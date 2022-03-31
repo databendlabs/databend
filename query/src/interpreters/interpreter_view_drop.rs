@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_exception::ErrorCode;
+use common_exception::Result;
+use common_meta_types::DropTableReq;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::DropTablePlan;
+use common_planners::DropViewPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -28,54 +29,53 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
-pub struct DropTableInterpreter {
+pub struct DropViewInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropTablePlan,
+    plan: DropViewPlan,
 }
 
-impl DropTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropTableInterpreter { ctx, plan }))
+impl DropViewInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropViewPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(DropViewInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropTableInterpreter {
+impl Interpreter for DropViewInterpreter {
     fn name(&self) -> &str {
-        "DropTableInterpreter"
+        "DropViewInterpreter"
     }
 
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let db_name = self.plan.db.as_str();
-        let tbl_name = self.plan.table.as_str();
-        let tbl = self.ctx.get_table(db_name, tbl_name).await.ok();
+        let db_name = self.plan.db.clone();
+        let viewname = self.plan.viewname.clone();
+        let tbl = self.ctx.get_table(db_name.as_str(), viewname.as_str()).await.ok();
 
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(db_name.into()),
+                &GrantObject::Database(db_name.clone()),
                 UserPrivilegeType::Drop,
             )
             .await?;
-
+        
         if let Some(table) = &tbl {
-            if table.get_table_info().engine() == VIEW_ENGINE {
-                return Err(ErrorCode::UnexpectedError(format!("{}.{} is VIEW, planse use `DROP VIEW {}.{}`", &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table)));
+            if table.get_table_info().engine() != VIEW_ENGINE {
+                return Err(ErrorCode::UnexpectedError(format!("{}.{} is not VIEW, please use `DROP TABLE {}.{}`", &self.plan.db, &self.plan.viewname, &self.plan.db, &self.plan.viewname)));
             }
         };
-
+        
         let catalog = self.ctx.get_catalog();
-        catalog.drop_table(self.plan.clone().into()).await?;
-
-        // `drop_table` throws several types of exceptions
-        // thus `optimize` operation is executed after it.
-        if let Some(tbl) = tbl {
-            let keep_last_snapshot = false;
-            tbl.optimize(self.ctx.clone(), keep_last_snapshot).await?;
-        }
+        let plan = DropTableReq {
+            if_exists: self.plan.if_exists,
+            tenant: self.plan.tenant.clone(),
+            db: db_name,
+            table: viewname,
+        };
+        catalog.drop_table(plan).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
@@ -84,3 +84,4 @@ impl Interpreter for DropTableInterpreter {
         )))
     }
 }
+

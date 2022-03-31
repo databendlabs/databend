@@ -317,6 +317,7 @@ impl<'a> DfParser<'a> {
                 Keyword::ROLE => self.parse_drop_role(),
                 Keyword::FUNCTION => self.parse_drop_udf(),
                 Keyword::STAGE => self.parse_drop_stage(),
+                Keyword::VIEW => self.parse_drop_view(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),

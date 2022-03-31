@@ -13,31 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
-use common_planners::Partitions;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
-use common_planners::TruncateTablePlan;
-use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::SyncSource;
-use crate::pipelines::new::processors::SyncSourcer;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
-use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -51,7 +31,7 @@ pub const VIEW_ENGINE: &str = "VIEW";
 pub const QUERY: &str = "query";
 
 impl ViewTable {
-    pub fn try_create(ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         let query = table_info.options().get(QUERY).cloned();
         if let Some(query) = query {
             Ok(Box::new(ViewTable {

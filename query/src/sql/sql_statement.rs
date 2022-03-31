@@ -24,6 +24,7 @@ use super::statements::DfCopy;
 use super::statements::DfCreateUserStage;
 use super::statements::DfDescribeUserStage;
 use super::statements::DfDropUserStage;
+use super::statements::DfDropView;
 use super::statements::DfGrantRoleStatement;
 use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
@@ -97,7 +98,7 @@ pub enum DfStatement {
     CreateView(DfCreateView),
     // TODO(veeupup) make alter and delete view done
     AlterView,
-    DeleteView,
+    DropView(DfDropView),
 
     // Settings.
     ShowSettings(DfShowSettings),

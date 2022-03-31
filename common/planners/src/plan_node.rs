@@ -69,6 +69,7 @@ use crate::SubQueriesSetPlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 use crate::CreateViewPlan;
+use crate::DropViewPlan;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -129,7 +130,7 @@ pub enum PlanNode {
     // View.
     CreateView(CreateViewPlan),
     // TODO(veeupup)
-    DropView,
+    DropView(DropViewPlan),
     AlterView,
 
     // User.
@@ -229,7 +230,7 @@ impl PlanNode {
             // View.
             PlanNode::CreateView(v) => v.schema(),
             PlanNode::AlterView => todo!(),
-            PlanNode::DropView => todo!(),
+            PlanNode::DropView(v) => v.schema(),
 
             // User.
             PlanNode::CreateUser(v) => v.schema(),
@@ -328,9 +329,9 @@ impl PlanNode {
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
 
             // View.
-            PlanNode::CreateView(v) => "CreateViewPlan",
+            PlanNode::CreateView(_) => "CreateViewPlan",
             PlanNode::AlterView => "AlterViewPlan",
-            PlanNode::DropView => "DropViewPlan",
+            PlanNode::DropView(_) => "DropViewPlan",
 
             // User.
             PlanNode::CreateUser(_) => "CreateUser",

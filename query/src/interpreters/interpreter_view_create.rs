@@ -14,30 +14,23 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::TableMeta;
-use common_meta_types::TableView;
 use common_meta_types::UserPrivilegeType;
 use common_meta_types::CreateTableReq;
-use common_planners::CreateTablePlan;
-use common_planners::InsertInputSource;
-use common_planners::InsertPlan;
-use common_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 
 use common_planners::CreateViewPlan;
-use super::InsertInterpreter;
 use crate::catalogs::Catalog;
 use std::collections::HashMap;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct CreateViewInterpreter {
     ctx: Arc<QueryContext>,
@@ -58,7 +51,7 @@ impl Interpreter for CreateViewInterpreter {
 
     async fn execute(
         &self,
-        input_stream: Option<SendableDataBlockStream>,
+        _: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         // check privilige
         self.ctx
@@ -97,7 +90,7 @@ impl CreateViewInterpreter {
             db: self.plan.db.clone(),
             table: self.plan.viewname.clone(),
             table_meta: TableMeta {
-                engine: "VIEW".to_string(),
+                engine: VIEW_ENGINE.to_string(),
                 options,
                 ..Default::default()
             }

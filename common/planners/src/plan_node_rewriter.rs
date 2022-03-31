@@ -79,6 +79,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
+use crate::DropViewPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -155,7 +156,7 @@ pub trait PlanRewriter: Sized {
             // View.
             PlanNode::CreateView(plan) => self.rewrite_create_view(plan),
             PlanNode::AlterView => todo!(),
-            PlanNode::DropView => todo!(),
+            PlanNode::DropView(plan) => self.rewrite_drop_view(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
@@ -364,6 +365,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_create_view(&mut self, plan: &CreateViewPlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateView(plan.clone()))
+    }
+
+    fn rewrite_drop_view(&mut self, plan: &DropViewPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropView(plan.clone()))
     }
 
     fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {

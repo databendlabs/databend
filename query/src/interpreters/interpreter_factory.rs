@@ -67,6 +67,7 @@ use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::interpreters::UseTenantInterpreter;
 use crate::interpreters::CreateViewInterpreter;
+use crate::interpreters::DropViewInterpreter;
 use crate::sessions::QueryContext;
 
 pub struct InterpreterFactory;
@@ -141,7 +142,7 @@ impl InterpreterFactory {
             // View.
             PlanNode::CreateView(v) => CreateViewInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterView => todo!(),
-            PlanNode::DropView => todo!(),
+            PlanNode::DropView(v) => DropViewInterpreter::try_create(ctx_clone, v),
 
             // User.
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),

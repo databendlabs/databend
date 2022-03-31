@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::Parser;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::FunctionArg;
@@ -25,7 +24,6 @@ use sqlparser::ast::Query;
 use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
-use sqlparser::dialect::GenericDialect;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
@@ -36,8 +34,6 @@ use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
-use crate::storages::Table;
-use crate::storages::view::ViewTable;
 use crate::storages::view::view_table::VIEW_ENGINE;
 use crate::storages::view::view_table::QUERY;
 

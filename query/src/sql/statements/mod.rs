@@ -65,6 +65,7 @@ mod statement_truncate_table;
 mod statement_use_database;
 mod statement_use_tenant;
 mod statement_create_view;
+mod statement_drop_view;
 
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
@@ -124,3 +125,4 @@ pub use statement_truncate_table::DfTruncateTable;
 pub use statement_use_database::DfUseDatabase;
 pub use statement_use_tenant::DfUseTenant;
 pub use statement_create_view::DfCreateView;
+pub use statement_drop_view::DfDropView;

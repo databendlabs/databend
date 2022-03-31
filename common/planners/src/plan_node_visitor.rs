@@ -14,6 +14,8 @@
 
 use common_exception::Result;
 
+use crate::CreateViewPlan;
+use crate::DropViewPlan;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AdminUseTenantPlan;
@@ -164,9 +166,9 @@ pub trait PlanVisitor {
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
 
             // View.
-            PlanNode::CreateView(v) => todo!(),
+            PlanNode::CreateView(v) => self.visit_create_view(v),
             PlanNode::AlterView => todo!(),
-            PlanNode::DropView => todo!(),
+            PlanNode::DropView(v) => self.visit_drop_view(v),
 
             // User.
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
@@ -415,6 +417,14 @@ pub trait PlanVisitor {
     }
 
     fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_view(&mut self, _: &CreateViewPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_view(&mut self, _: &DropViewPlan) -> Result<()> {
         Ok(())
     }
 

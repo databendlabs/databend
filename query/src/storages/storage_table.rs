@@ -90,7 +90,7 @@ pub trait Table: Sync + Send {
     async fn read(
         &self,
         _ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         unimplemented!()
     }

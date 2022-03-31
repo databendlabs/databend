@@ -18,6 +18,7 @@
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 
+use crate::sql::statements::DfDropView;
 use crate::sql::statements::DfQueryStatement;
 use crate::parser_err;
 use crate::sql::statements::DfCreateView;
@@ -49,5 +50,17 @@ impl<'a> DfParser<'a> {
         }else {
             parser_err!("need `AS` after VIEW NAME")
         }
+    }
+
+    pub(crate) fn parse_drop_view(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let table_name = self.parser.parse_object_name()?;
+
+        let drop = DfDropView {
+            if_exists,
+            name: table_name,
+        };
+
+        Ok(DfStatement::DropView(drop))
     }
 }

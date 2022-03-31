@@ -194,7 +194,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::List(v) => v.analyze(ctx).await,
             DfStatement::CreateView(v) => v.analyze(ctx).await,
             DfStatement::AlterView => todo!(),
-            DfStatement::DeleteView => todo!()
+            DfStatement::DropView(v) => v.analyze(ctx).await,
         }
     }
 }
