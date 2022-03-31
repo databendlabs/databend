@@ -80,7 +80,6 @@ impl ResizeProcessor {
             }
 
             if index == self.cur_input_index {
-                self.cur_input_index = index;
                 return match finished {
                     true => Some(input.clone()),
                     false => None,
@@ -111,7 +110,6 @@ impl ResizeProcessor {
             }
 
             if index == self.cur_output_index {
-                self.cur_output_index = index;
                 return match finished {
                     true => Some(output.clone()),
                     false => None,
