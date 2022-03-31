@@ -15,6 +15,7 @@
 mod clickhouse_handler;
 pub mod formats;
 mod http_services;
+pub mod middleware;
 pub mod v1;
 
 pub use http_services::HttpHandler;

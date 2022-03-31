@@ -105,16 +105,24 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         tracing::debug!("receive http request: {:?},", req);
-        match self.auth(&req).await {
+        let res = match self.auth(&req).await {
             Ok(user_info) => {
                 req.extensions_mut().insert(self.manager.clone());
                 req.extensions_mut().insert(user_info);
-                return self.ep.call(req).await;
+                self.ep.call(req).await
             }
             Err(err) => Err(PoemError::from_string(
                 err.message(),
                 StatusCode::UNAUTHORIZED,
             )),
-        }
+        };
+        if let Err(ref err) = res {
+            tracing::warn!(
+                "http request error: status={}, msg={}",
+                err.as_response().status(),
+                err,
+            );
+        };
+        res
     }
 }
