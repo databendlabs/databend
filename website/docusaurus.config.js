@@ -71,7 +71,7 @@ const config = {
                 redirects: [
                     {
                         to: '/', // string
-                        from: '/doc/index.md', // string | string[]
+                        from: '/doc/about/index.md', // string | string[]
                     },
                 ],
             },
@@ -92,7 +92,7 @@ const config = {
                 },
                 items: [
                   {
-                    to: '/doc',
+                    to: '/doc/about',
                     label: 'Documentation',
                     position: 'right',
                   },
@@ -117,7 +117,7 @@ const config = {
                         items: [
                             {
                                 label: 'What is Databend?',
-                                to: '/doc/'
+                                to: '/doc/about'
                             },
                             {
                                 label: 'Performance',
@@ -165,7 +165,7 @@ const config = {
                         ],
                     },
                 ],
-                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br> <a style="display:block;margin-top: 10px" href="https://vercel.com/?utm_source=databend&utm_campaign=oss"><img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg"></a>`,
+                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg">`,
             },
             prism: {
                 theme: lightCodeTheme,

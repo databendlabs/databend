@@ -1,51 +1,16 @@
-<div align="center">
+---
+title: What is Databend?
+sidebar_position: 1
+---
 
-<p align="center"><img alt="Databend Logo" src="website/static/img/favicon.svg" width="20%"/></p>
-<p align="center">A Modern Cloud Data Warehouse with the Elasticity and Performance both on Object Storage</p>
- 
-<h4 align="center">
-  <a href="https://databend.rs">Website</a> |
-  <a href="https://github.com/datafuselabs/databend/issues/3706">Roadmap</a> |
-  <a href="https://databend.rs/doc">Documentation</a>
-</h4>
-
-<div>
-<a href="https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA">
-<img src="https://badgen.net/badge/Slack/Join%20Databend/0abd59?icon=slack" alt="slack" />
-</a>
-
-<a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://github.com/datafuselabs/databend/actions/workflows/databend-release.yml/badge.svg" alt="CI Status" />
-</a>
-
-<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />
-
-<a href="https://opensource.org/licenses/Apache-2.0">
-<img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
-</a>
-
-</div>
-</div>
-<br>
-
-- [What is Databend?](#what-is-databend)
-- [Design Overview](#design-overview)
-   - [Meta Service Layer](#meta-service-layer)
-   - [Compute Layer](#compute-layer)
-   - [Storage Layer](#storage-layer)
-- [Getting Started](#getting-started)
-- [Roadmap](#roadmap)
-
-## What is Databend?
-
-Databend is an open source **elastic** and **scalable** Modern Cloud Data Warehouse.
+Databend is an open source **Elastic** and **Scalable** modern cloud data warehouse developed in Rust from scratch.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
 
 - __Instant Elasticity__
 
   Databend separates the storage and compute, which allows you easily scale up or scale down based on your application's needs.
-
+ 
 - __Blazing Performance__
 
   Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offers blazing performance data analytics.
@@ -57,11 +22,11 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 - __MySQL/ClickHouse Compatible__
 
   Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools.
-
-- __Easy to Use__
-
-  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into tables. 
  
+- __Easy to Use__
+ 
+  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into tables.
+
 ## Design Overview
 
 This is the high-level architecture of Databend, it consists of three components:
@@ -139,33 +104,19 @@ Each Parquet file is sorted by the primary key before being written to the under
 For efficient pruning, Databend also creates indexes for each Parquet file:
 
 - `min_max.idx` The index file stores the *minimum* and *maximum* value of this Parquet file.
--`sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records granularity.
+- `sparse.idx` The index file store the <key, parquet-page> mapping for every [N] records granularity.
 
 With the indexes, we can speed up the queries by reducing the I/O and CPU cost.
 Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x`, if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
-
-## Getting Started
-
-- [Databend Deploy](https://databend.rs/doc/category/deploy/)
-- [Databend Develop](https://databend.rs/doc/category/develop/)
-- [Databend Contributing](https://databend.rs/doc/category/contributing/)
-- [Databend Performance](https://databend.rs/doc/category/performance/)
-- [Databend Weekly](https://weekly.databend.rs/)
 
 ## Roadmap
 
 [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
 
-## Community
-
-- [Slack](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
-- [@Databend](https://twitter.com/Datafuse_Labs)
-
 ## License
 
-Databend is licensed under [Apache 2.0](LICENSE).
+Databend is licensed under Apache 2.0.
 
-## Acknowledgement
+## Acknowledgments
 
-- Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
-- The [documentation website](https://databend.rs) hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
