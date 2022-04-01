@@ -20,6 +20,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::AlterViewPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
@@ -28,6 +29,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -36,6 +38,7 @@ use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
+use crate::DropViewPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -161,6 +164,11 @@ pub trait PlanVisitor {
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
+
+            // View.
+            PlanNode::CreateView(v) => self.visit_create_view(v),
+            PlanNode::AlterView(v) => self.visit_alter_view(v),
+            PlanNode::DropView(v) => self.visit_drop_view(v),
 
             // User.
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
@@ -402,6 +410,18 @@ pub trait PlanVisitor {
     }
 
     fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_view(&mut self, _: &CreateViewPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_view(&mut self, _: &DropViewPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_view(&mut self, _: &AlterViewPlan) -> Result<()> {
         Ok(())
     }
 

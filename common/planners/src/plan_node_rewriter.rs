@@ -27,6 +27,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::AlterViewPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
@@ -35,6 +36,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -43,6 +45,7 @@ use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
+use crate::DropViewPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -149,6 +152,11 @@ pub trait PlanRewriter: Sized {
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
+
+            // View.
+            PlanNode::CreateView(plan) => self.rewrite_create_view(plan),
+            PlanNode::AlterView(plan) => self.rewrite_alter_view(plan),
+            PlanNode::DropView(plan) => self.rewrite_drop_view(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
@@ -350,6 +358,18 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::OptimizeTable(plan.clone()))
+    }
+
+    fn rewrite_create_view(&mut self, plan: &CreateViewPlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateView(plan.clone()))
+    }
+
+    fn rewrite_drop_view(&mut self, plan: &DropViewPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropView(plan.clone()))
+    }
+
+    fn rewrite_alter_view(&mut self, plan: &AlterViewPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterView(plan.clone()))
     }
 
     fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {

@@ -60,7 +60,7 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
+        let (db, table) = Self::resolve_table(ctx.clone(), &self.name, "Table")?;
         let mut table_meta = self.table_meta(ctx.clone(), db.as_str()).await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
@@ -102,15 +102,23 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    fn resolve_table(ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
+    pub fn resolve_table(
+        ctx: Arc<QueryContext>,
+        table_name: &ObjectName,
+        table_type: &str,
+    ) -> Result<(String, String)> {
         let idents = &table_name.0;
         match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Create table name is empty")),
+            0 => Err(ErrorCode::SyntaxException(format!(
+                "{} name is empty",
+                table_type
+            ))),
             1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
             2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Create table name must be [`db`].`table`",
-            )),
+            _ => Err(ErrorCode::SyntaxException(format!(
+                "{} name must be [`db`].`{}`",
+                table_type, table_type
+            ))),
         }
     }
 
@@ -135,7 +143,7 @@ impl DfCreateTable {
             Some(like_table_name) => {
                 // resolve database and table name from 'like statement'
                 let (origin_db_name, origin_table_name) =
-                    Self::resolve_table(ctx.clone(), like_table_name)?;
+                    Self::resolve_table(ctx.clone(), like_table_name, "Table")?;
 
                 // use the origin table's schema for the table to create
                 let origin_table = ctx.get_table(&origin_db_name, &origin_table_name).await?;

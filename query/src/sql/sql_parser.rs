@@ -217,6 +217,7 @@ impl<'a> DfParser<'a> {
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
                     Keyword::STAGE => self.parse_create_stage(),
+                    Keyword::VIEW => self.parse_create_view(),
                     _ => self.expected("create statement", Token::Word(w)),
                 }
             }
@@ -279,6 +280,7 @@ impl<'a> DfParser<'a> {
                 Keyword::USER => self.parse_alter_user(),
                 Keyword::FUNCTION => self.parse_alter_udf(),
                 Keyword::TABLE => self.parse_alter_table(),
+                Keyword::VIEW => self.parse_alter_view(),
                 _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
@@ -315,6 +317,7 @@ impl<'a> DfParser<'a> {
                 Keyword::ROLE => self.parse_drop_role(),
                 Keyword::FUNCTION => self.parse_drop_udf(),
                 Keyword::STAGE => self.parse_drop_stage(),
+                Keyword::VIEW => self.parse_drop_view(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),

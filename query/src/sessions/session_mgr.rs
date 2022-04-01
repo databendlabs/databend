@@ -411,6 +411,8 @@ impl SessionManager {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
             *config = Config::load_from_file(&config_file)?;
+            // ensure the environment variables are immutable
+            *config = Config::load_from_env(&config)?;
             config.config_file = config_file;
             config.clone()
         };

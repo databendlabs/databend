@@ -1,21 +1,21 @@
 ---
-title: Deploy Databend With Local Disk
-sidebar_label: With Local Disk
+title: Deploy Databend With Local Disk (for Test)
+sidebar_label: With Local Disk (Test)
 description:
-  How to deploy Databend with Local Disk
+  How to deploy Databend with Local Disk (for Test)
 ---
-
-:::tip
-
-Expected deployment time: ** 5 minutes ⏱ **
-
-:::
 
 This guideline will deploy Databend(standalone) with local disk step by step.
 
 <p align="center">
 <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
 </p>
+
+:::caution
+
+Databend requires scalable storage layer(like Object Storage) as its storage, local disk is for testing only, please do not use it in production!
+
+:::
 
 ## 1. Download
 
@@ -32,14 +32,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.0-nightly/databend-v0.7.0-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.0-nightly/databend-v0.7.0-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +47,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.0-nigh
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.0-nightly/databend-v0.7.0-nightly-aarch64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +57,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.0-nigh
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-tar xzvf databend-v0.7.0-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.7.4-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.0-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,7 +72,7 @@ tar xzvf databend-v0.7.0-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.0-nightly-aarch64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.7.4-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>

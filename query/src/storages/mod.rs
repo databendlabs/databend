@@ -19,6 +19,7 @@ pub mod index;
 pub mod memory;
 pub mod null;
 pub mod system;
+pub mod view;
 
 mod s3;
 mod storage_context;
