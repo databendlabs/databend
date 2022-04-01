@@ -1,5 +1,6 @@
 ---
 title: What is Databend?
+slug: ../
 sidebar_position: 1
 ---
 

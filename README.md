@@ -4,7 +4,7 @@
 <p align="center">A Modern Cloud Data Warehouse with the Elasticity and Performance both on Object Storage</p>
  
 <h4 align="center">
-  <a href="https://databend.rs/doc/overview">Documentation</a>  |
+  <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap(v0.8)</a>
 </h4>
 
