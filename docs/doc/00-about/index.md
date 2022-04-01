@@ -3,7 +3,7 @@ title: What is Databend?
 sidebar_position: 1
 ---
 
-Databend is an open source **Elastic** and **Scalable** modern cloud data warehouse developed in Rust from scratch.
+Databend is an open source **Elastic** and **Scalable** Modern Cloud Data Warehouse written in Rust from scratch.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
 
@@ -17,7 +17,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/category/load-data) in various formats like CSV, JSON and Parquet which location in cloud or your local file system.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/category/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
 
 - __MySQL/ClickHouse Compatible__
 
@@ -25,7 +25,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
  
 - __Easy to Use__
  
-  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into tables.
+  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into table.
 
 ## Design Overview
 
@@ -109,9 +109,15 @@ For efficient pruning, Databend also creates indexes for each Parquet file:
 With the indexes, we can speed up the queries by reducing the I/O and CPU cost.
 Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x`, if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
 
+
 ## Roadmap
 
 [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
+
+## Community
+
+- [Slack Channel](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
+- [@Databend](https://twitter.com/Datafuse_Labs) on Twitter
 
 ## License
 
@@ -119,4 +125,5 @@ Databend is licensed under Apache 2.0.
 
 ## Acknowledgments
 
-Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
+- Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture), its computing model is based on [apache-arrow](https://arrow.apache.org/).
+- The [documentation website](https://databend.rs) hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
