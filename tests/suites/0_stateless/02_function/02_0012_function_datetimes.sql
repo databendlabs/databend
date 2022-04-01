@@ -190,7 +190,6 @@ select '===CMP===';
 select toDateTime64('2022-04-01 06:50:20.000')   = '2022-04-01 06:50:20.000';
 select toDateTime64('2022-04-01 06:50:20.000')   > '2022-04-01 04:50:20.000';
 select toDateTime64('2022-04-01 06:50:20.000')   < '2022-04-02 04:50:20.000';
-select toDateTime(a) = toDateTime(b), toDate(c) = toDate(d) from ts;
 
 drop table if exists ts;
 create table ts(a DateTime64, b DateTime, c Date, d Date32);
