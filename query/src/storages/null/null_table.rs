@@ -154,7 +154,7 @@ impl SyncSource for NullSource {
     const NAME: &'static str = "NullSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if !self.finish {
+        if self.finish {
             return Ok(None);
         }
 
