@@ -56,6 +56,7 @@ fn test_range_wrapper_reflexive_property() {
     let mut greater_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
     // test antisymmetric propery and construct {less|greater}_map
+    // antisymmetric propery: if a > b then b > a.
     for i in tests.iter() {
         for j in tests.clone().iter() {
             let ret_i_j = i.cmp(j);
