@@ -191,6 +191,9 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropStage(v) => v.analyze(ctx).await,
             DfStatement::DescribeStage(v) => v.analyze(ctx).await,
             DfStatement::List(v) => v.analyze(ctx).await,
+            DfStatement::CreateView(v) => v.analyze(ctx).await,
+            DfStatement::AlterView(v) => v.analyze(ctx).await,
+            DfStatement::DropView(v) => v.analyze(ctx).await,
         }
     }
 }
