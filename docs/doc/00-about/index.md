@@ -109,10 +109,9 @@ For efficient pruning, Databend also creates indexes for each Parquet file:
 With the indexes, we can speed up the queries by reducing the I/O and CPU cost.
 Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x`, if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
 
-
 ## Roadmap
-
-[Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
+- [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
+- [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
 
 ## Community
 
