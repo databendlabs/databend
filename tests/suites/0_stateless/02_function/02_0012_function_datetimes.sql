@@ -183,3 +183,18 @@ select EXTRACT(HOUR FROM toDateTime('2022-03-04 22:32:09')) = 22;
 select EXTRACT(MINUTE FROM toDateTime('2022-03-04 22:32:09')) = 32;
 select EXTRACT(SECOND FROM toDateTime('2022-03-04 22:32:09')) = 9;
 select '===EXTRACT===';
+
+
+select '===CMP===';
+
+select toDateTime64('2022-04-01 06:50:20.000')   = '2022-04-01 06:50:20.000';
+select toDateTime64('2022-04-01 06:50:20.000')   > '2022-04-01 04:50:20.000';
+select toDateTime64('2022-04-01 06:50:20.000')   < '2022-04-02 04:50:20.000';
+select toDateTime(a) = toDateTime(b), toDate(c) = toDate(d) from ts;
+
+drop table if exists ts;
+create table ts(a DateTime64, b DateTime, c Date, d Date32);
+insert into ts values(now(), now(), today(), today());
+select toDateTime64(a) = toDateTime64(b),  toDateTime32(a) = toDateTime(b),  toDate32(c) = toDate32(d), toDate(c) = toDate(d) from ts;
+drop table if exists ts;
+
