@@ -64,18 +64,6 @@ const config = {
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
             },
         ],
-        [
-            '@docusaurus/plugin-client-redirects',
-            {
-                // this will be removed later, make a mark~.
-                redirects: [
-                    {
-                        to: '/', // string
-                        from: '/doc/about/index.md', // string | string[]
-                    },
-                ],
-            },
-        ]
     ],
     themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -92,7 +80,7 @@ const config = {
                 },
                 items: [
                   {
-                    to: '/doc/about',
+                    to: '/doc/overview',
                     label: 'Documentation',
                     position: 'right',
                   },
@@ -117,7 +105,7 @@ const config = {
                         items: [
                             {
                                 label: 'What is Databend?',
-                                to: '/doc/about'
+                                to: '/doc/overview'
                             },
                             {
                                 label: 'Performance',
