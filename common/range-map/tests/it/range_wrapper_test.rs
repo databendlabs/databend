@@ -32,13 +32,6 @@ fn upsert_cmp_map(map: &mut BTreeMap<String, BTreeSet<String>>, k: String, v: St
 /// test if or not RangeWrapper satisfy reflexive property
 #[test]
 fn test_range_wrapper_reflexive_property() {
-    println!(
-        "11 ret: {:?} {:?} {:?}",
-        (2, 2).cmp(&(2, 4)),
-        (2, 2).cmp(&(2, 6)),
-        (2, 2).cmp(&(1, 5))
-    );
-
     let tests = vec![
         RangeWrapper::new(2..4),
         RangeWrapper::new(0..1),
