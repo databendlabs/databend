@@ -44,7 +44,7 @@ where
 
 #[test]
 fn test_range_map() {
-    // test contain_key
+    // test get_by_key
     {
         let mut a = RangeMap::new();
 
@@ -53,17 +53,17 @@ fn test_range_map() {
         a.insert(2..6, 26);
 
         let ret1 = vec![(RangeWrapper::new(1..5), 15)];
-        assert!(test_vec_rangewrapper(a.contain_key(&1), ret1)); // [(1..5, 15)]
+        assert!(test_vec_rangewrapper(a.get_by_key(&1), ret1)); // [(1..5, 15)]
 
         let ret2 = vec![
             (RangeWrapper::new(1..5), 15),
             (RangeWrapper::new(2..4), 24),
             (RangeWrapper::new(2..6), 26),
         ];
-        assert!(test_vec_rangewrapper(a.contain_key(&2), ret2)); // [(1..5, 15), ((2..4), 24), ((2..6), 26)]
+        assert!(test_vec_rangewrapper(a.get_by_key(&2), ret2)); // [(1..5, 15), ((2..4), 24), ((2..6), 26)]
 
         let ret3 = vec![(RangeWrapper::new(2..6), 26)];
-        assert!(test_vec_rangewrapper(a.contain_key(&5), ret3)); // [((2..6), 26)]
+        assert!(test_vec_rangewrapper(a.get_by_key(&5), ret3)); // [((2..6), 26)]
     }
 
     // test get/get_mut/remove
@@ -79,10 +79,10 @@ fn test_range_map() {
         }
 
         let ret1 = vec![(RangeWrapper::new(1..5), 15)];
-        assert!(test_vec_rangewrapper(a.contain_key(&1), ret1)); // [(1..5, 15)]
+        assert!(test_vec_rangewrapper(a.get_by_key(&1), ret1)); // [(1..5, 15)]
 
         a.remove(1..5);
-        let ret = a.contain_key(&1);
+        let ret = a.get_by_key(&1);
         assert!(ret.is_empty());
     }
 
@@ -98,6 +98,6 @@ fn test_range_map() {
         });
 
         let ret = vec![(RangeWrapper::new(1..5), vec![1, 2, 3, 4])];
-        assert!(test_vec_rangewrapper(a.contain_key(&1), ret)); // [(1..5, 15)]
+        assert!(test_vec_rangewrapper(a.get_by_key(&1), ret)); // [(1..5, 15)]
     }
 }
