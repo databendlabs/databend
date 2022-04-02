@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
@@ -46,12 +45,7 @@ impl FuseTable {
                 loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
             let operator = ctx.get_storage_operator()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
-            operator
-                .object(&new_snapshot_loc)
-                .writer()
-                .write_bytes(bytes)
-                .await
-                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+            operator.object(&new_snapshot_loc).write(bytes).await?;
 
             if plan.purge {
                 let keep_last_snapshot = false;

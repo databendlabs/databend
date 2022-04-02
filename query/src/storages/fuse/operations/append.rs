@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use common_cache::Cache;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -69,10 +68,8 @@ impl FuseTable {
                         let seg_loc = locs.gen_segment_info_location();
                         let bytes = serde_json::to_vec(&seg)?;
                         da.object(&seg_loc)
-                        .writer()
-                        .write_bytes(bytes)
-                        .await
-                        .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+                        .write(bytes)
+                        .await?;
                         let seg = Arc::new(seg);
                         let log_entry = AppendOperationLogEntry::new(seg_loc.clone(), seg.clone());
                         if let Some(ref cache) = segment_info_cache {

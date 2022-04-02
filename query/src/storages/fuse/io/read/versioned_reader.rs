@@ -12,10 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::io::ErrorKind;
 use std::marker::PhantomData;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
@@ -63,13 +61,6 @@ where
 {
     let mut buffer: Vec<u8> = vec![];
     use futures::AsyncReadExt;
-    reader.read_to_end(&mut buffer).await.map_err(|e| {
-        let msg = e.to_string();
-        if e.kind() == ErrorKind::NotFound {
-            ErrorCode::DalPathNotFound(msg)
-        } else {
-            ErrorCode::DalTransportError(msg)
-        }
-    })?;
+    reader.read_to_end(&mut buffer).await?;
     Ok(from_slice::<T>(&buffer)?)
 }

@@ -636,7 +636,7 @@ impl BloomFilter {
     pub fn to_vec(&self) -> Result<Vec<u8>> {
         match bincode::serialize(self) {
             Ok(v) => Ok(v),
-            Err(e) => Err(ErrorCode::SerdeError(format!(
+            Err(e) => Err(ErrorCode::StorageOther(format!(
                 "bincode serialization error: {} ",
                 e
             ))),
@@ -647,7 +647,7 @@ impl BloomFilter {
     pub fn from_vec(bytes: &[u8]) -> Result<Self> {
         match bincode::deserialize::<BloomFilter>(bytes) {
             Ok(bloom_filter) => Ok(bloom_filter),
-            Err(e) => Err(ErrorCode::SerdeError(format!(
+            Err(e) => Err(ErrorCode::StorageOther(format!(
                 "bincode deserialization error: {} ",
                 e
             ))),

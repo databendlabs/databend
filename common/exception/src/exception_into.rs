@@ -104,7 +104,13 @@ impl From<sqlparser::parser::ParserError> for ErrorCode {
 
 impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
-        ErrorCode::from_std_error(error)
+        use std::io::ErrorKind;
+
+        match error.kind() {
+            ErrorKind::NotFound => ErrorCode::StorageNotFound(error.to_string()),
+            ErrorKind::PermissionDenied => ErrorCode::StoragePermissionDenied(error.to_string()),
+            _ => ErrorCode::StorageOther(error.to_string()),
+        }
     }
 }
 
@@ -226,12 +232,5 @@ impl From<ErrorCode> for tonic::Status {
             }
             Err(error) => tonic::Status::unknown(error.to_string()),
         }
-    }
-}
-
-// OpenDAL error.
-impl From<opendal::error::Error> for ErrorCode {
-    fn from(error: opendal::error::Error) -> Self {
-        ErrorCode::DalError(format!("{:?}", error))
     }
 }
