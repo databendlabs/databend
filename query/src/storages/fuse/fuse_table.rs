@@ -33,12 +33,13 @@ use futures::StreamExt;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_DATABASE_ID;
+use crate::sql::OPT_KEY_SNAPSHOT_LOC;
+use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -173,16 +174,19 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    fn snapshot_loc(&self) -> Option<String> {
-        self.table_info
-            .options()
-            .get(FUSE_OPT_KEY_SNAPSHOT_LOC)
+    pub fn snapshot_loc(&self) -> Option<String> {
+        let options = self.table_info.options();
+
+        options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            // for backward compatibility, we check the legacy table option
+            .or_else(|| options.get(OPT_KEY_SNAPSHOT_LOC))
             .cloned()
     }
 
     pub fn snapshot_format_version(&self) -> u64 {
-        match self.table_info.options().get(FUSE_OPT_KEY_SNAPSHOT_LOC) {
-            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc),
+        match self.snapshot_loc() {
+            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
                 // in this case, we just returns the current snapshot version
