@@ -32,6 +32,9 @@ apt-get install -yq libssl-dev libssl-dev:arm64 zlib1g-dev zlib1g-dev:arm64
 rustup target add x86_64-unknown-linux-gnu
 rustup target add aarch64-unknown-linux-gnu
 
+ln -sf /usr/local/bin/mold /usr/bin/x86_64-linux-gnu-ld
+ln -sf /usr/local/bin/mold /usr/bin/aarch64-linux-gnu-ld
+
 cat <<EOF >${CARGO_HOME}/config
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
