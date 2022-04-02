@@ -185,7 +185,7 @@ impl FuseTable {
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
-        Self::commit_to_meta_server(ctx, &self.get_table_info(), snapshot_loc.clone()).await?;
+        Self::commit_to_meta_server(ctx, self.get_table_info(), snapshot_loc.clone()).await?;
         ctx.get_write_progress().incr(&progress_values);
 
         if let Some(snapshot_cache) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
