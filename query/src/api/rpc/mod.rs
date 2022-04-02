@@ -32,3 +32,4 @@ mod flight_scatter_hash;
 mod flight_service;
 mod flight_service_stream;
 mod flight_tickets;
+mod query_exchanger;

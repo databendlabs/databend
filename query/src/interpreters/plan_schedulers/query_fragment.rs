@@ -1,34 +1,44 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 use common_exception::Result;
-use common_planners::PlanNode;
+use common_planners::{BroadcastPlan, PlanNode, StagePlan};
+use crate::interpreters::plan_schedulers::query_fragment_dag::QueryFragmentDAG;
 use crate::sessions::QueryContext;
 
-enum Mode {}
-
-// pub trait ScheduleContext {
-//     fn add_
-// }
-
-// TODO:
-pub trait QueryFragment {
-    fn traverse(&self, ctx: &mut dyn ScheduleContext) -> Result<Mode>;
+pub trait QueryFragment: Debug {
+    fn traverse_node(&self, ctx: &mut QueryFragmentDAG) -> Result<()>;
 }
 
-struct ShuffleQueryFragment {
+#[derive(Debug)]
+pub struct ShuffleQueryFragment {
     input: Arc<PlanNode>,
 }
 
-impl QueryFragment for ShuffleQueryFragment {
-    fn traverse(&self, ctx: Arc<QueryContext>) -> Result<Mode> {
-        todo!()
+impl ShuffleQueryFragment {
+    pub fn create(plan: &StagePlan) -> Box<dyn QueryFragment> {
+        Box::new(ShuffleQueryFragment { input: plan.input.clone() })
     }
 }
 
-struct BroadcastQueryFragment {}
+impl QueryFragment for ShuffleQueryFragment {
+    fn traverse_node(&self, ctx: &mut QueryFragmentDAG) -> Result<()> {
+        ctx.add_shuffle_node(&self.input)
+    }
+}
+
+#[derive(Debug)]
+pub struct BroadcastQueryFragment {
+    input: Arc<PlanNode>,
+}
+
+impl BroadcastQueryFragment {
+    pub fn create(plan: &BroadcastPlan) -> Box<dyn QueryFragment> {
+        Box::new(BroadcastQueryFragment { input: plan.input.clone() })
+    }
+}
 
 impl QueryFragment for BroadcastQueryFragment {
-    fn traverse(&self, ctx: &mut dyn ScheduleContext) -> Result<Mode> {
-        todo!()
+    fn traverse_node(&self, ctx: &mut QueryFragmentDAG) -> Result<()> {
+        ctx.add_broadcast_node(&self.input)
     }
 }
-

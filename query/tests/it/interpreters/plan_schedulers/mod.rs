@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod plan_scheduler;
+mod query_fragment_builder;
