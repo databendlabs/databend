@@ -18,7 +18,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/category/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
 
 - __MySQL/ClickHouse Compatible__
 
