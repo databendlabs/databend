@@ -4,7 +4,7 @@
 <p align="center">A Modern Cloud Data Warehouse with the Elasticity and Performance both on Object Storage</p>
  
 <h4 align="center">
-  <a href="https://databend.rs/doc/overview">Documentation</a>  |
+  <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap(v0.8)</a>
 </h4>
 
@@ -51,7 +51,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/category/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
 
 - __MySQL/ClickHouse Compatible__
 
@@ -145,10 +145,10 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 ## Getting Started
 
-- [Databend Deploy](https://databend.rs/doc/category/deploy/)
-- [Databend Develop](https://databend.rs/doc/category/develop/)
-- [Databend Contributing](https://databend.rs/doc/category/contributing/)
-- [Databend Performance](https://databend.rs/doc/category/performance/)
+- [Databend Deploy](https://databend.rs/doc/deploy)
+- [Databend Develop](https://databend.rs/doc/develop)
+- [Databend Contributing](https://databend.rs/doc/contributing)
+- [Databend Performance](https://databend.rs/doc/performance)
 - [Databend Weekly](https://weekly.databend.rs/)
 
 ## Roadmap

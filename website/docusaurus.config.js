@@ -80,7 +80,7 @@ const config = {
                 },
                 items: [
                   {
-                    to: '/doc/overview',
+                    to: '/doc',
                     label: 'Documentation',
                     position: 'right',
                   },
@@ -105,11 +105,11 @@ const config = {
                         items: [
                             {
                                 label: 'What is Databend?',
-                                to: '/doc/overview'
+                                to: '/doc'
                             },
                             {
                                 label: 'Performance',
-                                to: '/doc/category/performance'
+                                to: '/doc/performance'
                             },
                         ]
                     },
@@ -118,11 +118,11 @@ const config = {
                         items: [
                             {
                                 label: 'Deployment',
-                                to: '/doc/category/deploy'
+                                to: '/doc/deploy'
                             },
                             {
                                 label: 'Develop',
-                                to: '/doc/category/develop'
+                                to: '/doc/develop'
                             },
                         ]
                     },

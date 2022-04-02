@@ -17,12 +17,12 @@ function HomepageHeader() {
             <p className={clsx('hero__subtitle', styles.heroSubTitle)}>{siteConfig.tagline}</p>
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
-              to="/doc/overview">
+              to="/doc">
                 Documentation
             </Link>
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
-              to="/doc/category/performance">
+              to="/doc/performance">
                 Performance
             </Link>
             {/* <ArrowDownSvg className={styles.arrow}></ArrowDownSvg> */}

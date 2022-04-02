@@ -7,10 +7,12 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'website/**'
+      - '**.md'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - 'website/**'
+      - '**.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}

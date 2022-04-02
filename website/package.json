@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@docusaurus/core": "^2.0.0-beta.18",
-    "@docusaurus/plugin-client-redirects": "^2.0.0-beta.18",
     "@docusaurus/preset-classic": "^2.0.0-beta.18",
     "@mdx-js/react": "^1.6.21",
     "clsx": "^1.1.1",
     "docusaurus-plugin-sass": "^0.2.1",
+    "node": "^17.7.2",
     "prism-react-renderer": "^1.2.1",
     "rc-texty": "^0.2.0",
     "react": "^17.0.1",
