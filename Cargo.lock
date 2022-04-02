@@ -946,7 +946,6 @@ dependencies = [
  "bincode",
  "common-arrow",
  "octocrab",
- "opendal",
  "paste",
  "prost",
  "serde",
