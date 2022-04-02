@@ -31,12 +31,14 @@ async fn test_show_databases_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+----------+",
-            "| Database |",
-            "+----------+",
-            "| default  |",
-            "| system   |",
-            "+----------+",
+            "+--------------------+",
+            "| Database           |",
+            "+--------------------+",
+            "| INFORMATION_SCHEMA |",
+            "| default            |",
+            "| information_schema |",
+            "| system             |",
+            "+--------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
