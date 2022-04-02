@@ -16,6 +16,7 @@ pub mod cache;
 pub mod fuse;
 pub mod github;
 pub mod index;
+pub mod information_schema;
 pub mod memory;
 pub mod null;
 pub mod system;

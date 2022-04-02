@@ -52,7 +52,7 @@ impl SystemDatabase {
         ];
 
         for tbl in table_list.into_iter() {
-            sys_db_meta.insert(tbl);
+            sys_db_meta.insert("system", tbl);
         }
 
         let db_info = DatabaseInfo {

@@ -36,6 +36,7 @@ use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::configs::Config;
 use crate::databases::Database;
+use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
 use crate::storages::Table;
 
@@ -44,6 +45,7 @@ use crate::storages::Table;
 /// "information_schema" db is supposed to held here
 #[derive(Clone)]
 pub struct ImmutableCatalog {
+    info_schema_db: Arc<InformationSchemaDatabase>,
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
 }
@@ -54,9 +56,14 @@ impl ImmutableCatalog {
 
         // The global db meta.
         let mut sys_db_meta = InMemoryMetas::create(system_table_id);
+        sys_db_meta.init_db("system");
+        sys_db_meta.init_db("information_schema");
+
         let sys_db = SystemDatabase::create(&mut sys_db_meta);
+        let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
 
         Ok(Self {
+            info_schema_db: Arc::new(info_schema_db),
             sys_db: Arc::new(sys_db),
             sys_db_meta: Arc::new(sys_db_meta),
         })
@@ -66,17 +73,18 @@ impl ImmutableCatalog {
 #[async_trait::async_trait]
 impl Catalog for ImmutableCatalog {
     async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        if db_name == "system" {
-            return Ok(self.sys_db.clone());
+        match db_name {
+            "system" => Ok(self.sys_db.clone()),
+            "information_schema" => Ok(self.info_schema_db.clone()),
+            _ => Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database {}",
+                db_name
+            ))),
         }
-        Err(ErrorCode::UnknownDatabase(format!(
-            "Unknown database {}",
-            db_name
-        )))
     }
 
     async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
-        Ok(vec![self.sys_db.clone()])
+        Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
     }
 
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
@@ -114,18 +122,12 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let _db = self.get_database(tenant, db_name).await?;
 
-        let table = self
-            .sys_db_meta
-            .get_by_name(table_name)
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
-
-        Ok(table.clone())
+        let ret = self.sys_db_meta.get_by_name(db_name, table_name);
+        ret
     }
 
-    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        // ensure db exists
-        let _db = self.get_database(tenant, db_name).await?;
-        self.sys_db_meta.get_all_tables()
+    async fn list_tables(&self, _tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        self.sys_db_meta.get_all_tables(db_name)
     }
 
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
