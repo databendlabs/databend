@@ -19,7 +19,7 @@ This is Databend Roadmap 2022 :rocket:, sync from the [#3706](https://github.com
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [Query Cluster Track #747](https://github.com/datafuselabs/databend/issues/747) | PROGRESS  |   |  |
 | [RBAC Privileges #2793](https://github.com/datafuselabs/databend/issues/2793) | PROGRESS  |   |   |
-| [ New Planner Framework #1217](https://github.com/datafuselabs/databend/issues/1218)| PROGRESS  | | [RFC](https://databend.rs/dev/rfcs/query/new-sql-planner-framework)|
+| [ New Planner Framework #1217](https://github.com/datafuselabs/databend/issues/1218)| PROGRESS  | | [RFC](https://databend.rs/doc/contributing/rfcs/new-sql-planner-framework)|
 | [ Database Sharing #3430](https://github.com/datafuselabs/databend/issues/3430)| PROGRESS  |     | |
 | [ STAGE Command #2976](https://github.com/datafuselabs/databend/issues/2976)| PROGRESS  |     | |
 | [ COPY Command #4104](https://github.com/datafuselabs/databend/issues/4104)| PROGRESS  |     | |
