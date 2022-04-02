@@ -13,5 +13,11 @@
 // limitations under the License.
 
 mod columns_table;
+mod keywords_table;
+mod tables_table;
+mod views_table;
 
 pub use columns_table::ColumnsTable;
+pub use keywords_table::KeywordsTable;
+pub use tables_table::TablesTable;
+pub use views_table::ViewsTable;

@@ -20,6 +20,9 @@ use common_meta_types::DatabaseMeta;
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::storages::information_schema::ColumnsTable;
+use crate::storages::information_schema::KeywordsTable;
+use crate::storages::information_schema::TablesTable;
+use crate::storages::information_schema::ViewsTable;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -29,9 +32,12 @@ pub struct InformationSchemaDatabase {
 
 impl InformationSchemaDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
-        // todo(veeupup): create needed tables for infomation schema
-        // register sys_db_meta
-        let table_list: Vec<Arc<dyn Table>> = vec![ColumnsTable::create(sys_db_meta.next_id())];
+        let table_list: Vec<Arc<dyn Table>> = vec![
+            ColumnsTable::create(sys_db_meta.next_id()),
+            TablesTable::create(sys_db_meta.next_id()),
+            KeywordsTable::create(sys_db_meta.next_id()),
+            ViewsTable::create(sys_db_meta.next_id()),
+        ];
 
         for tbl in table_list.into_iter() {
             sys_db_meta.insert("information_schema", tbl);
