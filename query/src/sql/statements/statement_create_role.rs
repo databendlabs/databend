@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::RoleIdentity;
 use common_planners::CreateRolePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -27,7 +26,7 @@ use crate::sql::statements::AnalyzedResult;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateRole {
     pub if_not_exists: bool,
-    pub role_identity: RoleIdentity,
+    pub role_name: String,
 }
 
 #[async_trait::async_trait]
@@ -37,7 +36,7 @@ impl AnalyzableStatement for DfCreateRole {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateRole(
             CreateRolePlan {
                 if_not_exists: self.if_not_exists,
-                role_identity: self.role_identity.clone(),
+                role_name: self.role_name.clone(),
             },
         ))))
     }

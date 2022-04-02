@@ -48,8 +48,6 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
         },
     );
     user_info.grants.grant_privileges(
-        "root",
-        "127.0.0.1",
         &GrantObject::Global,
         UserPrivilegeSet::available_privileges_on_global(),
     );
@@ -81,8 +79,6 @@ pub async fn create_query_context_with_config(
         },
     );
     user_info.grants.grant_privileges(
-        "root",
-        "127.0.0.1",
         &GrantObject::Global,
         UserPrivilegeSet::available_privileges_on_global(),
     );

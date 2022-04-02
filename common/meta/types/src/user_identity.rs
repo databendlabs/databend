@@ -21,11 +21,15 @@ pub struct UserIdentity {
 }
 
 impl UserIdentity {
-    pub fn new(name: String, host: String) -> Self {
+    pub fn new(name: &str, host: &str) -> Self {
         Self {
-            username: name,
-            hostname: host,
+            username: name.to_string(),
+            hostname: host.to_string(),
         }
+    }
+
+    pub fn is_localhost(&self) -> bool {
+        &self.hostname.to_lowercase() == "localhost" || &self.hostname == "127.0.0.1"
     }
 }
 

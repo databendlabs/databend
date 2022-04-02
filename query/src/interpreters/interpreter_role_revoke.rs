@@ -54,7 +54,7 @@ impl Interpreter for RevokeRoleInterpreter {
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .revoke_role_from_user(&tenant, &user.username, &user.hostname, plan.role)
+                    .revoke_role_from_user(&tenant, user, plan.role)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {

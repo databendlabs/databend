@@ -17,12 +17,11 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RevokeRolePlan {
     pub principal: PrincipalIdentity,
-    pub role: RoleIdentity,
+    pub role: String,
 }
 
 impl RevokeRolePlan {

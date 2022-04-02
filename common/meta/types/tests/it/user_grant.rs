@@ -94,8 +94,6 @@ fn test_grant_object_contains() -> Result<()> {
 #[test]
 fn test_user_grant_entry() -> Result<()> {
     let grant = GrantEntry::new(
-        "u1".into(),
-        "h1".into(),
         GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Create}),
     );
@@ -113,8 +111,6 @@ fn test_user_grant_entry() -> Result<()> {
     ));
 
     let grant = GrantEntry::new(
-        "u1".into(),
-        "%".into(),
         GrantObject::Database("db1".into()),
         make_bitflags!(UserPrivilegeType::{Create}),
     );
@@ -132,8 +128,6 @@ fn test_user_grant_entry() -> Result<()> {
     ));
 
     let grant = GrantEntry::new(
-        "u1".into(),
-        "%".into(),
         GrantObject::Database("db1".into()),
         make_bitflags!(UserPrivilegeType::{Create}),
     );
@@ -162,26 +156,18 @@ fn test_user_grant_set() -> Result<()> {
     let mut grants = UserGrantSet::empty();
 
     grants.grant_privileges(
-        "u1",
-        "h1",
         &GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Create}).into(),
     );
     grants.grant_privileges(
-        "u1",
-        "h1",
         &GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
     grants.grant_privileges(
-        "u1",
-        "%",
         &GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
     grants.grant_privileges(
-        "u1",
-        "%",
         &GrantObject::Table("db1".into(), "table1".into()),
         make_bitflags!(UserPrivilegeType::{Select | Create}).into(),
     );
