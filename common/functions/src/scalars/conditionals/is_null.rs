@@ -54,10 +54,7 @@ impl Function for IsNullFunction {
         "IsNullFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(bool::to_data_type())
     }
 

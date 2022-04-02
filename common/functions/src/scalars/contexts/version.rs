@@ -19,8 +19,8 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::TypedFunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct VersionFunction {
@@ -28,7 +28,10 @@ pub struct VersionFunction {
 }
 
 impl VersionFunction {
-    pub fn try_create(display_name: &str, _args: &[&common_datavalues::DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(VersionFunction {
             _display_name: display_name.to_string(),
         }))

@@ -26,7 +26,7 @@ fn test_round_function() -> Result<()> {
 
     for r in &[1, 60, 60 * 10, 60 * 15, 60 * 30, 60 * 60, 60 * 60 * 24] {
         tests.push((
-            RoundFunction::try_create("toStartOfCustom", *r)?,
+            RoundFunction::try_create("toStartOfCustom", &[&DateTime32Type::arc(None)], *r)?,
             ScalarFunctionWithFieldTest {
                 name: "test-timeSlot-now",
                 columns: vec![ColumnWithField::new(

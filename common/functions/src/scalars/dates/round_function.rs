@@ -31,7 +31,19 @@ pub struct RoundFunction {
 }
 
 impl RoundFunction {
-    pub fn try_create(display_name: &str, round: u32) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[&DataTypePtr],
+        round: u32,
+    ) -> Result<Box<dyn Function>> {
+        if args[0].data_type_id() != TypeID::DateTime32 {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Function {} must have a DateTime type as argument, but got {}",
+                display_name,
+                args[0].name(),
+            )));
+        }
+
         let s = Self {
             display_name: display_name.to_owned(),
             round,
@@ -54,19 +66,8 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if args[0].data_type_id() == TypeID::DateTime32 {
-            return Ok(DateTime32Type::arc(None));
-        } else {
-            return Err(ErrorCode::BadDataValueType(format!(
-                "Function {} must have a DateTime type as argument, but got {}",
-                self.display_name,
-                args[0].name(),
-            )));
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(DateTime32Type::arc(None))
     }
 
     fn eval(

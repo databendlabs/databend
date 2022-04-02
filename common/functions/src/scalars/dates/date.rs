@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
 use super::number_function::ToYearFunction;
@@ -40,22 +38,21 @@ use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
-use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
+use crate::scalars::function_factory::FactoryCreatorWithTypes;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct DateFunction {}
 
 impl DateFunction {
-    fn round_function_creator(round: u32) -> FunctionDescription {
-        let creator: FactoryCreator = Box::new(move |display_name| -> Result<Box<dyn Function>> {
-            RoundFunction::try_create(display_name, round)
+    fn round_function_creator(round: u32) -> TypedFunctionDescription {
+        let creator: FactoryCreatorWithTypes = Box::new(move |display_name, args| {
+            RoundFunction::try_create(display_name, args, round)
         });
 
-        FunctionDescription::creator(creator).features(
+        TypedFunctionDescription::creator(creator).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -64,42 +61,42 @@ impl DateFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("today", TodayFunction::desc());
-        factory.register("yesterday", YesterdayFunction::desc());
-        factory.register("tomorrow", TomorrowFunction::desc());
-        factory.register("now", NowFunction::desc());
-        factory.register("toYYYYMM", ToYYYYMMFunction::desc());
-        factory.register("toYYYYMMDD", ToYYYYMMDDFunction::desc());
-        factory.register("toYYYYMMDDhhmmss", ToYYYYMMDDhhmmssFunction::desc());
-        factory.register("toStartOfYear", ToStartOfYearFunction::desc());
-        factory.register("toStartOfISOYear", ToStartOfISOYearFunction::desc());
-        factory.register("toStartOfQuarter", ToStartOfQuarterFunction::desc());
+        factory.register_typed("today", TodayFunction::desc());
+        factory.register_typed("yesterday", YesterdayFunction::desc());
+        factory.register_typed("tomorrow", TomorrowFunction::desc());
+        factory.register_typed("now", NowFunction::desc());
+        factory.register_typed("toYYYYMM", ToYYYYMMFunction::desc());
+        factory.register_typed("toYYYYMMDD", ToYYYYMMDDFunction::desc());
+        factory.register_typed("toYYYYMMDDhhmmss", ToYYYYMMDDhhmmssFunction::desc());
+        factory.register_typed("toStartOfYear", ToStartOfYearFunction::desc());
+        factory.register_typed("toStartOfISOYear", ToStartOfISOYearFunction::desc());
+        factory.register_typed("toStartOfQuarter", ToStartOfQuarterFunction::desc());
 
-        factory.register("toStartOfMonth", ToStartOfMonthFunction::desc());
-        factory.register("toMonth", ToMonthFunction::desc());
-        factory.register("toDayOfYear", ToDayOfYearFunction::desc());
-        factory.register("toDayOfMonth", ToDayOfMonthFunction::desc());
-        factory.register("toDayOfWeek", ToDayOfWeekFunction::desc());
-        factory.register("toHour", ToHourFunction::desc());
-        factory.register("toMinute", ToMinuteFunction::desc());
-        factory.register("toSecond", ToSecondFunction::desc());
-        factory.register("toMonday", ToMondayFunction::desc());
-        factory.register("toYear", ToYearFunction::desc());
+        factory.register_typed("toStartOfMonth", ToStartOfMonthFunction::desc());
+        factory.register_typed("toMonth", ToMonthFunction::desc());
+        factory.register_typed("toDayOfYear", ToDayOfYearFunction::desc());
+        factory.register_typed("toDayOfMonth", ToDayOfMonthFunction::desc());
+        factory.register_typed("toDayOfWeek", ToDayOfWeekFunction::desc());
+        factory.register_typed("toHour", ToHourFunction::desc());
+        factory.register_typed("toMinute", ToMinuteFunction::desc());
+        factory.register_typed("toSecond", ToSecondFunction::desc());
+        factory.register_typed("toMonday", ToMondayFunction::desc());
+        factory.register_typed("toYear", ToYearFunction::desc());
 
         // rounders
-        factory.register("toStartOfSecond", Self::round_function_creator(1));
-        factory.register("toStartOfMinute", Self::round_function_creator(60));
-        factory.register("toStartOfFiveMinutes", Self::round_function_creator(5 * 60));
-        factory.register("toStartOfTenMinutes", Self::round_function_creator(10 * 60));
-        factory.register(
+        factory.register_typed("toStartOfSecond", Self::round_function_creator(1));
+        factory.register_typed("toStartOfMinute", Self::round_function_creator(60));
+        factory.register_typed("toStartOfFiveMinutes", Self::round_function_creator(5 * 60));
+        factory.register_typed("toStartOfTenMinutes", Self::round_function_creator(10 * 60));
+        factory.register_typed(
             "toStartOfFifteenMinutes",
             Self::round_function_creator(15 * 60),
         );
-        factory.register("timeSlot", Self::round_function_creator(30 * 60));
-        factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
-        factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
+        factory.register_typed("timeSlot", Self::round_function_creator(30 * 60));
+        factory.register_typed("toStartOfHour", Self::round_function_creator(60 * 60));
+        factory.register_typed("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
 
-        factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
+        factory.register_typed("toStartOfWeek", ToStartOfWeekFunction::desc());
 
         //interval functions
         factory.register_typed("addYears", AddYearsFunction::desc(1));

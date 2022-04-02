@@ -25,10 +25,11 @@ use common_datavalues::Date16Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::TypedFunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
+use crate::scalars::FactoryCreatorWithTypes;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::FunctionContext;
@@ -57,7 +58,7 @@ pub trait NumberOperator<R> {
         None
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         None
     }
 }
@@ -111,7 +112,7 @@ impl NumberOperator<u16> for ToStartOfYear {
         get_day(end) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -132,7 +133,7 @@ impl NumberOperator<u16> for ToStartOfISOYear {
         get_day(end) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -149,7 +150,7 @@ impl NumberOperator<u16> for ToStartOfQuarter {
         get_day(date) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -165,7 +166,7 @@ impl NumberOperator<u16> for ToStartOfMonth {
         get_day(date) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -265,7 +266,10 @@ impl NumberOperator<u8> for ToMinute {
 
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(RoundFunction::try_create("toStartOfHour", 60 * 60).unwrap())
+        Some(
+            RoundFunction::try_create("toStartOfHour", &[&DateTime32Type::arc(None)], 60 * 60)
+                .unwrap(),
+        )
     }
 }
 
@@ -281,7 +285,10 @@ impl NumberOperator<u8> for ToSecond {
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(RoundFunction::try_create("toStartOfMinute", 60).unwrap())
+        Some(
+            RoundFunction::try_create("toStartOfMinute", &[&DateTime32Type::arc(None)], 60)
+                .unwrap(),
+        )
     }
 }
 
@@ -311,7 +318,7 @@ impl NumberOperator<u16> for ToYear {
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone + Sync + Send + 'static,
-    R: PrimitiveType + Clone + ToDataType + common_datavalues::Scalar<RefType<'static> = R>,
+    R: PrimitiveType + Clone + ToDataType + Scalar<RefType<'static> = R>,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(NumberFunction::<T, R> {
@@ -321,14 +328,17 @@ where
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> TypedFunctionDescription {
         let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        let function_creator: FactoryCreatorWithTypes =
+            Box::new(move |display_name, _args| Self::try_create(display_name));
+
+        TypedFunctionDescription::creator(function_creator).features(features)
     }
 }
 
@@ -341,10 +351,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         match T::return_type() {
             None => Ok(R::to_data_type()),
             Some(v) => Ok(v),

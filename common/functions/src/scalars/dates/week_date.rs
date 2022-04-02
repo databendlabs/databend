@@ -30,9 +30,9 @@ use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone, Debug)]
 pub struct WeekFunction<T, R> {
@@ -80,7 +80,12 @@ where
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_date_or_datetime(args[0])?;
+        if args.len() > 1 {
+            assert_numeric(args[1])?;
+        }
+
         Ok(Box::new(WeekFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -88,7 +93,7 @@ where
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> TypedFunctionDescription {
         let mut features = FunctionFeatures::default()
             .monotonicity()
             .variadic_arguments(1, 2);
@@ -97,7 +102,7 @@ where
             features = features.deterministic();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
@@ -113,11 +118,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_date_or_datetime(args[0])?;
-        if args.len() > 1 {
-            assert_numeric(args[1])?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         T::return_type()
     }
 

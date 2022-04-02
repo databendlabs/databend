@@ -23,7 +23,7 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::TypedFunctionDescription;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
@@ -80,15 +80,15 @@ impl NoArgDateFunction for Tomorrow {
 impl<T> SimpleFunction<T>
 where T: NoArgDateFunction + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(SimpleFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default())
     }
 }
@@ -100,17 +100,14 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Date16Type::arc())
     }
 
     fn eval(
         &self,
-        _columns: &common_datavalues::ColumnsWithField,
-        input_rows: usize,
+        columns: &common_datavalues::ColumnsWithField,
+        _input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
