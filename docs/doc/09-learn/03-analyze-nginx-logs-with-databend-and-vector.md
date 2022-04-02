@@ -197,7 +197,7 @@ select * from nginx.access_logs;
 +---------------------+--------+-----------+--------+-------+------------+--------------+--------+---------------------------+--------+---------+-----------------------------------------------------------------------------------------------------------+------------+-----------------+--------------+
 ```
 
-### 4.3 Analyze the logs
+### 4.3 Analyzing the Logs
 
 - Top 10 Request IPs
 ```shell title='mysql>'
@@ -209,5 +209,5 @@ select count(*) as count from nginx.access_logs group by request order by count 
 ```
 - Top 10 HTTP 404 Pages
 ```shell title='mysql>'
-select countif(status=404), uri as count from nginx.access_logs group by uri order by count desc limit 10;
+select countif(status=404) as count, uri from nginx.access_logs group by uri order by count desc limit 10;
 ```
