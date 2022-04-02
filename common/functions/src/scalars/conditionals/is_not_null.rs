@@ -19,8 +19,8 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct IsNotNullFunction {
@@ -28,14 +28,17 @@ pub struct IsNotNullFunction {
 }
 
 impl IsNotNullFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        _args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNotNullFunction {
             _display_name: "isNotNull".to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("isNull")

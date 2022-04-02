@@ -28,7 +28,11 @@ fn test_is_null_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(IsNullFunction::try_create_func("")?, &tests, false)
+    test_scalar_functions(
+        IsNullFunction::try_create_func("", &[&NullableType::arc(Int32Type::arc())])?,
+        &tests,
+        false,
+    )
 }
 
 #[test]
@@ -40,5 +44,9 @@ fn test_is_not_null_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(IsNotNullFunction::try_create_func("")?, &tests, false)
+    test_scalar_functions(
+        IsNotNullFunction::try_create_func("", &[&NullableType::arc(Int32Type::arc())])?,
+        &tests,
+        false,
+    )
 }
