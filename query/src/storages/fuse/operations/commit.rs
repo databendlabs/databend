@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -25,7 +26,6 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MatchSeq;
-use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
@@ -34,6 +34,7 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::OPT_KEY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -184,8 +185,7 @@ impl FuseTable {
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
-        Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc.clone())
-            .await?;
+        Self::commit_to_meta_server(ctx, &self.get_table_info(), snapshot_loc.clone()).await?;
         ctx.get_write_progress().incr(&progress_values);
 
         if let Some(snapshot_cache) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
@@ -230,21 +230,26 @@ impl FuseTable {
 
     async fn commit_to_meta_server(
         ctx: &QueryContext,
-        tbl_id: &TableIdent,
+        table_info: &TableInfo,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
-        let table_id = tbl_id.table_id;
         let catalog = ctx.get_catalog();
+        let mut options = [(
+            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+            Some(new_snapshot_location),
+        )]
+        .into_iter()
+        .collect();
 
+        // if there were any legacy options keys, it is a good chance to remove them
+        Self::gather_legacy_options(table_info, &mut options);
+
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.version;
         let req = UpsertTableOptionReq {
             table_id,
-            seq: MatchSeq::Exact(tbl_id.version),
-            options: [(
-                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-                Some(new_snapshot_location),
-            )]
-            .into_iter()
-            .collect(),
+            seq: MatchSeq::Exact(table_version),
+            options,
         };
 
         catalog.upsert_table_option(req).await
@@ -274,5 +279,17 @@ impl FuseTable {
         )?;
 
         Ok((seg_locs, s))
+    }
+
+    // check if there are any fuse table legacy options
+    fn gather_legacy_options(
+        table_info: &TableInfo,
+        options_of_upsert: &mut HashMap<String, Option<String>>,
+    ) {
+        let table_options = table_info.options();
+        if table_options.contains_key(OPT_KEY_SNAPSHOT_LOC) {
+            // remove the option by setting the value of option to None
+            options_of_upsert.insert(OPT_KEY_SNAPSHOT_LOC.to_owned(), None);
+        }
     }
 }

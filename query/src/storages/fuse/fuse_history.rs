@@ -22,8 +22,6 @@ use super::io::MetaReaders;
 use super::meta::TableSnapshot;
 use super::FuseTable;
 use crate::sessions::QueryContext;
-use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
-use crate::storages::Table;
 
 pub struct FuseHistory<'a> {
     pub ctx: Arc<QueryContext>,
@@ -36,9 +34,8 @@ impl<'a> FuseHistory<'a> {
     }
 
     pub async fn get_history(&self) -> Result<DataBlock> {
-        let tbl = &self.table;
-        let tbl_info = tbl.get_table_info();
-        let snapshot_location = tbl_info.meta.options.get(OPT_KEY_SNAPSHOT_LOCATION);
+        let tbl = self.table;
+        let snapshot_location = tbl.snapshot_loc();
         let snapshot_version = tbl.snapshot_format_version();
         let reader = MetaReaders::table_snapshot_reader(self.ctx.as_ref());
         let snapshots = reader
@@ -58,7 +55,7 @@ impl<'a> FuseHistory<'a> {
     ) -> Result<DataBlock> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
-        let mut snapshot_locs: Vec<Vec<u8>> = Vec::with_capacity(len);
+        let mut snapshot_locations: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut segment_count: Vec<u64> = Vec::with_capacity(len);
@@ -70,7 +67,7 @@ impl<'a> FuseHistory<'a> {
         let location_generator = &self.table.meta_location_generator;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
-            snapshot_locs.push(
+            snapshot_locations.push(
                 location_generator
                     .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?
                     .into_bytes(),
@@ -91,7 +88,7 @@ impl<'a> FuseHistory<'a> {
 
         Ok(DataBlock::create(FuseHistory::schema(), vec![
             Series::from_data(snapshot_ids),
-            Series::from_data(snapshot_locs),
+            Series::from_data(snapshot_locations),
             Series::from_data(format_versions),
             Series::from_data(prev_snapshot_ids),
             Series::from_data(segment_count),
@@ -105,9 +102,9 @@ impl<'a> FuseHistory<'a> {
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
             DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new("location", Vu8::to_data_type()),
+            DataField::new("snapshot_location", Vu8::to_data_type()),
             DataField::new("format_version", u64::to_data_type()),
-            DataField::new_nullable("prev_snapshot_id", Vu8::to_data_type()),
+            DataField::new_nullable("previous_snapshot_id", Vu8::to_data_type()),
             DataField::new("segment_count", u64::to_data_type()),
             DataField::new("block_count", u64::to_data_type()),
             DataField::new("row_count", u64::to_data_type()),

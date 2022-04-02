@@ -67,14 +67,14 @@ impl MetaReaders {
 impl<'a> TableSnapshotReader<'a> {
     pub async fn read_snapshot_history(
         &self,
-        latest_snapshot_location: Option<&String>,
+        latest_snapshot_location: Option<impl AsRef<str>>,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
         if let Some(loc) = latest_snapshot_location {
             let mut ver = format_version;
-            let mut loc = loc.to_string();
+            let mut loc = loc.as_ref().to_string();
             loop {
                 let snapshot = match self.read(loc, None, ver).await {
                     Ok(s) => s,
