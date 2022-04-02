@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,6 +40,16 @@ impl ViewTable {
             Err(ErrorCode::LogicalError(
                 "Need `query` when creating ViewTable",
             ))
+        }
+    }
+
+    /** When using `create`, must provide query in table_info */
+    pub fn create(table_info: TableInfo) -> Arc<dyn Table> {
+        let query = table_info.options().get(QUERY).cloned();
+        if let Some(query) = query {
+            Arc::new(ViewTable { query, table_info })
+        } else {
+            panic!("Need `query` when creating ViewTable")
         }
     }
 
