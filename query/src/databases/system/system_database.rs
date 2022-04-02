@@ -31,24 +31,24 @@ pub struct SystemDatabase {
 impl SystemDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
-            system::OneTable::create(sys_db_meta.next_id()),
-            system::FunctionsTable::create(sys_db_meta.next_id()),
-            system::ContributorsTable::create(sys_db_meta.next_id()),
-            system::CreditsTable::create(sys_db_meta.next_id()),
-            system::SettingsTable::create(sys_db_meta.next_id()),
-            system::TablesTable::create(sys_db_meta.next_id()),
-            system::ClustersTable::create(sys_db_meta.next_id()),
-            system::DatabasesTable::create(sys_db_meta.next_id()),
-            Arc::new(system::TracingTable::create(sys_db_meta.next_id())),
-            system::ProcessesTable::create(sys_db_meta.next_id()),
-            system::ConfigsTable::create(sys_db_meta.next_id()),
-            system::MetricsTable::create(sys_db_meta.next_id()),
-            system::ColumnsTable::create(sys_db_meta.next_id()),
-            system::UsersTable::create(sys_db_meta.next_id()),
-            system::WarehousesTable::create(sys_db_meta.next_id()),
-            Arc::new(system::QueryLogTable::create(sys_db_meta.next_id())),
-            system::EnginesTable::create(sys_db_meta.next_id()),
-            system::RolesTable::create(sys_db_meta.next_id()),
+            system::OneTable::create(sys_db_meta.next_table_id()),
+            system::FunctionsTable::create(sys_db_meta.next_table_id()),
+            system::ContributorsTable::create(sys_db_meta.next_table_id()),
+            system::CreditsTable::create(sys_db_meta.next_table_id()),
+            system::SettingsTable::create(sys_db_meta.next_table_id()),
+            system::TablesTable::create(sys_db_meta.next_table_id()),
+            system::ClustersTable::create(sys_db_meta.next_table_id()),
+            system::DatabasesTable::create(sys_db_meta.next_table_id()),
+            Arc::new(system::TracingTable::create(sys_db_meta.next_table_id())),
+            system::ProcessesTable::create(sys_db_meta.next_table_id()),
+            system::ConfigsTable::create(sys_db_meta.next_table_id()),
+            system::MetricsTable::create(sys_db_meta.next_table_id()),
+            system::ColumnsTable::create(sys_db_meta.next_table_id()),
+            system::UsersTable::create(sys_db_meta.next_table_id()),
+            system::WarehousesTable::create(sys_db_meta.next_table_id()),
+            Arc::new(system::QueryLogTable::create(sys_db_meta.next_table_id())),
+            system::EnginesTable::create(sys_db_meta.next_table_id()),
+            system::RolesTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {
@@ -56,7 +56,7 @@ impl SystemDatabase {
         }
 
         let db_info = DatabaseInfo {
-            database_id: 0,
+            database_id: sys_db_meta.next_db_id(),
             db: "system".to_string(),
             meta: DatabaseMeta {
                 engine: "SYSTEM".to_string(),

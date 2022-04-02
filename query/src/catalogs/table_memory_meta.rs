@@ -31,14 +31,16 @@ pub struct DbTables {
 }
 
 pub struct InMemoryMetas {
-    next_id: AtomicU64,
+    next_table_id: AtomicU64,
+    next_db_id: AtomicU64,
     db_tables: RwLock<HashMap<String, DbTables>>,
 }
 
 impl InMemoryMetas {
-    pub fn create(next_id: u64) -> Self {
+    pub fn create(next_db_id: u64, next_table_id: u64) -> Self {
         InMemoryMetas {
-            next_id: AtomicU64::new(next_id),
+            next_table_id: AtomicU64::new(next_table_id),
+            next_db_id: AtomicU64::new(next_db_id),
             db_tables: RwLock::new(HashMap::new()),
         }
     }
@@ -51,10 +53,16 @@ impl InMemoryMetas {
         });
     }
 
-    /// Get the next id.
-    pub fn next_id(&self) -> u64 {
-        self.next_id.fetch_add(1, Ordering::Relaxed);
-        self.next_id.load(Ordering::Relaxed) as u64
+    /// Get the next db id.
+    pub fn next_db_id(&self) -> u64 {
+        self.next_db_id.fetch_add(1, Ordering::Relaxed);
+        self.next_db_id.load(Ordering::Relaxed) as u64
+    }
+
+    /// Get the next table id.
+    pub fn next_table_id(&self) -> u64 {
+        self.next_table_id.fetch_add(1, Ordering::Relaxed);
+        self.next_table_id.load(Ordering::Relaxed) as u64
     }
 
     pub fn insert(&self, db: &str, tbl_ref: Arc<dyn Table>) {
@@ -80,10 +88,9 @@ impl InMemoryMetas {
                 .read()
                 .get(name)
                 .cloned()
-                .ok_or(ErrorCode::UnknownTable(format!(
-                    "`{}.{}` table is unknown",
-                    db, name
-                )))
+                .ok_or_else(|| {
+                    ErrorCode::UnknownTable(format!("`{}.{}` table is unknown", db, name))
+                })
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
                 "`{}` database is unknown",

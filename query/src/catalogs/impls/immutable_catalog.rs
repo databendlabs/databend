@@ -33,6 +33,7 @@ use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::InMemoryMetas;
+use crate::catalogs::SYS_DB_ID_BEGIN;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::configs::Config;
 use crate::databases::Database;
@@ -45,25 +46,29 @@ use crate::storages::Table;
 /// "information_schema" db is supposed to held here
 #[derive(Clone)]
 pub struct ImmutableCatalog {
-    info_schema_db: Arc<InformationSchemaDatabase>,
+    // the difference between `info_schema_db` and `info_schema_db_upper` is their database name's case
+    // it's case sensitive, so we will need two same database only with the name's case
+    info_schema_db: Arc<InformationSchemaDatabase<false>>,
+    info_schema_db_upper: Arc<InformationSchemaDatabase<true>>,
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
 }
 
 impl ImmutableCatalog {
     pub async fn try_create_with_config(_conf: &Config) -> Result<Self> {
-        let system_table_id = SYS_TBL_ID_BEGIN;
-
         // The global db meta.
-        let mut sys_db_meta = InMemoryMetas::create(system_table_id);
+        let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
         sys_db_meta.init_db("information_schema");
+        sys_db_meta.init_db("INFORMATION_SCHEMA");
 
         let sys_db = SystemDatabase::create(&mut sys_db_meta);
-        let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
+        let info_schema_db = InformationSchemaDatabase::<false>::create(&mut sys_db_meta);
+        let info_schema_db_upper = InformationSchemaDatabase::<true>::create(&mut sys_db_meta);
 
         Ok(Self {
             info_schema_db: Arc::new(info_schema_db),
+            info_schema_db_upper: Arc::new(info_schema_db_upper),
             sys_db: Arc::new(sys_db),
             sys_db_meta: Arc::new(sys_db_meta),
         })
@@ -76,6 +81,7 @@ impl Catalog for ImmutableCatalog {
         match db_name {
             "system" => Ok(self.sys_db.clone()),
             "information_schema" => Ok(self.info_schema_db.clone()),
+            "INFORMATION_SCHEMA" => Ok(self.info_schema_db_upper.clone()),
             _ => Err(ErrorCode::UnknownDatabase(format!(
                 "Unknown database {}",
                 db_name
@@ -84,7 +90,11 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
-        Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
+        Ok(vec![
+            self.sys_db.clone(),
+            self.info_schema_db.clone(),
+            self.info_schema_db_upper.clone(),
+        ])
     }
 
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
@@ -122,8 +132,7 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let _db = self.get_database(tenant, db_name).await?;
 
-        let ret = self.sys_db_meta.get_by_name(db_name, table_name);
-        ret
+        self.sys_db_meta.get_by_name(db_name, table_name)
     }
 
     async fn list_tables(&self, _tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {

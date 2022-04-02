@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+// min id for system database
+pub const SYS_DB_ID_BEGIN: u64 = 1 << 62;
 // min id for system tables (inclusive)
 pub const SYS_TBL_ID_BEGIN: u64 = 1 << 62;
 // max id for system tables (exclusive)
