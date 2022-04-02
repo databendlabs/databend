@@ -19,19 +19,19 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
+use crate::scalars::TypedFunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct CurrentUserFunction {}
 
 impl CurrentUserFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, _args: &[&common_datavalues::DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(CurrentUserFunction {}))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .context_function()
                 .num_arguments(1),

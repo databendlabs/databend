@@ -22,8 +22,8 @@ pub struct ContextFunction;
 
 impl ContextFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("database", DatabaseFunction::desc());
-        factory.register("version", VersionFunction::desc());
-        factory.register("current_user", CurrentUserFunction::desc());
+        factory.register_typed("database", DatabaseFunction::desc());
+        factory.register_typed("version", VersionFunction::desc());
+        factory.register_typed("current_user", CurrentUserFunction::desc());
     }
 }
