@@ -16,7 +16,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use common_range_map::RangeWrapper;
+use common_range_map::RangeKey;
 
 #[cfg(test)]
 
@@ -29,22 +29,14 @@ fn upsert_cmp_map(map: &mut BTreeMap<String, BTreeSet<String>>, k: String, v: St
     }
 }
 
-/// test if or not RangeWrapper satisfy reflexive property
+/// test if or not RangeKey satisfy reflexive property
 #[test]
 fn test_range_wrapper_reflexive_property() {
-    let tests = vec![
-        RangeWrapper::new(2..4),
-        RangeWrapper::new(0..1),
-        RangeWrapper::new(1..2),
-        RangeWrapper::new(2..3),
-        RangeWrapper::new(3..4),
-        RangeWrapper::new(1..4),
-        RangeWrapper::new(1..5),
-        RangeWrapper::new(2..6),
-        RangeWrapper::new(3..6),
-        RangeWrapper::new(4..6),
-        RangeWrapper::new(5..6),
-    ];
+    let mut tests = vec![];
+    for i in 0..10 {
+        tests.push(RangeKey::new(0..i, ()));
+    }
+
     let mut less_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut greater_map: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
