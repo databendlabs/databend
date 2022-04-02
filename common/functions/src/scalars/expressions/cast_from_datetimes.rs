@@ -55,7 +55,10 @@ pub fn cast_from_date16(
         }
 
         TypeID::DateTime64 => {
-            let it = c.iter().map(|v| *v as i64 * 24 * 3600 * 1_000_000_000);
+            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+            let it = c
+                .iter()
+                .map(|v| datetime.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -92,7 +95,10 @@ pub fn cast_from_date32(
         }
 
         TypeID::DateTime64 => {
-            let it = c.iter().map(|v| *v as i64 * 24 * 3600 * 1_000_000_000);
+            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+            let it = c
+                .iter()
+                .map(|v| datetime.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -135,7 +141,10 @@ pub fn cast_from_datetime32(
         }
 
         TypeID::DateTime64 => {
-            let it = c.iter().map(|v| *v as i64 * 1_000_000_000);
+            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+            let it = c
+                .iter()
+                .map(|v| datetime.from_nano_seconds(*v as i64 * 1_000_000_000));
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -172,7 +181,7 @@ pub fn cast_from_datetime64(
         TypeID::Date16 => {
             let it = c
                 .iter()
-                .map(|v| (date_time64.seconds(*v) / 24 / 3600) as u16);
+                .map(|v| (date_time64.to_seconds(*v) / 24 / 3600) as u16);
             let result = Arc::new(UInt16Column::from_iterator(it));
             Ok((result, None))
         }
@@ -180,13 +189,13 @@ pub fn cast_from_datetime64(
         TypeID::Date32 => {
             let it = c
                 .iter()
-                .map(|v| (date_time64.seconds(*v) / 24 / 3600) as i32);
+                .map(|v| (date_time64.to_seconds(*v) / 24 / 3600) as i32);
             let result = Arc::new(Int32Column::from_iterator(it));
             Ok((result, None))
         }
 
         TypeID::DateTime32 => {
-            let it = c.iter().map(|v| date_time64.seconds(*v) as u32);
+            let it = c.iter().map(|v| date_time64.to_seconds(*v) as u32);
             let result = Arc::new(UInt32Column::from_iterator(it));
             Ok((result, None))
         }

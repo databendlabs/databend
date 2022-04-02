@@ -163,6 +163,7 @@ build_exceptions! {
     TableAlreadyExists(2302),
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
+    ViewAlreadyExists(2306),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

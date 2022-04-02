@@ -21,6 +21,7 @@ use common_planners::ShowPlan;
 
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::AlterViewInterpreter;
 use super::CreateUserStageInterpreter;
 use super::ListInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
@@ -34,12 +35,14 @@ use crate::interpreters::CreateRoleInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::CreateUserUDFInterpreter;
+use crate::interpreters::CreateViewInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropRoleInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
+use crate::interpreters::DropViewInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::GrantRoleInterpreter;
@@ -135,6 +138,11 @@ impl InterpreterFactory {
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
+
+            // View.
+            PlanNode::CreateView(v) => CreateViewInterpreter::try_create(ctx_clone, v),
+            PlanNode::AlterView(v) => AlterViewInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropView(v) => DropViewInterpreter::try_create(ctx_clone, v),
 
             // User.
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),

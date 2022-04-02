@@ -37,20 +37,20 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs groupId="operating-systems">
-<TabItem value="linux" label="Ubuntu">
+<TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.0-nightly/databend-v0.7.0-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 </Tabs>
 
 <Tabs groupId="operating-systems">
-<TabItem value="linux" label="Ubuntu">
+<TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.0-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
