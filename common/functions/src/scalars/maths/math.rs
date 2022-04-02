@@ -51,7 +51,7 @@ impl MathsFunction {
         factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());
-        factory.register("crc32", CRC32Function::desc());
+        factory.register_typed("crc32", CRC32Function::desc());
         factory.register("exp", ExpFunction::desc());
         factory.register("sqrt", SqrtFunction::desc());
         factory.register("ceil", CeilFunction::desc());

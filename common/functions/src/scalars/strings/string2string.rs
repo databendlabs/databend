@@ -22,9 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
-// use common_tracing::tracing;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
     fn try_apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Result<usize>;
@@ -44,15 +43,22 @@ pub struct String2StringFunction<T> {
 }
 
 impl<T: StringOperator> String2StringFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if args[0].data_type_id() != TypeID::String {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected string arg, but got {:?}",
+                args[0]
+            )));
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             _marker: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -62,16 +68,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         &self.display_name
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if args[0].data_type_id() != TypeID::String {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string arg, but got {:?}",
-                args[0]
-            )));
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(StringType::arc())
     }
 

@@ -13,9 +13,9 @@
 // limitations under the License.
 use common_exception::Result;
 
-use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FactoryCreatorWithTypes;
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::function_factory::TypedFunctionDescription;
 use crate::scalars::CastFunction;
 use crate::scalars::FunctionFeatures;
 
@@ -23,7 +23,7 @@ use crate::scalars::FunctionFeatures;
 pub struct ToCastFunction;
 
 impl ToCastFunction {
-    fn cast_function_creator(type_name: &'static str) -> Result<FunctionDescription> {
+    fn cast_function_creator(type_name: &'static str) -> Result<TypedFunctionDescription> {
         let mut features = FunctionFeatures::default()
             .deterministic()
             .monotonicity()
@@ -37,10 +37,10 @@ impl ToCastFunction {
             _ => features.num_arguments(1),
         };
 
-        let function_creator: FactoryCreator =
-            Box::new(move |display_name| CastFunction::create(display_name, type_name));
+        let function_creator: FactoryCreatorWithTypes =
+            Box::new(move |display_name, _args| CastFunction::create(display_name, type_name));
 
-        Ok(FunctionDescription::creator(function_creator).features(features))
+        Ok(TypedFunctionDescription::creator(function_creator).features(features))
     }
 
     pub fn register(factory: &mut FunctionFactory) {
@@ -69,7 +69,7 @@ impl ToCastFunction {
         for name in names {
             let to_name = format!("to{}", name);
 
-            factory.register(&to_name, Self::cast_function_creator(name).unwrap());
+            factory.register_typed(&to_name, Self::cast_function_creator(name).unwrap());
         }
     }
 }

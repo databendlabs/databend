@@ -25,8 +25,8 @@ use sha2::Digest;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct Sha2HashFunction {
@@ -34,27 +34,7 @@ pub struct Sha2HashFunction {
 }
 
 impl Sha2HashFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Sha2HashFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-}
-
-impl Function for Sha2HashFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if args[0].data_type_id() != TypeID::String {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected first arg as string type, but got {:?}",
@@ -68,6 +48,24 @@ impl Function for Sha2HashFunction {
                 args[1]
             )));
         }
+
+        Ok(Box::new(Sha2HashFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+impl Function for Sha2HashFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(StringType::arc())
     }
 

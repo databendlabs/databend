@@ -27,8 +27,8 @@ use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 // This is not a correct implementation of stateful hasher. But just a thin wrapper of stateless hash for leveraging DFHash trait.
 // It is good enough for column hashing because we don't really need stream hashing.
@@ -61,27 +61,7 @@ pub struct City64WithSeedFunction {
 
 // CityHash64WithSeed(value, seed)
 impl City64WithSeedFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(City64WithSeedFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-}
-
-impl Function for City64WithSeedFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if !matches!(
             args[0].data_type_id(),
             TypeID::UInt8
@@ -113,6 +93,24 @@ impl Function for City64WithSeedFunction {
                 args[1]
             )));
         }
+
+        Ok(Box::new(City64WithSeedFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+impl Function for City64WithSeedFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(UInt64Type::arc())
     }
 

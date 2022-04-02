@@ -64,18 +64,18 @@ pub struct StringFunction;
 
 impl StringFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("to_base64", Base64EncodeFunction::desc());
-        factory.register("from_base64", Base64DecodeFunction::desc());
-        factory.register("rtrim", RTrimFunction::desc());
-        factory.register("trim", TrimFunction::desc());
-        factory.register("ltrim", LTrimFunction::desc());
-        factory.register("quote", QuoteFunction::desc());
-        factory.register("lower", LowerFunction::desc());
-        factory.register("lcase", LowerFunction::desc());
-        factory.register("upper", UpperFunction::desc());
-        factory.register("ucase", UpperFunction::desc());
-        factory.register("reverse", ReverseFunction::desc());
-        factory.register("soundex", SoundexFunction::desc());
+        factory.register_typed("to_base64", Base64EncodeFunction::desc());
+        factory.register_typed("from_base64", Base64DecodeFunction::desc());
+        factory.register_typed("rtrim", RTrimFunction::desc());
+        factory.register_typed("trim", TrimFunction::desc());
+        factory.register_typed("ltrim", LTrimFunction::desc());
+        factory.register_typed("quote", QuoteFunction::desc());
+        factory.register_typed("lower", LowerFunction::desc());
+        factory.register_typed("lcase", LowerFunction::desc());
+        factory.register_typed("upper", UpperFunction::desc());
+        factory.register_typed("ucase", UpperFunction::desc());
+        factory.register_typed("reverse", ReverseFunction::desc());
+        factory.register_typed("soundex", SoundexFunction::desc());
         factory.register("ascii", AsciiFunction::desc());
         factory.register("bit_length", BitLengthFunction::desc());
         factory.register("octet_length", OctetLengthFunction::desc());
