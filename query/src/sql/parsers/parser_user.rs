@@ -16,7 +16,6 @@
 // See notice.md
 
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -47,14 +46,13 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (name, hostname) = self.parse_principal_name_and_host()?;
+        let (username, hostname) = self.parse_principal_name_and_host()?;
         let with_options = self.parse_user_options()?;
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
-            name,
-            hostname,
+            user: UserIdentity { username, hostname },
             auth_option,
             with_options,
         };
@@ -66,7 +64,7 @@ impl<'a> DfParser<'a> {
             && self.parser.expect_token(&Token::LParen).is_ok()
             && self.parser.expect_token(&Token::RParen).is_ok();
 
-        let (name, hostname) = if !if_current_user {
+        let (username, hostname) = if !if_current_user {
             self.parse_principal_name_and_host()?
         } else {
             ("".to_string(), "".to_string())
@@ -86,8 +84,7 @@ impl<'a> DfParser<'a> {
 
         let alter = DfAlterUser {
             if_current_user,
-            name,
-            hostname,
+            user: UserIdentity { username, hostname },
             auth_option,
             with_options,
         };
@@ -97,11 +94,10 @@ impl<'a> DfParser<'a> {
 
     pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let (name, hostname) = self.parse_principal_name_and_host()?;
+        let (username, hostname) = self.parse_principal_name_and_host()?;
         let drop = DfDropUser {
             if_exists,
-            name,
-            hostname,
+            user: UserIdentity { username, hostname },
         };
         Ok(DfStatement::DropUser(drop))
     }
@@ -114,7 +110,7 @@ impl<'a> DfParser<'a> {
         let name = self.parser.parse_literal_string()?;
         let create = DfCreateRole {
             if_not_exists,
-            role_identity: RoleIdentity::new(name),
+            role_name: name,
         };
         Ok(DfStatement::CreateRole(create))
     }
@@ -125,7 +121,7 @@ impl<'a> DfParser<'a> {
         let name = self.parser.parse_literal_string()?;
         let drop = DfDropRole {
             if_exists,
-            role_identity: RoleIdentity::new(name),
+            role_name: name,
         };
         Ok(DfStatement::DropRole(drop))
     }
@@ -164,7 +160,7 @@ impl<'a> DfParser<'a> {
         let principal = self.parse_principal_identity()?;
         let grant = DfGrantRoleStatement {
             principal,
-            role: RoleIdentity { name },
+            role: name,
         };
         Ok(DfStatement::GrantRole(grant))
     }
@@ -204,7 +200,7 @@ impl<'a> DfParser<'a> {
         let prinicpal = self.parse_principal_identity()?;
         let revoke = DfRevokeRoleStatement {
             principal: prinicpal,
-            role: RoleIdentity { name },
+            role: name,
         };
         Ok(DfStatement::RevokeRole(revoke))
     }

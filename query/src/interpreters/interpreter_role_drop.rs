@@ -52,7 +52,7 @@ impl Interpreter for DropRoleInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         user_mgr
-            .drop_role(&tenant, plan.role_identity, plan.if_exists)
+            .drop_role(&tenant, plan.role_name, plan.if_exists)
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

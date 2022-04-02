@@ -1,5 +1,7 @@
 ---
 title: ALTER VIEW
+description:
+  Modifies the properties for an existing view.
 ---
 
 Alter the existing view by using another `QUERY`.

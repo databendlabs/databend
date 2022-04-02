@@ -52,13 +52,7 @@ impl Interpreter for AlterUserInterpreter {
         let user_mgr = self.ctx.get_user_manager();
         if plan.auth_info.is_some() || plan.user_option.is_some() {
             user_mgr
-                .update_user(
-                    &tenant,
-                    plan.name.as_str(),
-                    plan.hostname.as_str(),
-                    plan.auth_info,
-                    plan.user_option,
-                )
+                .update_user(&tenant, plan.user, plan.auth_info, plan.user_option)
                 .await?;
         }
 

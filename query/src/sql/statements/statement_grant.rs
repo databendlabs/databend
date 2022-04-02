@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_planners::GrantRolePlan;
@@ -86,7 +85,7 @@ impl AnalyzableStatement for DfGrantPrivilegeStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfGrantRoleStatement {
-    pub role: RoleIdentity,
+    pub role: String,
     pub principal: PrincipalIdentity,
 }
 

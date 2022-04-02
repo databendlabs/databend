@@ -24,7 +24,6 @@ use common_base::tokio::task::JoinHandle;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeType;
 use common_tracing::tracing;
@@ -93,7 +92,7 @@ impl RoleCacheMgr {
     pub async fn verify_privilege(
         &self,
         tenant: &str,
-        role_identities: &[RoleIdentity],
+        role_identities: &[String],
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> Result<bool> {
@@ -136,7 +135,7 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()
-        .map(|r| (r.identity().to_string(), r))
+        .map(|r| (r.identity(), r))
         .collect::<HashMap<_, _>>();
     Ok(CachedRoles {
         roles: roles_map,
@@ -147,11 +146,11 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
 pub fn find_all_related_roles(
     cache: &HashMap<String, RoleInfo>,
-    role_identities: &[RoleIdentity],
+    role_identities: &[String],
 ) -> Vec<RoleInfo> {
-    let mut visited: HashSet<RoleIdentity> = HashSet::new();
+    let mut visited: HashSet<String> = HashSet::new();
     let mut result: Vec<RoleInfo> = vec![];
-    let mut q: VecDeque<RoleIdentity> = role_identities.iter().cloned().collect();
+    let mut q: VecDeque<String> = role_identities.iter().cloned().collect();
     while let Some(role_identity) = q.pop_front() {
         if visited.contains(&role_identity) {
             continue;
