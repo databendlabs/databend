@@ -17,10 +17,22 @@ use std::collections::HashSet;
 use lazy_static::lazy_static;
 
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
+pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_loc";
 
 lazy_static! {
+    /// Table option keys that reserved for internal usage only
+    /// - Users are not allowed to specified this option keys in DDL
+    /// - Should not be shown in `show create table` statment
     pub static ref RESERVED_TABLE_OPTION_KEYS: HashSet<&'static str> = {
         let mut r = HashSet::new();
+        r.insert(OPT_KEY_DATABASE_ID);
+        r
+    };
+
+    /// Table option keys that Should not be shown in `show create table` statment
+    pub static ref INTERNAL_TABLE_OPTION_KEYS: HashSet<&'static str> = {
+        let mut r = HashSet::new();
+        r.insert(OPT_KEY_SNAPSHOT_LOCATION);
         r.insert(OPT_KEY_DATABASE_ID);
         r
     };
@@ -28,4 +40,8 @@ lazy_static! {
 
 pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
+    INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }

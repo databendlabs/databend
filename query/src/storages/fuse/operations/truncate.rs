@@ -23,10 +23,10 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 
 impl FuseTable {
     #[inline]
@@ -60,7 +60,7 @@ impl FuseTable {
             ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
-                    FUSE_OPT_KEY_SNAPSHOT_LOC,
+                    OPT_KEY_SNAPSHOT_LOCATION,
                     new_snapshot_loc,
                 ))
                 .await?;

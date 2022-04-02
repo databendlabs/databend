@@ -13,17 +13,17 @@ declare -A platform_targets=(["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x8
 
 mkdir -p ./distro/
 for platform in ${!platform_targets[@]}; do
-    target=${platform_targets[$platform]}
-    if [[ $version == "" ]]; then
-        ./scripts/setup/run_build_tool.sh cargo build --target ${target} --release
-    else
-        wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
-        mkdir -p ./target/${target}/release
-        tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz
-    fi
-    mkdir -p ./distro/linux/${platform}
-    cp ./target/${target}/release/databend-query ./distro/linux/${platform}
-    cp ./target/${target}/release/databend-meta ./distro/linux/${platform}
+	target=${platform_targets[$platform]}
+	if [[ $version == "" ]]; then
+		./scripts/setup/run_build_tool.sh cargo build --target ${target} --release
+	else
+		wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+		mkdir -p ./target/${target}/release
+		tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz
+	fi
+	mkdir -p ./distro/linux/${platform}
+	cp ./target/${target}/release/databend-query ./distro/linux/${platform}
+	cp ./target/${target}/release/databend-meta ./distro/linux/${platform}
 done
 
 # docker buildx build . -f ./docker/debian/meta.Dockerfile --platform linux/amd64,linux/arm64 -t ${HUB}/databend-meta:${TAG} --push
