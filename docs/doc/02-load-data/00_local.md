@@ -14,7 +14,7 @@ Currently, we only support CSV and Parquet file format.
 
 ### Before You Begin
 
-* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/category/deploy).
+* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
 
 ### Step 1. Data Files for Loading
 

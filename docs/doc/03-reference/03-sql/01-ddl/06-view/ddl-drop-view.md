@@ -1,5 +1,7 @@
 ---
 title: DROP VIEW
+description:
+  Drop an existing view
 ---
 
 Drop the view.

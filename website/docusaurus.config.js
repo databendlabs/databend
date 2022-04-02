@@ -109,7 +109,7 @@ const config = {
                             },
                             {
                                 label: 'Performance',
-                                to: '/doc/category/performance'
+                                to: '/doc/performance'
                             },
                         ]
                     },
@@ -118,11 +118,11 @@ const config = {
                         items: [
                             {
                                 label: 'Deployment',
-                                to: '/doc/category/deploy'
+                                to: '/doc/deploy'
                             },
                             {
                                 label: 'Develop',
-                                to: '/doc/category/develop'
+                                to: '/doc/develop'
                             },
                         ]
                     },

@@ -22,7 +22,7 @@ function HomepageHeader() {
             </Link>
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
-              to="/doc/category/performance">
+              to="/doc/performance">
                 Performance
             </Link>
             {/* <ArrowDownSvg className={styles.arrow}></ArrowDownSvg> */}

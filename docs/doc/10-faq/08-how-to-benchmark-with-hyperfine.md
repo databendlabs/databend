@@ -8,7 +8,7 @@ Databend recommends using hyperfine to perform benchmarking via the ClickHouse/M
 
 ### Before you begin
 
-* Make sure you have already [installed Databend](/doc/category/deploy).
+* Make sure you have already [installed Databend](/doc/deploy).
 * Install the MySQl client.
 * Check out [hyperfine - Installation](https://github.com/sharkdp/hyperfine#installation) to install hyperfine according to your distribution.
 
