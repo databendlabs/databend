@@ -22,7 +22,7 @@ bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" 
 # Crates.io dependencies
 bytes = "1.1.0"
 futures = "0.3.21"
-opendal = { git="https://github.com/datafuselabs/opendal" , rev="446dcfb"}
+opendal = { git = "https://github.com/datafuselabs/opendal", rev = "446dcfb" }
 serde = { version = "1.0.136", features = ["derive"] }
 time = "0.3.7"
 
