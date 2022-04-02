@@ -32,4 +32,4 @@ serde_json = { version = "1.0.79", default-features = false, features = ["preser
 tempfile = "3.3.0"
 
 [dev-dependencies]
-opendal = { git = "https://github.com/datafuselabs/opendal", rev = "446dcfb" }
+opendal = "0.4.1"
