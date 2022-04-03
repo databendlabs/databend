@@ -1,6 +1,6 @@
 ---
 title: Analyzing OnTime with Databend on Object Storage
-sidebar_label: Analyzing OnTime on S3
+sidebar_label: Analyzing OnTime Dataset
 ---
 
 Analyzing `OnTime` datasets on S3 with Databend step by step.

@@ -1,7 +1,6 @@
 ---
 title: What is Databend?
 slug: ../
-sidebar_position: 1
 ---
 
 Databend is an open source **Elastic** and **Scalable** Modern Cloud Data Warehouse written in Rust from scratch.
