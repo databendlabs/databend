@@ -37,6 +37,10 @@ runs:
     - shell: bash
       run: cargo build --target ${{ inputs.target }}
 
+    - shell: bash
+      if: "contains(inputs.target, 'linux')"
+      run: readelf -p .comment ./target/${{ inputs.target }}/debug/databend-query
+
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
