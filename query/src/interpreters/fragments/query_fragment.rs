@@ -15,6 +15,8 @@ pub trait QueryFragment: Debug {
     fn get_out_partition(&self) -> Result<PartitionState>;
 
     fn finalize(&self, nodes: &mut QueryFragmentsActions) -> Result<()>;
+
+    fn rewrite_remote_plan(&self, node: &PlanNode, new: &PlanNode) -> Result<PlanNode>;
 }
 
 
@@ -54,7 +56,7 @@ impl BuilderVisitor {
     }
 
     fn visit_stage(&self, node: &StagePlan) -> Result<Box<dyn QueryFragment>> {
-        StageQueryFragment::create(self.visit(&node.input)?)
+        StageQueryFragment::create(&node, self.visit(&node.input)?)
     }
 
     fn visit_select(&self, node: &SelectPlan) -> Result<Box<dyn QueryFragment>> {

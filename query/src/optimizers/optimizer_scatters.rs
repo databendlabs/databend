@@ -176,7 +176,7 @@ impl ScattersOptimizerImpl {
 
     fn convergent_shuffle_stage_builder(input: Arc<PlanNode>) -> PlanBuilder {
         PlanBuilder::from(&PlanNode::Stage(StagePlan {
-            kind: StageKind::Convergent,
+            kind: StageKind::Merge,
             scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input,
         }))
@@ -184,7 +184,7 @@ impl ScattersOptimizerImpl {
 
     fn convergent_shuffle_stage(input: PlanNode) -> Result<PlanNode> {
         Ok(PlanNode::Stage(StagePlan {
-            kind: StageKind::Convergent,
+            kind: StageKind::Merge,
             scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input: Arc::new(input),
         }))
@@ -314,7 +314,7 @@ impl Optimizer for ScattersOptimizer {
         match optimizer_impl.running_mode {
             RunningMode::Standalone => Ok(rewrite_plan),
             RunningMode::Cluster => Ok(PlanNode::Stage(StagePlan {
-                kind: StageKind::Convergent,
+                kind: StageKind::Merge,
                 scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
                 input: Arc::new(rewrite_plan),
             })),

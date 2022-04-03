@@ -1,7 +1,9 @@
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use common_exception::{ErrorCode, Result};
+use common_planners::PlanNode;
 use crate::api::FlightAction;
 use crate::interpreters::fragments::partition_state::PartitionState;
+use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 
 #[derive(Debug)]
 pub struct BroadcastQueryFragment {
@@ -23,7 +25,11 @@ impl QueryFragment for BroadcastQueryFragment {
         Ok(PartitionState::Broadcast)
     }
 
-    fn finalize(&self, nodes: Vec<String>) -> Result<Vec<FlightAction>> {
+    fn finalize(&self, nodes: &mut QueryFragmentsActions) -> Result<()> {
+        todo!()
+    }
+
+    fn rewrite_remote_plan(&self, node: &PlanNode, new: &PlanNode) -> Result<PlanNode> {
         todo!()
     }
 }

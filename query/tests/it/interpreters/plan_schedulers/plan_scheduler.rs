@@ -61,7 +61,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let context = create_env().await?;
     let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Stage(StagePlan {
-        kind: StageKind::Convergent,
+        kind: StageKind::Merge,
         scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
         input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
     }))?;
@@ -129,7 +129,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
-            kind: StageKind::Convergent,
+            kind: StageKind::Merge,
             scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input: Arc::new(PlanNode::Select(SelectPlan {
                 input: Arc::new(PlanNode::Stage(StagePlan {
@@ -232,7 +232,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let plan_scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = plan_scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
-            kind: StageKind::Convergent,
+            kind: StageKind::Merge,
             scatters_expr: Expression::create_literal(DataValue::UInt64(1)),
             input: Arc::new(PlanNode::Select(SelectPlan {
                 input: Arc::new(PlanNode::Stage(StagePlan {

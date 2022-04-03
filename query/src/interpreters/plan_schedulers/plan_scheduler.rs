@@ -411,7 +411,7 @@ impl PlanScheduler {
         match stage.kind {
             StageKind::Normal => self.schedule_normal_tasks(stage, tasks),
             StageKind::Expansive => self.schedule_expansive_tasks(stage, tasks),
-            StageKind::Convergent => self.schedule_converge_tasks(stage, tasks),
+            StageKind::Merge => self.schedule_converge_tasks(stage, tasks),
         }
     }
 

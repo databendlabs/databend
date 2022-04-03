@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use crate::interpreters::fragments::QueryFragmentsBuilder;
+use crate::interpreters::fragments::{QueryFragmentsActions, QueryFragmentsBuilder};
 
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::Scheduled;
@@ -63,7 +63,10 @@ pub async fn schedule_query(
 
 pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<SendableDataBlockStream> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
-    common_tracing::tracing::info!("Query fragments {:?}", query_fragments);
+
+    let mut fragments_actions = QueryFragmentsActions::create(ctx);
+    query_fragments.finalize(&mut fragments_actions)?;
+    common_tracing::tracing::info!("Query fragments actions: {:?}", fragments_actions);
     // TODO:
     unimplemented!()
 }

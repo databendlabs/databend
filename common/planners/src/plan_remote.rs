@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
+use std::sync::Arc;
+use common_datavalues::{DataSchema, DataSchemaRef};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct RemotePlan {
@@ -26,5 +27,15 @@ pub struct RemotePlan {
 impl RemotePlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+
+    pub fn create(receive_fragment_id: String) -> RemotePlan {
+        RemotePlan {
+            schema: Arc::new(DataSchema::empty()),
+            query_id: receive_fragment_id.clone(),
+            stage_id: receive_fragment_id.clone(),
+            stream_id: receive_fragment_id.clone(),
+            fetch_nodes: vec![],
+        }
     }
 }
