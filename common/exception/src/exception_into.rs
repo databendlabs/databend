@@ -106,10 +106,12 @@ impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
         use std::io::ErrorKind;
 
+        let msg = format!("{} ({})", error.kind(), &error);
+
         match error.kind() {
-            ErrorKind::NotFound => ErrorCode::StorageNotFound(error.to_string()),
-            ErrorKind::PermissionDenied => ErrorCode::StoragePermissionDenied(error.to_string()),
-            _ => ErrorCode::StorageOther(error.to_string()),
+            ErrorKind::NotFound => ErrorCode::StorageNotFound(msg),
+            ErrorKind::PermissionDenied => ErrorCode::StoragePermissionDenied(msg),
+            _ => ErrorCode::StorageOther(msg),
         }
     }
 }
