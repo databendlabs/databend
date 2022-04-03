@@ -30,11 +30,11 @@ fn add_benchmark(c: &mut Criterion) {
     let values = array.values();
 
     c.bench_function("from_iter", |b| {
-        b.iter(|| criterion::black_box(from_iter(&values)))
+        b.iter(|| criterion::black_box(from_iter(values)))
     });
 
     c.bench_function("from_builder", |b| {
-        b.iter(|| criterion::black_box(from_builder(&values)))
+        b.iter(|| criterion::black_box(from_builder(values)))
     });
 }
 

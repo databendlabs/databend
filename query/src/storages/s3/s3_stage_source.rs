@@ -28,7 +28,6 @@ use common_planners::S3StageTableInfo;
 use common_streams::CsvSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
-use opendal::io_util::seekable_read;
 use opendal::io_util::SeekableReader;
 use opendal::BytesReader;
 use opendal::Operator;
@@ -166,7 +165,7 @@ impl StageSource {
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
-                seekable_read(&object, ..),
+                object.seekable_reader(..),
             )
             .await?),
             // Unsupported.
