@@ -38,7 +38,7 @@ async fn test_catalogs_get_database() -> Result<()> {
     assert_eq!(database.name(), "system");
 
     let db_list = catalog.list_databases(tenant).await?;
-    assert_eq!(db_list.len(), 2);
+    assert_eq!(db_list.len(), 4);
 
     // get default database
     let db_2 = catalog.get_database(tenant, "default").await?;

@@ -24,18 +24,20 @@ async fn interpreter_show_create_table_test() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
 
     struct Case<'a> {
-        create_stmt: &'a str,
+        create_stmt: Vec<&'a str>,
         show_stmt: &'a str,
         expects: Vec<&'a str>,
         name: &'a str,
     }
 
     let normal_case = Case {
-        create_stmt: "
+        create_stmt: vec![
+            "
             CREATE TABLE default.a(\
                 a bigint, b int, c varchar(255), d smallint, e Date\
             ) Engine = Null COMMENT = 'test create'\
         ",
+        ],
         show_stmt: "SHOW CREATE TABLE a",
         expects: vec![
             "+-------+-------------------------------------+",
@@ -53,8 +55,8 @@ async fn interpreter_show_create_table_test() -> Result<()> {
         name: "normal case",
     };
 
-    let reserved_opt = Case {
-        create_stmt: " CREATE TABLE t( a int) Engine = fuse COMMENT = 'test create'",
+    let internal_opt = Case {
+        create_stmt: vec!["CREATE TABLE t( a int) Engine = fuse COMMENT = 'test create'"],
         show_stmt: "SHOW CREATE TABLE t",
         expects: vec![
             "+-------+-------------------------------------+",
@@ -65,15 +67,37 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             "|       | ) ENGINE=fuse COMMENT='test create' |",
             "+-------+-------------------------------------+",
         ],
-        name: "reserved opt should not be shown in fuse engine",
+        name: "internal options should not be shown in fuse engine",
     };
 
-    let cases = vec![normal_case, reserved_opt];
+    //  after insertion, the table snapshot will be created
+    //  with the corresponding table options which should not be shown
+    let internal_opts_after_insert = Case {
+        create_stmt: vec![
+            "CREATE TABLE s( a int) Engine = fuse COMMENT = 'test create'",
+            "insert into s values(1)",
+        ],
+        show_stmt: "SHOW CREATE TABLE s",
+        expects: vec![
+            "+-------+-------------------------------------+",
+            "| Table | Create Table                        |",
+            "+-------+-------------------------------------+",
+            "| s     | CREATE TABLE `s` (                  |",
+            "|       |   `a` Int32,                        |",
+            "|       | ) ENGINE=fuse COMMENT='test create' |",
+            "+-------+-------------------------------------+",
+        ],
+        name: "internal options should not be shown in fuse engine",
+    };
+
+    let cases = vec![normal_case, internal_opt, internal_opts_after_insert];
 
     for case in cases {
-        let plan = PlanParser::parse(ctx.clone(), case.create_stmt).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        for stmt in case.create_stmt {
+            let plan = PlanParser::parse(ctx.clone(), stmt).await?;
+            let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+            let _ = executor.execute(None).await?;
+        }
         let plan = PlanParser::parse(ctx.clone(), case.show_stmt).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateTableInterpreter");

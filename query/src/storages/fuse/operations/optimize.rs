@@ -22,10 +22,10 @@ use common_exception::Result;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
+use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -36,7 +36,7 @@ impl FuseTable {
     ) -> Result<()> {
         let accessor = ctx.get_storage_operator()?;
         let tbl_info = self.get_table_info();
-        let snapshot_loc = tbl_info.meta.options.get(FUSE_OPT_KEY_SNAPSHOT_LOC);
+        let snapshot_loc = tbl_info.meta.options.get(OPT_KEY_SNAPSHOT_LOCATION);
         let format_version = self.snapshot_format_version();
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
 

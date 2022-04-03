@@ -39,9 +39,9 @@ async fn test_alter_user_interpreter() -> Result<()> {
 
     let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     let user_mgr = ctx.get_user_manager();
-    user_mgr.add_user(tenant, user_info, false).await?;
+    user_mgr.add_user(tenant, user_info.clone(), false).await?;
 
-    let old_user = user_mgr.get_user(tenant, name, hostname).await?;
+    let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
     assert_eq!(
         old_user.auth_info.get_password().unwrap(),
         Vec::from(password)
@@ -59,7 +59,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "AlterUserInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(tenant, name, hostname).await?;
+        let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(
             new_user.auth_info.get_password(),
             Some(Vec::from(new_password))
@@ -76,9 +76,12 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
         executor.execute(None).await?;
-        let user = user_mgr.get_user(tenant, name, hostname).await?;
-        assert!(user.has_option_flag(UserOptionFlag::TenantSetting));
-        assert_eq!(user.auth_info.get_password(), Some(Vec::from(new_password)));
+        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
+        assert!(user_info.has_option_flag(UserOptionFlag::TenantSetting));
+        assert_eq!(
+            user_info.auth_info.get_password(),
+            Some(Vec::from(new_password))
+        );
     }
 
     {
@@ -87,8 +90,8 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
         executor.execute(None).await?;
-        let user = user_mgr.get_user(tenant, name, hostname).await?;
-        assert!(!user.has_option_flag(UserOptionFlag::TenantSetting));
+        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
+        assert!(!user_info.has_option_flag(UserOptionFlag::TenantSetting));
     }
 
     Ok(())

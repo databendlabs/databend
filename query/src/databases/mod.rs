@@ -17,9 +17,11 @@ mod database_context;
 mod database_factory;
 mod default;
 mod github;
+mod information_schema;
 mod system;
 
 pub use database::Database;
 pub use database_context::DatabaseContext;
 pub use database_factory::DatabaseFactory;
+pub use information_schema::InformationSchemaDatabase;
 pub use system::SystemDatabase;

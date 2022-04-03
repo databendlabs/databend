@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 
 pub use crate::configs::Config;
@@ -50,7 +51,9 @@ impl AuthMgr {
     }
 
     pub async fn no_auth(&self) -> Result<UserInfo> {
-        self.users.get_user(&self.tenant, "root", "127.0.0.1").await
+        self.users
+            .get_user(&self.tenant, UserIdentity::new("root", "127.0.0.1"))
+            .await
     }
 
     pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
@@ -60,7 +63,9 @@ impl AuthMgr {
                     Some(j) => j.get_user(t.as_str())?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
-                self.users.get_user(&self.tenant, &user_name, "%").await
+                self.users
+                    .get_user(&self.tenant, UserIdentity::new(&user_name, "%"))
+                    .await
             }
             Credential::Password {
                 name: n,

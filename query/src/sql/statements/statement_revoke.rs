@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_planners::PlanNode;
 use common_planners::RevokePrivilegePlan;
@@ -59,7 +58,7 @@ impl AnalyzableStatement for DfRevokePrivilegeStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfRevokeRoleStatement {
-    pub role: RoleIdentity,
+    pub role: String,
     pub principal: PrincipalIdentity,
 }
 

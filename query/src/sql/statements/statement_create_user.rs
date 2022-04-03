@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::AuthInfo;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserOptionFlag;
 use common_planners::CreateUserPlan;
@@ -86,9 +87,7 @@ impl DfUserWithOption {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateUser {
     pub if_not_exists: bool,
-    /// User name
-    pub name: String,
-    pub hostname: String,
+    pub user: UserIdentity,
     pub auth_option: DfAuthOption,
     pub with_options: Vec<DfUserWithOption>,
 }
@@ -103,8 +102,7 @@ impl AnalyzableStatement for DfCreateUser {
         }
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateUser(
             CreateUserPlan {
-                name: self.name.clone(),
-                hostname: self.hostname.clone(),
+                user: self.user.clone(),
                 auth_info: AuthInfo::create(
                     &self.auth_option.auth_type,
                     &self.auth_option.by_value,

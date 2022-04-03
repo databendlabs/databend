@@ -18,6 +18,7 @@ runs:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
+        image: datafuselabs/build-tool:dev-debian-amd64
         bypass_env_vars: RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     # If you need to reset the cache version, increment the number after `v`

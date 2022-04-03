@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -170,14 +171,14 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         executor.execute(None).await?;
 
         let user_mgr = ctx.get_user_manager();
-        let user_info = user_mgr.get_user("tenant1", "test_user", "%").await?;
+        let user_info = user_mgr
+            .get_user("tenant1", UserIdentity::new("test_user", "%"))
+            .await?;
         assert_eq!(user_info.grants.roles().len(), 1);
         let role = &user_info.grants.roles()[0];
         let role_info = user_mgr.get_role("tenant1", role.clone()).await?;
         let mut grants = UserGrantSet::empty();
         grants.grant_privileges(
-            "account_admin",
-            "",
             &GrantObject::Global,
             GrantObject::Global.available_privileges(),
         );

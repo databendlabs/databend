@@ -12,21 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+mod columns_table;
+mod keywords_table;
+mod tables_table;
+mod views_table;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct RoleIdentity {
-    pub name: String,
-}
-
-impl RoleIdentity {
-    pub fn new(name: String) -> Self {
-        Self { name }
-    }
-}
-
-impl fmt::Display for RoleIdentity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(f, "'{}'", self.name)
-    }
-}
+pub use columns_table::ColumnsTable;
+pub use keywords_table::KeywordsTable;
+pub use tables_table::TablesTable;
+pub use views_table::ViewsTable;

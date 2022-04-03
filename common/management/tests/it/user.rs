@@ -31,6 +31,7 @@ use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UserIdentity;
 use mockall::predicate::*;
 use mockall::*;
 
@@ -208,11 +209,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.get_user(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            Some(1),
-        );
+        let res = user_mgr.get_user(user_info.identity(), Some(1));
         assert!(res.await.is_ok());
 
         Ok(())
@@ -242,7 +239,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.get_user(test_user_name.to_string(), test_hostname.to_string(), None);
+        let res = user_mgr.get_user(user_info.identity(), None);
         assert!(res.await.is_ok());
         Ok(())
     }
@@ -265,7 +262,7 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr
-            .get_user(test_user_name.to_string(), test_hostname.to_string(), None)
+            .get_user(UserIdentity::new(test_user_name, test_hostname), None)
             .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -290,11 +287,7 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr
-            .get_user(
-                test_user_name.to_string(),
-                test_hostname.to_string(),
-                Some(2),
-            )
+            .get_user(UserIdentity::new(test_user_name, test_hostname), Some(2))
             .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
@@ -318,7 +311,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.get_user(test_user_name.to_string(), test_hostname.to_string(), None);
+        let res = user_mgr.get_user(UserIdentity::new(test_user_name, test_hostname), None);
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
@@ -415,6 +408,7 @@ mod get_users {
 }
 
 mod drop {
+
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -437,7 +431,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.drop_user(test_user.to_string(), test_hostname.to_string(), None);
+        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), None);
         assert!(res.await.is_ok());
 
         Ok(())
@@ -463,7 +457,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVActionReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
-        let res = user_mgr.drop_user(test_user.to_string(), test_hostname.to_string(), None);
+        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), None);
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::UnknownUser("").code()
@@ -548,8 +542,7 @@ mod update {
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.update_user(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
+            user_info.identity(),
             Some(new_test_auth_info(full)),
             None,
             test_seq,
@@ -581,8 +574,7 @@ mod update {
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.update_user(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
+            UserIdentity::new(test_user_name, test_hostname),
             Some(new_test_auth_info(false)),
             None,
             test_seq,
@@ -633,8 +625,7 @@ mod update {
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.update_user(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
+            user_info.identity(),
             Some(new_test_auth_info(true)),
             None,
             test_seq,
@@ -684,12 +675,9 @@ mod set_user_privileges {
         // - update_kv should be called
         let mut privileges = UserPrivilegeSet::empty();
         privileges.set_privilege(UserPrivilegeType::Select);
-        user_info.grants.grant_privileges(
-            test_user_name,
-            test_hostname,
-            &GrantObject::Global,
-            privileges,
-        );
+        user_info
+            .grants
+            .grant_privileges(&GrantObject::Global, privileges);
         let new_value = serde_json::to_vec(&user_info)?;
 
         kv.expect_upsert_kv()
@@ -706,8 +694,7 @@ mod set_user_privileges {
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.grant_privileges(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
+            user_info.identity(),
             GrantObject::Global,
             privileges,
             test_seq,

@@ -15,8 +15,8 @@
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
@@ -25,19 +25,13 @@ use common_meta_types::UserPrivilegeSet;
 pub trait UserApi: Sync + Send {
     async fn add_user(&self, user_info: UserInfo) -> Result<u64>;
 
-    async fn get_user(
-        &self,
-        username: String,
-        hostname: String,
-        seq: Option<u64>,
-    ) -> Result<SeqV<UserInfo>>;
+    async fn get_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<SeqV<UserInfo>>;
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
     async fn update_user(
         &self,
-        username: String,
-        hostname: String,
+        user: UserIdentity,
         auth_info: Option<AuthInfo>,
         user_option: Option<UserOption>,
         seq: Option<u64>,
@@ -45,8 +39,7 @@ pub trait UserApi: Sync + Send {
 
     async fn grant_privileges(
         &self,
-        username: String,
-        hostname: String,
+        user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
@@ -54,8 +47,7 @@ pub trait UserApi: Sync + Send {
 
     async fn revoke_privileges(
         &self,
-        username: String,
-        hostname: String,
+        user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
@@ -63,19 +55,17 @@ pub trait UserApi: Sync + Send {
 
     async fn grant_role(
         &self,
-        username: String,
-        hostname: String,
-        grant_role: RoleIdentity,
+        user: UserIdentity,
+        grant_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
     async fn revoke_role(
         &self,
-        username: String,
-        hostname: String,
-        revoke_role: RoleIdentity,
+        user: UserIdentity,
+        revoke_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()>;
+    async fn drop_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<()>;
 }

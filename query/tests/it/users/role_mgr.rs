@@ -16,7 +16,6 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -28,18 +27,18 @@ async fn test_role_manager() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
 
     let tenant = "tenant1";
-    let role_identity = RoleIdentity::new("test-role1".to_string());
+    let role_name = "test-role1".to_string();
     let role_mgr = UserApiProvider::create_global(conf).await?;
 
     // add role
     {
-        let role_info = RoleInfo::new(role_identity.name.clone());
+        let role_info = RoleInfo::new(role_name.clone());
         role_mgr.add_role(tenant, role_info, false).await?;
     }
 
     // add role again, error
     {
-        let role_info = RoleInfo::new(role_identity.name.clone());
+        let role_info = RoleInfo::new(role_name.clone());
         let res = role_mgr.add_role(tenant, role_info, false).await;
         assert!(res.is_err());
         assert_eq!(
@@ -50,13 +49,13 @@ async fn test_role_manager() -> Result<()> {
 
     // add role
     {
-        let role_info = RoleInfo::new(role_identity.name.clone());
+        let role_info = RoleInfo::new(role_name.clone());
         role_mgr.add_role(tenant, role_info, true).await?;
     }
 
     // get role
     {
-        let role = role_mgr.get_role(tenant, role_identity.clone()).await?;
+        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
         assert_eq!(role.name, "test-role1");
     }
 
@@ -72,12 +71,12 @@ async fn test_role_manager() -> Result<()> {
         role_mgr
             .grant_privileges_to_role(
                 tenant,
-                role_identity.clone(),
+                role_name.clone(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let role = role_mgr.get_role(tenant, role_identity.clone()).await?;
+        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
         assert!(role
             .grants
             .verify_privilege(&GrantObject::Global, UserPrivilegeType::Alter));
@@ -88,13 +87,13 @@ async fn test_role_manager() -> Result<()> {
         role_mgr
             .revoke_privileges_from_role(
                 tenant,
-                role_identity.clone(),
+                role_name.clone(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
 
-        let role = role_mgr.get_role(tenant, role_identity.clone()).await?;
+        let role = role_mgr.get_role(tenant, role_name.clone()).await?;
         assert_eq!(role.grants.entries().len(), 0);
     }
 

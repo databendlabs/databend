@@ -57,9 +57,9 @@ async fn test_drop_user_interpreter() -> Result<()> {
 
         let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
         let user_mgr = ctx.get_user_manager();
-        user_mgr.add_user(&tenant, user_info, false).await?;
+        user_mgr.add_user(&tenant, user_info.clone(), false).await?;
 
-        let old_user = user_mgr.get_user(&tenant, name, hostname).await?;
+        let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(
             old_user.auth_info.get_password().unwrap(),
             Vec::from(password)
