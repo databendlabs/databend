@@ -48,9 +48,7 @@ where
     K: Eq,
 {
     fn eq(&self, other: &RangeKey<T, K>) -> bool {
-        self.range.start == other.range.start
-            && self.range.end == other.range.end
-            && self.key == other.key
+        self.range.eq(&other.range) && self.key.eq(&other.key)
     }
 }
 
@@ -59,6 +57,8 @@ where
     T: Ord + std::fmt::Debug + Copy,
     K: Ord + std::fmt::Debug + Copy,
 {
+    /// the compare weight is: range.end > range.start > key
+    /// example: ((2,2),5) < ((5,1),3) cause 2 < 5
     fn cmp(&self, other: &RangeKey<T, K>) -> Ordering {
         ((self.range.end, self.range.start), self.key)
             .cmp(&((other.range.end, other.range.start), other.key))

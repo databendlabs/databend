@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_range_map::RangeKey;
-use common_range_map::RangeSet;
+use common_range_set::RangeKey;
+use common_range_set::RangeSet;
 
 #[cfg(test)]
 #[test]

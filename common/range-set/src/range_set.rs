@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use core::cmp::Ordering;
-use core::fmt;
 use core::fmt::Debug;
 use core::ops::Bound;
 use core::ops::Range;
@@ -21,49 +20,9 @@ use std::collections::BTreeSet;
 
 use super::range_key::RangeKey;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RangeSet<T, K> {
     pub(crate) set: BTreeSet<RangeKey<T, K>>,
-}
-
-impl<T, K> Default for RangeSet<T, K>
-where
-    T: Ord + Clone + std::fmt::Debug + Copy,
-    K: Ord + Clone + std::fmt::Debug + Copy + Default,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub struct Iter<'a, T, K> {
-    inner: std::collections::btree_set::Iter<'a, RangeKey<T, K>>,
-}
-
-impl<'a, T, K> Iterator for Iter<'a, T, K>
-where
-    T: 'a,
-    K: 'a,
-{
-    type Item = &'a Range<T>;
-
-    fn next(&mut self) -> Option<&'a Range<T>> {
-        self.inner.next().map(|by_start| &by_start.range)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
-    }
-}
-
-impl<T: Debug, K: Debug> Debug for RangeSet<T, K>
-where
-    T: Ord + Clone + std::fmt::Debug + Copy,
-    K: Ord + Clone + std::fmt::Debug + Copy + Default,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_set().entries(self.iter()).finish()
-    }
 }
 
 impl<T, K> RangeSet<T, K>
@@ -96,20 +55,11 @@ where
 
         self.set
             .range((Bound::Included(key_as_start), Bound::Unbounded))
-            .filter(|e| {
-                e.range.start.cmp(key) != Ordering::Greater
-                    && e.range.end.cmp(key) != Ordering::Less
-            })
+            .filter(|e| e.range.start.cmp(key) != Ordering::Greater)
             .collect()
     }
 
     pub fn remove(&mut self, range: Range<T>, k: K) {
         self.set.remove(&RangeKey::new(range, k));
-    }
-
-    pub fn iter(&self) -> Iter<'_, T, K> {
-        Iter {
-            inner: self.set.iter(),
-        }
     }
 }

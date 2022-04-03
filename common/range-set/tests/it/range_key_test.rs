@@ -16,7 +16,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use common_range_map::RangeKey;
+use common_range_set::RangeKey;
 
 #[cfg(test)]
 

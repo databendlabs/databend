@@ -23,7 +23,7 @@ members = [
     "common/meta/raft-store",
     "common/meta/sled-store",
     "common/meta/types",
-    "common/range-map",
+    "common/range-set",
     "common/streams",
     "common/codegen",
     "common/tracing",
