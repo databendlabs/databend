@@ -53,12 +53,7 @@ pub async fn write_block(
         common_arrow::write_parquet_file(&mut buf, row_groups, arrow_schema.clone(), options)
             .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
-    data_accessor
-        .object(location)
-        .writer()
-        .write_bytes(buf)
-        .await
-        .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+    data_accessor.object(location).write(buf).await?;
 
     Ok(result)
 }

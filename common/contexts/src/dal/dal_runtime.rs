@@ -11,21 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::io::Result;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::runtime::Handle;
-use opendal::error::Result as DalResult;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
 use opendal::Accessor;
-use opendal::BoxedAsyncReader;
-use opendal::BoxedObjectStream;
+use opendal::BytesReader;
+use opendal::BytesWriter;
 use opendal::Layer;
 use opendal::Metadata;
+use opendal::ObjectStreamer;
 
 /// # TODO
 ///
@@ -61,7 +62,7 @@ impl Layer for DalRuntime {
 
 #[async_trait]
 impl Accessor for DalRuntime {
-    async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncReader> {
+    async fn read(&self, args: &OpRead) -> Result<BytesReader> {
         let op = self.inner.as_ref().unwrap().clone();
         let args = args.clone();
         self.runtime
@@ -70,16 +71,16 @@ impl Accessor for DalRuntime {
             .expect("join must success")
     }
 
-    async fn write(&self, r: BoxedAsyncReader, args: &OpWrite) -> DalResult<usize> {
+    async fn write(&self, args: &OpWrite) -> Result<BytesWriter> {
         let op = self.inner.as_ref().unwrap().clone();
         let args = args.clone();
         self.runtime
-            .spawn(async move { op.write(r, &args).await })
+            .spawn(async move { op.write(&args).await })
             .await
             .expect("join must success")
     }
 
-    async fn stat(&self, args: &OpStat) -> DalResult<Metadata> {
+    async fn stat(&self, args: &OpStat) -> Result<Metadata> {
         let op = self.inner.as_ref().unwrap().clone();
         let args = args.clone();
         self.runtime
@@ -88,7 +89,7 @@ impl Accessor for DalRuntime {
             .expect("join must success")
     }
 
-    async fn delete(&self, args: &OpDelete) -> DalResult<()> {
+    async fn delete(&self, args: &OpDelete) -> Result<()> {
         let op = self.inner.as_ref().unwrap().clone();
         let args = args.clone();
         self.runtime
@@ -97,7 +98,7 @@ impl Accessor for DalRuntime {
             .expect("join must success")
     }
 
-    async fn list(&self, args: &OpList) -> DalResult<BoxedObjectStream> {
+    async fn list(&self, args: &OpList) -> Result<ObjectStreamer> {
         let op = self.inner.as_ref().unwrap().clone();
         let args = args.clone();
         self.runtime

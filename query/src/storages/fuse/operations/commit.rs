@@ -178,12 +178,7 @@ impl FuseTable {
             .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
         let bytes = serde_json::to_vec(&new_snapshot)?;
         let operator = ctx.get_storage_operator()?;
-        operator
-            .object(&snapshot_loc)
-            .writer()
-            .write_bytes(bytes)
-            .await
-            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+        operator.object(&snapshot_loc).write(bytes).await?;
 
         Self::commit_to_meta_server(ctx, self.get_table_info(), snapshot_loc.clone()).await?;
         ctx.get_write_progress().incr(&progress_values);

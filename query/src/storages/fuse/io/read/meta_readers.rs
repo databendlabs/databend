@@ -17,8 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::io::BufReader;
-use opendal::error::Kind as DalErrorKind;
-use opendal::Reader;
+use opendal::BytesReader;
 
 use super::cached_reader::CachedReader;
 use super::cached_reader::HasTenantLabel;
@@ -38,7 +37,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 #[async_trait::async_trait]
 pub trait BufReaderProvider {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>>;
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>>;
 }
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
@@ -79,7 +78,7 @@ impl<'a> TableSnapshotReader<'a> {
                 let snapshot = match self.read(loc, None, ver).await {
                     Ok(s) => s,
                     Err(e) => {
-                        if e.code() == ErrorCode::dal_path_not_found_code() {
+                        if e.code() == ErrorCode::storage_not_found_code() {
                             break;
                         } else {
                             return Err(e);
@@ -130,25 +129,25 @@ where T: BufReaderProvider + Sync
 
 #[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<BytesReader>> {
         let operator = self.get_storage_operator()?;
         let object = operator.object(path);
 
         let len = match len {
             Some(l) => l,
             None => {
-                let meta = object.metadata().await.map_err(|e| match e.kind() {
-                    DalErrorKind::ObjectNotExist => ErrorCode::DalPathNotFound(e.to_string()),
-                    _ => ErrorCode::DalTransportError(e.to_string()),
-                })?;
+                let meta = object.metadata().await?;
 
                 meta.content_length()
             }
         };
 
-        let reader = object.limited_reader(len);
+        let reader = object.range_reader(..len).await?;
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
-        Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
+        Ok(BufReader::with_capacity(
+            read_buffer_size as usize,
+            Box::new(reader),
+        ))
     }
 }
 

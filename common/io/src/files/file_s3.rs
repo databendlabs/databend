@@ -15,7 +15,6 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
-use opendal::credential::Credential;
 use opendal::ObjectMode;
 use opendal::Operator;
 
@@ -39,16 +38,11 @@ impl S3File {
         builder.bucket(s3_bucket);
         builder.root(root);
 
-        // Credentials.
-        if !aws_key_id.is_empty() {
-            let credential = Credential::hmac(aws_key_id, aws_secret_key);
-            builder.credential(credential);
-        }
+        // Credential
+        builder.access_key_id(aws_key_id);
+        builder.secret_access_key(aws_secret_key);
 
-        let accessor = builder
-            .finish()
-            .await
-            .map_err(|e| ErrorCode::DalError(format!("s3 dal build error:{:?}", e)))?;
+        let accessor = builder.finish().await?;
         Ok(opendal::Operator::new(accessor))
     }
 
@@ -61,7 +55,7 @@ impl S3File {
                 list.push(path.to_string());
             }
             ObjectMode::DIR => {
-                let mut objects = operator.objects(path);
+                let mut objects = operator.objects(path).await?;
                 while let Some(object) = objects.next().await {
                     let mut object = object?;
                     let meta = object.metadata_cached().await?;
@@ -71,7 +65,7 @@ impl S3File {
                 }
             }
             other => {
-                return Err(ErrorCode::DalError(format!(
+                return Err(ErrorCode::StorageOther(format!(
                     "S3 list() can not handle the object mode: {:?}",
                     other
                 )))

@@ -946,7 +946,6 @@ dependencies = [
  "bincode",
  "common-arrow",
  "octocrab",
- "opendal",
  "paste",
  "prost",
  "serde",
@@ -2950,7 +2949,21 @@ dependencies = [
  "ring",
  "serde",
  "serde_json",
- "simple_asn1",
+ "simple_asn1 0.4.1",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "8.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "012bb02250fdd38faa5feee63235f7a459974440b9b57593822414c31f92839e"
+dependencies = [
+ "base64 0.13.0",
+ "pem 1.0.2",
+ "ring",
+ "serde",
+ "serde_json",
+ "simple_asn1 0.6.1",
 ]
 
 [[package]]
@@ -3820,7 +3833,7 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "hyperx",
- "jsonwebtoken",
+ "jsonwebtoken 7.2.0",
  "once_cell",
  "reqwest",
  "serde",
@@ -3850,15 +3863,14 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.3.0"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c4cf26cc5de7a50ca0a6368eee871a64a6e1a72bc00df53f32de0fff912faa1"
+checksum = "e6b1c17025b3be9e23cd4e5d8b0f69f011e826ffdb1cfa0a2fe532d8840d8b4f"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-trait",
  "base64 0.13.0",
- "bstr",
  "bytes 1.1.0",
  "futures",
  "http",
@@ -3878,7 +3890,6 @@ dependencies = [
  "thiserror",
  "time 0.3.9",
  "tokio",
- "tower",
 ]
 
 [[package]]
@@ -4670,6 +4681,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quickcheck"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4854,9 +4874,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c595520a47f27ad20af3313ce68a26ac1882b182fcea007835530d78518c2f54"
+checksum = "8931679eac96ffc8eee4e5507c4b91fbc0799f29a6535707ee3ef89c0d0de426"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4867,12 +4887,15 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "http",
+ "jsonwebtoken 8.0.1",
  "log",
  "once_cell",
  "percent-encoding",
  "reqwest",
  "roxmltree",
  "rust-ini",
+ "serde",
+ "serde_json",
  "sha2 0.10.2",
  "time 0.3.9",
  "tokio",
@@ -5426,6 +5449,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple_asn1"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a762b1c38b9b990c694b9c2f8abe3372ce6a9ceaae6bca39cfc46e054f45745"
+dependencies = [
+ "num-bigint 0.4.3",
+ "num-traits",
+ "thiserror",
+ "time 0.3.9",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5812,6 +5847,7 @@ dependencies = [
  "itoa 1.0.1",
  "libc",
  "num_threads",
+ "quickcheck",
  "time-macros",
 ]
 

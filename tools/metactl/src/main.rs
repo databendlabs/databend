@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::net::SocketAddr;
 
+use anyhow::anyhow;
 use clap::Parser;
 use common_base::tokio;
 use common_meta_raft_store::config::RaftConfig;
@@ -82,14 +83,14 @@ async fn main() -> anyhow::Result<()> {
 
     // export from grpc api if metasrv is running
     if config.export && !config.grpc_api_address.is_empty() {
-        let grpc_api_addr = match config.grpc_api_address.parse() {
+        let grpc_api_addr: SocketAddr = match config.grpc_api_address.parse() {
             Ok(addr) => addr,
             Err(e) => {
                 eprintln!(
                     "ERROR: grpc api address is invalid: {}",
                     &config.grpc_api_address
                 );
-                return Err(e)?;
+                return Err(anyhow!(e));
             }
         };
         if service_is_running(grpc_api_addr).await? {

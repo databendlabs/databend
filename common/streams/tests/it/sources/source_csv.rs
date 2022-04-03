@@ -68,7 +68,7 @@ async fn test_parse_csv_delimiter() -> Result<()> {
             builder.record_delimiter(record_delimiter);
             builder.block_size(10);
 
-            let reader = local.object(name).reader();
+            let reader = local.object(name).reader().await?;
             let mut csv_source = builder.build(reader)?;
             let block = csv_source.read().await?.unwrap();
             assert_blocks_eq(
@@ -133,7 +133,7 @@ async fn test_parse_csv_text() -> Result<()> {
     builder.record_delimiter("\n");
     builder.block_size(10);
 
-    let reader = local.object(name).reader();
+    let reader = local.object(name).reader().await?;
     let mut csv_source = builder.build(reader)?;
 
     let block = csv_source.read().await?.unwrap();

@@ -12,5 +12,5 @@ test = false
 common-base = { path = "../base" }
 
 async-trait = "0.1.52"
-opendal = "0.3.0"
+opendal = "0.4.2"
 time = "0.3.7"

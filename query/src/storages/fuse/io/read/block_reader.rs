@@ -36,8 +36,8 @@ use common_tracing::tracing::Instrument;
 use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use opendal::Object;
 use opendal::Operator;
-use opendal::Reader;
 
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
@@ -106,15 +106,13 @@ impl BlockReader {
         let mut col_idx = Vec::with_capacity(num_cols);
         for index in &self.projection {
             let column_meta = &part.columns_meta[index];
-            let mut column_reader = self
-                .operator
-                .object(&part.location)
-                .range_reader(column_meta.offset, column_meta.length);
+            let column_reader = self.operator.object(&part.location);
             let fut = async move {
                 // NOTE: move chunk inside future so that alloc only
                 // happen when future is ready to go.
-                let mut column_chunk = vec![0; column_meta.length as usize];
-                column_reader.read_exact(&mut column_chunk).await?;
+                let column_chunk = column_reader
+                    .range_read(column_meta.offset..column_meta.offset + column_meta.length)
+                    .await?;
                 Ok::<_, ErrorCode>(column_chunk)
             }
             .instrument(debug_span!("read_col_chunk"));
@@ -125,8 +123,7 @@ impl BlockReader {
         let chunks = futures::stream::iter(column_chunk_futs)
             .buffered(std::cmp::min(10, num_cols))
             .try_collect::<Vec<_>>()
-            .await
-            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+            .await?;
 
         let mut columns_array_iter = Vec::with_capacity(num_cols);
         for (i, column_chunk) in chunks.into_iter().enumerate() {
@@ -187,23 +184,21 @@ impl BlockReader {
         for index in &self.projection {
             let column_meta = &part.columns_meta[index];
 
-            let column_reader = self
-                .operator
-                .object(&part.location)
-                .range_reader(column_meta.offset, column_meta.length);
-
-            let column_chunk = vec![0; column_meta.length as usize];
-            join_handlers.push(Self::read_column(column_reader, column_chunk));
+            join_handlers.push(Self::read_column(
+                self.operator.object(&part.location),
+                column_meta.offset,
+                column_meta.length,
+            ));
         }
 
         futures::future::try_join_all(join_handlers).await
     }
 
-    async fn read_column(mut column_reader: Reader, mut chunk: Vec<u8>) -> Result<Vec<u8>> {
+    async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
         let handler = common_base::tokio::spawn(async move {
-            tracing::debug!("read_exact | Begin, {:?}", std::thread::current());
-            column_reader.read_exact(&mut chunk).await?;
-            tracing::debug!("read_exact | End, {:?}", std::thread::current());
+            let mut chunk = vec![0; length as usize];
+            let mut r = o.range_reader(offset..offset + length).await?;
+            r.read_exact(&mut chunk).await?;
             Result::Ok(chunk)
         });
 

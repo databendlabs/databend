@@ -63,8 +63,7 @@ impl Interpreter for CreateUserStageInterpreter {
             let meta = obj.metadata().await;
             if meta.is_err() {
                 let file_obj = op.object(&prefix);
-                let writer = file_obj.writer();
-                writer.write_bytes(vec![]).await?;
+                let _ = file_obj.write("").await?;
             }
         }
 

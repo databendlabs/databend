@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_cache::Cache;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
@@ -137,10 +136,6 @@ impl FuseTable {
         data_accessor: Operator,
         location: impl AsRef<str>,
     ) -> Result<()> {
-        data_accessor
-            .object(location.as_ref())
-            .delete()
-            .await
-            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))
+        Ok(data_accessor.object(location.as_ref()).delete().await?)
     }
 }

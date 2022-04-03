@@ -32,7 +32,7 @@ use num::Integer;
 use opendal::ops::OpWrite;
 use opendal::services::fs;
 use opendal::Accessor;
-use opendal::BoxedAsyncReader;
+use opendal::BytesWriter;
 use opendal::Operator;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -363,9 +363,9 @@ impl MockDataAccessor {
 }
 #[async_trait::async_trait]
 impl Accessor for MockDataAccessor {
-    async fn write(&self, _r: BoxedAsyncReader, args: &OpWrite) -> opendal::error::Result<usize> {
+    async fn write(&self, _args: &OpWrite) -> std::io::Result<BytesWriter> {
         let called = &mut *self.put_stream_called.lock();
         *called += 1;
-        Ok(args.size as usize)
+        Ok(Box::new(vec![]))
     }
 }

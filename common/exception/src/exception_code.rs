@@ -195,13 +195,9 @@ build_exceptions! {
 
 // Storage errors [3001, 4000].
 build_exceptions! {
-    UnknownStorageSchemeName(3001),
-    SecretKeyNotSet(3002),
-    DalTransportError(3003),
-    DalPathNotFound(3004),
-    SerdeError(3005),
-    DalError(3006),
-    DalStatError(3007),
+    StorageNotFound(3001),
+    StoragePermissionDenied(3002),
+    StorageOther(4000)
 }
 
 // Cache errors [4001, 5000].

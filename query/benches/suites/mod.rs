@@ -38,7 +38,7 @@ pub async fn select_executor(sql: &str) -> Result<()> {
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
-        assert!(false)
+        unreachable!()
     }
     Ok(())
 }

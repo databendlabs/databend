@@ -11,23 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::io::Result;
 use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use opendal::error::Result as DalResult;
+use opendal::io_util::observe_read;
+use opendal::io_util::observe_write;
+use opendal::io_util::ReadEvent;
+use opendal::io_util::WriteEvent;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
-use opendal::readers::ObserveReader;
-use opendal::readers::ReadEvent;
 use opendal::Accessor;
-use opendal::BoxedAsyncReader;
-use opendal::BoxedObjectStream;
+use opendal::BytesReader;
+use opendal::BytesWriter;
 use opendal::Layer;
 use opendal::Metadata;
+use opendal::ObjectStreamer;
 
 use crate::DalMetrics;
 
@@ -61,12 +64,12 @@ impl Layer for DalContext {
 
 #[async_trait]
 impl Accessor for DalContext {
-    async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncReader> {
+    async fn read(&self, args: &OpRead) -> Result<BytesReader> {
         let metric = self.metrics.clone();
 
-        self.inner.as_ref().unwrap().read(args).await.map(|reader| {
+        self.inner.as_ref().unwrap().read(args).await.map(|r| {
             let mut last_pending = None;
-            let r = ObserveReader::new(reader, move |e| {
+            let r = observe_read(r, move |e| {
                 let start = match last_pending {
                     None => Instant::now(),
                     Some(t) => t,
@@ -83,29 +86,45 @@ impl Accessor for DalContext {
                 metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
             });
 
-            Box::new(r) as BoxedAsyncReader
+            Box::new(r) as BytesReader
         })
     }
 
-    async fn write(&self, r: BoxedAsyncReader, args: &OpWrite) -> DalResult<usize> {
-        let now = Instant::now();
-        self.inner.as_ref().unwrap().write(r, args).await.map(|n| {
-            self.metrics.inc_write_bytes(n);
-            self.metrics
-                .inc_write_bytes_cost(now.elapsed().as_millis() as u64);
-            n
+    async fn write(&self, args: &OpWrite) -> Result<BytesWriter> {
+        let metric = self.metrics.clone();
+
+        self.inner.as_ref().unwrap().write(args).await.map(|w| {
+            let mut last_pending = None;
+            let w = observe_write(w, move |e| {
+                let start = match last_pending {
+                    None => Instant::now(),
+                    Some(t) => t,
+                };
+                match e {
+                    WriteEvent::Pending => last_pending = Some(start),
+                    WriteEvent::Written(n) => {
+                        last_pending = None;
+                        metric.inc_write_bytes(n);
+                    }
+                    WriteEvent::Error(_) => last_pending = None,
+                    _ => {}
+                }
+                metric.inc_write_bytes_cost(start.elapsed().as_millis() as u64);
+            });
+
+            Box::new(w) as BytesWriter
         })
     }
 
-    async fn stat(&self, args: &OpStat) -> DalResult<Metadata> {
+    async fn stat(&self, args: &OpStat) -> Result<Metadata> {
         self.inner.as_ref().unwrap().stat(args).await
     }
 
-    async fn delete(&self, args: &OpDelete) -> DalResult<()> {
+    async fn delete(&self, args: &OpDelete) -> Result<()> {
         self.inner.as_ref().unwrap().delete(args).await
     }
 
-    async fn list(&self, args: &OpList) -> DalResult<BoxedObjectStream> {
+    async fn list(&self, args: &OpList) -> Result<ObjectStreamer> {
         self.inner.as_ref().unwrap().list(args).await
     }
 }
