@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 
 use super::range_key::RangeKey;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RangeSet<T, K> {
     pub(crate) set: BTreeSet<RangeKey<T, K>>,
 }
