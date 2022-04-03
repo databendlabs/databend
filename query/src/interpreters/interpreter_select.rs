@@ -77,7 +77,7 @@ impl Interpreter for SelectInterpreter {
             }
 
             let optimized_plan = self.rewrite_plan()?;
-            plan_schedulers::schedule_query_new().await
+            plan_schedulers::schedule_query_new(self.ctx.clone(), &optimized_plan).await
         } else {
             let optimized_plan = self.rewrite_plan()?;
             plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await

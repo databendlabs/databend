@@ -19,9 +19,6 @@ mod plan_scheduler_insert;
 mod plan_scheduler_query;
 mod plan_scheduler_rewriter;
 mod plan_scheduler_stream;
-mod query_fragment;
-mod query_fragment_builder;
-mod query_fragment_dag;
 
 pub use plan_scheduler::PlanScheduler;
 pub use plan_scheduler_error::handle_error;
