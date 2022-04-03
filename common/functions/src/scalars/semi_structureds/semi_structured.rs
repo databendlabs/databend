@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::get::GetFunction;
+use super::get::GetIgnoreCaseFunction;
+use super::get::GetPathFunction;
 use super::parse_json::ParseJsonFunction;
 use super::parse_json::TryParseJsonFunction;
 use crate::scalars::CheckJsonFunction;
@@ -24,5 +27,8 @@ impl SemiStructuredFunction {
         factory.register("parse_json", ParseJsonFunction::desc());
         factory.register("try_parse_json", TryParseJsonFunction::desc());
         factory.register("check_json", CheckJsonFunction::desc());
+        factory.register("get", GetFunction::desc());
+        factory.register("get_ignore_case", GetIgnoreCaseFunction::desc());
+        factory.register("get_path", GetPathFunction::desc());
     }
 }
