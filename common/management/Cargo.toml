@@ -21,7 +21,7 @@ common-functions = { path = "../functions" }
 common-meta-api = { path = "../meta/api" }
 common-meta-types = { path = "../meta/types" }
 
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 serde_json = "1.0.79"
 
 [dev-dependencies]

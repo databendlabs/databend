@@ -22,14 +22,14 @@ codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c8
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "da3b180" }
 
 # Crates.io dependencies
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 logos = "0.12.0"
-nom = "7.1.0"
+nom = "7.1.1"
 nom-rule = "0.2.1"
 pratt = "0.3.0"
 thiserror = "1.0.30"
 
 [dev-dependencies]
 goldenfile = "1.1.0"
-pretty_assertions = "1.1.0"
+pretty_assertions = "1.2.1"
 common-base = { path = "../base" }

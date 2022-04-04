@@ -36,8 +36,8 @@ arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2",
 # Crates.io dependencies
 arrow-format = { version = "0.4.0", features = ["flight-data", "flight-service", "ipc"] }
 futures = "0.3.21"
-parquet2 = { version = "0.10.2", default_features = false }
+parquet2 = { version = "0.10.3", default_features = false }
 
-parquet-format-async-temp = "0.2.0"
+parquet-format-async-temp = "=0.2.0"
 
 [dev-dependencies]

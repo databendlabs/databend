@@ -12,4 +12,4 @@ test = false
 
 [dependencies]
 run_script = "0.9.0"
-vergen = "6.0.2"
+vergen = "7.0.0"

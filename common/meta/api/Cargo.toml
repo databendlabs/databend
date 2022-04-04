@@ -19,6 +19,6 @@ common-exception = { path = "../../exception" }
 common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
 
-anyhow = "1.0.55"
-async-trait = "0.1.52"
+anyhow = "1.0.56"
+async-trait = "0.1.53"
 maplit = "1.0.2"
