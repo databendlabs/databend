@@ -42,7 +42,11 @@ fn test_upper_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(UpperFunction::try_create("upper")?, &tests, true)
+    test_scalar_functions(
+        UpperFunction::try_create("upper", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -54,5 +58,9 @@ fn test_upper_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(UpperFunction::try_create("ucase")?, &tests, true)
+    test_scalar_functions(
+        UpperFunction::try_create("ucase", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }

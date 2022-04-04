@@ -30,7 +30,11 @@ fn test_ltrim_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(LTrimFunction::try_create("ltrim")?, &tests, true)
+    test_scalar_functions(
+        LTrimFunction::try_create("ltrim", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -42,7 +46,11 @@ fn test_rtrim_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(RTrimFunction::try_create("rtrim")?, &tests, true)
+    test_scalar_functions(
+        RTrimFunction::try_create("rtrim", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -62,7 +70,11 @@ fn test_trim_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(TrimFunction::try_create("trim")?, &tests, true)
+    test_scalar_functions(
+        TrimFunction::try_create("trim", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -74,5 +86,9 @@ fn test_trim_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(TrimFunction::try_create("trim")?, &tests, true)
+    test_scalar_functions(
+        TrimFunction::try_create("trim", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }

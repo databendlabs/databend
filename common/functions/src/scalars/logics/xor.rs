@@ -12,24 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::logic::LogicExpression;
+use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
-use super::LogicFunction;
+use crate::calcute;
+use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
+
+#[derive(Clone)]
+pub struct LogicXorExpression;
+
+impl LogicExpression for LogicXorExpression {
+    fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
+        let lhs = cast_column_field(&columns[0], &BooleanType::arc())?;
+        let rhs = cast_column_field(&columns[1], &BooleanType::arc())?;
+        let lhs_viewer = bool::try_create_viewer(&lhs)?;
+        let rhs_viewer = bool::try_create_viewer(&rhs)?;
+
+        let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
+
+        calcute!(lhs_viewer, rhs_viewer, builder, |lhs: bool,
+                                                   rhs: bool|
+         -> bool {
+            lhs ^ rhs
+        });
+        Ok(builder.build(input_rows))
+    }
+}
 
 #[derive(Clone)]
 pub struct LogicXorFunction;
 
 impl LogicXorFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
-        LogicFunction::try_create(LogicOperator::Xor)
+    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        LogicFunctionImpl::<LogicXorExpression>::try_create(LogicOperator::Xor, args)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

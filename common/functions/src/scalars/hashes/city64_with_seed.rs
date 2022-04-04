@@ -110,7 +110,7 @@ impl Function for City64WithSeedFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(UInt64Type::arc())
     }
 

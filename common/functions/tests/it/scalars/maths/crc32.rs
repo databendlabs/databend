@@ -42,5 +42,9 @@ fn test_crc32_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(CRC32Function::try_create("crc")?, &tests, true)
+    test_scalar_functions(
+        CRC32Function::try_create("crc", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }

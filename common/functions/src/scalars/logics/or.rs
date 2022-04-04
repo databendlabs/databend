@@ -12,28 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::logic::LogicExpression;
+use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
-use super::LogicFunction;
+use crate::calcute;
+use crate::impl_logic_expression;
+use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
+
+impl_logic_expression!(LogicOrExpression, |, |lhs: bool, rhs: bool, lhs_v: bool, rhs_v: bool| -> (bool, bool) {
+    (lhs | rhs,  (lhs_v & rhs_v) | (lhs | rhs))
+});
 
 #[derive(Clone)]
 pub struct LogicOrFunction;
 
 impl LogicOrFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
-        LogicFunction::try_create(LogicOperator::Or)
+    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        LogicFunctionImpl::<LogicOrExpression>::try_create(LogicOperator::Or, args)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .disable_passthrough_null()
-                .num_arguments(1),
+                .num_arguments(2),
         )
     }
 }
