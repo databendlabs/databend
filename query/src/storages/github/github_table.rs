@@ -190,9 +190,7 @@ impl GithubSource {
 impl AsyncSource for GithubSource {
     const NAME: &'static str = "GithubSource";
 
-    type BlockFuture<'a>
-    where Self: 'a
-    = impl Future<Output = Result<Option<DataBlock>>>;
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>>;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
         async {

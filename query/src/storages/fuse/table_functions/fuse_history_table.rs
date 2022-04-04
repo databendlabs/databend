@@ -188,9 +188,7 @@ impl FuseHistorySource {
 impl AsyncSource for FuseHistorySource {
     const NAME: &'static str = "fuse_history";
 
-    type BlockFuture<'a>
-    where Self: 'a
-    = impl Future<Output = Result<Option<DataBlock>>>;
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
         async {

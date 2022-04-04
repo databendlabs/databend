@@ -261,9 +261,7 @@ where Self: AsyncSource
 
 impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<TTable> {
     const NAME: &'static str = TTable::NAME;
-    type BlockFuture<'a>
-    where Self: 'a
-    = impl Future<Output = Result<Option<DataBlock>>>;
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
         async move {

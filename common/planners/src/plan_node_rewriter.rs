@@ -856,14 +856,14 @@ impl RewriteHelper {
     pub fn check_aggr_in_group_expr(
         aggr: &Expression,
         group_by_names: &HashSet<String>,
-        input_schema: &DataSchemaRef,
+        _input_schema: &DataSchemaRef,
     ) -> Result<bool> {
         match aggr {
             Expression::Alias(alias, plan) => {
                 if group_by_names.contains(alias) {
                     return Ok(true);
                 } else {
-                    return Self::check_aggr_in_group_expr(plan, group_by_names, input_schema);
+                    return Self::check_aggr_in_group_expr(plan, group_by_names, _input_schema);
                 }
             }
             _ => {
