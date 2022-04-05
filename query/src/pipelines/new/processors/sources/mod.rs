@@ -90,9 +90,7 @@ mod source_example {
 
     impl AsyncSource for ExampleAsyncSource {
         const NAME: &'static str = "Async";
-        type BlockFuture<'a>
-        where Self: 'a
-        = impl Future<Output = Result<Option<DataBlock>>>;
+        type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
         fn generate(&mut self) -> Self::BlockFuture<'_> {
             async move {

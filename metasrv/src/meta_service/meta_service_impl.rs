@@ -76,10 +76,7 @@ impl RaftService for RaftServiceImpl {
                 let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
                     MetaError::MetaRaftError(MetaRaftError::ForwardRequestError(e.to_string()))
                 });
-                match a {
-                    Ok(applied_state) => Ok(applied_state),
-                    Err(e) => Err(e),
-                }
+                a
             }
             Err(e) => Err(e),
         };

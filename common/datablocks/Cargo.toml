@@ -25,4 +25,4 @@ comfy-table = "5.0.1"
 regex = "1.5.5"
 
 [dev-dependencies]
-pretty_assertions = "1.1.0"
+pretty_assertions = "1.2.1"

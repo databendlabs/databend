@@ -23,8 +23,8 @@ common-tracing = { path = "../tracing" }
 # Github dependencies
 
 # Crates.io dependencies
-async-stream = "0.3.2"
-async-trait = "0.1.52"
+async-stream = "0.3.3"
+async-trait = "0.1.53"
 csv-async = "1.2.4"
 futures = "0.3.21"
 pin-project-lite = "0.2.8"

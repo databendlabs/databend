@@ -21,11 +21,11 @@ common-tracing = { path = "../tracing" }
 # Github dependencies
 
 # Crates.io dependencies
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 futures = "0.3.21"
-hyper = "0.14.17"
-poem = { version = "1.3.6", features = ["rustls"] }
+hyper = "0.14.18"
+poem = { version = "=1.3.16", features = ["rustls"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = { version = "1.0.79", default-features = false, features = ["raw_value"] }
 serde_yaml = { version = "0.8.23", default-features = false }

@@ -183,9 +183,7 @@ impl StageSource {
 impl AsyncSource for StageSource {
     const NAME: &'static str = "StageSource";
 
-    type BlockFuture<'a>
-    where Self: 'a
-    = impl Future<Output = Result<Option<DataBlock>>>;
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
         async move {
