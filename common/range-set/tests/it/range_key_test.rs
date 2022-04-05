@@ -18,8 +18,6 @@ use std::collections::BTreeSet;
 
 use common_range_set::RangeKey;
 
-#[cfg(test)]
-
 fn upsert_cmp_map(map: &mut BTreeMap<String, BTreeSet<String>>, k: String, v: String) {
     if map.get(&k).is_none() {
         map.insert(k.clone(), BTreeSet::new());

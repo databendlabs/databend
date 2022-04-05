@@ -15,10 +15,9 @@
 use common_range_set::RangeKey;
 use common_range_set::RangeSet;
 
-#[cfg(test)]
 #[test]
 fn test_range_set() {
-    // test get_by_key_range
+    // test get_by_point
     {
         let mut a = RangeSet::new();
 
@@ -32,12 +31,12 @@ fn test_range_set() {
         a.insert(2..4, 24);
         a.insert(2..6, 26);
 
-        assert_eq!(a.get_by_key_range(&1), vec![r11, r15]);
-        assert_eq!(a.get_by_key_range(&2), vec![r24, r15, r26]);
-        assert_eq!(a.get_by_key_range(&5), vec![r26]);
+        assert_eq!(a.get_by_point(&1), vec![r11, r15]);
+        assert_eq!(a.get_by_point(&2), vec![r24, r15, r26]);
+        assert_eq!(a.get_by_point(&5), vec![r26]);
 
         a.remove(1..5, 15);
-        assert_eq!(a.get_by_key_range(&1), vec![r11]);
-        assert_eq!(a.get_by_key_range(&2), vec![r24, r26]);
+        assert_eq!(a.get_by_point(&1), vec![r11]);
+        assert_eq!(a.get_by_point(&2), vec![r24, r26]);
     }
 }

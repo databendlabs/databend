@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::ops::Bound;
 use core::ops::Range;
@@ -44,18 +43,19 @@ where
         self.set.insert(range_key);
     }
 
-    // Return a vector of (range,value) which contain the key in the [start, end).
+    // Return a vector of `RangeKey` which contain the point in the [start, end).
     // If we have range [1,5],[2,4],[2,6], then:
-    // 1. `get_by_key_range(1)` return [1,5]
-    // 2. `get_by_key_range(2)` return [1,5],[2,4],[2,6]
-    // 3. `get_by_key_range(5)` return [2,4],[2,6]
+    // 1. `get_by_point(1)` return [1,5]
+    // 2. `get_by_point(2)` return [1,5],[2,4],[2,6]
+    // 3. `get_by_point(5)` return [2,4],[2,6]
     // Use the default key when construct `RangeKey::key` for search.
-    pub fn get_by_key_range(&self, key: &T) -> Vec<&RangeKey<T, K>> {
-        let key_as_start = RangeKey::new(*key..*key, K::default());
+    pub fn get_by_point(&self, point: &T) -> Vec<&RangeKey<T, K>> {
+        let key = *point;
+        let range_key = RangeKey::new(key..key, K::default());
 
         self.set
-            .range((Bound::Included(key_as_start), Bound::Unbounded))
-            .filter(|e| e.range.start.cmp(key) != Ordering::Greater)
+            .range((Bound::Included(range_key), Bound::Unbounded))
+            .filter(|e| e.range.start <= key)
             .collect()
     }
 
