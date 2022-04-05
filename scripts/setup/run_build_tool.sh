@@ -30,11 +30,13 @@ done
 mkdir -p "${CARGO_HOME}/registry"
 mkdir -p "${CARGO_HOME}/git"
 
+TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+
 exec docker run --rm --tty --net=host ${EXTRA_ARGS} \
 	--user $(id -u):$(id -g) \
 	--volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
 	--volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
 	--volume "${PWD}:/workspace" \
 	--workdir "/workspace" \
-	"${IMAGE}" \
+	"${IMAGE}-${TOOLCHAIN_VERSION}" \
 	${COMMAND}

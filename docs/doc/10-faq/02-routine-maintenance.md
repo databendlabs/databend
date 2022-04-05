@@ -14,12 +14,14 @@ Databend will choose a relatively new nightly version for the build/test/bench.
 
 The steps to update toolchain are as follows:
 
-- Step 1: edit `rust-toolchain.toml` to update the `channel` field.
+- Setp 1: edit `scripts/setup/rust-toolchain.toml` to update the `channel` field for builder image.
   - Usually updated to the current date.
-- Step 2: Run `make lint` to make sure clippy is happy.
+  - Merge this change to main and wait for ci to build the new toolchain image
+- Step 2: edit `rust-toolchain.toml` to the same channel as build tool.
+- Step 3: Run `scripts/setup/run_build_tool.sh make lint` to make sure clippy is happy.
   - clippy is not entirely correct. If necessary, you can use `#[allow(clippy::xxx)]` to skip some of the rules.
   - If possible, please add a comment to clarify.
-- Step 3: Run `make test` to check the correctness.
+- Step 4: Run `scripts/setup/run_build_tool.sh make test` to check the correctness.
 
 ## Upgrade the dependencies
 
@@ -40,4 +42,3 @@ Currently, the dependency upgrade process is divided into the following steps:
 :::tip
 If you hacked `Cargo.lock` during the process, make sure everything is working smoothly.
 :::
-
