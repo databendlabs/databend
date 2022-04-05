@@ -115,7 +115,7 @@ jobs:
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
         with:
-          image: datafuselabs/build-tool:multiarch
+          image: multiarch
       - name: get objcopy path
         id: get_objcopy
         shell: bash

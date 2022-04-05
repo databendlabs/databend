@@ -5,7 +5,6 @@ on:
     branches:
       - main
     paths:
-      - "rust-toolchain.toml"
       - "scripts/setup/**"
 
 jobs:
@@ -33,7 +32,7 @@ jobs:
       - name: Get rust toolchain version
         id: toolchain_version
         run: |
-          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "::set-output name=RUST_TOOLCHAIN::${version}"
 
       - name: Build and publish databend build base image

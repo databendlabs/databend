@@ -11,7 +11,7 @@ RUN apk add --no-cache sudo bash && delgroup dialout && \
     adduser -u 501 -G staff macos -D -H && \
     printf "builder,runner,macos ALL=(ALL:ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/databend
 
-COPY rust-toolchain.toml /build/rust-toolchain.toml
+COPY scripts/setup/rust-toolchain.toml /build/rust-toolchain.toml
 COPY scripts/setup/dev_setup.sh /build/scripts/setup/dev_setup.sh
 RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     /build/scripts/setup/dev_setup.sh -yb && \
