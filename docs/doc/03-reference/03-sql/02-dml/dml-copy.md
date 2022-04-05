@@ -1,30 +1,45 @@
 ---
-title: COPY INTO table
-sidebar_label: COPY INTO
+title: 'COPY INTO <table>'
+sidebar_label: 'COPY INTO <table>'
 description:
-  Load Data into table using COPY
+  'Load Data using COPY INTO <table>'
 ---
 
-Loads data from staged files to a table. The files must be staged in one of the following locations:
+`COPY` moves data between Databend tables and object storage system(Such as Amazon S3-like) files.
 
-* Internal stage.
-* External location (Amazon S3).
+Loads data from staged files into a table, the files must be staged in one of the following locations:
+
+* Named internal stage, files can be staged using the [PUT to Stage](../../00-api/01-put-to-stage.md).
+* Named external stage that references an external location (Amazon S3 S3-like object storage system).
+* External location (Amazon S3-like object storage system).
 
 ## Syntax
 
 ```sql
 COPY INTO [<database>.]<table_name>
-FROM { externalLocation }
+FROM { internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] } ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
 [ copyOptions ]
-[ VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS ]
 ```
 
 Where:
 
-### externalLocation (for Amazon S3)
+### internalStage
+
+```sql
+internalStage ::= @<internal_stage_name>[/<path>]
+```
+
+### externalStage
+
+```sql
+externalStage ::= @<external_stage_name>[/<path>]
+```
+
+### externalLocation (for Amazon S3-like)
+
 ```
 externalLocation (for Amazon S3) ::=
   's3://<bucket>[/<path>]'
@@ -71,7 +86,36 @@ copyOptions ::=
 
 ## Examples
 
-### Loading Files Directly from an External Location
+### Loading Files from Internal Stage
+
+First, create a named internal stage:
+```sql
+create stage my_internal_s1;
+```
+
+Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/01-put-to-stage.md) API:
+```shell
+curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+```
+
+Final, copy the file into `mytable` from the `my_internal_s1` named internal stage:
+```sql
+list @my_internal_s1;
+copy into mytable from '@my_internal_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+```
+
+### Loading Files from External Stage
+
+First, create a named external stage:
+```sql
+create stage my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
+```
+Then, copy the file into `mytable` from the `my_external_s1` named external stage:
+```sql
+copy into mytable from '@my_external_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+```
+
+### Loading Files Directly from External Location
 
 **Amazon S3**
 
