@@ -5,7 +5,10 @@ description:
   HTTP Handler
 ---
 
-Databend's HTTP API(Databend's REST API) is the communication protocol between server and client. It’s used to send query statements for execution on the server and to receive results back to the client.
+The Databend HTTP handler is a REST API that used to send query statement for execution on the server and to receive results back to the client.
+
+The HTTP handler is hosted by databend-query, it can be specified by using `--http_handler_host` and `--http_handler_port`(This defaults to 8000).
+
 
 ## HTTP Methods
 
@@ -13,10 +16,10 @@ Databend's HTTP API(Databend's REST API) is the communication protocol between s
 
 This handler return results in `pages` with long-polling.
 
-1. Start with A `POST` to /v1/query with JSON of type `QueryRequest` which contains the SQL to execute, returns a JSON
+1. Start with A `POST` to `/v1/query` with JSON of type `QueryRequest` which contains the SQL to execute, returns a JSON
    of type `QueryResponse`.
 2. Use fields of `QueryResponse` for further processing:
-    1. A `GET` to the `next_uri` returns the next "page" of query results. It returns `QueryResponse` too, processing it
+    1. A `GET` to the `next_uri` returns the next `page` of query results. It returns `QueryResponse` too, processing it
        the same way recursively until `next_uri` is nil.
     2. A `GET` to the `final_uri` finally after all results is fetched (`next_uri = nil`) or the remaining is not
        needed. Return empty body.

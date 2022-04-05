@@ -9,7 +9,7 @@ description:
 
 Loads data from staged files into a table, the files must be staged in one of the following locations:
 
-* Named internal stage, files can be staged using the [PUT to Stage](../../00-api/01-put-to-stage.md).
+* Named internal stage, files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md).
 * Named external stage that references an external location (Amazon S3 S3-like object storage system).
 * External location (Amazon S3-like object storage system).
 
@@ -93,7 +93,7 @@ First, create a named internal stage:
 create stage my_internal_s1;
 ```
 
-Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/01-put-to-stage.md) API:
+Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/10-put-to-stage.md) API:
 ```shell
 curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
 ```
