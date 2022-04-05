@@ -34,7 +34,7 @@ fn test_logic_not_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionTest {
-            name: "not-null",
+            name: "not-nullable",
             columns: vec![Series::from_data(vec![None, Some(true), Some(false)])],
             expect: Series::from_data(vec![None, Some(false), Some(true)]),
             error: "",
@@ -42,6 +42,21 @@ fn test_logic_not_function() -> Result<()> {
     ];
     test_scalar_functions(
         LogicNotFunction::try_create("not", &[&BooleanType::arc()])?,
+        &tests,
+        true,
+    )
+}
+
+#[test]
+fn test_logic_not_function_null() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "not-null",
+        columns: vec![Arc::new(NullColumn::new(4))],
+        expect: Arc::new(NullColumn::new(4)),
+        error: "",
+    }];
+    test_scalar_functions(
+        LogicNotFunction::try_create("not", &[&NullType::arc()])?,
         &tests,
         true,
     )
@@ -74,6 +89,21 @@ fn test_logic_and_function() -> Result<()> {
                     Series::from_data(vec![true, false, true, true]),
                 ],
                 expect: Series::from_data(vec![None, Some(false), Some(true), Some(false)]),
+                error: "",
+            },
+        ),
+        (
+            LogicAndFunction::try_create("and", &[
+                &NullableType::arc(BooleanType::arc()),
+                &NullType::arc(),
+            ])?,
+            ScalarFunctionTest {
+                name: "and-null",
+                columns: vec![
+                    Series::from_data(vec![None, Some(true), Some(false)]),
+                    Arc::new(NullColumn::new(3)),
+                ],
+                expect: Series::from_data(vec![None, None, Some(false)]),
                 error: "",
             },
         ),
@@ -163,6 +193,24 @@ fn test_logic_xor_function() -> Result<()> {
     ];
     test_scalar_functions(
         LogicXorFunction::try_create("xor", &[&BooleanType::arc(), &BooleanType::arc()])?,
+        &tests,
+        true,
+    )
+}
+
+#[test]
+fn test_logic_xor_function_null() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "xor-null",
+        columns: vec![
+            Series::from_data(vec![None, Some(true), Some(false), Some(false)]),
+            Arc::new(NullColumn::new(4)),
+        ],
+        expect: Arc::new(NullColumn::new(4)),
+        error: "",
+    }];
+    test_scalar_functions(
+        LogicXorFunction::try_create("xor", &[&BooleanType::arc(), &NullType::arc()])?,
         &tests,
         true,
     )

@@ -181,65 +181,85 @@ fn test_sha1hash_function() -> Result<()> {
 
 #[test]
 fn test_sha2hash_function() -> Result<()> {
-    let tests = vec![(
-        UInt32Type::arc(),
-        ScalarFunctionTest {
-            name: "Sha0 (256)",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([0_u32])],
-            expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
-            error: "",
-        }),
+    let tests = vec![
         (
             UInt32Type::arc(),
             ScalarFunctionTest {
-            name: "Sha224",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([224_u32])],
-            expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
-            error: "",
-        }),
+                name: "Sha0 (256)",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([0_u32])],
+                expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
+                error: "",
+            },
+        ),
         (
             UInt32Type::arc(),
             ScalarFunctionTest {
-            name: "Sha256",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([256_u32])],
-            expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
-            error: "",
-        }),
+                name: "Sha224",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([224_u32])],
+                expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
+                error: "",
+            },
+        ),
         (
             UInt32Type::arc(),
-        ScalarFunctionTest {
-            name: "Sha384",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([384_u32])],
-            expect: Series::from_data(["cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"]),
-            error: "",
-        }),
+            ScalarFunctionTest {
+                name: "Sha256",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([256_u32])],
+                expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
+                error: "",
+            },
+        ),
         (
             UInt32Type::arc(),
-        ScalarFunctionTest {
-            name: "Sha512",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([512_u32])],
-            expect: Series::from_data(["ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"]),
-            error: "",
-        }),
+            ScalarFunctionTest {
+                name: "Sha384",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([384_u32])],
+                expect: Series::from_data(["cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"]),
+                error: "",
+            },
+        ),
         (
             UInt32Type::arc(),
-        ScalarFunctionTest {
-            name: "InvalidSha",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([1_u32])],
-            expect: Series::from_data([Option::<&str>::None]),
-            error: "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got 1",
-        }),
+            ScalarFunctionTest {
+                name: "Sha512",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([512_u32])],
+                expect: Series::from_data(["ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"]),
+                error: "",
+            },
+        ),
+        (
+            UInt32Type::arc(),
+            ScalarFunctionTest {
+                name: "InvalidSha",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([1_u32])],
+                expect: Series::from_data([Option::<&str>::None]),
+                error: "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got 1",
+            },
+        ),
         (
             UInt16Type::arc(),
-        ScalarFunctionTest {
-            name: "Sha Length as Const Field",
-            columns: vec![
-                Series::from_data(["abc"]),
-                Series::from_data([224_u16]),
-            ],
-            expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
-            error: "",
-        }),
+            ScalarFunctionTest {
+                name: "Sha Length as Const Field",
+                columns: vec![
+                    Series::from_data(["abc"]),
+                    Series::from_data([224_u16]),
+                ],
+                expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
+                error: "",
+            },
+        ),
+        (
+            UInt16Type::arc(),
+            ScalarFunctionTest {
+                name: "Sha Length with null value",
+                columns: vec![
+                    Series::from_data([Option::<&str>::None]),
+                    Series::from_data([Option::<u16>::None]),
+                ],
+                expect: Series::from_data([Option::<&str>::None]),
+                error: "",
+            },
+        )
     ];
 
     for (typ, test) in tests {
@@ -251,25 +271,6 @@ fn test_sha2hash_function() -> Result<()> {
     }
 
     Ok(())
-}
-
-#[test]
-fn test_sha2hash_function_null() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
-        name: "Sha Length with null value",
-        columns: vec![
-            Series::from_data([Option::<&str>::None]),
-            Series::from_data([Option::<u16>::None]),
-        ],
-        expect: Series::from_data([Option::<&str>::None]),
-        error: "",
-    }];
-
-    test_scalar_functions(
-        Sha2HashFunction::try_create("sha2", &[&StringType::arc(), &UInt16Type::arc()])?,
-        &tests,
-        true,
-    )
 }
 
 #[test]
