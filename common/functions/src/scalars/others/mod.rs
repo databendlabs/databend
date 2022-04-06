@@ -14,7 +14,6 @@
 
 mod exists;
 mod ignore;
-mod in_basic;
 mod inet_aton;
 mod inet_ntoa;
 mod other;
@@ -24,7 +23,6 @@ mod to_type_name;
 
 pub use exists::ExistsFunction;
 pub use ignore::IgnoreFunction;
-pub use in_basic::InFunction;
 pub use inet_aton::InetAtonFunction;
 pub use inet_aton::TryInetAtonFunction;
 pub use inet_ntoa::InetNtoaFunction;
