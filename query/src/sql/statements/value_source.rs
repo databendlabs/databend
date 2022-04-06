@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_io::prelude::*;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
-use sqlparser::ast::Values;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
@@ -39,8 +38,8 @@ impl ValueSource {
         Self { schema }
     }
 
-    pub fn stream_read(&self, str: String) -> Result<DataBlock> {
-        let cursor = Cursor::new(str.into_bytes());
+    pub fn stream_read(&self, str: &str) -> Result<DataBlock> {
+        let cursor = Cursor::new(str.as_bytes());
         let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
 
         let _ = reader.ignore_white_spaces()?;

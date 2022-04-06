@@ -104,6 +104,7 @@ pub use statement_explain::DfExplain;
 pub use statement_grant::DfGrantObject;
 pub use statement_grant::DfGrantPrivilegeStatement;
 pub use statement_grant::DfGrantRoleStatement;
+pub use statement_insert::InsertSource;
 pub use statement_insert::DfInsertStatement;
 pub use statement_kill::DfKillStatement;
 pub use statement_list::DfList;

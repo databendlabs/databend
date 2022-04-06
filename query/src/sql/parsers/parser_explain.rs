@@ -25,7 +25,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Parse an SQL EXPLAIN statement.
-    pub(crate) fn parse_explain(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_explain(&mut self) -> Result<DfStatement<'a>, ParserError> {
         // Parser is at the token immediately after EXPLAIN
         // Check for EXPLAIN VERBOSE
         let typ = match self.parser.peek_token() {

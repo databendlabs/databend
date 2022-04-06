@@ -29,7 +29,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Create database.
-    pub(crate) fn parse_create_database(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -48,7 +48,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Drop database.
-    pub(crate) fn parse_drop_database(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let db_name = self.parser.parse_object_name()?;
 
@@ -61,7 +61,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Show create database.
-    pub(crate) fn parse_show_create_database(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_create_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let db_name = self.parser.parse_object_name()?;
         let show_create_database = DfShowCreateDatabase { name: db_name };
         Ok(DfStatement::ShowCreateDatabase(show_create_database))
