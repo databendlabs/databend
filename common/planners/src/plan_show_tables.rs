@@ -17,4 +17,5 @@ use crate::PlanShowKind;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ShowTablesPlan {
     pub kind: PlanShowKind,
+    pub showfull: bool,
 }

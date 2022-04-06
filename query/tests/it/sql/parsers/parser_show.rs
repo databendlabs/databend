@@ -29,51 +29,101 @@ fn show_queries() -> Result<()> {
     // positive case
     expect_parse_ok(
         "SHOW TABLES",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false)),
+    )?;
+    expect_parse_ok(
+        "SHOW FULL TABLES",
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true)),
     )?;
     expect_parse_ok(
         "SHOW TABLES;",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false)),
+    )?;
+    expect_parse_ok(
+        "SHOW FULL TABLES;",
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true)),
     )?;
     expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
     expect_parse_ok(
         "SHOW TABLES LIKE 'aaa'",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::Like(Ident::with_quote(
-            '\'', "aaa",
-        )))),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Like(Ident::with_quote('\'', "aaa")),
+            false,
+        )),
     )?;
 
     expect_parse_ok(
         "SHOW TABLES --comments should not in sql case1",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false)),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FULL TABLES --comments should not in sql case1",
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true)),
     )?;
 
     expect_parse_ok(
         "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::Like(Ident::with_quote(
-            '\'', "aaa",
-        )))),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Like(Ident::with_quote('\'', "aaa")),
+            false,
+        )),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FULL TABLES LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Like(Ident::with_quote('\'', "aaa")),
+            true,
+        )),
     )?;
 
     expect_parse_ok(
         "SHOW TABLES WHERE t LIKE 'aaa'",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::Where(parse_sql_to_expr(
-            "t LIKE 'aaa'",
-        )))),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa'")),
+            false,
+        )),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FULL TABLES WHERE t LIKE 'aaa'",
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa'")),
+            true,
+        )),
     )?;
 
     expect_parse_ok(
         "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::Like(Ident::with_quote(
-            '\'', "aaa",
-        )))),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Like(Ident::with_quote('\'', "aaa")),
+            false,
+        )),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FULL TABLES LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Like(Ident::with_quote('\'', "aaa")),
+            true,
+        )),
     )?;
 
     expect_parse_ok(
         "SHOW TABLES WHERE t LIKE 'aaa' AND t LIKE 'a%'",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::Where(parse_sql_to_expr(
-            "t LIKE 'aaa' AND t LIKE 'a%'",
-        )))),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa' AND t LIKE 'a%'")),
+            false,
+        )),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FULL TABLES WHERE t LIKE 'aaa' AND t LIKE 'a%'",
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa' AND t LIKE 'a%'")),
+            true,
+        )),
     )?;
 
     Ok(())
@@ -86,16 +136,28 @@ fn show_tables_test() -> Result<()> {
     let v = vec![ident];
     let name = ObjectName(v);
     let name_two = name.clone();
+    let name_three = name_two.clone();
+    let name_four = name_three.clone();
 
     expect_parse_ok(
         "SHOW TABLES FROM `ss`",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name))),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name), false)),
+    )?;
+    expect_parse_ok(
+        "SHOW FULL TABLES FROM `ss`",
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name_two), true)),
     )?;
     expect_parse_ok(
         "SHOW TABLES IN `ss`",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name_two))),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::FromOrIn(name_three),
+            false,
+        )),
     )?;
-
+    expect_parse_ok(
+        "SHOW FULL TABLES IN `ss`",
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name_four), true)),
+    )?;
     Ok(())
 }
 #[test]
