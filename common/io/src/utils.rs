@@ -121,6 +121,16 @@ pub fn is_control_ascii(c: u8) -> bool {
     c <= 31
 }
 
+pub fn parse_escape_string(bs: &[u8]) -> String {
+    let bs = parse_escape_bytes(bs);
+
+    let mut cs = Vec::with_capacity(bs.len());
+    for b in bs {
+        cs.push(b as char);
+    }
+    cs.iter().collect()
+}
+
 pub fn parse_escape_bytes(bs: &[u8]) -> Vec<u8> {
     let mut vs = Vec::with_capacity(bs.len());
     let mut i = 0;

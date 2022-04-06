@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::get_abs_path;
+use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageS3Storage;
@@ -139,16 +140,20 @@ pub fn parse_copy_file_format_options(
         .parse::<u64>()?;
 
     // Field delimiter.
-    let field_delimiter = file_format_options
-        .get("field_delimiter")
-        .unwrap_or(&"".to_string())
-        .clone();
+    let field_delimiter = parse_escape_string(
+        file_format_options
+            .get("field_delimiter")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
 
     // Record delimiter.
-    let record_delimiter = file_format_options
-        .get("record_delimiter")
-        .unwrap_or(&"".to_string())
-        .clone();
+    let record_delimiter = parse_escape_string(
+        file_format_options
+            .get("record_delimiter")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
 
     Ok(FileFormatOptions {
         format: file_format,

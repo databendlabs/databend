@@ -19,7 +19,7 @@ use async_stream::stream;
 use common_base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_io::prelude::parse_escape_bytes;
+use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
@@ -87,13 +87,9 @@ pub async fn streaming_load(
         if settings.has_setting(key.as_str()) {
             let value = value.to_str().unwrap();
             let value = value.trim_matches(|p| p == '"' || p == '\'');
-            let value = parse_escape_bytes(value.as_bytes());
+            let value = parse_escape_string(value.as_bytes());
             settings
-                .set_settings(
-                    key.to_string(),
-                    String::from_utf8_lossy(&value).to_string(),
-                    false,
-                )
+                .set_settings(key.to_string(), value, false)
                 .map_err(InternalServerError)?
         }
     }

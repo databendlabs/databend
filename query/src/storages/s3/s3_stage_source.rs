@@ -19,7 +19,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
@@ -70,7 +69,8 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let mut builder = CsvSourceBuilder::create(schema, FormatSettings::default());
+        let settings = ctx.get_format_settings()?;
+        let mut builder = CsvSourceBuilder::create(schema, settings);
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.
