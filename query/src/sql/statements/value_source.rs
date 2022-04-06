@@ -104,7 +104,7 @@ impl ValueSource {
         let values = parse_exprs(bytes)?;
 
         let mut blocks = vec![];
-        for value in values.0 {
+        for value in values {
             let block = exprs_to_datablock(value, &analyzer, &self.schema).await?;
             blocks.push(block);
         }
@@ -147,11 +147,11 @@ async fn exprs_to_datablock(
     executor.execute(&one_row_block)
 }
 
-fn parse_exprs(buf: &[u8]) -> std::result::Result<Values, ParserError> {
+fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
     let dialect = GenericDialect {};
     let sql = std::str::from_utf8(buf).unwrap();
     let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let tokens = tokenizer.tokenize()?;
-    let mut parser = Parser::new(tokens, &dialect);
+    let (tokens, position_map) = tokenizer.tokenize()?;
+    let mut parser = Parser::new(tokens, position_map, &dialect);
     parser.parse_values()
 }

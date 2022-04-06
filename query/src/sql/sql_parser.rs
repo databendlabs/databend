@@ -64,11 +64,11 @@ impl<'a> DfParser<'a> {
     /// Parse the specified tokens with dialect
     pub fn new_with_dialect(sql: &'a str, dialect: &'a dyn Dialect) -> Result<Self, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
-        let tokens = tokenizer.tokenize()?;
+        let (tokens, position_map) = tokenizer.tokenize()?;
 
         Ok(DfParser {
             sql,
-            parser: Parser::new(tokens, dialect),
+            parser: Parser::new(tokens, position_map, dialect),
         })
     }
 
