@@ -88,7 +88,7 @@ func main() {
 	log.Println("Insert 1 row")
 
 	// Select.
-	res, err := db.Query("SELECT * FROM books")
+	res, err := db.Query("select * from books")
 	if err != nil {
 		log.Fatal(err)
 	}
