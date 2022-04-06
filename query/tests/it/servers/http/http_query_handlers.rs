@@ -24,11 +24,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
+use databend_query::servers::http::middleware::HTTPSessionEndpoint;
+use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::make_state_uri;
-use databend_query::servers::http::v1::middleware::HTTPSessionEndpoint;
-use databend_query::servers::http::v1::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::HttpSession;
@@ -476,6 +476,7 @@ async fn test_auth_jwt() -> Result<()> {
         auth_info: AuthInfo::JWT,
         grants: Default::default(),
         quota: Default::default(),
+        option: Default::default(),
     };
 
     let tenant = "test";

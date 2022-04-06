@@ -21,4 +21,10 @@ SHOW GRANTS FOR 'test-grant'@'localhost';
 REVOKE ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
 SHOW GRANTS FOR 'test-grant'@'localhost';
 
+CREATE ROLE 'test-grant-role';
+GRANT SELECT ON * TO ROLE 'test-grant-role';
+GRANT SELECT ON * TO ROLE 'test-grant-role1'; -- {ErrorCode 2204}
+SHOW GRANTS FOR ROLE 'test-grant-role';
+DROP ROLE 'test-grant-role';
+
 DROP DATABASE `db01`;

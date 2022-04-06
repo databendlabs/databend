@@ -1,11 +1,11 @@
-CREATE TABLE strings_oct_sample_u8 (value Uint8) engine=Memory;
-CREATE TABLE strings_oct_sample_u16 (value Uint16) engine=Memory;
-CREATE TABLE strings_oct_sample_u32 (value Uint32) engine=Memory;
-CREATE TABLE strings_oct_sample_u64 (value Uint64) engine=Memory;
-CREATE TABLE strings_oct_sample_i8 (value Int8) engine=Memory;
-CREATE TABLE strings_oct_sample_i16 (value Int16) engine=Memory;
-CREATE TABLE strings_oct_sample_i32 (value Int32) engine=Memory;
-CREATE TABLE strings_oct_sample_i64 (value Int64) engine=Memory;
+CREATE TABLE strings_oct_sample_u8 (value UInt8 null) engine=Memory;
+CREATE TABLE strings_oct_sample_u16 (value UInt16 null) engine=Memory;
+CREATE TABLE strings_oct_sample_u32 (value UInt32 null) engine=Memory;
+CREATE TABLE strings_oct_sample_u64 (value UInt64 null) engine=Memory;
+CREATE TABLE strings_oct_sample_i8 (value Int8 null) engine=Memory;
+CREATE TABLE strings_oct_sample_i16 (value Int16 null) engine=Memory;
+CREATE TABLE strings_oct_sample_i32 (value Int32 null) engine=Memory;
+CREATE TABLE strings_oct_sample_i64 (value Int64 null) engine=Memory;
 
 INSERT INTO strings_oct_sample_u8 VALUES (0), (255), (127), (NULL);
 INSERT INTO strings_oct_sample_u16 VALUES (0), (65535), (32768), (NULL);

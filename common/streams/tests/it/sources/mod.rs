@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod source_csv;
+mod source_ndjson;
 mod source_parquet;

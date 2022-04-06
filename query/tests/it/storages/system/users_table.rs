@@ -19,6 +19,7 @@ use common_meta_types::AuthType;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
 use databend_query::storages::system::UsersTable;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -40,6 +41,7 @@ async fn test_users_table() -> Result<()> {
                 hostname: "localhost".to_string(),
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
+                option: UserOption::default(),
             },
             false,
         )
@@ -57,6 +59,7 @@ async fn test_users_table() -> Result<()> {
                 hostname: "%".to_string(),
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
+                option: UserOption::default(),
             },
             false,
         )
@@ -72,6 +75,7 @@ async fn test_users_table() -> Result<()> {
                 hostname: "%".to_string(),
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
+                option: UserOption::default(),
             },
             false,
         )

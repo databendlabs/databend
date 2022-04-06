@@ -18,7 +18,7 @@ SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20
 
 SELECT '==GROUP BY nullables==';
 
-CREATE TABLE t(a UInt64, b UInt32, c UInt32 not null) Engine = Fuse;
+CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
 INSERT INTO t(a,b, c)  SELECT if (number % 3 = 1, null, number) as a, number + 3 as b, number + 4 as c FROM numbers(10);
 -- nullable(u8)
 SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;

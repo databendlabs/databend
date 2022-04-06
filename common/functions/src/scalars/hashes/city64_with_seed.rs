@@ -25,9 +25,9 @@ use naive_cityhash::cityhash64_with_seed;
 
 use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 // This is not a correct implementation of stateful hasher. But just a thin wrapper of stateless hash for leveraging DFHash trait.
 // It is good enough for column hashing because we don't really need stream hashing.
@@ -75,13 +75,6 @@ impl City64WithSeedFunction {
 impl Function for City64WithSeedFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn get_monotonicity(
-        &self,
-        _args: &[crate::scalars::Monotonicity],
-    ) -> Result<crate::scalars::Monotonicity> {
-        Ok(crate::scalars::Monotonicity::default())
     }
 
     fn return_type(

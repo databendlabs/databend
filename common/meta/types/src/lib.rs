@@ -51,7 +51,6 @@ mod user_stage;
 
 pub mod error_context;
 mod principal_identity;
-mod role_identity;
 mod warehouse_meta;
 
 // reexport
@@ -129,7 +128,6 @@ pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
-pub use role_identity::RoleIdentity;
 pub use role_info::RoleInfo;
 pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
@@ -158,6 +156,8 @@ pub use user_grant::GrantObject;
 pub use user_grant::UserGrantSet;
 pub use user_identity::UserIdentity;
 pub use user_info::UserInfo;
+pub use user_info::UserOption;
+pub use user_info::UserOptionFlag;
 pub use user_privilege::UserPrivilegeSet;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;

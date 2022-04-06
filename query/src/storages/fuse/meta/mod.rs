@@ -13,16 +13,19 @@
 //  limitations under the License.
 //
 
-mod block;
-mod segment;
-mod snapshot;
+mod common;
 
-pub use block::BlockLocation;
-pub use block::BlockMeta;
-pub use block::ColumnMeta;
-pub use segment::SegmentInfo;
-pub use snapshot::ColumnId;
-pub use snapshot::Location;
-pub use snapshot::SnapshotId;
-pub use snapshot::Statistics;
-pub use snapshot::TableSnapshot;
+/// Re-exports meta data structures of current version, i.e. v1
+mod current;
+mod v0;
+mod v1;
+mod versions;
+
+pub use common::ColumnId;
+pub use common::Location;
+pub use common::SnapshotId;
+pub use common::Statistics;
+pub use common::Versioned;
+pub use current::*;
+pub use versions::SegmentInfoVersion;
+pub use versions::SnapshotVersion;

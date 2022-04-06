@@ -37,6 +37,7 @@ use crate::Source;
 pub struct ParquetSourceBuilder {
     schema: DataSchemaRef,
     projection: Vec<usize>,
+    size_limit: usize,
     metadata: Option<FileMetaData>,
 }
 
@@ -46,6 +47,7 @@ impl ParquetSourceBuilder {
         ParquetSourceBuilder {
             schema,
             projection: (0..size).collect(),
+            size_limit: usize::MAX,
             metadata: None,
         }
     }
@@ -71,6 +73,7 @@ pub struct ParquetSource<R> {
     builder: ParquetSourceBuilder,
     current_row_group: usize,
     arrow_table_schema: ArrowSchema,
+    rows: usize,
 }
 
 impl<R> ParquetSource<R>
@@ -85,6 +88,7 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             builder,
             arrow_table_schema,
             current_row_group: 0,
+            rows: 0,
         }
     }
 }
@@ -140,8 +144,15 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             Some(chunk) => chunk.map_err(|e| ErrorCode::ParquetError(e.to_string()))?,
         };
 
-        let block = DataBlock::from_chunk(&self.builder.schema, &chunk)?;
+        let mut block = DataBlock::from_chunk(&self.builder.schema, &chunk)?;
         self.current_row_group += 1;
+        self.rows += block.num_rows();
+
+        if self.rows > self.builder.size_limit {
+            let cut = self.rows - self.builder.size_limit;
+            block = block.slice(0, block.num_rows() - cut);
+        }
+
         Ok(Some(block))
     }
 }

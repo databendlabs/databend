@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
@@ -23,9 +22,10 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 
 impl FuseTable {
     #[inline]
@@ -33,23 +33,19 @@ impl FuseTable {
         if let Some(prev_snapshot) = self.read_table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;
 
-            let new_snapshot = TableSnapshot {
-                snapshot_id: Uuid::new_v4(),
-                prev_snapshot_id: Some(prev_id),
-                schema: prev_snapshot.schema.clone(),
-                summary: Default::default(),
-                segments: vec![],
-            };
-            let loc = self.meta_locations();
-            let new_snapshot_loc = loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id);
+            let new_snapshot = TableSnapshot::new(
+                Uuid::new_v4(),
+                Some((prev_id, prev_snapshot.format_version())),
+                prev_snapshot.schema.clone(),
+                Default::default(),
+                vec![],
+            );
+            let loc = self.meta_location_generator();
+            let new_snapshot_loc =
+                loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
             let operator = ctx.get_storage_operator()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
-            operator
-                .object(&new_snapshot_loc)
-                .writer()
-                .write_bytes(bytes)
-                .await
-                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+            operator.object(&new_snapshot_loc).write(bytes).await?;
 
             if plan.purge {
                 let keep_last_snapshot = false;
@@ -58,7 +54,7 @@ impl FuseTable {
             ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
-                    FUSE_OPT_KEY_SNAPSHOT_LOC,
+                    OPT_KEY_SNAPSHOT_LOCATION,
                     new_snapshot_loc,
                 ))
                 .await?;

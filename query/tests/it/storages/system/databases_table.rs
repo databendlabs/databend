@@ -30,12 +30,14 @@ async fn test_tables_table() -> Result<()> {
     assert_eq!(block.num_columns(), 1);
 
     let expected = vec![
-        "+---------+",
-        "| name    |",
-        "+---------+",
-        "| default |",
-        "| system  |",
-        "+---------+",
+        "+--------------------+",
+        "| name               |",
+        "+--------------------+",
+        "| INFORMATION_SCHEMA |",
+        "| default            |",
+        "| information_schema |",
+        "| system             |",
+        "+--------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 

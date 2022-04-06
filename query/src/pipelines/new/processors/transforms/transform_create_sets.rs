@@ -114,8 +114,8 @@ impl SubQueriesPuller {
             columns.push(Vec::new())
         }
 
-        query_executor.start()?;
-        while let Some(data_block) = query_executor.pull_data() {
+        query_executor.start();
+        while let Some(data_block) = query_executor.pull_data()? {
             #[allow(clippy::needless_range_loop)]
             for column_index in 0..data_block.num_columns() {
                 let column = data_block.column(column_index);
@@ -123,8 +123,6 @@ impl SubQueriesPuller {
                 columns[column_index].append(&mut values)
             }
         }
-
-        query_executor.finish()?;
 
         let mut struct_fields = Vec::with_capacity(columns.len());
 
@@ -149,17 +147,12 @@ impl SubQueriesPuller {
         let mut query_executor =
             PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
 
-        query_executor.start()?;
-        match query_executor.pull_data() {
-            None => {
-                query_executor.finish()?;
-                Err(ErrorCode::ScalarSubqueryBadRows(
-                    "Scalar subquery result set must be one row.",
-                ))
-            }
+        query_executor.start();
+        match query_executor.pull_data()? {
+            None => Err(ErrorCode::ScalarSubqueryBadRows(
+                "Scalar subquery result set must be one row.",
+            )),
             Some(data_block) => {
-                query_executor.finish()?;
-
                 if data_block.num_rows() != 1 {
                     return Err(ErrorCode::ScalarSubqueryBadRows(
                         "Scalar subquery result set must be one row.",

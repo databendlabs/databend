@@ -23,6 +23,7 @@ mod maths;
 mod nullables;
 mod others;
 mod scalar_function2_test;
+mod semi_structureds;
 mod strings;
 mod tuples;
 mod udfs;

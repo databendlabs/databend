@@ -72,16 +72,25 @@ impl BlockPruner {
         };
 
         // Segments and blocks are accumulated concurrently, thus an atomic counter is used
-        // to **try** collecting as less blocks as possible. But concurrency is preferred than
-        // the "accuracy". In [FuseTable::do_read_partitions], there "limit" will be treated
-        // precisely.
+        // to **try** collecting as less blocks as possible. But concurrency is preferred to
+        // "accuracy". In [FuseTable::do_read_partitions], the "limit" will be treated precisely.
 
         let accumulated_rows = AtomicUsize::new(0);
+
+        // A !Copy Wrapper of u64
+        struct NonCopy(u64);
+
+        // convert u64 (which is Copy) into NonCopy( struct which is !Copy)
+        // so that "async move" can be avoided in the latter async block
+        // See https://github.com/rust-lang/rust/issues/81653
+        let segment_locs = segment_locs.into_iter().map(|(s, v)| (s, NonCopy(v)));
+
         let stream = futures::stream::iter(segment_locs)
-            .map(|seg_loc| async {
+            .map(|(seg_loc, u)| async {
+                let version = { u }.0; // use block expression to force moving
                 if accumulated_rows.load(Ordering::Acquire) < limit {
                     let reader = MetaReaders::segment_info_reader(ctx);
-                    let segment_info = reader.read(seg_loc).await?;
+                    let segment_info = reader.read(seg_loc, None, version).await?;
                     Self::filter_segment(
                         segment_info.as_ref(),
                         &block_pred,

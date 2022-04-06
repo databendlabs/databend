@@ -21,9 +21,9 @@ use common_datavalues::with_match_scalar_type;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction {

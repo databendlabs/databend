@@ -19,11 +19,13 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 
+use super::statements::DfAlterView;
 use super::statements::DfCall;
 use super::statements::DfCopy;
 use super::statements::DfCreateUserStage;
 use super::statements::DfDescribeUserStage;
 use super::statements::DfDropUserStage;
+use super::statements::DfDropView;
 use super::statements::DfGrantRoleStatement;
 use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
@@ -35,6 +37,7 @@ use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfCreateView;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropRole;
@@ -64,7 +67,6 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use crate::sql::statements::DfUseTenant;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
@@ -79,7 +81,6 @@ pub enum DfStatement {
     CreateDatabase(DfCreateDatabase),
     DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
-    UseTenant(DfUseTenant),
 
     // Tables.
     ShowTables(DfShowTables),
@@ -91,6 +92,12 @@ pub enum DfStatement {
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
     RenameTable(DfRenameTable),
+
+    // Views.
+    CreateView(DfCreateView),
+    // TODO(veeupup) make alter and delete view done
+    AlterView(DfAlterView),
+    DropView(DfDropView),
 
     // Settings.
     ShowSettings(DfShowSettings),

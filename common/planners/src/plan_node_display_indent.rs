@@ -281,12 +281,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     }
 
     fn format_create_role(f: &mut Formatter, plan: &CreateRolePlan) -> fmt::Result {
-        write!(f, "Create role {:}", plan.role_identity)?;
+        write!(f, "Create role {:}", plan.role_name)?;
         write!(f, " if_not_exist:{:}", plan.if_not_exists)
     }
 
     fn format_drop_role(f: &mut Formatter, plan: &DropRolePlan) -> fmt::Result {
-        write!(f, "Drop role {:}", plan.role_identity)?;
+        write!(f, "Drop role {:}", plan.role_name)?;
         write!(f, " if_exists:{:}", plan.if_exists)
     }
 

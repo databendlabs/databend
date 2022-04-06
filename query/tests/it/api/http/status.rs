@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::UserIdentity;
 use databend_query::api::http::v1::status::status_handler;
 use databend_query::api::http::v1::status::Status;
 use databend_query::interpreters::Interpreter;
@@ -60,7 +61,7 @@ async fn run_query(sessions: Arc<SessionManager>) -> Result<Arc<dyn Interpreter>
     ctx.attach_query_str(sql);
     let user = ctx
         .get_user_manager()
-        .get_user("test", "root", "localhost")
+        .get_user("test", UserIdentity::new("root", "localhost"))
         .await?;
     session.set_current_user(user);
     let plan = PlanParser::parse(ctx.clone(), sql).await?;

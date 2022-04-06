@@ -44,7 +44,7 @@ impl CsvSourceBuilder {
             field_delimiter: b',',
             record_delimiter: Terminator::CRLF,
             block_size: 10000,
-            size_limit: 0,
+            size_limit: usize::MAX,
         }
     }
 
@@ -128,7 +128,7 @@ where R: AsyncRead + Unpin + Send
 {
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         // Check size_limit.
-        if self.builder.size_limit > 0 && self.rows >= self.builder.size_limit {
+        if self.rows >= self.builder.size_limit {
             return Ok(None);
         }
 
@@ -161,7 +161,7 @@ where R: AsyncRead + Unpin + Send
             self.rows += 1;
 
             // Check size_limit.
-            if self.builder.size_limit > 0 && self.rows >= self.builder.size_limit {
+            if self.rows >= self.builder.size_limit {
                 break;
             }
 

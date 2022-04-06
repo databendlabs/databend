@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -245,7 +246,7 @@ impl Settings {
         setting.user_setting.value = DataValue::UInt64(val);
 
         if is_global {
-            let tenant = self.session_ctx.get_current_tenant();
+            let tenant = self.session_ctx.get_tenant();
             let _ = futures::executor::block_on(
                 self.user_api
                     .get_setting_api_client(&tenant)?
@@ -275,6 +276,16 @@ impl Settings {
                 DataValue::String(v.desc.as_bytes().to_vec()),
             ]);
             result.push(res);
+        }
+        result
+    }
+
+    pub fn get_setting_values_short(&self) -> BTreeMap<String, DataValue> {
+        let settings = self.settings.read();
+
+        let mut result = BTreeMap::new();
+        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
+            result.insert(k.clone(), v.user_setting.value.clone());
         }
         result
     }

@@ -25,6 +25,7 @@ use crate::storages::fuse::FuseTable;
 use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
+use crate::storages::view::ViewTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
 
@@ -102,6 +103,12 @@ impl StorageFactory {
         creators.insert("FUSE".to_string(), Storage {
             creator: Arc::new(FuseTable::try_create),
             descriptor: Arc::new(FuseTable::description),
+        });
+
+        // Register View table engine
+        creators.insert("VIEW".to_string(), Storage {
+            creator: Arc::new(ViewTable::try_create),
+            descriptor: Arc::new(ViewTable::description),
         });
 
         StorageFactory {

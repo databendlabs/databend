@@ -36,11 +36,15 @@ pub struct DateTime64Type {
     /// tz indicates the timezone, if it's None, it's UTC.
     tz: Option<String>,
 }
+const DATETIME64_3: &str = "DateTime64(3)";
+const DATETIME64_6: &str = "DateTime64(6)";
+const DATETIME64_9: &str = "DateTime64(9)";
 
 impl DateTime64Type {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
         DateTime64Type { precision, tz }
     }
+
     pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
         Arc::new(DateTime64Type { precision, tz })
     }
@@ -62,9 +66,14 @@ impl DateTime64Type {
     }
 
     #[inline]
-    pub fn seconds(&self, v: i64) -> i64 {
+    pub fn to_seconds(&self, v: i64) -> i64 {
         let v = v * 10_i64.pow(9 - self.precision as u32);
         v / 1_000_000_000
+    }
+
+    #[inline]
+    pub fn from_nano_seconds(&self, v: i64) -> i64 {
+        v / 10_i64.pow(9 - self.precision as u32)
     }
 
     pub fn format_string(&self) -> String {
@@ -88,7 +97,19 @@ impl DataType for DateTime64Type {
     }
 
     fn name(&self) -> &str {
-        "DateTime64"
+        match self.precision {
+            3 => DATETIME64_3,
+            6 => DATETIME64_6,
+            9 => DATETIME64_9,
+            _ => unreachable!(),
+        }
+    }
+
+    fn aliases(&self) -> &[&str] {
+        match self.precision {
+            3 => &["DateTime64"],
+            _ => &[],
+        }
     }
 
     fn default_value(&self) -> DataValue {
@@ -148,6 +169,6 @@ impl DataType for DateTime64Type {
 
 impl std::fmt::Debug for DateTime64Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({})", self.name(), self.precision())
+        write!(f, "DateTime64({})", self.precision())
     }
 }

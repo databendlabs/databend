@@ -17,7 +17,6 @@ use serde::Serialize;
 
 use crate::MetaError;
 use crate::MetaResult;
-use crate::RoleIdentity;
 use crate::UserGrantSet;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -36,10 +35,16 @@ impl RoleInfo {
         }
     }
 
-    pub fn identity(&self) -> RoleIdentity {
-        RoleIdentity {
-            name: self.name.clone(),
-        }
+    pub fn identity(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn format_grants(&self) -> Vec<Vec<u8>> {
+        self.grants
+            .entries()
+            .iter()
+            .map(|e| format!("{} TO '{}'", e, self.name).into_bytes())
+            .collect::<Vec<_>>()
     }
 }
 

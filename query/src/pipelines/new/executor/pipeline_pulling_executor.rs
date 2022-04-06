@@ -20,122 +20,123 @@ use common_base::Runtime;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 
-use crate::pipelines::new::executor::pipeline_threads_executor::PipelineThreadsExecutor;
-use crate::pipelines::new::pipe::SinkPipeBuilder;
+use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Sink;
 use crate::pipelines::new::processors::Sinker;
+use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 
-enum Executor {
-    Inited(Arc<PipelineThreadsExecutor>),
-    Running(Arc<PipelineThreadsExecutor>),
-    Finished(Result<()>),
+struct State {
+    sender: SyncSender<Result<Option<DataBlock>>>,
 }
 
+impl State {
+    pub fn create(sender: SyncSender<Result<Option<DataBlock>>>) -> Arc<State> {
+        Arc::new(State { sender })
+    }
+}
+
+// Use this executor when the pipeline is pulling pipeline (exists source but not exists sink)
 pub struct PipelinePullingExecutor {
-    executor: Arc<Mutex<Executor>>,
-    receiver: Receiver<DataBlock>,
+    state: Arc<State>,
+    executor: Arc<PipelineExecutor>,
+    receiver: Receiver<Result<Option<DataBlock>>>,
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut NewPipeline) -> Result<Receiver<DataBlock>> {
-        if pipeline.pipes.is_empty() {
-            return Err(ErrorCode::PipelineUnInitialized(""));
+    fn wrap_pipeline(
+        pipeline: &mut NewPipeline,
+        tx: SyncSender<Result<Option<DataBlock>>>,
+    ) -> Result<()> {
+        if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
+            return Err(ErrorCode::LogicalError(
+                "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
+            ));
         }
 
-        if pipeline.pipes[0].input_size() != 0 {
-            return Err(ErrorCode::PipelineUnInitialized(""));
-        }
+        pipeline.resize(1)?;
+        let input = InputPort::create();
 
-        if pipeline.output_len() == 0 {
-            return Err(ErrorCode::PipelineUnInitialized(""));
-        }
-
-        let (tx, rx) = std::sync::mpsc::sync_channel(pipeline.output_len());
-        let mut pipe_builder = SinkPipeBuilder::create();
-
-        for _index in 0..pipeline.output_len() {
-            let input = InputPort::create();
-            let pulling_sink = PullingSink::create(tx.clone(), input.clone());
-            pipe_builder.add_sink(input.clone(), pulling_sink);
-        }
-
-        pipeline.add_pipe(pipe_builder.finalize());
-        Ok(rx)
+        pipeline.add_pipe(NewPipe::SimplePipe {
+            outputs_port: vec![],
+            inputs_port: vec![input.clone()],
+            processors: vec![PullingSink::create(tx, input)],
+        });
+        Ok(())
     }
 
     pub fn try_create(
         async_runtime: Arc<Runtime>,
         mut pipeline: NewPipeline,
     ) -> Result<PipelinePullingExecutor> {
-        let receiver = Self::wrap_pipeline(&mut pipeline)?;
-        let pipeline_executor = PipelineThreadsExecutor::create(async_runtime, pipeline)?;
-        let executor = Arc::new(Mutex::new(Executor::Inited(pipeline_executor)));
-        Ok(PipelinePullingExecutor { receiver, executor })
+        let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
+        let state = State::create(sender.clone());
+
+        Self::wrap_pipeline(&mut pipeline, sender)?;
+        let executor = PipelineExecutor::create(async_runtime, pipeline)?;
+        Ok(PipelinePullingExecutor {
+            receiver,
+            state,
+            executor,
+        })
     }
 
-    pub fn start(&mut self) -> Result<()> {
-        let mut executor = self.executor.lock();
-
-        if let Executor::Inited(threads_executor) = &*executor {
-            let state = self.executor.clone();
-            let threads_executor = threads_executor.clone();
-            let thread_function = Self::thread_function(state, threads_executor.clone());
-
-            std::thread::spawn(thread_function);
-            *executor = Executor::Running(threads_executor);
-        }
-
-        Ok(())
+    pub fn start(&mut self) {
+        let state = self.state.clone();
+        let threads_executor = self.executor.clone();
+        let thread_function = Self::thread_function(state, threads_executor);
+        std::thread::spawn(thread_function);
     }
 
-    fn thread_function(
-        state: Arc<Mutex<Executor>>,
-        threads_executor: Arc<PipelineThreadsExecutor>,
-    ) -> impl Fn() {
+    fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
-            let res = threads_executor.execute();
-            let mut state = state.lock();
-            match res {
-                Ok(_) => {
-                    *state = Executor::Finished(Ok(()));
+            if let Err(cause) = executor.execute() {
+                if let Err(send_err) = state.sender.send(Err(cause)) {
+                    common_tracing::tracing::warn!("Send error {:?}", send_err);
                 }
-                Err(cause) => {
-                    *state = Executor::Finished(Err(cause));
-                }
+
+                return;
+            }
+
+            if let Err(send_err) = state.sender.send(Ok(None)) {
+                common_tracing::tracing::warn!("Send finish event error {:?}", send_err);
             }
         }
     }
 
     pub fn finish(&self) -> Result<()> {
-        let mutex_guard = self.executor.lock();
-        match &*mutex_guard {
-            Executor::Inited(_) => Ok(()),
-            Executor::Running(executor) => executor.finish(),
-            Executor::Finished(res) => res.clone(),
-        }
+        self.executor.finish()
     }
 
-    pub fn pull_data(&mut self) -> Option<DataBlock> {
+    pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
         match self.receiver.recv() {
-            Err(_recv_err) => None,
-            Ok(data_block) => Some(data_block),
+            Ok(data_block) => data_block,
+            Err(_recv_err) => Err(ErrorCode::LogicalError("Logical error, receiver error.")),
         }
     }
 }
 
-enum PullingSink {
-    Running(SyncSender<DataBlock>),
-    Finished,
+impl Drop for PipelinePullingExecutor {
+    fn drop(&mut self) {
+        if let Err(cause) = self.finish() {
+            common_tracing::tracing::warn!("Executor finish is failure {:?}", cause);
+        }
+    }
+}
+
+struct PullingSink {
+    sender: SyncSender<Result<Option<DataBlock>>>,
 }
 
 impl PullingSink {
-    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
-        Sinker::create(input, PullingSink::Running(tx))
+    pub fn create(
+        tx: SyncSender<Result<Option<DataBlock>>>,
+        input: Arc<InputPort>,
+    ) -> ProcessorPtr {
+        Sinker::create(input, PullingSink { sender: tx })
     }
 }
 
@@ -143,20 +144,24 @@ impl Sink for PullingSink {
     const NAME: &'static str = "PullingExecutorSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        if let PullingSink::Running(_) = self {
-            *self = PullingSink::Finished;
+        if let Err(cause) = self.sender.send(Ok(None)) {
+            return Err(ErrorCode::LogicalError(format!(
+                "Logical error, cannot push data into SyncSender, cause {:?}",
+                cause
+            )));
         }
 
         Ok(())
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        match self {
-            PullingSink::Finished => Ok(()),
-            PullingSink::Running(tx) => match tx.send(data_block) {
-                Ok(_) => Ok(()),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
-            },
+        if let Err(cause) = self.sender.send(Ok(Some(data_block))) {
+            return Err(ErrorCode::LogicalError(format!(
+                "Logical error, cannot push data into SyncSender, cause {:?}",
+                cause
+            )));
         }
+
+        Ok(())
     }
 }

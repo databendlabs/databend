@@ -40,18 +40,32 @@ impl ShowTablesInterpreter {
 
     fn build_query(&self) -> Result<String> {
         let database = self.ctx.get_current_database();
+        let showfull = self.plan.showfull;
+        let select_cols = if showfull {
+            format!(
+                "table_name as Tables_in_{}, table_type as Table_type",
+                database
+            )
+        } else {
+            format!("table_name as Tables_in_{}", database)
+        };
         return match &self.plan.kind {
             PlanShowKind::All => {
-                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' ORDER BY database, name", database))
+                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
             }
             PlanShowKind::Like(v) => {
-                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' AND name LIKE {} ORDER BY database, name", database, v))
+                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND table_name LIKE {} ORDER BY table_schema, table_name", select_cols, database, v))
             }
             PlanShowKind::Where(v) => {
-                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' AND ({}) ORDER BY database, name", database, v))
+                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
             }
             PlanShowKind::FromOrIn(v) => {
-                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' ORDER BY database, name", v))
+                let select_cols = if showfull {
+                    format!("table_name as Tables_in_{}, table_type as Table_type", v)
+                } else {
+                    format!("table_name as Tables_in_{}", v)
+                };
+                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, v))
             }
         };
     }

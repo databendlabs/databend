@@ -22,7 +22,11 @@ system
 default
 1
 1
+INFORMATION_SCHEMA
 default
+information_schema
+INFORMATION_SCHEMA
+information_schema
 system
 1
 ==compare_regexp==

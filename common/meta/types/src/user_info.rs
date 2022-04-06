@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use enumflags2::bitflags;
+use enumflags2::BitFlags;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -36,6 +39,8 @@ pub struct UserInfo {
     pub grants: UserGrantSet,
 
     pub quota: UserQuota,
+
+    pub option: UserOption,
 }
 
 impl UserInfo {
@@ -43,6 +48,7 @@ impl UserInfo {
         // Default is no privileges.
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
+        let option = UserOption::default();
 
         UserInfo {
             name,
@@ -50,6 +56,7 @@ impl UserInfo {
             auth_info,
             grants,
             quota,
+            option,
         }
     }
 
@@ -63,6 +70,18 @@ impl UserInfo {
             hostname: self.hostname.clone(),
         }
     }
+
+    pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
+        self.option.has_option_flag(flag)
+    }
+
+    pub fn format_grants(&self) -> Vec<Vec<u8>> {
+        self.grants
+            .entries()
+            .iter()
+            .map(|e| format!("{} TO {}", e, self.identity()).into_bytes())
+            .collect::<Vec<_>>()
+    }
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
@@ -75,6 +94,47 @@ impl TryFrom<Vec<u8>> for UserInfo {
                 "Cannot deserialize user info from bytes. cause {}",
                 serialize_error
             ))),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[serde(default)]
+pub struct UserOption {
+    flags: BitFlags<UserOptionFlag>,
+}
+
+impl UserOption {
+    pub fn set_all_flag(&mut self) {
+        self.flags = BitFlags::all();
+    }
+
+    pub fn set_option_flag(&mut self, flag: UserOptionFlag) {
+        self.flags.insert(flag);
+    }
+
+    pub fn unset_option_flag(&mut self, flag: UserOptionFlag) {
+        self.flags.remove(flag);
+    }
+
+    pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
+        self.flags.contains(flag)
+    }
+}
+
+#[bitflags]
+#[repr(u64)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserOptionFlag {
+    TenantSetting = 1 << 0,
+    ConfigReload = 1 << 1,
+}
+
+impl std::fmt::Display for UserOptionFlag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UserOptionFlag::TenantSetting => write!(f, "TENANTSETTING"),
+            UserOptionFlag::ConfigReload => write!(f, "CONFIGRELOAD"),
         }
     }
 }

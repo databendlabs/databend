@@ -21,7 +21,7 @@ use crate::PlanNode;
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum InsertInputSource {
     SelectPlan(Box<PlanNode>),
-    Expressions(Vec<Vec<Expression>>),
+    Expressions(String, Vec<Vec<Expression>>),
     StreamingWithFormat(String),
 }
 

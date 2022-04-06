@@ -80,7 +80,10 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
 
             // TODO(b41sh): support max/min aggregate functions for variant
             let nonull_data_type = remove_nullable(data_type);
-            if nonull_data_type.data_type_id() != TypeID::Variant {
+            if nonull_data_type.data_type_id() != TypeID::Variant
+                && nonull_data_type.data_type_id() != TypeID::VariantArray
+                && nonull_data_type.data_type_id() != TypeID::VariantObject
+            {
                 let field = schema.field((*id) as usize);
                 // TODO
                 // for some data types, we shall balance the accuracy and the length

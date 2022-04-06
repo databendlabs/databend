@@ -1,8 +1,8 @@
-today	1	0		
-todayofmonth	1	0		
-todayofweek	1	0		
-todayofyear	1	0		
-today	1	0		
-todayofmonth	1	0		
-todayofweek	1	0		
-todayofyear	1	0		
+today	1	0		Returns current date.
+todayofmonth	1	0		Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+todayofweek	1	0		Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+todayofyear	1	0		Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+today	1	0		Returns current date.
+todayofmonth	1	0		Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+todayofweek	1	0		Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+todayofyear	1	0		Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).

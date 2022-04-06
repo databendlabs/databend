@@ -81,10 +81,7 @@ impl QueryContext {
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!(
-                "DatabendQuery v-{}",
-                *crate::configs::DATABEND_COMMIT_VERSION
-            ),
+            version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
             shared,
         })
     }
@@ -255,12 +252,6 @@ impl QueryContext {
                 )));
             }
         };
-
-        Ok(())
-    }
-
-    pub async fn set_current_tenant(&self, tenant: String) -> Result<()> {
-        self.shared.set_current_tenant(tenant);
 
         Ok(())
     }

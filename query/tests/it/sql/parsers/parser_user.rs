@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -29,6 +28,7 @@ use databend_query::sql::statements::DfGrantPrivilegeStatement;
 use databend_query::sql::statements::DfGrantRoleStatement;
 use databend_query::sql::statements::DfRevokePrivilegeStatement;
 use databend_query::sql::statements::DfShowGrants;
+use databend_query::sql::statements::DfUserWithOption;
 use databend_query::sql::*;
 
 use crate::sql::sql_parser::*;
@@ -42,12 +42,12 @@ fn create_user_auth_test(
         &format!("CREATE USER 'test'@'localhost' {}", auth_clause),
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            auth_options: DfAuthOption {
+            user: UserIdentity::new("test", "localhost"),
+            auth_option: DfAuthOption {
                 auth_type,
                 by_value: auth_string,
             },
+            with_options: Default::default(),
         }),
     )
 }
@@ -71,12 +71,12 @@ fn alter_user_auth_test(
         &format!("ALTER USER 'test'@'localhost' {}", auth_clause),
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            auth_option: DfAuthOption {
+            user: UserIdentity::new("test", "localhost"),
+            auth_option: Some(DfAuthOption {
                 auth_type,
                 by_value: auth_string,
-            },
+            }),
+            with_options: Default::default(),
         }),
     )
 }
@@ -116,21 +116,60 @@ fn create_user_test() -> Result<()> {
         "CREATE USER 'test@localhost'",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
-            name: String::from("test@localhost"),
-            hostname: String::from("%"),
-            auth_options: DfAuthOption::default(),
+            user: UserIdentity::new("test@localhost", "%"),
+            auth_option: DfAuthOption::default(),
+            with_options: Default::default(),
         }),
     )?;
 
-    // errors
+    // create user with option
+    let with_options = vec![DfUserWithOption::TenantSetting];
+    expect_parse_ok(
+        "CREATE USER 'operator' WITH TENANTSETTING NOT IDENTIFIED",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            user: UserIdentity::new("operator", "%"),
+            auth_option: DfAuthOption::no_password(),
+            with_options,
+        }),
+    )?;
+
+    let with_options = vec![
+        DfUserWithOption::NoTenantSetting,
+        DfUserWithOption::ConfigReload,
+    ];
+    expect_parse_ok(
+        "CREATE USER 'operator' WITH NOTENANTSETTING, CONFIGRELOAD NOT IDENTIFIED",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            user: UserIdentity::new("operator", "%"),
+            auth_option: DfAuthOption::no_password(),
+            with_options,
+        }),
+    )?;
+
+    // create user with option
+    expect_parse_err(
+        "CREATE USER 'operator' NOT IDENTIFIED WITH TENANTSETTINGS",
+        String::from("sql parser error: Expected end of statement, found: WITH"),
+    )?;
+
+    // create user with no_password
     expect_parse_err(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
         String::from("sql parser error: Expected end of statement, found: BY"),
     )?;
 
+    // create user without password
     expect_parse_err(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
         String::from("sql parser error: Expected literal string, found: EOF"),
+    )?;
+
+    // create user with unknown option
+    expect_parse_err(
+        "CREATE USER 'operator' WITH TEST",
+        String::from("sql parser error: Expected user option, found: TEST"),
     )?;
 
     Ok(())
@@ -154,18 +193,28 @@ fn alter_user_test() -> Result<()> {
 
     alter_user_auth_test("NOT IDENTIFIED", Some("no_password".to_string()), None)?;
 
-    alter_user_auth_test("", None, None)?;
+    // alter_user_auth_test("", None, None)?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            user: UserIdentity::new("test", "localhost"),
+            auth_option: None,
+            with_options: Default::default(),
+        }),
+    )?;
 
     expect_parse_ok(
         "ALTER USER USER() IDENTIFIED BY 'password'",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: true,
-            name: String::from(""),
-            hostname: String::from(""),
-            auth_option: DfAuthOption {
+            user: UserIdentity::new("", ""),
+            auth_option: Some(DfAuthOption {
                 auth_type: None,
                 by_value: Some(password),
-            },
+            }),
+            with_options: Default::default(),
         }),
     )?;
 
@@ -173,12 +222,37 @@ fn alter_user_test() -> Result<()> {
         "ALTER USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test@localhost"),
-            hostname: String::from("%"),
-            auth_option: DfAuthOption {
+            user: UserIdentity::new("test@localhost", "%"),
+            auth_option: Some(DfAuthOption {
                 auth_type: Some("sha256_password".to_string()),
                 by_value: Some("password".to_string()),
-            },
+            }),
+            with_options: Default::default(),
+        }),
+    )?;
+
+    let mut with_options = vec![DfUserWithOption::TenantSetting];
+    expect_parse_ok(
+        "ALTER USER 'test'@'%' WITH TENANTSETTING",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            user: UserIdentity::new("test", "%"),
+            auth_option: None,
+            with_options: with_options.clone(),
+        }),
+    )?;
+
+    with_options.push(DfUserWithOption::ConfigReload);
+    expect_parse_ok(
+        "ALTER USER 'test'@'%' WITH TENANTSETTING, CONFIGRELOAD IDENTIFIED by 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            user: UserIdentity::new("test", "%"),
+            auth_option: Some(DfAuthOption {
+                auth_type: None,
+                by_value: Some("password".to_string()),
+            }),
+            with_options,
         }),
     )?;
 
@@ -192,6 +266,11 @@ fn alter_user_test() -> Result<()> {
         String::from("sql parser error: Expected literal string, found: EOF"),
     )?;
 
+    expect_parse_err(
+        "ALTER USER 'operator' WITH TEST",
+        String::from("sql parser error: Expected user option, found: TEST"),
+    )?;
+
     Ok(())
 }
 
@@ -201,8 +280,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER 'test'@'localhost'",
         DfStatement::DropUser(DfDropUser {
             if_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
         }),
     )?;
 
@@ -210,8 +288,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER 'test'@'127.0.0.1'",
         DfStatement::DropUser(DfDropUser {
             if_exists: false,
-            name: String::from("test"),
-            hostname: String::from("127.0.0.1"),
+            user: UserIdentity::new("test", "127.0.0.1"),
         }),
     )?;
 
@@ -219,8 +296,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER 'test'",
         DfStatement::DropUser(DfDropUser {
             if_exists: false,
-            name: String::from("test"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test", "%"),
         }),
     )?;
 
@@ -228,8 +304,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER IF EXISTS 'test'@'localhost'",
         DfStatement::DropUser(DfDropUser {
             if_exists: true,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
         }),
     )?;
 
@@ -237,8 +312,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER IF EXISTS 'test'@'127.0.0.1'",
         DfStatement::DropUser(DfDropUser {
             if_exists: true,
-            name: String::from("test"),
-            hostname: String::from("127.0.0.1"),
+            user: UserIdentity::new("test", "127.0.0.1"),
         }),
     )?;
 
@@ -246,8 +320,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER IF EXISTS 'test'",
         DfStatement::DropUser(DfDropUser {
             if_exists: true,
-            name: String::from("test"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test", "%"),
         }),
     )?;
     Ok(())
@@ -257,18 +330,23 @@ fn drop_user_test() -> Result<()> {
 fn show_grants_test() -> Result<()> {
     expect_parse_ok(
         "SHOW GRANTS",
-        DfStatement::ShowGrants(DfShowGrants {
-            user_identity: None,
-        }),
+        DfStatement::ShowGrants(DfShowGrants { principal: None }),
     )?;
 
     expect_parse_ok(
         "SHOW GRANTS FOR 'u1'@'%'",
         DfStatement::ShowGrants(DfShowGrants {
-            user_identity: Some(UserIdentity {
+            principal: Some(PrincipalIdentity::User(UserIdentity {
                 username: "u1".into(),
                 hostname: "%".into(),
-            }),
+            })),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW GRANTS FOR ROLE 'test_role'",
+        DfStatement::ShowGrants(DfShowGrants {
+            principal: Some(PrincipalIdentity::Role("test_role".into())),
         }),
     )?;
 
@@ -458,9 +536,7 @@ fn create_role_test() -> Result<()> {
         "CREATE ROLE 'test'",
         DfStatement::CreateRole(DfCreateRole {
             if_not_exists: false,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -468,9 +544,7 @@ fn create_role_test() -> Result<()> {
         "CREATE ROLE IF NOT EXISTS 'test'",
         DfStatement::CreateRole(DfCreateRole {
             if_not_exists: true,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -483,9 +557,7 @@ fn drop_role_test() -> Result<()> {
         "DROP ROLE 'test'",
         DfStatement::DropRole(DfDropRole {
             if_exists: false,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -493,9 +565,7 @@ fn drop_role_test() -> Result<()> {
         "DROP ROLE IF EXISTS 'test'",
         DfStatement::DropRole(DfDropRole {
             if_exists: true,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -509,9 +579,7 @@ fn grant_role_test() -> Result<()> {
         "GRANT ROLE 'test' TO 'test'",
         DfStatement::GrantRole(DfGrantRoleStatement {
             principal: PrincipalIdentity::user("test".to_string(), "%".to_string()),
-            role: RoleIdentity {
-                name: String::from("test"),
-            },
+            role: String::from("test"),
         }),
     )?;
     //
@@ -520,9 +588,7 @@ fn grant_role_test() -> Result<()> {
         "GRANT ROLE 'test' TO USER 'test'@'localhost'",
         DfStatement::GrantRole(DfGrantRoleStatement {
             principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
-            role: RoleIdentity {
-                name: String::from("test"),
-            },
+            role: String::from("test"),
         }),
     )?;
 
@@ -531,9 +597,7 @@ fn grant_role_test() -> Result<()> {
         "GRANT ROLE 'test' TO ROLE 'test'",
         DfStatement::GrantRole(DfGrantRoleStatement {
             principal: PrincipalIdentity::role("test".to_string()),
-            role: RoleIdentity {
-                name: String::from("test"),
-            },
+            role: String::from("test"),
         }),
     )?;
 

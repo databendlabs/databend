@@ -23,6 +23,7 @@ members = [
     "common/meta/raft-store",
     "common/meta/sled-store",
     "common/meta/types",
+    "common/range-set",
     "common/streams",
     "common/codegen",
     "common/tracing",
@@ -35,7 +36,6 @@ members = [
     "metasrv",
 
     # Tools
-    "tools/benchmark",
     "tools/fuzz",
     "tools/metactl",
 ]

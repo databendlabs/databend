@@ -43,6 +43,16 @@ pub trait Procedure: Sync + Send {
                 self.name()
             )));
         }
+        if let Some(user_option_flag) = features.user_option_flag {
+            let user_info = ctx.get_current_user()?;
+            if !user_info.has_option_flag(user_option_flag) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Access denied: '{}' requires user {} option flag",
+                    self.name(),
+                    user_option_flag
+                )));
+            }
+        }
         Ok(())
     }
 

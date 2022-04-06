@@ -48,11 +48,11 @@ async fn interpreter_describe_table_test() -> Result<()> {
             "+-------+--------+------+",
             "| Field | Type   | Null |",
             "+-------+--------+------+",
-            "| a     | Int64  | YES  |",
-            "| b     | Int32  | YES  |",
-            "| c     | String | YES  |",
-            "| d     | Int16  | YES  |",
-            "| e     | Date16 | YES  |",
+            "| a     | Int64  | NO   |",
+            "| b     | Int32  | NO   |",
+            "| c     | String | NO   |",
+            "| d     | Int16  | NO   |",
+            "| e     | Date16 | NO   |",
             "+-------+--------+------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

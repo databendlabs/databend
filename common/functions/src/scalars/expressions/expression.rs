@@ -16,8 +16,8 @@ use common_exception::Result;
 use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct ToCastFunction;
@@ -68,6 +68,7 @@ impl ToCastFunction {
 
         for name in names {
             let to_name = format!("to{}", name);
+
             factory.register(&to_name, Self::cast_function_creator(name).unwrap());
         }
     }

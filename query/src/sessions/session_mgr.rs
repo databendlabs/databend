@@ -32,8 +32,8 @@ use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
-use opendal::credential::Credential;
 use opendal::services::fs;
+use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Accessor;
 use opendal::Operator;
@@ -328,10 +328,14 @@ impl SessionManager {
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
         let storage_conf = &conf.storage;
         let schema_name = &storage_conf.storage_type;
-        let schema = DalSchema::from_str(schema_name)
-            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+        let schema = DalSchema::from_str(schema_name)?;
 
         let accessor: Arc<dyn Accessor> = match schema {
+            DalSchema::Memory => {
+                let mut builder = memory::Backend::build();
+
+                builder.finish().await?
+            }
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
                 let mut builder = s3::Backend::build();
@@ -348,10 +352,8 @@ impl SessionManager {
 
                 // Credential.
                 {
-                    builder.credential(Credential::hmac(
-                        &s3_conf.access_key_id,
-                        &s3_conf.secret_access_key,
-                    ));
+                    builder.access_key_id(&s3_conf.access_key_id);
+                    builder.secret_access_key(&s3_conf.secret_access_key);
                 }
 
                 // Bucket.
@@ -366,13 +368,7 @@ impl SessionManager {
                     }
                 }
 
-                builder
-                    .finish()
-                    .await
-                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
-            }
-            DalSchema::Azblob => {
-                todo!()
+                builder.finish().await?
             }
             DalSchema::Fs => {
                 let mut path = storage_conf.disk.data_path.clone();
@@ -380,12 +376,9 @@ impl SessionManager {
                     path = env::current_dir().unwrap().join(path).display().to_string();
                 }
 
-                fs::Backend::build()
-                    .root(&path)
-                    .finish()
-                    .await
-                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
+                fs::Backend::build().root(&path).finish().await?
             }
+            _ => return Err(ErrorCode::StorageOther("not supported storage backend")),
         };
 
         Ok(Operator::new(accessor))
@@ -400,6 +393,8 @@ impl SessionManager {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
             *config = Config::load_from_file(&config_file)?;
+            // ensure the environment variables are immutable
+            *config = Config::load_from_env(&config)?;
             config.config_file = config_file;
             config.clone()
         };

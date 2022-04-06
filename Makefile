@@ -55,7 +55,6 @@ build-release:
 ifeq ($(shell uname),Linux) # Macs don't have objcopy
 	# Reduce binary size by compressing binaries.
 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-query
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-benchmark
 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-meta
 	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-metactl
 endif
@@ -81,7 +80,7 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
 management-test: build-debug
 	rm -rf ./_meta*/
@@ -113,21 +112,15 @@ dockerx:
 build-tool:
 	bash ./scripts/build/build-tool-runner.sh
 
-build-perf-tool:
-	cargo build --target x86_64-unknown-linux-gnu --bin databend-benchmark
-	mkdir -p ./distro
-	mv ./target/x86_64-unknown-linux-gnu/debug/databend-benchmark  ./distro
-
 # generate common/functions/src/scalars/arithmetics/result_type.rs
 run-codegen:
 	cargo run --manifest-path=common/codegen/Cargo.toml
 
-perf-tool: build-perf-tool
-	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 # used for the build of dev container
 dev-container:
 	cp ./rust-toolchain.toml ./docker/build-tool
-	docker build ./docker/build-tool -t ${HUB}/dev-container:${TAG} -f ./docker/build-tool/Dockerfile
+	docker build ./docker/build-tool -t ${HUB}/dev-container:${TAG} -f ./docker/build-tool/Dockerfile\
+
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 

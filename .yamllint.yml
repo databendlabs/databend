@@ -5,9 +5,12 @@ ignore: |
   target/
 
 rules:
-  # 80 chars should be enough, but don't fail if a line is longer
+  # 100 chars should be enough, but don't fail if a line is longer
   line-length:
-    max: 80
+    max: 100
     level: warning
   braces: disable
   brackets: disable
+  document-start: disable
+  truthy:
+    check-keys: false

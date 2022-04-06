@@ -62,13 +62,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .revoke_privileges_from_user(
-                        &tenant,
-                        &user.username,
-                        &user.hostname,
-                        plan.on,
-                        plan.priv_types,
-                    )
+                    .revoke_privileges_from_user(&tenant, user, plan.on, plan.priv_types)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {

@@ -29,11 +29,12 @@ use crate::sql::statements::DfShowKind;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowTables {
     pub kind: DfShowKind,
+    pub showfull: bool,
 }
 
 impl DfShowTables {
-    pub fn create(kind: DfShowKind) -> DfShowTables {
-        DfShowTables { kind }
+    pub fn create(kind: DfShowKind, showfull: bool) -> DfShowTables {
+        DfShowTables { kind, showfull }
     }
 }
 
@@ -42,6 +43,7 @@ impl AnalyzableStatement for DfShowTables {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut kind = PlanShowKind::All;
+        let showfull = self.showfull;
         match &self.kind {
             DfShowKind::All => {}
             DfShowKind::Like(v) => {
@@ -56,7 +58,7 @@ impl AnalyzableStatement for DfShowTables {
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
-            ShowPlan::ShowTables(ShowTablesPlan { kind }),
+            ShowPlan::ShowTables(ShowTablesPlan { kind, showfull }),
         ))))
     }
 }

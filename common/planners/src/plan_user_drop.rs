@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropUserPlan {
     pub if_exists: bool,
-    pub name: String,
-    pub hostname: String,
+    pub user: UserIdentity,
 }
 
 impl DropUserPlan {

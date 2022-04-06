@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parser_admin;
 mod parser_call;
 mod parser_copy;
 mod parser_database;
@@ -28,3 +27,4 @@ mod parser_table;
 mod parser_udf;
 mod parser_use;
 mod parser_user;
+mod parser_view;

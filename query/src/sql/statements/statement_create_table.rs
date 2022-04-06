@@ -31,13 +31,14 @@ use sqlparser::ast::ObjectName;
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::is_reserved_opt_key;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
-use crate::storages::OPT_KEY_DATABASE_ID;
+use crate::sql::OPT_KEY_DATABASE_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
@@ -59,7 +60,7 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
+        let (db, table) = Self::resolve_table(ctx.clone(), &self.name, "Table")?;
         let mut table_meta = self.table_meta(ctx.clone(), db.as_str()).await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
@@ -101,15 +102,23 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    fn resolve_table(ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
+    pub fn resolve_table(
+        ctx: Arc<QueryContext>,
+        table_name: &ObjectName,
+        table_type: &str,
+    ) -> Result<(String, String)> {
         let idents = &table_name.0;
         match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Create table name is empty")),
+            0 => Err(ErrorCode::SyntaxException(format!(
+                "{} name is empty",
+                table_type
+            ))),
             1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
             2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Create table name must be [`db`].`table`",
-            )),
+            _ => Err(ErrorCode::SyntaxException(format!(
+                "{} name must be [`db`].`{}`",
+                table_type, table_type
+            ))),
         }
     }
 
@@ -122,6 +131,8 @@ impl DfCreateTable {
             options: self.options.clone(),
             ..Default::default()
         };
+        self.validate_table_options()?;
+
         self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
     }
 
@@ -132,7 +143,7 @@ impl DfCreateTable {
             Some(like_table_name) => {
                 // resolve database and table name from 'like statement'
                 let (origin_db_name, origin_table_name) =
-                    Self::resolve_table(ctx.clone(), like_table_name)?;
+                    Self::resolve_table(ctx.clone(), like_table_name, "Table")?;
 
                 // use the origin table's schema for the table to create
                 let origin_table = ctx.get_table(&origin_db_name, &origin_table_name).await?;
@@ -143,12 +154,15 @@ impl DfCreateTable {
                 let mut fields = Vec::with_capacity(self.columns.len());
 
                 for column in &self.columns {
-                    let mut nullable = true;
+                    //  Defaults to not nullable, if you want to use nullable, you should add `null` into table options
+                    // For example: `CREATE TABLE test (id INT NOT NULL, name String NULL)`
+                    // Equals to: `CREATE TABLE test (id INT, name String NULL)`
+                    let mut nullable = false;
                     let mut default_expr = None;
                     for opt in &column.options {
                         match &opt.option {
-                            ColumnOption::NotNull => {
-                                nullable = false;
+                            ColumnOption::Null => {
+                                nullable = true;
                             }
                             ColumnOption::Default(expr) => {
                                 let expr = expr_analyzer.analyze(expr).await?;
@@ -197,5 +211,26 @@ impl DfCreateTable {
                 .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
         Ok(meta)
+    }
+
+    fn validate_table_options(&self) -> Result<()> {
+        let reserved = self
+            .options
+            .keys()
+            .filter_map(|k| {
+                if is_reserved_opt_key(k) {
+                    Some(k.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if !reserved.is_empty() {
+            Err(ErrorCode::BadOption(format!("the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
+                        reserved.join(",")
+                        )))
+        } else {
+            Ok(())
+        }
     }
 }
