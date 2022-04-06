@@ -9,11 +9,12 @@ Create a new table.
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | Null ],
-    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | Null ],
+    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | NULL],
+    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | NULL],
     ...
 )
 ```
+
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
@@ -26,11 +27,22 @@ AS SELECT query
 
 ## Column Option is nullable or not
 
-By default, all columns are not nullable.
+By default, **all columns are not nullable(NOT NULL)**, if you want to special a column default to `NULL`, please use:
+```sql
+CREATE TABLE [IF NOT EXISTS] [db.]table_name
+(
+    <col_name> <col_type> NULL,
+     ...
+)
+```
+
+```sql
+create table t1(a int NULL);
+```
 
 ## Default Values
 ```sql
-DEFAULT <expr>
+DEFAULT <expression>
 ```
 Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
 
@@ -97,7 +109,7 @@ mysql> SELECT * FROM copy1;
 |  888 | stars |
 +------+-------+
 
-mysql> CREATE TABLE copy2(x VARCHAR null, y VARCHAR null) AS SELECT * FROM source;
+mysql> CREATE TABLE copy2(x VARCHAR NULL, y VARCHAR NULL) AS SELECT * FROM source;
 
 mysql> SELECT * FROM copy2;
 +------+------+------+-------+
