@@ -26,10 +26,10 @@ clickhouse-client --host 127.0.0.1 --port 9000
 :::tip
 Databend ClickHouse HTTP handler is a simplified version of the implementation, it only providers:
 * Heath check
-* Insert with JSONEachRow format file
+* Insert with JSONEachRow format
 :::
 
-### Health check
+### Health Check
 
 ```sql title='query=select 1'
 curl '127.0.0.1:8000/clickhouse/?query=select%201'
@@ -39,10 +39,10 @@ curl '127.0.0.1:8000/clickhouse/?query=select%201'
 1
 ```
 
-### Insert with JSONEachRow(ndjson) Format File
+### Insert with JSONEachRow(ndjson)
 
 :::note
-** Databend ClickHouse Handler only supports put ndjson(JSONEachRow in ClickHouse) format files**.
+** Databend ClickHouse HTTP handler only supports put ndjson(JSONEachRow in ClickHouse) format values**.
 :::
 
 ndjson is a newline delimited JSON format:
@@ -54,13 +54,21 @@ For example, we have a table:
 CREATE TABLE t1(a UInt8);
 ```
 
-and a ndjson file:
-````json title='t1.json'
-{"a":1}
-{"a":2}
-````
-
 Insert into `t1`:
-```sql title='insert into t1 format JSONEachRow'
-curl -i 'http://localhost:8000/clickhouse/?query=INSERT%20INTO%20default.t1%20FORMAT%20JSONEachRow' --data-binary @t1.json
+```shell title='insert into t1 format JSONEachRow'
+echo -e '{"a": 1}\n{"a": 2}' | curl '127.0.0.1:8000/clickhouse/?query=INSERT%20INTO%20t1%20FORMAT%20JSONEachRow' --data-binary @-
 ```
+
+### Insert with Authentication
+
+Use HTTP basic authentication:
+```shell
+echo -e '{"a": 1}\n{"a": 2}' | curl 'user:password@127.0.0.1:8000/clickhouse/?query=INSERT%20INTO%20t1%20FORMAT%20JSONEachRow' --data-binary @-
+```
+
+### Compression
+
+Databend ClickHouse HTTP handler supports the following compression methods:
+* BR
+* DEFLATE
+* GZIP
