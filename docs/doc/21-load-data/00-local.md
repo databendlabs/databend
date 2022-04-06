@@ -12,6 +12,8 @@ description:
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 Currently, we only support CSV and Parquet file format.
 
+> Note: CSV file should be UTF-8 character encoded if you have extra character set
+
 ### Before You Begin
 
 * **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
