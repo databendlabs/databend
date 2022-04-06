@@ -36,5 +36,9 @@ fn test_exp_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(ExpFunction::try_create("exp")?, &tests, true)
+    test_scalar_functions(
+        ExpFunction::try_create("exp", &[&Int32Type::arc()])?,
+        &tests,
+        true,
+    )
 }

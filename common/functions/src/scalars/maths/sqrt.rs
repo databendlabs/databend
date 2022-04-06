@@ -20,7 +20,7 @@ use common_exception::Result;
 use num::cast::AsPrimitive;
 
 use crate::scalars::function_common::assert_numeric;
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::TypedFunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
@@ -33,14 +33,15 @@ pub struct SqrtFunction {
 }
 
 impl SqrtFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(SqrtFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -55,8 +56,7 @@ impl Function for SqrtFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Float64Type::arc())
     }
 

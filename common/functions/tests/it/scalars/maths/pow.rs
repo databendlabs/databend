@@ -63,5 +63,9 @@ fn test_pow_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(PowFunction::try_create("pow")?, &tests, true)
+    test_scalar_functions(
+        PowFunction::try_create("pow", &[&Int32Type::arc(), &Int32Type::arc()])?,
+        &tests,
+        true,
+    )
 }

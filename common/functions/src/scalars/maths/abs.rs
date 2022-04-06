@@ -20,7 +20,7 @@ use common_exception::Result;
 
 use crate::scalars::function::Function;
 use crate::scalars::function_common::assert_numeric;
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::TypedFunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::FunctionContext;
@@ -30,17 +30,33 @@ use crate::scalars::Monotonicity;
 #[derive(Clone)]
 pub struct AbsFunction {
     _display_name: String,
+    result_type: DataTypePtr,
 }
 
 impl AbsFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
+        let result_type = match args[0].data_type_id() {
+            TypeID::Int8 => u8::to_data_type(),
+            TypeID::Int16 => u16::to_data_type(),
+            TypeID::Int32 => u32::to_data_type(),
+            TypeID::Int64 => u64::to_data_type(),
+            TypeID::UInt8 => u8::to_data_type(),
+            TypeID::UInt16 => u16::to_data_type(),
+            TypeID::UInt32 => u32::to_data_type(),
+            TypeID::UInt64 => u64::to_data_type(),
+            TypeID::Float32 => f32::to_data_type(),
+            TypeID::Float64 => f64::to_data_type(),
+            _ => unreachable!(),
+        };
         Ok(Box::new(AbsFunction {
             _display_name: display_name.to_string(),
+            result_type,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -76,22 +92,8 @@ impl Function for AbsFunction {
         "abs"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        let data_type = match args[0].data_type_id() {
-            TypeID::Int8 => u8::to_data_type(),
-            TypeID::Int16 => u16::to_data_type(),
-            TypeID::Int32 => u32::to_data_type(),
-            TypeID::Int64 => u64::to_data_type(),
-            TypeID::UInt8 => u8::to_data_type(),
-            TypeID::UInt16 => u16::to_data_type(),
-            TypeID::UInt32 => u32::to_data_type(),
-            TypeID::UInt64 => u64::to_data_type(),
-            TypeID::Float32 => f32::to_data_type(),
-            TypeID::Float64 => f64::to_data_type(),
-            _ => unreachable!(),
-        };
-        Ok(data_type)
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.result_type.clone())
     }
 
     fn eval(

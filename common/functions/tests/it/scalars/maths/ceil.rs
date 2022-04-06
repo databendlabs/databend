@@ -22,61 +22,72 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 #[test]
 fn test_ceil_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        (Int32Type::arc(), ScalarFunctionTest {
             name: "ceil(123)",
             columns: vec![Series::from_data([123])],
             expect: Series::from_data(vec![123_f64]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (Float64Type::arc(), ScalarFunctionTest {
             name: "ceil(1.2)",
             columns: vec![Series::from_data([1.2])],
             expect: Series::from_data(vec![2_f64]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (Float64Type::arc(), ScalarFunctionTest {
             name: "ceil(-1.2)",
             columns: vec![Series::from_data([-1.2])],
             expect: Series::from_data(vec![-1_f64]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (StringType::arc(), ScalarFunctionTest {
             name: "ceil('123')",
             columns: vec![Series::from_data(["123"])],
             expect: Series::from_data(vec![123_f64]),
             error: "Expected a numeric type, but got String",
-        },
-        ScalarFunctionTest {
+        }),
+        (StringType::arc(), ScalarFunctionTest {
             name: "ceil('+123.2a1')",
             columns: vec![Series::from_data(["+123.2a1"])],
             expect: Series::from_data(vec![124_f64]),
             error: "Expected a numeric type, but got String",
-        },
-        ScalarFunctionTest {
+        }),
+        (StringType::arc(), ScalarFunctionTest {
             name: "ceil('-123.2a1')",
             columns: vec![Series::from_data(["-123.2a1"])],
             expect: Series::from_data(vec![-123_f64]),
             error: "Expected a numeric type, but got String",
-        },
-        ScalarFunctionTest {
+        }),
+        (StringType::arc(), ScalarFunctionTest {
             name: "ceil('a')",
             columns: vec![Series::from_data(["a"])],
             expect: Series::from_data(vec![0_f64]),
             error: "Expected a numeric type, but got String",
-        },
-        ScalarFunctionTest {
+        }),
+        (StringType::arc(), ScalarFunctionTest {
             name: "ceil('a123')",
             columns: vec![Series::from_data(["a123"])],
             expect: Series::from_data(vec![0_f64]),
             error: "Expected a numeric type, but got String",
-        },
-        ScalarFunctionTest {
+        }),
+        (BooleanType::arc(), ScalarFunctionTest {
             name: "ceil(true)",
             columns: vec![Series::from_data([true])],
             expect: Series::from_data([0_u8]),
             error: "Expected a numeric type, but got Boolean",
-        },
+        }),
     ];
 
-    test_scalar_functions(CeilFunction::try_create("ceil")?, &tests, true)
+    for (typ, test) in tests {
+        match CeilFunction::try_create("ceil", &[&typ]) {
+            Ok(f) => {
+                test_scalar_functions(f, &[test], true)?;
+            }
+            Err(cause) => {
+                assert_eq!(test.error, cause.message(), "{}", test.name);
+            }
+        }
+    }
+
+    Ok(())
 }

@@ -156,7 +156,11 @@ fn test_round_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RoundNumberFunction::try_create("round")?, &tests, true)
+    test_scalar_functions(
+        RoundNumberFunction::try_create("round", &[&Float64Type::arc(), &Float64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -206,7 +210,7 @@ fn test_trunc_number_function() -> Result<()> {
             name: "first arg is const, second is series",
             columns: vec![
                 ConstColumn::new(Series::from_data(vec![11.11f64]), 4).arc(),
-                Series::from_data([None, Some(-1), Some(0), Some(1)]),
+                Series::from_data([None, Some(-1i64), Some(0), Some(1)]),
             ],
             expect: Series::from_data([None, Some(10.0), Some(11.0), Some(11.1)]),
             error: "",
@@ -222,12 +226,16 @@ fn test_trunc_number_function() -> Result<()> {
                     Some(33.33),
                     Some(44.44),
                 ]),
-                Series::from_data([None, Some(1), None, Some(0), Some(-1), Some(1)]),
+                Series::from_data([None, Some(1i64), None, Some(0), Some(-1), Some(1)]),
             ],
             expect: Series::from_data([None, None, None, Some(22.0), Some(30.0), Some(44.4)]),
             error: "",
         },
     ];
 
-    test_scalar_functions(TruncNumberFunction::try_create("trunc")?, &tests, true)
+    test_scalar_functions(
+        TruncNumberFunction::try_create("trunc", &[&Float64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }

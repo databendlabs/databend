@@ -42,5 +42,9 @@ fn test_sqrt_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(SqrtFunction::try_create("sqrt")?, &tests, true)
+    test_scalar_functions(
+        SqrtFunction::try_create("sqrt", &[&Int32Type::arc()])?,
+        &tests,
+        true,
+    )
 }

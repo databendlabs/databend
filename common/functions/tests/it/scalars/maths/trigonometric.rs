@@ -26,43 +26,47 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 #[test]
 fn test_trigonometric_sin_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        (UInt8Type::arc(), ScalarFunctionTest {
             name: "sin-u8-passed",
             columns: vec![Series::from_data(vec![0_u8, 1, 3])],
             expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt16Type::arc(), ScalarFunctionTest {
             name: "sin-u16-passed",
             columns: vec![Series::from_data(vec![0_u16, 1, 3])],
             expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt32Type::arc(), ScalarFunctionTest {
             name: "sin-u32-passed",
             columns: vec![Series::from_data(vec![0_u32, 1, 3])],
             expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt64Type::arc(), ScalarFunctionTest {
             name: "sin-u64-passed",
             columns: vec![Series::from_data(vec![0_u64, 1, 3])],
             expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (Float64Type::arc(), ScalarFunctionTest {
             name: "sin-f64-passed",
             columns: vec![Series::from_data(vec![0_f64, 1.0, 3.0])],
             expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
-        },
+        }),
     ];
 
-    test_scalar_functions(
-        TrigonometricSinFunction::try_create_func("sin")?,
-        &tests,
-        true,
-    )
+    for (typ, test) in tests {
+        test_scalar_functions(
+            TrigonometricSinFunction::try_create_func("sin", &[&typ])?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
@@ -75,7 +79,7 @@ fn test_trigonometric_cos_function() -> Result<()> {
     }];
 
     test_scalar_functions(
-        TrigonometricCosFunction::try_create_func("cos")?,
+        TrigonometricCosFunction::try_create_func("cos", &[&Float64Type::arc()])?,
         &tests,
         true,
     )
@@ -91,7 +95,7 @@ fn test_trigonometric_tan_function() -> Result<()> {
     }];
 
     test_scalar_functions(
-        TrigonometricTanFunction::try_create_func("tan")?,
+        TrigonometricTanFunction::try_create_func("tan", &[&Float64Type::arc()])?,
         &tests,
         true,
     )
@@ -115,7 +119,7 @@ fn test_trigonometric_cot_function() -> Result<()> {
     ];
 
     test_scalar_functions(
-        TrigonometricCotFunction::try_create_func("cot")?,
+        TrigonometricCotFunction::try_create_func("cot", &[&Float64Type::arc()])?,
         &tests,
         true,
     )
@@ -131,7 +135,7 @@ fn test_trigonometric_asin_function() -> Result<()> {
     }];
 
     test_scalar_functions(
-        TrigonometricAsinFunction::try_create_func("asin")?,
+        TrigonometricAsinFunction::try_create_func("asin", &[&Float64Type::arc()])?,
         &tests,
         true,
     )
@@ -147,7 +151,7 @@ fn test_trigonometric_acos_function() -> Result<()> {
     }];
 
     test_scalar_functions(
-        TrigonometricAcosFunction::try_create_func("acos")?,
+        TrigonometricAcosFunction::try_create_func("acos", &[&Int32Type::arc()])?,
         &tests,
         true,
     )
@@ -156,13 +160,13 @@ fn test_trigonometric_acos_function() -> Result<()> {
 #[test]
 fn test_trigonometric_atan_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        (Int32Type::arc(), ScalarFunctionTest {
             name: "atan-passed",
             columns: vec![Series::from_data(vec![1, -1])],
             expect: Series::from_data(vec![FRAC_PI_4, -FRAC_PI_4]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (Float64Type::arc(), ScalarFunctionTest {
             name: "atan-passed",
             columns: vec![
                 Series::from_data(vec![-2_f64, PI]),
@@ -170,14 +174,18 @@ fn test_trigonometric_atan_function() -> Result<()> {
             ],
             expect: Series::from_data(vec![-FRAC_PI_4, FRAC_PI_2]),
             error: "",
-        },
+        }),
     ];
 
-    test_scalar_functions(
-        TrigonometricAtanFunction::try_create_func("atan")?,
-        &tests,
-        true,
-    )
+    for (typ, test) in tests {
+        test_scalar_functions(
+            TrigonometricAtanFunction::try_create_func("atan", &[&typ])?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
@@ -213,7 +221,7 @@ fn test_trigonometric_atan2_function() -> Result<()> {
     ];
 
     test_scalar_functions(
-        TrigonometricAtan2Function::try_create_func("atan2")?,
+        TrigonometricAtan2Function::try_create_func("atan2", &[&Float64Type::arc()])?,
         &tests,
         true,
     )

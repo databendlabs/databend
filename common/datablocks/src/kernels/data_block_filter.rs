@@ -67,7 +67,7 @@ impl DataBlock {
             let inner = col.inner();
             if inner.is_const() {
                 let col: &ConstColumn = unsafe { Series::static_cast(inner) };
-                let inner_boolean = Self::cast_to_nonull_boolean(col.inner())?;
+                let inner_boolean = Self::cast_to_nonull_boolean(inner)?;
                 return Ok(Arc::new(ConstColumn::new(inner_boolean, col.len())));
             }
 

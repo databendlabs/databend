@@ -26,8 +26,8 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct TrigonometricFunction {
@@ -73,10 +73,7 @@ impl Function for TrigonometricFunction {
         "TrigonometricFunction"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(f64::to_data_type())
     }
 
@@ -168,12 +165,18 @@ impl fmt::Display for TrigonometricFunction {
 pub struct TrigonometricSinFunction;
 
 impl TrigonometricSinFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::SIN)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -181,12 +184,18 @@ impl TrigonometricSinFunction {
 pub struct TrigonometricCosFunction;
 
 impl TrigonometricCosFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::COS)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -194,12 +203,18 @@ impl TrigonometricCosFunction {
 pub struct TrigonometricTanFunction;
 
 impl TrigonometricTanFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::TAN)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -207,12 +222,18 @@ impl TrigonometricTanFunction {
 pub struct TrigonometricCotFunction;
 
 impl TrigonometricCotFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::COT)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -220,12 +241,18 @@ impl TrigonometricCotFunction {
 pub struct TrigonometricAsinFunction;
 
 impl TrigonometricAsinFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ASIN)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -233,12 +260,18 @@ impl TrigonometricAsinFunction {
 pub struct TrigonometricAcosFunction;
 
 impl TrigonometricAcosFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ACOS)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -246,12 +279,18 @@ impl TrigonometricAcosFunction {
 pub struct TrigonometricAtanFunction;
 
 impl TrigonometricAtanFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ATAN)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),
@@ -262,12 +301,18 @@ impl TrigonometricAtanFunction {
 pub struct TrigonometricAtan2Function;
 
 impl TrigonometricAtan2Function {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ATAN2)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

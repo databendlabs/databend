@@ -26,8 +26,8 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct PowFunction {
@@ -35,14 +35,17 @@ pub struct PowFunction {
 }
 
 impl PowFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(PowFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
@@ -61,11 +64,8 @@ impl Function for PowFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(Float64Type::arc())
     }
 
     fn eval(

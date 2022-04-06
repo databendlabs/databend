@@ -109,7 +109,7 @@ fn test_logic_and_function() -> Result<()> {
         ),
     ];
     for (func, test) in tests {
-        test_scalar_functions(func, &[test], false)?
+        test_scalar_functions(func, &[test], false)?;
     }
 
     Ok(())
@@ -163,7 +163,7 @@ fn test_logic_or_function() -> Result<()> {
     ];
 
     for (func, test) in tests {
-        test_scalar_functions(func, &[test], false)?
+        test_scalar_functions(func, &[test], false)?;
     }
 
     Ok(())

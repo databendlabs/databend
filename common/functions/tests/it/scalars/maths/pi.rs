@@ -31,5 +31,5 @@ fn test_pi_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(PiFunction::try_create("pi()")?, &tests, true)
+    test_scalar_functions(PiFunction::try_create("pi()", &[])?, &tests, true)
 }

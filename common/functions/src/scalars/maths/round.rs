@@ -27,8 +27,8 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
@@ -85,11 +85,8 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(Float64Type::arc())
     }
 
     fn eval(
@@ -175,14 +172,17 @@ pub struct RoundingFunction<const IS_TRUNC: bool> {
 }
 
 impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),

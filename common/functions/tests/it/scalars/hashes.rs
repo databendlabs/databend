@@ -141,7 +141,7 @@ fn test_siphash_function() -> Result<()> {
             SipHash64Function::try_create("siphash", &[&typ])?,
             &[test],
             true,
-        )?
+        )?;
     }
 
     Ok(())
@@ -267,7 +267,7 @@ fn test_sha2hash_function() -> Result<()> {
             Sha2HashFunction::try_create("sha2", &[&StringType::arc(), &typ])?,
             &[test],
             true,
-        )?
+        )?;
     }
 
     Ok(())

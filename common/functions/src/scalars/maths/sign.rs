@@ -26,9 +26,9 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct SignFunction {
@@ -36,14 +36,15 @@ pub struct SignFunction {
 }
 
 impl SignFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(SignFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -66,9 +67,8 @@ impl Function for SignFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        Ok(i8::to_data_type())
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(Int8Type::arc())
     }
 
     fn eval(

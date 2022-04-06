@@ -162,7 +162,7 @@ fn test_if_function() -> Result<()> {
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions(test_function, &[test], false)?
+        test_scalar_functions(test_function, &[test], false)?;
     }
 
     Ok(())
