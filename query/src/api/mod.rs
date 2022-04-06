@@ -24,6 +24,8 @@ pub use rpc::FlightClient;
 pub use rpc::FlightTicket;
 pub use rpc::ShuffleAction;
 pub use rpc::StreamTicket;
+pub use rpc::ExecutorPacket;
+pub use rpc::FragmentPacket;
 pub use rpc_service::RpcService;
 
 pub mod http;

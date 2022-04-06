@@ -64,9 +64,12 @@ pub async fn schedule_query(
 pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<SendableDataBlockStream> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
 
+
     let mut fragments_actions = QueryFragmentsActions::create(ctx);
     query_fragments.finalize(&mut fragments_actions)?;
-    common_tracing::tracing::info!("Query fragments actions: {:?}", fragments_actions);
+    let executor_packets = fragments_actions.to_packets()?;
+    common_tracing::tracing::info!("Query fragments packets: {:?}", executor_packets);
     // TODO:
     unimplemented!()
 }
+

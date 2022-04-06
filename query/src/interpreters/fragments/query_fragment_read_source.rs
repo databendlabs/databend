@@ -3,9 +3,8 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 
 use common_exception::{ErrorCode, Result};
-use common_planners::{AdminUseTenantPlan, AggregatorFinalPlan, AggregatorPartialPlan, AlterUserPlan, AlterUserUDFPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, EmptyPlan, ExplainPlan, Expression, ExpressionPlan, Expressions, FilterPlan, find_aggregate_exprs, GrantPrivilegePlan, GrantRolePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, ListPlan, OptimizeTablePlan, Partitions, PlanBuilder, PlanNode, PlanRewriter, PlanVisitor, ProjectionPlan, ReadDataSourcePlan, RemotePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, SortPlan, StagePlan, SubQueriesSetPlan, TruncateTablePlan, UseDatabasePlan};
+use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, Partitions, PlanBuilder, PlanNode, PlanRewriter, ReadDataSourcePlan};
 
-use crate::api::FlightAction;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};

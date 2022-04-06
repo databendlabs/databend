@@ -1,7 +1,10 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
 use common_planners::PlanNode;
+use crate::api::{ExecutorPacket, FragmentPacket};
 use crate::sessions::QueryContext;
 
 // Query plan fragment with executor name
@@ -81,6 +84,32 @@ impl QueryFragmentsActions {
         *self.fragments_actions.last_mut().unwrap() = actions;
         Ok(())
     }
+
+    pub fn to_packets(self) -> Result<Vec<ExecutorPacket>> {
+        let mut fragments_packets = HashMap::new();
+        for fragment_actions in self.fragments_actions {
+            for fragment_action in fragment_actions.fragment_actions {
+                let fragment_packet = FragmentPacket::create(fragment_action.node.clone());
+
+                match fragments_packets.entry(fragment_action.executor.to_owned()) {
+                    Entry::Vacant(entry) => {
+                        entry.insert(vec![fragment_packet]);
+                    }
+                    Entry::Occupied(mut entry) => {
+                        entry.get_mut().push(fragment_packet);
+                    }
+                }
+            }
+        }
+
+        let mut executors_packets = Vec::with_capacity(fragments_packets.len());
+
+        for (executor, actions) in fragments_packets.into_iter() {
+            executors_packets.push(ExecutorPacket::create(executor, actions));
+        }
+
+        Ok(executors_packets)
+    }
 }
 
 impl Debug for QueryFragmentsActions {
@@ -90,4 +119,3 @@ impl Debug for QueryFragmentsActions {
             .finish()
     }
 }
-

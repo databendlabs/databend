@@ -2,12 +2,10 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
 use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, BroadcastPlan, ExpressionPlan, FilterPlan, HavingPlan, LimitByPlan, LimitPlan, PlanNode, ProjectionPlan, ReadDataSourcePlan, SelectPlan, SinkPlan, SortPlan, StagePlan};
-use crate::api::FlightAction;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_broadcast::BroadcastQueryFragment;
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::interpreters::fragments::query_fragment_read_source::ReadDatasourceQueryFragment;
-use crate::interpreters::fragments::query_fragment_root::RootQueryFragment;
 use crate::interpreters::fragments::query_fragment_stage::StageQueryFragment;
 use crate::sessions::QueryContext;
 
