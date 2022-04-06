@@ -2,7 +2,7 @@
 title: Deploy Databend With Scaleway OS
 sidebar_label: With Scaleway OS
 description:
-  How to deploy Databend with Scaleway OS
+  How to deploy Databend with Scaleway OS.
 ---
 
 :::tip

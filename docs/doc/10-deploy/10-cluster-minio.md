@@ -2,7 +2,7 @@
 title: Start a Local Query Cluster
 sidebar_label: Local Cluster
 description:
-  How to Deploy a Local Query Cluster
+  How to Deploy a Local Query Cluster.
 ---
 
 :::tip

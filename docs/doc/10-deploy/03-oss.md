@@ -2,7 +2,7 @@
 title: Deploy Databend With Alibaba Cloud OSS
 sidebar_label: With Alibaba OSS
 description:
-  How to deploy Databend with Alibaba Cloud(阿里云) OSS
+  How to deploy Databend with Alibaba Cloud(阿里云) OSS.
 ---
 
 :::tip
