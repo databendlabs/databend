@@ -149,7 +149,6 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 - [Databend Develop](https://databend.rs/doc/develop)
 - [Databend Contributing](https://databend.rs/doc/contributing)
 - [Databend Performance](https://databend.rs/doc/performance)
-- [Databend Weekly](https://weekly.databend.rs/)
 
 ## Roadmap
 - [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
@@ -157,8 +156,12 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 ## Community
 
-- [Slack Channel](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
-- [@Databend](https://twitter.com/Datafuse_Labs) on Twitter
+For general help to use Databend, please refer to the official Databend documentation. For additional help, you can use one of these channels to ask a question:
+
+- [Slack](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA) (For live discussion with the Community)
+- [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
+- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about the Databend)
 
 ## License
 

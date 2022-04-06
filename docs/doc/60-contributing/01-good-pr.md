@@ -100,12 +100,6 @@ Summary about this PR
 ## Related Issues
 
 Fixes #issue
-
-## Test Plan
-
-Unit Tests
-
-Stateless Tests
 ```
 
 You should not change the PR template context, but need to finish:
@@ -113,8 +107,6 @@ You should not change the PR template context, but need to finish:
 1. `Summary` - Describes what constitutes the Pull Request and what changes you have made to the code.
 2. `Changelog` - Choose one or more, this is used for tagging label, then used to generate the changelog.
 3. `Related Issues` - Fixes which issue, the issue will be closed once the commit is merged into the main brach.
-4. `Test Plan` - Which test does this PR used: `Unit Tests` or `Stateless Tests` or both of them.
-
 
 ### PR Commit Message
 
