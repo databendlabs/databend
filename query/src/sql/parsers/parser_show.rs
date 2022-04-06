@@ -28,21 +28,25 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // parse show tables.
-    pub(crate) fn parse_show_tables(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_tables(&mut self, full: bool) -> Result<DfStatement, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
             Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::create(
                 DfShowKind::All,
+                full,
             ))),
             Token::Word(w) => match w.keyword {
                 Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::Like(self.parser.parse_identifier()?),
+                    full,
                 ))),
                 Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::Where(self.parser.parse_expr()?),
+                    full,
                 ))),
                 Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::FromOrIn(self.parser.parse_object_name()?),
+                    full,
                 ))),
                 _ => self.expected("like or where", tok),
             },

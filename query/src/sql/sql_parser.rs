@@ -325,8 +325,9 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_show(&mut self) -> Result<DfStatement, ParserError> {
+        let full: bool = self.consume_token("FULL");
         if self.consume_token("TABLES") {
-            self.parse_show_tables()
+            self.parse_show_tables(full)
         } else if self.consume_token("DATABASES") {
             self.parse_show_databases()
         } else if self.consume_token("SETTINGS") {
