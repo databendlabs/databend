@@ -28,7 +28,7 @@ pub struct ProcessorExecutorStream {
 
 impl ProcessorExecutorStream {
     pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
-        executor.start()?;
+        executor.start();
         Ok(Self { executor })
     }
 }
@@ -39,11 +39,9 @@ impl Stream for ProcessorExecutorStream {
     fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let self_ = Pin::get_mut(self);
         match self_.executor.pull_data() {
-            Some(data) => Poll::Ready(Some(Ok(data))),
-            None => match self_.executor.finish() {
-                Ok(_) => Poll::Ready(None),
-                Err(cause) => Poll::Ready(Some(Err(cause))),
-            },
+            Ok(None) => Poll::Ready(None),
+            Err(cause) => Poll::Ready(Some(Err(cause))),
+            Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
         }
     }
 }

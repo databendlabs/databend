@@ -19,6 +19,7 @@ use common_meta_types::AuthType;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
 use databend_query::storages::system::UsersTable;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -32,37 +33,52 @@ async fn test_users_table() -> Result<()> {
     ctx.get_settings().set_max_threads(2)?;
     let auth_data = AuthInfo::None;
     ctx.get_user_manager()
-        .add_user(&tenant, UserInfo {
-            auth_info: auth_data,
-            name: "test".to_string(),
-            hostname: "localhost".to_string(),
-            grants: UserGrantSet::empty(),
-            quota: UserQuota::no_limit(),
-        })
+        .add_user(
+            &tenant,
+            UserInfo {
+                auth_info: auth_data,
+                name: "test".to_string(),
+                hostname: "localhost".to_string(),
+                grants: UserGrantSet::empty(),
+                quota: UserQuota::no_limit(),
+                option: UserOption::default(),
+            },
+            false,
+        )
         .await?;
     let auth_data = AuthInfo::Password {
         hash_value: Vec::from("123456789"),
         hash_method: PasswordHashMethod::PlainText,
     };
     ctx.get_user_manager()
-        .add_user(&tenant, UserInfo {
-            auth_info: auth_data,
-            name: "test1".to_string(),
-            hostname: "%".to_string(),
-            grants: UserGrantSet::empty(),
-            quota: UserQuota::no_limit(),
-        })
+        .add_user(
+            &tenant,
+            UserInfo {
+                auth_info: auth_data,
+                name: "test1".to_string(),
+                hostname: "%".to_string(),
+                grants: UserGrantSet::empty(),
+                quota: UserQuota::no_limit(),
+                option: UserOption::default(),
+            },
+            false,
+        )
         .await?;
     let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
     assert!(auth_data.is_ok());
     ctx.get_user_manager()
-        .add_user(&tenant, UserInfo {
-            auth_info: auth_data.unwrap(),
-            name: "test2".to_string(),
-            hostname: "%".to_string(),
-            grants: UserGrantSet::empty(),
-            quota: UserQuota::no_limit(),
-        })
+        .add_user(
+            &tenant,
+            UserInfo {
+                auth_info: auth_data.unwrap(),
+                name: "test2".to_string(),
+                hostname: "%".to_string(),
+                grants: UserGrantSet::empty(),
+                quota: UserQuota::no_limit(),
+                option: UserOption::default(),
+            },
+            false,
+        )
         .await?;
 
     let table = UsersTable::create(1);

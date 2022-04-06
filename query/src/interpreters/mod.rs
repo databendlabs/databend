@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod access;
 mod interpreter;
-mod interpreter_admin_use_tenant;
 mod interpreter_call;
 mod interpreter_common;
 mod interpreter_copy;
@@ -25,6 +23,7 @@ mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_factory_interceptor;
 mod interpreter_insert;
+mod interpreter_insert_values;
 mod interpreter_insert_with_stream;
 mod interpreter_kill;
 mod interpreter_list;
@@ -64,12 +63,14 @@ mod interpreter_user_stage_drop;
 mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
+mod interpreter_view_alter;
+mod interpreter_view_create;
+mod interpreter_view_drop;
 mod plan_schedulers;
 mod stream;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
-pub use interpreter_admin_use_tenant::UseTenantInterpreter;
 pub use interpreter_call::CallInterpreter;
 pub use interpreter_copy::CopyInterpreter;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
@@ -116,4 +117,7 @@ pub use interpreter_user_stage_create::CreateUserStageInterpreter;
 pub use interpreter_user_udf_alter::AlterUserUDFInterpreter;
 pub use interpreter_user_udf_create::CreateUserUDFInterpreter;
 pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
+pub use interpreter_view_alter::AlterViewInterpreter;
+pub use interpreter_view_create::CreateViewInterpreter;
+pub use interpreter_view_drop::DropViewInterpreter;
 pub use plan_schedulers::PlanScheduler;

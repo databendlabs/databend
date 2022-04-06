@@ -10,7 +10,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'The modern data warehouse, have the Elasticity and Performance both',
+    tagline: 'The modern Cloud Data Warehouse, activate your Object Storage for sub-second analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -64,18 +64,6 @@ const config = {
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
             },
         ],
-        [
-            '@docusaurus/plugin-client-redirects',
-            {
-                // this will be removed later, make a mark~.
-                redirects: [
-                    {
-                        to: '/', // string
-                        from: '/doc/index.md', // string | string[]
-                    },
-                ],
-            },
-        ]
     ],
     themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -94,8 +82,14 @@ const config = {
                   {
                     to: '/doc',
                     label: 'Documentation',
-                    position: 'left',
+                    position: 'right',
                   },
+                  {
+                     to: '/doc/contributing/good-pr',
+                     label: 'Contributing',
+                     position: 'right',
+                  },
+                  {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
                   {
                       href: 'https://github.com/datafuselabs/databend',
                       label: 'GitHub',
@@ -107,15 +101,28 @@ const config = {
                 style: 'dark',
                 links: [
                     {
-                        title: 'Resources',
+                        title: 'About',
                         items: [
                             {
-                                label: 'Develop',
-                                to: '/doc/category/develop'
+                                label: 'What is Databend?',
+                                to: '/doc'
                             },
                             {
                                 label: 'Performance',
-                                to: '/doc/category/performance'
+                                to: '/doc/performance'
+                            },
+                        ]
+                    },
+                    {
+                        title: 'Resources',
+                        items: [
+                            {
+                                label: 'Deployment',
+                                to: '/doc/deploy'
+                            },
+                            {
+                                label: 'Develop',
+                                to: '/doc/develop'
                             },
                         ]
                     },
@@ -146,7 +153,7 @@ const config = {
                         ],
                     },
                 ],
-                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br> <a style="display:block;margin-top: 10px" href="https://vercel.com/?utm_source=databend&utm_campaign=oss"><img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg"></a>`,
+                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br><br> <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg">`,
             },
             prism: {
                 theme: lightCodeTheme,

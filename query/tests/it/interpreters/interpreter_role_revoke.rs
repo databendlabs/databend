@@ -15,8 +15,8 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
@@ -42,11 +42,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     // Revoke role from normal user.
     {
         let mut test_user = UserInfo::new_no_auth("test_user".to_string(), "%".to_string());
-        test_user
-            .grants
-            .grant_role(RoleIdentity::new("test".to_string()));
-        user_mgr.add_user(&tenant, test_user).await?;
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        test_user.grants.grant_role("test".to_string());
+        user_mgr.add_user(&tenant, test_user.clone(), false).await?;
+        let user_info = user_mgr.get_user(&tenant, test_user.identity()).await?;
         assert_eq!(user_info.grants.roles().len(), 1);
 
         let query = "REVOKE ROLE 'test' FROM 'test_user'";
@@ -54,7 +52,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
 
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        let user_info = user_mgr.get_user(&tenant, test_user.identity()).await?;
         let roles = user_info.grants.roles();
         assert_eq!(roles.len(), 0);
     }
@@ -66,7 +64,9 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
 
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        let user_info = user_mgr
+            .get_user(&tenant, UserIdentity::new("test_user", "%"))
+            .await?;
         let roles = user_info.grants.roles();
         assert_eq!(roles.len(), 0);
     }
@@ -83,10 +83,8 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     }
 
     let mut test_role = RoleInfo::new("test_role".to_string());
-    test_role
-        .grants
-        .grant_role(RoleIdentity::new("test".to_string()));
-    user_mgr.add_role(&tenant, test_role.clone()).await?;
+    test_role.grants.grant_role("test".to_string());
+    user_mgr.add_role(&tenant, test_role.clone(), false).await?;
     let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
     assert_eq!(role_info.grants.roles().len(), 1);
 

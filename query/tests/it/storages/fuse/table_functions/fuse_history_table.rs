@@ -14,11 +14,13 @@
 //
 
 use common_base::tokio;
+use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::CreateTableInterpreter;
+use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::table_test_fixture::*;
@@ -86,10 +88,11 @@ async fn test_fuse_history_table_read() -> Result<()> {
 
     {
         let expected = vec![
-            "+-------------+------------------+---------------+-------------+-----------+--------------------+------------------+",
-            "| snapshot_id | prev_snapshot_id | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed |",
-            "+-------------+------------------+---------------+-------------+-----------+--------------------+------------------+",
-            "+-------------+------------------+---------------+-------------+-----------+--------------------+------------------+",
+            "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+",
+            "| snapshot_id | snapshot_location | format_version | previous_snapshot_id | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed |",
+            "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+",
+            "+-------------+-------------------+----------------+----------------------+---------------+-------------+-----------+--------------------+------------------+",
+
         ];
 
         expects_ok(
@@ -112,7 +115,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
             "+-------+",
         ];
         let qry = format!(
-            "select count(*) as count from fuse_history('{}', '{}')",
+            "select count(1) as count from fuse_history('{}', '{}')",
             db, tbl
         );
 
@@ -173,10 +176,11 @@ async fn test_fuse_history_table_read() -> Result<()> {
         execute_query(ctx.clone(), qry.as_str()).await?;
 
         let qry = format!("select * from fuse_history('{}', '{}')", db, "in_mem");
+        let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
         expects_err(
             "check_row_and_block_count_after_append",
             ErrorCode::bad_arguments_code(),
-            execute_query(ctx.clone(), qry.as_str()).await,
+            output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }
 

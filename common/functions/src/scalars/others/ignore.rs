@@ -22,9 +22,9 @@ use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 // ignore(...) is a function that takes any arguments, and always returns 0.
 // it can be used in performance tests

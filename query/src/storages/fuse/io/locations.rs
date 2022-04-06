@@ -13,11 +13,21 @@
 //  limitations under the License.
 //
 
+use std::marker::PhantomData;
+
+use common_datablocks::DataBlock;
+use common_exception::Result;
 use uuid::Uuid;
 
 use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::SnapshotVersion;
+use crate::storages::fuse::meta::Versioned;
+
+static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
+static SNAPHOST_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -34,24 +44,61 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
-        format!("{}/{}/{}", &self.prefix, FUSE_TBL_BLOCK_PREFIX, part_uuid)
+        let part_uuid = Uuid::new_v4().to_simple().to_string();
+        format!(
+            "{}/{}/{}_v{}.parquet",
+            &self.prefix,
+            FUSE_TBL_BLOCK_PREFIX,
+            part_uuid,
+            DataBlock::VERSION,
+        )
     }
 
-    pub fn gen_segment_info_location(&self) -> String {
+    pub fn gen_segment_info_location(&self) -> String where {
         let segment_uuid = Uuid::new_v4().to_simple().to_string();
         format!(
-            "{}/{}/{}",
-            &self.prefix, FUSE_TBL_SEGMENT_PREFIX, segment_uuid
+            "{}/{}/{}_v{}.json",
+            &self.prefix,
+            FUSE_TBL_SEGMENT_PREFIX,
+            segment_uuid,
+            SegmentInfo::VERSION,
         )
     }
 
-    pub fn snapshot_location_from_uuid(&self, id: &Uuid) -> String {
+    pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
+        let snaphost_version = SnapshotVersion::try_from(version)?;
+        Ok(snaphost_version.create(id, &self.prefix))
+    }
+
+    pub fn snaphost_version(location: impl AsRef<str>) -> u64 {
+        if location.as_ref().ends_with(SNAPHOST_V1.suffix()) {
+            SNAPHOST_V1.version()
+        } else {
+            SNAPSHOT_V0.version()
+        }
+    }
+}
+
+trait SnapshotLocationCreator {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+    fn suffix(&self) -> &'static str;
+}
+
+impl SnapshotLocationCreator for SnapshotVersion {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
         format!(
-            "{}/{}/{}",
-            &self.prefix,
+            "{}/{}/{}{}",
+            prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_PREFIX,
-            id.to_simple()
+            id.to_simple(),
+            self.suffix(),
         )
+    }
+
+    fn suffix(&self) -> &'static str {
+        match self {
+            SnapshotVersion::V0(_) => "",
+            SnapshotVersion::V1(_) => "_v1.json",
+        }
     }
 }

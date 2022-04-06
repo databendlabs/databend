@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserOptionFlag;
 use once_cell::sync::Lazy;
 
 use crate::procedures::admins::AdminProcedure;
@@ -32,6 +33,12 @@ pub struct ProcedureFeatures {
     // (1, 2) means we only accept [1, 2] arguments
     // None means it's not variadic function.
     pub variadic_arguments: Option<(usize, usize)>,
+
+    // Management mode only.
+    pub management_mode_required: bool,
+
+    // User option flag required.
+    pub user_option_flag: Option<UserOptionFlag>,
 }
 
 impl ProcedureFeatures {
@@ -39,6 +46,8 @@ impl ProcedureFeatures {
         ProcedureFeatures {
             num_arguments: 0,
             variadic_arguments: None,
+            management_mode_required: false,
+            user_option_flag: None,
         }
     }
 
@@ -51,30 +60,20 @@ impl ProcedureFeatures {
         self.variadic_arguments = Some((min, max));
         self
     }
-}
 
-pub struct ProcedureDescription {
-    features: ProcedureFeatures,
-    procedure_creator: Factory2Creator,
-}
-
-impl ProcedureDescription {
-    pub fn creator(creator: Factory2Creator) -> ProcedureDescription {
-        ProcedureDescription {
-            procedure_creator: creator,
-            features: ProcedureFeatures::default(),
-        }
+    pub fn management_mode_required(mut self, required: bool) -> ProcedureFeatures {
+        self.management_mode_required = required;
+        self
     }
 
-    #[must_use]
-    pub fn features(mut self, features: ProcedureFeatures) -> ProcedureDescription {
-        self.features = features;
+    pub fn user_option_flag(mut self, flag: UserOptionFlag) -> ProcedureFeatures {
+        self.user_option_flag = Some(flag);
         self
     }
 }
 
 pub struct ProcedureFactory {
-    descs: HashMap<String, ProcedureDescription>,
+    creators: HashMap<String, Factory2Creator>,
 }
 
 static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
@@ -87,7 +86,7 @@ static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
 impl ProcedureFactory {
     pub fn create() -> ProcedureFactory {
         ProcedureFactory {
-            descs: Default::default(),
+            creators: Default::default(),
         }
     }
 
@@ -95,29 +94,17 @@ impl ProcedureFactory {
         FUNCTION_FACTORY.as_ref()
     }
 
-    pub fn register(&mut self, name: &str, desc: ProcedureDescription) {
-        let descs = &mut self.descs;
-        descs.insert(name.to_lowercase(), desc);
-    }
-
-    pub fn get_features(&self, name: impl AsRef<str>) -> Result<ProcedureFeatures> {
-        let origin_name = name.as_ref();
-        let name = origin_name.to_lowercase();
-        match self.descs.get(&name) {
-            Some(desc) => Ok(desc.features.clone()),
-            None => Err(ErrorCode::UnknownFunction(format!(
-                "Unsupported Function: {}",
-                origin_name
-            ))),
-        }
+    pub fn register(&mut self, name: &str, creator: Factory2Creator) {
+        let creators = &mut self.creators;
+        creators.insert(name.to_lowercase(), creator);
     }
 
     pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn Procedure>> {
         let origin_name = name.as_ref();
         let name = origin_name.to_lowercase();
-        match self.descs.get(&name) {
-            Some(desc) => {
-                let inner = (desc.procedure_creator)()?;
+        match self.creators.get(&name) {
+            Some(creator) => {
+                let inner = creator()?;
                 Ok(inner)
             }
             None => Err(ErrorCode::UnknownFunction(format!(

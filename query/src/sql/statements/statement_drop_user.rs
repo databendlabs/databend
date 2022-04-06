@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::UserIdentity;
 use common_planners::DropUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -26,9 +27,7 @@ use crate::sql::statements::AnalyzedResult;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfDropUser {
     pub if_exists: bool,
-    /// User name
-    pub name: String,
-    pub hostname: String,
+    pub user: UserIdentity,
 }
 
 #[async_trait::async_trait]
@@ -38,8 +37,7 @@ impl AnalyzableStatement for DfDropUser {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropUser(
             DropUserPlan {
                 if_exists: self.if_exists,
-                name: self.name.clone(),
-                hostname: self.hostname.clone(),
+                user: self.user.clone(),
             },
         ))))
     }

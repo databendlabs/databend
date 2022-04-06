@@ -48,6 +48,19 @@ impl TypeDeserializer for NullableDeserializer {
         unreachable!()
     }
 
+    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+        match value {
+            serde_json::Value::Null => {
+                self.de_null();
+                Ok(())
+            }
+            other => {
+                self.bitmap.push(true);
+                self.inner.de_json(other)
+            }
+        }
+    }
+
     // TODO: support null text setting
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         self.inner.de_text(reader)?;

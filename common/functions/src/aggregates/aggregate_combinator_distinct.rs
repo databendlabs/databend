@@ -73,12 +73,13 @@ impl AggregateDistinctCombinator {
     }
 
     pub fn uniq_desc() -> AggregateFunctionDescription {
-        let properties = super::aggregate_function_factory::AggregateFunctionProperties {
+        let features = super::aggregate_function_factory::AggregateFunctionFeatures {
             returns_default_when_only_null: true,
+            ..Default::default()
         };
-        AggregateFunctionDescription::creator_with_properties(
+        AggregateFunctionDescription::creator_with_features(
             Box::new(Self::try_create_uniq),
-            properties,
+            features,
         )
     }
 

@@ -32,6 +32,10 @@ use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
+use crate::storages::view::view_table::QUERY;
+use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct JoinedSchemaAnalyzer {
     ctx: Arc<QueryContext>,
@@ -97,15 +101,35 @@ impl JoinedSchemaAnalyzer {
         // TODO(Winter): await query_context.get_table
         let (database, table) = self.resolve_table(&item.name)?;
         let read_table = self.ctx.get_table(&database, &table).await?;
+        let tbl_info = read_table.get_table_info();
 
-        match &item.alias {
-            None => {
-                let name_prefix = vec![database, table];
-                JoinedSchema::from_table(read_table, name_prefix)
+        if tbl_info.engine() == VIEW_ENGINE {
+            if let Some(query) = tbl_info.options().get(QUERY) {
+                let (statements, _) = DfParser::parse_sql(query.as_str())?;
+                if statements.len() == 1 {
+                    if let DfStatement::Query(subquery) = &statements[0] {
+                        if let AnalyzedResult::SelectQuery(state) =
+                            subquery.analyze(self.ctx.clone()).await?
+                        {
+                            let alias = vec![tbl_info.name.clone()];
+                            return JoinedSchema::from_subquery(state, alias);
+                        }
+                    }
+                }
             }
-            Some(table_alias) => {
-                let name_prefix = vec![table_alias.name.value.clone()];
-                JoinedSchema::from_table(read_table, name_prefix)
+            Err(ErrorCode::LogicalError(
+                "Logical error, subquery analyzed data must be SelectQuery, it's a bug.",
+            ))
+        } else {
+            match &item.alias {
+                None => {
+                    let name_prefix = vec![database, table];
+                    JoinedSchema::from_table(read_table, name_prefix)
+                }
+                Some(table_alias) => {
+                    let name_prefix = vec![table_alias.name.value.clone()];
+                    JoinedSchema::from_table(read_table, name_prefix)
+                }
             }
         }
     }

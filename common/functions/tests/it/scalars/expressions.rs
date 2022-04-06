@@ -210,6 +210,18 @@ fn test_cast_function() -> Result<()> {
                 error: "",
             },
         ),
+        (
+            CastFunction::create("cast", "variant")?,
+            ScalarFunctionTest {
+                name: "cast-string-to-variant-error",
+                columns: vec![Series::from_data(vec![
+                    "abc",
+                    "123",
+                ])],
+                expect: Arc::new(NullColumn::new(2)),
+                error: "Expression type does not match column data type, expecting VARIANT but got String",
+            },
+        ),
     ];
 
     for (test_func, test) in tests {
@@ -244,6 +256,74 @@ fn test_datetime_cast_function() -> Result<()> {
                 )],
                 expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
                 error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "variant")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-date32-to-variant-error",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![18691i32, 18924]),
+                    DataField::new("dummy_1", Date32Type::arc()),
+                )],
+                expect: Arc::new(NullColumn::new(2)),
+                error: "Expression type does not match column data type, expecting VARIANT but got Date32",
+            },
+        ),
+    ];
+
+    for (test_func, test) in tests {
+        test_scalar_functions_with_type(test_func, &[test], false)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_variant_cast_function() -> Result<()> {
+    let tests = vec![
+        (
+            CastFunction::create("cast", "array")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-variant-to-array-passed",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![
+                        json!(1_i32),
+                        json!([1_i32, 2, 3]),
+                        json!(["a", "b", "c"]),
+                    ]),
+                    DataField::new("dummy_1", VariantType::arc()),
+                )],
+                expect: Series::from_data(vec![
+                    json!([1_i32]),
+                    json!([1_i32, 2, 3]),
+                    json!(["a", "b", "c"]),
+                ]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "object")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-variant-to-object-passed",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![json!({"a":1_i32}), json!({"k":"v"})]),
+                    DataField::new("dummy_1", VariantType::arc()),
+                )],
+                expect: Series::from_data(vec![json!({"a":1_i32}), json!({"k":"v"})]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "object")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-variant-to-object-error",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![json!(["a", "b", "c"]), json!("abc")]),
+                    DataField::new("dummy_1", VariantType::arc()),
+                )],
+                expect: Arc::new(NullColumn::new(2)),
+                error: "Failed to cast variant value [\"a\",\"b\",\"c\"] to OBJECT",
             },
         ),
     ];

@@ -53,7 +53,9 @@ impl PlanParser {
         statements: Vec<DfStatement>,
         ctx: Arc<QueryContext>,
     ) -> Result<PlanNode> {
-        if statements.len() != 1 {
+        if statements.is_empty() {
+            return Err(ErrorCode::SyntaxException("Empty query"));
+        } else if statements.len() > 1 {
             return Err(ErrorCode::SyntaxException("Only support single query"));
         }
 

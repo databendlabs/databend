@@ -26,6 +26,7 @@ use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::sql::is_internal_opt_key;
 
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -74,6 +75,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             let mut opts = table.options().iter().collect::<Vec<_>>();
             opts.sort_by_key(|(k, _)| *k);
             opts.iter()
+                .filter(|(k, _)| !is_internal_opt_key(k))
                 .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
                 .collect::<Vec<_>>()
                 .join("")

@@ -81,10 +81,7 @@ impl QueryContext {
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!(
-                "DatabendQuery v-{}",
-                *crate::configs::DATABEND_COMMIT_VERSION
-            ),
+            version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
             shared,
         })
     }
@@ -176,8 +173,11 @@ impl QueryContext {
 
     // Update the context partition pool from the pipeline builder.
     pub fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+        let mut partition_queue = self.partition_queue.write();
+
+        partition_queue.clear();
         for part in partitions {
-            self.partition_queue.write().push_back(part);
+            partition_queue.push_back(part);
         }
         Ok(())
     }
@@ -252,12 +252,6 @@ impl QueryContext {
                 )));
             }
         };
-
-        Ok(())
-    }
-
-    pub async fn set_current_tenant(&self, tenant: String) -> Result<()> {
-        self.shared.set_current_tenant(tenant);
 
         Ok(())
     }
@@ -346,6 +340,7 @@ impl QueryContext {
     // Get the storage data accessor operator from the session manager.
     pub fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();
+
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }
 
@@ -353,7 +348,7 @@ impl QueryContext {
         self.shared.dal_ctx.as_ref()
     }
 
-    pub fn get_storage_runtime(&self) -> &Runtime {
+    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.shared.session.session_mgr.get_storage_runtime()
     }
 

@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-quote = "1.0.15"
+quote = "1.0.17"
 proc-macro2 = "1.0.36"
-syn = { version = "1.0.86", features = ["full"] }
+syn = { version = "1.0.90", features = ["full"] }
 synstructure = "0.12.6"

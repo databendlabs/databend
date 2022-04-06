@@ -198,7 +198,7 @@ impl Stream for ExportStream {
             return Poll::Ready(None);
         }
 
-        let chunk_size = 16;
+        let chunk_size = std::cmp::min(16, l);
 
         Poll::Ready(Some(self.data.drain(0..chunk_size).collect()))
     }

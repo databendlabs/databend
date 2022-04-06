@@ -15,7 +15,6 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 
@@ -23,7 +22,7 @@ use crate::users::UserApiProvider;
 
 impl UserApiProvider {
     // Get one role from by tenant.
-    pub async fn get_role(&self, tenant: &str, role: RoleIdentity) -> Result<RoleInfo> {
+    pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
         let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(role, None).await?.data;
         Ok(role_data)
@@ -48,19 +47,30 @@ impl UserApiProvider {
     }
 
     // Add a new role info.
-    pub async fn add_role(&self, tenant: &str, role_info: RoleInfo) -> Result<u64> {
+    pub async fn add_role(
+        &self,
+        tenant: &str,
+        role_info: RoleInfo,
+        if_not_exists: bool,
+    ) -> Result<u64> {
         let client = self.get_role_api_client(tenant)?;
         let add_role = client.add_role(role_info);
         match add_role.await {
             Ok(res) => Ok(res),
-            Err(e) => Err(e.add_message_back("(while add role).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::user_already_exists_code() {
+                    Ok(0)
+                } else {
+                    Err(e.add_message_back("(while add role)"))
+                }
+            }
         }
     }
 
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &str,
-        role: RoleIdentity,
+        role: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -74,7 +84,7 @@ impl UserApiProvider {
     pub async fn revoke_privileges_from_role(
         &self,
         tenant: &str,
-        role: RoleIdentity,
+        role: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -88,8 +98,8 @@ impl UserApiProvider {
     pub async fn grant_role_to_role(
         &self,
         tenant: &str,
-        role: RoleIdentity,
-        grant_role: RoleIdentity,
+        role: String,
+        grant_role: String,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
@@ -101,8 +111,8 @@ impl UserApiProvider {
     pub async fn revoke_role_from_role(
         &self,
         tenant: &str,
-        role: RoleIdentity,
-        revoke_role: RoleIdentity,
+        role: String,
+        revoke_role: String,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
@@ -112,7 +122,7 @@ impl UserApiProvider {
     }
 
     // Drop a role by name
-    pub async fn drop_role(&self, tenant: &str, role: RoleIdentity, if_exists: bool) -> Result<()> {
+    pub async fn drop_role(&self, tenant: &str, role: String, if_exists: bool) -> Result<()> {
         let client = self.get_role_api_client(tenant)?;
         let drop_role = client.drop_role(role, None);
         match drop_role.await {

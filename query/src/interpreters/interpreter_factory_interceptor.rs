@@ -20,7 +20,6 @@ use common_planners::PlanNode;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
@@ -28,20 +27,16 @@ use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
-    plan: PlanNode,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
-    management_mode_access: ManagementModeAccess,
 }
 
 impl InterceptorInterpreter {
     pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr, plan: PlanNode) -> Self {
         InterceptorInterpreter {
             ctx: ctx.clone(),
-            plan: plan.clone(),
             inner,
-            query_log: InterpreterQueryLog::create(ctx.clone(), plan),
-            management_mode_access: ManagementModeAccess::create(ctx),
+            query_log: InterpreterQueryLog::create(ctx, plan),
         }
     }
 }
@@ -56,9 +51,6 @@ impl Interpreter for InterceptorInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // Management mode access check.
-        self.management_mode_access.check(&self.plan)?;
-
         let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =
             ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
@@ -81,6 +73,7 @@ impl Interpreter for InterceptorInterpreter {
     async fn finish(&self) -> Result<()> {
         let session = self.ctx.get_current_session();
         let now = SystemTime::now();
+        session.get_status().write().query_finish();
         if session.get_type().is_user_session() {
             session
                 .get_session_manager()

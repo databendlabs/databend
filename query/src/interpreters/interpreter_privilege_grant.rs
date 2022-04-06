@@ -64,13 +64,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .grant_privileges_to_user(
-                        &tenant,
-                        &user.username,
-                        &user.hostname,
-                        plan.on,
-                        plan.priv_types,
-                    )
+                    .grant_privileges_to_user(&tenant, user, plan.on, plan.priv_types)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
 use common_meta_types::GrantObject;
@@ -32,6 +33,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
 
@@ -46,6 +48,8 @@ pub struct Session {
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
     #[ignore_malloc_size_of = "insignificant"]
     session_settings: Settings,
+    #[ignore_malloc_size_of = "insignificant"]
+    status: Arc<RwLock<SessionStatus>>,
 }
 
 impl Session {
@@ -59,6 +63,7 @@ impl Session {
         let session_settings =
             Settings::try_create(&conf, session_ctx.clone(), session_mgr.get_user_manager())?;
         let ref_count = Arc::new(AtomicUsize::new(0));
+        let status = Arc::new(Default::default());
 
         Ok(Arc::new(Session {
             id,
@@ -67,6 +72,7 @@ impl Session {
             ref_count,
             session_ctx,
             session_settings,
+            status,
         }))
     }
 
@@ -94,6 +100,7 @@ impl Session {
                 }
             }
         }
+        self.session_mgr.http_query_manager.kill_session(&self.id);
     }
 
     pub fn force_kill_session(self: &Arc<Self>) {
@@ -142,6 +149,10 @@ impl Session {
         })
     }
 
+    pub fn query_context_shared_is_none(&self) -> bool {
+        self.session_ctx.query_context_shared_is_none()
+    }
+
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + 'static {
         let (tx, rx) = futures::channel::oneshot::channel();
@@ -164,12 +175,8 @@ impl Session {
         self.session_ctx.get_current_database()
     }
 
-    pub fn get_current_tenant(self: &Arc<Self>) -> String {
-        self.session_ctx.get_current_tenant()
-    }
-
-    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
-        self.session_ctx.set_current_tenant(tenant);
+    pub fn get_tenant(self: &Arc<Self>) -> String {
+        self.session_ctx.get_tenant()
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
@@ -193,7 +200,7 @@ impl Session {
             return Ok(());
         }
 
-        let tenant = self.get_current_tenant();
+        let tenant = self.get_tenant();
         let role_cache = self
             .get_shared_query_context()
             .await?
@@ -233,5 +240,9 @@ impl Session {
 
     pub fn get_config(&self) -> Config {
         self.session_mgr.get_config()
+    }
+
+    pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
+        self.status.clone()
     }
 }

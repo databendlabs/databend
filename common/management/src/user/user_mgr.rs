@@ -26,10 +26,11 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
-use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
 use crate::user::user_api::UserApi;
@@ -113,13 +114,8 @@ impl UserApi for UserMgr {
         }
     }
 
-    async fn get_user(
-        &self,
-        username: String,
-        hostname: String,
-        seq: Option<u64>,
-    ) -> Result<SeqV<UserInfo>> {
-        let user_key = format_user_key(&username, &hostname);
+    async fn get_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<SeqV<UserInfo>> {
+        let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
@@ -148,70 +144,46 @@ impl UserApi for UserMgr {
 
     async fn update_user(
         &self,
-        username: String,
-        hostname: String,
-        new_auth_info: AuthInfo,
+        user: UserIdentity,
+        new_auth_info: Option<AuthInfo>,
+        new_user_option: Option<UserOption>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
-        let user_info = user_val_seq.await?.data;
+        let user_val_seq = self.get_user(user, seq);
+        let mut user_info = user_val_seq.await?.data;
 
-        let mut new_user_info = UserInfo::new(username.clone(), hostname.clone(), new_auth_info);
-        new_user_info.grants = user_info.grants;
-
-        let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
-        let value = serde_json::to_vec(&new_user_info)?;
-
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
+        if let Some(auth_info) = new_auth_info {
+            user_info.auth_info = auth_info;
         };
-
-        let res = self
-            .kv_api
-            .upsert_kv(UpsertKVAction::new(
-                &key,
-                match_seq,
-                Operation::Update(value),
-                None,
-            ))
-            .await?;
-        match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(Some(s)),
-            None => Err(ErrorCode::UnknownUser(format!(
-                "unknown user, or seq not match {}",
-                username
-            ))),
-        }
+        if let Some(user_option) = new_user_option {
+            user_info.option = user_option;
+        };
+        let seq = self.upsert_user_info(&user_info, seq).await?;
+        Ok(Some(seq))
     }
 
     async fn grant_privileges(
         &self,
-        username: String,
-        hostname: String,
+        user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
+        let user_val_seq = self.get_user(user, seq);
         let mut user_info = user_val_seq.await?.data;
-        user_info
-            .grants
-            .grant_privileges(&username, &hostname, &object, privileges);
+        user_info.grants.grant_privileges(&object, privileges);
         let seq = self.upsert_user_info(&user_info, seq).await?;
         Ok(Some(seq))
     }
 
     async fn revoke_privileges(
         &self,
-        username: String,
-        hostname: String,
+        user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
+        let user_val_seq = self.get_user(user, seq);
         let mut user_info = user_val_seq.await?.data;
         user_info.grants.revoke_privileges(&object, privileges);
         let seq = self.upsert_user_info(&user_info, seq).await?;
@@ -220,12 +192,11 @@ impl UserApi for UserMgr {
 
     async fn grant_role(
         &self,
-        username: String,
-        hostname: String,
-        grant_role: RoleIdentity,
+        user: UserIdentity,
+        grant_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(username, hostname, seq);
+        let user_val_seq = self.get_user(user, seq);
         let mut user_info = user_val_seq.await?.data;
         user_info.grants.grant_role(grant_role);
         let seq = self.upsert_user_info(&user_info, seq).await?;
@@ -234,20 +205,19 @@ impl UserApi for UserMgr {
 
     async fn revoke_role(
         &self,
-        username: String,
-        hostname: String,
-        revoke_role: RoleIdentity,
+        user: UserIdentity,
+        revoke_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let user_val_seq = self.get_user(username, hostname, seq);
+        let user_val_seq = self.get_user(user, seq);
         let mut user_info = user_val_seq.await?.data;
         user_info.grants.revoke_role(&revoke_role);
         let seq = self.upsert_user_info(&user_info, seq).await?;
         Ok(Some(seq))
     }
 
-    async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
-        let user_key = format_user_key(&username, &hostname);
+    async fn drop_user(&self, user: UserIdentity, seq: Option<u64>) -> Result<()> {
+        let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self
             .kv_api

@@ -15,6 +15,10 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserGrantSet;
+use common_meta_types::UserIdentity;
+use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
@@ -50,7 +54,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$fuse_history` expect to have 2 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `FUSE_HISTORY` expect to have 2 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -103,265 +107,94 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
+async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$create_warehouse_meta()").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `admin$create_warehouse_meta` expect to have 3 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `BOOTSTRAP_TENANT` expect to have 5 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
-    // Create Warehouse
+    // Access denied
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context().await?;
-
-    // NumberArgumentsNotMatch. Case 1
-    {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$get_warehouse_meta()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `admin$get_warehouse_meta` expect to have 2 arguments, but got 0.";
+        let expect = "Code: 1062, displayText = Access denied: 'BOOTSTRAP_TENANT' only used in management-mode.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
-    // NumberArgumentsNotMatch. Case 2
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), None).await?;
+
+    // Management Mode, without user option
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$get_warehouse_meta(tenant1)").await?;
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
+        )
+        .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `admin$get_warehouse_meta` expect to have 2 arguments, but got 1.";
+        let expect = "Code: 1063, displayText = Access denied: 'BOOTSTRAP_TENANT' requires user TENANTSETTING option flag.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
-    // Get on empty
+    let mut user_info = ctx.get_current_user()?;
+    user_info
+        .option
+        .set_option_flag(UserOptionFlag::TenantSetting);
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+
+    // Management Mode, with user option
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call admin$get_warehouse_meta('tenant1', '🐸🐸@@11')",
+            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect =
-            "Code: 2901, displayText = unknown warehouse __fd_warehouses/tenant1/🐸🐸@@11.";
-        assert_eq!(expect, res.err().unwrap().to_string());
+        executor.execute(None).await?;
+
+        let user_mgr = ctx.get_user_manager();
+        let user_info = user_mgr
+            .get_user("tenant1", UserIdentity::new("test_user", "%"))
+            .await?;
+        assert_eq!(user_info.grants.roles().len(), 1);
+        let role = &user_info.grants.roles()[0];
+        let role_info = user_mgr.get_role("tenant1", role.clone()).await?;
+        let mut grants = UserGrantSet::empty();
+        grants.grant_privileges(
+            &GrantObject::Global,
+            GrantObject::Global.available_privileges(),
+        );
+        assert_eq!(role_info.grants, grants);
     }
 
-    // Ok
+    // Call again
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$get_warehouse_meta('tenant1', '🐸🐸@@11')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context().await?;
-
-    // NumberArgumentsNotMatch.
-    {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$list_warehouse_meta()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `admin$list_warehouse_meta` expect to have 1 arguments, but got 0.";
-        assert_eq!(expect, res.err().unwrap().to_string());
+        executor.execute(None).await?;
     }
 
-    // Ok
-    {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call admin$list_warehouse_meta('tenant1')").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@1212', 'Small')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-
-        let plan =
-            PlanParser::parse(ctx.clone(), "call admin$list_warehouse_meta('tenant1')").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context().await?;
-
-    // NumberArgumentsNotMatch.
-    {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call admin$update_warehouse_meta_size()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `admin$update_warehouse_meta_size` expect to have 3 arguments, but got 0.";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
-
-    // cannot update on non-exist warehouse
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'Small')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 2901, displayText = unknown warehouse __fd_warehouses/tenant1/🐸🐸@@11(while update warehouse size).";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
-
-    // Ok
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'XXXLarge')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
-    common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context().await?;
-
-    // NumberArgumentsNotMatch.
-    {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$drop_warehouse_meta()").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `admin$drop_warehouse_meta` expect to have 2 arguments, but got 0.";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
-
-    // Drop on nil should work
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$drop_warehouse_meta('tenant1', 'non-exists')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-    }
-
-    // Regular case
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$drop_warehouse_meta('tenant1',  '🐸🐸@@11')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), false);
-    }
     Ok(())
 }

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_meta_types::UserOptionFlag;
 
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureDescription;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 
@@ -29,16 +29,19 @@ impl ReloadConfigProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
         Ok(Box::new(ReloadConfigProcedure {}))
     }
-
-    pub fn desc() -> ProcedureDescription {
-        ProcedureDescription::creator(Box::new(Self::try_create))
-            .features(ProcedureFeatures::default())
-    }
 }
 
 #[async_trait::async_trait]
 impl Procedure for ReloadConfigProcedure {
-    async fn eval(&self, ctx: Arc<QueryContext>, _: Vec<String>) -> Result<DataBlock> {
+    fn name(&self) -> &str {
+        "RELOAD_CONFIG"
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        ProcedureFeatures::default().user_option_flag(UserOptionFlag::ConfigReload)
+    }
+
+    async fn inner_eval(&self, ctx: Arc<QueryContext>, _: Vec<String>) -> Result<DataBlock> {
         // TODO: check permissions
         ctx.reload_config().await?;
         Ok(DataBlock::empty())

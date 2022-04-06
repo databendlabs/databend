@@ -14,6 +14,7 @@
 
 use std::io::Read;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 
@@ -60,6 +61,16 @@ impl TypeDeserializer for StringDeserializer {
             self.builder.append_value(reader);
         }
         Ok(())
+    }
+
+    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+        match value {
+            serde_json::Value::String(s) => {
+                self.builder.append_value(s);
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be string")),
+        }
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {

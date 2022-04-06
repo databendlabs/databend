@@ -14,8 +14,10 @@
 //
 
 use std::any::Any;
+use std::future::Future;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -30,6 +32,12 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::AsyncSource;
+use crate::pipelines::new::processors::AsyncSourcer;
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
@@ -130,6 +138,89 @@ impl Table for FuseHistoryTable {
             None,
             blocks,
         )))
+    }
+
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let output = OutputPort::create();
+        pipeline.add_pipe(NewPipe::SimplePipe {
+            inputs_port: vec![],
+            outputs_port: vec![output.clone()],
+            processors: vec![FuseHistorySource::create(
+                ctx,
+                output,
+                self.arg_database_name.to_owned(),
+                self.arg_table_name.to_owned(),
+            )?],
+        });
+
+        Ok(())
+    }
+}
+
+struct FuseHistorySource {
+    finish: bool,
+    ctx: Arc<QueryContext>,
+    arg_database_name: String,
+    arg_table_name: String,
+}
+
+impl FuseHistorySource {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        output: Arc<OutputPort>,
+        arg_database_name: String,
+        arg_table_name: String,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
+            ctx,
+            finish: false,
+            arg_table_name,
+            arg_database_name,
+        })
+    }
+}
+
+impl AsyncSource for FuseHistorySource {
+    const NAME: &'static str = "fuse_history";
+
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
+
+    fn generate(&mut self) -> Self::BlockFuture<'_> {
+        async {
+            if self.finish {
+                return Ok(None);
+            }
+
+            self.finish = true;
+            let tenant_id = self.ctx.get_tenant();
+            let tbl = self
+                .ctx
+                .get_catalog()
+                .get_table(
+                    tenant_id.as_str(),
+                    self.arg_database_name.as_str(),
+                    self.arg_table_name.as_str(),
+                )
+                .await?;
+
+            let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+                ErrorCode::BadArguments(format!(
+                    "expecting fuse table, but got table of engine type: {}",
+                    tbl.get_table_info().meta.engine
+                ))
+            })?;
+
+            Ok(Some(
+                FuseHistory::new(self.ctx.clone(), tbl)
+                    .get_history()
+                    .await?,
+            ))
+        }
     }
 }
 

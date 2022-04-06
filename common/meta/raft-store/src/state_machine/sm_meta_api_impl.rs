@@ -209,6 +209,7 @@ impl MetaApi for StateMachine {
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+        let if_exists = req.if_exists;
         let tenant = &req.tenant;
         let db_name = &req.db;
         let table_name = &req.table_name;
@@ -222,11 +223,19 @@ impl MetaApi for StateMachine {
             new_db_name: new_db_name.to_string(),
             new_table_name: new_table_name.to_string(),
         };
-        let res = self.sm_tree.txn(true, |t| self.apply_cmd(&cmd, &t))?;
 
-        let mut ch: Change<TableMeta, u64> = res.try_into().unwrap();
-        let table_id = ch.ident.take().unwrap();
-        Ok(RenameTableReply { table_id })
+        let res = self.sm_tree.txn(true, |t| self.apply_cmd(&cmd, &t));
+        if let Err(MetaStorageError::AppError(AppError::UnknownTable(e))) = res {
+            if if_exists {
+                Ok(RenameTableReply { table_id: 0 })
+            } else {
+                Err(MetaError::AppError(AppError::UnknownTable(e)))
+            }
+        } else {
+            let mut ch: Change<TableMeta, u64> = res?.try_into().unwrap();
+            let table_id = ch.ident.take().unwrap();
+            Ok(RenameTableReply { table_id })
+        }
     }
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {

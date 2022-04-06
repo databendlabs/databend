@@ -20,7 +20,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_physical_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
@@ -179,46 +178,68 @@ pub fn cast_with_type(
 pub fn cast_to_variant(
     column: &ColumnRef,
     from_type: &DataTypePtr,
+    data_type: &DataTypePtr,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let size = column.len();
-    let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
 
-    with_match_physical_primitive_type!(from_type.data_type_id().to_physical_type(), |$T| {
-        let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
-        for v in col.iter() {
-            let v = *v as $T;
-            let x: JsonValue = v.into();
-            builder.append(&x);
+    if data_type.data_type_id() == TypeID::VariantArray {
+        if from_type.data_type_id() == TypeID::Variant {
+            let col: &JsonColumn = Series::check_get(&column)?;
+            let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+            for v in col.iter() {
+                if v.is_array() {
+                    builder.append(v);
+                } else {
+                    let arr = JsonValue::Array(vec![v.clone()]);
+                    builder.append(&arr);
+                }
+            }
+            return Ok((builder.build(size), None));
         }
-        return Ok((builder.build(size), None));
-    }, {
-        match from_type.data_type_id() {
-            TypeID::Null => {
-                for _ in 0..size {
-                    let v = JsonValue::Null;
+        return Err(ErrorCode::BadDataValueType(format!(
+            "Expression type does not match column data type, expecting ARRAY but got {}",
+            from_type.data_type_id()
+        )));
+    } else if data_type.data_type_id() == TypeID::VariantObject {
+        if from_type.data_type_id() == TypeID::Variant {
+            let col: &JsonColumn = Series::check_get(&column)?;
+            for v in col.iter() {
+                if !v.is_object() {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Failed to cast variant value {} to OBJECT",
+                        v
+                    )));
+                }
+            }
+            return Ok((column.clone(), None));
+        }
+        return Err(ErrorCode::BadDataValueType(format!(
+            "Expression type does not match column data type, expecting OBJECT but got {}",
+            from_type.data_type_id()
+        )));
+    }
+    if from_type.data_type_id() == TypeID::Variant {
+        return Ok((column.clone(), None));
+    }
+    let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+    if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
+        let serializer = from_type.create_serializer();
+        match serializer.serialize_json_object(&column, None) {
+            Ok(values) => {
+                for v in values {
                     builder.append(&v);
                 }
-                return Ok((builder.build(size), None));
             }
-            TypeID::Boolean => {
-                let c: &BooleanColumn = Series::check_get(&column)?;
-                for v in c.iter() {
-                    let v = v as bool;
-                    let x: JsonValue = v.into();
-                    builder.append(&x);
-                }
-                return Ok((builder.build(size), None));
-            }
-            _ => {
-                // other data types can't automatically casted to variant
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Expression type does not match column data type, expecting VARIANT but got {:?}",
-                    from_type.data_type_id()
-                )));
-            }
+            Err(e) => return Err(e),
         }
-    });
+        return Ok((builder.build(size), None));
+    }
+    // other data types can't automatically casted to variant
+    return Err(ErrorCode::BadDataValueType(format!(
+        "Expression type does not match column data type, expecting VARIANT but got {}",
+        from_type.data_type_id()
+    )));
 }
 
 // cast using arrow's cast compute
@@ -228,8 +249,11 @@ pub fn arrow_cast_compute(
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
-    if data_type.data_type_id() == TypeID::Variant {
-        return cast_to_variant(column, from_type);
+    if data_type.data_type_id() == TypeID::Variant
+        || data_type.data_type_id() == TypeID::VariantArray
+        || data_type.data_type_id() == TypeID::VariantObject
+    {
+        return cast_to_variant(column, from_type, data_type);
     }
 
     let arrow_array = column.as_arrow_array();

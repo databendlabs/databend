@@ -361,6 +361,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     async fn do_init(&mut self, database_name: &str) -> Result<()> {
+        if database_name.is_empty() {
+            return Ok(());
+        }
         let init_query = format!("USE `{}`;", database_name);
 
         let do_query = self.do_query(&init_query).await;

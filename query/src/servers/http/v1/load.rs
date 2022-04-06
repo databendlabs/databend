@@ -17,12 +17,18 @@ use std::sync::Arc;
 use async_compat::CompatExt;
 use async_stream::stream;
 use common_base::ProgressValues;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSourceBuilder;
+use common_streams::NDJsonSourceBuilder;
+use common_streams::ParquetSourceBuilder;
+use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 use common_tracing::tracing;
+use futures::io::Cursor;
 use futures::StreamExt;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -61,7 +67,6 @@ pub async fn streaming_load(
         .map_err(InternalServerError)?;
 
     // TODO: list user's grant list and check client address
-
     session.set_current_user(user_info.0.clone());
 
     let context = session
@@ -79,83 +84,24 @@ pub async fn streaming_load(
         .map_err(InternalServerError)?;
     context.attach_query_str(insert_sql);
 
-    let mut builder = CsvSourceBuilder::create(plan.schema());
-
-    // Skip header.
-    {
-        let skip_header = req
-            .headers()
-            .get("skip_header")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("0")
-            .parse::<i32>()
-            .map_err(|e| {
-                poem::Error::from_string(
-                    format!("Parse csv skip_header error:{:}", e),
-                    StatusCode::BAD_REQUEST,
-                )
-            })?;
-
-        builder.skip_header(skip_header);
-    }
-
-    // Field delimiter.
-    {
-        let field_delimiter = req
-            .headers()
-            .get("field_delimiter")
-            .and_then(|v| v.to_str().ok())
-            .map(|v| match v.len() {
-                n if n >= 1 => {
-                    if v.as_bytes()[0] == b'\\' {
-                        "\t"
-                    } else {
-                        v
-                    }
-                }
-                _ => ",",
-            })
-            .unwrap_or(",");
-
-        builder.field_delimiter(field_delimiter);
-    }
-
-    // Record delimiter.
-    {
-        let record_delimiter = req
-            .headers()
-            .get("record_delimiter")
-            .and_then(|v| v.to_str().ok())
-            .map(|v| match v.len() {
-                n if n >= 1 => {
-                    if v.as_bytes()[0] == b'\\' {
-                        "\n"
-                    } else {
-                        v
-                    }
-                }
-                _ => "\n",
-            })
-            .unwrap_or("\n");
-
-        builder.record_delimiter(record_delimiter);
-    }
-
     // Block size.
-    {
-        let max_block_size = context
-            .get_settings()
-            .get_max_block_size()
-            .map_err(InternalServerError)? as usize;
-        builder.block_size(max_block_size);
-    }
+    let max_block_size = context
+        .get_settings()
+        .get_max_block_size()
+        .map_err(InternalServerError)? as usize;
 
     // validate plan
-    match &plan {
+    let source_stream = match &plan {
         PlanNode::Insert(insert) => match &insert.source {
             InsertInputSource::StreamingWithFormat(format) => {
                 if format.to_lowercase().as_str() == "csv" {
-                    Ok(())
+                    build_csv_stream(&plan, req, multipart, max_block_size)
+                } else if format.to_lowercase().as_str() == "parquet" {
+                    build_parquet_stream(&plan, multipart)
+                } else if format.to_lowercase().as_str() == "ndjson"
+                    || format.to_lowercase().as_str() == "jsoneachrow"
+                {
+                    build_ndjson_stream(&plan, multipart)
                 } else {
                     Err(poem::Error::from_string(
                         format!(
@@ -189,25 +135,9 @@ pub async fn streaming_load(
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
-    let stream = stream! {
-        while let Ok(Some(field)) = multipart.next_field().await {
-            let reader = field.into_async_read();
-            let mut source = builder.build(reader.compat())?;
-
-            loop {
-                let block = source.read().await;
-                match block {
-                    Ok(None) => break,
-                    Ok(Some(b)) =>  yield(Ok(b)),
-                    Err(e) => yield(Err(e)),
-                }
-            }
-        }
-    };
-
     // this runs inside the runtime of poem, load is not cpu densive so it's ok
     let mut data_stream = interpreter
-        .execute(Some(Box::pin(stream)))
+        .execute(Some(source_stream))
         .await
         .map_err(InternalServerError)?;
     while let Some(_block) = data_stream.next().await {}
@@ -227,4 +157,146 @@ pub async fn streaming_load(
         stats: context.get_scan_progress_value(),
         error: None,
     }))
+}
+
+fn build_parquet_stream(
+    plan: &PlanNode,
+    mut multipart: Multipart,
+) -> PoemResult<SendableDataBlockStream> {
+    let builder = ParquetSourceBuilder::create(plan.schema());
+    let stream = stream! {
+        while let Ok(Some(field)) = multipart.next_field().await {
+            let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
+            let cursor = Cursor::new(bytes);
+
+            let mut source = builder.build(cursor)?;
+
+            loop {
+                let block = source.read().await;
+                match block {
+                    Ok(None) => break,
+                    Ok(Some(b)) =>  yield(Ok(b)),
+                    Err(e) => yield(Err(e)),
+                }
+            }
+        }
+    };
+
+    Ok(Box::pin(stream))
+}
+
+fn build_ndjson_stream(
+    plan: &PlanNode,
+    mut multipart: Multipart,
+) -> PoemResult<SendableDataBlockStream> {
+    let builder = NDJsonSourceBuilder::create(plan.schema());
+    let stream = stream! {
+        while let Ok(Some(field)) = multipart.next_field().await {
+            let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
+            let cursor = std::io::Cursor::new(bytes);
+            let mut source = builder.build(cursor)?;
+
+            loop {
+                let block = source.read().await;
+                match block {
+                    Ok(None) => break,
+                    Ok(Some(b)) =>  yield(Ok(b)),
+                    Err(e) => yield(Err(e)),
+                }
+            }
+        }
+    };
+
+    Ok(Box::pin(stream))
+}
+
+fn build_csv_stream(
+    plan: &PlanNode,
+    req: &Request,
+    mut multipart: Multipart,
+    block_size: usize,
+) -> PoemResult<SendableDataBlockStream> {
+    let mut builder = CsvSourceBuilder::create(plan.schema());
+    builder.block_size(block_size);
+    // Skip header.
+    {
+        let skip_header = req
+            .headers()
+            .get("skip_header")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("0")
+            .parse::<i32>()
+            .map_err(|_| {
+                poem::Error::from_string("skip_header must be an integer", StatusCode::BAD_REQUEST)
+            })?;
+
+        builder.skip_header(skip_header);
+    }
+
+    // Field delimiter.
+    {
+        let field_delimiter = req
+            .headers()
+            .get("field_delimiter")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| {
+                let v = v.trim_matches(|p| p == '"' || p == '\'');
+
+                match v.len() {
+                    n if n >= 1 => {
+                        if v.as_bytes()[0] == b'\\' {
+                            "\t"
+                        } else {
+                            v
+                        }
+                    }
+                    _ => ",",
+                }
+            })
+            .unwrap_or(",");
+
+        builder.field_delimiter(field_delimiter);
+    }
+
+    // Record delimiter.
+    {
+        let record_delimiter = req
+            .headers()
+            .get("record_delimiter")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| {
+                let v = v.trim_matches(|p| p == '"' || p == '\'');
+                match v.len() {
+                    n if n >= 1 => {
+                        if v.as_bytes()[0] == b'\\' {
+                            "\n"
+                        } else {
+                            v
+                        }
+                    }
+                    _ => "\n",
+                }
+            })
+            .unwrap_or("\n");
+
+        builder.record_delimiter(record_delimiter);
+    }
+
+    let stream = stream! {
+        while let Ok(Some(field)) = multipart.next_field().await {
+            let reader = field.into_async_read();
+            let mut source = builder.build(reader.compat())?;
+
+            loop {
+                let block = source.read().await;
+                match block {
+                    Ok(None) => break,
+                    Ok(Some(b)) =>  yield(Ok(b)),
+                    Err(e) => yield(Err(e)),
+                }
+            }
+        }
+    };
+
+    Ok(Box::pin(stream))
 }

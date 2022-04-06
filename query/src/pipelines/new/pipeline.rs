@@ -37,8 +37,45 @@ impl NewPipeline {
         }
     }
 
+    // We need to push data to executor
+    pub fn is_pushing_pipeline(&self) -> Result<bool> {
+        match self.pipes.first() {
+            Some(pipe) => Ok(pipe.input_size() != 0),
+            None => Err(ErrorCode::LogicalError(
+                "Logical error, call is_pushing on empty pipeline.",
+            )),
+        }
+    }
+
+    // We need to pull data from executor
+    pub fn is_pulling_pipeline(&self) -> Result<bool> {
+        match self.pipes.last() {
+            Some(pipe) => Ok(pipe.output_size() != 0),
+            None => Err(ErrorCode::LogicalError(
+                "Logical error, call is_pulling on empty pipeline.",
+            )),
+        }
+    }
+
+    // We just need to execute it.
+    pub fn is_complete_pipeline(&self) -> Result<bool> {
+        Ok(
+            !self.pipes.is_empty()
+                && !self.is_pushing_pipeline()?
+                && !self.is_pulling_pipeline()?,
+        )
+    }
+
     pub fn add_pipe(&mut self, pipe: NewPipe) {
         self.pipes.push(pipe);
+    }
+
+    pub fn input_len(&self) -> usize {
+        match self.pipes.first() {
+            None => 0,
+            Some(NewPipe::SimplePipe { inputs_port, .. }) => inputs_port.len(),
+            Some(NewPipe::ResizePipe { inputs_port, .. }) => inputs_port.len(),
+        }
     }
 
     pub fn output_len(&self) -> usize {
@@ -47,24 +84,6 @@ impl NewPipeline {
             Some(NewPipe::SimplePipe { outputs_port, .. }) => outputs_port.len(),
             Some(NewPipe::ResizePipe { outputs_port, .. }) => outputs_port.len(),
         }
-    }
-
-    pub fn graph_size(&self) -> (usize, usize) {
-        let mut nodes_size = 0;
-        let mut edges_size = 0;
-        for pipe in &self.pipes {
-            nodes_size += match pipe {
-                NewPipe::ResizePipe { .. } => 1,
-                NewPipe::SimplePipe { processors, .. } => processors.len(),
-            };
-
-            edges_size += match pipe {
-                NewPipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
-                NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
-            };
-        }
-
-        (nodes_size, edges_size)
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {
@@ -97,8 +116,10 @@ impl NewPipeline {
 
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
-            None => Err(ErrorCode::LogicalError("")),
-            Some(pipe) if pipe.output_size() == 0 => Err(ErrorCode::LogicalError("")),
+            None => Err(ErrorCode::LogicalError("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_size() == 0 => {
+                Err(ErrorCode::LogicalError("Cannot resize empty pipe."))
+            }
             Some(pipe) if pipe.output_size() == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_size(), new_size);

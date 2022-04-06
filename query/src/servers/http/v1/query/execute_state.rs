@@ -25,7 +25,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use futures::StreamExt;
 use serde::Deserialize;
@@ -36,9 +35,7 @@ use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
-use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -137,22 +134,13 @@ pub(crate) struct ExecuteRunning {
 impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
-        session_manager: &Arc<SessionManager>,
-        user_info: &UserInfo,
+        session: SessionRef,
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
         let sql = &request.sql;
         let start_time = Instant::now();
-        let session = session_manager
-            .create_session(SessionType::HTTPQuery)
-            .await?;
         let ctx = session.create_query_context().await?;
-        if let Some(db) = &request.session.database {
-            ctx.set_current_database(db.clone()).await?;
-        };
         ctx.attach_query_str(sql);
-        session.set_current_user(user_info.clone());
-
         let plan = PlanParser::parse(ctx.clone(), sql).await?;
         let schema = plan.schema();
 

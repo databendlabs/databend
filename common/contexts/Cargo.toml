@@ -9,5 +9,8 @@ doctest = false
 test = false
 
 [dependencies]
-async-trait = "0.1.52"
-opendal = "0.2.3"
+common-base = { path = "../base" }
+
+async-trait = "0.1.53"
+opendal = "0.4.2"
+time = "0.3.9"

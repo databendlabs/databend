@@ -15,7 +15,6 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
@@ -40,7 +39,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
     }
 
     user_mgr
-        .add_role(&tenant, RoleInfo::new("test".to_string()))
+        .add_role(&tenant, RoleInfo::new("test".to_string()), false)
         .await?;
 
     // Grant role to unknown user.
@@ -56,13 +55,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
     // Grant role to normal user.
     {
-        user_mgr
-            .add_user(
-                &tenant,
-                UserInfo::new_no_auth("test_user".to_string(), "%".to_string()),
-            )
-            .await?;
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        let user_info = UserInfo::new_no_auth("test_user".to_string(), "%".to_string());
+        user_mgr.add_user(&tenant, user_info.clone(), false).await?;
+        let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.roles().len(), 0);
 
         let query = "GRANT ROLE 'test' TO 'test_user'";
@@ -70,10 +65,10 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
 
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         let roles = user_info.grants.roles();
         assert_eq!(roles.len(), 1);
-        assert_eq!(roles[0], RoleIdentity::new("test".to_string()));
+        assert_eq!(roles[0], "test".to_string());
     }
 
     // Grant role to unknown role.
@@ -91,7 +86,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
     // Grant role to normal role.
     {
-        user_mgr.add_role(&tenant, test_role.clone()).await?;
+        user_mgr.add_role(&tenant, test_role.clone(), false).await?;
         let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
         assert_eq!(role_info.grants.roles().len(), 0);
 
@@ -103,7 +98,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
         let roles = role_info.grants.roles();
         assert_eq!(roles.len(), 1);
-        assert_eq!(roles[0], RoleIdentity::new("test".to_string()));
+        assert_eq!(roles[0], "test".to_string());
     }
     Ok(())
 }

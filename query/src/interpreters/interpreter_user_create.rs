@@ -55,12 +55,13 @@ impl Interpreter for CreateUserInterpreter {
         let user_mgr = self.ctx.get_user_manager();
         let user_info = UserInfo {
             auth_info: plan.auth_info.clone(),
-            name: plan.name,
-            hostname: plan.hostname,
+            name: plan.user.username,
+            hostname: plan.user.hostname,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
+            option: plan.user_option,
         };
-        user_mgr.add_user(&tenant, user_info).await?;
+        user_mgr.add_user(&tenant, user_info, false).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

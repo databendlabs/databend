@@ -66,13 +66,13 @@ async fn test_plan_parser() -> Result<()> {
         Test {
             name: "create-table-passed",
             sql: "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
-            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: true }, DataField { name: \"c2\", data_type: Int64, nullable: true }, DataField { name: \"c3\", data_type: String, nullable: true }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}, as_select: None",
+            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: false }, DataField { name: \"c2\", data_type: Int64, nullable: false }, DataField { name: \"c3\", data_type: String, nullable: false }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}, as_select: None",
             error: "",
         },
         Test {
             name: "create-table-if-not-exists-passed",
             sql: "CREATE TABLE IF NOT EXISTS t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
-            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: true }, DataField { name: \"c2\", data_type: Int64, nullable: true }, DataField { name: \"c3\", data_type: String, nullable: true }, engine: Parquet, if_not_exists:true, option: {\"location\": \"foo.parquet\"}, as_select: None",
+            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: false }, DataField { name: \"c2\", data_type: Int64, nullable: false }, DataField { name: \"c3\", data_type: String, nullable: false }, engine: Parquet, if_not_exists:true, option: {\"location\": \"foo.parquet\"}, as_select: None",
             error: "",
         },
         Test {
@@ -88,6 +88,24 @@ async fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "drop-table-if-exists-passed",
+            sql: "DROP TABLE IF EXISTS db1.t1",
+            expect: "Drop table db1.t1, if_exists:true",
+            error: "",
+        },
+        Test {
+            name: "alter-table-rename-table-passed",
+            sql: "ALTER TABLE t1 RENAME TO t2",
+            expect: "Rename table, [default.t1 to default.t2]",
+            error: "",
+        },
+        Test {
+            name: "alter-table-rename-table-passed",
+            sql: "ALTER TABLE db1.t1 RENAME TO db1.t2",
+            expect: "Rename table, [db1.t1 to db1.t2]",
+            error: "",
+        },
+        Test {
             name: "rename-table-passed",
             sql: "RENAME TABLE t1 TO t2",
             expect: "Rename table, [default.t1 to default.t2]",
@@ -97,12 +115,6 @@ async fn test_plan_parser() -> Result<()> {
             name: "rename-table-passed",
             sql: "RENAME TABLE db1.t1 TO db1.t2",
             expect: "Rename table, [db1.t1 to db1.t2]",
-            error: "",
-        },
-        Test {
-            name: "drop-table-if-exists-passed",
-            sql: "DROP TABLE IF EXISTS db1.t1",
-            expect: "Drop table db1.t1, if_exists:true",
             error: "",
         },
         Test {
@@ -177,19 +189,19 @@ async fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "Code: 1025, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 1025, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 1025, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table 't'.",
         },
         Test {
             name: "select-full",
@@ -246,13 +258,13 @@ async fn test_plan_parser() -> Result<()> {
         Test {
             name: "create-role",
             sql: "CREATE ROLE role1",
-            expect: "Create role 'role1' if_not_exist:false",
+            expect: "Create role role1 if_not_exist:false",
             error: "",
         },
         Test {
             name: "drop-role",
             sql: "DROP ROLE role1",
-            expect: "Drop role 'role1' if_exists:false",
+            expect: "Drop role role1 if_exists:false",
             error: "",
         }
     ];

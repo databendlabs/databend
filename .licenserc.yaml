@@ -21,6 +21,9 @@ header:
     - "Makefile"
     # Ignore docs and generated files
     - "**/*.md"
+    - "**/*.hbs"
+    - "**/*.template"
+    - "**/*.cue"
     - "**/*.json"
     - "**/*.sql"
     - "**/*.proto"

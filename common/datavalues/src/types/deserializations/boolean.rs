@@ -56,6 +56,14 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
+    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+        match value {
+            serde_json::Value::Bool(v) => self.builder.append_value(*v),
+            _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
+        }
+        Ok(())
+    }
+
     fn finish_to_column(&mut self) -> ColumnRef {
         self.builder.to_column()
     }

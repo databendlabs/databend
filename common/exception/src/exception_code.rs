@@ -118,6 +118,7 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
+    InvalidAuthInfo(1066),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -162,6 +163,7 @@ build_exceptions! {
     TableAlreadyExists(2302),
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
+    ViewAlreadyExists(2306),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
@@ -193,13 +195,9 @@ build_exceptions! {
 
 // Storage errors [3001, 4000].
 build_exceptions! {
-    UnknownStorageSchemeName(3001),
-    SecretKeyNotSet(3002),
-    DalTransportError(3003),
-    DalPathNotFound(3004),
-    SerdeError(3005),
-    DalError(3006),
-    DalStatError(3007),
+    StorageNotFound(3001),
+    StoragePermissionDenied(3002),
+    StorageOther(4000)
 }
 
 // Cache errors [4001, 5000].

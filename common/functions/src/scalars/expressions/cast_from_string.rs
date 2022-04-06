@@ -79,10 +79,12 @@ pub fn cast_from_string(
         }
         TypeID::DateTime64 => {
             let mut builder = ColumnBuilder::<i64>::with_capacity(size);
+            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_datetime64(v) {
                     Some(d) => {
-                        builder.append(d.timestamp_nanos());
+                        builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
                     }
                     None => bitmap.set(row, false),
                 }

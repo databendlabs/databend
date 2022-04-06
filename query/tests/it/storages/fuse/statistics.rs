@@ -61,9 +61,10 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
 fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
+    let test_file_size = 1;
     for item in blocks {
         let block_acc = stats_acc.begin(&item?)?;
-        stats_acc = block_acc.end(1, "".to_owned(), HashMap::new());
+        stats_acc = block_acc.end(test_file_size, "".to_owned(), HashMap::new());
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls

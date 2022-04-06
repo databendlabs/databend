@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
@@ -56,5 +57,58 @@ impl TypeSerializer for StringSerializer {
         let column: &StringColumn = Series::check_get(column)?;
         let values: Vec<&[u8]> = column.iter().collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_json_object(
+        &self,
+        column: &ColumnRef,
+        valids: Option<&Bitmap>,
+    ) -> Result<Vec<Value>> {
+        let column: &StringColumn = Series::check_get(column)?;
+        let mut result: Vec<Value> = Vec::new();
+        for (i, v) in column.iter().enumerate() {
+            if let Some(valids) = valids {
+                if !valids.get_bit(i) {
+                    result.push(Value::Null);
+                    continue;
+                }
+            }
+            match std::str::from_utf8(v) {
+                Ok(v) => match serde_json::from_str::<Value>(v) {
+                    Ok(v) => result.push(v),
+                    Err(e) => {
+                        return Err(ErrorCode::BadDataValueType(format!(
+                            "Error parsing JSON: {}",
+                            e
+                        )))
+                    }
+                },
+                Err(e) => {
+                    return Err(ErrorCode::BadDataValueType(format!(
+                        "Error parsing JSON: {}",
+                        e
+                    )))
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    fn serialize_json_object_suppress_error(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<Vec<Option<Value>>> {
+        let column: &StringColumn = Series::check_get(column)?;
+        let result: Vec<Option<Value>> = column
+            .iter()
+            .map(|v| match std::str::from_utf8(v) {
+                Ok(v) => match serde_json::from_str::<Value>(v) {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                },
+                Err(_) => None,
+            })
+            .collect();
+        Ok(result)
     }
 }

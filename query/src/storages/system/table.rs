@@ -133,7 +133,7 @@ where Self: SyncSource
         inner: Arc<TTable>,
         context: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, SystemTableSyncSource::<TTable> {
+        SyncSourcer::create(context.clone(), output, SystemTableSyncSource::<TTable> {
             inner,
             context,
             finished: false,
@@ -251,7 +251,7 @@ where Self: AsyncSource
         inner: Arc<TTable>,
         context: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(output, SystemTableAsyncSource::<TTable> {
+        AsyncSourcer::create(context.clone(), output, SystemTableAsyncSource::<TTable> {
             inner,
             context,
             finished: false,
@@ -261,9 +261,7 @@ where Self: AsyncSource
 
 impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<TTable> {
     const NAME: &'static str = TTable::NAME;
-    type BlockFuture<'a>
-    where Self: 'a
-    = impl Future<Output = Result<Option<DataBlock>>>;
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
         async move {

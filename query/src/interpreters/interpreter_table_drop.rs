@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
@@ -25,6 +26,7 @@ use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct DropTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -58,6 +60,15 @@ impl Interpreter for DropTableInterpreter {
                 UserPrivilegeType::Drop,
             )
             .await?;
+
+        if let Some(table) = &tbl {
+            if table.get_table_info().engine() == VIEW_ENGINE {
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{}.{} is VIEW, please use `DROP VIEW {}.{}`",
+                    &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table
+                )));
+            }
+        };
 
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;

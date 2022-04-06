@@ -1,24 +1,23 @@
-name: 'Test metactl'
+name: "Test metactl"
+description: ""
 inputs:
   profile:
-    description: 'The profile for this test'
+    description: "The profile for this test"
     required: true
-    default: 'debug'
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
-    # If you need to reset the cache version, increment the number after `v`
-    - uses: Swatinem/rust-cache@v1
-      with:
-        sharedKey: unit-v1
-
     - uses: actions/download-artifact@v2
       with:
-        name: ${{ inputs.profile }}-${{ github.sha }}-${{ matrix.config.os }}-${{ matrix.config.target }}
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
         path: ./target/debug
 
     - name: Test metactl

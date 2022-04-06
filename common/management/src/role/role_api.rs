@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
 use common_meta_types::UserPrivilegeSet;
@@ -23,13 +22,13 @@ use common_meta_types::UserPrivilegeSet;
 pub trait RoleApi: Sync + Send {
     async fn add_role(&self, role_info: RoleInfo) -> Result<u64>;
 
-    async fn get_role(&self, role: RoleIdentity, seq: Option<u64>) -> Result<SeqV<RoleInfo>>;
+    async fn get_role(&self, role: String, seq: Option<u64>) -> Result<SeqV<RoleInfo>>;
 
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>>;
 
     async fn grant_privileges(
         &self,
-        role: RoleIdentity,
+        role: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
@@ -37,7 +36,7 @@ pub trait RoleApi: Sync + Send {
 
     async fn revoke_privileges(
         &self,
-        role: RoleIdentity,
+        role: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
@@ -45,17 +44,17 @@ pub trait RoleApi: Sync + Send {
 
     async fn grant_role(
         &self,
-        role: RoleIdentity,
-        grant_role: RoleIdentity,
+        role: String,
+        grant_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
     async fn revoke_role(
         &self,
-        role: RoleIdentity,
-        revoke_role: RoleIdentity,
+        role: String,
+        revoke_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn drop_role(&self, role: RoleIdentity, seq: Option<u64>) -> Result<()>;
+    async fn drop_role(&self, role: String, seq: Option<u64>) -> Result<()>;
 }

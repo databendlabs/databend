@@ -75,8 +75,12 @@ impl Interpreter for InsertInterpreter {
                 let with_plan = InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
                 with_plan.execute(table.as_ref()).await
             }
-            InsertInputSource::Expressions(values_exprs) => {
-                let stream = values_exprs.to_stream(self.plan.schema.clone())?;
+            InsertInputSource::Expressions(values, values_exprs) => {
+                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+                let stream = values
+                    .to_stream(self.plan.schema.clone(), block_size)
+                    .or_else(|_| values_exprs.to_stream(self.plan.schema.clone(), block_size))?;
+
                 let stream = if need_fill_missing_columns {
                     Box::pin(AddOnStream::try_create(
                         stream,

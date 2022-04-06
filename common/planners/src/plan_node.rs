@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::AlterViewPlan;
 use crate::BroadcastPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
@@ -30,6 +30,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -38,6 +39,7 @@ use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
+use crate::DropViewPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
@@ -125,6 +127,11 @@ pub enum PlanNode {
     DescribeTable(DescribeTablePlan),
     ShowCreateTable(ShowCreateTablePlan),
 
+    // View.
+    CreateView(CreateViewPlan),
+    DropView(DropViewPlan),
+    AlterView(AlterViewPlan),
+
     // User.
     CreateUser(CreateUserPlan),
     AlterUser(AlterUserPlan),
@@ -160,9 +167,6 @@ pub enum PlanNode {
 
     // Kill.
     Kill(KillPlan),
-
-    // Admin
-    AdminUseTenant(AdminUseTenantPlan),
 }
 
 impl PlanNode {
@@ -219,6 +223,11 @@ impl PlanNode {
             PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
 
+            // View.
+            PlanNode::CreateView(v) => v.schema(),
+            PlanNode::AlterView(v) => v.schema(),
+            PlanNode::DropView(v) => v.schema(),
+
             // User.
             PlanNode::CreateUser(v) => v.schema(),
             PlanNode::AlterUser(v) => v.schema(),
@@ -257,9 +266,6 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(v) => v.schema(),
-
-            // Admin.
-            PlanNode::AdminUseTenant(v) => v.schema(),
         }
     }
 
@@ -315,6 +321,11 @@ impl PlanNode {
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
 
+            // View.
+            PlanNode::CreateView(_) => "CreateViewPlan",
+            PlanNode::AlterView(_) => "AlterViewPlan",
+            PlanNode::DropView(_) => "DropViewPlan",
+
             // User.
             PlanNode::CreateUser(_) => "CreateUser",
             PlanNode::AlterUser(_) => "AlterUser",
@@ -353,9 +364,6 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(_) => "KillQuery",
-
-            // Admin.
-            PlanNode::AdminUseTenant(_) => "UseTenantPlan",
         }
     }
 

@@ -155,11 +155,11 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
+            DfStatement::AlterTable(v) => v.analyze(ctx).await,
             DfStatement::RenameTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::OptimizeTable(v) => v.analyze(ctx).await,
             DfStatement::UseDatabase(v) => v.analyze(ctx).await,
-            DfStatement::UseTenant(v) => v.analyze(ctx).await,
             DfStatement::ShowCreateTable(v) => v.analyze(ctx).await,
             DfStatement::ShowTables(v) => v.analyze(ctx).await,
             DfStatement::ShowSettings(v) => v.analyze(ctx).await,
@@ -191,6 +191,9 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropStage(v) => v.analyze(ctx).await,
             DfStatement::DescribeStage(v) => v.analyze(ctx).await,
             DfStatement::List(v) => v.analyze(ctx).await,
+            DfStatement::CreateView(v) => v.analyze(ctx).await,
+            DfStatement::AlterView(v) => v.analyze(ctx).await,
+            DfStatement::DropView(v) => v.analyze(ctx).await,
         }
     }
 }

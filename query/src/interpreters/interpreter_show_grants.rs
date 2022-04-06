@@ -54,9 +54,7 @@ impl Interpreter for ShowGrantsInterpreter {
             Some(ref user_identity) => {
                 let tenant = self.ctx.get_tenant();
                 let user_mgr = self.ctx.get_user_manager();
-                user_mgr
-                    .get_user(&tenant, &user_identity.username, &user_identity.hostname)
-                    .await?
+                user_mgr.get_user(&tenant, user_identity.clone()).await?
             }
         };
 
@@ -64,7 +62,7 @@ impl Interpreter for ShowGrantsInterpreter {
             .grants
             .entries()
             .iter()
-            .map(|e| e.to_string().into_bytes())
+            .map(|e| format!("{} TO {}", e, user_info.identity()).into_bytes())
             .collect::<Vec<_>>();
 
         let block = DataBlock::create(schema.clone(), vec![Series::from_data(grant_list)]);

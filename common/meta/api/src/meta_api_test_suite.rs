@@ -279,7 +279,7 @@ impl MetaApiTestSuite {
             let err = ErrorCode::from(res);
 
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
-            assert_eq!("db2".to_string(), err.message());
+            assert_eq!("Unknown database 'db2'".to_string(), err.message());
         }
 
         tracing::info!("--- drop db2");
@@ -535,7 +535,10 @@ impl MetaApiTestSuite {
                 let err_code = ErrorCode::from(status);
 
                 assert_eq!(
-                    format!("Code: 2302, displayText = table exists: {}.", tbl_name),
+                    format!(
+                        "Code: 2302, displayText = Table '{}' already exists.",
+                        tbl_name
+                    ),
                     err_code.to_string()
                 );
 
@@ -609,7 +612,7 @@ impl MetaApiTestSuite {
                     let err_code = ErrorCode::from(status);
 
                     assert_eq!(
-                        format!("Code: 1025, displayText = Unknown table: '{:}'.", tbl_name),
+                        format!("Code: 1025, displayText = Unknown table '{:}'.", tbl_name),
                         err_code.to_string(),
                         "get dropped table {}",
                         tbl_name
@@ -677,6 +680,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table on unknown db");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -739,6 +743,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table, ok");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -770,6 +775,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table again, error");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -805,6 +811,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table again after recreate, error");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -824,6 +831,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table to other db, error");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -861,6 +869,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table to other db, ok");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -1021,8 +1030,11 @@ impl MetaApiTestSuite {
             let err = res.unwrap_err();
             let err = ErrorCode::from(err);
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
-            assert_eq!("nonexistent", err.message());
-            assert_eq!("Code: 1003, displayText = nonexistent.", format!("{}", err));
+            assert_eq!("Unknown database 'nonexistent'", err.message());
+            assert_eq!(
+                "Code: 1003, displayText = Unknown database 'nonexistent'.",
+                format!("{}", err)
+            );
         }
 
         Ok(())

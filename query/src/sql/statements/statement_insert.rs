@@ -164,7 +164,11 @@ impl DfInsertStatement {
             value_exprs.push(exprs);
         }
 
-        Ok(InsertInputSource::Expressions(value_exprs))
+        let values = format!("{}", values);
+        Ok(InsertInputSource::Expressions(
+            (values["VALUES ".len()..]).to_string(),
+            value_exprs,
+        ))
     }
 
     async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {

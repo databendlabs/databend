@@ -20,6 +20,7 @@ pub enum SessionType {
     MySQL,
     HTTPQuery,
     HTTPStreamingLoad,
+    ClickHouseHttpHandler,
     FlightRPC,
     HTTPAPI(String),
     Test,
@@ -34,6 +35,7 @@ impl SessionType {
 impl fmt::Display for SessionType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
+            SessionType::ClickHouseHttpHandler => "ClickhouseHTTPHandler".to_string(),
             SessionType::Clickhouse => "Clickhouse".to_string(),
             SessionType::MySQL => "MySQL".to_string(),
             SessionType::HTTPQuery => "HTTPQuery".to_string(),

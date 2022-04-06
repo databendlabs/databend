@@ -68,12 +68,19 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// whether table has the exact number of total rows
+    fn has_exact_total_row_count(&self) -> bool {
+        false
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)>;
+    ) -> Result<(Statistics, Partitions)> {
+        unimplemented!()
+    }
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         None
@@ -83,8 +90,10 @@ pub trait Table: Sync + Send {
     async fn read(
         &self,
         _ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream>;
+        _plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
+        unimplemented!()
+    }
 
     fn read2(
         &self,
@@ -92,7 +101,7 @@ pub trait Table: Sync + Send {
         _: &ReadDataSourcePlan,
         _: &mut NewPipeline,
     ) -> Result<()> {
-        Err(ErrorCode::UnImplement(""))
+        unimplemented!()
     }
 
     async fn append_data(
@@ -130,8 +139,4 @@ pub trait Table: Sync + Send {
     async fn optimize(&self, _ctx: Arc<QueryContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
-}
-
-pub mod opt_keys {
-    pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 }

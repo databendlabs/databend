@@ -24,7 +24,6 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -84,8 +83,8 @@ impl RoleMgr {
         }
     }
 
-    fn make_role_key(&self, role: &RoleIdentity) -> String {
-        format!("{}/{}", self.role_prefix, role.name)
+    fn make_role_key(&self, role: &str) -> String {
+        format!("{}/{}", self.role_prefix, role)
     }
 }
 
@@ -113,7 +112,7 @@ impl RoleApi for RoleMgr {
         }
     }
 
-    async fn get_role(&self, role: RoleIdentity, seq: Option<u64>) -> Result<SeqV<RoleInfo>> {
+    async fn get_role(&self, role: String, seq: Option<u64>) -> Result<SeqV<RoleInfo>> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();
         let res = kv_api.get_kv(&key).await?;
@@ -144,23 +143,21 @@ impl RoleApi for RoleMgr {
 
     async fn grant_privileges(
         &self,
-        role: RoleIdentity,
+        role: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let role_val_seq = self.get_role(role, seq);
         let mut role_info = role_val_seq.await?.data;
-        role_info
-            .grants
-            .grant_privileges(&role_info.name, "", &object, privileges);
+        role_info.grants.grant_privileges(&object, privileges);
         let seq = self.upsert_role_info(&role_info, seq).await?;
         Ok(Some(seq))
     }
 
     async fn revoke_privileges(
         &self,
-        role: RoleIdentity,
+        role: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
@@ -174,8 +171,8 @@ impl RoleApi for RoleMgr {
 
     async fn grant_role(
         &self,
-        role: RoleIdentity,
-        grant_role: RoleIdentity,
+        role: String,
+        grant_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let role_val_seq = self.get_role(role, seq);
@@ -187,8 +184,8 @@ impl RoleApi for RoleMgr {
 
     async fn revoke_role(
         &self,
-        role: RoleIdentity,
-        revoke_role: RoleIdentity,
+        role: String,
+        revoke_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let role_val_seq = self.get_role(role, seq);
@@ -198,7 +195,7 @@ impl RoleApi for RoleMgr {
         Ok(Some(seq))
     }
 
-    async fn drop_role(&self, role: RoleIdentity, seq: Option<u64>) -> Result<()> {
+    async fn drop_role(&self, role: String, seq: Option<u64>) -> Result<()> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();
         let res = kv_api

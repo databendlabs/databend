@@ -21,11 +21,20 @@ common-tracing = { path = "../tracing" }
 # Github dependencies
 
 # Crates.io dependencies
-async-trait = "0.1.52"
+async-trait = "0.1.53"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 futures = "0.3.21"
-pprof = { version = "0.6.2", features = ["flamegraph", "protobuf"] }
-tokio = { version = "1.17.0", features = ["full"] }
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
+hyper = "0.14.18"
+poem = { version = "=1.3.16", features = ["rustls"] }
 serde = { version = "1.0.136", features = ["derive"] }
-poem = { version = "1.3.6", features = ["rustls"] }
+serde_json = { version = "1.0.79", default-features = false, features = ["raw_value"] }
+serde_yaml = { version = "0.8.23", default-features = false }
+# Rollback to tagged release after 666d9e2 included in new release.
+pprof = { git = "https://github.com/tikv/pprof-rs", rev = "666d9e2", features = [
+    "flamegraph",
+    "protobuf-codec",
+    "protobuf",
+] }
+tokio = { version = "1.17.0", features = ["full"] }
+toml = { version = "0.5.8", default-features = false }
+uuid = { version = "0.8.2", features = ["serde", "v4"] }

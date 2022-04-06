@@ -20,10 +20,10 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_functions::aggregates::eval_aggr;
 
-use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
+use crate::storages::fuse::meta::Versioned;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
 
@@ -77,7 +77,10 @@ impl StatisticsAccumulator {
 
             // TODO(b41sh): support max/min aggregate functions for variant
             let nonull_data_type = remove_nullable(field.data_type());
-            if nonull_data_type.data_type_id() != TypeID::Variant {
+            if nonull_data_type.data_type_id() != TypeID::Variant
+                && nonull_data_type.data_type_id() != TypeID::VariantArray
+                && nonull_data_type.data_type_id() != TypeID::VariantObject
+            {
                 let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
                 let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
@@ -126,15 +129,12 @@ impl PartiallyAccumulated {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
         let block_meta = BlockMeta {
-            location: BlockLocation {
-                path: location,
-                meta_size: 0,
-            },
             row_count: self.block_row_count,
             block_size: self.block_size,
             file_size,
             col_stats: self.block_column_statistics,
             col_metas,
+            location: (location, DataBlock::VERSION),
         };
         stats.blocks_metas.push(block_meta);
         self.accumulator

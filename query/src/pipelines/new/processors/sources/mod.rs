@@ -13,16 +13,16 @@
 // limitations under the License.
 
 mod async_source;
+mod empty_source;
 mod sync_source;
 mod sync_source_receiver;
-mod table_source;
 
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
+pub use empty_source::EmptySource;
 pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;
 pub use sync_source_receiver::SyncReceiverSource;
-pub use table_source::TableSource;
 
 #[allow(dead_code)]
 mod source_example {
@@ -38,6 +38,7 @@ mod source_example {
     use crate::pipelines::new::processors::sources::sync_source::SyncSource;
     use crate::pipelines::new::processors::sources::AsyncSourcer;
     use crate::pipelines::new::processors::sources::SyncSourcer;
+    use crate::sessions::QueryContext;
 
     struct ExampleSyncSource {
         pos: usize,
@@ -46,10 +47,11 @@ mod source_example {
 
     impl ExampleSyncSource {
         pub fn create(
+            ctx: Arc<QueryContext>,
             data_blocks: Vec<DataBlock>,
             outputs: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
-            SyncSourcer::create(outputs, ExampleSyncSource {
+            SyncSourcer::create(ctx, outputs, ExampleSyncSource {
                 pos: 0,
                 data_blocks,
             })
@@ -75,10 +77,11 @@ mod source_example {
 
     impl ExampleAsyncSource {
         pub fn create(
+            ctx: Arc<QueryContext>,
             data_blocks: Vec<DataBlock>,
             output: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
-            AsyncSourcer::create(output, ExampleAsyncSource {
+            AsyncSourcer::create(ctx, output, ExampleAsyncSource {
                 pos: 0,
                 data_blocks,
             })
@@ -87,9 +90,7 @@ mod source_example {
 
     impl AsyncSource for ExampleAsyncSource {
         const NAME: &'static str = "Async";
-        type BlockFuture<'a>
-        where Self: 'a
-        = impl Future<Output = Result<Option<DataBlock>>>;
+        type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
         fn generate(&mut self) -> Self::BlockFuture<'_> {
             async move {

@@ -16,33 +16,33 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
-use crate::users::User;
 use crate::users::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.
-    pub async fn get_user(&self, tenant: &str, username: &str, hostname: &str) -> Result<UserInfo> {
-        match username {
+    pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
+        match user.username.as_str() {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let mut user_info: UserInfo = User::new(username, hostname, AuthInfo::None).into();
-                if hostname == "127.0.0.1" || &hostname.to_lowercase() == "localhost" {
+                let mut user_info =
+                    UserInfo::new_no_auth(user.username.clone(), user.hostname.clone());
+                if user.is_localhost() {
                     user_info.grants.grant_privileges(
-                        username,
-                        hostname,
                         &GrantObject::Global,
                         UserPrivilegeSet::available_privileges_on_global(),
                     );
+                    user_info.option.set_all_flag();
                 }
                 Ok(user_info)
             }
             _ => {
                 let client = self.get_user_api_client(tenant)?;
-                let get_user = client.get_user(username.to_string(), hostname.to_string(), None);
+                let get_user = client.get_user(user, None);
                 Ok(get_user.await?.data)
             }
         }
@@ -57,7 +57,7 @@ impl UserApiProvider {
         client_ip: &str,
     ) -> Result<UserInfo> {
         let user = self
-            .get_user(tenant, username, client_ip)
+            .get_user(tenant, UserIdentity::new(username, client_ip))
             .await
             .map(Some)
             .or_else(|e| {
@@ -69,7 +69,10 @@ impl UserApiProvider {
             })?;
         match user {
             Some(user) => Ok(user),
-            None => self.get_user(tenant, username, "%").await,
+            None => {
+                self.get_user(tenant, UserIdentity::new(username, "%"))
+                    .await
+            }
         }
     }
 
@@ -92,32 +95,36 @@ impl UserApiProvider {
     }
 
     // Add a new user info.
-    pub async fn add_user(&self, tenant: &str, user_info: UserInfo) -> Result<u64> {
+    pub async fn add_user(
+        &self,
+        tenant: &str,
+        user_info: UserInfo,
+        if_not_exists: bool,
+    ) -> Result<u64> {
         let client = self.get_user_api_client(tenant)?;
         let add_user = client.add_user(user_info);
         match add_user.await {
             Ok(res) => Ok(res),
-            Err(e) => Err(e.add_message_back("(while add user).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::user_already_exists_code() {
+                    Ok(0)
+                } else {
+                    Err(e.add_message_back("(while add user)"))
+                }
+            }
         }
     }
 
     pub async fn grant_privileges_to_user(
         &self,
         tenant: &str,
-        username: &str,
-        hostname: &str,
+        user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .grant_privileges(
-                username.to_string(),
-                hostname.to_string(),
-                object,
-                privileges,
-                None,
-            )
+            .grant_privileges(user, object, privileges, None)
             .await
             .map_err(|e| e.add_message_back("(while set user privileges)"))
     }
@@ -125,20 +132,13 @@ impl UserApiProvider {
     pub async fn revoke_privileges_from_user(
         &self,
         tenant: &str,
-        username: &str,
-        hostname: &str,
+        user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .revoke_privileges(
-                username.to_string(),
-                hostname.to_string(),
-                object,
-                privileges,
-                None,
-            )
+            .revoke_privileges(user, object, privileges, None)
             .await
             .map_err(|e| e.add_message_back("(while revoke user privileges)"))
     }
@@ -146,18 +146,12 @@ impl UserApiProvider {
     pub async fn grant_role_to_user(
         &self,
         tenant: &str,
-        username: &str,
-        hostname: &str,
-        grant_role: RoleIdentity,
+        user: UserIdentity,
+        grant_role: String,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .grant_role(
-                username.to_string(),
-                hostname.to_string(),
-                grant_role.clone(),
-                None,
-            )
+            .grant_role(user, grant_role.clone(), None)
             .await
             .map_err(|e| e.add_message_back("(while grant role to user)"))
     }
@@ -165,32 +159,20 @@ impl UserApiProvider {
     pub async fn revoke_role_from_user(
         &self,
         tenant: &str,
-        username: &str,
-        hostname: &str,
-        revoke_role: RoleIdentity,
+        user: UserIdentity,
+        revoke_role: String,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .revoke_role(
-                username.to_string(),
-                hostname.to_string(),
-                revoke_role.clone(),
-                None,
-            )
+            .revoke_role(user, revoke_role.clone(), None)
             .await
             .map_err(|e| e.add_message_back("(while revoke role from user)"))
     }
 
     // Drop a user by name and hostname.
-    pub async fn drop_user(
-        &self,
-        tenant: &str,
-        username: &str,
-        hostname: &str,
-        if_exists: bool,
-    ) -> Result<()> {
+    pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
         let client = self.get_user_api_client(tenant)?;
-        let drop_user = client.drop_user(username.to_string(), hostname.to_string(), None);
+        let drop_user = client.drop_user(user, None);
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(e) => {
@@ -207,13 +189,12 @@ impl UserApiProvider {
     pub async fn update_user(
         &self,
         tenant: &str,
-        username: &str,
-        hostname: &str,
-        auth_info: AuthInfo,
+        user: UserIdentity,
+        auth_info: Option<AuthInfo>,
+        user_option: Option<UserOption>,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
-        let update_user =
-            client.update_user(username.to_string(), hostname.to_string(), auth_info, None);
+        let update_user = client.update_user(user, auth_info, user_option, None);
         match update_user.await {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while alter user).")),

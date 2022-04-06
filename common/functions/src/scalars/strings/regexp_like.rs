@@ -25,9 +25,9 @@ use regex::bytes::Regex as BytesRegex;
 use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use crate::scalars::assert_string;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct RegexpLikeFunction {
@@ -73,10 +73,14 @@ impl Function for RegexpLikeFunction {
             if columns.len() == 3 {
                 if columns[2].column().is_const() {
                     let mt = columns[2].column().get_string(0)?;
-                    return Ok(Arc::new(a_regexp_binary_scalar(lhs, &rhs, Some(&mt))?));
+                    return Ok(Arc::new(self.a_regexp_binary_scalar(
+                        lhs,
+                        &rhs,
+                        Some(&mt),
+                    )?));
                 }
             } else {
-                return Ok(Arc::new(a_regexp_binary_scalar(lhs, &rhs, None)?));
+                return Ok(Arc::new(self.a_regexp_binary_scalar(lhs, &rhs, None)?));
             }
         }
 
@@ -84,7 +88,7 @@ impl Function for RegexpLikeFunction {
         if columns.len() == 3 {
             mt = Some(columns[2].column())
         }
-        Ok(Arc::new(a_regexp_binary(
+        Ok(Arc::new(self.a_regexp_binary(
             columns[0].column(),
             columns[1].column(),
             mt,
@@ -98,86 +102,97 @@ impl fmt::Display for RegexpLikeFunction {
     }
 }
 
-#[inline]
-fn a_regexp_binary_scalar(lhs: &ColumnRef, rhs: &[u8], mt: Option<&[u8]>) -> Result<BooleanColumn> {
-    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
+impl RegexpLikeFunction {
+    fn a_regexp_binary_scalar(
+        &self,
+        lhs: &ColumnRef,
+        rhs: &[u8],
+        mt: Option<&[u8]>,
+    ) -> Result<BooleanColumn> {
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
-    let re = build_regexp_from_pattern(rhs, mt)?;
+        let re = build_regexp_from_pattern(self.name(), rhs, mt)?;
 
-    let lhs = Vu8::try_create_viewer(lhs)?;
-    for lhs_value in lhs.iter() {
-        builder.append(re.is_match(lhs_value));
+        let lhs = Vu8::try_create_viewer(lhs)?;
+        for lhs_value in lhs.iter() {
+            builder.append(re.is_match(lhs_value));
+        }
+
+        Ok(builder.build_column())
     }
 
-    Ok(builder.build_column())
-}
+    fn a_regexp_binary(
+        &self,
+        lhs: &ColumnRef,
+        rhs: &ColumnRef,
+        mt: Option<&ColumnRef>,
+    ) -> Result<BooleanColumn> {
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
-#[inline]
-fn a_regexp_binary(
-    lhs: &ColumnRef,
-    rhs: &ColumnRef,
-    mt: Option<&ColumnRef>,
-) -> Result<BooleanColumn> {
-    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
+        let mut map = HashMap::new();
+        let mut key: Vec<u8> = Vec::new();
 
-    let mut map = HashMap::new();
-    let mut key: Vec<u8> = Vec::new();
+        let lhs = Vu8::try_create_viewer(lhs)?;
+        let rhs = Vu8::try_create_viewer(rhs)?;
 
-    let lhs = Vu8::try_create_viewer(lhs)?;
-    let rhs = Vu8::try_create_viewer(rhs)?;
+        if let Some(mt) = mt {
+            let mt = Vu8::try_create_viewer(mt)?;
+            let iter = izip!(lhs, rhs, mt);
+            for (lhs_value, rhs_value, mt_value) in iter {
+                if mt_value.starts_with_str("-") {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Incorrect arguments to {} match type: {}",
+                        self.name(),
+                        mt_value.to_str_lossy(),
+                    )));
+                }
+                key.extend_from_slice(rhs_value);
+                key.extend_from_slice("-".as_bytes());
+                key.extend_from_slice(mt_value);
 
-    if let Some(mt) = mt {
-        let mt = Vu8::try_create_viewer(mt)?;
-        let iter = izip!(lhs, rhs, mt);
-        for (lhs_value, rhs_value, mt_value) in iter {
-            if mt_value.starts_with_str("-") {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Incorrect arguments to REGEXP_LIKE match type: {}",
-                    mt_value.to_str_lossy(),
-                )));
+                let pattern = if let Some(pattern) = map.get(&key) {
+                    pattern
+                } else {
+                    let re = build_regexp_from_pattern(self.name(), rhs_value, Some(mt_value))?;
+                    map.insert(key.clone(), re);
+                    map.get(&key).unwrap()
+                };
+                key.clear();
+
+                builder.append(pattern.is_match(lhs_value));
             }
-            key.extend_from_slice(rhs_value);
-            key.extend_from_slice("-".as_bytes());
-            key.extend_from_slice(mt_value);
+        } else {
+            for (lhs_value, rhs_value) in lhs.zip(rhs) {
+                key.extend_from_slice(rhs_value);
+                let pattern = if let Some(pattern) = map.get(&key) {
+                    pattern
+                } else {
+                    let re = build_regexp_from_pattern(self.name(), rhs_value, None)?;
+                    map.insert(key.clone(), re);
+                    map.get(&key).unwrap()
+                };
+                key.clear();
 
-            let pattern = if let Some(pattern) = map.get(&key) {
-                pattern
-            } else {
-                let re = build_regexp_from_pattern(rhs_value, Some(mt_value))?;
-                map.insert(key.clone(), re);
-                map.get(&key).unwrap()
-            };
-            key.clear();
-
-            builder.append(pattern.is_match(lhs_value));
+                builder.append(pattern.is_match(lhs_value));
+            }
         }
-    } else {
-        for (lhs_value, rhs_value) in lhs.zip(rhs) {
-            key.extend_from_slice(rhs_value);
-            let pattern = if let Some(pattern) = map.get(&key) {
-                pattern
-            } else {
-                let re = build_regexp_from_pattern(rhs_value, None)?;
-                map.insert(key.clone(), re);
-                map.get(&key).unwrap()
-            };
-            key.clear();
 
-            builder.append(pattern.is_match(lhs_value));
-        }
+        Ok(builder.build_column())
     }
-
-    Ok(builder.build_column())
 }
 
 #[inline]
-fn build_regexp_from_pattern(pat: &[u8], mt: Option<&[u8]>) -> Result<BytesRegex> {
+pub fn build_regexp_from_pattern(
+    fn_name: &str,
+    pat: &[u8],
+    mt: Option<&[u8]>,
+) -> Result<BytesRegex> {
     let pattern = match pat.is_empty() {
         true => "^$",
         false => simdutf8::basic::from_utf8(pat).map_err(|e| {
             ErrorCode::BadArguments(format!(
-                "Unable to convert the REGEXP_LIKE pattern to string: {}",
-                e
+                "Unable to convert the {} pattern to string: {}",
+                fn_name, e
             ))
         })?,
     };
@@ -206,12 +221,12 @@ fn build_regexp_from_pattern(pat: &[u8], mt: Option<&[u8]>) -> Result<BytesRegex
             // Notes: https://github.com/rust-lang/regex/issues/244
             // It seems that the regexp crate doesn't support the 'u' match type.
             'u' => Err(ErrorCode::BadArguments(format!(
-                "Unsupported arguments to REGEXP_LIKE match type: {}",
-                c,
+                "Unsupported arguments to {} match type: {}",
+                fn_name, c,
             ))),
             _ => Err(ErrorCode::BadArguments(format!(
-                "Incorrect arguments to REGEXP_LIKE match type: {}",
-                c,
+                "Incorrect arguments to {} match type: {}",
+                fn_name, c,
             ))),
         };
         if let Err(e) = r {
@@ -220,8 +235,8 @@ fn build_regexp_from_pattern(pat: &[u8], mt: Option<&[u8]>) -> Result<BytesRegex
     }
     builder.build().map_err(|e| {
         ErrorCode::BadArguments(format!(
-            "Unable to build regex from REGEXP_LIKE pattern: {}",
-            e
+            "Unable to build regex from {} pattern: {}",
+            fn_name, e
         ))
     })
 }

@@ -16,7 +16,6 @@
 // See notice.md
 
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -38,6 +37,7 @@ use crate::sql::statements::DfGrantRoleStatement;
 use crate::sql::statements::DfRevokePrivilegeStatement;
 use crate::sql::statements::DfRevokeRoleStatement;
 use crate::sql::statements::DfShowGrants;
+use crate::sql::statements::DfUserWithOption;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -46,14 +46,15 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (name, hostname) = self.parse_principal_name_and_host()?;
+        let (username, hostname) = self.parse_principal_name_and_host()?;
+        let with_options = self.parse_user_options()?;
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
-            name,
-            hostname,
-            auth_options: auth_option,
+            user: UserIdentity { username, hostname },
+            auth_option,
+            with_options,
         };
         Ok(DfStatement::CreateUser(create))
     }
@@ -63,19 +64,29 @@ impl<'a> DfParser<'a> {
             && self.parser.expect_token(&Token::LParen).is_ok()
             && self.parser.expect_token(&Token::RParen).is_ok();
 
-        let (name, hostname) = if !if_current_user {
+        let (username, hostname) = if !if_current_user {
             self.parse_principal_name_and_host()?
         } else {
             ("".to_string(), "".to_string())
         };
 
-        let auth_option = self.parse_auth_option()?;
+        let with_options = self.parse_user_options()?;
+        let auth_option = match self.parser.peek_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::NOT | Keyword::IDENTIFIED => Some(self.parse_auth_option()?),
+                _ => {
+                    return self.expected("IDENTIFIED or NOT IDENTIFIED", self.parser.peek_token())
+                }
+            },
+            Token::EOF => None,
+            unexpected => return self.expected("IDENTIFIED or NOT IDENTIFIED", unexpected),
+        };
 
         let alter = DfAlterUser {
             if_current_user,
-            name,
-            hostname,
+            user: UserIdentity { username, hostname },
             auth_option,
+            with_options,
         };
 
         Ok(DfStatement::AlterUser(alter))
@@ -83,11 +94,10 @@ impl<'a> DfParser<'a> {
 
     pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let (name, hostname) = self.parse_principal_name_and_host()?;
+        let (username, hostname) = self.parse_principal_name_and_host()?;
         let drop = DfDropUser {
             if_exists,
-            name,
-            hostname,
+            user: UserIdentity { username, hostname },
         };
         Ok(DfStatement::DropUser(drop))
     }
@@ -100,7 +110,7 @@ impl<'a> DfParser<'a> {
         let name = self.parser.parse_literal_string()?;
         let create = DfCreateRole {
             if_not_exists,
-            role_identity: RoleIdentity::new(name),
+            role_name: name,
         };
         Ok(DfStatement::CreateRole(create))
     }
@@ -111,7 +121,7 @@ impl<'a> DfParser<'a> {
         let name = self.parser.parse_literal_string()?;
         let drop = DfDropRole {
             if_exists,
-            role_identity: RoleIdentity::new(name),
+            role_name: name,
         };
         Ok(DfStatement::DropRole(drop))
     }
@@ -150,7 +160,7 @@ impl<'a> DfParser<'a> {
         let principal = self.parse_principal_identity()?;
         let grant = DfGrantRoleStatement {
             principal,
-            role: RoleIdentity { name },
+            role: name,
         };
         Ok(DfStatement::GrantRole(grant))
     }
@@ -190,7 +200,7 @@ impl<'a> DfParser<'a> {
         let prinicpal = self.parse_principal_identity()?;
         let revoke = DfRevokeRoleStatement {
             principal: prinicpal,
-            role: RoleIdentity { name },
+            role: name,
         };
         Ok(DfStatement::RevokeRole(revoke))
     }
@@ -272,6 +282,26 @@ impl<'a> DfParser<'a> {
         self.parser
             .parse_identifier()
             .or_else(|_| self.expected("identifier or *", token))
+    }
+
+    fn parse_user_options(&mut self) -> Result<Vec<DfUserWithOption>, ParserError> {
+        let mut user_options = vec![];
+        if !self.parser.parse_keyword(Keyword::WITH) {
+            return Ok(user_options);
+        }
+        loop {
+            match self.parser.peek_token().to_string().as_str().try_into() {
+                Ok(option) => user_options.push(option),
+                Err(_) => {
+                    return self.expected("user option", self.parser.peek_token());
+                }
+            }
+            self.parser.next_token();
+            if !self.parser.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        Ok(user_options)
     }
 
     fn parse_auth_option(&mut self) -> Result<DfAuthOption, ParserError> {

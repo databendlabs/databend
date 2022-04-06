@@ -24,10 +24,9 @@ use common_planners::TruncateTablePlan;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
+use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::fuse::FUSE_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::ToReadDataSourcePlan;
-use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -229,12 +228,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    let mut create_table_plan = fixture.default_crate_table_plan();
-    // set chunk size to 100
-    create_table_plan
-        .table_meta
-        .options
-        .insert(FUSE_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), 100.to_string());
+    let create_table_plan = fixture.default_crate_table_plan();
 
     // create test table
     let tbl_name = create_table_plan.table.clone();
@@ -267,7 +261,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
     // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks
-    // that `Table::append` takes are not deterministic (`append` is also executed parallelly in this case),
+    // that `Table::append` takes are not deterministic (`append` is also executed in parallel in this case),
     // therefore, the final number of blocks varies.
     // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
     // only arrange one worker for the `ReadDataSourcePlan`.

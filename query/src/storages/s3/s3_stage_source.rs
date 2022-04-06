@@ -28,8 +28,9 @@ use common_planners::S3StageTableInfo;
 use common_streams::CsvSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use opendal::io_util::SeekableReader;
+use opendal::BytesReader;
 use opendal::Operator;
-use opendal::Reader;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -52,7 +53,7 @@ impl StageSource {
         schema: DataSchemaRef,
         table_info: S3StageTableInfo,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(output, StageSource {
+        AsyncSourcer::create(ctx.clone(), output, StageSource {
             ctx,
             schema,
             table_info,
@@ -66,7 +67,7 @@ impl StageSource {
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         stage_info: &UserStageInfo,
-        reader: Reader,
+        reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
         let mut builder = CsvSourceBuilder::create(schema);
         let size_limit = stage_info.copy_options.size_limit;
@@ -109,7 +110,7 @@ impl StageSource {
         _ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         _stage_info: &UserStageInfo,
-        reader: Reader,
+        reader: SeekableReader,
     ) -> Result<Box<dyn Source>> {
         let mut builder = ParquetSourceBuilder::create(schema.clone());
 
@@ -149,19 +150,24 @@ impl StageSource {
 
         let op = Self::get_op(&self.ctx, &self.table_info.stage_info).await?;
         let path = file_name.unwrap_or_else(|| "".to_string());
-        let file_reader = op.object(&path).reader();
+        let object = op.object(&path);
 
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
-            StageFileFormatType::Csv => {
-                Ok(Self::csv_source(ctx.clone(), self.schema.clone(), stage, file_reader).await?)
-            }
-            StageFileFormatType::Parquet => {
-                Ok(
-                    Self::parquet_source(ctx.clone(), self.schema.clone(), stage, file_reader)
-                        .await?,
-                )
-            }
+            StageFileFormatType::Csv => Ok(Self::csv_source(
+                ctx.clone(),
+                self.schema.clone(),
+                stage,
+                Box::new(object.reader().await?),
+            )
+            .await?),
+            StageFileFormatType::Parquet => Ok(Self::parquet_source(
+                ctx.clone(),
+                self.schema.clone(),
+                stage,
+                object.seekable_reader(..),
+            )
+            .await?),
             // Unsupported.
             format => Err(ErrorCode::LogicalError(format!(
                 "Unsupported file format: {:?}",
@@ -177,9 +183,7 @@ impl StageSource {
 impl AsyncSource for StageSource {
     const NAME: &'static str = "StageSource";
 
-    type BlockFuture<'a>
-    where Self: 'a
-    = impl Future<Output = Result<Option<DataBlock>>>;
+    type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
         async move {

@@ -17,7 +17,7 @@ use common_exception::Result;
 
 use super::aggregate_null_variadic_adaptor::AggregateNullVariadicAdaptor;
 use super::AggregateNullUnaryAdaptor;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionProperties;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::aggregate_null_result::AggregateNullResultFunction;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -48,7 +48,7 @@ impl AggregateFunctionCombinatorNull {
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
         nested: AggregateFunctionRef,
-        properties: AggregateFunctionProperties,
+        properties: AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         // has_null_types
         if !arguments.is_empty()

@@ -42,27 +42,25 @@ common-tracing = { path = "../common/tracing" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 
 # Crates.io dependencies
-anyerror = "0.1.4"
-anyhow = "1.0.55"
-async-trait = "0.1.52"
-clap = { version = "3.1.3", features = ["derive", "env"] }
+anyerror = "0.1.6"
+anyhow = "1.0.56"
+async-trait = "0.1.53"
+clap = { version = "3.1.8", features = ["derive", "env"] }
 futures = "0.3.21"
-metrics = "0.18.0"
+metrics = "0.18.1"
 num = "0.4.0"
-poem = { version = "1.3.6", features = ["rustls"] }
-prost = "0.9.0"
+poem = { version = "=1.3.16", features = ["rustls"] }
+prost = "=0.9.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 tempfile = "3.3.0"
 tokio-stream = "0.1.8"
-toml = "0.5.8"
-tonic = { version = "0.6.2", features = ["tls"] }
-#tokio = {version="0.2.18",features = ["sync", "stream", "macros"]}
-tokio = { version = "1.17.0", features = ["full"] }
+tonic = { version = "=0.6.2", features = ["tls"] }
+tonic-reflection = "=0.3.0"
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }
 maplit = "1.0.2"
 regex = "1.5.5"
-pretty_assertions = "1.1.0"
-reqwest = { version = "0.11.9", features = ["json"] }
+pretty_assertions = "1.2.1"
+reqwest = { version = "0.11.10", features = ["json"] }

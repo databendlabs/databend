@@ -197,6 +197,29 @@ impl SeriesFrom<Vec<JsonValue>, Vec<JsonValue>> for Series {
     }
 }
 
+impl SeriesFrom<Vec<Option<JsonValue>>, Vec<Option<JsonValue>>> for Series {
+    fn from_data(v: Vec<Option<JsonValue>>) -> ColumnRef {
+        type Builder = <<JsonValue as Scalar>::ColumnType as ScalarColumn>::Builder;
+        let mut builder = Builder::with_capacity(v.len());
+        let mut bitmap = MutableBitmap::with_capacity(v.len());
+
+        for item in v {
+            match item {
+                Some(v) => {
+                    bitmap.push(true);
+                    builder.push(&v);
+                }
+                None => {
+                    bitmap.push(false);
+                    builder.push(&JsonValue::default());
+                }
+            }
+        }
+        let column = builder.finish();
+        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+    }
+}
+
 macro_rules! impl_from_option_iterator {
     ([], $( { $S: ident} ),*) => {
         $(

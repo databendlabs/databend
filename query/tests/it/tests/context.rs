@@ -48,8 +48,6 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
         },
     );
     user_info.grants.grant_privileges(
-        "root",
-        "127.0.0.1",
         &GrantObject::Global,
         UserPrivilegeSet::available_privileges_on_global(),
     );
@@ -65,7 +63,10 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     Ok(context)
 }
 
-pub async fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_config(
+    config: Config,
+    current_user: Option<UserInfo>,
+) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
     let dummy_session = sessions.create_session(SessionType::Test).await?;
 
@@ -78,11 +79,12 @@ pub async fn create_query_context_with_config(config: Config) -> Result<Arc<Quer
         },
     );
     user_info.grants.grant_privileges(
-        "root",
-        "127.0.0.1",
         &GrantObject::Global,
         UserPrivilegeSet::available_privileges_on_global(),
     );
+    if let Some(user) = current_user {
+        user_info = user;
+    }
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
