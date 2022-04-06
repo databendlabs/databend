@@ -19,13 +19,14 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use crate::interpreters::fragments::{QueryFragmentsActions, QueryFragmentsBuilder};
+use crate::interpreters::fragments::{QueryFragmentsActions, QueryFragmentsBuilder, RootQueryFragment};
 
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::Scheduled;
 use crate::interpreters::plan_schedulers::ScheduledStream;
 use crate::interpreters::PlanScheduler;
-use crate::pipelines::processors::PipelineBuilder;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::processors::{Pipeline, PipelineBuilder};
 use crate::sessions::QueryContext;
 
 #[tracing::instrument(level = "debug", skip(ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -61,15 +62,13 @@ pub async fn schedule_query(
     }
 }
 
-pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<SendableDataBlockStream> {
+pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Result<NewPipeline> {
     let query_fragments = QueryFragmentsBuilder::build(ctx.clone(), plan)?;
+    let root_query_fragments = RootQueryFragment::create(query_fragments, plan)?;
 
-
+    let exchange_manager = ctx.get_exchange_manager();
     let mut fragments_actions = QueryFragmentsActions::create(ctx);
-    query_fragments.finalize(&mut fragments_actions)?;
-    let executor_packets = fragments_actions.to_packets()?;
-    common_tracing::tracing::info!("Query fragments packets: {:?}", executor_packets);
-    // TODO:
-    unimplemented!()
+    root_query_fragments.finalize(&mut fragments_actions)?;
+    exchange_manager.submit_query_actions(fragments_actions)
 }
 

@@ -47,7 +47,7 @@ use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManager;
 
 pub type FlightStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     sessions: Arc<SessionManager>,
@@ -184,6 +184,7 @@ impl FlightService for DatabendQueryFlightService {
                     .await?;
                 FlightResult { body: vec![] }
             }
+            FlightAction::Packets(_) => unimplemented!()
         };
 
         // let action_result = do_flight_action.await?;

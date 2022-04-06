@@ -8,4 +8,5 @@ mod query_fragment_actions;
 
 pub use query_fragment::QueryFragment;
 pub use query_fragment::QueryFragmentsBuilder;
+pub use query_fragment_root::RootQueryFragment;
 pub use query_fragment_actions::QueryFragmentsActions;

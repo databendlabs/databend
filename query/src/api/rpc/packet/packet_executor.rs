@@ -1,9 +1,9 @@
 use crate::api::rpc::packet::packet_fragment::FragmentPacket;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExecutorPacket {
     executor: String,
-    receive_executors: Vec<String>,
+    // receive_executors: Vec<String>,
     fragments_packets: Vec<FragmentPacket>,
 }
 

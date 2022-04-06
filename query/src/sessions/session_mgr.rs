@@ -38,6 +38,7 @@ use opendal::services::s3;
 use opendal::Accessor;
 use opendal::Operator;
 use opendal::Scheme as DalSchema;
+use crate::api::DataExchangeManager;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
@@ -59,12 +60,13 @@ pub struct SessionManager {
     pub(in crate::sessions) user_manager: RwLock<Arc<UserApiProvider>>,
     pub(in crate::sessions) auth_manager: RwLock<Arc<AuthMgr>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
+    pub(in crate::sessions) data_exchange_manager: Arc<DataExchangeManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
     pub(in crate::sessions) query_logger:
-        RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
+    RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
@@ -118,6 +120,7 @@ impl SessionManager {
             max_sessions,
             active_sessions,
             auth_manager: RwLock::new(auth_manager),
+            data_exchange_manager: DataExchangeManager::create(),
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,
@@ -160,6 +163,10 @@ impl SessionManager {
         self.storage_cache_manager.read().clone()
     }
 
+    pub fn get_data_exchange_manager(&self) -> Arc<DataExchangeManager> {
+        self.data_exchange_manager.clone()
+    }
+
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.storage_runtime.clone()
     }
@@ -181,7 +188,7 @@ impl SessionManager {
             typ,
             self.clone(),
         )
-        .await?;
+            .await?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -222,7 +229,7 @@ impl SessionManager {
             SessionType::FlightRPC,
             self.clone(),
         )
-        .await?;
+            .await?;
 
         let mut sessions = self.active_sessions.write();
         let v = sessions.get(&id);
@@ -269,7 +276,7 @@ impl SessionManager {
         self: &Arc<Self>,
         mut signal: SignalStream,
         timeout_secs: i32,
-    ) -> impl Future<Output = ()> {
+    ) -> impl Future<Output=()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             tracing::info!(

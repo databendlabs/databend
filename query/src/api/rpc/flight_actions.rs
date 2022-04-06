@@ -20,6 +20,7 @@ use common_exception::ToErrorCode;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
+use crate::api::ExecutorPacket;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ShuffleAction {
@@ -115,11 +116,36 @@ impl TryInto<Vec<u8>> for CancelAction {
     }
 }
 
+impl TryInto<ExecutorPacket> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<ExecutorPacket, Self::Error> {
+        match std::str::from_utf8(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(utf8_body) => match serde_json::from_str::<ExecutorPacket>(utf8_body) {
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+                Ok(action) => Ok(action),
+            },
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for ExecutorPacket {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
+            "Logical error: cannot serialize BroadcastAction."
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
     BroadcastAction(BroadcastAction),
     CancelAction(CancelAction),
+    Packets(ExecutorPacket),
 }
 
 impl FlightAction {
@@ -197,6 +223,10 @@ impl TryInto<Action> for FlightAction {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
             }),
+            FlightAction::Packets(executor) => Ok(Action {
+                r#type: String::from("Packet"),
+                body: executor.try_into()?,
+            })
         }
     }
 }

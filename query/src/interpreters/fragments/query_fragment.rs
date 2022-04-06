@@ -7,6 +7,7 @@ use crate::interpreters::fragments::query_fragment_broadcast::BroadcastQueryFrag
 use crate::interpreters::fragments::query_fragment_actions::QueryFragmentsActions;
 use crate::interpreters::fragments::query_fragment_read_source::ReadDatasourceQueryFragment;
 use crate::interpreters::fragments::query_fragment_stage::StageQueryFragment;
+use crate::interpreters::fragments::RootQueryFragment;
 use crate::sessions::QueryContext;
 
 pub trait QueryFragment: Debug {

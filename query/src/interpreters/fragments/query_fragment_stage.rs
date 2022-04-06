@@ -30,6 +30,7 @@ impl QueryFragment for StageQueryFragment {
 
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
         self.input.finalize(actions)?;
+        let out_partition = self.get_out_partition()?;
         let input_actions = actions.get_root_actions()?;
         let mut fragment_actions = QueryFragmentActions::create(true);
 
@@ -43,9 +44,11 @@ impl QueryFragment for StageQueryFragment {
                     input: Arc::new(self.input.rewrite_remote_plan(&self.stage.input, &action.node)?),
                 }),
             );
+
             fragment_actions.add_action(fragment_action);
         }
 
+        // TODO: set exchange
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
             false => actions.update_root_fragment_actions(fragment_actions),

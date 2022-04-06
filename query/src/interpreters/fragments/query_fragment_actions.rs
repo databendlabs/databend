@@ -5,6 +5,7 @@ use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
 use common_planners::PlanNode;
 use crate::api::{ExecutorPacket, FragmentPacket};
+use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::sessions::QueryContext;
 
 // Query plan fragment with executor name
@@ -23,12 +24,13 @@ impl QueryFragmentAction {
 #[derive(Debug)]
 pub struct QueryFragmentActions {
     pub exchange_actions: bool,
+    pub fragment_id: String,
     fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
     pub fn create(force_exchange: bool) -> QueryFragmentActions {
-        QueryFragmentActions { exchange_actions: force_exchange, fragment_actions: vec![] }
+        QueryFragmentActions { exchange_actions: force_exchange, fragment_id: "".to_string(), fragment_actions: vec![] }
     }
 
     pub fn get_actions(&self) -> &[QueryFragmentAction] {
@@ -91,6 +93,7 @@ impl QueryFragmentsActions {
             for fragment_action in fragment_actions.fragment_actions {
                 let fragment_packet = FragmentPacket::create(fragment_action.node.clone());
 
+                // TODO: require node info
                 match fragments_packets.entry(fragment_action.executor.to_owned()) {
                     Entry::Vacant(entry) => {
                         entry.insert(vec![fragment_packet]);

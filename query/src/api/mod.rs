@@ -26,6 +26,7 @@ pub use rpc::ShuffleAction;
 pub use rpc::StreamTicket;
 pub use rpc::ExecutorPacket;
 pub use rpc::FragmentPacket;
+pub use rpc::DataExchangeManager;
 pub use rpc_service::RpcService;
 
 pub mod http;
