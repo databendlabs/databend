@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::PrincipalIdentity;
 use common_planners::ShowGrantsPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -47,23 +48,23 @@ impl Interpreter for ShowGrantsInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let schema = DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())]);
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
 
         // TODO: add permission check on reading user grants
-        let user_info = match self.plan.user_identity {
-            None => self.ctx.get_current_user()?,
-            Some(ref user_identity) => {
-                let tenant = self.ctx.get_tenant();
-                let user_mgr = self.ctx.get_user_manager();
-                user_mgr.get_user(&tenant, user_identity.clone()).await?
-            }
+        let grant_list = match self.plan.principal {
+            None => self.ctx.get_current_user()?.format_grants(),
+            Some(ref principal) => match principal {
+                PrincipalIdentity::User(user) => user_mgr
+                    .get_user(&tenant, user.clone())
+                    .await?
+                    .format_grants(),
+                PrincipalIdentity::Role(role) => user_mgr
+                    .get_role(&tenant, role.clone())
+                    .await?
+                    .format_grants(),
+            },
         };
-
-        let grant_list = user_info
-            .grants
-            .entries()
-            .iter()
-            .map(|e| format!("{} TO {}", e, user_info.identity()).into_bytes())
-            .collect::<Vec<_>>();
 
         let block = DataBlock::create(schema.clone(), vec![Series::from_data(grant_list)]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

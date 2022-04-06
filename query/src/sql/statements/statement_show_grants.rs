@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::UserIdentity;
+use common_meta_types::PrincipalIdentity;
 use common_planners::PlanNode;
 use common_planners::ShowGrantsPlan;
 use common_planners::ShowPlan;
@@ -27,7 +27,7 @@ use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowGrants {
-    pub user_identity: Option<UserIdentity>,
+    pub principal: Option<PrincipalIdentity>,
 }
 
 #[async_trait::async_trait]
@@ -36,7 +36,7 @@ impl AnalyzableStatement for DfShowGrants {
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
             ShowPlan::ShowGrants(ShowGrantsPlan {
-                user_identity: self.user_identity.clone(),
+                principal: self.principal.clone(),
             }),
         ))))
     }

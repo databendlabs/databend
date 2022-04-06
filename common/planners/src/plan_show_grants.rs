@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_types::UserIdentity;
+use common_meta_types::PrincipalIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ShowGrantsPlan {
-    pub user_identity: Option<UserIdentity>,
+    pub principal: Option<PrincipalIdentity>,
 }
