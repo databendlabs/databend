@@ -19,6 +19,7 @@ use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_streams::CsvSourceBuilder;
 use common_streams::Source;
 use opendal::services::fs;
@@ -35,7 +36,7 @@ async fn test_parse_csv_delimiter() -> Result<()> {
 
             write!(
                 file,
-                "1{}\"1\"{}1.11{}2{}\"2\"{}2{}3{}\"3-'3'-3\"{}3\"{}",
+                "1{}\"1\"{}1.11{}2{}\"2\"{}2{}3{}\"3-'3'-3\"{}3{}",
                 field_delimiter,
                 field_delimiter,
                 record_delimiter,
@@ -62,8 +63,8 @@ async fn test_parse_csv_delimiter() -> Result<()> {
                     .unwrap(),
             );
 
-            let mut builder = CsvSourceBuilder::create(schema);
-            builder.skip_header(0);
+            let mut builder = CsvSourceBuilder::create(schema, FormatSettings::default());
+            builder.skip_header(false);
             builder.field_delimiter(field_delimiter);
             builder.record_delimiter(record_delimiter);
             builder.block_size(10);
@@ -127,8 +128,8 @@ async fn test_parse_csv_text() -> Result<()> {
             .unwrap(),
     );
 
-    let mut builder = CsvSourceBuilder::create(schema);
-    builder.skip_header(0);
+    let mut builder = CsvSourceBuilder::create(schema, FormatSettings::default());
+    builder.skip_header(false);
     builder.field_delimiter(",");
     builder.record_delimiter("\n");
     builder.block_size(10);

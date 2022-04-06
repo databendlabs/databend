@@ -17,8 +17,11 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
+use common_io::prelude::BufferReadExt;
+use common_io::prelude::CpBufferReader;
 
 use crate::ColumnRef;
+use crate::DataValue;
 use crate::NullableColumn;
 use crate::TypeDeserializer;
 
@@ -62,8 +65,33 @@ impl TypeDeserializer for NullableDeserializer {
     }
 
     // TODO: support null text setting
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        if reader.ignore_insensitive_bytes(b"null")? {
+            self.de_default();
+            return Ok(());
+        }
         self.inner.de_text(reader)?;
+        self.bitmap.push(true);
+        Ok(())
+    }
+
+    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        if reader.ignore_insensitive_bytes(b"null")? {
+            self.de_default();
+            return Ok(());
+        }
+        self.inner.de_text_quoted(reader)?;
+        self.bitmap.push(true);
+        Ok(())
+    }
+
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+        if reader.eq_ignore_ascii_case(b"null") {
+            self.de_default();
+            return Ok(());
+        }
+
+        self.inner.de_whole_text(reader)?;
         self.bitmap.push(true);
         Ok(())
     }
@@ -73,6 +101,18 @@ impl TypeDeserializer for NullableDeserializer {
         self.bitmap.push(false);
         true
     }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+        if value.is_null() {
+            self.inner.de_default();
+            self.bitmap.push(false);
+        } else {
+            self.inner.append_data_value(value)?;
+            self.bitmap.push(true);
+        }
+        Ok(())
+    }
+
     fn finish_to_column(&mut self) -> ColumnRef {
         let inner_column = self.inner.finish_to_column();
         let bitmap = std::mem::take(&mut self.bitmap);

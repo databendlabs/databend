@@ -43,10 +43,21 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let v = if reader.eq_ignore_ascii_case(b"true") {
-            Ok(true)
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+        if reader.eq_ignore_ascii_case(b"true") {
+            self.builder.append_value(true);
         } else if reader.eq_ignore_ascii_case(b"false") {
+            self.builder.append_value(false);
+        } else {
+            return Err(ErrorCode::BadBytes("Incorrect boolean value"));
+        }
+        Ok(())
+    }
+
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        let v = if BufferReadExt::ignore_insensitive_bytes(reader, b"true")? {
+            Ok(true)
+        } else if BufferReadExt::ignore_insensitive_bytes(reader, b"false")? {
             Ok(false)
         } else {
             Err(ErrorCode::BadBytes("Incorrect boolean value"))
@@ -61,6 +72,11 @@ impl TypeDeserializer for BooleanDeserializer {
             serde_json::Value::Bool(v) => self.builder.append_value(*v),
             _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
         }
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+        self.builder.append_value(value.as_bool()?);
         Ok(())
     }
 

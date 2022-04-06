@@ -117,7 +117,7 @@ impl FromStr for StageFileFormatType {
 pub struct FileFormatOptions {
     pub format: StageFileFormatType,
     // Number of lines at the start of the file to skip.
-    pub skip_header: i32,
+    pub skip_header: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
     pub compression: StageFileCompression,
