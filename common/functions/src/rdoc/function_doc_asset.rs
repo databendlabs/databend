@@ -25,7 +25,7 @@ use rust_embed::RustEmbed;
 use super::FunctionDocs;
 
 #[derive(RustEmbed)]
-#[folder = "../../docs/doc/03-reference/02-functions"]
+#[folder = "../../docs/doc/30-reference/20-functions"]
 pub struct FunctionDocAsset;
 
 static DOCS: OnceCell<HashMap<String, FunctionDocs>> = OnceCell::new();
