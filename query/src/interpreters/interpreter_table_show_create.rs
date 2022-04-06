@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_planners::Expression;
 use common_planners::ShowCreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -62,10 +63,18 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let mut table_info = format!("CREATE TABLE `{}` (\n", name);
         for field in schema.fields().iter() {
+            let default_expr = match field.default_expr() {
+                Some(expr) => {
+                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                    format!(" DEFAULT {}", expression.column_name())
+                }
+                None => "".to_string(),
+            };
             let column = format!(
-                "  `{}` {},\n",
+                "  `{}` {}{},\n",
                 field.name(),
-                format_data_type_sql(field.data_type())
+                format_data_type_sql(&field.data_type()),
+                default_expr
             );
             table_info.push_str(column.as_str());
         }

@@ -418,3 +418,11 @@ impl fmt::Debug for DataValue {
         }
     }
 }
+
+/// SQL style format
+pub fn format_datavalue_sql(value: &DataValue) -> String {
+    match value {
+        DataValue::String(_) | DataValue::Json(_) => format!("'{}'", value),
+        _ => format!("{}", value),
+    }
+}
