@@ -65,4 +65,4 @@ object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 
 [patch.crates-io]
-parquet2 = { version = "0.10", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "b3efb4e" }
+parquet2 = { version = "0.10", optional = true, git = "https://github.com/datafuse-extras/parquet2", rev = "195165eb5" }

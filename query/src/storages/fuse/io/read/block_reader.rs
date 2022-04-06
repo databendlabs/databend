@@ -80,7 +80,7 @@ impl BlockReader {
         let pages = PageIterator::new(
             std::io::Cursor::new(chunk),
             meta.num_values as i64,
-            Compression::Lz4,
+            Compression::Lz4Raw,
             descriptor.clone(),
             Arc::new(|_, _| true),
             vec![],

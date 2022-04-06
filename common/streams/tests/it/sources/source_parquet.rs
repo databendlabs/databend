@@ -39,7 +39,7 @@ async fn test_source_parquet() -> Result<()> {
     use common_arrow::arrow::io::parquet::write::*;
     let options = WriteOptions {
         write_statistics: true,
-        compression: Compression::Lz4, // let's begin with lz4
+        compression: Compression::Lz4Raw, // let's begin with lz4
         version: Version::V2,
     };
 
