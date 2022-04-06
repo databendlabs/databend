@@ -43,10 +43,5 @@ async fn test_parse_value_source() -> Result<()> {
         ],
         &[block],
     );
-
-    let s = "VALUES ('ABC', 30, 'China', '1992-03-15 00:00:00'), ('XYZ', 31, 'Japen', '1991-03-15 00:00:00')".to_string();
-    let block = parser.stream_read(s)?;
-
-    println!("{:?}", block);
     Ok(())
 }

@@ -38,7 +38,7 @@ where R: BufferRead
     fn read_date_text(&mut self) -> Result<NaiveDate> {
         // TODO support YYYYMMDD format
         let mut buf = vec![0; DATE_LEN];
-        let _ = self.read(buf.as_mut_slice())?;
+        self.read_exact(buf.as_mut_slice())?;
 
         let v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
@@ -48,14 +48,14 @@ where R: BufferRead
 
     fn read_datetime_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
         let mut buf = vec![0; DATE_TIME_LEN];
-        let _ = self.read(buf.as_mut_slice())?;
+        self.read_exact(buf.as_mut_slice())?;
 
         let v = std::str::from_utf8(buf.as_slice())
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
         let res = tz
             .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
             .map_err_to_code(ErrorCode::BadBytes, || {
-                "Cannot parse value to DateTime type"
+                format!("Cannot parse value:{:?} to DateTime type", v)
             })?;
 
         if self.ignore_byte(b'.')? {
