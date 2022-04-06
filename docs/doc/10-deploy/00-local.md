@@ -2,7 +2,7 @@
 title: Deploy Databend With Local Disk (for Test)
 sidebar_label: With Local Disk (Test)
 description:
-  How to deploy Databend with Local Disk (for Test)
+  How to deploy Databend with Local Disk (for Test).
 ---
 
 This guideline will deploy Databend(standalone) with local disk step by step.

@@ -2,7 +2,7 @@
 title: Deploy Databend With MinIO
 sidebar_label: With MinIO
 description:
-  How to deploy Databend with MinIO
+  How to deploy Databend with MinIO.
 ---
 
 :::tip

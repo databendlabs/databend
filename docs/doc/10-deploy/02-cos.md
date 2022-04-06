@@ -2,7 +2,7 @@
 title: Deploy Databend With Tencent Cloud COS
 sidebar_label: With Tencent COS
 description:
-  How to deploy Databend with Tencent Cloud(腾讯云) COS
+  How to deploy Databend with Tencent Cloud(腾讯云) COS.
 ---
 
 :::tip

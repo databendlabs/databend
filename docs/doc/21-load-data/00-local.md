@@ -2,7 +2,7 @@
 title: Load Data from Local File System
 sidebar_label: From Local File System
 description:
-  Load Data from Local File System
+  Load Data from Local File System.
 ---
 
 <p align="center">
