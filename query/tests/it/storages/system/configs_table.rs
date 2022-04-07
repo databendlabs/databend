@@ -174,7 +174,7 @@ async fn test_configs_table_redact() -> Result<()> {
         "| s3.root                              |                          | storage |             |",
         "| s3.secret_access_key                 | ******key                | storage |             |",
         "| storage_num_cpus                     | 0                        | storage |             |",
-        "| storage_type                         | fs                     | storage |             |",
+        "| storage_type                         | fs                       | storage |             |",
         "| table_cache_block_meta_count         | 102400                   | query   |             |",
         "| table_cache_enabled                  | false                    | query   |             |",
         "| table_cache_segment_count            | 10240                    | query   |             |",
