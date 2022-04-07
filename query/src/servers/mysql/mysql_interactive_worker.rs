@@ -18,6 +18,11 @@ use std::time::Instant;
 
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::Series;
+use common_datavalues::SeriesFrom;
+use common_datavalues::StringType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -251,70 +256,109 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     async fn do_close(&mut self, _: u32) {}
 
-    fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> bool {
-        let expr = RegexSet::new(&[
-            "(?i)^(SET NAMES(.*))",
-            "(?i)^(SET character_set_results(.*))",
-            "(?i)^(SET FOREIGN_KEY_CHECKS(.*))",
-            "(?i)^(SET AUTOCOMMIT(.*))",
-            "(?i)^(SET sql_mode(.*))",
-            "(?i)^(SET @@(.*))",
-            "(?i)^(SHOW VARIABLES(.*))",
-            "(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))",
+    fn variable_block(name: &str, value: &str) -> Option<DataBlock> {
+        Some(DataBlock::create(
+            DataSchemaRefExt::create(vec![DataField::new(
+                &format!("@@{}", name),
+                StringType::arc(),
+            )]),
+            vec![Series::from_data(vec![value])],
+        ))
+    }
+
+    fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> Option<DataBlock> {
+        let rules: Vec<(&str, Option<DataBlock>)> = vec![
+            (
+                "(?i)^(SELECT @@tx_isolation)",
+                Self::variable_block("tx_isolation", "AUTOCOMMIT"),
+            ),
+            (
+                "(?i)^(SELECT @@transaction_isolation)",
+                Self::variable_block("transaction_isolation", "AUTOCOMMIT"),
+            ),
+            ("(?i)^(SELECT @@(.*))", None),
+            ("(?i)^(ROLLBACK(.*))", None),
+            ("(?i)^(SET NAMES(.*))", None),
+            ("(?i)^(SET character_set_results(.*))", None),
+            ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
+            ("(?i)^(SET AUTOCOMMIT(.*))", None),
+            ("(?i)^(SET sql_mode(.*))", None),
+            ("(?i)^(SET @@(.*))", None),
+            ("(?i)^(SHOW VARIABLES(.*))", None),
+            ("(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))", None),
             // Just compatibility for jdbc
-            "(?i)^(/\\* mysql-connector-java(.*))",
+            ("(?i)^(/\\* mysql-connector-java(.*))", None),
             // Just compatibility for DBeaver
-            "(?i)^(SHOW WARNINGS)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)",
-            "(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))",
-        ])
-        .unwrap();
+            ("(?i)^(SHOW WARNINGS)", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))", None),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))", None),
+            (
+                "(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))",
+                None,
+            ),
+            (
+                "(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))",
+                None,
+            ),
+            ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
+        ];
+
+        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
+
         tracing::debug!("the query is {}", query);
-        expr.is_match(query)
+        let regex_set = RegexSet::new(&regex_rules).unwrap();
+        let matches = regex_set.matches(query);
+        for (index, (_regex, data_block)) in rules.iter().enumerate() {
+            if matches.matched(index) {
+                return match data_block {
+                    None => Some(DataBlock::empty()),
+                    Some(data_block) => Some(data_block.clone()),
+                };
+            }
+        }
+
+        None
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        if self.federated_server_setup_set_or_jdbc_command(query) {
-            tracing::info!("the matched query is {}", query);
-            Ok((vec![DataBlock::empty()], String::from("")))
-        } else {
-            tracing::info!("the not matched query is {}", query);
-            let context = self.session.create_query_context().await?;
-            context.attach_query_str(query);
-            let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
+        match self.federated_server_setup_set_or_jdbc_command(query) {
+            Some(data_block) => Ok((vec![data_block], String::from(""))),
+            None => {
+                tracing::info!("the not matched query is {}", query);
+                let context = self.session.create_query_context().await?;
+                context.attach_query_str(query);
+                let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
 
-            match hints
-                .iter()
-                .find(|v| v.error_code.is_some())
-                .and_then(|x| x.error_code)
-            {
-                None => Self::exec_query(plan, &context).await,
-                Some(hint_error_code) => match Self::exec_query(plan, &context).await {
-                    Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                        "Expected server error code: {} but got: Ok.",
-                        hint_error_code
-                    ))),
-                    Err(error_code) => {
-                        if hint_error_code == error_code.code() {
-                            Ok((vec![DataBlock::empty()], String::from("")))
-                        } else {
-                            let actual_code = error_code.code();
-                            Err(error_code.add_message(format!(
-                                "Expected server error code: {} but got: {}.",
-                                hint_error_code, actual_code
-                            )))
+                match hints
+                    .iter()
+                    .find(|v| v.error_code.is_some())
+                    .and_then(|x| x.error_code)
+                {
+                    None => Self::exec_query(plan, &context).await,
+                    Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                        Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                            "Expected server error code: {} but got: Ok.",
+                            hint_error_code
+                        ))),
+                        Err(error_code) => {
+                            if hint_error_code == error_code.code() {
+                                Ok((vec![DataBlock::empty()], String::from("")))
+                            } else {
+                                let actual_code = error_code.code();
+                                Err(error_code.add_message(format!(
+                                    "Expected server error code: {} but got: {}.",
+                                    hint_error_code, actual_code
+                                )))
+                            }
                         }
-                    }
-                },
+                    },
+                }
             }
         }
     }
