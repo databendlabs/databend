@@ -52,7 +52,7 @@ pub struct BlockMeta {
 
     /// Compression algo used to compress the columns of blocks
     ///
-    /// If no specified, the legacy algo `Lz4` will be used.
+    /// If not specified, the legacy algo `Lz4` will be used.
     /// `Lz4` is merely for backward compatibility, it will NO longer be
     /// used in the write path.
     #[serde(default = "Compression::legacy")]

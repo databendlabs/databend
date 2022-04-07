@@ -33,7 +33,7 @@ pub async fn write_block(
 ) -> Result<(u64, FileMetaData)> {
     let options = WriteOptions {
         write_statistics: false,
-        compression: Compression::Lz4Raw, // let's begin with lz4
+        compression: Compression::Lz4Raw,
         version: Version::V2,
     };
     let batch = Chunk::try_from(block)?;
