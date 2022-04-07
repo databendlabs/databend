@@ -24,7 +24,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
-use super::interpreter_insert_with_stream::SendableWithSchema;
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
 use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
@@ -75,12 +74,10 @@ impl Interpreter for InsertInterpreter {
                 let with_plan = InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
                 with_plan.execute(table.as_ref()).await
             }
-            InsertInputSource::Expressions(values, values_exprs) => {
-                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-                let stream = values
-                    .to_stream(self.plan.schema.clone(), block_size)
-                    .or_else(|_| values_exprs.to_stream(self.plan.schema.clone(), block_size))?;
 
+            InsertInputSource::Values(values) => {
+                let stream: SendableDataBlockStream =
+                    Box::pin(futures::stream::iter(vec![Ok(values.block.clone())]));
                 let stream = if need_fill_missing_columns {
                     Box::pin(AddOnStream::try_create(
                         stream,
@@ -94,6 +91,7 @@ impl Interpreter for InsertInterpreter {
                 let with_stream = InsertWithStream::new(&self.ctx, &table);
                 with_stream.append_stream(stream).await
             }
+
             InsertInputSource::StreamingWithFormat(_) => {
                 let stream = input_stream
                     .take()

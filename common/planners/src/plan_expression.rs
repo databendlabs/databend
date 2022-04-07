@@ -160,16 +160,7 @@ impl Expression {
                 value, column_name, ..
             } => match column_name {
                 Some(name) => name.clone(),
-                None => {
-                    if let DataValue::String(v) = value {
-                        match std::str::from_utf8(v) {
-                            Ok(v) => format!("'{}'", v),
-                            Err(_e) => format!("{:?}", value),
-                        }
-                    } else {
-                        format!("{:?}", value)
-                    }
-                }
+                None => format_datavalue_sql(value),
             },
             Expression::UnaryExpression { op, expr } => {
                 format!("({} {})", op.to_lowercase(), expr.column_name())

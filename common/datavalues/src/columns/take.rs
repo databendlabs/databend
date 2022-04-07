@@ -23,7 +23,7 @@ use crate::prelude::*;
 
 impl Series {
     pub fn take<I: Index>(column: &ColumnRef, indices: &[I]) -> Result<ColumnRef> {
-        if column.is_const() {
+        if column.is_const() || column.is_null() {
             Ok(column.slice(0, indices.len()))
         } else if column.is_nullable() {
             let nullable_c: &NullableColumn = unsafe { Series::static_cast(column) };

@@ -19,8 +19,3 @@ Summary about this PR
 
 Fixes #issue
 
-## Test Plan
-
-Unit Tests
-
-Stateless Tests

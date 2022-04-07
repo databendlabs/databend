@@ -2,7 +2,7 @@
 title: Load Data from Local File System
 sidebar_label: From Local File System
 description:
-  Load Data from Local File System
+  Load Data from Local File System.
 ---
 
 <p align="center">
@@ -11,6 +11,8 @@ description:
 
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 Currently, we only support CSV and Parquet file format.
+
+> Note: CSV file should be UTF-8 character encoded if you have extra character set
 
 ### Before You Begin
 

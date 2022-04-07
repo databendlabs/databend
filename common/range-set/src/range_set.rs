@@ -26,8 +26,8 @@ pub struct RangeSet<T, K> {
 
 impl<T, K> RangeSet<T, K>
 where
-    T: Ord + Clone + std::fmt::Debug + Copy,
-    K: Ord + Clone + std::fmt::Debug + Copy + Default,
+    T: Ord + Clone + Debug,
+    K: Ord + Clone + Debug + Default,
 {
     pub fn new() -> Self {
         RangeSet {
@@ -50,8 +50,8 @@ where
     // 3. `get_by_point(5)` return [2,4],[2,6]
     // Use the default key when construct `RangeKey::key` for search.
     pub fn get_by_point(&self, point: &T) -> Vec<&RangeKey<T, K>> {
-        let key = *point;
-        let range_key = RangeKey::new(key..key, K::default());
+        let key = point.clone();
+        let range_key = RangeKey::new(key.clone()..key.clone(), K::default());
 
         self.set
             .range((Bound::Included(range_key), Bound::Unbounded))

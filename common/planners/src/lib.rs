@@ -150,6 +150,7 @@ pub use plan_filter::FilterPlan;
 pub use plan_having::HavingPlan;
 pub use plan_insert_into::InsertInputSource;
 pub use plan_insert_into::InsertPlan;
+pub use plan_insert_into::InsertValueBlock;
 pub use plan_kill::KillPlan;
 pub use plan_limit::LimitPlan;
 pub use plan_limit_by::LimitByPlan;

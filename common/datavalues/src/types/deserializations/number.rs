@@ -50,23 +50,50 @@ where
     fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
         match value {
             serde_json::Value::Number(v) => {
-                let str = v.to_string();
-                self.de_text(str.as_bytes())
+                let v = v.to_string();
+                let mut reader = BufferReader::new(v.as_bytes());
+                let v: T = if !T::FLOATING {
+                    reader.read_int_text()
+                } else {
+                    reader.read_float_text()
+                }?;
+
+                self.builder.append_value(v);
+                Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
         }
     }
 
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let value = lexical_core::parse_partial::<T>(reader)
-            .unwrap_or((T::default(), 0))
-            .0;
-        self.builder.append_value(value);
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+        let mut reader = BufferReader::new(reader);
+        let v: T = if !T::FLOATING {
+            reader.read_int_text()
+        } else {
+            reader.read_float_text()
+        }?;
+        reader.must_eof()?;
+
+        self.builder.append_value(v);
+        Ok(())
+    }
+
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        let v: T = if !T::FLOATING {
+            reader.read_int_text()
+        } else {
+            reader.read_float_text()
+        }?;
+        self.builder.append_value(v);
         Ok(())
     }
 
     fn de_null(&mut self) -> bool {
         false
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+        self.builder.append_data_value(value)
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

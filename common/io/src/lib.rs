@@ -14,13 +14,20 @@
 
 // https://github.com/rust-lang/rust-clippy/issues/8334
 #![allow(clippy::ptr_arg)]
+#![feature(can_vector)]
+#![feature(read_buf)]
+#![feature(slice_internals)]
+#![feature(maybe_uninit_slice)]
+#![feature(new_uninit)]
 
 pub mod prelude;
 
 mod binary_read;
 mod binary_write;
-mod buf_read;
+
+mod buffer;
 mod files;
+mod format_settings;
 mod marshal;
 mod options_deserializer;
 mod stat_buffer;

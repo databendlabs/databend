@@ -330,18 +330,23 @@ fn drop_user_test() -> Result<()> {
 fn show_grants_test() -> Result<()> {
     expect_parse_ok(
         "SHOW GRANTS",
-        DfStatement::ShowGrants(DfShowGrants {
-            user_identity: None,
-        }),
+        DfStatement::ShowGrants(DfShowGrants { principal: None }),
     )?;
 
     expect_parse_ok(
         "SHOW GRANTS FOR 'u1'@'%'",
         DfStatement::ShowGrants(DfShowGrants {
-            user_identity: Some(UserIdentity {
+            principal: Some(PrincipalIdentity::User(UserIdentity {
                 username: "u1".into(),
                 hostname: "%".into(),
-            }),
+            })),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW GRANTS FOR ROLE 'test_role'",
+        DfStatement::ShowGrants(DfShowGrants {
+            principal: Some(PrincipalIdentity::Role("test_role".into())),
         }),
     )?;
 

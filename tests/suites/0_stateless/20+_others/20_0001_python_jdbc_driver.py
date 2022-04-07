@@ -34,6 +34,9 @@ mycursor = mydb.cursor()
 mycursor.execute("SHOW TABLES FROM db1")
 res = mycursor.fetchall()
 assert res == [('t1',)]
+mycursor.execute("SHOW FULL TABLES FROM db1")
+res = mycursor.fetchall()
+assert res == [('t1', 'BASE TABLE')]
 
 sql = "DROP DATABASE db1;"
 client1.run(sql)

@@ -1,8 +1,8 @@
 ---
 title: How to Work with Databend in Python
-sidebar_label: python
+sidebar_label: Python
 description:
-   How to Work with Databend in Python
+   How to Work with Databend in Python.
 ---
 
 ### Before You Begin

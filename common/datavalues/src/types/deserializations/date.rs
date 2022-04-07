@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Sub;
-
+use chrono::Datelike;
 use chrono::NaiveDate;
 use common_exception::*;
 use common_io::prelude::*;
@@ -26,9 +25,11 @@ pub struct DateDeserializer<T: PrimitiveType> {
     pub builder: MutablePrimitiveColumn<T>,
 }
 
+pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
+
 impl<T> TypeDeserializer for DateDeserializer<T>
 where
-    i64: AsPrimitive<T>,
+    i32: AsPrimitive<T>,
     T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
 {
@@ -53,32 +54,74 @@ where
 
     fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
         match value {
-            serde_json::Value::String(v) => self.de_text(v.as_bytes()),
+            serde_json::Value::String(v) => {
+                let mut reader = BufferReader::new(v.as_bytes());
+                let date = reader.read_date_text()?;
+                self.builder.append_value(uniform(date));
+                Ok(())
+            }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
         }
     }
 
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        match lexical_core::parse::<T>(reader) {
-            Ok(v) => {
-                self.builder.append_value(v);
-                Ok(())
-            }
-            Err(_) => {
-                let v = std::str::from_utf8(reader)
-                    .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
-                let res = v
-                    .parse::<chrono::NaiveDate>()
-                    .map_err_to_code(ErrorCode::BadBytes, || "Cannot parse value to Date type")?;
-                let epoch = NaiveDate::from_ymd(1970, 1, 1);
-                let duration = res.sub(epoch);
-                self.builder.append_value(duration.num_days().as_());
-                Ok(())
-            }
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+        let mut reader = BufferReader::new(reader);
+        let date = reader.read_date_text()?;
+        reader.must_eof()?;
+        self.builder.append_value(uniform(date));
+        Ok(())
+    }
+
+    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        reader.must_ignore_byte(b'\'')?;
+        let date = reader.read_date_text()?;
+        reader.must_ignore_byte(b'\'')?;
+
+        self.builder.append_value(uniform(date));
+        Ok(())
+    }
+
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        let date = reader.read_date_text()?;
+        self.builder.append_value(uniform(date));
+        Ok(())
+    }
+
+    fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
+        let date = reader.read_date_text()?;
+        if maybe_quote {
+            reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
+        self.builder.append_value(uniform(date));
+        Ok(())
+    }
+
+    fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        reader.must_ignore_byte(b'"')?;
+        let date = reader.read_date_text()?;
+        reader.must_ignore_byte(b'"')?;
+
+        self.builder.append_value(uniform(date));
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+        let v = value.as_i64()? as i32;
+        self.builder.append_value(v.as_());
+        Ok(())
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {
         self.builder.to_column()
     }
+}
+
+#[inline]
+fn uniform<T>(date: NaiveDate) -> T
+where
+    i32: AsPrimitive<T>,
+    T: PrimitiveType,
+{
+    (date.num_days_from_ce() - EPOCH_DAYS_FROM_CE).as_()
 }

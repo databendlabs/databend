@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::InFunction;
 use super::IsNotNullFunction;
 use super::IsNullFunction;
 use crate::scalars::FunctionFactory;
@@ -25,5 +26,7 @@ impl ConditionalFunction {
         factory.register("if", IfFunction::desc());
         factory.register("isNull", IsNullFunction::desc());
         factory.register("isNotNull", IsNotNullFunction::desc());
+        factory.register("in", InFunction::<false>::desc());
+        factory.register("not_in", InFunction::<true>::desc());
     }
 }

@@ -259,21 +259,35 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             "(?i)^(SET AUTOCOMMIT(.*))",
             "(?i)^(SET sql_mode(.*))",
             "(?i)^(SET @@(.*))",
+            "(?i)^(SHOW VARIABLES(.*))",
             "(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))",
             // Just compatibility for jdbc
             "(?i)^(/\\* mysql-connector-java(.*))",
+            // Just compatibility for DBeaver
+            "(?i)^(SHOW WARNINGS)",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)",
+            "(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))",
+            "(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))",
+            "(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))",
+            "(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))",
         ])
         .unwrap();
+        tracing::debug!("the query is {}", query);
         expr.is_match(query)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        tracing::debug!("{}", query);
-
         if self.federated_server_setup_set_or_jdbc_command(query) {
+            tracing::info!("the matched query is {}", query);
             Ok((vec![DataBlock::empty()], String::from("")))
         } else {
+            tracing::info!("the not matched query is {}", query);
             let context = self.session.create_query_context().await?;
             context.attach_query_str(query);
             let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;

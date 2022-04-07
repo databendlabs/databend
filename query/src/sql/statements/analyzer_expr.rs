@@ -45,6 +45,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 
+#[derive(Clone)]
 pub struct ExpressionAnalyzer {
     context: Arc<QueryContext>,
 }

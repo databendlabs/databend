@@ -21,6 +21,7 @@ use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::storages::information_schema::ColumnsTable;
 use crate::storages::information_schema::KeywordsTable;
+use crate::storages::information_schema::SchemataTable;
 use crate::storages::information_schema::TablesTable;
 use crate::storages::information_schema::ViewsTable;
 use crate::storages::Table;
@@ -37,6 +38,7 @@ impl<const UPPER: bool> InformationSchemaDatabase<UPPER> {
             TablesTable::create(sys_db_meta.next_table_id()),
             KeywordsTable::create(sys_db_meta.next_table_id()),
             ViewsTable::create(sys_db_meta.next_table_id()),
+            SchemataTable::create(sys_db_meta.next_table_id()),
         ];
 
         let db = if UPPER {

@@ -29,6 +29,7 @@ use common_contexts::DalMetrics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_io::prelude::FormatSettings;
 use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
 use common_planners::Expression;
@@ -266,6 +267,10 @@ impl QueryContext {
 
     pub fn get_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
+    }
+
+    pub fn get_format_settings(&self) -> Result<FormatSettings> {
+        self.shared.get_format_settings()
     }
 
     pub fn get_config(&self) -> Config {
