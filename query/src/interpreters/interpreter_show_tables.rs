@@ -39,7 +39,10 @@ impl ShowTablesInterpreter {
     }
 
     fn build_query(&self) -> Result<String> {
-        let database = self.ctx.get_current_database();
+        let mut database = self.ctx.get_current_database();
+        if let Some(v) = &self.plan.fromdb {
+            database = v.to_string();
+        }
         let showfull = self.plan.showfull;
         let select_cols = if showfull {
             format!(
@@ -58,14 +61,6 @@ impl ShowTablesInterpreter {
             }
             PlanShowKind::Where(v) => {
                 Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
-            }
-            PlanShowKind::FromOrIn(v) => {
-                let select_cols = if showfull {
-                    format!("table_name as Tables_in_{}, table_type as Table_type", v)
-                } else {
-                    format!("table_name as Tables_in_{}", v)
-                };
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, v))
             }
         };
     }

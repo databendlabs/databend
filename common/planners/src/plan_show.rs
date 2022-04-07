@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
+use crate::plan_show_tab_stat::ShowTabStatPlan;
 use crate::ShowDatabasesPlan;
 use crate::ShowEnginesPlan;
 use crate::ShowFunctionsPlan;
@@ -37,9 +38,6 @@ pub enum PlanShowKind {
 
     // show tables where name like '%xx%'
     Where(String),
-
-    // show tables from db1 [or in db1]
-    FromOrIn(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -54,6 +52,7 @@ pub enum ShowPlan {
     ShowUsers(ShowUsersPlan),
     ShowGrants(ShowGrantsPlan),
     ShowRoles(ShowRolesPlan),
+    ShowTabStat(ShowTabStatPlan),
 }
 
 impl ShowPlan {

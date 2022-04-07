@@ -32,10 +32,18 @@ impl TablesTable {
             database AS table_schema,
             name AS table_name,
             'BASE TABLE' AS table_type,
+            engine AS engine,
+            created_on AS create_time,
+            0 AS data_length,
+            0 AS index_length,
             database AS TABLE_CATALOG,
             database AS TABLE_SCHEMA,
             name AS TABLE_NAME,
-            'BASE TABLE' AS TABLE_TYPE
+            'BASE TABLE' AS TABLE_TYPE,
+            engine AS ENGINE,
+            created_on AS CREATE_TIME,
+            0 AS DATA_LENGTH,
+            0 AS INDEX_LENGTH
         FROM system.tables;";
 
         let mut options = HashMap::new();

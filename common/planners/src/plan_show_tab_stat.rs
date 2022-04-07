@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@
 
 use crate::PlanShowKind;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ShowTablesPlan {
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct ShowTabStatPlan {
     pub kind: PlanShowKind,
-    pub showfull: bool,
     // show tables from db1 [or in db1]
     pub fromdb: Option<String>,
 }
