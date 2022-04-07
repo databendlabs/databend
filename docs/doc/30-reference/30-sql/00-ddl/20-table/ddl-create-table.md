@@ -9,11 +9,39 @@ Create a new table.
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | NULL],
-    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | NULL],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
 )
+
+<data_type>:
+  Int8
+| UInt8
+| Int16
+| UInt16
+| Int32
+| UInt32
+| Int64
+| UInt64
+| Float32
+| Float64
+| Date
+| Date32
+| DateTime
+| DateTime64
+| String
+| Variant
 ```
+
+:::tip
+Data type reference:
+* [Integer Numbers Data Type](../../../10-data-types/data-type-integer-number.md)
+* [Real Numbers Data Type](../../../10-data-types/data-type-real-number.md)
+* [Time and Date Data Type](../../../10-data-types/data-type-time-date-types.md)
+* [String Data Type](../../../10-data-types/data-type-string-types.md)
+* [Semi-structured Data Type](../../../10-data-types/data-type-semi-structured-types.md)
+:::
+
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
@@ -25,19 +53,19 @@ LIKE [db.]origin_table_name
 AS SELECT query
 ```
 
-## Column Option is nullable or not
+## Column Nullable
 
 By default, **all columns are not nullable(NOT NULL)**, if you want to special a column default to `NULL`, please use:
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <col_name> <col_type> NULL,
+    <column_name> <data_type> NULL,
      ...
 )
 ```
 
 ```sql
-create table t1(a int NULL);
+create table t1(a Int32 NULL);
 ```
 
 ## Default Values
@@ -46,6 +74,9 @@ DEFAULT <expression>
 ```
 Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
 
+## MySQL Compatibility
+
+Databend’s syntax is difference from MySQL mainly in the data type and some specific index hints.
 
 ## Examples
 
