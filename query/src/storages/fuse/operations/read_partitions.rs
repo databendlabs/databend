@@ -182,7 +182,13 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
-        FusePartInfo::create(location, format_version, rows_count, columns_meta)
+        FusePartInfo::create(
+            location,
+            format_version,
+            rows_count,
+            columns_meta,
+            meta.compression.clone(),
+        )
     }
 
     fn projection_part(meta: &BlockMeta, projections: &[usize]) -> PartInfoPtr {
@@ -200,7 +206,13 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
-        FusePartInfo::create(location, format_version, rows_count, columns_meta)
+        FusePartInfo::create(
+            location,
+            format_version,
+            rows_count,
+            columns_meta,
+            meta.compression.clone(),
+        )
     }
 
     fn check_quick_path(
