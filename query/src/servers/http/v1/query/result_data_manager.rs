@@ -81,7 +81,7 @@ impl ResultDataManager {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
             let (block, end) = self.collect_new_page(tp).await?;
-            let num_row = block.len();
+            let num_row = block.data().len();
             self.total_rows += num_row;
             let page = Page {
                 data: Arc::new(block),
@@ -150,6 +150,6 @@ impl ResultDataManager {
                 }
             }
         }
-        Ok((results.concat(), end))
+        Ok((JsonBlock::concat(results), end))
     }
 }

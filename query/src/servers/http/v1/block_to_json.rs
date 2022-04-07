@@ -15,12 +15,56 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value as JsonValue;
 
-pub(crate) type JsonBlock = Vec<Vec<JsonValue>>;
-pub(crate) type JsonBlockRef = Arc<JsonBlock>;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(into = "Vec<Vec<JsonValue>>")]
+pub struct JsonBlock {
+    data: Vec<Vec<JsonValue>>,
+    schema: DataSchemaRef,
+}
+
+pub type JsonBlockRef = Arc<JsonBlock>;
+
+impl JsonBlock {
+    pub fn empty() -> Self {
+        Self {
+            data: vec![],
+            schema: Arc::new(DataSchema::empty()),
+        }
+    }
+
+    pub fn concat(blocks: Vec<JsonBlock>) -> Self {
+        if blocks.len() == 0 {
+            return Self::empty();
+        }
+        let schema = blocks[0].schema.clone();
+        let results = blocks.into_iter().map(|b| b.data).collect::<Vec<_>>();
+        let data = results.concat();
+        Self { data, schema }
+    }
+
+    pub fn data(&self) -> &Vec<Vec<JsonValue>> {
+        &self.data
+    }
+
+    pub fn schema(&self) -> &DataSchemaRef {
+        &self.schema
+    }
+}
+
+impl Into<Vec<Vec<JsonValue>>> for JsonBlock {
+    fn into(self) -> Vec<Vec<JsonValue>> {
+        self.data
+    }
+}
 
 fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
     let num_row = col_table[0].len();
@@ -36,7 +80,7 @@ fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
     row_table
 }
 
-pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
+pub fn block_to_json(block: &DataBlock) -> Result<JsonBlock> {
     let mut col_table = Vec::new();
     let columns_size = block.columns().len();
     for col_index in 0..columns_size {
@@ -54,5 +98,8 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
         })?);
     }
 
-    Ok(transpose(col_table))
+    Ok(JsonBlock {
+        data: transpose(col_table),
+        schema: block.schema().clone(),
+    })
 }

@@ -37,6 +37,7 @@ use super::query::ExecuteStateName;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::JsonBlockRef;
+use crate::servers::http::v1::JsonBlock;
 use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
@@ -98,9 +99,9 @@ impl QueryResponse {
                 d.page.data.clone(),
                 d.next_page_no.map(|n| make_page_uri(&id, n)),
             ),
-            None => (Arc::new(vec![]), None),
+            None => (Arc::new(JsonBlock::empty()), None),
         };
-        let schema = r.initial_state.as_ref().and_then(|v| v.schema.clone());
+        let schema = data.schema().clone();
         let session_id = r.initial_state.as_ref().map(|v| v.session_id.clone());
         let stats = QueryStats {
             scan_progress: r.state.scan_progress.clone(),
@@ -109,7 +110,7 @@ impl QueryResponse {
         QueryResponse {
             data,
             state: r.state.state,
-            schema,
+            schema: Some(schema),
             session_id,
             stats,
             id: id.clone(),
@@ -125,7 +126,7 @@ impl QueryResponse {
             id,
             stats: QueryStats::default(),
             state: ExecuteStateName::Failed,
-            data: Arc::new(vec![]),
+            data: Arc::new(JsonBlock::empty()),
             schema: None,
             session_id: None,
             next_uri: None,
