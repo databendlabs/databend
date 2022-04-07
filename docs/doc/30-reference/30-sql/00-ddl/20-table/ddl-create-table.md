@@ -1,12 +1,19 @@
 ---
 title: CREATE TABLE
+description: Create a new table.
 ---
 
-Create a new table.
+`CREATE TABLE` is the most complicated part of many Databases, you need to:
+* Manually specify the engine
+* Manually specify the indexes
+* And even specify the data partitions or data shard
+ 
+In Databend, you **don't need to specify any of these**, one of Databend's design goals is to make it easier to use.
 
 ## Syntax
 
-```sql
+### Create Table
+```text
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
@@ -35,19 +42,28 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 
 :::tip
 Data type reference:
-* [Integer Numbers Data Type](../../../10-data-types/data-type-integer-number.md)
-* [Real Numbers Data Type](../../../10-data-types/data-type-real-number.md)
-* [Time and Date Data Type](../../../10-data-types/data-type-time-date-types.md)
-* [String Data Type](../../../10-data-types/data-type-string-types.md)
-* [Semi-structured Data Type](../../../10-data-types/data-type-semi-structured-types.md)
+* [Integer Numbers Data Type](../../../10-data-types/10-data-type-integer-number.md)
+* [Real Numbers Data Type](../../../10-data-types/11-data-type-real-number.md)
+* [Time and Date Data Type](../../../10-data-types/20-data-type-time-date-types.md)
+* [String Data Type](../../../10-data-types/30-data-type-string-types.md)
+* [Semi-structured Data Type](../../../10-data-types/40-data-type-semi-structured-types.md)
 :::
 
+### Create Table LIKE
 
-```sql
+Creates an empty copy of an existing table, the new table automatically copies all column names, their data types, and their not-null constraints.
+
+Syntax:
+```text
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
-```sql
+
+### Create Table AS [SELECT query]
+
+Creates a table and fills it with data computed by a SELECT command.
+
+```text
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 AS SELECT query
@@ -55,8 +71,8 @@ AS SELECT query
 
 ## Column Nullable
 
-By default, **all columns are not nullable(NOT NULL)**, if you want to special a column default to `NULL`, please use:
-```sql
+By default, **all columns are not nullable(NOT NULL)**, if you want to specify a column default to `NULL`, please use:
+```text
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
     <column_name> <data_type> NULL,
@@ -64,15 +80,83 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 )
 ```
 
-```sql
-create table t1(a Int32 NULL);
+Let check it out how difference the column is `NULL` or `NOT NULL`.
+
+Create a table `t_not_null` which column with `NOT NULL`(Databend Column is `NOT NULL` by default):
+```text title='mysql>'
+create table t_not_null(a Int32);
+```
+
+```text title='mysql>'
+desc t_not_null;
+```
+
+```
++-------+-------+------+---------+
+| Field | Type  | Null | Default |
++-------+-------+------+---------+
+| a     | Int32 | NO   | 0       |
++-------+-------+------+---------+
+```
+
+Create another table `t_null` column with `NULL`:
+```text title='mysql>'
+create table t_null(a Int32 NULL);
+```
+
+```text title='mysql>'
+desc t_null;
+```
+
+```
++-------+-------+------+---------+
+| Field | Type  | Null | Default |
++-------+-------+------+---------+
+| a     | Int32 | YES  | NULL    |
++-------+-------+------+---------+
 ```
 
 ## Default Values
-```sql
+```text
 DEFAULT <expression>
 ```
 Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
+
+For example:
+```text title='mysql>'
+create table t_default_value(a UInt8, b Int16 DEFAULT (a+3), c String DEFAULT 'c');
+```
+
+Desc the `t_default_value` table:
+```text title='mysql>'
+desc t_default_value;
+```
+```text
++-------+--------+------+---------+
+| Field | Type   | Null | Default |
++-------+--------+------+---------+
+| a     | UInt8  | NO   | 0       |
+| b     | Int16  | NO   | (a + 3) |
+| c     | String | NO   | c       |
++-------+--------+------+---------+
+```
+
+Insert a value:
+```text title='mysql>'
+insert into t_default_value(a) values(1);
+```
+
+Check the table values:
+```text title='mysql>'
+select * from t_default_value;
+```
+```
++------+------+------+
+| a    | b    | c    |
++------+------+------+
+|    1 |    4 | c    |
++------+------+------+
+```
 
 ## MySQL Compatibility
 
@@ -80,72 +164,98 @@ Databend’s syntax is difference from MySQL mainly in the data type and some sp
 
 ## Examples
 
-```sql
-mysql> CREATE TABLE test(a UInt64, b Varchar, c Varchar DEFAULT concat(b, '-b'));
+### Create Table
 
-mysql> INSERT INTO test(a,b) values(888, 'stars');
+```text title='mysql>'
+create table test(a UInt64, b String, c String DEFAULT concat(b, '-b'));
+```
 
-mysql> select * from test;
+```text title='mysql>'
+desc test;
+```
+```text
++-------+--------+------+---------------+
+| Field | Type   | Null | Default       |
++-------+--------+------+---------------+
+| a     | UInt64 | NO   | 0             |
+| b     | String | NO   |               |
+| c     | String | NO   | concat(b, -b) |
++-------+--------+------+---------------+
+```
+
+```text title='mysql>'
+insert into test(a,b) values(888, 'stars');
+```
+
+```text title='mysql>'
+select * from test;
+```
+```text
 +------+-------+---------+
 | a    | b     | c       |
 +------+-------+---------+
 |  888 | stars | stars-b |
 +------+-------+---------+
 ```
-### Create Table Like statement
-```sql
-mysql> CREATE TABLE test(a UInt64, b Varchar);
 
-mysql> INSERT INTO test(a,b) values(888, 'stars');
-
-mysql> SELECT * FROM test;
-+------+---------+
-| a    | b       |
-+------+---------+
-|  888 |  stars  |
-+------+---------+
-
-mysql> CREATE TABLE test2 LIKE test;
-
-mysql> INSERT INTO test2(a,b) values(0, 'sun');
-
-mysql> SELECT * FROM test2;
-+------+------+
-| a    | b    |
-+------+------+
-|    0 | sun  |
-+------+------+
+### Create Table Like Statement
+```text title='mysql>'
+create table test2 like test;
 ```
 
-### Create Table As Select (CTAS) statement
+```text title='mysql>'
+desc test2;
+```
+```text
++-------+--------+------+---------------+
+| Field | Type   | Null | Default       |
++-------+--------+------+---------------+
+| a     | UInt64 | NO   | 0             |
+| b     | String | NO   |               |
+| c     | String | NO   | concat(b, -b) |
++-------+--------+------+---------------+
+```
 
-```sql
-mysql> CREATE TABLE source(a UInt64 null, b Varchar null)
+```text title='mysql>'
+insert into test2(a,b) values(888, 'stars');
+```
 
-mysql> INSERT INTO source(a,b) values(888, 'stars');
+```text title='mysql>'
+select * from test2;
+```
+```text
++------+-------+---------+
+| a    | b     | c       |
++------+-------+---------+
+|  888 | stars | stars-b |
++------+-------+---------+
+```
 
-mysql> SELECT * FROM source;
-+------+---------+
-| a    | b       |
-+------+---------+
-|  888 |  stars  |
-+------+---------+
+### Create Table As Select (CTAS) Statement
 
-mysql> CREATE TABLE copy1 AS SELECT * FROM source;
+```text title='mysql>'
+create table test3 as select * from test2;
+```
+```text title='mysql>'
+desc test3;
+```
+```text
++-------+--------+------+---------------+
+| Field | Type   | Null | Default       |
++-------+--------+------+---------------+
+| a     | UInt64 | NO   | 0             |
+| b     | String | NO   |               |
+| c     | String | NO   | concat(b, -b) |
++-------+--------+------+---------------+
+```
 
-mysql> SELECT * FROM copy1;
-+------+-------+
-| a    | b     |
-+------+-------+
-|  888 | stars |
-+------+-------+
-
-mysql> CREATE TABLE copy2(x VARCHAR NULL, y VARCHAR NULL) AS SELECT * FROM source;
-
-mysql> SELECT * FROM copy2;
-+------+------+------+-------+
-| x    | y    | a    | b     |
-+------+------+------+-------+
-| NULL | NULL |  888 | stars |
-+------+------+------+-------+
+```text title='mysql>'
+select * from test3;
+```
+```text
++------+-------+---------+
+| a    | b     | c       |
++------+-------+---------+
+|  888 | stars | stars-b |
++------+-------+---------+
 ```
