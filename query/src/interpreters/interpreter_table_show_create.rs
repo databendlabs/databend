@@ -73,7 +73,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             let column = format!(
                 "  `{}` {}{},\n",
                 field.name(),
-                format_data_type_sql(&field.data_type()),
+                format_data_type_sql(field.data_type()),
                 default_expr
             );
             table_info.push_str(column.as_str());
