@@ -120,9 +120,9 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::create_with_conf(new_config)
     }
 
-    pub fn disk_storage_path(self, path: String) -> SessionManagerBuilder {
+    pub fn fs_storage_path(self, path: String) -> SessionManagerBuilder {
         let mut new_config = self.config;
-        new_config.storage.disk.data_path = path;
+        new_config.storage.fs.data_path = path;
         SessionManagerBuilder::create_with_conf(new_config)
     }
 
