@@ -276,7 +276,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 "(?i)^(SELECT @@transaction_isolation)",
                 Self::variable_block("transaction_isolation", "AUTOCOMMIT"),
             ),
-            ("(?i)^(SELECT @@(.*))", None),
+            ("(?i)^(SELECT @@(.*))", Self::variable_block("", "1")),
             ("(?i)^(ROLLBACK(.*))", None),
             ("(?i)^(SET NAMES(.*))", None),
             ("(?i)^(SET character_set_results(.*))", None),
