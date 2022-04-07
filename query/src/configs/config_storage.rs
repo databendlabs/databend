@@ -27,7 +27,6 @@ pub const STORAGE_NUM_CPUS: &str = "STORAGE_NUM_CPUS";
 
 // Fs Storage env.
 pub const FS_STORAGE_DATA_PATH: &str = "FS_STORAGE_DATA_PATH";
-pub const FS_STORAGE_TEMP_DATA_PATH: &str = "FS_STORAGE_TEMP_DATA_PATH";
 
 // S3 Storage env.
 const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";

@@ -49,7 +49,6 @@ async fn test_configs_table() -> Result<()> {
         "| cluster_id                           |                          | query   |             |",
         "| database_engine_github_enabled       | true                     | query   |             |",
         "| fs.data_path                         | _data                    | storage |             |",
-        "| fs.temp_data_path                    |                          | storage |             |",
         "| flight_api_address                   | 127.0.0.1:9090           | query   |             |",
         "| http_handler_host                    | 127.0.0.1                | query   |             |",
         "| http_handler_port                    | 8000                     | query   |             |",
