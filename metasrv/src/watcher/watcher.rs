@@ -17,66 +17,70 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::mpsc::Sender;
-use common_base::tokio::sync::oneshot;
-use common_base::tokio::sync::oneshot::Receiver as OneshotReceiver;
-use common_base::tokio::sync::oneshot::Sender as OneshotSender;
-use common_base::tokio::task;
-use common_meta_types::protobuf::FilterType;
 use common_meta_types::protobuf::WatchCreateRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::MetaWatcherResult;
-use tonic::Status;
 use tonic::Streaming;
 
 use super::WatcherId;
+use super::WatcherStreamId;
 use super::WatcherStreamSender;
 
+#[derive(Debug)]
 pub struct Watcher {
     id: WatcherId,
 
-    task: task::JoinHandle<()>,
+    // owner watcher stream id
+    owner: WatcherStreamId,
 
-    key: Vec<u8>,
+    pub key: String,
 
-    key_end: Vec<u8>,
-
-    filter: FilterType,
+    pub key_end: String,
 }
 
-pub struct WatcherCore {
-    stream: Streaming<WatchRequest>,
+#[derive(Debug)]
+pub struct WatcherStream {
+    id: WatcherStreamId,
+
+    //task: task::JoinHandle<impl Future<Output = ()>>,
     tx: WatcherStreamSender,
-    watch_tx: Arc<mpsc::UnboundedSender<WatchRequest>>,
+}
+
+pub struct WatcherStreamCore {
+    id: WatcherStreamId,
+
+    stream: Streaming<WatchRequest>,
+
+    watch_tx: Arc<mpsc::UnboundedSender<(WatcherStreamId, WatchRequest)>>,
 }
 
 impl Watcher {
+    pub fn new(id: WatcherId, owner: WatcherStreamId, create: WatchCreateRequest) -> Watcher {
+        Watcher {
+            id,
+            owner,
+            key: create.key,
+            key_end: create.key_end,
+        }
+    }
+}
+
+impl WatcherStream {
     pub fn spawn(
-        id: WatcherId,
-        create: WatchCreateRequest,
+        id: WatcherStreamId,
         stream: Streaming<WatchRequest>,
         tx: WatcherStreamSender,
-        watch_tx: Arc<mpsc::UnboundedSender<WatchRequest>>,
-        resp: WatchResponse,
+        watch_tx: Arc<mpsc::UnboundedSender<(WatcherStreamId, WatchRequest)>>,
     ) -> Self {
-        let core = WatcherCore {
+        let core = WatcherStreamCore {
+            id,
             stream,
-            tx,
             watch_tx,
         };
 
-        let _ = core.tx.send(Ok(resp));
+        let _task = tokio::spawn(core.watcher_main());
 
-        let task = tokio::spawn(core.watcher_main());
-
-        Watcher {
-            id,
-            task,
-            key: create.clone().key,
-            key_end: create.clone().key_end,
-            filter: create.filter(),
-        }
+        WatcherStream { id, tx }
     }
 
     pub fn stop(&mut self, id: WatcherId) {
@@ -84,14 +88,18 @@ impl Watcher {
             return;
         }
 
-        self.task.abort()
+        //self.task.abort()
+    }
+
+    pub fn send(&self, resp: WatchResponse) {
+        let _ = self.tx.send(Ok(resp));
     }
 }
 
-impl WatcherCore {
+impl WatcherStreamCore {
     async fn watcher_main(mut self) {
         while let Some(req) = self.stream.message().await.unwrap() {
-            let _ = self.watch_tx.send(req);
+            let _ = self.watch_tx.send((self.id, req));
         }
     }
 }

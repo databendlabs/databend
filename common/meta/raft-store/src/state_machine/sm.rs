@@ -93,7 +93,7 @@ const TREE_STATE_MACHINE: &str = "state_machine";
 /// StateMachine subscriber trait
 #[async_trait::async_trait]
 pub trait StateMachineSubscriber: Debug + Sync + Send {
-    async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, meta: &Option<SeqV>);
+    async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, current: &Option<SeqV>);
 }
 
 /// The state machine of the `MemStore`.

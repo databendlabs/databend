@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod server_watcher;
 mod watcher;
+mod watcher_manager;
 
-pub use server_watcher::MetaServiceWatcher;
-pub use server_watcher::WatcherId;
-pub use server_watcher::WatcherStreamSender;
 pub use watcher::Watcher;
+pub use watcher::WatcherStream;
+pub use watcher_manager::WatcherId;
+pub use watcher_manager::WatcherManager;
+pub use watcher_manager::WatcherStreamId;
+pub use watcher_manager::WatcherStreamSender;

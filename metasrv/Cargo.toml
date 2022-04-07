@@ -37,6 +37,7 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-tracing = { path = "../common/tracing" }
+common-range-set = { path = "../common/range-set" }
 
 # Github dependencies
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }

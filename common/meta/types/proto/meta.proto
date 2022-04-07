@@ -58,40 +58,20 @@ message WatchRequest {
   }
 }
 
-enum KeyType {
-  DB = 0;
-
-  TABLE = 1;
-
-  KV = 2;
-}
-
-enum FilterType {
-  // filter out put event.
-  NOPUT = 0;
-  // filter out delete event.
-  NODELETE = 1;
-}
-
 message WatchCreateRequest {
-  KeyType kv_type = 1;
-
   // key is the key to register for watching.
-  bytes key = 2;
+  string key = 1;
 
   // range_end is the end of the range [key, range_end) to watch. If range_end is not given,
   // only the key argument is watched. If range_end is equal to '\0', all keys greater than
   // or equal to the key argument are watched.
   // If the range_end is one bit larger than the given key,
   // then all keys with the prefix (the given key) will be watched.
-  bytes key_end = 3;
-
-  // filter the events at server side before it sends back to the watcher.
-  FilterType filter = 4;
+  string key_end = 2;
 }
 
 message WatchCancelRequest {
-
+  int64 watch_id = 1;
 }
 
 message WatchResponse {
