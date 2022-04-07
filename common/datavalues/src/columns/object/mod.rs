@@ -101,6 +101,10 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         T::data_type()
     }
 
+    fn column_type_name(&self) -> String {
+        "Object".to_string()
+    }
+
     fn len(&self) -> usize {
         self.values.len()
     }

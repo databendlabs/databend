@@ -71,6 +71,10 @@ impl Column for StructColumn {
         self.data_type.clone()
     }
 
+    fn column_type_name(&self) -> String {
+        "Struct".to_string()
+    }
+
     fn len(&self) -> usize {
         self.values[0].len()
     }

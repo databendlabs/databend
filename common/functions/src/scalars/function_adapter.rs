@@ -128,6 +128,31 @@ impl Function for FunctionAdapter {
             return inner.eval(columns, input_rows);
         }
 
+        // is there nullable constant? Did not consider this case
+        // unwrap constant
+        if self.passthrough_constant() && columns.iter().all(|v| v.column().is_const()) {
+            let columns = columns
+                .iter()
+                .map(|v| {
+                    let c = v.column();
+                    let c: &ConstColumn = unsafe { Series::static_cast(c) };
+
+                    ColumnWithField::new(c.inner().clone(), v.field().clone())
+                })
+                .collect::<Vec<_>>();
+
+            let col = self.eval(&columns, 1)?;
+            let col = if col.is_const() && col.len() == 1 {
+                col.replicate(&[input_rows])
+            } else if col.is_null() {
+                NullColumn::new(input_rows).arc()
+            } else {
+                ConstColumn::new(col, input_rows).arc()
+            };
+
+            return Ok(col);
+        }
+
         // nullable or null
         if self.passthrough_null {
             if columns
@@ -180,38 +205,13 @@ impl Function for FunctionAdapter {
                 });
 
                 let col = if col.is_nullable() {
-                    let nullable_column: &NullableColumn = unsafe { Series::static_cast(&col) };
+                    let nullable_column: &NullableColumn = Series::check_get(&col)?;
                     NullableColumn::new(nullable_column.inner().clone(), validity)
                 } else {
                     NullableColumn::new(col, validity)
                 };
                 return Ok(Arc::new(col));
             }
-        }
-
-        // is there nullable constant? Did not consider this case
-        // unwrap constant
-        if self.passthrough_constant() && columns.iter().all(|v| v.column().is_const()) {
-            let columns = columns
-                .iter()
-                .map(|v| {
-                    let c = v.column();
-                    let c: &ConstColumn = unsafe { Series::static_cast(c) };
-
-                    ColumnWithField::new(c.inner().clone(), v.field().clone())
-                })
-                .collect::<Vec<_>>();
-
-            let col = self.eval(&columns, 1)?;
-            let col = if col.is_const() && col.len() == 1 {
-                col.replicate(&[input_rows])
-            } else if col.is_null() {
-                NullColumn::new(input_rows).arc()
-            } else {
-                ConstColumn::new(col, input_rows).arc()
-            };
-
-            return Ok(col);
         }
 
         inner.eval(columns, input_rows)

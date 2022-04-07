@@ -156,6 +156,10 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         create_primitive_datatype::<T>()
     }
 
+    fn column_type_name(&self) -> String {
+        "Primitive".to_string()
+    }
+
     fn len(&self) -> usize {
         self.values.len()
     }

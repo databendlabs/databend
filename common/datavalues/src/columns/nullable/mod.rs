@@ -71,6 +71,10 @@ impl Column for NullableColumn {
         Arc::new(NullableType::create(nest))
     }
 
+    fn column_type_name(&self) -> String {
+        format!("Nullable({})", self.column.column_type_name())
+    }
+
     fn is_nullable(&self) -> bool {
         true
     }

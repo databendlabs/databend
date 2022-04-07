@@ -48,7 +48,7 @@ impl Series {
             .ok_or_else(|| {
                 ErrorCode::UnknownColumn(format!(
                     "downcast column error, column type: {:?}, expected column: {:?}",
-                    column.data_type(),
+                    column.column_type_name(),
                     std::any::type_name::<T>(),
                 ))
             });
@@ -59,7 +59,7 @@ impl Series {
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(
                 "downcast column error, column type: {:?}, expected column: {:?}",
-                column.data_type(),
+                column.column_type_name(),
                 std::any::type_name::<T>(),
             ))
         });
