@@ -156,21 +156,6 @@ fn try_parse_insert_formatted(sql: &str) -> Result<Option<(Format, Vec<DfStateme
     Ok(None)
 }
 
-// parse query params first to avoid tokenize the body part when it is a insert with format.
-// async fn parse(
-//     sql: &str,
-//     body: Body,
-// ) -> PoemResult<(Option<(Format, Body)>, Cow<'_, str>, Vec<DfStatement>)> {
-//     if let Some((format, statements)) = try_parse_insert_formatted(sql).map_err(BadRequest)? {
-//         Ok((Some((format, body)), sql.into(), statements))
-//     } else {
-//         let body = body.into_string().await.map_err(BadRequest)?;
-//         let sql = format!("{}\n{}", sql, body);
-//         let (statements, _) = DfParser::parse_sql(&sql).map_err(BadRequest)?;
-//         Ok((None, sql.into(), statements))
-//     }
-// }
-
 #[poem::handler]
 pub async fn clickhouse_handler_post(
     sessions_extension: Data<&Arc<SessionManager>>,
