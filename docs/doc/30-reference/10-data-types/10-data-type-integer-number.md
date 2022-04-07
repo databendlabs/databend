@@ -2,6 +2,7 @@
 title: Integer Numbers
 description: Basic Integer Numbers data types
 ---
+
 | Data Type        | Size      | Min Value              | Max Value   |
 | -----------------| --------- | ---------------------- | ----------- |
 | Int8             | 1 byte    |  -128                  |  127        
