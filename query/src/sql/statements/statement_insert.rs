@@ -145,12 +145,8 @@ impl<'a> DfInsertStatement<'a> {
         schema: &DataSchemaRef,
     ) -> Result<InsertInputSource> {
         tracing::debug!("{:?}", values_str);
-        // TODO(ygf11): set the self.values from parser
-        // let values_str = self.value.clone().unwrap();
-        // let offsize = "VALUES ".len();
-        // let values_str = format!("{}", values);
-        let source = ValueSource::new(schema.clone());
 
+        let source = ValueSource::new(schema.clone());
         let block = match source.stream_read(values_str) {
             Ok(block) => Ok(block),
             Err(_) => {
