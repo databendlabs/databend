@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::configs::DiskStorageConfig;
+use databend_query::configs::FsStorageConfig;
 use databend_query::configs::S3StorageConfig;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -45,9 +45,8 @@ async fn test_get_storage_accessor_fs() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
     conf.storage.storage_type = "fs".to_string();
-    conf.storage.disk = DiskStorageConfig {
+    conf.storage.fs = FsStorageConfig {
         data_path: "/tmp".to_string(),
-        temp_data_path: "/tmp".to_string(),
     };
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;

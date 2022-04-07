@@ -579,9 +579,9 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
-    // TODO(xp): This function will replace `test_meta_node_restart` after disk backed state machine is ready.
+    // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.
 
-    // Test disk backed meta node restart.
+    // Test fs backed meta node restart.
     // - Start a cluster of a solo leader;
     // - Write one log.
     // - Restart.
