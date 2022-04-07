@@ -55,7 +55,14 @@ impl Interpreter for CreateUserStageInterpreter {
         if user_stage.stage_type == StageType::Internal {
             let prefix = format!("stage/{}/", user_stage.stage_name);
             let op = self.ctx.get_storage_operator()?;
-            op.object(&prefix).create().await?;
+            op.object(&prefix).create().await.or_else(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    // if target path already exist, just ignore the error
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })?;
         }
 
         let _create_stage = user_mgr
