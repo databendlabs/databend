@@ -30,25 +30,36 @@ impl QueryFragment for StageQueryFragment {
 
     fn finalize(&self, actions: &mut QueryFragmentsActions) -> Result<()> {
         self.input.finalize(actions)?;
-        let out_partition = self.get_out_partition()?;
         let input_actions = actions.get_root_actions()?;
         let mut fragment_actions = QueryFragmentActions::create(true);
 
-        // We run exchange data on the current hosts
-        for action in input_actions.get_actions() {
+        if self.input.get_out_partition()? == PartitionState::NotPartition {
+            if input_actions.get_actions().is_empty() {
+                return Err(ErrorCode::LogicalError("Logical error, input actions is empty."));
+            }
+
+            let action = &input_actions.get_actions()[0];
             let fragment_action = QueryFragmentAction::create(
-                action.executor.clone(),
-                PlanNode::Stage(StagePlan {
-                    kind: self.stage.kind.clone(),
-                    scatters_expr: self.stage.scatters_expr.clone(),
-                    input: Arc::new(self.input.rewrite_remote_plan(&self.stage.input, &action.node)?),
-                }),
+                actions.get_local_executor(),
+                self.input.rewrite_remote_plan(&self.stage.input, &action.node)?,
             );
 
             fragment_actions.add_action(fragment_action);
+        } else {
+            // We run exchange data on the current hosts
+            for action in input_actions.get_actions() {
+                let fragment_action = QueryFragmentAction::create(
+                    action.executor.clone(),
+                    self.input.rewrite_remote_plan(&self.stage.input, &action.node)?,
+                );
+
+                fragment_actions.add_action(fragment_action);
+            }
         }
 
+
         // TODO: set exchange
+        // fragment_actions.set_exchange();
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
             false => actions.update_root_fragment_actions(fragment_actions),

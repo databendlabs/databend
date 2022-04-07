@@ -116,13 +116,19 @@ impl TryInto<Vec<u8>> for CancelAction {
     }
 }
 
-impl TryInto<ExecutorPacket> for Vec<u8> {
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PrepareNewPipeline {
+    pub query_id: String,
+    pub executor_packet: ExecutorPacket,
+}
+
+impl TryInto<PrepareNewPipeline> for Vec<u8> {
     type Error = Status;
 
-    fn try_into(self) -> Result<ExecutorPacket, Self::Error> {
+    fn try_into(self) -> Result<PrepareNewPipeline, Self::Error> {
         match std::str::from_utf8(&self) {
             Err(cause) => Err(Status::invalid_argument(cause.to_string())),
-            Ok(utf8_body) => match serde_json::from_str::<ExecutorPacket>(utf8_body) {
+            Ok(utf8_body) => match serde_json::from_str::<PrepareNewPipeline>(utf8_body) {
                 Err(cause) => Err(Status::invalid_argument(cause.to_string())),
                 Ok(action) => Ok(action),
             },
@@ -130,7 +136,7 @@ impl TryInto<ExecutorPacket> for Vec<u8> {
     }
 }
 
-impl TryInto<Vec<u8>> for ExecutorPacket {
+impl TryInto<Vec<u8>> for PrepareNewPipeline {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
@@ -145,7 +151,7 @@ pub enum FlightAction {
     PrepareShuffleAction(ShuffleAction),
     BroadcastAction(BroadcastAction),
     CancelAction(CancelAction),
-    Packets(ExecutorPacket),
+    PrepareNewPipeline(PrepareNewPipeline),
 }
 
 impl FlightAction {
@@ -223,7 +229,7 @@ impl TryInto<Action> for FlightAction {
                 r#type: String::from("CancelAction"),
                 body: cancel_action.try_into()?,
             }),
-            FlightAction::Packets(executor) => Ok(Action {
+            FlightAction::PrepareNewPipeline(executor) => Ok(Action {
                 r#type: String::from("Packet"),
                 body: executor.try_into()?,
             })

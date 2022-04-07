@@ -111,9 +111,9 @@ impl CopyInterpreter {
 
         tracing::info!("copy_one_file_to_table: source plan:{:?}", read_source_plan);
 
-        let from_plan = common_planners::SelectPlan {
+        let from_plan = PlanNode::Select(common_planners::SelectPlan {
             input: Arc::new(PlanNode::ReadSource(read_source_plan)),
-        };
+        });
 
         let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
         let mut pipeline = pipeline_builder.finalize(&from_plan)?;

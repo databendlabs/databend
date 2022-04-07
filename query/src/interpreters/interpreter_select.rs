@@ -91,10 +91,7 @@ impl Interpreter for SelectInterpreter {
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
 
         let optimized_plan = self.rewrite_plan()?;
-        let select_plan = SelectPlan {
-            input: Arc::new(optimized_plan),
-        };
-        let mut new_pipeline = builder.finalize(&select_plan)?;
+        let mut new_pipeline = builder.finalize(&optimized_plan)?;
         new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
         Ok(new_pipeline)
     }

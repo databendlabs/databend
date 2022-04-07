@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
+use common_planners::{AggregatorFinalPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExplainPlan, Expression, GrantPrivilegePlan, GrantRolePlan, InsertPlan, KillPlan, ListPlan, OptimizeTablePlan, RemotePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, StagePlan, TruncateTablePlan, UseDatabasePlan};
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -65,8 +65,8 @@ impl QueryPipelineBuilder {
         }
     }
 
-    pub fn finalize(mut self, plan: &SelectPlan) -> Result<NewPipeline> {
-        self.visit_select(plan)?;
+    pub fn finalize(mut self, plan: &PlanNode) -> Result<NewPipeline> {
+        self.visit_plan_node(plan)?;
         Ok(self.pipeline)
     }
 }
@@ -85,6 +85,7 @@ impl PlanVisitor for QueryPipelineBuilder {
             PlanNode::LimitBy(n) => self.visit_limit_by(n),
             PlanNode::ReadSource(n) => self.visit_read_data_source(n),
             PlanNode::Select(n) => self.visit_select(n),
+            PlanNode::Remote(n) => self.visit_remote(n),
             PlanNode::SubQueryExpression(n) => self.visit_sub_queries_sets(n),
             _ => Err(ErrorCode::UnImplement("")),
         }
@@ -140,6 +141,12 @@ impl PlanVisitor for QueryPipelineBuilder {
                     plan.expr.to_owned(),
                 )
             })
+    }
+
+    fn visit_remote(&mut self, plan: &RemotePlan) -> Result<()> {
+        let query_id = self.ctx.get_id();
+        let exchange_manager = self.ctx.get_exchange_manager();
+        exchange_manager.get_fragment_source(query_id, "".to_string(), &mut self.pipeline)
     }
 
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {

@@ -10,6 +10,7 @@ use crate::interpreters::fragments::query_fragment_stage::StageQueryFragment;
 use crate::interpreters::fragments::RootQueryFragment;
 use crate::sessions::QueryContext;
 
+// A fragment of query, the smallest execution unit of a distributed query
 pub trait QueryFragment: Debug {
     fn get_out_partition(&self) -> Result<PartitionState>;
 

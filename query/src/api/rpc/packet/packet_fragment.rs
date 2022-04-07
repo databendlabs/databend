@@ -3,7 +3,8 @@ use common_planners::PlanNode;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct FragmentPacket {
-    node: PlanNode,
+    pub node: PlanNode,
+    pub fragment_id: String,
 }
 
 impl FragmentPacket {

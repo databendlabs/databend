@@ -63,7 +63,7 @@ impl QueryFragment for ReadDatasourceQueryFragment {
         match self.get_out_partition()? {
             PartitionState::NotPartition => {
                 fragment_actions.add_action(QueryFragmentAction::create(
-                    actions.get_local_executor(),
+                    actions.get_local_executor()?,
                     PlanNode::ReadSource(self.read_data_source.clone()),
                 ));
             }
@@ -73,7 +73,7 @@ impl QueryFragment for ReadDatasourceQueryFragment {
 
                 for (index, executor) in executors.iter().enumerate() {
                     fragment_actions.add_action(QueryFragmentAction::create(
-                        executor.to_owned(),
+                        executor.clone(),
                         PlanNode::ReadSource(ReadDataSourcePlan {
                             parts: new_partitions[index].to_owned(),
                             source_info: self.read_data_source.source_info.clone(),

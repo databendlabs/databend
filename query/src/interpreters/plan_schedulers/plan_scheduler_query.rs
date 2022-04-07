@@ -67,8 +67,8 @@ pub async fn schedule_query_new(ctx: Arc<QueryContext>, plan: &PlanNode) -> Resu
     let root_query_fragments = RootQueryFragment::create(query_fragments, plan)?;
 
     let exchange_manager = ctx.get_exchange_manager();
-    let mut fragments_actions = QueryFragmentsActions::create(ctx);
+    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_query_fragments.finalize(&mut fragments_actions)?;
-    exchange_manager.submit_query_actions(fragments_actions)
+    exchange_manager.submit_query_actions(ctx, fragments_actions).await
 }
 

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
 use common_planners::PlanNode;
 use crate::api::{ExecutorPacket, FragmentPacket};
+use crate::clusters::Cluster;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::sessions::QueryContext;
 

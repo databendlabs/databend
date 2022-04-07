@@ -44,7 +44,7 @@ use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
-use crate::sessions::SessionManager;
+use crate::sessions::{SessionManager, SessionType};
 
 pub type FlightStream<T> =
 Pin<Box<dyn Stream<Item=Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -184,7 +184,13 @@ impl FlightService for DatabendQueryFlightService {
                     .await?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::Packets(_) => unimplemented!()
+            FlightAction::PrepareNewPipeline(packet) => {
+                let session = self.sessions.create_session(SessionType::FlightRPC).await?;
+                let query_context = session.create_query_context().await?;
+                let exchange_manager = self.sessions.get_data_exchange_manager();
+                exchange_manager.handle_prepare(&query_context, packet)?;
+                FlightResult { body: vec![] }
+            }
         };
 
         // let action_result = do_flight_action.await?;
