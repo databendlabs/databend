@@ -83,6 +83,14 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
+    assert_eq!(result.schema.unwrap().fields().len(), 4);
+
+    let sql = "show databases";
+    let (status, result) = post_sql(sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert!(result.schema.is_some());
+    assert_eq!(result.schema.unwrap().fields().len(), 0);
     Ok(())
 }
 
