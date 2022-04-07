@@ -55,7 +55,7 @@ impl S3File {
                 list.push(path.to_string());
             }
             ObjectMode::DIR => {
-                let mut objects = operator.objects(path).await?;
+                let mut objects = operator.object(path).list().await?;
                 while let Some(object) = objects.next().await {
                     let mut object = object?;
                     let meta = object.metadata_cached().await?;
