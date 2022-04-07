@@ -20,6 +20,7 @@ use opendal::io_util::observe_read;
 use opendal::io_util::observe_write;
 use opendal::io_util::ReadEvent;
 use opendal::io_util::WriteEvent;
+use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
 use opendal::ops::OpRead;
@@ -64,6 +65,10 @@ impl Layer for DalContext {
 
 #[async_trait]
 impl Accessor for DalContext {
+    async fn create(&self, args: &OpCreate) -> Result<()> {
+        self.inner.as_ref().unwrap().create(args).await
+    }
+
     async fn read(&self, args: &OpRead) -> Result<BytesReader> {
         let metric = self.metrics.clone();
 
