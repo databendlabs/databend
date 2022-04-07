@@ -20,7 +20,7 @@ use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::compression::Compression;
+use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
@@ -41,6 +41,7 @@ use opendal::Operator;
 
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
+use crate::storages::fuse::meta::Compression;
 
 #[derive(Clone)]
 pub struct BlockReader {
@@ -76,11 +77,12 @@ impl BlockReader {
         rows: usize,
         descriptor: &ColumnDescriptor,
         field: Field,
+        compression: &Compression,
     ) -> Result<ArrayIter<'static>> {
         let pages = PageIterator::new(
             std::io::Cursor::new(chunk),
             meta.num_values as i64,
-            Compression::Lz4Raw,
+            Self::to_parquet_compression(compression),
             descriptor.clone(),
             Arc::new(|_, _| true),
             vec![],
@@ -137,6 +139,7 @@ impl BlockReader {
                 rows,
                 column_descriptor,
                 field,
+                &part.compression,
             )?);
         }
 
@@ -165,6 +168,7 @@ impl BlockReader {
                 num_rows,
                 column_descriptor,
                 field,
+                &part.compression,
             )?);
         }
 
@@ -222,6 +226,13 @@ impl BlockReader {
             None => Err(ErrorCode::ParquetError("fail to get a chunk")),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
+        }
+    }
+
+    fn to_parquet_compression(meta_compression: &Compression) -> ParquetCompression {
+        match meta_compression {
+            Compression::Lz4 => ParquetCompression::Lz4,
+            Compression::Lz4Raw => ParquetCompression::Lz4Raw,
         }
     }
 }

@@ -94,7 +94,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_stats: s.col_stats,
             col_metas: s.col_metas,
             location: (s.location.path, DataBlock::VERSION),
-            compression: Compression::Lz4Raw,
+            compression: Compression::Lz4,
         }
     }
 }
