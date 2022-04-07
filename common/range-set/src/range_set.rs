@@ -38,7 +38,7 @@ where
     pub fn insert(&mut self, range: Range<T>, key: K) {
         assert!(range.start <= range.end);
 
-        let range_key: RangeKey<T, K> = RangeKey::new(range.clone(), key);
+        let range_key: RangeKey<T, K> = RangeKey::new(range, key);
 
         self.set.insert(range_key);
     }

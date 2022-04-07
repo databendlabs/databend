@@ -56,14 +56,14 @@ fn test_range_set() {
 
         a.insert(a1.clone()..a1.clone(), 11);
         a.insert(a1.clone()..a5.clone(), 15);
-        a.insert(a2.clone()..a4.clone(), 24);
-        a.insert(a2.clone()..a6.clone(), 26);
+        a.insert(a2.clone()..a4, 24);
+        a.insert(a2.clone()..a6, 26);
 
         assert_eq!(a.get_by_point(&a1), vec![r11, r15]);
         assert_eq!(a.get_by_point(&a2), vec![r24, r15, r26]);
         assert_eq!(a.get_by_point(&a5), vec![r26]);
 
-        a.remove(a1.clone()..a5.clone(), 15);
+        a.remove(a1.clone()..a5, 15);
         assert_eq!(a.get_by_point(&a1), vec![r11]);
         assert_eq!(a.get_by_point(&a2), vec![r24, r26]);
     }
