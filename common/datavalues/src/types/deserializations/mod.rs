@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_io::prelude::CpBufferReader;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -39,15 +40,32 @@ pub trait TypeDeserializer: Send + Sync {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()>;
 
     fn de_default(&mut self);
+
     fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
-    /// If error occurrs, append a null by default
-    fn de_text(&mut self, reader: &[u8]) -> Result<()>;
 
     fn de_json(&mut self, reader: &Value) -> Result<()>;
 
     fn de_null(&mut self) -> bool {
         false
     }
+
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()>;
+
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()>;
+
+    fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        self.de_text(reader)
+    }
+
+    fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        self.de_text(reader)
+    }
+
+    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        self.de_text(reader)
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()>;
 
     fn finish_to_column(&mut self) -> ColumnRef;
 }

@@ -66,7 +66,9 @@ mod statement_show_tables;
 mod statement_show_users;
 mod statement_truncate_table;
 mod statement_use_database;
+mod value_source;
 
+pub use analyzer_expr::ExpressionAnalyzer;
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::QueryAnalyzeState;
@@ -126,3 +128,4 @@ pub use statement_show_tables::DfShowTables;
 pub use statement_show_users::DfShowUsers;
 pub use statement_truncate_table::DfTruncateTable;
 pub use statement_use_database::DfUseDatabase;
+pub use value_source::ValueSource;

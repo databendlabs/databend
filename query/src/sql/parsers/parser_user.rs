@@ -209,15 +209,13 @@ impl<'a> DfParser<'a> {
     pub(crate) fn parse_show_grants(&mut self) -> Result<DfStatement, ParserError> {
         // SHOW GRANTS
         if !self.consume_token("FOR") {
-            return Ok(DfStatement::ShowGrants(DfShowGrants {
-                user_identity: None,
-            }));
+            return Ok(DfStatement::ShowGrants(DfShowGrants { principal: None }));
         }
 
-        // SHOW GRANTS FOR 'u1'@'%'
-        let (username, hostname) = self.parse_principal_name_and_host()?;
+        // SHOW GRANTS FOR { ROLE 'name' | [USER] 'u1'@'%' }
+        let prinicpal = self.parse_principal_identity()?;
         Ok(DfStatement::ShowGrants(DfShowGrants {
-            user_identity: Some(UserIdentity { username, hostname }),
+            principal: Some(prinicpal),
         }))
     }
 

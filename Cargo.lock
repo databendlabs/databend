@@ -1031,8 +1031,11 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "bytes 1.1.0",
+ "chrono",
+ "chrono-tz",
  "common-exception",
  "futures",
+ "lexical-core",
  "opendal",
  "rand 0.8.5",
  "serde",
@@ -1234,6 +1237,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-range-set"
+version = "0.1.0"
+
+[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -1245,6 +1252,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-io",
  "common-tracing",
  "csv-async",
  "futures",
@@ -3896,9 +3904,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b1c17025b3be9e23cd4e5d8b0f69f011e826ffdb1cfa0a2fe532d8840d8b4f"
+checksum = "d774ff9f291db4147e5363d05088860c9f40d330e72939fbc8ee1e56138fad95"
 dependencies = [
  "anyhow",
  "async-compat",

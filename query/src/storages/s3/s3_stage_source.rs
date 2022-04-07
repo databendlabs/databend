@@ -69,7 +69,8 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let mut builder = CsvSourceBuilder::create(schema);
+        let settings = ctx.get_format_settings()?;
+        let mut builder = CsvSourceBuilder::create(schema, settings);
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.
@@ -87,7 +88,7 @@ impl StageSource {
 
         // Skip header.
         {
-            builder.skip_header(stage_info.file_format_options.skip_header);
+            builder.skip_header(stage_info.file_format_options.skip_header > 0);
         }
 
         // Field delimiter, default ','.

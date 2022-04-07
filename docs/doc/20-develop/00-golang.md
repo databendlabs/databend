@@ -1,8 +1,8 @@
 ---
 title: How to Work with Databend in Golang
-sidebar_label: go
+sidebar_label: Golang
 description:
-   How to Work with Databend in Golang
+   How to Work with Databend in Golang.
 ---
 
 ### Before You Begin
@@ -88,7 +88,7 @@ func main() {
 	log.Println("Insert 1 row")
 
 	// Select.
-	res, err := db.Query("SELECT * FROM books")
+	res, err := db.Query("select * from books")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
+use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
@@ -236,6 +237,18 @@ impl QueryContextShared {
 
     pub fn get_config(&self) -> Config {
         self.session.get_config()
+    }
+
+    pub fn get_format_settings(&self) -> Result<FormatSettings> {
+        let settings = self.get_settings();
+        let mut format = FormatSettings::default();
+        {
+            format.record_delimiter = settings.get_record_delimiter()?;
+            format.field_delimiter = settings.get_field_delimiter()?;
+            format.empty_as_default = settings.get_empty_as_default()? > 0;
+            format.skip_header = settings.get_skip_header()? > 0;
+        }
+        Ok(format)
     }
 
     pub async fn reload_config(&self) -> Result<()> {

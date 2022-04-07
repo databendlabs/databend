@@ -2,7 +2,7 @@
 title: Deploy Databend With Tencent Cloud COS
 sidebar_label: With Tencent COS
 description:
-  How to deploy Databend with Tencent Cloud(腾讯云) COS
+  How to deploy Databend with Tencent Cloud(腾讯云) COS.
 ---
 
 :::tip
@@ -38,7 +38,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.9-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -48,7 +48,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nigh
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.9-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>

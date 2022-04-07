@@ -31,11 +31,11 @@ impl TablesTable {
             database AS table_catalog,
             database AS table_schema,
             name AS table_name,
-            NULL AS table_type,
+            'BASE TABLE' AS table_type,
             database AS TABLE_CATALOG,
             database AS TABLE_SCHEMA,
             name AS TABLE_NAME,
-            NULL AS TABLE_TYPE
+            'BASE TABLE' AS TABLE_TYPE
         FROM system.tables;";
 
         let mut options = HashMap::new();

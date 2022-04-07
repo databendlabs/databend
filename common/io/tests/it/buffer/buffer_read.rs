@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::BufReader;
-
 use common_io::prelude::*;
 
 #[test]
 fn test_buf_read() {
-    let mut buffer = BufReader::new("1 bytes   helloworld".as_bytes());
+    let mut buffer = BufferReader::new("1 bytes   helloworld".as_bytes());
+
     buffer.ignore_byte(b'1').unwrap();
-    buffer.ignore_spaces().unwrap();
+    buffer.ignore_white_spaces().unwrap();
     let bs = buffer.buffer();
     assert_eq!(String::from_utf8_lossy(bs), "bytes   helloworld");
 
@@ -29,7 +28,14 @@ fn test_buf_read() {
     assert_eq!(String::from_utf8_lossy(buffer.buffer()), "   helloworld");
     assert_eq!(String::from_utf8_lossy(&vec), "bytes".to_string());
 
-    let spaces = buffer.ignore_spaces().unwrap();
+    let spaces = buffer.ignore_white_spaces().unwrap();
     assert!(spaces);
     assert_eq!(String::from_utf8_lossy(buffer.buffer()), "helloworld");
+
+    let mut buffer = BufferU8Reader::new("1 bytes   helloworld".as_bytes());
+
+    buffer.ignore_byte(b'1').unwrap();
+    buffer.ignore_white_spaces().unwrap();
+    let bs = buffer.buffer();
+    assert_eq!(String::from_utf8_lossy(bs), "bytes   helloworld");
 }

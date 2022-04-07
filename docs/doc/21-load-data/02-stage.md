@@ -2,7 +2,7 @@
 title: Load Data from Databend Stages
 sidebar_label: From Stages
 description:
-  Load Data from Databend Stages
+  Load Data from Databend Stages.
 ---
 
 <p align="center">

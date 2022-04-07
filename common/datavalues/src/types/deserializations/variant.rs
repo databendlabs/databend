@@ -16,6 +16,8 @@ use std::io::Read;
 
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
+use common_io::prelude::BufferReadExt;
+use common_io::prelude::CpBufferReader;
 use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
@@ -69,10 +71,30 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        self.buffer.clear();
+        reader.read_escaped_string_text(&mut self.buffer)?;
+        let val = serde_json::from_slice(self.buffer.as_slice())?;
+        self.builder.append_value(val);
+        Ok(())
+    }
+
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let val = serde_json::from_slice(reader)?;
         self.builder.append_value(val);
         Ok(())
+    }
+
+    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        self.buffer.clear();
+        reader.read_quoted_text(&mut self.buffer, b'\'')?;
+        let val = serde_json::from_slice(self.buffer.as_slice())?;
+        self.builder.append_value(val);
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+        self.builder.append_data_value(value)
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {
