@@ -79,7 +79,7 @@ impl ColumnsTable {
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'COLUMNS'".to_string(),
+            desc: "'INFORMATION_SCHEMA'.'COLUMNS'".to_string(),
             name: "COLUMNS".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

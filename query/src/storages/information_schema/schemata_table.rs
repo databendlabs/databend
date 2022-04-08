@@ -47,7 +47,7 @@ impl SchemataTable {
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'SCHEMATA'".to_string(),
+            desc: "'INFORMATION_SCHEMA'.'SCHEMATA'".to_string(),
             name: "SCHEMATA".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

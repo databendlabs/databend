@@ -21,6 +21,7 @@ use common_planners::PlanShowKind;
 use common_planners::ShowTablesPlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -43,6 +44,11 @@ impl ShowTablesInterpreter {
         if let Some(v) = &self.plan.fromdb {
             database = v.to_string();
         }
+
+        if DatabaseCatalog::is_case_insensitive_db(&database) {
+            database = database.to_uppercase()
+        }
+
         let showfull = self.plan.showfull;
         let select_cols = if showfull {
             format!(
@@ -52,17 +58,18 @@ impl ShowTablesInterpreter {
         } else {
             format!("table_name as Tables_in_{}", database)
         };
-        return match &self.plan.kind {
+
+        match &self.plan.kind {
             PlanShowKind::All => {
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
             }
             PlanShowKind::Like(v) => {
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND table_name LIKE {} ORDER BY table_schema, table_name", select_cols, database, v))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND table_name LIKE {} ORDER BY table_schema, table_name", select_cols, database, v))
             }
             PlanShowKind::Where(v) => {
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
             }
-        };
+        }
     }
 }
 

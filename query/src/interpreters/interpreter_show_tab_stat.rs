@@ -21,6 +21,7 @@ use common_planners::PlanShowKind;
 use common_planners::ShowTabStatPlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -43,6 +44,11 @@ impl ShowTabStatInterpreter {
         if let Some(v) = &self.plan.fromdb {
             database = v.to_string();
         }
+
+        if DatabaseCatalog::is_case_insensitive_db(&database) {
+            database = database.to_uppercase()
+        }
+
         let select_cols = "table_name AS Name, engine AS Engine, 0 AS Version, \
         NULL AS Row_format, NULL AS Rows, NULL AS Avg_row_length, NULL AS Data_length, \
         NULL AS Max_data_length, NULL AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
@@ -51,17 +57,17 @@ impl ShowTabStatInterpreter {
             .to_string();
         return match &self.plan.kind {
             PlanShowKind::All => Ok(format!(
-                "SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' \
+                "SELECT {} FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = '{}' \
                 ORDER BY table_schema, table_name",
                 select_cols, database
             )),
             PlanShowKind::Like(v) => Ok(format!(
-                "SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' \
+                "SELECT {} FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = '{}' \
                 AND table_name LIKE {} ORDER BY table_schema, table_name",
                 select_cols, database, v
             )),
             PlanShowKind::Where(v) => Ok(format!(
-                "SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' \
+                "SELECT {} FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = '{}' \
                 AND ({}) ORDER BY table_schema, table_name",
                 select_cols, database, v
             )),

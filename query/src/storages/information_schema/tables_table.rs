@@ -49,7 +49,7 @@ impl TablesTable {
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'TABLES'".to_string(),
+            desc: "'INFORMATION_SCHEMA'.'TABLES'".to_string(),
             name: "TABLES".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
