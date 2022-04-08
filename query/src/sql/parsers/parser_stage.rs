@@ -29,7 +29,7 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    pub(crate) fn parse_create_stage(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -117,7 +117,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateStage(create))
     }
 
-    pub(crate) fn parse_drop_stage(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parser.parse_literal_string()?;
 
@@ -126,14 +126,14 @@ impl<'a> DfParser<'a> {
     }
 
     // Desc stage.
-    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeUserStage { name: table_name };
         Ok(DfStatement::DescribeStage(desc))
     }
 
     // list stage files
-    pub(crate) fn parse_list_cmd(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_list_cmd(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let location = match self.parser.next_token() {
             Token::AtString(s) => Ok(format!("@{}", s)),
             unexpected => self.expected("@string_literal", unexpected),

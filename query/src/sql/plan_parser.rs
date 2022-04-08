@@ -50,7 +50,7 @@ impl PlanParser {
     }
 
     pub async fn build_plan(
-        statements: Vec<DfStatement>,
+        statements: Vec<DfStatement<'_>>,
         ctx: Arc<QueryContext>,
     ) -> Result<PlanNode> {
         if statements.is_empty() {

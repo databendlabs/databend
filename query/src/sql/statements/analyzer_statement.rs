@@ -143,7 +143,7 @@ pub trait AnalyzableStatement {
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfStatement {
+impl<'a> AnalyzableStatement for DfStatement<'a> {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         match self {
             DfStatement::Query(v) => v.analyze(ctx).await,
