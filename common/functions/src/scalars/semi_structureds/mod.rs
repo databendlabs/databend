@@ -13,10 +13,14 @@
 // limitations under the License.
 
 mod check_json;
+mod get;
 mod parse_json;
 mod semi_structured;
 
 pub use check_json::CheckJsonFunction;
+pub use get::GetFunction;
+pub use get::GetIgnoreCaseFunction;
+pub use get::GetPathFunction;
 pub use parse_json::ParseJsonFunction;
 pub use parse_json::TryParseJsonFunction;
 pub use semi_structured::SemiStructuredFunction;
