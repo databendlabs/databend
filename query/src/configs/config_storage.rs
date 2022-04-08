@@ -25,9 +25,8 @@ use crate::configs::Config;
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
 pub const STORAGE_NUM_CPUS: &str = "STORAGE_NUM_CPUS";
 
-// Disk Storage env.
-pub const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
-pub const DISK_STORAGE_TEMP_DATA_PATH: &str = "DISK_STORAGE_TEMP_DATA_PATH";
+// Fs Storage env.
+pub const FS_STORAGE_DATA_PATH: &str = "FS_STORAGE_DATA_PATH";
 
 // S3 Storage env.
 const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
@@ -46,7 +45,7 @@ const AZURE_BLOB_CONTAINER: &str = "AZURE_BLOB_CONTAINER";
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum StorageType {
-    Disk,
+    Fs,
     S3,
     AzureStorageBlob,
 }
@@ -57,7 +56,7 @@ impl FromStr for StorageType {
 
     fn from_str(s: &str) -> std::result::Result<StorageType, &'static str> {
         match s {
-            "disk" => Ok(StorageType::Disk),
+            "fs" => Ok(StorageType::Fs),
             "s3" => Ok(StorageType::S3),
             "azure_storage_blob" => Ok(StorageType::AzureStorageBlob),
             _ => Err("no match for storage type"),
@@ -67,21 +66,16 @@ impl FromStr for StorageType {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
-pub struct DiskStorageConfig {
-    /// Disk storage backend data path
-    #[clap(long, env = DISK_STORAGE_DATA_PATH, default_value = "_data")]
+pub struct FsStorageConfig {
+    /// fs storage backend data path
+    #[clap(long, env = FS_STORAGE_DATA_PATH, default_value = "_data")]
     pub data_path: String,
-
-    /// Disk storage temporary data path for external data
-    #[clap(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "")]
-    pub temp_data_path: String,
 }
 
-impl Default for DiskStorageConfig {
+impl Default for FsStorageConfig {
     fn default() -> Self {
         Self {
             data_path: "_data".to_string(),
-            temp_data_path: "".to_string(),
         }
     }
 }
@@ -191,16 +185,16 @@ impl fmt::Debug for AzureStorageBlobConfig {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
-    /// Current storage type: disk|s3
-    #[clap(long, env = STORAGE_TYPE, default_value = "disk")]
+    /// Current storage type: fs|s3
+    #[clap(long, env = STORAGE_TYPE, default_value = "fs")]
     pub storage_type: String,
 
     #[clap(long, env = STORAGE_NUM_CPUS, default_value = "0")]
     pub storage_num_cpus: u64,
 
-    // Disk storage backend config.
+    // Fs storage backend config.
     #[clap(flatten)]
-    pub disk: DiskStorageConfig,
+    pub fs: FsStorageConfig,
 
     // S3 storage backend config.
     #[clap(flatten)]
@@ -214,8 +208,8 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            storage_type: "disk".to_string(),
-            disk: DiskStorageConfig::default(),
+            storage_type: "fs".to_string(),
+            fs: FsStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azure_storage_blob: AzureStorageBlobConfig::default(),
             storage_num_cpus: 0,
@@ -231,18 +225,10 @@ impl StorageConfig {
         // DISK.
         env_helper!(
             mut_config.storage,
-            disk,
+            fs,
             data_path,
             String,
-            DISK_STORAGE_DATA_PATH
-        );
-
-        env_helper!(
-            mut_config.storage,
-            disk,
-            temp_data_path,
-            String,
-            DISK_STORAGE_TEMP_DATA_PATH
+            FS_STORAGE_DATA_PATH
         );
 
         // S3.

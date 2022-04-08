@@ -2514,7 +2514,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bb81d22191b89b117cd12d6549544bfcba0da741efdcec7c7d2fd06a0f56363"
 dependencies = [
  "ahash",
- "hashbrown",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -2564,6 +2564,15 @@ name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c21d40587b92fa6a6c6e3c1bdbf87d75511db5672f9c93175574b3a00df1758"
 dependencies = [
  "ahash",
 ]
@@ -2868,7 +2877,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
 dependencies = [
  "autocfg 1.0.1",
- "hashbrown",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -3239,7 +3248,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "274353858935c992b13c0ca408752e2121da852d07dec7ce5f108c77dfa14d1f"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -3382,7 +3391,7 @@ dependencies = [
  "atomic-shim",
  "crossbeam-epoch",
  "crossbeam-utils",
- "hashbrown",
+ "hashbrown 0.11.2",
  "metrics",
  "num_cpus",
  "parking_lot 0.11.2",
@@ -3906,9 +3915,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b1c17025b3be9e23cd4e5d8b0f69f011e826ffdb1cfa0a2fe532d8840d8b4f"
+checksum = "c66039bdd3b510275ada79e4c31a444c06fd8d88d7e2749968728b5da29d92c1"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -3987,7 +3996,7 @@ dependencies = [
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=22c7f23#22c7f23582a787767da06b70e3ed3684ae1d44fd"
+source = "git+https://github.com/datafuselabs/opensrv?rev=967477f1#967477f1f7005f8911a7d6c38cefbba4edd755ad"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -4100,7 +4109,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b476c5fc0aad16f8b8d74e7df9da1813731fae300f7a923713c4c591905ff50"
 dependencies = [
  "dlv-list",
- "hashbrown",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -5061,7 +5070,7 @@ checksum = "98f2771d255fd99f0294f13249fecd0cae6e074f86b4197ec1f1689d537b44d3"
 dependencies = [
  "ahash",
  "griddle",
- "hashbrown",
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -5668,8 +5677,9 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=da3b180#da3b1801de9e502c8b8d2ec624cc00e1a5d0e108"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=1c8d3f1#1c8d3f1b77039649b4a9fc798ed319d413182d3b"
 dependencies = [
+ "hashbrown 0.12.0",
  "log",
 ]
 

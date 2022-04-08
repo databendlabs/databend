@@ -40,7 +40,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Create table.
-    pub(crate) fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -90,7 +90,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Drop table.
-    pub(crate) fn parse_drop_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
@@ -103,7 +103,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Alter table
-    pub(crate) fn parse_alter_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_alter_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
@@ -125,7 +125,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Rename table.
-    pub(crate) fn parse_rename_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_rename_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let mut name_map = HashMap::new();
         self.parser.expect_keyword(Keyword::TABLE)?;
         let name = self.parser.parse_object_name()?;
@@ -146,7 +146,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Truncate table.
-    pub(crate) fn parse_truncate_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_truncate_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let purge = self.parser.parse_keyword(Keyword::PURGE);
         let statement = DfTruncateTable {
@@ -157,14 +157,14 @@ impl<'a> DfParser<'a> {
     }
 
     // Show create table.
-    pub(crate) fn parse_show_create_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_create_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let show_create_table = DfShowCreateTable { name: table_name };
         Ok(DfStatement::ShowCreateTable(show_create_table))
     }
 
     // Desc table.
-    pub(crate) fn parse_desc_table(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_desc_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeTable { name: table_name };
         Ok(DfStatement::DescribeTable(desc))

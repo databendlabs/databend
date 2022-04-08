@@ -23,7 +23,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Parse 'KILL statement'.
-    pub(crate) fn parse_kill_query(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_kill_query(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.consume_token("KILL") {
             true if self.consume_token("QUERY") => self.parse_kill::<true>(),
             true if self.consume_token("CONNECTION") => self.parse_kill::<false>(),
@@ -33,7 +33,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Parse 'KILL statement'.
-    fn parse_kill<const KILL_QUERY: bool>(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_kill<const KILL_QUERY: bool>(&mut self) -> Result<DfStatement<'a>, ParserError> {
         Ok(DfStatement::KillStatement(DfKillStatement {
             object_id: self.parser.parse_identifier()?,
             kill_query: KILL_QUERY,
