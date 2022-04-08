@@ -23,9 +23,9 @@ use crate::storages::view::view_table::QUERY;
 use crate::storages::view::ViewTable;
 use crate::storages::Table;
 
-pub struct ColumnsTable {}
+pub struct ColumnsTable<const UPPER: bool> {}
 
-impl ColumnsTable {
+impl<const UPPER: bool> ColumnsTable<UPPER> {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
             database AS table_catalog,
@@ -78,9 +78,11 @@ impl ColumnsTable {
 
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
+        let name = if UPPER { "COLUMNS" } else { "columns" };
+
         let table_info = TableInfo {
-            desc: "'information_schema'.'COLUMNS'".to_string(),
-            name: "COLUMNS".to_string(),
+            desc: format!("'information_schema'.'{}'", name),
+            name: name.to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,

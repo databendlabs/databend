@@ -34,11 +34,11 @@ pub struct InformationSchemaDatabase<const UPPER: bool> {
 impl<const UPPER: bool> InformationSchemaDatabase<UPPER> {
     pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
-            ColumnsTable::create(sys_db_meta.next_table_id()),
-            TablesTable::create(sys_db_meta.next_table_id()),
-            KeywordsTable::create(sys_db_meta.next_table_id()),
-            ViewsTable::create(sys_db_meta.next_table_id()),
-            SchemataTable::create(sys_db_meta.next_table_id()),
+            ColumnsTable::<UPPER>::create(sys_db_meta.next_table_id()),
+            TablesTable::<UPPER>::create(sys_db_meta.next_table_id()),
+            KeywordsTable::<UPPER>::create(sys_db_meta.next_table_id()),
+            ViewsTable::<UPPER>::create(sys_db_meta.next_table_id()),
+            SchemataTable::<UPPER>::create(sys_db_meta.next_table_id()),
         ];
 
         let db = if UPPER {

@@ -23,9 +23,9 @@ use crate::storages::view::view_table::QUERY;
 use crate::storages::view::ViewTable;
 use crate::storages::Table;
 
-pub struct TablesTable {}
+pub struct TablesTable<const UPPER: bool> {}
 
-impl TablesTable {
+impl<const UPPER: bool> TablesTable<UPPER> {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
             database AS table_catalog,
@@ -38,11 +38,12 @@ impl TablesTable {
             'BASE TABLE' AS TABLE_TYPE
         FROM system.tables;";
 
+        let name = if UPPER { "TABLES" } else { "tables" };
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'TABLES'".to_string(),
-            name: "TABLES".to_string(),
+            desc: format!("'information_schema'.'{}'", name),
+            name: name.to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,

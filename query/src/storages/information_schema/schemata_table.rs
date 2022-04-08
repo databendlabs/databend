@@ -23,9 +23,9 @@ use crate::storages::view::view_table::QUERY;
 use crate::storages::view::ViewTable;
 use crate::storages::Table;
 
-pub struct SchemataTable {}
+pub struct SchemataTable<const UPPER: bool> {}
 
-impl SchemataTable {
+impl<const UPPER: bool> SchemataTable<UPPER> {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
             name AS catalog_name,
@@ -44,11 +44,12 @@ impl SchemataTable {
             NULL AS SQL_PATH
         FROM system.databases;";
 
+        let name = if UPPER { "SCHEMATA" } else { "schemata" };
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'SCHEMATA'".to_string(),
-            name: "SCHEMATA".to_string(),
+            desc: format!("'information_schema'.'{}'", name),
+            name: name.to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,
