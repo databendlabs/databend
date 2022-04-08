@@ -24,6 +24,25 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::ResizeProcessor;
 
+/// The struct of new pipeline
+///                                                                              +----------+
+///                                                                         +--->|Processors|
+///                                                                         |    +----------+
+///                                                          +----------+   |
+///                                                      +-->|SimplePipe|---+
+///                                                      |   +----------+   |                  +-----------+
+///                           +-----------+              |                  |              +-->|inputs_port|
+///                   +------>|max threads|              |                  |     +-----+  |   +-----------+
+///                   |       +-----------+              |                  +--->>|ports|--+
+/// +----------+      |                       +-----+    |                  |     +-----+  |   +------------+
+/// | pipeline |------+                       |pipe1|----+                  |              +-->|outputs_port|
+/// +----------+      |       +-------+       +-----+    |   +----------+   |                  +------------+
+///                   +------>| pipes |------>| ... |    +-->|ResizePipe|---+
+///                           +-------+       +-----+        +----------+   |
+///                                           |pipeN|                       |    +---------+
+///                                           +-----+                       +--->|Processor|
+///                                                                              +---------+
+///
 pub struct NewPipeline {
     max_threads: usize,
     pub pipes: Vec<NewPipe>,
