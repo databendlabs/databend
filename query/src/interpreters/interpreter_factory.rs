@@ -64,6 +64,7 @@ use crate::interpreters::ShowMetricsInterpreter;
 use crate::interpreters::ShowProcessListInterpreter;
 use crate::interpreters::ShowRolesInterpreter;
 use crate::interpreters::ShowSettingsInterpreter;
+use crate::interpreters::ShowTabStatInterpreter;
 use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
@@ -97,6 +98,9 @@ impl InterpreterFactory {
             }
             PlanNode::Show(ShowPlan::ShowTables(v)) => {
                 ShowTablesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowTabStat(v)) => {
+                ShowTabStatInterpreter::try_create(ctx_clone, v)
             }
             PlanNode::Show(ShowPlan::ShowEngines(v)) => {
                 ShowEnginesInterpreter::try_create(ctx_clone, v)

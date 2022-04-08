@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowPlan;
-use common_planners::ShowTablesPlan;
+use common_planners::ShowTabStatPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
@@ -27,28 +27,22 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfShowKind;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowTables {
+pub struct DfShowTabStat {
     pub kind: DfShowKind,
-    pub showfull: bool,
     pub fromdb: Option<String>,
 }
 
-impl DfShowTables {
-    pub fn create(kind: DfShowKind, showfull: bool, fromdb: Option<String>) -> DfShowTables {
-        DfShowTables {
-            kind,
-            showfull,
-            fromdb,
-        }
+impl DfShowTabStat {
+    pub fn create(kind: DfShowKind, fromdb: Option<String>) -> DfShowTabStat {
+        DfShowTabStat { kind, fromdb }
     }
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfShowTables {
+impl AnalyzableStatement for DfShowTabStat {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut kind = PlanShowKind::All;
-        let showfull = self.showfull;
         let fromdb = self.fromdb.clone();
         match &self.kind {
             DfShowKind::All => {}
@@ -61,11 +55,7 @@ impl AnalyzableStatement for DfShowTables {
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
-            ShowPlan::ShowTables(ShowTablesPlan {
-                kind,
-                showfull,
-                fromdb,
-            }),
+            ShowPlan::ShowTabStat(ShowTabStatPlan { kind, fromdb }),
         ))))
     }
 }

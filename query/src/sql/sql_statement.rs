@@ -63,6 +63,7 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowRoles;
 use crate::sql::statements::DfShowSettings;
+use crate::sql::statements::DfShowTabStat;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
@@ -85,6 +86,7 @@ pub enum DfStatement<'a> {
     // Tables.
     ShowTables(DfShowTables),
     ShowCreateTable(DfShowCreateTable),
+    ShowTabStat(DfShowTabStat),
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
