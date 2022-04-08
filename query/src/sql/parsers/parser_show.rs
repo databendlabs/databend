@@ -28,7 +28,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // parse show tables.
-    pub(crate) fn parse_show_tables(&mut self, full: bool) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_tables(&mut self, full: bool) -> Result<DfStatement<'a>, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
             Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::create(
@@ -55,7 +55,7 @@ impl<'a> DfParser<'a> {
     }
 
     // parse show databases where database = xxx or where database
-    pub(crate) fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_databases(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
             Token::EOF | Token::SemiColon => Ok(DfStatement::ShowDatabases(
@@ -78,7 +78,7 @@ impl<'a> DfParser<'a> {
     }
 
     // parse show functions statement
-    pub(crate) fn parse_show_functions(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_functions(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
             Token::EOF | Token::SemiColon => Ok(DfStatement::ShowFunctions(

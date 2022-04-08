@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use async_stream::stream;
@@ -157,21 +156,6 @@ fn try_parse_insert_formatted(sql: &str) -> Result<Option<(Format, Vec<DfStateme
     Ok(None)
 }
 
-// parse query params first to avoid tokenize the body part when it is a insert with format.
-async fn parse(
-    sql: &str,
-    body: Body,
-) -> PoemResult<(Option<(Format, Body)>, Cow<'_, str>, Vec<DfStatement>)> {
-    if let Some((format, statements)) = try_parse_insert_formatted(sql).map_err(BadRequest)? {
-        Ok((Some((format, body)), sql.into(), statements))
-    } else {
-        let body = body.into_string().await.map_err(BadRequest)?;
-        let sql = format!("{}\n{}", sql, body);
-        let (statements, _) = DfParser::parse_sql(&sql).map_err(BadRequest)?;
-        Ok((None, sql.into(), statements))
-    }
-}
-
 #[poem::handler]
 pub async fn clickhouse_handler_post(
     sessions_extension: Data<&Arc<SessionManager>>,
@@ -179,9 +163,6 @@ pub async fn clickhouse_handler_post(
     body: Body,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let mut sql = params.query;
-    let (format, sql, statements) = parse(&sql, body).await?;
-
     let session_manager = sessions_extension.0;
     let session = session_manager
         .create_session(SessionType::ClickHouseHttpHandler)
@@ -194,21 +175,37 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    let plan = PlanParser::build_plan(statements, ctx.clone())
-        .await
-        .map_err(InternalServerError)?;
-    ctx.attach_query_str(&sql);
+    let mut sql = params.query;
 
-    if let Some((format, body)) = format {
-        let input_stream = match format {
-            Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
+    // Insert into format sql
+    let (plan, input_stream) =
+        if let Some((format, statements)) = try_parse_insert_formatted(&sql).map_err(BadRequest)? {
+            let plan = PlanParser::build_plan(statements, ctx.clone())
+                .await
+                .map_err(InternalServerError)?;
+            ctx.attach_query_str(&sql);
+
+            let input_stream = match format {
+                Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
+            };
+            (plan, Some(input_stream))
+        } else {
+            // Other sql
+            let body = body.into_string().await.map_err(BadRequest)?;
+            let sql = format!("{}\n{}", sql, body);
+            let (statements, _) = DfParser::parse_sql(&sql).map_err(BadRequest)?;
+
+            let plan = PlanParser::build_plan(statements, ctx.clone())
+                .await
+                .map_err(InternalServerError)?;
+            ctx.attach_query_str(&sql);
+
+            (plan, None)
         };
-        execute(ctx, plan, Some(input_stream))
-            .await
-            .map_err(InternalServerError)
-    } else {
-        execute(ctx, plan, None).await.map_err(InternalServerError)
-    }
+
+    execute(ctx, plan, input_stream)
+        .await
+        .map_err(InternalServerError)
 }
 
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {

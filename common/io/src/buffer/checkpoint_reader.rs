@@ -19,7 +19,7 @@ use super::checkpoint_read::CheckpointRead;
 use super::BufferRead;
 
 // This is dynamic checkpoint buffer reader
-pub type CpBufferReader = CheckpointReader<Box<dyn BufferRead>>;
+pub type CpBufferReader<'a> = CheckpointReader<Box<dyn BufferRead + 'a>>;
 
 pub struct CheckpointReader<R: BufferRead> {
     reader: R,

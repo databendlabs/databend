@@ -371,7 +371,7 @@ impl SessionManager {
                 builder.finish().await?
             }
             DalSchema::Fs => {
-                let mut path = storage_conf.disk.data_path.clone();
+                let mut path = storage_conf.fs.data_path.clone();
                 if !path.starts_with('/') {
                     path = env::current_dir().unwrap().join(path).display().to_string();
                 }

@@ -23,7 +23,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Parse 'use database' db name.
-    pub(crate) fn parse_use_database(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_use_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
         if !self.consume_token("USE") {
             return self.expected("Must USE", self.parser.peek_token());
         }

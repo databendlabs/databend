@@ -99,7 +99,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
     let mut handler = ClickHouseHandler::create(
         SessionManagerBuilder::create()
             .max_sessions(1)
-            .disk_storage_path(data_path)
+            .fs_storage_path(data_path)
             .build()?,
     );
 

@@ -91,12 +91,11 @@ rpc_tls_meta_server_root_ca_cert = \"\"
 rpc_tls_meta_service_domain_name = \"localhost\"
 
 [storage]
-storage_type = \"disk\"
+storage_type = \"fs\"
 storage_num_cpus = 0
 
-[storage.disk]
+[storage.fs]
 data_path = \"_data\"
-temp_data_path = \"\"
 
 [storage.s3]
 region = \"\"
@@ -137,7 +136,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_TABLE_DISK_CACHE_ROOT", "_cache_env");
     std::env::set_var("QUERY_TABLE_DISK_CACHE_MB_SIZE", "512");
     std::env::set_var("STORAGE_TYPE", "s3");
-    std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
+    std::env::set_var("FS_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
     std::env::set_var("S3_STORAGE_ENDPOINT_URL", "");
     std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
@@ -168,7 +167,7 @@ fn test_env_config() -> Result<()> {
 
     assert_eq!("s3", configured.storage.storage_type);
 
-    assert_eq!("/tmp/test", configured.storage.disk.data_path);
+    assert_eq!("/tmp/test", configured.storage.fs.data_path);
 
     assert_eq!("us.region", configured.storage.s3.region);
     assert_eq!("", configured.storage.s3.endpoint_url);
@@ -205,7 +204,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_TABLE_DISK_CACHE_ROOT");
     std::env::remove_var("QUERY_TABLE_DISK_CACHE_MB_SIZE");
     std::env::remove_var("STORAGE_TYPE");
-    std::env::remove_var("DISK_STORAGE_DATA_PATH");
+    std::env::remove_var("FS_STORAGE_DATA_PATH");
     std::env::remove_var("S3_STORAGE_REGION");
     std::env::remove_var("S3_STORAGE_ACCESS_KEY_ID");
     std::env::remove_var("S3_STORAGE_SECRET_ACCESS_KEY");
