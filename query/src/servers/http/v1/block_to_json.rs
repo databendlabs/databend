@@ -19,13 +19,9 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value as JsonValue;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(into = "Vec<Vec<JsonValue>>")]
+#[derive(Debug, Clone)]
 pub struct JsonBlock {
     data: Vec<Vec<JsonValue>>,
     schema: DataSchemaRef,
@@ -41,6 +37,30 @@ impl JsonBlock {
         }
     }
 
+    pub fn new(block: &DataBlock) -> Result<Self> {
+        let mut col_table = Vec::new();
+        let columns_size = block.columns().len();
+        for col_index in 0..columns_size {
+            let column = block.column(col_index);
+            let column = column.convert_full_column();
+            let field = block.schema().field(col_index);
+            let data_type = field.data_type();
+            let serializer = data_type.create_serializer();
+            col_table.push(serializer.serialize_json(&column).map_err(|e| {
+                ErrorCode::UnexpectedError(format!(
+                    "fail to serialize filed {}, error = {}",
+                    field.name(),
+                    e
+                ))
+            })?);
+        }
+
+        Ok(JsonBlock {
+            data: transpose(col_table),
+            schema: block.schema().clone(),
+        })
+    }
+
     pub fn concat(blocks: Vec<JsonBlock>) -> Self {
         if blocks.len() == 0 {
             return Self::empty();
@@ -49,6 +69,14 @@ impl JsonBlock {
         let results = blocks.into_iter().map(|b| b.data).collect::<Vec<_>>();
         let data = results.concat();
         Self { data, schema }
+    }
+
+    pub fn num_rows(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 
     pub fn data(&self) -> &Vec<Vec<JsonValue>> {
@@ -78,28 +106,4 @@ fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
         }
     }
     row_table
-}
-
-pub fn block_to_json(block: &DataBlock) -> Result<JsonBlock> {
-    let mut col_table = Vec::new();
-    let columns_size = block.columns().len();
-    for col_index in 0..columns_size {
-        let column = block.column(col_index);
-        let column = column.convert_full_column();
-        let field = block.schema().field(col_index);
-        let data_type = field.data_type();
-        let serializer = data_type.create_serializer();
-        col_table.push(serializer.serialize_json(&column).map_err(|e| {
-            ErrorCode::UnexpectedError(format!(
-                "fail to serialize filed {}, error = {}",
-                field.name(),
-                e
-            ))
-        })?);
-    }
-
-    Ok(JsonBlock {
-        data: transpose(col_table),
-        schema: block.schema().clone(),
-    })
 }

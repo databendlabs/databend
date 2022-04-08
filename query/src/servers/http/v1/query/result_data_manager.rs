@@ -24,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
 
-use crate::servers::http::v1::block_to_json;
 use crate::servers::http::v1::JsonBlock;
 use crate::servers::http::v1::JsonBlockRef;
 
@@ -136,7 +135,7 @@ impl ResultDataManager {
             match ResultDataManager::receive(block_rx, tp).await {
                 Ok(block) => {
                     rows += block.num_rows();
-                    results.push(block_to_json(&block)?);
+                    results.push(JsonBlock::new(&block)?);
                     // TODO(youngsofun):  set it in post if needed
                     if rows >= TARGET_ROWS_PER_PAGE {
                         break;

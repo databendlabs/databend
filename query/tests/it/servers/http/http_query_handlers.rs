@@ -90,7 +90,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert!(result.schema.is_some());
-    assert_eq!(result.schema.unwrap().fields().len(), 0);
+    assert_eq!(result.schema.unwrap().fields().len(), 1);
     Ok(())
 }
 

@@ -32,11 +32,11 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 
 use super::query::ExecuteStateName;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use super::JsonBlockRef;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::SessionManager;
 
@@ -81,7 +81,7 @@ pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
     pub schema: Option<DataSchemaRef>,
-    pub data: JsonBlockRef,
+    pub data: Vec<Vec<JsonValue>>,
     pub state: ExecuteStateName,
     // only sql query error
     pub error: Option<QueryError>,
@@ -108,7 +108,7 @@ impl QueryResponse {
             running_time_ms: r.state.running_time_ms,
         };
         QueryResponse {
-            data,
+            data: data.data().clone(),
             state: r.state.state,
             schema: Some(schema),
             session_id,
@@ -126,7 +126,7 @@ impl QueryResponse {
             id,
             stats: QueryStats::default(),
             state: ExecuteStateName::Failed,
-            data: Arc::new(JsonBlock::empty()),
+            data: vec![],
             schema: None,
             session_id: None,
             next_uri: None,

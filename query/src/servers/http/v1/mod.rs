@@ -19,7 +19,6 @@ mod query;
 mod stage;
 mod statement;
 
-pub(crate) use block_to_json::block_to_json;
 pub(crate) use block_to_json::JsonBlock;
 pub(crate) use block_to_json::JsonBlockRef;
 pub use http_query_handlers::make_final_uri;
