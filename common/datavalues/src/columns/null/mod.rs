@@ -55,6 +55,10 @@ impl Column for NullColumn {
         Arc::new(NullType {})
     }
 
+    fn column_type_name(&self) -> String {
+        "Null".to_string()
+    }
+
     fn is_null(&self) -> bool {
         true
     }
