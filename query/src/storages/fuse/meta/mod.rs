@@ -22,6 +22,7 @@ mod v1;
 mod versions;
 
 pub use common::ColumnId;
+pub use common::Compression;
 pub use common::Location;
 pub use common::SnapshotId;
 pub use common::Statistics;

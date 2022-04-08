@@ -41,7 +41,15 @@ impl ShowTablesInterpreter {
 
     fn build_query(&self) -> Result<String> {
         let mut database = self.ctx.get_current_database();
+        if let Some(v) = &self.plan.fromdb {
+            database = v.to_string();
+        }
+
+        if DatabaseCatalog::is_case_insensitive_db(&database) {
+            database = database.to_uppercase()
+        }
         let showfull = self.plan.showfull;
+
         let select_cols = if showfull {
             format!(
                 "table_name as Tables_in_{}, table_type as Table_type",
@@ -51,11 +59,7 @@ impl ShowTablesInterpreter {
             format!("table_name as Tables_in_{}", database)
         };
 
-        if DatabaseCatalog::is_case_insensitive_db(&database) {
-            database = database.to_uppercase()
-        }
-
-        return match &self.plan.kind {
+        match &self.plan.kind {
             PlanShowKind::All => {
                 Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
             }
@@ -65,15 +69,7 @@ impl ShowTablesInterpreter {
             PlanShowKind::Where(v) => {
                 Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
             }
-            PlanShowKind::FromOrIn(v) => {
-                let select_cols = if showfull {
-                    format!("table_name as Tables_in_{}, table_type as Table_type", v)
-                } else {
-                    format!("table_name as Tables_in_{}", v)
-                };
-                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, v))
-            }
-        };
+        }
     }
 }
 

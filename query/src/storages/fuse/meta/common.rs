@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 
+use serde::Deserialize;
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::storages::index::ColumnStatistics;
@@ -23,7 +25,7 @@ pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,
@@ -39,4 +41,16 @@ pub trait Versioned<const V: u64>
 where Self: Sized
 {
     const VERSION: u64 = V;
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+pub enum Compression {
+    Lz4,
+    Lz4Raw,
+}
+
+impl Compression {
+    pub fn legacy() -> Self {
+        Compression::Lz4
+    }
 }

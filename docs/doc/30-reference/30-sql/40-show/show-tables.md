@@ -7,7 +7,9 @@ Shows the list of tables in the currently selected database.
 ## Syntax
 
 ```
-SHOW [FULL] TABLES  [LIKE 'pattern' | WHERE expr | FROM 'pattern' | IN 'pattern']
+SHOW [EXTENDED] [FULL] TABLES
+    [{FROM | IN} db_name]
+    [LIKE 'pattern' | WHERE expr]
 ```
 
 ## Examples
@@ -38,7 +40,7 @@ mysql> SHOW TABLES;
 +------------------+
 ```
 
-Showing the tables with table name `"numbers_local"`:
+Showing the tables with table name `"settings"`:
 ```sql
 mysql> SHOW TABLES LIKE 'settings';
 +------------------+
@@ -48,7 +50,7 @@ mysql> SHOW TABLES LIKE 'settings';
 +------------------+
 ```
 
-Showing the tables begin with `"numbers"`:
+Showing the tables begin with `"co"`:
 ```sql
 mysql> SHOW TABLES LIKE 'co%';
 +------------------+
@@ -60,7 +62,7 @@ mysql> SHOW TABLES LIKE 'co%';
 +------------------+
 ```
 
-Showing the tables begin with `"numbers"` with `WHERE`:
+Showing the tables begin with `"co"` with `WHERE`:
 ```sql
 mysql> SHOW TABLES WHERE table_name LIKE 'co%';
 +------------------+
@@ -72,7 +74,7 @@ mysql> SHOW TABLES WHERE table_name LIKE 'co%';
 +------------------+
 ```
 
-Showing the tables are inside `"ss"`:
+Showing the tables are inside `"system"`:
 ```sql
 mysql> SHOW TABLES FROM 'system';
 +------------------+
