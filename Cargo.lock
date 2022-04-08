@@ -3904,9 +3904,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d774ff9f291db4147e5363d05088860c9f40d330e72939fbc8ee1e56138fad95"
+checksum = "c66039bdd3b510275ada79e4c31a444c06fd8d88d7e2749968728b5da29d92c1"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -3985,7 +3985,7 @@ dependencies = [
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=22c7f23#22c7f23582a787767da06b70e3ed3684ae1d44fd"
+source = "git+https://github.com/datafuselabs/opensrv?rev=967477f1#967477f1f7005f8911a7d6c38cefbba4edd755ad"
 dependencies = [
  "async-trait",
  "byteorder",

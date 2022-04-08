@@ -1,11 +1,11 @@
 ---
-title: Deploy Databend With Local Disk (for Test)
-sidebar_label: With Local Disk (Test)
+title: Deploy Databend With Local Fs (for Test)
+sidebar_label: With Local Fs (Test)
 description:
-  How to deploy Databend with Local Disk (for Test).
+  How to deploy Databend with Local Fs (for Test).
 ---
 
-This guideline will deploy Databend(standalone) with local disk step by step.
+This guideline will deploy Databend(standalone) with local fs step by step.
 
 <p align="center">
 <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
@@ -13,7 +13,7 @@ This guideline will deploy Databend(standalone) with local disk step by step.
 
 :::caution
 
-Databend requires scalable storage layer(like Object Storage) as its storage, local disk is for testing only, please do not use it in production!
+Databend requires scalable storage layer(like Object Storage) as its storage, local fs is for testing only, please do not use it in production!
 
 :::
 
@@ -153,10 +153,10 @@ meta_username = "root"
 meta_password = "root"
 
 [storage]
-# disk|s3
-storage_type = "disk"
+# fs|s3
+storage_type = "fs"
 
-[storage.disk]
+[storage.fs]
 data_path = "benddata/datas"
 
 [storage.s3]
