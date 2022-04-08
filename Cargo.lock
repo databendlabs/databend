@@ -3210,9 +3210,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.14"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+checksum = "6389c490849ff5bc16be905ae24bc913a9c8892e19b2341dbc175e14c341c2b8"
 dependencies = [
  "cfg-if",
 ]
@@ -3914,9 +3914,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c66039bdd3b510275ada79e4c31a444c06fd8d88d7e2749968728b5da29d92c1"
+checksum = "496b6dff08ea23239dcf173c95c0fe276a4b577d5aab71b1baaadfea3fd4fa41"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -3932,6 +3932,7 @@ dependencies = [
  "metrics",
  "minitrace",
  "once_cell",
+ "parking_lot 0.12.0",
  "pin-project",
  "quick-xml",
  "reqsign",
