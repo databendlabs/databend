@@ -3,13 +3,18 @@ queue_rules:
     conditions:
       - "#approved-reviews-by>=2"
 
-      - '#check-success>=12'
+      # Must write expected checks explicitly
+      # Reference: https://docs.mergify.com/conditions/#validating-all-status-checks
       - check-success=check
-      - check-success~=build
-      - check-success~=test_unit
-      - check-success~=test_stateless_standalone
-      - check-success~=test_stateless_cluster
-      - check-success~=test_stateful_standalone
+      - check-success=build_macos
+      - check-success=build_linux
+      - check-success=test_unit
+      - check-success=test_metactl
+      - check-success=test_stateless_standalone_linux
+      - check-success=test_stateless_standalone_macos
+      - check-success=test_stateless_cluster_linux
+      - check-success=test_stateless_cluster_macos
+      - check-success=test_stateful_standalone
 
 pull_request_rules:
   - name: put bug fix pr to queue with high priority
