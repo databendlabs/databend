@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod check_json;
+mod get;
 mod parse_json;

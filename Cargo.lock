@@ -996,6 +996,7 @@ dependencies = [
  "sha1",
  "sha2 0.10.2",
  "simdutf8",
+ "sqlparser",
  "strength_reduce",
  "twox-hash",
  "uuid",
