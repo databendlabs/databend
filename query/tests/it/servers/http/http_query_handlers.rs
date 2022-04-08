@@ -134,7 +134,7 @@ async fn test_async() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", result);
         assert_eq!(result.data.len(), 1, "{:?}", result);
         assert!(result.next_uri.is_none());
-        assert!(result.schema.is_none());
+        assert!(result.schema.is_some());
         assert!(result.stats.scan_progress.is_some());
         assert_eq!(result.state, ExecuteStateKind::Succeeded);
     }
@@ -146,7 +146,7 @@ async fn test_async() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
-    assert!(result.schema.is_none());
+    assert!(result.schema.is_some());
     assert!(result.stats.scan_progress.is_some());
     assert_eq!(result.state, ExecuteStateKind::Succeeded);
 
