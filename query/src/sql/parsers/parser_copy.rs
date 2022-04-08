@@ -28,7 +28,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // copy into table from [?] ...
-    pub(crate) fn parse_copy(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_copy(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.expect_keyword(Keyword::INTO)?;
         let name = self.parser.parse_object_name()?;
         let columns = self

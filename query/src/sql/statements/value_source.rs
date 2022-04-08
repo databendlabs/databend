@@ -21,7 +21,6 @@ use common_exception::Result;
 use common_io::prelude::*;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
-use sqlparser::ast::Values;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
@@ -39,8 +38,8 @@ impl ValueSource {
         Self { schema }
     }
 
-    pub fn stream_read(&self, str: String) -> Result<DataBlock> {
-        let cursor = Cursor::new(str.into_bytes());
+    pub fn stream_read(&self, str: &str) -> Result<DataBlock> {
+        let cursor = Cursor::new(str.as_bytes());
         let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
 
         let _ = reader.ignore_white_spaces()?;
@@ -104,7 +103,7 @@ impl ValueSource {
         let values = parse_exprs(bytes)?;
 
         let mut blocks = vec![];
-        for value in values.0 {
+        for value in values {
             let block = exprs_to_datablock(value, &analyzer, &self.schema).await?;
             blocks.push(block);
         }
@@ -147,11 +146,11 @@ async fn exprs_to_datablock(
     executor.execute(&one_row_block)
 }
 
-fn parse_exprs(buf: &[u8]) -> std::result::Result<Values, ParserError> {
+fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
     let dialect = GenericDialect {};
     let sql = std::str::from_utf8(buf).unwrap();
     let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let tokens = tokenizer.tokenize()?;
-    let mut parser = Parser::new(tokens, &dialect);
+    let (tokens, position_map) = tokenizer.tokenize()?;
+    let mut parser = Parser::new(tokens, position_map, &dialect);
     parser.parse_values()
 }

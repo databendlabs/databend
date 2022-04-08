@@ -29,7 +29,7 @@ use crate::sql::DfStatement;
 impl<'a> DfParser<'a> {
     // Create view.
     // syntax reference to https://clickhouse.com/docs/zh/sql-reference/statements/create/view/
-    pub(crate) fn parse_create_view(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_view(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -51,7 +51,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    pub(crate) fn parse_drop_view(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_view(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
@@ -63,7 +63,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropView(drop))
     }
 
-    pub(crate) fn parse_alter_view(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_alter_view(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let name = self.parser.parse_object_name()?;
         if self.consume_token("AS") {
             let native_query = self.parser.parse_query()?;

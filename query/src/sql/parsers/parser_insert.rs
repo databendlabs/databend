@@ -15,18 +15,23 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use sqlparser::ast::SetExpr;
 use sqlparser::ast::Statement;
+use sqlparser::ast::StreamValues;
+use sqlparser::ast::Values;
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::QueryOffset;
 
 use crate::parser_err;
 use crate::sql::statements::DfInsertStatement;
+use crate::sql::statements::InsertSource;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    pub(crate) fn parse_insert(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_insert(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.next_token();
-        match self.parser.parse_insert()? {
+        match self.parser.parse_stream_values_insert()? {
             Statement::Insert {
                 or,
                 table_name,
@@ -38,19 +43,54 @@ impl<'a> DfParser<'a> {
                 after_columns,
                 table,
                 on,
-            } => Ok(DfStatement::InsertQuery(DfInsertStatement {
-                or,
-                table_name,
-                columns,
-                overwrite,
-                source,
-                partitioned,
-                format,
-                after_columns,
-                table,
-                on,
-            })),
+            } => {
+                let insert_source = match source {
+                    None => Ok(InsertSource::Empty),
+                    Some(source) => match source.body {
+                        SetExpr::Values(Values(_, stream_value)) => {
+                            self.get_values_str(&stream_value).map(InsertSource::Values)
+                        }
+                        SetExpr::Select(_) => Ok(InsertSource::Select(source)),
+                        _ => Err(ParserError::ParserError(
+                            "Insert must be have values or select source.".to_string(),
+                        )),
+                    },
+                }?;
+
+                Ok(DfStatement::InsertQuery(DfInsertStatement {
+                    or,
+                    table_name,
+                    columns,
+                    overwrite,
+                    source: insert_source,
+                    partitioned,
+                    format,
+                    after_columns,
+                    table,
+                    on,
+                }))
+            }
             _ => parser_err!("Expect set insert statement"),
+        }
+    }
+
+    fn get_values_str(&self, values_info: &StreamValues) -> Result<&'a str, ParserError> {
+        let start = &values_info.start;
+        let end = &values_info.end;
+        let sql = self.sql;
+
+        match (start, end) {
+            (QueryOffset::Normal(start), QueryOffset::Normal(end)) => {
+                let start = *start as usize;
+                let end = *end as usize;
+
+                Ok(&sql[start..end])
+            }
+            (QueryOffset::Normal(start), QueryOffset::EOF) => Ok(&sql[*start as usize..]),
+            _ => parser_err!(format!(
+                "Unexpected values position info, start:{}, end:{}",
+                start, end,
+            )),
         }
     }
 }

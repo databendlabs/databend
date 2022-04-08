@@ -64,16 +64,16 @@ impl<'a> DfParser<'a> {
     /// Parse the specified tokens with dialect
     pub fn new_with_dialect(sql: &'a str, dialect: &'a dyn Dialect) -> Result<Self, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
-        let tokens = tokenizer.tokenize()?;
+        let (tokens, position_map) = tokenizer.tokenize()?;
 
         Ok(DfParser {
             sql,
-            parser: Parser::new(tokens, dialect),
+            parser: Parser::new(tokens, position_map, dialect),
         })
     }
 
     /// Parse a SQL statement and produce a set of statements with dialect
-    pub fn parse_sql(sql: &str) -> Result<(Vec<DfStatement>, Vec<DfHint>), ErrorCode> {
+    pub fn parse_sql(sql: &'a str) -> Result<(Vec<DfStatement<'a>>, Vec<DfHint>), ErrorCode> {
         let dialect = &GenericDialect {};
         let start = Instant::now();
         let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
@@ -83,9 +83,9 @@ impl<'a> DfParser<'a> {
 
     /// Parse a SQL statement and produce a set of statements
     pub fn parse_sql_with_dialect(
-        sql: &str,
-        dialect: &dyn Dialect,
-    ) -> Result<(Vec<DfStatement>, Vec<DfHint>), ParserError> {
+        sql: &'a str,
+        dialect: &'a dyn Dialect,
+    ) -> Result<(Vec<DfStatement<'a>>, Vec<DfHint>), ParserError> {
         let mut parser = DfParser::new_with_dialect(sql, dialect)?;
         let mut stmts = Vec::new();
 
@@ -130,7 +130,7 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parse a new expression
-    pub fn parse_statement(&mut self) -> Result<DfStatement, ParserError> {
+    pub fn parse_statement(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.peek_token() {
             Token::Word(w) => {
                 match w.keyword {
@@ -206,7 +206,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_create(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_create(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => {
                 //TODO:make stage to sql parser keyword
@@ -274,7 +274,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_alter(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_alter(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
@@ -287,7 +287,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_describe(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_desc_table(),
@@ -302,13 +302,13 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_rename(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_rename(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.next_token();
         self.parse_rename_table()
     }
 
     /// Drop database/table/stage.
-    fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_drop(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::DATABASE => self.parse_drop_database(),
@@ -324,7 +324,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_show(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_show(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let full: bool = self.consume_token("FULL");
         if self.consume_token("TABLES") {
             self.parse_show_tables(full)
@@ -353,7 +353,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_show_create(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_show_create(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_show_create_table(),
@@ -364,7 +364,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_truncate(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.next_token();
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
