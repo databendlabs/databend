@@ -16,8 +16,11 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::storages::fuse::meta::common::ColumnId;
+use crate::storages::fuse::meta::common::Compression;
 use crate::storages::fuse::meta::common::FormatVersion;
 use crate::storages::fuse::meta::common::Location;
 use crate::storages::fuse::meta::common::Statistics;
@@ -26,7 +29,7 @@ use crate::storages::fuse::meta::v0::ColumnMeta;
 use crate::storages::index::ColumnStatistics;
 
 /// A segment comprises one or more blocks
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SegmentInfo {
     /// format version
     format_version: FormatVersion,
@@ -38,7 +41,7 @@ pub struct SegmentInfo {
 
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,
@@ -46,6 +49,14 @@ pub struct BlockMeta {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub location: Location,
+
+    /// Compression algo used to compress the columns of blocks
+    ///
+    /// If not specified, the legacy algo `Lz4` will be used.
+    /// `Lz4` is merely for backward compatibility, it will NO longer be
+    /// used in the write path.
+    #[serde(default = "Compression::legacy")]
+    pub compression: Compression,
 }
 
 impl SegmentInfo {
@@ -83,6 +94,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             col_stats: s.col_stats,
             col_metas: s.col_metas,
             location: (s.location.path, DataBlock::VERSION),
+            compression: Compression::Lz4,
         }
     }
 }

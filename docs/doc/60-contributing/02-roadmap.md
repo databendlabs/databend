@@ -1,6 +1,6 @@
 ---
 title: Roadmap 2022
-sidebar_label: Roadmap 2022
+sidebar_label: Roadmap
 description:
   Roadmap 2022
 ---

@@ -5,7 +5,9 @@
  
 <h4 align="center">
   <a href="https://databend.rs/doc">Documentation</a>  |
+  <a href="https://perf.databend.rs">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap(v0.8)</a>
+
 </h4>
 
 <div>
@@ -149,6 +151,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 - [Databend Develop](https://databend.rs/doc/develop)
 - [Databend Contributing](https://databend.rs/doc/contributing)
 - [Databend Performance](https://databend.rs/doc/performance)
+- [Databend Continuous Benchmarking](https://perf.databend.rs)
 
 ## Use-Case
 

@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse_handler;
-mod formats;
-mod http_query_handlers;
-mod json_block;
-mod statement;
+use crate::PlanShowKind;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct ShowTabStatPlan {
+    pub kind: PlanShowKind,
+    // show tables from db1 [or in db1]
+    pub fromdb: Option<String>,
+}

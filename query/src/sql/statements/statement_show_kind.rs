@@ -14,12 +14,10 @@
 
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
-use sqlparser::ast::ObjectName;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfShowKind {
     All,
     Like(Ident),
     Where(Expr),
-    FromOrIn(ObjectName),
 }
