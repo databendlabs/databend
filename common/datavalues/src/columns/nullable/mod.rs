@@ -111,7 +111,7 @@ impl Column for NullableColumn {
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {
-        (false, Some(&self.validity))
+        (self.only_null(), Some(&self.validity))
     }
 
     fn memory_size(&self) -> usize {

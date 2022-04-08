@@ -24,8 +24,8 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 // ignore(...) is a function that takes any arguments, and always returns 0.
 // it can be used in performance tests
@@ -36,14 +36,17 @@ pub struct IgnoreFunction {
 }
 
 impl IgnoreFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IgnoreFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .bool_function()

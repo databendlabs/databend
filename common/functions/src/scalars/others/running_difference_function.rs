@@ -15,7 +15,6 @@
 use std::fmt;
 use std::ops::Sub;
 use std::str;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -23,40 +22,17 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {
     display_name: String,
+    result_type: DataTypePtr,
 }
 
 impl RunningDifferenceFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(RunningDifferenceFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    // The function runningDifference compares the value[index] and value[index-1].
-    // If we set passthrough_null to be true, the input will be optimized with non-null + masking.
-    // Considering tht we actually need two masks(one for value[index], the other value[index-1]) for validity,
-    // we choose to handler the nullable ourselves.
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .disable_passthrough_null()
-                .num_arguments(1),
-        )
-    }
-}
-
-impl Function for RunningDifferenceFunction {
-    fn name(&self) -> &str {
-        self.display_name.as_str()
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
         let dt = remove_nullable(args[0]);
 
@@ -77,11 +53,38 @@ impl Function for RunningDifferenceFunction {
             )),
         }?;
 
-        if nullable {
-            Ok(Arc::new(NullableType::create(output_type)))
+        let result_type = if nullable {
+            NullableType::arc(output_type)
         } else {
-            Ok(output_type)
-        }
+            output_type
+        };
+
+        Ok(Box::new(RunningDifferenceFunction {
+            display_name: display_name.to_string(),
+            result_type,
+        }))
+    }
+
+    // The function runningDifference compares the value[index] and value[index-1].
+    // If we set passthrough_null to be true, the input will be optimized with non-null + masking.
+    // Considering tht we actually need two masks(one for value[index], the other value[index-1]) for validity,
+    // we choose to handler the nullable ourselves.
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .disable_passthrough_null()
+                .num_arguments(1),
+        )
+    }
+}
+
+impl Function for RunningDifferenceFunction {
+    fn name(&self) -> &str {
+        self.display_name.as_str()
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.result_type.clone())
     }
 
     fn eval(

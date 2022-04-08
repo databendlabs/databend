@@ -20,8 +20,8 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
@@ -29,14 +29,17 @@ pub struct ToTypeNameFunction {
 }
 
 impl ToTypeNameFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(ToTypeNameFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .disable_passthrough_null()

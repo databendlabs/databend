@@ -18,17 +18,17 @@ use std::str;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_numeric;
 use crate::scalars::cast_with_type;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::ParsingMode;
+use crate::scalars::TypedFunctionDescription;
 
 #[doc(alias = "TryNumToIPv4StringFunction")]
 pub type TryInetNtoaFunction = InetNtoaFunctionImpl<true>;
@@ -39,18 +39,37 @@ pub type InetNtoaFunction = InetNtoaFunctionImpl<false>;
 #[derive(Clone)]
 pub struct InetNtoaFunctionImpl<const SUPPRESS_CAST_ERROR: bool> {
     display_name: String,
+    result_type: DataTypePtr,
 }
 
 impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        let result_type = if SUPPRESS_CAST_ERROR {
+            if args[0].data_type_id() == TypeID::Null {
+                NullType::arc()
+            } else {
+                let input_type = remove_nullable(args[0]);
+                assert_numeric(&input_type)?;
+                // For invalid input, the function should return null. So the return type must be nullable.
+                NullableType::arc(StringType::arc())
+            }
+        } else {
+            assert_numeric(args[0])?;
+            StringType::arc()
+        };
+
         Ok(Box::new(InetNtoaFunctionImpl::<SUPPRESS_CAST_ERROR> {
             display_name: display_name.to_string(),
+            result_type,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(1))
+    pub fn desc() -> TypedFunctionDescription {
+        let mut features = FunctionFeatures::default().deterministic().num_arguments(1);
+        if SUPPRESS_CAST_ERROR {
+            features = features.disable_passthrough_null()
+        }
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
@@ -59,27 +78,8 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let input_type = args[0];
-        if input_type.data_type_id() == TypeID::Null {
-            return Ok(NullType::arc());
-        }
-
-        let output_type = if input_type.data_type_id().is_numeric() {
-            Ok(StringType::arc())
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric or null type, but got {}",
-                args[0].name()
-            )))
-        }?;
-
-        if SUPPRESS_CAST_ERROR {
-            // For invalid input, the function should return null. So the return type must be nullable.
-            Ok(Arc::new(NullableType::create(output_type)))
-        } else {
-            Ok(output_type)
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.result_type.clone())
     }
 
     fn eval(

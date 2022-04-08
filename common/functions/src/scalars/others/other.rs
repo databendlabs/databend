@@ -28,27 +28,27 @@ pub struct OtherFunction {}
 
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("exists", ExistsFunction::desc());
-        factory.register("totypename", ToTypeNameFunction::desc());
-        factory.register("sleep", SleepFunction::desc());
+        factory.register_typed("exists", ExistsFunction::desc());
+        factory.register_typed("totypename", ToTypeNameFunction::desc());
+        factory.register_typed("sleep", SleepFunction::desc());
 
-        factory.register("runningDifference", RunningDifferenceFunction::desc());
-        factory.register("ignore", IgnoreFunction::desc());
+        factory.register_typed("runningDifference", RunningDifferenceFunction::desc());
+        factory.register_typed("ignore", IgnoreFunction::desc());
 
         // inet_aton
-        factory.register("inet_aton", InetAtonFunction::desc());
-        factory.register("IPv4StringToNum", InetAtonFunction::desc());
+        factory.register_typed("inet_aton", InetAtonFunction::desc());
+        factory.register_typed("IPv4StringToNum", InetAtonFunction::desc());
 
         // try_inet_aton
-        factory.register("try_inet_aton", TryInetAtonFunction::desc());
-        factory.register("TryIPv4StringToNum", TryInetAtonFunction::desc());
+        factory.register_typed("try_inet_aton", TryInetAtonFunction::desc());
+        factory.register_typed("TryIPv4StringToNum", TryInetAtonFunction::desc());
 
         // inet_ntoa
-        factory.register("inet_ntoa", InetNtoaFunction::desc());
-        factory.register("IPv4NumToString", InetNtoaFunction::desc());
+        factory.register_typed("inet_ntoa", InetNtoaFunction::desc());
+        factory.register_typed("IPv4NumToString", InetNtoaFunction::desc());
 
         // try_inet_ntoa
-        factory.register("try_inet_ntoa", TryInetNtoaFunction::desc());
-        factory.register("TryIPv4NumToString", TryInetNtoaFunction::desc());
+        factory.register_typed("try_inet_ntoa", TryInetNtoaFunction::desc());
+        factory.register_typed("TryIPv4NumToString", TryInetNtoaFunction::desc());
     }
 }

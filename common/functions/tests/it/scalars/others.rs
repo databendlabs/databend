@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::InetAtonFunction;
 use common_functions::scalars::InetNtoaFunction;
 use common_functions::scalars::RunningDifferenceFunction;
+use common_functions::scalars::ToTypeNameFunction;
 use common_functions::scalars::TryInetAtonFunction;
 use common_functions::scalars::TryInetNtoaFunction;
 
@@ -28,10 +30,8 @@ use crate::scalars::scalar_function2_test::ScalarFunctionWithFieldTest;
 
 #[test]
 fn test_running_difference_first_null() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
-        ScalarFunctionTest {
+        (NullableType::arc(Int8Type::arc()), ScalarFunctionTest {
             name: "i8_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -42,8 +42,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i16)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt8Type::arc()), ScalarFunctionTest {
             name: "u8_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -54,8 +54,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i16)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int16Type::arc()), ScalarFunctionTest {
             name: "i16_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -66,8 +66,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i32)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt16Type::arc()), ScalarFunctionTest {
             name: "u16_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -78,8 +78,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i32)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int32Type::arc()), ScalarFunctionTest {
             name: "i32_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -90,8 +90,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt32Type::arc()), ScalarFunctionTest {
             name: "u32_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -102,8 +102,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int64Type::arc()), ScalarFunctionTest {
             name: "i64_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -114,8 +114,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt64Type::arc()), ScalarFunctionTest {
             name: "u64_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -126,8 +126,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int8Type::arc()), ScalarFunctionTest {
             name: "i8_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i8),
@@ -138,8 +138,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i16), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt8Type::arc()), ScalarFunctionTest {
             name: "u8_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u8),
@@ -150,8 +150,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i16), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int16Type::arc()), ScalarFunctionTest {
             name: "i16_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i16),
@@ -162,8 +162,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i32), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt16Type::arc()), ScalarFunctionTest {
             name: "u16_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u16),
@@ -174,8 +174,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i32), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int32Type::arc()), ScalarFunctionTest {
             name: "i32_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i32),
@@ -186,8 +186,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt32Type::arc()), ScalarFunctionTest {
             name: "u32_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u32),
@@ -198,8 +198,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(Int64Type::arc()), ScalarFunctionTest {
             name: "i64_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i64),
@@ -210,8 +210,8 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (NullableType::arc(UInt64Type::arc()), ScalarFunctionTest {
             name: "u64_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u64),
@@ -222,15 +222,22 @@ fn test_running_difference_first_null() -> Result<()> {
             ])],
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
-        },
+        }),
     ];
 
-    test_scalar_functions(RunningDifferenceFunction::try_create("a")?, &tests, false)
+    for (typ, test) in tests {
+        test_scalar_functions(
+            RunningDifferenceFunction::try_create("a", &[&typ])?,
+            &[test],
+            false,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_running_difference_datetime32_first_null() -> Result<()> {
-    use common_datavalues::prelude::*;
     use common_datavalues::type_datetime32::DateTime32Type;
 
     let tests = vec![
@@ -260,13 +267,17 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(RunningDifferenceFunction::try_create("a")?, &tests, false)
+    test_scalar_functions_with_type(
+        RunningDifferenceFunction::try_create("a", &[&NullableType::arc(DateTime32Type::arc(
+            None,
+        ))])?,
+        &tests,
+        false,
+    )
 }
 
 #[test]
 fn test_try_inet_aton_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "valid input",
@@ -288,14 +299,12 @@ fn test_try_inet_aton_function() -> Result<()> {
         },
     ];
 
-    let test_func = TryInetAtonFunction::try_create("try_inet_aton")?;
-    test_scalar_functions(test_func, &tests, true)
+    let test_func = TryInetAtonFunction::try_create("try_inet_aton", &[&StringType::arc()])?;
+    test_scalar_functions(test_func, &tests, false)
 }
 
 #[test]
 fn test_inet_aton_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "valid input",
@@ -323,106 +332,153 @@ fn test_inet_aton_function() -> Result<()> {
         },
     ];
 
-    let test_func = InetAtonFunction::try_create("inet_aton")?;
-    test_scalar_functions(test_func, &tests, false)
+    let test_func = InetAtonFunction::try_create("inet_aton", &[&StringType::arc()])?;
+    test_scalar_functions(test_func, &tests, true)
 }
 
 #[test]
 fn test_try_inet_ntoa_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         // integer input test cases
-        ScalarFunctionTest {
+        (Int32Type::arc(), ScalarFunctionTest {
             name: "integer_input_i32_positive",
             columns: vec![Series::from_data(vec![2130706433_i32])],
             expect: Series::from_data(vec![Some("127.0.0.1")]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (Int32Type::arc(), ScalarFunctionTest {
             name: "integer_input_i32_negative",
             columns: vec![Series::from_data(vec![-1])],
             expect: Series::from_data(vec![Some("255.255.255.255")]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt8Type::arc(), ScalarFunctionTest {
             name: "integer_input_u8",
             columns: vec![Series::from_data(vec![Some(0_u8)])],
             expect: Series::from_data(vec![Some("0.0.0.0")]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt32Type::arc(), ScalarFunctionTest {
             name: "integer_input_u32",
             columns: vec![Series::from_data(vec![Some(3232235777_u32)])],
             expect: Series::from_data(vec![Some("192.168.1.1")]),
             error: "",
-        },
-        // float input test cases
-        ScalarFunctionTest {
-            name: "float_input_f64",
-            columns: vec![Series::from_data(vec![2130706433.3917_f64])],
-            expect: Series::from_data(vec![Some("127.0.0.1")]),
-            error: "",
-        },
-        // string input test cases
-        ScalarFunctionTest {
-            name: "string_input_u32",
-            columns: vec![Series::from_data(vec!["3232235777"])],
-            expect: Series::from_data(vec![Some("192.168.1.1")]),
-            error: "Expected numeric or null type, but got String",
-        },
+        }),
+        (
+            Float64Type::arc(),
+            // float input test cases
+            ScalarFunctionTest {
+                name: "float_input_f64",
+                columns: vec![Series::from_data(vec![2130706433.3917_f64])],
+                expect: Series::from_data(vec![Some("127.0.0.1")]),
+                error: "",
+            },
+        ),
+        (
+            StringType::arc(),
+            // string input test cases
+            ScalarFunctionTest {
+                name: "string_input_u32",
+                columns: vec![Series::from_data(vec!["3232235777"])],
+                expect: Series::from_data(vec![Some("192.168.1.1")]),
+                error: "Expected a numeric type, but got String",
+            },
+        ),
     ];
 
-    let test_func = TryInetNtoaFunction::try_create("try_inet_ntoa")?;
-    test_scalar_functions(test_func, &tests, true)
+    for (typ, test) in tests {
+        match TryInetNtoaFunction::try_create("try_inet_ntoa", &[&typ]) {
+            Ok(f) => {
+                test_scalar_functions(f, &[test], false)?;
+            }
+            Err(cause) => {
+                assert_eq!(test.error, cause.message(), "{}", test.name);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_inet_ntoa_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
-        // integer input test cases
-        ScalarFunctionTest {
-            name: "integer_input_i32_positive",
-            columns: vec![Series::from_data([2130706433_i32])],
-            expect: Series::from_data(["127.0.0.1"]),
-            error: "",
-        },
-        ScalarFunctionTest {
+        (
+            Int32Type::arc(),
+            // integer input test cases
+            ScalarFunctionTest {
+                name: "integer_input_i32_positive",
+                columns: vec![Series::from_data([2130706433_i32])],
+                expect: Series::from_data(["127.0.0.1"]),
+                error: "",
+            },
+        ),
+        (Int32Type::arc(), ScalarFunctionTest {
             name: "integer_input_i32_negative",
             columns: vec![Series::from_data([-1])],
             expect: Series::from_data(["255.255.255.255"]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt8Type::arc(), ScalarFunctionTest {
             name: "integer_input_u8",
             columns: vec![Series::from_data([Some(0_u8)])],
             expect: Series::from_data([Some("0.0.0.0")]),
             error: "",
-        },
-        ScalarFunctionTest {
+        }),
+        (UInt32Type::arc(), ScalarFunctionTest {
             name: "integer_input_u32",
             columns: vec![Series::from_data([Some(3232235777_u32)])],
             expect: Series::from_data([Some("192.168.1.1")]),
             error: "",
-        },
-        // float input test cases
-        ScalarFunctionTest {
-            name: "float_input_f64",
-            columns: vec![Series::from_data([2130706433.3917_f64])],
-            expect: Series::from_data(["127.0.0.1"]),
-            error: "",
-        },
-        // string input test cases
-        ScalarFunctionTest {
-            name: "string_input_empty",
-            columns: vec![Series::from_data([""])],
-            expect: Series::from_data([""]),
-            error: "Expected numeric or null type, but got String",
-        },
+        }),
+        (
+            Float64Type::arc(),
+            // float input test cases
+            ScalarFunctionTest {
+                name: "float_input_f64",
+                columns: vec![Series::from_data([2130706433.3917_f64])],
+                expect: Series::from_data(["127.0.0.1"]),
+                error: "",
+            },
+        ),
+        (
+            StringType::arc(),
+            // string input test cases
+            ScalarFunctionTest {
+                name: "string_input_empty",
+                columns: vec![Series::from_data([""])],
+                expect: Series::from_data([""]),
+                error: "Expected a numeric type, but got String",
+            },
+        ),
     ];
 
-    let test_func = InetNtoaFunction::try_create("inet_ntoa")?;
-    test_scalar_functions(test_func, &tests, true)
+    for (typ, test) in tests {
+        match InetNtoaFunction::try_create("inet_ntoa", &[&typ]) {
+            Ok(f) => {
+                test_scalar_functions(f, &[test], true)?;
+            }
+            Err(cause) => {
+                assert_eq!(test.error, cause.message(), "{}", test.name);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_to_type_name_function() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "to_type_name-example-passed",
+        columns: vec![Series::from_data([true, true, true, false])],
+        expect: Series::from_data(["Boolean", "Boolean", "Boolean", "Boolean"]),
+        error: "",
+    }];
+
+    test_scalar_functions(
+        ToTypeNameFunction::try_create("toTypeName", &[&BooleanType::arc()])?,
+        &tests,
+        false,
+    )
 }

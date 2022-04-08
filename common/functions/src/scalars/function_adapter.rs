@@ -168,29 +168,30 @@ impl Function for FunctionAdapter {
 
             if columns.iter().any(|v| v.data_type().is_nullable()) {
                 let mut validity: Option<Bitmap> = None;
-                let mut has_all_null = false;
 
-                let columns = columns
-                    .iter()
-                    .map(|v| {
-                        let (is_all_null, valid) = v.column().validity();
-                        if is_all_null {
-                            has_all_null = true;
-                            let mut v = MutableBitmap::with_capacity(input_rows);
-                            v.extend_constant(input_rows, false);
-                            validity = Some(v.into());
-                        } else if !has_all_null {
-                            validity = combine_validities_2(validity.clone(), valid.cloned());
-                        }
+                let mut input = Vec::with_capacity(columns.len());
+                for v in columns.iter() {
+                    let (is_all_null, valid) = v.column().validity();
+                    if is_all_null {
+                        // If only null, return null directly.
+                        let args = columns.iter().map(|v| v.data_type()).collect::<Vec<_>>();
+                        let inner_type = inner.return_type(args.as_slice())?;
+                        return Ok(NullableColumn::wrap_inner(
+                            inner_type
+                                .create_constant_column(&inner_type.default_value(), input_rows)?,
+                            Some(valid.unwrap().clone()),
+                        ));
+                    }
+                    validity = combine_validities_2(validity.clone(), valid.cloned());
 
-                        let ty = remove_nullable(v.data_type());
-                        let f = v.field();
-                        let col = Series::remove_nullable(v.column());
-                        ColumnWithField::new(col, DataField::new(f.name(), ty))
-                    })
-                    .collect::<Vec<_>>();
+                    let ty = remove_nullable(v.data_type());
+                    let f = v.field();
+                    let col = Series::remove_nullable(v.column());
+                    let col = ColumnWithField::new(col, DataField::new(f.name(), ty));
+                    input.push(col);
+                }
 
-                let col = self.eval(&columns, input_rows, func_ctx)?;
+                let col = self.eval(&input, input_rows, func_ctx)?;
 
                 // The'try' series functions always return Null when they failed the try.
                 // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
