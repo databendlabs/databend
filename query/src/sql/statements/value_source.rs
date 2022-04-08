@@ -13,10 +13,9 @@
 //  limitations under the License.
 //
 
-use std::io::Cursor;
-
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use common_planners::Expression;
@@ -24,6 +23,7 @@ use sqlparser::ast::Expr;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::transforms::ExpressionExecutor;
@@ -31,22 +31,16 @@ use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
     schema: DataSchemaRef,
+    analyzer: ExpressionAnalyzer,
 }
 
 impl ValueSource {
-    pub fn new(schema: DataSchemaRef) -> Self {
-        Self { schema }
+    pub fn new(schema: DataSchemaRef, analyzer: ExpressionAnalyzer) -> Self {
+        Self { schema, analyzer }
     }
 
-    pub fn stream_read(&self, str: &str) -> Result<DataBlock> {
-        let cursor = Cursor::new(str.as_bytes());
-        let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
-
-        let _ = reader.ignore_white_spaces()?;
-        let _ = reader.ignore_insensitive_bytes(b"VALUES")?;
-
-        let reader = &mut reader;
-
+    pub async fn read<'a>(self, reader: &mut CpBufferReader<'a>) -> Result<DataBlock> {
+        let mut buf = Vec::new();
         let mut desers = self
             .schema
             .fields()
@@ -64,22 +58,39 @@ impl ValueSource {
             }
             // not the first row
             if rows != 0 {
-                let _ = reader.ignore_byte(b',')?;
-                let _ = reader.ignore_white_spaces()?;
-            }
-
-            reader.must_ignore_byte(b'(')?;
-            for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
-                let _ = reader.ignore_white_spaces()?;
-
-                if col > 0 {
-                    reader.must_ignore_byte(b',')?;
-                    let _ = reader.ignore_white_spaces()?;
-                }
-                deser.de_text_quoted(reader)?;
+                reader.until(b',', &mut buf)?;
             }
             let _ = reader.ignore_white_spaces()?;
-            reader.must_ignore_byte(b')')?;
+            reader.checkpoint();
+
+            let mut datavalues: Option<Vec<DataValue>> = None;
+
+            if !reader.ignore_byte(b'(')? {
+                return Err(ErrorCode::BadDataValueType(
+                    "Must start with parentheses".to_string(),
+                ));
+            }
+
+            for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
+                if let Some(values) = &datavalues {
+                    deser.append_data_value(values[col].clone())?;
+                    continue;
+                }
+                let _ = reader.ignore_white_spaces()?;
+
+                if deser.de_text_quoted(reader).is_err() {
+                    skip_to_next_row(reader, 1)?;
+                    // parse from expression
+                    // set datavalues
+                    let buf = reader.get_checkpoint_buffer();
+                    let exprs = parse_exprs(buf)?;
+                    reader.reset_checkpoint();
+
+                    let values = exprs_to_datavalue(exprs, &self.analyzer, &self.schema).await?;
+                    deser.append_data_value(values[col].clone())?;
+                    datavalues = Some(values);
+                }
+            }
             rows += 1;
         }
 
@@ -94,28 +105,62 @@ impl ValueSource {
 
         Ok(DataBlock::create(self.schema.clone(), columns))
     }
-
-    pub async fn parser_read(
-        self,
-        bytes: &[u8],
-        analyzer: ExpressionAnalyzer,
-    ) -> Result<DataBlock> {
-        let values = parse_exprs(bytes)?;
-
-        let mut blocks = vec![];
-        for value in values {
-            let block = exprs_to_datablock(value, &analyzer, &self.schema).await?;
-            blocks.push(block);
-        }
-        DataBlock::concat_blocks(&blocks)
-    }
 }
 
-async fn exprs_to_datablock(
+// values |(xxx), (yyy), (zzz)
+pub fn skip_to_next_row(reader: &mut CpBufferReader, mut balance: i32) -> Result<()> {
+    let _ = reader.ignore_white_spaces()?;
+
+    let mut quoted = false;
+
+    while balance > 0 {
+        let buffer = reader.fill_buf()?;
+        if buffer.is_empty() {
+            break;
+        }
+
+        let size = buffer.len();
+
+        let it = buffer
+            .iter()
+            .position(|&c| c == b'(' || c == b')' || c == b'\\' || c == b'\'');
+
+        if let Some(it) = it {
+            let c = buffer[it];
+            reader.consume(it + 1);
+
+            match c {
+                b'\\' => {
+                    continue;
+                }
+                b'\'' => {
+                    quoted ^= true;
+                    continue;
+                }
+                b')' => {
+                    if !quoted {
+                        balance -= 1;
+                    }
+                }
+                b'(' => {
+                    if !quoted {
+                        balance += 1;
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            reader.consume(size);
+        }
+    }
+    Ok(())
+}
+
+async fn exprs_to_datavalue(
     exprs: Vec<Expr>,
     analyzer: &ExpressionAnalyzer,
     schema: &DataSchemaRef,
-) -> Result<DataBlock> {
+) -> Result<Vec<DataValue>> {
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
         let expr = analyzer.analyze(expr).await?;
@@ -143,14 +188,23 @@ async fn exprs_to_datablock(
         expressions,
         true,
     )?;
-    executor.execute(&one_row_block)
+    let res = executor.execute(&one_row_block)?;
+
+    let datavalues: Vec<DataValue> = res.columns().iter().map(|col| col.get(0)).collect();
+    Ok(datavalues)
 }
 
-fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
+fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Expr>, ParserError> {
+    println!("buf -> {:?}", String::from_utf8_lossy(buf).to_string());
+
     let dialect = GenericDialect {};
     let sql = std::str::from_utf8(buf).unwrap();
     let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let (tokens, position_map) = tokenizer.tokenize()?;
-    let mut parser = Parser::new(tokens, position_map, &dialect);
-    parser.parse_values()
+    let (tokens, pos_map) = tokenizer.tokenize()?;
+    let mut parser = Parser::new(tokens, pos_map, &dialect);
+
+    parser.expect_token(&Token::LParen)?;
+    let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
+    parser.expect_token(&Token::RParen)?;
+    Ok(exprs)
 }
