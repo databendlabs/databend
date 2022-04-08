@@ -80,7 +80,7 @@ impl ResultDataManager {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
             let (block, end) = self.collect_new_page(tp).await?;
-            let num_row = block.data().len();
+            let num_row = block.num_rows();
             self.total_rows += num_row;
             let page = Page {
                 data: Arc::new(block),

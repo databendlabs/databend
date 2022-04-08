@@ -108,7 +108,7 @@ impl QueryResponse {
             running_time_ms: r.state.running_time_ms,
         };
         QueryResponse {
-            data: data.data().clone(),
+            data: data.into(),
             state: r.state.state,
             schema: Some(schema),
             session_id,
