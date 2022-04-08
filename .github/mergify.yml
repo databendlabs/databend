@@ -6,8 +6,6 @@ queue_rules:
       # Must write expected checks explicitly
       # Reference: https://docs.mergify.com/conditions/#validating-all-status-checks
       - check-success=check
-      - check-success=build_macos
-      - check-success=build_linux
       - check-success=test_unit
       - check-success=test_metactl
       - check-success=test_stateless_standalone_linux
