@@ -39,6 +39,8 @@ pub trait Column: Send + Sync {
     }
     fn data_type(&self) -> DataTypePtr;
 
+    fn column_type_name(&self) -> String;
+
     fn is_nullable(&self) -> bool {
         false
     }
@@ -254,6 +256,9 @@ impl std::fmt::Debug for dyn Column + '_ {
                 Struct => {
                     fmt_dyn!(col, StructColumn, f)
                 },
+                Variant | VariantArray | VariantObject => {
+                    fmt_dyn!(col, JsonColumn, f)
+                }
                 _ => {
                     unimplemented!()
                 }

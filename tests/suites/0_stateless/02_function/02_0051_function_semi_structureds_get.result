@@ -1,0 +1,30 @@
+==get==
+2.71
+NULL
+2
+NULL
+==get_ignore_case==
+2
+1
+==get_path==
+1
+2
+1
+"databend"
+"ext"
+NULL
+==get from table==
+1
+NULL
+NULL
+1
+==get_ignore_case from table==
+1
+1
+==get_path from table==
+1
+"a"
+1
+1
+2
+2

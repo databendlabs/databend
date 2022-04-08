@@ -276,6 +276,10 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 "(?i)^(SELECT @@transaction_isolation)",
                 Self::variable_block("transaction_isolation", "AUTOCOMMIT"),
             ),
+            (
+                "(?i)^(SELECT @@session.transaction_read_only)",
+                Self::variable_block("session.transaction_read_only", "0"),
+            ),
             ("(?i)^(SELECT @@(.*))", Self::variable_block("", "1")),
             ("(?i)^(ROLLBACK(.*))", None),
             ("(?i)^(SET NAMES(.*))", None),
