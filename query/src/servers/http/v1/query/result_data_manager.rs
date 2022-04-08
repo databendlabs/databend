@@ -12,20 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::error::TryRecvError;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
 
 use crate::servers::http::v1::JsonBlock;
-use crate::servers::http::v1::JsonBlockRef;
 
 const TARGET_ROWS_PER_PAGE: usize = 10000;
 
@@ -38,7 +35,7 @@ pub enum Wait {
 
 #[derive(Clone)]
 pub struct Page {
-    pub data: JsonBlockRef,
+    pub data: JsonBlock,
     pub total_rows: usize,
 }
 
@@ -48,7 +45,6 @@ pub struct ResponseData {
 }
 
 pub struct ResultDataManager {
-    pub(crate) schema: DataSchemaRef,
     total_rows: usize,
     total_pages: usize,
     last_page: Option<Page>,
@@ -57,9 +53,8 @@ pub struct ResultDataManager {
 }
 
 impl ResultDataManager {
-    pub fn new(schema: DataSchemaRef, block_rx: mpsc::Receiver<DataBlock>) -> ResultDataManager {
+    pub fn new(block_rx: mpsc::Receiver<DataBlock>) -> ResultDataManager {
         ResultDataManager {
-            schema,
             block_rx,
             total_rows: 0,
             last_page: None,
@@ -83,7 +78,7 @@ impl ResultDataManager {
             let num_row = block.num_rows();
             self.total_rows += num_row;
             let page = Page {
-                data: Arc::new(block),
+                data: block,
                 total_rows: self.total_rows,
             };
             if num_row > 0 {

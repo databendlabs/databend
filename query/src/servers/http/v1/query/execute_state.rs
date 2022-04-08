@@ -22,7 +22,6 @@ use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -136,13 +135,12 @@ impl ExecuteState {
         request: &HttpQueryRequest,
         session: SessionRef,
         block_tx: mpsc::Sender<DataBlock>,
-    ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
+    ) -> Result<Arc<RwLock<Executor>>> {
         let sql = &request.sql;
         let start_time = Instant::now();
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(sql);
         let plan = PlanParser::parse(ctx.clone(), sql).await?;
-        let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.
@@ -182,7 +180,7 @@ impl ExecuteState {
             };
         })?;
 
-        Ok((executor, schema))
+        Ok(executor)
     }
 }
 

@@ -20,7 +20,6 @@ mod stage;
 mod statement;
 
 pub(crate) use block_to_json::JsonBlock;
-pub(crate) use block_to_json::JsonBlockRef;
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;

@@ -21,7 +21,6 @@ use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::Mutex as TokioMutex;
 use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
@@ -93,10 +92,10 @@ impl Default for HttpSession {
 }
 
 pub struct ResponseInitialState {
-    pub schema: Option<DataSchemaRef>,
     pub session_id: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct ResponseState {
     pub running_time_ms: f64,
     pub scan_progress: Option<ProgressValues>,
@@ -166,8 +165,8 @@ impl HttpQuery {
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 
-        let (state, schema) = ExecuteState::try_create(&request, session, block_tx).await?;
-        let data = Arc::new(TokioMutex::new(ResultDataManager::new(schema, block_rx)));
+        let state = ExecuteState::try_create(&request, session, block_tx).await?;
+        let data = Arc::new(TokioMutex::new(ResultDataManager::new(block_rx)));
         let query = HttpQuery {
             id: id.to_string(),
             session_id,
@@ -210,9 +209,7 @@ impl HttpQuery {
     }
 
     pub async fn get_initial_state(&self) -> ResponseInitialState {
-        let data = self.data.lock().await;
         ResponseInitialState {
-            schema: Some(data.schema.clone()),
             session_id: self.session_id.clone(),
         }
     }

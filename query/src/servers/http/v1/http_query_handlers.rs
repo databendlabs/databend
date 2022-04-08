@@ -94,22 +94,20 @@ pub struct QueryResponse {
 
 impl QueryResponse {
     pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
-        let (data, next_url) = match &r.data {
-            Some(d) => (
-                d.page.data.clone(),
-                d.next_page_no.map(|n| make_page_uri(&id, n)),
-            ),
-            None => (Arc::new(JsonBlock::empty()), None),
+        let state = r.state.clone();
+        let (data, next_url) = match r.data {
+            Some(d) => (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n))),
+            None => (JsonBlock::empty(), None),
         };
         let schema = data.schema().clone();
         let session_id = r.initial_state.as_ref().map(|v| v.session_id.clone());
         let stats = QueryStats {
-            scan_progress: r.state.scan_progress.clone(),
-            running_time_ms: r.state.running_time_ms,
+            scan_progress: state.scan_progress.clone(),
+            running_time_ms: state.running_time_ms,
         };
         QueryResponse {
             data: data.into(),
-            state: r.state.state,
+            state: state.state,
             schema: Some(schema),
             session_id,
             stats,
