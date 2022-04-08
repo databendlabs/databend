@@ -27,13 +27,13 @@ use crate::sql::statements::QueryAnalyzeState;
 use crate::sql::DfStatement;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfExplain {
+pub struct DfExplain<'a> {
     pub typ: ExplainType,
-    pub statement: Box<DfStatement>,
+    pub statement: Box<DfStatement<'a>>,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfExplain {
+impl<'a> AnalyzableStatement for DfExplain<'a> {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         match self.statement.as_ref() {
@@ -50,7 +50,7 @@ impl AnalyzableStatement for DfExplain {
     }
 }
 
-impl DfExplain {
+impl<'a> DfExplain<'a> {
     async fn analyze_explain(
         ctx: Arc<QueryContext>,
         v: &DfQueryStatement,

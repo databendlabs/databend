@@ -28,7 +28,7 @@ async fn test_parse_value_source() -> Result<()> {
 
     let parser = ValueSource::new(schema);
     let s = "VALUES ('ABC', 30 , 'China', '1992-03-15 00:00:00'), ('XYZ', 31 , 'Japen', '1991-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00')".to_string();
-    let block = parser.stream_read(s)?;
+    let block = parser.stream_read(&s)?;
 
     common_datablocks::assert_blocks_sorted_eq(
         vec![

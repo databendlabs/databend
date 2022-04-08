@@ -39,6 +39,8 @@ pub trait Column: Send + Sync {
     }
     fn data_type(&self) -> DataTypePtr;
 
+    fn column_type_name(&self) -> String;
+
     fn is_nullable(&self) -> bool {
         false
     }
