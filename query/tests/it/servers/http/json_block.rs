@@ -16,7 +16,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use databend_query::servers::http::v1::block_to_json::JsonBlock;
+use databend_query::servers::http::v1::json_block::JsonBlock;
 use pretty_assertions::assert_eq;
 use serde::Serialize;
 use serde_json::to_value;
