@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_arrow::parquet::FileMetaData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -25,7 +26,6 @@ use futures::stream::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Operator;
-use parquet_format_async_temp::FileMetaData;
 
 use super::block_writer;
 use crate::storages::fuse::io::TableMetaLocationGenerator;

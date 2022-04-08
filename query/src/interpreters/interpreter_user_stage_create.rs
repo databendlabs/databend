@@ -55,7 +55,7 @@ impl Interpreter for CreateUserStageInterpreter {
         if user_stage.stage_type == StageType::Internal {
             let prefix = format!("stage/{}/", user_stage.stage_name);
             let op = self.ctx.get_storage_operator()?;
-            op.object(&prefix).create().await?;
+            op.object(&prefix).create().await?
         }
 
         let _create_stage = user_mgr
