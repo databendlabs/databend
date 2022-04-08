@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Result;
 use std::sync::Arc;
 use std::time::Instant;
@@ -49,10 +51,13 @@ impl DalContext {
         }
     }
 
-    fn get_inner(&self) -> Arc<dyn Accessor> {
+    fn get_inner(&self) -> Result<Arc<dyn Accessor>> {
         match &self.inner {
-            None => panic!("dal context must init wrongly, inner accessor is empty"),
-            Some(inner) => inner.clone(),
+            None => Err(Error::new(
+                ErrorKind::Other,
+                "dal context must init wrongly, inner accessor is empty",
+            )),
+            Some(inner) => Ok(inner.clone()),
         }
     }
 
@@ -73,13 +78,13 @@ impl Layer for DalContext {
 #[async_trait]
 impl Accessor for DalContext {
     async fn create(&self, args: &OpCreate) -> Result<()> {
-        self.get_inner().create(args).await
+        self.get_inner()?.create(args).await
     }
 
     async fn read(&self, args: &OpRead) -> Result<BytesReader> {
         let metric = self.metrics.clone();
 
-        self.get_inner().read(args).await.map(|r| {
+        self.get_inner()?.read(args).await.map(|r| {
             let mut last_pending = None;
             let r = observe_read(r, move |e| {
                 let start = match last_pending {
@@ -105,7 +110,7 @@ impl Accessor for DalContext {
     async fn write(&self, args: &OpWrite) -> Result<BytesWriter> {
         let metric = self.metrics.clone();
 
-        self.get_inner().write(args).await.map(|w| {
+        self.get_inner()?.write(args).await.map(|w| {
             let mut last_pending = None;
             let w = observe_write(w, move |e| {
                 let start = match last_pending {
@@ -129,14 +134,14 @@ impl Accessor for DalContext {
     }
 
     async fn stat(&self, args: &OpStat) -> Result<Metadata> {
-        self.get_inner().stat(args).await
+        self.get_inner()?.stat(args).await
     }
 
     async fn delete(&self, args: &OpDelete) -> Result<()> {
-        self.get_inner().delete(args).await
+        self.get_inner()?.delete(args).await
     }
 
     async fn list(&self, args: &OpList) -> Result<ObjectStreamer> {
-        self.get_inner().list(args).await
+        self.get_inner()?.list(args).await
     }
 }
