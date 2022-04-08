@@ -5,10 +5,9 @@ description:
   Continuous Benchmarking
 ---
 
-One of Databend design goals is to **keep top performance**, to guarantee it Databend runs Continuous Benchmarking on every [nightly release](https://github.com/datafuselabs/databend/releases) to detect performance regressions and visualizes it on the website: [perf.databend.rs](https://perf.databend.rs)
+One of Databend design goals is to **keep top performance**, to guarantee it Databend runs Continuous Benchmarking on every [nightly release](https://github.com/datafuselabs/databend/releases) to detect performance regressions and visualizes it on the website: [perf.databend.rs](https://perf.databend.rs).
 
-The benchmark runner and results daily which run daily are defined in the repository [datafuselabs/databend-perf](https://github.com/datafuselabs/databend-perf).
-From 
+The benchmark runner and results which run daily are defined in the repository [datafuselabs/databend-perf](https://github.com/datafuselabs/databend-perf).
 
 ## Vectorized Execution Benchmarking
 
