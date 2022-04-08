@@ -38,3 +38,6 @@ mod exchange;
 pub use packet::ExecutorPacket;
 pub use packet::FragmentPacket;
 pub use exchange::DataExchangeManager;
+pub use exchange::DataExchange;
+pub use exchange::HashDataExchange;
+pub use exchange::MergeExchange;

@@ -12,25 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::UnsafeCell;
 use parking_lot::ReentrantMutex as ParkingReentrantMutex;
-use parking_lot::ReentrantMutexGuard;
+use crate::ReentrantMutexGuard;
 
 /// A simple wrapper around the lock() function of a ReentrantMutex
 #[derive(Debug)]
-pub struct ReentrantMutex<T>(ParkingReentrantMutex<T>);
+pub struct ReentrantMutex<T>(ParkingReentrantMutex<UnsafeCell<T>>);
 
-unsafe impl<T> Send for ReentrantMutex<T> where ParkingMutex<T>: Send {}
+unsafe impl<T> Send for ReentrantMutex<UnsafeCell<T>> where ParkingReentrantMutex<T>: Send {}
 
-unsafe impl<T> Sync for ReentrantMutex<T> where ParkingMutex<T>: Sync {}
+unsafe impl<T> Sync for ReentrantMutex<UnsafeCell<T>> where ParkingReentrantMutex<T>: Sync {}
 
 impl<T> ReentrantMutex<T> {
     /// creates mutex
     pub fn new(t: T) -> Self {
-        Self(ParkingReentrantMutex::new(t))
+        Self(ParkingReentrantMutex::new(UnsafeCell::new(t)))
     }
 
     /// lock the mutex
     pub fn lock(&self) -> ReentrantMutexGuard<'_, T> {
-        self.0.lock()
+        ReentrantMutexGuard::create(self.0.lock())
     }
 }
+
+

@@ -123,3 +123,4 @@ pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
 pub use plan_schedulers::PlanScheduler;
 pub use fragments::QueryFragmentsActions;
+pub use fragments::QueryFragmentAction;

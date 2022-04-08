@@ -1,6 +1,7 @@
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use common_exception::Result;
 use common_planners::{PlanNode, RemotePlan, StageKind, StagePlan};
+use crate::api::{DataExchange, MergeExchange};
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
 
@@ -34,7 +35,7 @@ impl QueryFragment for RootQueryFragment {
             ));
         }
 
-        // TODO: set send
+        fragment_actions.set_exchange(MergeExchange::create(actions.get_local_executor()));
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
             false => actions.update_root_fragment_actions(fragment_actions),

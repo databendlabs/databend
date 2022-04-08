@@ -4,13 +4,12 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
 use common_planners::PlanNode;
-use crate::api::{ExecutorPacket, FragmentPacket};
+use crate::api::{DataExchange, ExecutorPacket, FragmentPacket};
 use crate::clusters::Cluster;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::sessions::QueryContext;
 
 // Query plan fragment with executor name
-#[derive(Debug)]
 pub struct QueryFragmentAction {
     pub node: PlanNode,
     pub executor: String,
@@ -26,12 +25,13 @@ impl QueryFragmentAction {
 pub struct QueryFragmentActions {
     pub exchange_actions: bool,
     pub fragment_id: String,
+    pub data_exchange: Option<DataExchange>,
     fragment_actions: Vec<QueryFragmentAction>,
 }
 
 impl QueryFragmentActions {
     pub fn create(force_exchange: bool) -> QueryFragmentActions {
-        QueryFragmentActions { exchange_actions: force_exchange, fragment_id: "".to_string(), fragment_actions: vec![] }
+        QueryFragmentActions { exchange_actions: force_exchange, fragment_id: "".to_string(), data_exchange: None, fragment_actions: vec![] }
     }
 
     pub fn get_actions(&self) -> &[QueryFragmentAction] {
@@ -40,6 +40,10 @@ impl QueryFragmentActions {
 
     pub fn add_action(&mut self, action: QueryFragmentAction) {
         self.fragment_actions.push(action)
+    }
+
+    pub fn set_exchange(&mut self, exchange: DataExchange) {
+        self.data_exchange = Some(exchange);
     }
 }
 
@@ -88,11 +92,15 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn to_packets(self) -> Result<Vec<ExecutorPacket>> {
+    pub fn to_packets(mut self, ctx: &Arc<QueryContext>) -> Result<Vec<ExecutorPacket>> {
         let mut fragments_packets = HashMap::new();
-        for fragment_actions in self.fragments_actions {
-            for fragment_action in fragment_actions.fragment_actions {
-                let fragment_packet = FragmentPacket::create(fragment_action.node.clone());
+        for fragment_actions in &mut self.fragments_actions {
+            for fragment_action in &mut fragment_actions.fragment_actions {
+                let fragment_packet = FragmentPacket::create(
+                    fragment_actions.fragment_id.to_owned(),
+                    fragment_action.node.clone(),
+                    fragment_actions.data_exchange.clone().unwrap(),
+                );
 
                 // TODO: require node info
                 match fragments_packets.entry(fragment_action.executor.to_owned()) {
@@ -106,10 +114,13 @@ impl QueryFragmentsActions {
             }
         }
 
+        // TODO:
+        // let cluster = ctx.get_cluster();
+        // cluster.get_nodes().iter().map(|node| node.id,)
         let mut executors_packets = Vec::with_capacity(fragments_packets.len());
 
         for (executor, actions) in fragments_packets.into_iter() {
-            executors_packets.push(ExecutorPacket::create(executor, actions));
+            executors_packets.push(ExecutorPacket::create(executor, actions, Default::default()));
         }
 
         Ok(executors_packets)
@@ -120,6 +131,14 @@ impl Debug for QueryFragmentsActions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("QueryFragmentsActions")
             .field("actions", &self.fragments_actions)
+            .finish()
+    }
+}
+
+impl Debug for QueryFragmentAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueryFragmentAction")
+            .field("node", &self.node.name())
             .finish()
     }
 }

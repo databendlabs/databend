@@ -111,6 +111,7 @@ impl SessionManager {
             (Vec::new(), None)
         };
 
+        let exchange_manager = DataExchangeManager::create(conf.clone());
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
             catalog: RwLock::new(catalog),
@@ -120,7 +121,7 @@ impl SessionManager {
             max_sessions,
             active_sessions,
             auth_manager: RwLock::new(auth_manager),
-            data_exchange_manager: DataExchangeManager::create(),
+            data_exchange_manager: exchange_manager,
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,

@@ -11,7 +11,7 @@ use crate::interpreters::fragments::RootQueryFragment;
 use crate::sessions::QueryContext;
 
 // A fragment of query, the smallest execution unit of a distributed query
-pub trait QueryFragment: Debug {
+pub trait QueryFragment: Debug + Sync + Send {
     fn get_out_partition(&self) -> Result<PartitionState>;
 
     fn finalize(&self, nodes: &mut QueryFragmentsActions) -> Result<()>;

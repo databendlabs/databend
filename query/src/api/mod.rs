@@ -28,6 +28,9 @@ pub use rpc::ExecutorPacket;
 pub use rpc::FragmentPacket;
 pub use rpc::DataExchangeManager;
 pub use rpc_service::RpcService;
+pub use rpc::DataExchange;
+pub use rpc::HashDataExchange;
+pub use rpc::MergeExchange;
 
 pub mod http;
 mod http_service;

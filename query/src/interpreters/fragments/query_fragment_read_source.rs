@@ -63,7 +63,7 @@ impl QueryFragment for ReadDatasourceQueryFragment {
         match self.get_out_partition()? {
             PartitionState::NotPartition => {
                 fragment_actions.add_action(QueryFragmentAction::create(
-                    actions.get_local_executor()?,
+                    actions.get_local_executor(),
                     PlanNode::ReadSource(self.read_data_source.clone()),
                 ));
             }
@@ -108,27 +108,18 @@ struct ReplaceDataSource<'a> {
 
 impl<'a> PlanRewriter for ReplaceDataSource<'a> {
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
-        let new_input = self.rewrite_plan_node(&plan.input)?;
-        match self.before_group_by_schema {
-            Some(_) => Err(ErrorCode::LogicalError("Logical error: before group by schema must be None")),
-            None => {
-                self.before_group_by_schema = Some(new_input.schema());
-                PlanBuilder::from(&new_input)
-                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                    .build()
-            }
-        }
+        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
+            .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+            .build()
     }
 
     fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        let schema = plan.schema_before_group_by.clone();
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
-        match self.before_group_by_schema.take() {
-            None => Err(ErrorCode::LogicalError("Logical error: before group by schema must be Some")),
-            Some(schema_before_group_by) => PlanBuilder::from(&new_input)
-                .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
-                .build(),
-        }
+        PlanBuilder::from(&new_input)
+            .aggregate_final(schema, &plan.aggr_expr, &plan.group_expr)?
+            .build()
     }
 
     fn rewrite_read_data_source(&mut self, _: &ReadDataSourcePlan) -> Result<PlanNode> {

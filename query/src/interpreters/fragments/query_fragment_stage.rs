@@ -4,6 +4,7 @@ use common_datavalues::DataSchemaRef;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use common_exception::{ErrorCode, Result};
 use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, PlanBuilder, PlanNode, PlanRewriter, RemotePlan, StageKind, StagePlan};
+use crate::api::{DataExchange, HashDataExchange, MergeExchange};
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
 
@@ -58,8 +59,12 @@ impl QueryFragment for StageQueryFragment {
         }
 
 
-        // TODO: set exchange
-        // fragment_actions.set_exchange();
+        fragment_actions.set_exchange(match self.stage.kind {
+            StageKind::Expansive => unimplemented!(),
+            StageKind::Merge => MergeExchange::create(actions.get_local_executor()),
+            StageKind::Normal => HashDataExchange::create(actions.get_executors(), self.stage.scatters_expr.clone()),
+        });
+
         match input_actions.exchange_actions {
             true => actions.add_fragment_actions(fragment_actions),
             false => actions.update_root_fragment_actions(fragment_actions),
@@ -74,41 +79,28 @@ impl QueryFragment for StageQueryFragment {
 
 struct StageRewrite {
     fragment_id: String,
-    before_group_by_schema: Option<DataSchemaRef>,
 }
 
 impl StageRewrite {
     pub fn create(fragment_id: String) -> StageRewrite {
-        StageRewrite {
-            fragment_id,
-            before_group_by_schema: None,
-        }
+        StageRewrite { fragment_id }
     }
 }
 
 impl PlanRewriter for StageRewrite {
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
-        let new_input = self.rewrite_plan_node(&plan.input)?;
-        match self.before_group_by_schema {
-            Some(_) => Err(ErrorCode::LogicalError("Logical error: before group by schema must be None")),
-            None => {
-                self.before_group_by_schema = Some(new_input.schema());
-                PlanBuilder::from(&new_input)
-                    .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
-                    .build()
-            }
-        }
+        PlanBuilder::from(&self.rewrite_plan_node(&plan.input)?)
+            .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
+            .build()
     }
 
     fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        let schema = plan.schema_before_group_by.clone();
         let new_input = self.rewrite_plan_node(&plan.input)?;
 
-        match self.before_group_by_schema.take() {
-            None => Err(ErrorCode::LogicalError("Logical error: before group by schema must be Some")),
-            Some(schema_before_group_by) => PlanBuilder::from(&new_input)
-                .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
-                .build(),
-        }
+        PlanBuilder::from(&new_input)
+            .aggregate_final(schema, &plan.aggr_expr, &plan.group_expr)?
+            .build()
     }
 
     fn rewrite_stage(&mut self, _: &StagePlan) -> Result<PlanNode> {
@@ -119,6 +111,7 @@ impl PlanRewriter for StageRewrite {
 impl Debug for StageQueryFragment {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StageQueryFragment")
+            .field("input", &self.input)
             .finish()
     }
 }
