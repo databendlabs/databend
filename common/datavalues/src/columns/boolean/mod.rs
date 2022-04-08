@@ -75,6 +75,10 @@ impl Column for BooleanColumn {
         BooleanType::arc()
     }
 
+    fn column_type_name(&self) -> String {
+        "Boolean".to_string()
+    }
+
     fn len(&self) -> usize {
         self.values.len()
     }

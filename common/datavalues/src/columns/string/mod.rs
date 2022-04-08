@@ -143,6 +143,10 @@ impl Column for StringColumn {
         StringType::arc()
     }
 
+    fn column_type_name(&self) -> String {
+        "String".to_string()
+    }
+
     fn len(&self) -> usize {
         self.offsets.len() - 1
     }
