@@ -147,7 +147,8 @@ impl<'a> DfInsertStatement<'a> {
         values_str: &'a str,
         schema: &DataSchemaRef,
     ) -> Result<InsertInputSource> {
-        tracing::debug!("{:?}", values_str);
+        // tracing::debug!("{:?}", values_str);
+        println!("{:?}", values_str);
 
         let bytes = values_str.as_bytes();
         let cursor = Cursor::new(bytes);

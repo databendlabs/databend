@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::*;
+use databend_query::sql::statements::ExpressionAnalyzer;
 use databend_query::sql::statements::ValueSource;
+
+use crate::tests::create_query_context;
 
 #[tokio::test]
 async fn test_parse_value_source() -> Result<()> {
+    let ctx = create_query_context().await?;
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", u8::to_data_type()),
@@ -26,9 +33,12 @@ async fn test_parse_value_source() -> Result<()> {
         DataField::new("born_time", DateTime32Type::arc(None)),
     ]);
 
-    let parser = ValueSource::new(schema);
-    let s = "VALUES ('ABC', 30 , 'China', '1992-03-15 00:00:00'), ('XYZ', 31 , 'Japen', '1991-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00')".to_string();
-    let block = parser.stream_read(&s)?;
+    let parser = ValueSource::new(schema, ExpressionAnalyzer::create(ctx));
+    let s = "('ABC', 30 , 'China', '1992-03-15 00:00:00'), ('XYZ', 31 , 'Japen', '1991-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00')".to_string();
+    let bytes = s.as_bytes();
+    let cursor = Cursor::new(bytes);
+    let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
+    let block = parser.read(&mut reader).await?;
 
     common_datablocks::assert_blocks_sorted_eq(
         vec![

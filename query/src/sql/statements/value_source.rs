@@ -89,6 +89,8 @@ impl ValueSource {
                     let values = exprs_to_datavalue(exprs, &self.analyzer, &self.schema).await?;
                     deser.append_data_value(values[col].clone())?;
                     datavalues = Some(values);
+                } else {
+                    let _ = reader.ignore_byte(b')')?;
                 }
             }
             rows += 1;
