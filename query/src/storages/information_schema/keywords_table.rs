@@ -23,20 +23,18 @@ use crate::storages::view::view_table::QUERY;
 use crate::storages::view::ViewTable;
 use crate::storages::Table;
 
-pub struct KeywordsTable<const UPPER: bool> {}
+pub struct KeywordsTable {}
 
-impl<const UPPER: bool> KeywordsTable<UPPER> {
+impl KeywordsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         // TODO(veeupup): add more keywords in keywords table
         let query = "SELECT 'CREATE' AS WORD, 1 AS RESERVED";
 
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
-
-        let name = if UPPER { "KEYWORDS" } else { "keywords" };
         let table_info = TableInfo {
-            desc: format!("'information_schema'.'{}'", name),
-            name: name.to_string(),
+            desc: "'INFORMATION_SCHEMA'.'KEYWORDS'".to_string(),
+            name: "KEYWORDS".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,

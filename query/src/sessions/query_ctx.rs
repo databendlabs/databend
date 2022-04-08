@@ -221,12 +221,6 @@ impl QueryContext {
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
     pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
-        if database.eq_ignore_ascii_case("INFORMATION_SCHEMA") {
-            return self
-                .shared
-                .get_table(&database.to_ascii_uppercase(), &table.to_ascii_uppercase())
-                .await;
-        }
         self.shared.get_table(database, table).await
     }
 

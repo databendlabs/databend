@@ -23,9 +23,9 @@ use crate::storages::view::view_table::QUERY;
 use crate::storages::view::ViewTable;
 use crate::storages::Table;
 
-pub struct ViewsTable<const UPPER: bool> {}
+pub struct ViewsTable {}
 
-impl<const UPPER: bool> ViewsTable<UPPER> {
+impl ViewsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
             database AS table_catalog,
@@ -51,12 +51,11 @@ impl<const UPPER: bool> ViewsTable<UPPER> {
         FROM system.tables
         WHERE engine LIKE '%View';";
 
-        let name = if UPPER { "VIEWS" } else { "views" };
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: format!("'information_schema'.'{}'", name),
-            name: name.to_string(),
+            desc: "'INFORMATION_SCHEMA'.'VIEWS'".to_string(),
+            name: "VIEWS".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,

@@ -27,25 +27,21 @@ use crate::storages::information_schema::ViewsTable;
 use crate::storages::Table;
 
 #[derive(Clone)]
-pub struct InformationSchemaDatabase<const UPPER: bool> {
+pub struct InformationSchemaDatabase {
     db_info: DatabaseInfo,
 }
 
-impl<const UPPER: bool> InformationSchemaDatabase<UPPER> {
+impl InformationSchemaDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
-            ColumnsTable::<UPPER>::create(sys_db_meta.next_table_id()),
-            TablesTable::<UPPER>::create(sys_db_meta.next_table_id()),
-            KeywordsTable::<UPPER>::create(sys_db_meta.next_table_id()),
-            ViewsTable::<UPPER>::create(sys_db_meta.next_table_id()),
-            SchemataTable::<UPPER>::create(sys_db_meta.next_table_id()),
+            ColumnsTable::create(sys_db_meta.next_table_id()),
+            TablesTable::create(sys_db_meta.next_table_id()),
+            KeywordsTable::create(sys_db_meta.next_table_id()),
+            ViewsTable::create(sys_db_meta.next_table_id()),
+            SchemataTable::create(sys_db_meta.next_table_id()),
         ];
 
-        let db = if UPPER {
-            "INFORMATION_SCHEMA"
-        } else {
-            "information_schema"
-        };
+        let db = "INFORMATION_SCHEMA";
 
         for tbl in table_list.into_iter() {
             sys_db_meta.insert(db, tbl);
@@ -65,13 +61,9 @@ impl<const UPPER: bool> InformationSchemaDatabase<UPPER> {
 }
 
 #[async_trait::async_trait]
-impl<const UPPER: bool> Database for InformationSchemaDatabase<UPPER> {
+impl Database for InformationSchemaDatabase {
     fn name(&self) -> &str {
-        if UPPER {
-            "INFORMATION_SCHEMA"
-        } else {
-            "information_schema"
-        }
+        "INFORMATION_SCHEMA"
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

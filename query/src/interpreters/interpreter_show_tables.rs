@@ -21,6 +21,7 @@ use common_planners::PlanShowKind;
 use common_planners::ShowTablesPlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -39,7 +40,7 @@ impl ShowTablesInterpreter {
     }
 
     fn build_query(&self) -> Result<String> {
-        let database = self.ctx.get_current_database();
+        let mut database = self.ctx.get_current_database();
         let showfull = self.plan.showfull;
         let select_cols = if showfull {
             format!(
@@ -49,6 +50,11 @@ impl ShowTablesInterpreter {
         } else {
             format!("table_name as Tables_in_{}", database)
         };
+
+        if DatabaseCatalog::is_case_insensitive_db(&database) {
+            database = database.to_uppercase()
+        }
+
         return match &self.plan.kind {
             PlanShowKind::All => {
                 Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))

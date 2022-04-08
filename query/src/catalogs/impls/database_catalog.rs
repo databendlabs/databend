@@ -46,7 +46,7 @@ use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
-///   upper layer first, and bottom layer later(if necessary)  
+///   upper layer first, and bottom layer later(if necessary)
 /// - metadata are written to the bottom layer
 #[derive(Clone)]
 pub struct DatabaseCatalog {
@@ -82,6 +82,10 @@ impl DatabaseCatalog {
         );
         Ok(res)
     }
+
+    pub fn is_case_insensitive_db(db: &str) -> bool {
+        db.to_uppercase() == "INFORMATION_SCHEMA"
+    }
 }
 
 #[async_trait::async_trait]
@@ -93,11 +97,17 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let r = self.immutable_catalog.get_database(tenant, db_name).await;
+        let db_name = if Self::is_case_insensitive_db(db_name) {
+            db_name.to_uppercase()
+        } else {
+            db_name.to_string()
+        };
+
+        let r = self.immutable_catalog.get_database(tenant, &db_name).await;
         match r {
             Err(e) => {
                 if e.code() == ErrorCode::unknown_database_code() {
-                    self.mutable_catalog.get_database(tenant, db_name).await
+                    self.mutable_catalog.get_database(tenant, &db_name).await
                 } else {
                     Err(e)
                 }
@@ -196,16 +206,22 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
+        let (db_name, table_name) = if Self::is_case_insensitive_db(db_name) {
+            (db_name.to_uppercase(), table_name.to_uppercase())
+        } else {
+            (db_name.to_string(), table_name.to_string())
+        };
+
         let res = self
             .immutable_catalog
-            .get_table(tenant, db_name, table_name)
+            .get_table(tenant, &db_name, &table_name)
             .await;
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabaseCode() {
                     self.mutable_catalog
-                        .get_table(tenant, db_name, table_name)
+                        .get_table(tenant, &db_name, &table_name)
                         .await
                 } else {
                     Err(e)
@@ -221,12 +237,18 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let r = self.immutable_catalog.list_tables(tenant, db_name).await;
+        let db_name = if Self::is_case_insensitive_db(db_name) {
+            db_name.to_uppercase()
+        } else {
+            db_name.to_string()
+        };
+
+        let r = self.immutable_catalog.list_tables(tenant, &db_name).await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabaseCode() {
-                    self.mutable_catalog.list_tables(tenant, db_name).await
+                    self.mutable_catalog.list_tables(tenant, &db_name).await
                 } else {
                     Err(e)
                 }
