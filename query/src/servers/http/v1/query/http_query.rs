@@ -30,7 +30,7 @@ use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::ExecuteState;
-use crate::servers::http::v1::query::ExecuteStateName;
+use crate::servers::http::v1::query::ExecuteStateKind;
 use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::ResultDataManager;
@@ -99,7 +99,7 @@ pub struct ResponseInitialState {
 pub struct ResponseState {
     pub running_time_ms: f64,
     pub scan_progress: Option<ProgressValues>,
-    pub state: ExecuteStateName,
+    pub state: ExecuteStateKind,
     pub error: Option<ErrorCode>,
 }
 

@@ -38,7 +38,7 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
-pub enum ExecuteStateName {
+pub enum ExecuteStateKind {
     Running,
     Failed,
     Succeeded,
@@ -50,15 +50,23 @@ pub(crate) enum ExecuteState {
 }
 
 impl ExecuteState {
-    pub(crate) fn extract(&self) -> (ExecuteStateName, Option<ErrorCode>) {
+    pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            ExecuteState::Running(_) => (ExecuteStateName::Running, None),
+            ExecuteState::Running(_) => (ExecuteStateKind::Running, None),
             ExecuteState::Stopped(v) => match &v.reason {
-                Ok(_) => (ExecuteStateName::Succeeded, None),
-                Err(e) => (ExecuteStateName::Failed, Some(e.clone())),
+                Ok(_) => (ExecuteStateKind::Succeeded, None),
+                Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
             },
         }
     }
+}
+
+pub(crate) struct ExecuteRunning {
+    // used to kill query
+    session: SessionRef,
+    // mainly used to get progress for now
+    context: Arc<QueryContext>,
+    interpreter: Arc<dyn Interpreter>,
 }
 
 pub(crate) struct ExecuteStopped {
@@ -120,14 +128,6 @@ impl HttpQueryHandle {
             sender.send(()).await.ok();
         });
     }
-}
-
-pub(crate) struct ExecuteRunning {
-    // used to kill query
-    session: SessionRef,
-    // mainly used to get progress for now
-    context: Arc<QueryContext>,
-    interpreter: Arc<dyn Interpreter>,
 }
 
 impl ExecuteState {

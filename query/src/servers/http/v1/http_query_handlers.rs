@@ -34,7 +34,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
-use super::query::ExecuteStateName;
+use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::JsonBlock;
@@ -82,7 +82,7 @@ pub struct QueryResponse {
     pub session_id: Option<String>,
     pub schema: Option<DataSchemaRef>,
     pub data: Vec<Vec<JsonValue>>,
-    pub state: ExecuteStateName,
+    pub state: ExecuteStateKind,
     // only sql query error
     pub error: Option<QueryError>,
     pub stats: QueryStats,
@@ -123,7 +123,7 @@ impl QueryResponse {
         QueryResponse {
             id,
             stats: QueryStats::default(),
-            state: ExecuteStateName::Failed,
+            state: ExecuteStateKind::Failed,
             data: vec![],
             schema: None,
             session_id: None,

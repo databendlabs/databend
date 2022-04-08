@@ -28,7 +28,7 @@ pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
 pub use load::streaming_load;
 pub use load::LoadResponse;
-pub use query::ExecuteStateName;
+pub use query::ExecuteStateKind;
 pub use query::HttpQueryHandle;
 pub use query::HttpQueryManager;
 pub use query::HttpSession;
