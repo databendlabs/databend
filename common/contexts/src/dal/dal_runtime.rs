@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::runtime::Handle;
+use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
 use opendal::ops::OpRead;
@@ -62,6 +63,15 @@ impl Layer for DalRuntime {
 
 #[async_trait]
 impl Accessor for DalRuntime {
+    async fn create(&self, args: &OpCreate) -> Result<()> {
+        let op = self.inner.as_ref().unwrap().clone();
+        let args = args.clone();
+        self.runtime
+            .spawn(async move { op.create(&args).await })
+            .await
+            .expect("join must success")
+    }
+
     async fn read(&self, args: &OpRead) -> Result<BytesReader> {
         let op = self.inner.as_ref().unwrap().clone();
         let args = args.clone();

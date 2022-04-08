@@ -47,21 +47,28 @@ where
 
 impl<T, K> Ord for RangeKey<T, K>
 where
-    T: Ord + std::fmt::Debug + Copy,
-    K: Ord + std::fmt::Debug + Copy,
+    T: Ord + Debug + Clone,
+    K: Ord + Debug + Clone,
 {
     /// the compare weight is: range.end > range.start > key
-    /// example: ((2,3),5) < ((5,1),3) cause 2 < 5
+    /// example: ((2,3),5) < ((5,1),3) since 2 < 5
     fn cmp(&self, other: &RangeKey<T, K>) -> Ordering {
-        ((self.range.end, self.range.start), self.key)
-            .cmp(&((other.range.end, other.range.start), other.key))
+        let ret = self.range.end.cmp(&other.range.end);
+        if !ret.is_eq() {
+            return ret;
+        }
+        let ret = self.range.start.cmp(&other.range.start);
+        if !ret.is_eq() {
+            return ret;
+        }
+        self.key.cmp(&other.key)
     }
 }
 
 impl<T, K> PartialOrd for RangeKey<T, K>
 where
-    T: Ord + std::fmt::Debug + Copy,
-    K: Ord + std::fmt::Debug + Copy,
+    T: Ord + Debug + Clone,
+    K: Ord + Debug + Clone,
 {
     fn partial_cmp(&self, other: &RangeKey<T, K>) -> Option<Ordering> {
         Some(self.cmp(other))

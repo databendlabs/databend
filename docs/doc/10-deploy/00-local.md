@@ -1,11 +1,11 @@
 ---
-title: Deploy Databend With Local Disk (for Test)
-sidebar_label: With Local Disk (Test)
+title: Deploy Databend With Local Fs (for Test)
+sidebar_label: With Local Fs (Test)
 description:
-  How to deploy Databend with Local Disk (for Test).
+  How to deploy Databend with Local Fs (for Test).
 ---
 
-This guideline will deploy Databend(standalone) with local disk step by step.
+This guideline will deploy Databend(standalone) with local fs step by step.
 
 <p align="center">
 <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
@@ -13,7 +13,7 @@ This guideline will deploy Databend(standalone) with local disk step by step.
 
 :::caution
 
-Databend requires scalable storage layer(like Object Storage) as its storage, local disk is for testing only, please do not use it in production!
+Databend requires scalable storage layer(like Object Storage) as its storage, local fs is for testing only, please do not use it in production!
 
 :::
 
@@ -32,14 +32,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.9-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.9-nightly/databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +47,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nigh
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-aarch64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.9-nightly/databend-v0.7.4-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +57,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nigh
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.9-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.7.9-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,7 +72,7 @@ tar xzvf databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-aarch64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.9-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -153,10 +153,10 @@ meta_username = "root"
 meta_password = "root"
 
 [storage]
-# disk|s3
-storage_type = "disk"
+# fs|s3
+storage_type = "fs"
 
-[storage.disk]
+[storage.fs]
 data_path = "benddata/datas"
 
 [storage.s3]

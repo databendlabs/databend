@@ -38,7 +38,7 @@ use crate::state::RaftStateValue;
 pub struct RaftState {
     pub id: NodeId,
 
-    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
+    /// If the instance is opened(true) from an existent state(e.g. load from fs) or created(false).
     is_open: bool,
 
     /// A sled tree with key space support.
