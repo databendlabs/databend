@@ -87,6 +87,7 @@ impl Executor {
             Stopped(f) => f.progress.clone(),
         }
     }
+
     pub(crate) fn elapsed(&self) -> Duration {
         match &self.state {
             Running(_) => Instant::now() - self.start_time,

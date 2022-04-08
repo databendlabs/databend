@@ -256,7 +256,7 @@ async fn test_system_tables() -> Result<()> {
 
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.data.len() > 0, "{:?}", result);
+    assert!(!result.data.is_empty(), "{:?}", result);
 
     let table_names = result
         .data
@@ -583,7 +583,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
     let res = resp.json::<QueryResponse>().await;
     assert!(res.is_ok());
     let res = res.unwrap();
-    assert!(res.data.len() > 0, "{:?}", res);
+    assert!(!res.data.is_empty(), "{:?}", res);
     Ok(())
 }
 
@@ -648,7 +648,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let res = resp.json::<QueryResponse>().await;
     assert!(res.is_ok());
     let res = res.unwrap();
-    assert!(res.data.len() > 0, "{:?}", res);
+    assert!(!res.data.is_empty(), "{:?}", res);
     Ok(())
 }
 

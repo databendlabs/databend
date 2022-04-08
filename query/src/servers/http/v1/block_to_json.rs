@@ -62,7 +62,7 @@ impl JsonBlock {
     }
 
     pub fn concat(blocks: Vec<JsonBlock>) -> Self {
-        if blocks.len() == 0 {
+        if blocks.is_empty() {
             return Self::empty();
         }
         let schema = blocks[0].schema.clone();
@@ -88,9 +88,9 @@ impl JsonBlock {
     }
 }
 
-impl Into<Vec<Vec<JsonValue>>> for JsonBlock {
-    fn into(self) -> Vec<Vec<JsonValue>> {
-        self.data
+impl From<JsonBlock> for Vec<Vec<JsonValue>> {
+    fn from(block: JsonBlock) -> Self {
+        block.data
     }
 }
 
