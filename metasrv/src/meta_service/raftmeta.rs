@@ -47,7 +47,6 @@ use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaNetworkResult;
 use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
-use common_meta_types::MetaWatcherResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
@@ -69,6 +68,7 @@ use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
+use crate::watcher::WatcherConfig;
 use crate::watcher::WatcherManager;
 use crate::watcher::WatcherStreamSender;
 use crate::Opened;
@@ -95,6 +95,7 @@ impl Opened for MetaNode {
 pub struct MetaNodeBuilder {
     node_id: Option<NodeId>,
     raft_config: Option<Config>,
+    watcher_config: Option<WatcherConfig>,
     sto: Option<Arc<MetaRaftStore>>,
     monitor_metrics: bool,
     endpoint: Option<Endpoint>,
@@ -111,6 +112,11 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaError::InvalidConfig(String::from("config is not set")))?;
 
+        let watcher_config = self
+            .watcher_config
+            .take()
+            .ok_or_else(|| MetaError::InvalidConfig(String::from("watcher_config is not set")))?;
+
         let sto = self
             .sto
             .take()
@@ -123,7 +129,7 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let watcher = WatcherManager::create();
+        let watcher = WatcherManager::create(watcher_config);
 
         sto.get_state_machine()
             .await
@@ -188,9 +194,16 @@ impl MetaNode {
         MetaNodeBuilder {
             node_id: None,
             raft_config: Some(raft_config),
+            watcher_config: Some(MetaNode::new_watcher_config(config)),
             sto: None,
             monitor_metrics: true,
             endpoint: None,
+        }
+    }
+
+    fn new_watcher_config(config: &RaftConfig) -> WatcherConfig {
+        WatcherConfig {
+            watcher_notify_internal: config.watcher_notify_internal,
         }
     }
 

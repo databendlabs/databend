@@ -71,7 +71,7 @@ message WatchCreateRequest {
 }
 
 message WatchCancelRequest {
-  int64 watch_id = 1;
+  int64 watcher_id = 1;
 }
 
 message WatchResponse {

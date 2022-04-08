@@ -14,10 +14,13 @@
 
 mod watcher;
 mod watcher_manager;
+mod watcher_stream;
 
 pub use watcher::Watcher;
-pub use watcher::WatcherStream;
+pub use watcher_manager::CloseWatcherStreamReq;
+pub use watcher_manager::WatcherConfig;
 pub use watcher_manager::WatcherId;
 pub use watcher_manager::WatcherManager;
 pub use watcher_manager::WatcherStreamId;
 pub use watcher_manager::WatcherStreamSender;
+pub use watcher_stream::WatcherStream;

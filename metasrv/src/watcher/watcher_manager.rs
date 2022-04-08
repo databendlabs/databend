@@ -12,12 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-
 use core::ops::Range;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use clap::Parser;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::Sender;
@@ -35,42 +33,22 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::SeqV;
 use common_range_set::RangeSet;
 use common_tracing::tracing;
-use serde::Deserialize;
-use serde::Serialize;
 use tonic::Status;
 use tonic::Streaming;
 
 use super::Watcher;
 use super::WatcherStream;
 
-pub const META_WATCHER_NOTIFY_INTERVAL: &str = "META_WATCHER_NOTIFY_INTERVAL";
-pub const META_WATCHER_BUFFER_SIZE: &str = "META_WATCHER_BUFFER_SIZE";
-
 pub type WatcherId = i64;
 pub type WatcherStreamId = i64;
 pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
-pub struct WatcherConfig {
-    /// Watcher notify interval ms.
-    #[clap(long, env = META_WATCHER_NOTIFY_INTERVAL, default_value = "100")]
-    pub notify_interval_ms: u32,
-
-    /// Watcher buffer applied msg size.
-    #[clap(long, env = META_WATCHER_BUFFER_SIZE, default_value = "1024000")]
-    pub buffer_size: u32,
-}
-
-impl Default for WatcherConfig {
-    fn default() -> Self {
-        Self {
-            notify_interval_ms: 100,
-            buffer_size: 1024000,
-        }
-    }
-}
+pub type CloseWatcherStreamReq = (WatcherStreamId, String);
 
 type CreateWatcherEvent = (Streaming<WatchRequest>, WatcherStreamSender);
+
+pub struct WatcherConfig {
+    pub watcher_notify_internal: u64,
+}
 
 #[derive(Clone, Debug)]
 struct StateMachineKvData {
@@ -107,16 +85,25 @@ struct WatcherManagerCore {
 
     sm_rx: mpsc::UnboundedReceiver<StateMachineKvData>,
 
+    /// A channel for sending stop stream request.
+    close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
+
+    /// A channel for receiving stop stream request.
+    close_stream_rx: mpsc::UnboundedReceiver<CloseWatcherStreamReq>,
+
+    /// save subscribe kv data
     kv_vec: Vec<StateMachineKvData>,
 
+    /// update events to watcher internal
     notify_interval: Interval,
 
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 
-    watcher_streams: BTreeMap<WatcherId, WatcherStream>,
+    watcher_streams: BTreeMap<WatcherStreamId, WatcherStream>,
 
-    watchers: BTreeMap<WatcherId, Arc<Watcher>>,
+    watchers: BTreeMap<WatcherId, Watcher>,
 
+    /// map range to WatcherId
     watcher_range_set: RangeSet<String, WatcherId>,
 
     current_stream_id: WatcherStreamId,
@@ -125,9 +112,10 @@ struct WatcherManagerCore {
 }
 
 impl WatcherManager {
-    pub fn create() -> Self {
+    pub fn create(config: WatcherConfig) -> Self {
         let (create_tx, create_rx) = mpsc::unbounded_channel();
         let (watch_tx, watch_rx) = mpsc::unbounded_channel::<(WatcherStreamId, WatchRequest)>();
+        let (close_stream_tx, close_stream_rx) = mpsc::unbounded_channel::<CloseWatcherStreamReq>();
         let (sm_tx, sm_rx) = mpsc::unbounded_channel::<StateMachineKvData>();
         let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel::<()>();
 
@@ -135,9 +123,11 @@ impl WatcherManager {
             create_rx,
             watch_tx: Arc::new(watch_tx),
             watch_rx,
+            close_stream_tx: Arc::new(close_stream_tx),
+            close_stream_rx,
             sm_rx,
             kv_vec: Vec::new(),
-            notify_interval: interval(Duration::from_millis(1000)),
+            notify_interval: interval(Duration::from_millis(config.watcher_notify_internal)),
             shutdown_rx,
             watcher_streams: BTreeMap::new(),
             watchers: BTreeMap::new(),
@@ -175,9 +165,15 @@ impl WatcherManagerCore {
                         None => {},
                     }
                 },
-                watch = self.watch_rx.recv() => {
-                    match watch {
-                        Some((stream_id,watch)) => {self.watch_request(stream_id, watch).await;},
+                req = self.watch_rx.recv() => {
+                    match req {
+                        Some((stream_id,req)) => {self.watch_request(stream_id, req).await;},
+                        None => {},
+                    }
+                },
+                close_stream_req = self.close_stream_rx.recv() => {
+                    match close_stream_req {
+                        Some((stream_id, err)) => {self.close_stream(stream_id, err);},
                         None => {},
                     }
                 },
@@ -185,7 +181,7 @@ impl WatcherManagerCore {
                     if let Some(kv) = kv { self.recv_kv(kv);}
                 }
                 _ = self.notify_interval.tick() => {
-                    self.notify_events();
+                    self.notify_events().await;
                 },
                 _ = self.shutdown_rx.recv() => {
                     break;
@@ -194,11 +190,23 @@ impl WatcherManagerCore {
         }
     }
 
-    fn notify_events(&mut self) {
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn close_stream(&mut self, stream_id: WatcherStreamId, err: String) {
+        tracing::info!("close watcher steam {:?} since {:?}", stream_id, err);
+        let stream = self.watcher_streams.get(&stream_id).unwrap();
+        let watchers = stream.get_watchers().clone();
+        self.watcher_streams.remove(&stream_id);
+        for watcher_id in watchers.iter() {
+            self.remove_watcher(stream_id, *watcher_id);
+        }
+    }
+
+    async fn notify_events(&mut self) {
         let kv_vec = &self.kv_vec;
 
         let mut event_maps = BTreeMap::<WatcherId, Vec<Event>>::new();
 
+        // first aggregate events for each watcher
         for kv in kv_vec {
             let current = match &kv.current {
                 Some(current) => current.data.clone(),
@@ -234,6 +242,7 @@ impl WatcherManagerCore {
             }
         }
 
+        // then send events to watchers
         for (watcher_id, events) in event_maps.iter() {
             if let Some(stream) = self.watcher_streams.get(watcher_id) {
                 let resp = WatchResponse {
@@ -243,7 +252,7 @@ impl WatcherManagerCore {
                     events: events.to_vec(),
                 };
 
-                stream.send(resp);
+                stream.send(resp).await;
             }
         }
 
@@ -261,38 +270,39 @@ impl WatcherManagerCore {
         tx: WatcherStreamSender,
     ) {
         //let Some(req) = stream.message().await.unwrap;
-        if let Some(req) = stream.message().await.unwrap() {
-            match req.request_union {
-                Some(CreateRequest(create)) => {
-                    tracing::info!("create_watcher ");
+        let req = stream.message().await.unwrap().unwrap();
 
-                    let watcher_stream = WatcherStream::spawn(
-                        self.current_stream_id,
-                        stream,
-                        tx,
-                        self.watch_tx.clone(),
-                    );
+        match req.request_union {
+            Some(CreateRequest(create)) => {
+                tracing::info!("create_watcher_stream: {:?}", create);
 
-                    self.watcher_streams
-                        .insert(self.current_stream_id, watcher_stream);
+                let watcher_stream = WatcherStream::spawn(
+                    self.current_stream_id,
+                    stream,
+                    tx,
+                    self.watch_tx.clone(),
+                    self.close_stream_tx.clone(),
+                );
 
-                    self.current_stream_id += 1;
+                self.watcher_streams
+                    .insert(self.current_stream_id, watcher_stream);
 
-                    self.create_watcher(self.current_stream_id, create);
-                }
-                _ => {}
+                self.current_stream_id += 1;
+
+                self.create_watcher(self.current_stream_id, create);
             }
-        };
+            _ => {}
+        }
     }
 
-    async fn watch_request(&mut self, owner: WatcherStreamId, req: WatchRequest) {
+    async fn watch_request(&mut self, stream_id: WatcherStreamId, req: WatchRequest) {
         match req.request_union {
             Some(req) => match req {
                 CreateRequest(create) => {
-                    self.create_watcher(owner, create);
+                    self.create_watcher(stream_id, create);
                 }
                 CancelRequest(cancel) => {
-                    self.cancel_watcher(owner, cancel).await;
+                    self.cancel_watcher(stream_id, cancel).await;
                 }
             },
             None => {}
@@ -305,49 +315,63 @@ impl WatcherManagerCore {
         return key.clone()..key_end.clone();
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     fn create_watcher(&mut self, stream_id: WatcherStreamId, create: WatchCreateRequest) {
         if create.key < create.key_end {
             return;
         }
-        let stream = self.watcher_streams.get(&stream_id);
-        if stream.is_none() {
-            return;
-        }
+        let stream = self.watcher_streams.get_mut(&stream_id).unwrap();
 
         let range = WatcherManagerCore::get_range_key(&create.key, &create.key_end);
 
-        let id = self.current_watcher_id;
+        let watcher_id = self.current_watcher_id;
         self.current_watcher_id += 1;
-        let watcher = Arc::new(Watcher::new(id, stream_id, create.clone()));
+        let watcher = Watcher::new(watcher_id, stream_id, create.clone());
 
-        self.watcher_range_set.insert(range, id);
-        self.watchers.insert(id, watcher);
+        self.watcher_range_set.insert(range, watcher_id);
+        self.watchers.insert(watcher_id, watcher);
 
-        if let Some(stream) = stream {
-            let _ = stream.send(WatchResponse {
-                watch_id: id,
-                created: true,
-                canceled: false,
-                events: vec![],
-            });
-        };
+        stream.add_watcher(watcher_id);
+        tracing::info!("create watcher {:?} of stream {:?}", watcher_id, stream_id);
+        let _ = stream.send(WatchResponse {
+            watch_id: watcher_id,
+            created: true,
+            canceled: false,
+            events: vec![],
+        });
     }
 
-    async fn cancel_watcher(&mut self, stream_id: WatcherStreamId, cancel: WatchCancelRequest) {
-        if let Some(stream) = self.watcher_streams.get(&stream_id) {
-            let watcher_id = cancel.watch_id;
-            if let Some(watcher) = self.watchers.get(&watcher_id) {
-                let range = WatcherManagerCore::get_range_key(&watcher.key, &watcher.key_end);
-                self.watcher_range_set.remove(range, watcher_id);
-                self.watchers.remove(&watcher_id);
-            }
-            let _ = stream.send(WatchResponse {
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn remove_watcher(&mut self, stream_id: WatcherStreamId, watcher_id: WatcherId) {
+        tracing::info!("remove watcher {:?} of stream {:?}", watcher_id, stream_id);
+        let watcher = self.watchers.get(&watcher_id).unwrap();
+        assert_eq!(watcher.owner_id, stream_id);
+        let range = WatcherManagerCore::get_range_key(&watcher.key, &watcher.key_end);
+        self.watcher_range_set.remove(range, watcher_id);
+        self.watchers.remove(&watcher_id);
+    }
+
+    async fn remove_watcher_from_stream(
+        &mut self,
+        stream_id: WatcherStreamId,
+        watcher_id: WatcherId,
+    ) {
+        let stream = self.watcher_streams.get(&stream_id).unwrap();
+        let _ = stream
+            .send(WatchResponse {
                 watch_id: watcher_id,
                 created: false,
                 canceled: true,
                 events: vec![],
-            });
-        }
+            })
+            .await;
+    }
+
+    async fn cancel_watcher(&mut self, stream_id: WatcherStreamId, cancel: WatchCancelRequest) {
+        self.remove_watcher_from_stream(stream_id, cancel.watcher_id)
+            .await;
+
+        self.remove_watcher(stream_id, cancel.watcher_id);
     }
 }
 

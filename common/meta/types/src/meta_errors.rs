@@ -22,16 +22,12 @@ use crate::MetaNetworkError;
 use crate::MetaRaftError;
 use crate::MetaResultError;
 use crate::MetaStorageError;
-use crate::MetaWatcherError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaError {
     #[error(transparent)]
     MetaNetworkError(#[from] MetaNetworkError),
-
-    #[error(transparent)]
-    MetaWatcherError(#[from] MetaWatcherError),
 
     #[error(transparent)]
     MetaRaftError(#[from] MetaRaftError),

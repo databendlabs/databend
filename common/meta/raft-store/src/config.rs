@@ -135,6 +135,10 @@ pub struct RaftConfig {
     /// For test only: specifies the tree name prefix
     #[clap(long, default_value = "")]
     pub sled_tree_prefix: String,
+
+    /// Notify watcher events internal(in ms)
+    #[clap(long, env = "META_WATCHER_NOTIFY_INTERNAL", default_value = "100")]
+    pub watcher_notify_internal: u64,
 }
 
 pub fn get_default_raft_advertise_host() -> String {
@@ -168,6 +172,7 @@ impl Default for RaftConfig {
             join: vec![],
             id: 0,
             sled_tree_prefix: "".to_string(),
+            watcher_notify_internal: 100,
         }
     }
 }
