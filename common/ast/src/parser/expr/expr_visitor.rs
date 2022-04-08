@@ -79,6 +79,7 @@ pub trait ExprVisitor: Sized + Send {
             Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
             Expr::InList { expr, list, .. } => self.visit_inlist(expr, list).await,
             Expr::Extract { field, expr } => self.visit_extract(field, expr).await,
+            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -223,6 +224,10 @@ pub trait ExprVisitor: Sized + Send {
     }
 
     async fn visit_extract(&mut self, _field: &DateTimeField, expr: &Expr) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
+    }
+
+    async fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
         ExprTraverser::accept(expr, self).await
     }
 }
