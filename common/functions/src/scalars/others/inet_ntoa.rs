@@ -39,37 +39,20 @@ pub type InetNtoaFunction = InetNtoaFunctionImpl<false>;
 #[derive(Clone)]
 pub struct InetNtoaFunctionImpl<const SUPPRESS_CAST_ERROR: bool> {
     display_name: String,
-    result_type: DataTypePtr,
 }
 
 impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
     pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        let result_type = if SUPPRESS_CAST_ERROR {
-            if args[0].data_type_id() == TypeID::Null {
-                NullType::arc()
-            } else {
-                let input_type = remove_nullable(args[0]);
-                assert_numeric(&input_type)?;
-                // For invalid input, the function should return null. So the return type must be nullable.
-                NullableType::arc(StringType::arc())
-            }
-        } else {
-            assert_numeric(args[0])?;
-            StringType::arc()
-        };
+        assert_numeric(args[0])?;
 
         Ok(Box::new(InetNtoaFunctionImpl::<SUPPRESS_CAST_ERROR> {
             display_name: display_name.to_string(),
-            result_type,
         }))
     }
 
     pub fn desc() -> TypedFunctionDescription {
-        let mut features = FunctionFeatures::default().deterministic().num_arguments(1);
-        if SUPPRESS_CAST_ERROR {
-            features = features.disable_passthrough_null()
-        }
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -79,7 +62,11 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
     }
 
     fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.result_type.clone())
+        if SUPPRESS_CAST_ERROR {
+            Ok(NullableType::arc(StringType::arc()))
+        } else {
+            Ok(StringType::arc())
+        }
     }
 
     fn eval(
@@ -88,10 +75,6 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
-        if columns[0].column().data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-        }
-
         if SUPPRESS_CAST_ERROR {
             let cast_to: DataTypePtr = Arc::new(NullableType::create(UInt32Type::arc()));
             let cast_options = CastOptions {

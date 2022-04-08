@@ -300,7 +300,7 @@ fn test_try_inet_aton_function() -> Result<()> {
     ];
 
     let test_func = TryInetAtonFunction::try_create("try_inet_aton", &[&StringType::arc()])?;
-    test_scalar_functions(test_func, &tests, false)
+    test_scalar_functions(test_func, &tests, true)
 }
 
 #[test]
@@ -389,7 +389,7 @@ fn test_try_inet_ntoa_function() -> Result<()> {
     for (typ, test) in tests {
         match TryInetNtoaFunction::try_create("try_inet_ntoa", &[&typ]) {
             Ok(f) => {
-                test_scalar_functions(f, &[test], false)?;
+                test_scalar_functions(f, &[test], true)?;
             }
             Err(cause) => {
                 assert_eq!(test.error, cause.message(), "{}", test.name);

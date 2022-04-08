@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -22,8 +21,8 @@ use serde_json::Value as JsonValue;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 pub type TryParseJsonFunction = ParseJsonFunctionImpl<true>;
 
@@ -32,23 +31,44 @@ pub type ParseJsonFunction = ParseJsonFunctionImpl<false>;
 #[derive(Clone)]
 pub struct ParseJsonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
     display_name: String,
+    result_type: DataTypePtr,
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERROR> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        let data_type = remove_nullable(args[0]);
+        if data_type.data_type_id() == TypeID::VariantArray
+            || data_type.data_type_id() == TypeID::VariantObject
+        {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Invalid argument types for function '{}': ({})",
+                display_name,
+                data_type.name()
+            )));
+        }
+
+        let result_type = if args[0].data_type_id() == TypeID::Null {
+            NullType::arc()
+        } else if args[0].is_nullable() || SUPPRESS_PARSE_ERROR {
+            NullableType::arc(VariantType::arc())
+        } else {
+            VariantType::arc()
+        };
+
         Ok(Box::new(ParseJsonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
             display_name: display_name.to_string(),
+            result_type,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> TypedFunctionDescription {
         let mut features = FunctionFeatures::default().deterministic().num_arguments(1);
         // Null will cause parse error when SUPPRESS_PARSE_ERROR is false.
         // In this case we need to check null and skip the parsing, so passthrough_null should be false.
         if !SUPPRESS_PARSE_ERROR {
             features = features.disable_passthrough_null()
         }
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
@@ -57,20 +77,8 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if args[0].data_type_id() == TypeID::Null {
-            return Ok(NullType::arc());
-        }
-
-        if SUPPRESS_PARSE_ERROR {
-            // For invalid input, we suppress parse error and return null. So the return type must be nullable.
-            return Ok(Arc::new(NullableType::create(VariantType::arc())));
-        }
-
-        if args[0].is_nullable() {
-            return Ok(Arc::new(NullableType::create(VariantType::arc())));
-        }
-        Ok(VariantType::arc())
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.result_type.clone())
     }
 
     fn eval(
@@ -80,15 +88,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
-        if data_type.data_type_id() == TypeID::VariantArray
-            || data_type.data_type_id() == TypeID::VariantObject
-        {
-            return Err(ErrorCode::BadDataValueType(format!(
-                "Invalid argument types for function '{}': ({})",
-                self.display_name,
-                data_type.name()
-            )));
-        } else if data_type.data_type_id() == TypeID::Null {
+        if data_type.data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
 
@@ -123,20 +123,13 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         if column.is_nullable() {
             let (_, valids) = column.validity();
             let nullable_column: &NullableColumn = Series::check_get(column)?;
-            let column = nullable_column.inner();
+            let mut inner = nullable_column.inner();
+            if inner.is_const() {
+                let const_column: &ConstColumn = unsafe { Series::static_cast(inner) };
+                inner = const_column.inner();
+            }
 
             let data_type = remove_nullable(data_type);
-            if data_type.data_type_id() == TypeID::VariantArray
-                || data_type.data_type_id() == TypeID::VariantObject
-            {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Invalid argument types for function '{}': ({})",
-                    self.display_name,
-                    data_type.name()
-                )));
-            } else if data_type.data_type_id() == TypeID::Null {
-                return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-            }
 
             let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
@@ -145,7 +138,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
                 || data_type.data_type_id() == TypeID::Variant
             {
                 let serializer = data_type.create_serializer();
-                match serializer.serialize_json_object(column, valids) {
+                match serializer.serialize_json_object(inner, valids) {
                     Ok(values) => {
                         for (i, v) in values.iter().enumerate() {
                             if let Some(valids) = valids {

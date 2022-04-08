@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -26,8 +25,8 @@ use sqlparser::tokenizer::Tokenizer;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 pub type GetFunction = GetFunctionImpl<false, false>;
 
@@ -41,26 +40,7 @@ pub struct GetFunctionImpl<const BY_PATH: bool, const IGNORE_CASE: bool> {
 }
 
 impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNORE_CASE> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(GetFunctionImpl::<BY_PATH, IGNORE_CASE> {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-}
-
-impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
-    for GetFunctionImpl<BY_PATH, IGNORE_CASE>
-{
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         let data_type = args[0];
         let path_type = args[1];
 
@@ -76,13 +56,32 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Invalid argument types for function '{}': ({:?}, {:?})",
-                self.display_name.to_uppercase(),
+                display_name.to_uppercase(),
                 data_type,
                 path_type
             )));
         }
 
-        Ok(Arc::new(NullableType::create(VariantType::arc())))
+        Ok(Box::new(GetFunctionImpl::<BY_PATH, IGNORE_CASE> {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
+    for GetFunctionImpl<BY_PATH, IGNORE_CASE>
+{
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(NullableType::arc(VariantType::arc()))
     }
 
     fn eval(

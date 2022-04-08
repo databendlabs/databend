@@ -25,6 +25,12 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 fn test_get_function() -> Result<()> {
     use common_datavalues::prelude::*;
 
+    let types = vec![
+        [VariantType::arc(), StringType::arc()],
+        [VariantType::arc(), UInt32Type::arc()],
+        [StringType::arc(), Int32Type::arc()],
+    ];
+
     let tests = vec![
         ScalarFunctionTest {
             name: "get_by_field_name",
@@ -70,13 +76,28 @@ fn test_get_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(GetFunction::try_create("get")?, &tests, false)
+    for (typ, test) in types.iter().zip(tests) {
+        match GetFunction::try_create("get", &typ.iter().collect::<Vec<_>>()) {
+            Ok(f) => {
+                test_scalar_functions(f, &[test], true)?;
+            }
+            Err(cause) => {
+                assert_eq!(test.error, cause.message(), "{}", test.name);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_get_ignore_case_function() -> Result<()> {
     use common_datavalues::prelude::*;
 
+    let types = vec![[VariantType::arc(), StringType::arc()], [
+        StringType::arc(),
+        Int32Type::arc(),
+    ]];
     let tests = vec![
         ScalarFunctionTest {
             name: "get_by_field_name",
@@ -101,17 +122,29 @@ fn test_get_ignore_case_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        GetIgnoreCaseFunction::try_create("get_ignore_case")?,
-        &tests,
-        false,
-    )
+    for (typ, test) in types.iter().zip(tests) {
+        match GetIgnoreCaseFunction::try_create("get_ignore_case", &typ.iter().collect::<Vec<_>>())
+        {
+            Ok(f) => {
+                test_scalar_functions(f, &[test], true)?;
+            }
+            Err(cause) => {
+                assert_eq!(test.error, cause.message(), "{}", test.name);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_get_path_function() -> Result<()> {
     use common_datavalues::prelude::*;
 
+    let types = vec![[VariantType::arc(), StringType::arc()], [
+        StringType::arc(),
+        Int32Type::arc(),
+    ]];
     let tests = vec![
         ScalarFunctionTest {
             name: "get_by_path",
@@ -139,5 +172,16 @@ fn test_get_path_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(GetPathFunction::try_create("get_path")?, &tests, false)
+    for (typ, test) in types.iter().zip(tests) {
+        match GetPathFunction::try_create("get_path", &typ.iter().collect::<Vec<_>>()) {
+            Ok(f) => {
+                test_scalar_functions(f, &[test], true)?;
+            }
+            Err(cause) => {
+                assert_eq!(test.error, cause.message(), "{}", test.name);
+            }
+        }
+    }
+
+    Ok(())
 }

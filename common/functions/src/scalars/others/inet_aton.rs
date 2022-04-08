@@ -35,7 +35,6 @@ pub type InetAtonFunction = InetAtonFunctionImpl<false>;
 #[derive(Clone)]
 pub struct InetAtonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
     display_name: String,
-    result_type: DataTypePtr,
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
@@ -43,36 +42,16 @@ impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR
         display_name: &str,
         args: &[&common_datavalues::DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        let result_type = if SUPPRESS_PARSE_ERROR {
-            let input_type = remove_nullable(args[0]);
-            match input_type.data_type_id() {
-                TypeID::Null => NullType::arc(),
-                // For invalid input, we suppress parse error and return null. So the return type must be nullable.
-                TypeID::String => NullableType::arc(UInt32Type::arc()),
-                _ => {
-                    return Err(ErrorCode::IllegalDataType(format!(
-                        "Expected string or null type, but got {}",
-                        args[0].name()
-                    )))
-                }
-            }
-        } else {
-            assert_string(args[0])?;
-            UInt32Type::arc()
-        };
+        assert_string(args[0])?;
 
         Ok(Box::new(InetAtonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
             display_name: display_name.to_string(),
-            result_type,
         }))
     }
 
     pub fn desc() -> TypedFunctionDescription {
-        let mut features = FunctionFeatures::default().deterministic().num_arguments(1);
-        if SUPPRESS_PARSE_ERROR {
-            features = features.disable_passthrough_null()
-        }
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -82,7 +61,11 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
     }
 
     fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.result_type.clone())
+        if SUPPRESS_PARSE_ERROR {
+            Ok(NullableType::arc(UInt32Type::arc()))
+        } else {
+            Ok(UInt32Type::arc())
+        }
     }
 
     fn eval(
@@ -91,10 +74,6 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
         input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
-        if columns[0].column().data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-        }
-
         let viewer = Vu8::try_create_viewer(columns[0].column())?;
         let viewer_iter = viewer.iter();
 

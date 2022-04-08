@@ -25,6 +25,29 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 fn test_check_json_function() -> Result<()> {
     use common_datavalues::prelude::*;
 
+    let types = vec![
+        BooleanType::arc(),
+        Int16Type::arc(),
+        Float64Type::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        NullableType::arc(BooleanType::arc()),
+        NullableType::arc(Int16Type::arc()),
+        NullableType::arc(Float64Type::arc()),
+        NullableType::arc(StringType::arc()),
+        NullableType::arc(StringType::arc()),
+        NullableType::arc(StringType::arc()),
+        NullableType::arc(StringType::arc()),
+        Arc::new(ArrayType::create(StringType::arc())),
+        Arc::new(StructType::create(
+            vec!["date".to_owned(), "integer".to_owned()],
+            vec![Date32Type::arc(), Int8Type::arc()],
+        )),
+        VariantType::arc(),
+        NullType::arc(),
+    ];
     let tests = vec![
         ScalarFunctionTest {
             name: "check_json_bool",
@@ -203,5 +226,13 @@ fn test_check_json_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(CheckJsonFunction::try_create("check_json")?, &tests, false)
+    for (typ, test) in types.iter().zip(tests) {
+        test_scalar_functions(
+            CheckJsonFunction::try_create("check_json", &[typ])?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }

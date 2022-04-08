@@ -25,6 +25,22 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 fn test_parse_json_function() -> Result<()> {
     use common_datavalues::prelude::*;
 
+    let types = vec![
+        BooleanType::arc(),
+        Int16Type::arc(),
+        Float64Type::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        NullableType::arc(BooleanType::arc()),
+        NullableType::arc(Int16Type::arc()),
+        NullableType::arc(Float64Type::arc()),
+        NullableType::arc(StringType::arc()),
+        NullableType::arc(StringType::arc()),
+        NullableType::arc(StringType::arc()),
+        NullableType::arc(StringType::arc()),
+    ];
     let tests = vec![
         ScalarFunctionTest {
             name: "parse_json_bool",
@@ -168,12 +184,30 @@ fn test_parse_json_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(ParseJsonFunction::try_create("parse_json")?, &tests, false)
+    for (typ, test) in types.iter().zip(tests) {
+        test_scalar_functions(
+            ParseJsonFunction::try_create("parse_json", &[typ])?,
+            &[test],
+            false,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_try_parse_json_function() -> Result<()> {
     use common_datavalues::prelude::*;
+
+    let types = vec![
+        BooleanType::arc(),
+        Int16Type::arc(),
+        Float64Type::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        StringType::arc(),
+        StringType::arc(),
+    ];
 
     let tests = vec![
         ScalarFunctionTest {
@@ -248,9 +282,13 @@ fn test_try_parse_json_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        TryParseJsonFunction::try_create("try_parse_json")?,
-        &tests,
-        false,
-    )
+    for (typ, test) in types.iter().zip(tests) {
+        test_scalar_functions(
+            TryParseJsonFunction::try_create("try_parse_json", &[typ])?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }

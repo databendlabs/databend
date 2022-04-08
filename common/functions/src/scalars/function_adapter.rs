@@ -147,7 +147,7 @@ impl Function for FunctionAdapter {
                 .collect::<Vec<_>>();
 
             let col = self.eval(&columns, 1, func_ctx)?;
-            let col = if col.is_const() && col.len() == 1 {
+            let col = if col.is_const() && col.len() != 1 {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
                 NullColumn::new(input_rows).arc()
@@ -175,7 +175,8 @@ impl Function for FunctionAdapter {
                     if is_all_null {
                         // If only null, return null directly.
                         let args = columns.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                        let inner_type = inner.return_type(args.as_slice())?;
+
+                        let inner_type = remove_nullable(&inner.return_type(args.as_slice())?);
                         return Ok(NullableColumn::wrap_inner(
                             inner_type
                                 .create_constant_column(&inner_type.default_value(), input_rows)?,
