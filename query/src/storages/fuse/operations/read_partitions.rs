@@ -187,7 +187,7 @@ impl FuseTable {
             format_version,
             rows_count,
             columns_meta,
-            meta.compression.clone(),
+            meta.compression,
         )
     }
 
@@ -211,7 +211,7 @@ impl FuseTable {
             format_version,
             rows_count,
             columns_meta,
-            meta.compression.clone(),
+            meta.compression,
         )
     }
 
