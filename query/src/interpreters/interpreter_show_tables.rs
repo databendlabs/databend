@@ -51,13 +51,13 @@ impl ShowTablesInterpreter {
         };
         return match &self.plan.kind {
             PlanShowKind::All => {
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
             }
             PlanShowKind::Like(v) => {
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND table_name LIKE {} ORDER BY table_schema, table_name", select_cols, database, v))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND table_name LIKE {} ORDER BY table_schema, table_name", select_cols, database, v))
             }
             PlanShowKind::Where(v) => {
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
             }
             PlanShowKind::FromOrIn(v) => {
                 let select_cols = if showfull {
@@ -65,7 +65,7 @@ impl ShowTablesInterpreter {
                 } else {
                     format!("table_name as Tables_in_{}", v)
                 };
-                Ok(format!("SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, v))
+                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, v))
             }
         };
     }
