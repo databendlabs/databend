@@ -43,7 +43,7 @@ use crate::storages::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
-/// "information_schema" db is supposed to held here
+/// "INFORMATION_SCHEMA" db is supposed to held here
 #[derive(Clone)]
 pub struct ImmutableCatalog {
     // it's case sensitive, so we will need two same database only with the name's case

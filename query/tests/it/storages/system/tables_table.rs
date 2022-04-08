@@ -51,16 +51,6 @@ async fn test_tables_table() -> Result<()> {
         r"\| system             \| tracing      \| SystemTracing      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\| system             \| roles        \| SystemRoles        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\| system             \| processes    \| SystemProcesses    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| information_schema \| tables       \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| information_schema \| columns      \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| information_schema \| keywords     \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| information_schema \| views        \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| information_schema \| schemata     \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| INFORMATION_SCHEMA \| VIEWS        \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| INFORMATION_SCHEMA \| KEYWORDS     \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| INFORMATION_SCHEMA \| COLUMNS      \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| INFORMATION_SCHEMA \| TABLES       \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
-        r"\| INFORMATION_SCHEMA \| SCHEMATA     \| VIEW               \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\+--------------------\+--------------\+--------------------\+-------------------------------\+",
     ];
     common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());

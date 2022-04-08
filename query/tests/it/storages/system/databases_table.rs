@@ -35,7 +35,6 @@ async fn test_tables_table() -> Result<()> {
         "+--------------------+",
         "| INFORMATION_SCHEMA |",
         "| default            |",
-        "| information_schema |",
         "| system             |",
         "+--------------------+",
     ];

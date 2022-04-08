@@ -48,8 +48,8 @@ impl ShowTablesInterpreter {
         if DatabaseCatalog::is_case_insensitive_db(&database) {
             database = database.to_uppercase()
         }
-        let showfull = self.plan.showfull;
 
+        let showfull = self.plan.showfull;
         let select_cols = if showfull {
             format!(
                 "table_name as Tables_in_{}, table_type as Table_type",
