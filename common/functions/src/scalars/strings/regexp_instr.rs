@@ -226,7 +226,7 @@ fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
     let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
 
     // the 'pos' postion is the character index,
-    // so we should transform it to the byte index.
+    // so we should iterate the character to find the byte index.
     let mut pos = match s.char_indices().nth(pos) {
         Some((start, _, _)) => start,
         None => return 0,
