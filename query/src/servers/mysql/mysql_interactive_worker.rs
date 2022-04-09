@@ -282,6 +282,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             ),
             ("(?i)^(SELECT @@(.*))", Self::variable_block("", "1")),
             ("(?i)^(ROLLBACK(.*))", None),
+            ("(?i)^(COMMIT(.*))", None),
             ("(?i)^(SET NAMES(.*))", None),
             ("(?i)^(SET character_set_results(.*))", None),
             ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
@@ -332,9 +333,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         match self.federated_server_setup_set_or_jdbc_command(query) {
-            Some(data_block) => Ok((vec![data_block], String::from(""))),
+            Some(data_block) => {
+                tracing::info!("Federated query: {}", query);
+                Ok((vec![data_block], String::from("")))
+            }
             None => {
-                tracing::info!("the not matched query is {}", query);
+                tracing::info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
                 let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;

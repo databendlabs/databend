@@ -15,7 +15,11 @@ This guideline show how to connect and query to Databend using Python.
 
 We will be creating a table named `books` and insert a row, then query it.
 
-```text
+### Using mysql.connector
+`pip install mysql-connector-python`
+
+```python
+#!/usr/bin/env python3
 import mysql.connector
 
 cnx = mysql.connector.connect(user='root', password='',
@@ -30,9 +34,9 @@ cursor.execute("use book_db")
 cursor.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
 
 # Insert new book. 
-add_book = ("INSERT INTO books "
+add_book = ("insert into books "
                "(title, author, date) "
-               "VALUES (%s, %s, %s)")
+               "values (%s, %s, %s)")
 data_book = ('myname', 'author', '2022')
 cursor.execute(add_book, data_book)
 
@@ -44,4 +48,26 @@ for (title, author, date) in cursor:
 
 cursor.close()
 cnx.close()
+```
+
+### Using sqlalchemy
+
+`pip install sqlalchemy`
+
+```python
+#!/usr/bin/env python3
+
+import sqlalchemy
+
+engine = sqlalchemy.create_engine("mysql+pymysql://root:root@localhost:3307/")
+conn = engine.connect()
+conn.execute("create database if not exists book_db")
+conn.execute("use book_db")
+conn.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
+conn.execute("insert into books values('myname', 'author', '2022')")
+results = conn.execute('select * from books').fetchall()
+for result in results:
+    print(result)
+conn.execute('drop database book_db')
+
 ```
