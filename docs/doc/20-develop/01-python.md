@@ -37,7 +37,7 @@ cursor.execute("create table if not exists books(title varchar(255), author varc
 add_book = ("insert into books "
                "(title, author, date) "
                "values (%s, %s, %s)")
-data_book = ('myname', 'author', '2022')
+data_book = ('mybook', 'author', '2022')
 cursor.execute(add_book, data_book)
 
 # Query.
@@ -64,7 +64,7 @@ conn = engine.connect()
 conn.execute("create database if not exists book_db")
 conn.execute("use book_db")
 conn.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
-conn.execute("insert into books values('myname', 'author', '2022')")
+conn.execute("insert into books values('mybook', 'author', '2022')")
 results = conn.execute('select * from books').fetchall()
 for result in results:
     print(result)

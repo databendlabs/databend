@@ -448,7 +448,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml
 	# drivers
-	python3 -m pip install --quiet mysql-connector-python sqlalchemy
+	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy
 
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
