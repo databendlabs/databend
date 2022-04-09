@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod watcher;
+mod watcher_config;
 mod watcher_manager;
 mod watcher_stream;
 
 pub use watcher::Watcher;
+pub use watcher_config::WatcherConfig;
+pub use watcher_config::METASRV_WATCHER_NOTIFY_INTERNAL;
 pub use watcher_manager::CloseWatcherStreamReq;
-pub use watcher_manager::WatcherConfig;
 pub use watcher_manager::WatcherId;
 pub use watcher_manager::WatcherManager;
 pub use watcher_manager::WatcherStreamId;

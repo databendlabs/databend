@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::watcher::WatcherConfig;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -40,7 +41,7 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let mn = MetaNode::start(&tc.config.raft_config).await?;
+    let mn = MetaNode::start(&tc.config.raft_config, &tc.config.watcher_config).await?;
     mn.join_cluster(&tc.config.raft_config).await?;
     let mut srv = GrpcServer::create(tc.config.clone(), mn);
     srv.start().await?;
@@ -102,6 +103,7 @@ impl MetaSrvTestContext {
             config.raft_config.no_sync = true;
         }
 
+        config.watcher_config = WatcherConfig::default();
         config.raft_config.id = id;
 
         config.raft_config.config_id = format!("{}", config_id);

@@ -21,6 +21,9 @@ use common_meta_types::MetaResult;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::watcher;
+use crate::watcher::WatcherConfig;
+
 macro_rules! load_field_from_env {
     ($field:expr, $field_type: ty, $env:expr) => {
         if let Some(env_var) = std::env::var_os($env) {
@@ -82,6 +85,9 @@ pub struct Config {
     pub grpc_tls_server_key: String,
 
     #[clap(flatten)]
+    pub watcher_config: WatcherConfig,
+
+    #[clap(flatten)]
     pub raft_config: RaftConfig,
 }
 
@@ -98,6 +104,7 @@ impl Default for Config {
             grpc_api_address: "127.0.0.1:9191".to_string(),
             grpc_tls_server_cert: "".to_string(),
             grpc_tls_server_key: "".to_string(),
+            watcher_config: Default::default(),
             raft_config: Default::default(),
         }
     }
@@ -162,6 +169,7 @@ impl Config {
         load_field_from_env!(cfg.grpc_api_address, String, METASRV_GRPC_API_ADDRESS);
         load_field_from_env!(cfg.grpc_tls_server_cert, String, GRPC_TLS_SERVER_CERT);
         load_field_from_env!(cfg.grpc_tls_server_key, String, GRPC_TLS_SERVER_KEY);
+
         load_field_from_env!(
             cfg.raft_config.raft_listen_host,
             String,
@@ -197,6 +205,11 @@ impl Config {
             cfg.raft_config.install_snapshot_timeout,
             u64,
             raft_config::KVSRV_INSTALL_SNAPSHOT_TIMEOUT
+        );
+        load_field_from_env!(
+            cfg.watcher_config.watcher_notify_internal,
+            u64,
+            watcher::METASRV_WATCHER_NOTIFY_INTERNAL
         );
         load_field_from_env!(cfg.raft_config.single, bool, raft_config::KVSRV_SINGLE);
         load_field_from_env!(cfg.raft_config.id, u64, raft_config::KVSRV_ID);

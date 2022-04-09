@@ -166,7 +166,8 @@ impl MetaService for MetaServiceImpl {
         Ok(Response::new(Box::pin(s)))
     }
 
-    type WatchStream = GrpcStream<WatchResponse>;
+    type WatchStream =
+        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn watch(

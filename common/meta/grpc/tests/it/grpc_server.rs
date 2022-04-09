@@ -23,6 +23,8 @@ use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::WatchRequest;
+use common_meta_types::protobuf::WatchResponse;
 use futures::Stream;
 use rand::Rng;
 use tonic::transport::Server;
@@ -70,6 +72,16 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
+        todo!()
+    }
+
+    type WatchStream =
+        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
+
+    async fn watch(
+        &self,
+        _request: Request<Streaming<WatchRequest>>,
+    ) -> Result<Response<Self::WatchStream>, Status> {
         todo!()
     }
 }

@@ -21,6 +21,7 @@ pub use sm::SerializableSnapshot;
 pub use sm::SnapshotKeyValue;
 pub use sm::StateMachine;
 pub use sm::StateMachineSubscriber;
+pub use sm::UpdateType;
 pub use snapshot::Snapshot;
 pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;

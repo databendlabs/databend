@@ -42,7 +42,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     conf.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
     conf.admin_api_address = addr_str.to_owned();
     let tc = MetaSrvTestContext::new(0);
-    let meta_node = MetaNode::start(&tc.config.raft_config).await?;
+    let meta_node = MetaNode::start(&tc.config.raft_config, &tc.config.watcher_config).await?;
     meta_node.join_cluster(&tc.config.raft_config).await?;
 
     let mut srv = HttpService::create(conf, meta_node);

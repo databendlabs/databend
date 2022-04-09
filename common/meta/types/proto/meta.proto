@@ -16,8 +16,6 @@ syntax = "proto3";
 
 package meta;
 
-import "kv.proto";
-
 message Empty {}
 message GetRequest { string key = 1; }
 
@@ -72,6 +70,23 @@ message WatchCreateRequest {
 
 message WatchCancelRequest {
   int64 watcher_id = 1;
+}
+
+message Event {
+  enum EventType {
+    UpInsert = 0;
+    Delete = 1;
+  }
+
+  string key = 1;
+
+  EventType event = 2;
+
+  // current hold current value of key
+  bytes current = 3;
+
+  // current hold prev value of key(if any)
+  bytes prev = 4;
 }
 
 message WatchResponse {

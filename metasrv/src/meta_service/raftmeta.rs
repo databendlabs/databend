@@ -188,22 +188,16 @@ impl MetaNodeBuilder {
 }
 
 impl MetaNode {
-    pub fn builder(config: &RaftConfig) -> MetaNodeBuilder {
+    pub fn builder(config: &RaftConfig, watcher_config: &WatcherConfig) -> MetaNodeBuilder {
         let raft_config = MetaNode::new_raft_config(config);
 
         MetaNodeBuilder {
             node_id: None,
             raft_config: Some(raft_config),
-            watcher_config: Some(MetaNode::new_watcher_config(config)),
+            watcher_config: Some(watcher_config.clone()),
             sto: None,
             monitor_metrics: true,
             endpoint: None,
-        }
-    }
-
-    fn new_watcher_config(config: &RaftConfig) -> WatcherConfig {
-        WatcherConfig {
-            watcher_notify_internal: config.watcher_notify_internal,
         }
     }
 
@@ -298,6 +292,7 @@ impl MetaNode {
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &RaftConfig,
+        watcher_config: &WatcherConfig,
         open: Option<()>,
         create: Option<()>,
         init_cluster: Option<Vec<String>>,
@@ -317,7 +312,7 @@ impl MetaNode {
         let is_open = sto.is_opened();
         let sto = Arc::new(sto);
 
-        let mut builder = MetaNode::builder(&config).sto(sto.clone());
+        let mut builder = MetaNode::builder(&config, watcher_config).sto(sto.clone());
         // config.id only used for the first time
         let self_node_id = if is_open { sto.id } else { config.id };
 
@@ -433,9 +428,12 @@ impl MetaNode {
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
     #[tracing::instrument(level = "debug", skip(config))]
-    pub async fn start(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
+    pub async fn start(
+        config: &RaftConfig,
+        watcher_config: &WatcherConfig,
+    ) -> Result<Arc<MetaNode>, MetaError> {
         tracing::info!(?config, "start()");
-        let mn = Self::do_start(config).await?;
+        let mn = Self::do_start(config, watcher_config).await?;
         tracing::info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
     }
@@ -506,15 +504,21 @@ impl MetaNode {
         )
     }
 
-    async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
+    async fn do_start(
+        conf: &RaftConfig,
+        watcher_config: &WatcherConfig,
+    ) -> Result<Arc<MetaNode>, MetaError> {
         if conf.single {
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
+            let mn =
+                MetaNode::open_create_boot(conf, watcher_config, Some(()), Some(()), Some(vec![]))
+                    .await?;
             return Ok(mn);
         }
 
         if !conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+            let mn =
+                MetaNode::open_create_boot(conf, watcher_config, Some(()), Some(()), None).await?;
 
             if mn.is_opened() {
                 return Ok(mn);
@@ -522,19 +526,23 @@ impl MetaNode {
             return Ok(mn);
         }
         // open mode
-        let mn = MetaNode::open_create_boot(conf, Some(()), None, None).await?;
+        let mn = MetaNode::open_create_boot(conf, watcher_config, Some(()), None, None).await?;
         Ok(mn)
     }
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn boot(config: &RaftConfig) -> MetaResult<Arc<MetaNode>> {
+    pub async fn boot(
+        config: &RaftConfig,
+        watcher_config: &WatcherConfig,
+    ) -> MetaResult<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mn = Self::open_create_boot(config, None, Some(()), Some(vec![])).await?;
+        let mn =
+            Self::open_create_boot(config, watcher_config, None, Some(()), Some(vec![])).await?;
 
         Ok(mn)
     }

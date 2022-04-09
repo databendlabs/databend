@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
-use common_base::tokio::task::JoinHandle;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_tracing::tracing;
@@ -33,12 +32,12 @@ use super::WatcherStreamSender;
 pub struct WatcherStream {
     id: WatcherStreamId,
 
-    task: JoinHandle<()>,
-
     tx: WatcherStreamSender,
 
     /// notify manager to stop watcher stream
     close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
+
+    shutdown_tx: mpsc::UnboundedSender<()>,
 
     /// save stream watcher ids
     pub watchers: BTreeSet<WatcherId>,
@@ -53,6 +52,9 @@ pub struct WatcherStreamCore {
 
     /// notify manager to stop watcher stream
     close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
+
+    /// notify the core shutdown
+    shutdown_rx: mpsc::UnboundedReceiver<()>,
 }
 
 impl WatcherStream {
@@ -63,20 +65,22 @@ impl WatcherStream {
         watch_tx: Arc<mpsc::UnboundedSender<(WatcherStreamId, WatchRequest)>>,
         close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
     ) -> Self {
+        let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel::<()>();
         let core = WatcherStreamCore {
             id,
             stream,
             watch_tx,
+            shutdown_rx,
             close_stream_tx: close_stream_tx.clone(),
         };
 
-        let task = tokio::spawn(core.watcher_main());
+        let _ = tokio::spawn(core.watcher_main());
 
         WatcherStream {
             id,
-            task,
             tx,
             close_stream_tx,
+            shutdown_tx,
             watchers: BTreeSet::new(),
         }
     }
@@ -99,7 +103,7 @@ impl WatcherStream {
                     err
                 );
                 let _ = self.close_stream_tx.send((self.id, err.to_string()));
-                self.task.abort()
+                let _ = self.shutdown_tx.send(());
             }
             Ok(_) => {}
         }
@@ -110,20 +114,30 @@ impl WatcherStreamCore {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn watcher_main(mut self) {
         loop {
-            let msg = self.stream.message().await;
-            match msg {
-                Ok(msg) => {
-                    if let Some(req) = msg {
-                        let _ = self.watch_tx.send((self.id, req));
+            tokio::select! {
+                    msg = self.stream.message() => {
+                    match msg {
+                        Ok(msg) => {
+                            if let Some(req) = msg {
+                                let _ = self.watch_tx.send((self.id, req));
+                            }
+                        }
+                        Err(err) => {
+                            tracing::info!(
+                                "close watcher stream {:?} cause recv err: {:?}",
+                                self.id,
+                                err
+                            );
+                            let _ = self.close_stream_tx.send((self.id, err.to_string()));
+                            break;
+                        }
                     }
-                }
-                Err(err) => {
+                },
+                _ = self.shutdown_rx.recv() => {
                     tracing::info!(
-                        "close watcher stream {:?} cause recv err: {:?}",
+                        "close watcher stream {:?} has been shutdown",
                         self.id,
-                        err
                     );
-                    let _ = self.close_stream_tx.send((self.id, err.to_string()));
                     break;
                 }
             }
