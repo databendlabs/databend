@@ -202,11 +202,11 @@ impl WatcherManagerCore {
     }
 
     fn from_update_type_to_event_type(update: UpdateType) -> EventType {
-        return if update == UpdateType::UpInsert {
+        if update == UpdateType::UpInsert {
             EventType::UpInsert
         } else {
             EventType::Delete
-        };
+        }
     }
 
     async fn notify_events(&mut self) {
@@ -241,13 +241,12 @@ impl WatcherManagerCore {
                         });
                     }
                     None => {
-                        let mut events = Vec::<Event>::new();
-                        events.push(Event {
+                        let events = vec![Event {
                             key: kv.key.clone(),
                             event,
                             current: current.clone(),
                             prev: prev.clone(),
-                        });
+                        }];
                         event_maps.insert(watcher_id, events);
                     }
                 }
@@ -281,29 +280,25 @@ impl WatcherManagerCore {
         mut stream: Streaming<WatchRequest>,
         tx: WatcherStreamSender,
     ) {
-        //let Some(req) = stream.message().await.unwrap;
         let req = stream.message().await.unwrap().unwrap();
 
-        match req.request_union {
-            Some(CreateRequest(create)) => {
-                tracing::info!("create_watcher_stream: {:?}", create);
+        if let Some(CreateRequest(create)) = req.request_union {
+            tracing::info!("create_watcher_stream: {:?}", create);
 
-                let watcher_stream = WatcherStream::spawn(
-                    self.current_stream_id,
-                    stream,
-                    tx,
-                    self.watch_tx.clone(),
-                    self.close_stream_tx.clone(),
-                );
+            let watcher_stream = WatcherStream::spawn(
+                self.current_stream_id,
+                stream,
+                tx,
+                self.watch_tx.clone(),
+                self.close_stream_tx.clone(),
+            );
 
-                self.watcher_streams
-                    .insert(self.current_stream_id, watcher_stream);
+            self.watcher_streams
+                .insert(self.current_stream_id, watcher_stream);
 
-                self.current_stream_id += 1;
+            self.current_stream_id += 1;
 
-                self.create_watcher(self.current_stream_id, create);
-            }
-            _ => {}
+            self.create_watcher(self.current_stream_id, create);
         }
     }
 
@@ -321,10 +316,8 @@ impl WatcherManagerCore {
         }
     }
 
-    fn get_range_key(key: &String, key_end: &String) -> Range<String> {
-        let key_end = format!("{:?}\x00", key_end);
-
-        return key.clone()..key_end.clone();
+    fn get_range_key(key: &str, key_end: &String) -> Range<String> {
+        key.to_owned()..format!("{:?}\x00", key_end)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -338,7 +331,7 @@ impl WatcherManagerCore {
 
         let watcher_id = self.current_watcher_id;
         self.current_watcher_id += 1;
-        let watcher = Watcher::new(watcher_id, stream_id, create.clone());
+        let watcher = Watcher::new(watcher_id, stream_id, create);
 
         self.watcher_range_set.insert(range, watcher_id);
         self.watchers.insert(watcher_id, watcher);

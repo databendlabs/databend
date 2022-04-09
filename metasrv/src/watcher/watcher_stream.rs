@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
+use common_meta_types::protobuf::WatchCreateRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_tracing::tracing;
@@ -27,6 +28,29 @@ use super::CloseWatcherStreamReq;
 use super::WatcherId;
 use super::WatcherStreamId;
 use super::WatcherStreamSender;
+
+#[derive(Debug)]
+pub struct Watcher {
+    pub id: WatcherId,
+
+    // owner watcher stream id
+    pub owner_id: WatcherStreamId,
+
+    pub key: String,
+
+    pub key_end: String,
+}
+
+impl Watcher {
+    pub fn new(id: WatcherId, owner_id: WatcherStreamId, create: WatchCreateRequest) -> Watcher {
+        Watcher {
+            id,
+            owner_id,
+            key: create.key,
+            key_end: create.key_end,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct WatcherStream {
@@ -90,22 +114,19 @@ impl WatcherStream {
     }
 
     pub fn get_watchers(&self) -> &BTreeSet<WatcherId> {
-        return &self.watchers;
+        &self.watchers
     }
 
     pub async fn send(&self, resp: WatchResponse) {
         let ret = self.tx.send(Ok(resp)).await;
-        match ret {
-            Err(err) => {
-                tracing::info!(
-                    "close watcher stream {:?} cause send err: {:?}",
-                    self.id,
-                    err
-                );
-                let _ = self.close_stream_tx.send((self.id, err.to_string()));
-                let _ = self.shutdown_tx.send(());
-            }
-            Ok(_) => {}
+        if let Err(err) = ret {
+            tracing::info!(
+                "close watcher stream {:?} cause send err: {:?}",
+                self.id,
+                err
+            );
+            let _ = self.close_stream_tx.send((self.id, err.to_string()));
+            let _ = self.shutdown_tx.send(());
         }
     }
 }

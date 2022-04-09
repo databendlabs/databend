@@ -60,18 +60,14 @@ async fn watcher_client_main(
     loop {
         tokio::select! {
             resp = client_stream.message() => {
-                match resp {
-                    Ok(resp) => {
-                        if let Some(resp) = resp {
-                            assert!(!watch_events.is_empty());
-                            assert_eq!(watch_events.get(0), resp.events.get(0));
-                            watch_events.pop();
-                            if watch_events.is_empty() {
-                                let _ = start_tx.send(());
-                            }
-                        }
-                    },
-                    Err(_) => {},
+                if let Ok(Some(resp)) = resp {
+                    assert!(!watch_events.is_empty());
+                    assert_eq!(watch_events.get(0), resp.events.get(0));
+                    watch_events.pop();
+                    if watch_events.is_empty() {
+                        // notify has recv all the notify events
+                        let _ = start_tx.send(());
+                    }
                 }
             },
             _ = shutdown_rx.recv() => {
