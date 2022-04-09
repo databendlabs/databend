@@ -183,6 +183,24 @@ impl TypeID {
     }
 
     #[inline]
+    pub fn is_variant(&self) -> bool {
+        matches!(
+            self,
+            TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject
+        )
+    }
+
+    #[inline]
+    pub fn is_variant_or_array(&self) -> bool {
+        matches!(self, TypeID::Variant | TypeID::VariantArray)
+    }
+
+    #[inline]
+    pub fn is_variant_or_object(&self) -> bool {
+        matches!(self, TypeID::Variant | TypeID::VariantObject)
+    }
+
+    #[inline]
     pub fn numeric_byte_size(&self) -> Result<usize> {
         match self {
             TypeID::Int8 | TypeID::UInt8 => Ok(1),

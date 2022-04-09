@@ -20,7 +20,7 @@ mod http_query_manager;
 mod result_data_manager;
 
 pub(crate) use execute_state::ExecuteState;
-pub use execute_state::ExecuteStateName;
+pub use execute_state::ExecuteStateKind;
 pub(crate) use execute_state::Executor;
 pub use execute_state::HttpQueryHandle;
 pub use http_query::HttpQuery;

@@ -86,8 +86,8 @@ pub fn make_column_def(
 pub fn parse_sql_to_expr(query_expr: &str) -> Expr {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, query_expr);
-    let tokens = tokenizer.tokenize().unwrap();
-    let mut parser = Parser::new(tokens, &dialect);
+    let (tokens, position_map) = tokenizer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens, position_map, &dialect);
     parser.parse_expr().unwrap()
 }
 

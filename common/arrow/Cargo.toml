@@ -38,6 +38,4 @@ arrow-format = { version = "0.4.0", features = ["flight-data", "flight-service",
 futures = "0.3.21"
 parquet2 = { version = "0.10.3", default_features = false }
 
-parquet-format-async-temp = "=0.2.0"
-
 [dev-dependencies]

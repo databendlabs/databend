@@ -11,11 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Result;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::runtime::Handle;
+use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
 use opendal::ops::OpRead;
@@ -49,6 +52,16 @@ impl DalRuntime {
             runtime,
         }
     }
+
+    fn get_inner(&self) -> Result<Arc<dyn Accessor>> {
+        match &self.inner {
+            None => Err(Error::new(
+                ErrorKind::Other,
+                "dal runtime must init wrongly, inner accessor is empty",
+            )),
+            Some(inner) => Ok(inner.clone()),
+        }
+    }
 }
 
 impl Layer for DalRuntime {
@@ -62,8 +75,17 @@ impl Layer for DalRuntime {
 
 #[async_trait]
 impl Accessor for DalRuntime {
+    async fn create(&self, args: &OpCreate) -> Result<()> {
+        let op = self.get_inner()?;
+        let args = args.clone();
+        self.runtime
+            .spawn(async move { op.create(&args).await })
+            .await
+            .expect("join must success")
+    }
+
     async fn read(&self, args: &OpRead) -> Result<BytesReader> {
-        let op = self.inner.as_ref().unwrap().clone();
+        let op = self.get_inner()?;
         let args = args.clone();
         self.runtime
             .spawn(async move { op.read(&args).await })
@@ -72,7 +94,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn write(&self, args: &OpWrite) -> Result<BytesWriter> {
-        let op = self.inner.as_ref().unwrap().clone();
+        let op = self.get_inner()?;
         let args = args.clone();
         self.runtime
             .spawn(async move { op.write(&args).await })
@@ -81,7 +103,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn stat(&self, args: &OpStat) -> Result<Metadata> {
-        let op = self.inner.as_ref().unwrap().clone();
+        let op = self.get_inner()?;
         let args = args.clone();
         self.runtime
             .spawn(async move { op.stat(&args).await })
@@ -90,7 +112,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn delete(&self, args: &OpDelete) -> Result<()> {
-        let op = self.inner.as_ref().unwrap().clone();
+        let op = self.get_inner()?;
         let args = args.clone();
         self.runtime
             .spawn(async move { op.delete(&args).await })
@@ -99,7 +121,7 @@ impl Accessor for DalRuntime {
     }
 
     async fn list(&self, args: &OpList) -> Result<ObjectStreamer> {
-        let op = self.inner.as_ref().unwrap().clone();
+        let op = self.get_inner()?;
         let args = args.clone();
         self.runtime
             .spawn(async move { op.list(&args).await })

@@ -20,7 +20,7 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    pub(crate) fn parse_call(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_call(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let name = self.parser.parse_literal_string()?;
         self.parser.expect_token(&Token::LParen)?;
         let mut args = vec![];

@@ -25,7 +25,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // Set.
-    pub(crate) fn parse_set(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_set(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.next_token();
         match self.parser.parse_set()? {
             Statement::SetVariable {

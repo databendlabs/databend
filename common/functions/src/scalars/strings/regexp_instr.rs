@@ -223,7 +223,15 @@ impl RegexpInStrFunction {
 #[inline]
 fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
     let occur = if occur < 1 { 1 } else { occur };
-    let mut pos = if pos < 1 { 0 } else { (pos - 1) as usize };
+    let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
+
+    // the 'pos' postion is the character index,
+    // so we should iterate the character to find the byte index.
+    let mut pos = match s.char_indices().nth(pos) {
+        Some((start, _, _)) => start,
+        None => return 0,
+    };
+
     let mut i = 1_i64;
     let m = loop {
         let m = re.find_at(s, pos);
@@ -233,23 +241,29 @@ fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
 
         i += 1;
         if let Some(m) = m {
-            pos += m.end();
-        }
-        if pos >= s.len() {
-            break None;
+            // set the start postion of 'find_at' function to the position following the matched substring
+            pos = m.end();
         }
     };
 
-    let instr = match m {
-        Some(m) => {
-            if ro == 0 {
-                m.start() + 1
-            } else {
-                m.end() + 1
+    if m.is_none() {
+        return 0;
+    }
+
+    // the matched result is the byte index, but the 'regexp_instr' function returns the character index,
+    // so we should iterate the character to find the character index.
+    let mut instr = 0_usize;
+    for (p, (start, end, _)) in s.char_indices().enumerate() {
+        if ro == 0 {
+            if start == m.unwrap().start() {
+                instr = p + 1;
+                break;
             }
+        } else if end == m.unwrap().end() {
+            instr = p + 2;
+            break;
         }
-        None => 0,
-    };
+    }
 
     instr as u64
 }

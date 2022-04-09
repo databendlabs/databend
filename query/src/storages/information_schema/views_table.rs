@@ -54,7 +54,7 @@ impl ViewsTable {
         let mut options = HashMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'VIEWS'".to_string(),
+            desc: "'INFORMATION_SCHEMA'.'VIEWS'".to_string(),
             name: "VIEWS".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

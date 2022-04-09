@@ -23,6 +23,7 @@ use common_functions::aggregates::eval_aggr;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
+use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
@@ -135,6 +136,7 @@ impl PartiallyAccumulated {
             col_stats: self.block_column_statistics,
             col_metas,
             location: (location, DataBlock::VERSION),
+            compression: Compression::Lz4Raw,
         };
         stats.blocks_metas.push(block_meta);
         self.accumulator
