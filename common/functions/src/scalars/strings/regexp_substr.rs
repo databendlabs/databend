@@ -31,11 +31,11 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct RegexpInStrFunction {
+pub struct RegexpSubStrFunction {
     display_name: String,
 }
 
-impl RegexpInStrFunction {
+impl RegexpSubStrFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
@@ -46,19 +46,19 @@ impl RegexpInStrFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .variadic_arguments(2, 6),
+                .variadic_arguments(2, 5),
         )
     }
 }
 
-impl Function for RegexpInStrFunction {
+impl Function for RegexpSubStrFunction {
     fn name(&self) -> &str {
         &self.display_name
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         for (i, arg) in args.iter().enumerate() {
-            if i < 2 || i == 5 {
+            if i < 2 || i == 4 {
                 assert_string(*arg)?;
             } else if !arg.data_type_id().is_integer()
                 && !arg.data_type_id().is_string()
@@ -71,21 +71,20 @@ impl Function for RegexpInStrFunction {
             }
         }
 
-        Ok(u64::to_data_type())
+        Ok(Arc::new(NullableType::create(StringType::arc())))
     }
-    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+
+    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
-        let mut return_option = ConstColumn::new(Series::from_data(vec![0_i64]), input_rows).arc();
         let mut match_type = ConstColumn::new(Series::from_data(vec![""]), input_rows).arc();
 
         for i in 2..columns.len() {
             match i {
                 2 => pos = cast_column_field(&columns[2], &Int64Type::arc())?,
                 3 => occurrence = cast_column_field(&columns[3], &Int64Type::arc())?,
-                4 => return_option = cast_column_field(&columns[4], &Int64Type::arc())?,
-                _ => match_type = cast_column_field(&columns[5], &StringType::arc())?,
+                _ => match_type = cast_column_field(&columns[4], &StringType::arc())?,
             }
         }
 
@@ -95,78 +94,72 @@ impl Function for RegexpInStrFunction {
             let pat_value = pat.get_string(0)?;
             let mt_value = match_type.get_string(0)?;
 
-            return Ok(Arc::new(self.a_regexp_instr_binary_scalar(
+            return self.a_regexp_substr_binary_scalar(
                 columns[0].column(),
                 &pat_value,
                 &pos,
                 &occurrence,
-                &return_option,
                 &mt_value,
-            )?));
+                input_rows,
+            );
         }
 
-        Ok(Arc::new(self.a_regexp_instr_binary(
+        self.a_regexp_substr_binary(
             columns[0].column(),
             pat,
             &pos,
             &occurrence,
-            &return_option,
             &match_type,
-        )?))
+            input_rows,
+        )
     }
 }
 
-impl RegexpInStrFunction {
-    fn a_regexp_instr_binary_scalar(
+impl RegexpSubStrFunction {
+    fn a_regexp_substr_binary_scalar(
         &self,
         source: &ColumnRef,
         pat: &[u8],
         pos: &ColumnRef,
         occurrence: &ColumnRef,
-        return_option: &ColumnRef,
         mt: &[u8],
-    ) -> Result<UInt64Column> {
-        let mut builder: ColumnBuilder<u64> = ColumnBuilder::with_capacity(source.len());
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
+        let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(source.len());
 
         let source = Vu8::try_create_viewer(source)?;
         let pos = i64::try_create_viewer(pos)?;
         let occur = i64::try_create_viewer(occurrence)?;
-        let ro = i64::try_create_viewer(return_option)?;
 
         let re = build_regexp_from_pattern(self.name(), pat, Some(mt))?;
 
-        let iter = izip!(source, pos, occur, ro);
-        for (s_value, pos_value, occur_value, ro_value) in iter {
-            if ro_value != 0 && ro_value != 1 {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Incorrect arguments to {}: return_option must be 1 or 0, but got {}",
-                    self.name(),
-                    ro_value
-                )));
-            }
+        let iter = izip!(source, pos, occur);
+        for (s_value, pos_value, occur_value) in iter {
             if s_value.is_empty() || pat.is_empty() {
-                builder.append(0);
+                builder.append_null();
                 continue;
             }
 
-            let instr = regexp_instr(s_value, &re, pos_value, occur_value, ro_value);
-
-            builder.append(instr);
+            let substr = regexp_substr(s_value, &re, pos_value, occur_value);
+            match substr {
+                Some(ss) => builder.append(ss, true),
+                None => builder.append_null(),
+            }
         }
 
-        Ok(builder.build_column())
+        Ok(builder.build(input_rows))
     }
 
-    fn a_regexp_instr_binary(
+    fn a_regexp_substr_binary(
         &self,
         source: &ColumnRef,
         pat: &ColumnRef,
         pos: &ColumnRef,
         occurrence: &ColumnRef,
-        return_option: &ColumnRef,
         match_type: &ColumnRef,
-    ) -> Result<UInt64Column> {
-        let mut builder: ColumnBuilder<u64> = ColumnBuilder::with_capacity(source.len());
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
+        let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(source.len());
 
         let mut map: HashMap<Vec<u8>, Regex> = HashMap::new();
         let mut key: Vec<u8> = Vec::new();
@@ -175,18 +168,10 @@ impl RegexpInStrFunction {
         let pat = Vu8::try_create_viewer(pat)?;
         let pos = i64::try_create_viewer(pos)?;
         let occur = i64::try_create_viewer(occurrence)?;
-        let ro = i64::try_create_viewer(return_option)?;
         let mt = Vu8::try_create_viewer(match_type)?;
 
-        let iter = izip!(source, pat, pos, occur, ro, mt);
-        for (s_value, pat_value, pos_value, occur_value, ro_value, mt_value) in iter {
-            if ro_value != 0 && ro_value != 1 {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Incorrect arguments to {}: return_option must be 1 or 0, but got {}",
-                    self.name(),
-                    ro_value
-                )));
-            }
+        let iter = izip!(source, pat, pos, occur, mt);
+        for (s_value, pat_value, pos_value, occur_value, mt_value) in iter {
             if mt_value.starts_with_str("-") {
                 return Err(ErrorCode::BadArguments(format!(
                     "Incorrect arguments to {} match type: {}",
@@ -195,7 +180,7 @@ impl RegexpInStrFunction {
                 )));
             }
             if s_value.is_empty() || pat_value.is_empty() {
-                builder.append(0);
+                builder.append_null();
                 continue;
             }
 
@@ -211,17 +196,20 @@ impl RegexpInStrFunction {
             };
             key.clear();
 
-            let instr = regexp_instr(s_value, re, pos_value, occur_value, ro_value);
-
-            builder.append(instr);
+            let substr = regexp_substr(s_value, re, pos_value, occur_value);
+            if let Some(ss) = substr {
+                builder.append(ss, true);
+            } else {
+                builder.append_null();
+            }
         }
 
-        Ok(builder.build_column())
+        Ok(builder.build(input_rows))
     }
 }
 
 #[inline]
-fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
+fn regexp_substr<'a>(s: &'a [u8], re: &Regex, pos: i64, occur: i64) -> Option<&'a [u8]> {
     let occur = if occur < 1 { 1 } else { occur };
     let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
 
@@ -229,7 +217,7 @@ fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
     // so we should iterate the character to find the byte index.
     let mut pos = match s.char_indices().nth(pos) {
         Some((start, _, _)) => start,
-        None => return 0,
+        None => return None,
     };
 
     let mut i = 1_i64;
@@ -246,29 +234,10 @@ fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
         }
     };
 
-    if m.is_none() {
-        return 0;
-    }
-
-    // the matched result is the byte index, but the 'regexp_instr' function returns the character index,
-    // so we should iterate the character to find the character index.
-    let mut instr = 0_usize;
-    for (p, (start, end, _)) in s.char_indices().enumerate() {
-        if ro == 0 {
-            if start == m.unwrap().start() {
-                instr = p + 1;
-                break;
-            }
-        } else if end == m.unwrap().end() {
-            instr = p + 2;
-            break;
-        }
-    }
-
-    instr as u64
+    m.map(|m| m.as_bytes())
 }
 
-impl fmt::Display for RegexpInStrFunction {
+impl fmt::Display for RegexpSubStrFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
