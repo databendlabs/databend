@@ -11,15 +11,15 @@ SHOW TABLE STATUS LIKE 't%';
 SHOW TABLE STATUS LIKE 't2';
 SHOW TABLE STATUS LIKE 't';
 
-SHOW TABLE STATUS WHERE table_name LIKE 't%';
-SHOW TABLE STATUS WHERE table_name = 't%' AND 1 = 0;
-SHOW TABLE STATUS WHERE table_name = 't2' OR 1 = 1;
-SHOW TABLE STATUS WHERE table_name = 't2' AND 1 = 1;
+SHOW TABLE STATUS WHERE name LIKE 't%';
+SHOW TABLE STATUS WHERE name = 't%' AND 1 = 0;
+SHOW TABLE STATUS WHERE name = 't2' OR 1 = 1;
+SHOW TABLE STATUS WHERE name = 't2' AND 1 = 1;
 
 USE default;
-SHOW TABLE STATUS FROM showtabstat WHERE table_name LIKE 't%';
-SHOW TABLE STATUS FROM showtabstat WHERE table_name = 't%' AND 1 = 0;
-SHOW TABLE STATUS FROM showtabstat WHERE table_name = 't2' OR 1 = 1;
-SHOW TABLE STATUS FROM showtabstat WHERE table_name = 't2' AND 1 = 1;
+SHOW TABLE STATUS FROM showtabstat WHERE name LIKE 't%';
+SHOW TABLE STATUS FROM showtabstat WHERE name = 't%' AND 1 = 0;
+SHOW TABLE STATUS FROM showtabstat WHERE name = 't2' OR 1 = 1;
+SHOW TABLE STATUS FROM showtabstat WHERE name = 't2' AND 1 = 1;
 
 DROP DATABASE IF EXISTS showtabstat;

@@ -49,26 +49,26 @@ impl ShowTabStatInterpreter {
             database = database.to_uppercase()
         }
 
-        let select_cols = "table_name AS Name, engine AS Engine, 0 AS Version, \
-        NULL AS Row_format, NULL AS Rows, NULL AS Avg_row_length, NULL AS Data_length, \
+        let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
+        NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
         NULL AS Max_data_length, NULL AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
-        create_time AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
+        created_on AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
         NULL AS Checksum, '' AS Comment"
             .to_string();
         return match &self.plan.kind {
             PlanShowKind::All => Ok(format!(
-                "SELECT {} FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = '{}' \
-                ORDER BY table_schema, table_name",
+                "SELECT {} FROM system.tables WHERE database = '{}' \
+                ORDER BY database, name",
                 select_cols, database
             )),
             PlanShowKind::Like(v) => Ok(format!(
-                "SELECT {} FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = '{}' \
-                AND table_name LIKE {} ORDER BY table_schema, table_name",
+                "SELECT {} FROM system.tables WHERE database = '{}' \
+                AND name LIKE {} ORDER BY database, name",
                 select_cols, database, v
             )),
             PlanShowKind::Where(v) => Ok(format!(
-                "SELECT {} FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = '{}' \
-                AND ({}) ORDER BY table_schema, table_name",
+                "SELECT {} FROM system.tables WHERE database = '{}' \
+                AND ({}) ORDER BY database, name",
                 select_cols, database, v
             )),
         };

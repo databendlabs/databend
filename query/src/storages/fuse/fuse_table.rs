@@ -43,6 +43,7 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
+use crate::storages::TableStatistics;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -170,6 +171,21 @@ impl Table for FuseTable {
 
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
         self.do_optimize(ctx, keep_last_snapshot).await
+    }
+
+    async fn statistics(&self, ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
+        Ok(snapshot.and_then(|s| {
+            let summary = &s.summary;
+            let tbl_stats = TableStatistics {
+                num_rows: Some(summary.row_count),
+                data_length: Some(summary.uncompressed_byte_size),
+                data_length_compressed: Some(summary.compressed_byte_size),
+                index_length: None,
+            };
+            Some(tbl_stats)
+        }))
+        //Ok(None)
     }
 }
 
