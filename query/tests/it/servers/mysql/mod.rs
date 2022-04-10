@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,3 @@
 
 mod mysql_federated;
 mod mysql_handler;
-mod mysql_interactive_worker;
-mod mysql_metrics;
-mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
-mod writers;
-
-pub use self::mysql_federated::MySQLFederated;
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
-
-const MYSQL_VERSION: &str = "8.0.26";
