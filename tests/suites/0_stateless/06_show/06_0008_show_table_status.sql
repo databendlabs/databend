@@ -22,4 +22,12 @@ SHOW TABLE STATUS FROM showtabstat WHERE name = 't%' AND 1 = 0;
 SHOW TABLE STATUS FROM showtabstat WHERE name = 't2' OR 1 = 1;
 SHOW TABLE STATUS FROM showtabstat WHERE name = 't2' AND 1 = 1;
 
+
+
+CREATE TABLE showtabstat.t4(c1 int);
+SHOW TABLE STATUS FROM showtabstat WHERE name = 't4';
+insert into showtabstat.t4 values(1);
+SHOW TABLE STATUS FROM showtabstat WHERE name = 't4';
+
+
 DROP DATABASE IF EXISTS showtabstat;

@@ -175,17 +175,15 @@ impl Table for FuseTable {
 
     async fn statistics(&self, ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
-        Ok(snapshot.and_then(|s| {
+        Ok(snapshot.map(|s| {
             let summary = &s.summary;
-            let tbl_stats = TableStatistics {
+            TableStatistics {
                 num_rows: Some(summary.row_count),
                 data_length: Some(summary.uncompressed_byte_size),
                 data_length_compressed: Some(summary.compressed_byte_size),
                 index_length: None,
-            };
-            Some(tbl_stats)
+            }
         }))
-        //Ok(None)
     }
 }
 
