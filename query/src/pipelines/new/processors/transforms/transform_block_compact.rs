@@ -37,12 +37,12 @@ impl Compactor for BlockCompactCompactor {
         "BlockCompactTransform"
     }
 
-    fn compact(&self, blocks: &Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
 
-        for block in blocks.into_iter() {
+        for block in blocks.iter() {
             // Perfect block, no need to compact
             if block.num_rows() >= self.min_row_per_block
                 && block.num_rows() <= self.max_row_per_block
@@ -63,16 +63,16 @@ impl Compactor for BlockCompactCompactor {
                 accumulated_rows += block.num_rows();
                 temp_blocks.push(block);
 
-                while accumulated_rows >= self.min_row_per_block {
+                while accumulated_rows >= self.max_row_per_block {
                     let block = DataBlock::concat_blocks(&temp_blocks)?;
-                    res.push(block.slice(0, self.min_row_per_block));
-                    accumulated_rows -= self.min_row_per_block;
+                    res.push(block.slice(0, self.max_row_per_block));
+                    accumulated_rows -= self.max_row_per_block;
 
                     temp_blocks.clear();
                     if accumulated_rows != 0 {
                         temp_blocks.push(block.slice(
                             self.max_row_per_block,
-                            block.num_rows() - self.min_row_per_block,
+                            block.num_rows() - self.max_row_per_block,
                         ));
                     }
                 }
@@ -82,6 +82,46 @@ impl Compactor for BlockCompactCompactor {
         if accumulated_rows != 0 {
             let block = DataBlock::concat_blocks(&temp_blocks)?;
             res.push(block);
+        }
+
+        Ok(res)
+    }
+
+    fn use_partial_compact() -> bool {
+        true
+    }
+
+    fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let size = blocks.len();
+        let mut res = Vec::with_capacity(size);
+        let block = blocks[size - 1].clone();
+
+        // perfect block
+        if block.num_rows() >= self.min_row_per_block && block.num_rows() <= self.max_row_per_block
+        {
+            res.push(block.clone());
+            blocks.remove(size - 1);
+        } else {
+            let accumulated_rows: usize = blocks.into_iter().map(|b| b.num_rows()).sum();
+            blocks.clear();
+
+            if accumulated_rows >= self.max_row_per_block {
+                let cut = block.slice(0, self.max_row_per_block);
+                res.push(cut);
+
+                if accumulated_rows != self.max_row_per_block {
+                    blocks.push(block.slice(
+                        self.max_row_per_block,
+                        accumulated_rows - self.max_row_per_block,
+                    ));
+                }
+            } else {
+                blocks.push(block);
+            }
         }
 
         Ok(res)

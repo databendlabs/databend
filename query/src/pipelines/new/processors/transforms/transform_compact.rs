@@ -32,7 +32,16 @@ pub struct TransformCompact<T: Compactor + Send + 'static> {
 
 pub trait Compactor {
     fn name() -> &'static str;
-    fn compact(&self, blocks: &Vec<DataBlock>) -> Result<Vec<DataBlock>>;
+
+    fn use_partial_compact() -> bool {
+        false
+    }
+
+    fn compact_partial(&self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        Ok(vec![])
+    }
+
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
@@ -45,6 +54,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
             input_port,
             output_port,
             input_data_blocks: vec![],
+            output_data_blocks: VecDeque::new(),
         });
 
         Ok(ProcessorPtr::create(Box::new(Self { state, compactor })))
@@ -53,6 +63,15 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let ProcessorState::Consume(state) = &mut self.state {
+            if !state.output_data_blocks.is_empty() {
+                if !state.output_port.can_push() {
+                    return Ok(Event::NeedConsume);
+                }
+                let block = state.output_data_blocks.pop_front().unwrap();
+                state.output_port.push_data(Ok(block));
+                return Ok(Event::NeedConsume);
+            }
+
             if state.input_port.is_finished() {
                 let mut temp_state = ProcessorState::Finished;
                 std::mem::swap(&mut self.state, &mut temp_state);
@@ -65,6 +84,10 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
                 state
                     .input_data_blocks
                     .push(state.input_port.pull_data().unwrap()?);
+
+                if T::use_partial_compact() {
+                    return Ok(Event::Sync);
+                }
             }
 
             state.input_port.set_need_data();
@@ -111,18 +134,29 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let ProcessorState::Compacting(state) = &self.state {
-            let compacted_blocks = self.compactor.compact(&state.blocks)?;
+        match &mut self.state {
+            ProcessorState::Consume(state) => {
+                let compacted_blocks = self
+                    .compactor
+                    .compact_partial(&mut state.input_data_blocks)?;
 
-            let mut temp_state = ProcessorState::Finished;
-            std::mem::swap(&mut self.state, &mut temp_state);
-            temp_state = temp_state.convert_to_compacted_state(compacted_blocks)?;
-            std::mem::swap(&mut self.state, &mut temp_state);
-            debug_assert!(matches!(temp_state, ProcessorState::Finished));
-            return Ok(());
+                for b in compacted_blocks {
+                    state.output_data_blocks.push_back(b);
+                }
+                Ok(())
+            }
+            ProcessorState::Compacting(state) => {
+                let compacted_blocks = self.compactor.compact_final(&state.blocks)?;
+
+                let mut temp_state = ProcessorState::Finished;
+                std::mem::swap(&mut self.state, &mut temp_state);
+                temp_state = temp_state.convert_to_compacted_state(compacted_blocks)?;
+                std::mem::swap(&mut self.state, &mut temp_state);
+                debug_assert!(matches!(temp_state, ProcessorState::Finished));
+                Ok(())
+            }
+            _ => Err(ErrorCode::LogicalError("State invalid. it's a bug.")),
         }
-
-        Err(ErrorCode::LogicalError("State invalid. it's a bug."))
     }
 }
 
@@ -143,6 +177,7 @@ pub struct ConsumeState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data_blocks: Vec<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
 }
 
 pub struct CompactingState {

@@ -41,9 +41,9 @@ impl Compactor for SortMergeCompactor {
         "SortMergeTransform"
     }
 
-    fn compact(&self, blocks: &Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let block =
-            DataBlock::merge_sort_blocks(&blocks, &self.sort_columns_descriptions, self.limit)?;
+            DataBlock::merge_sort_blocks(blocks, &self.sort_columns_descriptions, self.limit)?;
         Ok(vec![block])
     }
 }
