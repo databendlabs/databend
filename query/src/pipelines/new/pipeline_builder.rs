@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExplainPlan, Expression, GrantPrivilegePlan, GrantRolePlan, InsertPlan, KillPlan, ListPlan, OptimizeTablePlan, RemotePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, StagePlan, TruncateTablePlan, UseDatabasePlan};
+use common_planners::{AggregatorFinalPlan, AlterUserPlan, AlterUserUDFPlan, AlterViewPlan, BroadcastPlan, CallPlan, CopyPlan, CreateDatabasePlan, CreateRolePlan, CreateTablePlan, CreateUserPlan, CreateUserStagePlan, CreateUserUDFPlan, CreateViewPlan, DescribeTablePlan, DescribeUserStagePlan, DropDatabasePlan, DropRolePlan, DropTablePlan, DropUserPlan, DropUserStagePlan, DropUserUDFPlan, DropViewPlan, EmptyPlan, ExplainPlan, Expression, GrantPrivilegePlan, GrantRolePlan, InsertPlan, KillPlan, ListPlan, RemotePlan, OptimizeTablePlan, V1RemotePlan, RenameTablePlan, RevokePrivilegePlan, RevokeRolePlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowPlan, SinkPlan, StagePlan, TruncateTablePlan, UseDatabasePlan};
 use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
@@ -144,9 +144,15 @@ impl PlanVisitor for QueryPipelineBuilder {
     }
 
     fn visit_remote(&mut self, plan: &RemotePlan) -> Result<()> {
-        let query_id = self.ctx.get_id();
-        let exchange_manager = self.ctx.get_exchange_manager();
-        exchange_manager.get_fragment_source(query_id, "".to_string(), &mut self.pipeline)
+        match plan {
+            RemotePlan::V1(_) => Err(ErrorCode::LogicalError("Use version 1 remote plan in version 2 framework.")),
+            RemotePlan::V2(plan) => {
+                let query_id = plan.receive_query_id.to_owned();
+                let fragment_id = plan.receive_fragment_id.to_owned();
+                let exchange_manager = self.ctx.get_exchange_manager();
+                exchange_manager.get_fragment_source(query_id, fragment_id, &mut self.pipeline)
+            }
+        }
     }
 
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {

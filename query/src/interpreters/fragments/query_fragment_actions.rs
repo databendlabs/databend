@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
+use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
 use crate::api::{DataExchange, ExecutorPacket, FragmentPacket};
 use crate::clusters::Cluster;
@@ -92,17 +93,43 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn to_packets(mut self, ctx: &Arc<QueryContext>) -> Result<Vec<ExecutorPacket>> {
+    pub fn to_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutorPacket>> {
+        let fragments_packets = self.get_executors_fragments();
+        let mut executors_packets = Vec::with_capacity(fragments_packets.len());
+
+        let nodes_info = Self::nodes_info(&ctx);
+
+        for (executor, fragments) in fragments_packets.into_iter() {
+            let query_id = ctx.get_id();
+            let executors_info = nodes_info.clone();
+            let packet = ExecutorPacket::create(query_id, executor, fragments, executors_info);
+            executors_packets.push(packet);
+        }
+
+        Ok(executors_packets)
+    }
+
+    fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {
+        let nodes = ctx.get_cluster().get_nodes();
+        let mut nodes_info = HashMap::with_capacity(nodes.len());
+
+        for node in nodes {
+            nodes_info.insert(node.id.to_owned(), node.clone());
+        }
+
+        nodes_info
+    }
+
+    fn get_executors_fragments(&self) -> HashMap<String, Vec<FragmentPacket>> {
         let mut fragments_packets = HashMap::new();
-        for fragment_actions in &mut self.fragments_actions {
-            for fragment_action in &mut fragment_actions.fragment_actions {
+        for fragment_actions in &self.fragments_actions {
+            for fragment_action in &fragment_actions.fragment_actions {
                 let fragment_packet = FragmentPacket::create(
                     fragment_actions.fragment_id.to_owned(),
                     fragment_action.node.clone(),
                     fragment_actions.data_exchange.clone().unwrap(),
                 );
 
-                // TODO: require node info
                 match fragments_packets.entry(fragment_action.executor.to_owned()) {
                     Entry::Vacant(entry) => {
                         entry.insert(vec![fragment_packet]);
@@ -114,16 +141,7 @@ impl QueryFragmentsActions {
             }
         }
 
-        // TODO:
-        // let cluster = ctx.get_cluster();
-        // cluster.get_nodes().iter().map(|node| node.id,)
-        let mut executors_packets = Vec::with_capacity(fragments_packets.len());
-
-        for (executor, actions) in fragments_packets.into_iter() {
-            executors_packets.push(ExecutorPacket::create(executor, actions, Default::default()));
-        }
-
-        Ok(executors_packets)
+        fragments_packets
     }
 }
 

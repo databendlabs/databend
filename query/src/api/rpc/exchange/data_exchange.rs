@@ -8,8 +8,8 @@ pub enum DataExchange {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HashDataExchange {
-    destination_ids: Vec<String>,
-    exchange_expression: Expression,
+    pub destination_ids: Vec<String>,
+    pub exchange_expression: Expression,
 }
 
 impl HashDataExchange {
@@ -23,7 +23,7 @@ impl HashDataExchange {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MergeExchange {
-    destination_id: String,
+    pub destination_id: String,
 }
 
 impl MergeExchange {

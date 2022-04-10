@@ -184,7 +184,7 @@ impl FlightService for DatabendQueryFlightService {
                     .await?;
                 FlightResult { body: vec![] }
             }
-            FlightAction::PrepareNewPipeline(packet) => {
+            FlightAction::PrepareExecutor(packet) => {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let query_context = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();

@@ -56,7 +56,7 @@ impl BuilderVisitor {
     }
 
     fn visit_stage(&self, node: &StagePlan) -> Result<Box<dyn QueryFragment>> {
-        StageQueryFragment::create(&node, self.visit(&node.input)?)
+        StageQueryFragment::create(self.ctx.clone(), &node, self.visit(&node.input)?)
     }
 
     fn visit_select(&self, node: &SelectPlan) -> Result<Box<dyn QueryFragment>> {

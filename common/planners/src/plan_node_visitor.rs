@@ -16,7 +16,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, RemotePlan};
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
@@ -56,7 +56,7 @@ use crate::OptimizeTablePlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
-use crate::RemotePlan;
+use crate::V1RemotePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;

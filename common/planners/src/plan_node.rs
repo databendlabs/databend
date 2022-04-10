@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::AggregatorFinalPlan;
+use crate::{AggregatorFinalPlan, RemotePlan};
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
@@ -55,7 +55,7 @@ use crate::ListPlan;
 use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
-use crate::RemotePlan;
+use crate::V1RemotePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;

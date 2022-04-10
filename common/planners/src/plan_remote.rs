@@ -16,7 +16,7 @@ use std::sync::Arc;
 use common_datavalues::{DataSchema, DataSchemaRef};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct RemotePlan {
+pub struct V1RemotePlan {
     pub schema: DataSchemaRef,
     pub query_id: String,
     pub stage_id: String,
@@ -24,18 +24,42 @@ pub struct RemotePlan {
     pub fetch_nodes: Vec<String>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+pub struct V2RemotePlan {
+    schema: DataSchemaRef,
+    pub receive_query_id: String,
+    pub receive_fragment_id: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+pub enum RemotePlan {
+    V1(V1RemotePlan),
+    V2(V2RemotePlan),
+}
+
 impl RemotePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+    pub fn create_v1(
+        schema: DataSchemaRef,
+        query_id: String,
+        stage_id: String,
+        stream_id: String,
+        fetch_nodes: Vec<String>,
+    ) -> RemotePlan {
+        RemotePlan::V1(V1RemotePlan { schema, query_id, stage_id, stream_id, fetch_nodes })
     }
 
-    pub fn create(receive_fragment_id: String) -> RemotePlan {
-        RemotePlan {
-            schema: Arc::new(DataSchema::empty()),
-            query_id: receive_fragment_id.clone(),
-            stage_id: receive_fragment_id.clone(),
-            stream_id: receive_fragment_id.clone(),
-            fetch_nodes: vec![],
+    pub fn create_v2(schema: DataSchemaRef, query_id: String, fragment: String) -> RemotePlan {
+        RemotePlan::V2(V2RemotePlan {
+            schema,
+            receive_query_id: query_id,
+            receive_fragment_id: fragment,
+        })
+    }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        match self {
+            Self::V1(plan) => plan.schema.clone(),
+            Self::V2(plan) => plan.schema.clone(),
         }
     }
 }

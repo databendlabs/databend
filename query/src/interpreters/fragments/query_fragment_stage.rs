@@ -1,22 +1,25 @@
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use common_base::GlobalUniqName;
 use common_datavalues::DataSchemaRef;
 use crate::interpreters::fragments::query_fragment::QueryFragment;
 use common_exception::{ErrorCode, Result};
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, PlanBuilder, PlanNode, PlanRewriter, RemotePlan, StageKind, StagePlan};
+use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, RemotePlan, PlanBuilder, PlanNode, PlanRewriter, V1RemotePlan, StageKind, StagePlan};
 use crate::api::{DataExchange, HashDataExchange, MergeExchange};
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::interpreters::fragments::query_fragment_actions::{QueryFragmentAction, QueryFragmentActions, QueryFragmentsActions};
+use crate::sessions::QueryContext;
 
 pub struct StageQueryFragment {
     id: String,
     stage: StagePlan,
+    ctx: Arc<QueryContext>,
     input: Box<dyn QueryFragment>,
 }
 
 impl StageQueryFragment {
-    pub fn create(node: &StagePlan, input: Box<dyn QueryFragment>) -> Result<Box<dyn QueryFragment>> {
-        Ok(Box::new(StageQueryFragment { id: "".to_string(), stage: node.clone(), input }))
+    pub fn create(ctx: Arc<QueryContext>, node: &StagePlan, input: Box<dyn QueryFragment>) -> Result<Box<dyn QueryFragment>> {
+        Ok(Box::new(StageQueryFragment { id: GlobalUniqName::unique(), stage: node.clone(), ctx, input }))
     }
 }
 
@@ -72,18 +75,21 @@ impl QueryFragment for StageQueryFragment {
     }
 
     fn rewrite_remote_plan(&self, node: &PlanNode, _: &PlanNode) -> Result<PlanNode> {
-        let mut stage_rewrite = StageRewrite::create(self.id.clone());
+        let query_id = self.ctx.get_id();
+        let fragment_id = self.id.clone();
+        let mut stage_rewrite = StageRewrite::create(query_id, fragment_id);
         stage_rewrite.rewrite_plan_node(node)
     }
 }
 
 struct StageRewrite {
+    query_id: String,
     fragment_id: String,
 }
 
 impl StageRewrite {
-    pub fn create(fragment_id: String) -> StageRewrite {
-        StageRewrite { fragment_id }
+    pub fn create(query_id: String, fragment_id: String) -> StageRewrite {
+        StageRewrite { query_id, fragment_id }
     }
 }
 
@@ -103,8 +109,12 @@ impl PlanRewriter for StageRewrite {
             .build()
     }
 
-    fn rewrite_stage(&mut self, _: &StagePlan) -> Result<PlanNode> {
-        Ok(PlanNode::Remote(RemotePlan::create(self.fragment_id.clone())))
+    fn rewrite_stage(&mut self, stage: &StagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::Remote(RemotePlan::create_v2(
+            stage.schema(),
+            self.query_id.to_owned(),
+            self.fragment_id.to_owned(),
+        )))
     }
 }
 
