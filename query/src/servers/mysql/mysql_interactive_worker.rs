@@ -263,7 +263,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         match self.federated_server_setup_command_check(query) {
             Some(data_block) => {
-                tracing::info!("Federated query: {}, response:{:?}", query, data_block);
+                tracing::info!("Federated query: {}", query);
                 Ok((vec![data_block], String::from("")))
             }
             None => {
