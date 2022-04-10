@@ -18,11 +18,6 @@ use std::time::Instant;
 
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
-use common_datavalues::StringType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -38,18 +33,17 @@ use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
-use regex::RegexSet;
 use tokio_stream::StreamExt;
 
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::mysql::MySQLFederated;
+use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 use crate::users::CertifiedInfo;
-
-const MYSQL_VERSION: &str = "8.0.26";
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
@@ -258,104 +252,18 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     async fn do_close(&mut self, _: u32) {}
 
-    fn variable_block(name: &str, value: &str) -> Option<DataBlock> {
-        Some(DataBlock::create(
-            DataSchemaRefExt::create(vec![DataField::new(
-                &format!("@@{}", name),
-                StringType::arc(),
-            )]),
-            vec![Series::from_data(vec![value])],
-        ))
-    }
-
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    fn federated_server_setup_command_check(&mut self, query: &str) -> Option<DataBlock> {
-        let rules: Vec<(&str, Option<DataBlock>)> = vec![
-            // MySQL version < 5.7.20
-            (
-                "(?i)^(SELECT @@tx_isolation)",
-                Self::variable_block("tx_isolation", "AUTOCOMMIT"),
-            ),
-            // MySQL version >= 5.7.20
-            (
-                "(?i)^(SELECT @@transaction_isolation)",
-                Self::variable_block("transaction_isolation", "AUTOCOMMIT"),
-            ),
-            (
-                "(?i)^(SELECT @@session.transaction_read_only)",
-                Self::variable_block("session.transaction_read_only", "0"),
-            ),
-            // 8.0.26-v0.7.12-nightly-ac9bf33-simd(rust-1.61.0-nightly-2022-04-10T01:02:24.233314535Z)
-            (
-                "(?i)^(SELECT VERSION())",
-                Self::variable_block(
-                    "version()",
-                    format!(
-                        "{}-{}",
-                        MYSQL_VERSION,
-                        *crate::configs::DATABEND_COMMIT_VERSION
-                    )
-                    .as_str(),
-                ),
-            ),
-            // Returns 1 make some drivers can parse it to int, no special purpose here.
-            ("(?i)^(SELECT @@(.*))", Self::variable_block("", "1")),
-            ("(?i)^(SHOW VARIABLES(.*))", None),
-            ("(?i)^(ROLLBACK(.*))", None),
-            ("(?i)^(COMMIT(.*))", None),
-            // Set.
-            ("(?i)^(SET NAMES(.*))", None),
-            ("(?i)^(SET character_set_results(.*))", None),
-            ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
-            ("(?i)^(SET AUTOCOMMIT(.*))", None),
-            ("(?i)^(SET sql_mode(.*))", None),
-            ("(?i)^(SET @@(.*))", None),
-            ("(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))", None),
-            // Compatibility for JDBC.
-            ("(?i)^(/\\* mysql-connector-java(.*))", None),
-            // Compatibility for DBeaver.
-            ("(?i)^(SHOW WARNINGS)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))", None),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))", None),
-            (
-                "(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))",
-                None,
-            ),
-            (
-                "(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))",
-                None,
-            ),
-            ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
-        ];
-
-        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-
-        tracing::debug!("the query is {}", query);
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
-        let matches = regex_set.matches(query);
-        for (index, (_regex, data_block)) in rules.iter().enumerate() {
-            if matches.matched(index) {
-                return match data_block {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block.clone()),
-                };
-            }
-        }
-
-        None
+    fn federated_server_setup_command_check(&self, query: &str) -> Option<DataBlock> {
+        let federated = MySQLFederated::create();
+        federated.check(query)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         match self.federated_server_setup_command_check(query) {
             Some(data_block) => {
-                tracing::info!("Setup query: {}", query);
+                tracing::info!("Federated query: {}", query);
                 Ok((vec![data_block], String::from("")))
             }
             None => {
