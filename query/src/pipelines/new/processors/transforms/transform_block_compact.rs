@@ -103,10 +103,10 @@ impl Compactor for BlockCompactCompactor {
         // perfect block
         if block.num_rows() >= self.min_row_per_block && block.num_rows() <= self.max_row_per_block
         {
-            res.push(block.clone());
+            res.push(block);
             blocks.remove(size - 1);
         } else {
-            let accumulated_rows: usize = blocks.into_iter().map(|b| b.num_rows()).sum();
+            let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
             blocks.clear();
 
             if accumulated_rows >= self.max_row_per_block {
