@@ -1,11 +1,11 @@
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
-DROP TABLE IF EXISTS t3;
+DROP DATABASE IF EXISTS showtable;
 
-CREATE TABLE t1(c1 int) ENGINE = Null;
-CREATE TABLE t2(c1 int) ENGINE = Null;
-CREATE TABLE t3(c1 int) ENGINE = Null;
+CREATE DATABASE showtable;
+CREATE TABLE showtable.t1(c1 int) ENGINE = Null;
+CREATE TABLE showtable.t2(c1 int) ENGINE = Null;
+CREATE TABLE showtable.t3(c1 int) ENGINE = Null;
 
+use showtable;
 SHOW TABLES;
 
 SHOW TABLES LIKE 't%';
@@ -17,7 +17,9 @@ SHOW TABLES WHERE table_name = 't%' AND 1 = 0;
 SHOW TABLES WHERE table_name = 't2' OR 1 = 1;
 SHOW TABLES WHERE table_name = 't2' AND 1 = 1;
 
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
-DROP TABLE IF EXISTS t3;
-
+USE default;
+SHOW TABLES FROM showtables WHERE table_name LIKE 't%';
+SHOW TABLES FROM showtables WHERE table_name = 't%' AND 1 = 0;
+SHOW TABLES FROM showtables WHERE table_name = 't2' OR 1 = 1;
+SHOW TABLES FROM showtables WHERE table_name = 't2' AND 1 = 1;
+DROP DATABASE showtable;

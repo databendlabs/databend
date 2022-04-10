@@ -46,14 +46,14 @@ fn test_regexp_instr_function() -> Result<()> {
             columns: vec![
                 Series::from_data(vec![
                     "dog cat dog",
-                    "aa aaa aaaa aa aaa aaaa",
-                    "aa aaa aaaa aa aaa aaaa",
+                    "aa aa aa aaaa aaaa aaaa",
+                    "aa aa aa aaaa aaaa aaaa",
                 ]),
                 Series::from_data(vec!["dog", "a{2}", "a{4}"]),
-                Series::from_data(vec![1_i64, 2, 1]),
-                Series::from_data(vec![2_i64, 2, 2]),
+                Series::from_data(vec![1_i64, 1, 9]),
+                Series::from_data(vec![2_i64, 3, 2]),
             ],
-            expect: Series::from_data(vec![9_u64, 8, 20]),
+            expect: Series::from_data(vec![9_u64, 7, 15]),
             error: "",
         },
         ScalarFunctionTest {
@@ -87,6 +87,23 @@ fn test_regexp_instr_function() -> Result<()> {
                 Series::from_data(vec!["i", "c", "i"]),
             ],
             expect: Series::from_data(vec![9_u64, 0, 24]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "regexp-instr-multi-byte-character-passed",
+            columns: vec![
+                Series::from_data(vec![
+                    "周 周周 周周周 周周周周",
+                    "周 周周 周周周 周周周周",
+                    "周 周周 周周周 周周周周",
+                    "周 周周 周周周 周周周周",
+                ]),
+                Series::from_data(vec!["周+", "周+", "周+", "周+"]),
+                Series::from_data(vec![1_i64, 2, 3, 5]),
+                Series::from_data(vec![1_i64, 2, 3, 1]),
+                Series::from_data(vec![0_i64, 1, 1, 1]),
+            ],
+            expect: Series::from_data(vec![1_u64, 9, 14, 9]),
             error: "",
         },
         ScalarFunctionTest {

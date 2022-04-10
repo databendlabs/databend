@@ -72,7 +72,6 @@ impl FuseTable {
         // segments which no longer need to be kept
         let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
 
-        // TODO rm those deference **
         // blocks to be removed
         let prev_blocks: HashSet<String> = self
             .blocks_of(seg_delta.iter().map(|i| **i), ctx.clone())

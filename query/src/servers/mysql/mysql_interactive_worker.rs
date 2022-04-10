@@ -49,6 +49,8 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 use crate::users::CertifiedInfo;
 
+const MYSQL_VERSION: &str = "8.0.26";
+
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
     generic_hold: PhantomData<W>,
@@ -266,12 +268,16 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         ))
     }
 
-    fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> Option<DataBlock> {
+    // Check the query is a federated or driver setup command.
+    // Here we fake some values for the command which Databend not supported.
+    fn federated_server_setup_command_check(&mut self, query: &str) -> Option<DataBlock> {
         let rules: Vec<(&str, Option<DataBlock>)> = vec![
+            // MySQL version < 5.7.20
             (
                 "(?i)^(SELECT @@tx_isolation)",
                 Self::variable_block("tx_isolation", "AUTOCOMMIT"),
             ),
+            // MySQL version >= 5.7.20
             (
                 "(?i)^(SELECT @@transaction_isolation)",
                 Self::variable_block("transaction_isolation", "AUTOCOMMIT"),
@@ -280,19 +286,35 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 "(?i)^(SELECT @@session.transaction_read_only)",
                 Self::variable_block("session.transaction_read_only", "0"),
             ),
+            // 8.0.26-v0.7.12-nightly-ac9bf33-simd(rust-1.61.0-nightly-2022-04-10T01:02:24.233314535Z)
+            (
+                "(?i)^(SELECT VERSION())",
+                Self::variable_block(
+                    "version()",
+                    format!(
+                        "{}-{}",
+                        MYSQL_VERSION,
+                        *crate::configs::DATABEND_COMMIT_VERSION
+                    )
+                    .as_str(),
+                ),
+            ),
+            // Returns 1 make some drivers can parse it to int, no special purpose here.
             ("(?i)^(SELECT @@(.*))", Self::variable_block("", "1")),
+            ("(?i)^(SHOW VARIABLES(.*))", None),
             ("(?i)^(ROLLBACK(.*))", None),
+            ("(?i)^(COMMIT(.*))", None),
+            // Set.
             ("(?i)^(SET NAMES(.*))", None),
             ("(?i)^(SET character_set_results(.*))", None),
             ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
             ("(?i)^(SET AUTOCOMMIT(.*))", None),
             ("(?i)^(SET sql_mode(.*))", None),
             ("(?i)^(SET @@(.*))", None),
-            ("(?i)^(SHOW VARIABLES(.*))", None),
             ("(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))", None),
-            // Just compatibility for jdbc
+            // Compatibility for JDBC.
             ("(?i)^(/\\* mysql-connector-java(.*))", None),
-            // Just compatibility for DBeaver
+            // Compatibility for DBeaver.
             ("(?i)^(SHOW WARNINGS)", None),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)", None),
@@ -331,10 +353,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        match self.federated_server_setup_set_or_jdbc_command(query) {
-            Some(data_block) => Ok((vec![data_block], String::from(""))),
+        match self.federated_server_setup_command_check(query) {
+            Some(data_block) => {
+                tracing::info!("Setup query: {}", query);
+                Ok((vec![data_block], String::from("")))
+            }
             None => {
-                tracing::info!("the not matched query is {}", query);
+                tracing::info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
                 let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
@@ -457,8 +482,11 @@ impl<W: std::io::Write> InteractiveWorker<W> {
                 generic_hold: PhantomData::default(),
             },
             salt: scramble,
-            // TODO: version
-            version: format!("{}-{}", "8.0.26", *crate::configs::DATABEND_COMMIT_VERSION),
+            version: format!(
+                "{}-{}",
+                MYSQL_VERSION,
+                *crate::configs::DATABEND_COMMIT_VERSION
+            ),
             client_addr,
         }
     }

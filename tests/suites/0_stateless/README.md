@@ -18,8 +18,8 @@
 ### Test Name
 
 xx_yyyy_[test_name]
-* xx is category no
-* yyyy is the sequence no under the category
+* xx is category number
+* yyyy is the sequence number under the category
 
 ### Test Category
 
@@ -33,8 +33,8 @@ xx_yyyy_[test_name]
 * 07_use -- for `USE` statement tests
 * 08_optimizer -- for Optimizer tests
 * 09_fuse_engine -- for `FUSE` storage engine tests
-* 10_stage -- for `STAGE` tests
-* 20_others -- for other tests
+* 10_drivers -- for driver integration tests
+* 20+_others -- for other tests
 
 Note: If your test is not in the above category, please add it.
 
