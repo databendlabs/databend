@@ -42,9 +42,13 @@ impl Compactor for SortMergeCompactor {
     }
 
     fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        let block =
-            DataBlock::merge_sort_blocks(blocks, &self.sort_columns_descriptions, self.limit)?;
-        Ok(vec![block])
+        if blocks.is_empty() {
+            Ok(vec![])
+        } else {
+            let block =
+                DataBlock::merge_sort_blocks(blocks, &self.sort_columns_descriptions, self.limit)?;
+            Ok(vec![block])
+        }
     }
 }
 
