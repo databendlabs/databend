@@ -54,6 +54,11 @@ impl MySQLFederated {
         default_map.insert("session.transaction_read_only", "0");
         default_map.insert("time_zone", "UTC");
         default_map.insert("system_time_zone", "UTC");
+        // 128M
+        default_map.insert("max_allowed_packet", "134217728");
+        default_map.insert("interactive_timeout", "31536000");
+        default_map.insert("wait_timeout", "31536000");
+        default_map.insert("net_write_timeout", "31536000");
 
         let mut fields = vec![];
         let mut values = vec![];
