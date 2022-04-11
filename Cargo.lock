@@ -862,6 +862,9 @@ dependencies = [
 name = "common-building"
 version = "0.1.0"
 dependencies = [
+ "cargo-license",
+ "cargo_metadata",
+ "common-tracing",
  "run_script",
  "vergen",
 ]
@@ -1724,8 +1727,6 @@ dependencies = [
  "bumpalo",
  "byteorder",
  "bytes 1.1.0",
- "cargo-license",
- "cargo_metadata",
  "chrono",
  "chrono-tz",
  "clap 3.1.8",
