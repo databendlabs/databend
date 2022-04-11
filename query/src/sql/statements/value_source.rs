@@ -77,6 +77,10 @@ impl ValueSource {
                     continue;
                 }
                 let _ = reader.ignore_white_spaces()?;
+                if col > 0 {
+                    reader.must_ignore_byte(b',')?;
+                    let _ = reader.ignore_white_spaces()?;
+                }
 
                 if deser.de_text_quoted(reader).is_err() {
                     skip_to_next_row(reader, 1)?;
@@ -90,9 +94,14 @@ impl ValueSource {
                     deser.append_data_value(values[col].clone())?;
                     datavalues = Some(values);
                 } else {
-                    let _ = reader.ignore_byte(b')')?;
+                    // Check ')' for last colomn
+                    if col + 1 == col_size {
+                        let _ = reader.ignore_white_spaces()?;
+                        reader.must_ignore_byte(b')')?;
+                    }
                 }
             }
+
             rows += 1;
         }
 
