@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod utils;
-
 use std::path::Path;
 
 use common_tracing::tracing;
-use utils::FormatVec;
 use vergen::vergen;
 use vergen::Config;
 use vergen::ShaKind;
@@ -97,14 +94,14 @@ pub fn add_env_credits_info() {
         .collect();
     println!(
         "cargo:rustc-env=DATABEND_CREDITS_NAMES={}",
-        FormatVec(names)
+        names.join(", ")
     );
     println!(
         "cargo:rustc-env=DATABEND_CREDITS_VERSIONS={}",
-        FormatVec(versions)
+        versions.join(", ")
     );
     println!(
         "cargo:rustc-env=DATABEND_CREDITS_LICENSES={}",
-        FormatVec(licenses)
+        licenses.join(", ")
     );
 }
