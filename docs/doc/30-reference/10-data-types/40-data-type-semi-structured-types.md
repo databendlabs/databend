@@ -166,3 +166,32 @@ Query the result:
 | {"a":1,"b":{"c":2}}   |
 +-----------------------+
 ```
+
+## Data Type Conversion
+
+By default, elements retrieved from a Variant column are returned. To convert a returned element to a specific type, add the `::` operator and the target data type (e.g. expression::type).
+
+```text
+select arr[0]::Int32 from array_table;
+```
+
+```text
++-------------------------------------+
+| cast(get_path(arr, '[0]') as Int32) |
++-------------------------------------+
+|                                   1 |
++-------------------------------------+
+```
+
+Let's do a more complex query:
+```text
+select sum(arr[0]::Int32) from array_table group by arr[0]::Int32;
+```
+
+```text
++------------------------------------------+
+| sum(cast(get_path(arr, '[0]') as Int32)) |
++------------------------------------------+
+|                                        1 |
++------------------------------------------+
+```

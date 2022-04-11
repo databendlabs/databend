@@ -68,18 +68,10 @@ pub fn cast_from_variant(
                 JsonValue::String(v) => {
                     match v.parse::<$T>() {
                         Ok(num) => builder.append(num as $T),
-                        Err(_) => {
-                            return Err(ErrorCode::BadDataValueType(format!(
-                                "Failed to cast variant value {} to {}",
-                                v, data_type.data_type_id()
-                            )));
-                        }
+                        Err(_) => bitmap.set(row, false),
                     }
                 }
-                _ => return Err(ErrorCode::BadDataValueType(format!(
-                    "Failed to cast variant value {} to {}",
-                    value.to_string(), data_type.data_type_id()
-                ))),
+                _ => bitmap.set(row, false),
             }
         }
         return Ok((builder.build(size), Some(bitmap.into())));
@@ -98,16 +90,10 @@ pub fn cast_from_variant(
                             } else if v.to_lowercase() == *"false".to_string() {
                                 builder.append(false)
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    v, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false)
                             }
                         }
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
@@ -138,16 +124,10 @@ pub fn cast_from_variant(
                             if let Some(d) = string_to_date(v) {
                                 builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16);
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false);
                             }
                         },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
@@ -162,16 +142,10 @@ pub fn cast_from_variant(
                             if let Some(d) = string_to_date(v) {
                                 builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false);
                             }
                         },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
@@ -186,16 +160,10 @@ pub fn cast_from_variant(
                             if let Some(t) = string_to_datetime(v) {
                                 builder.append(t.timestamp() as u32);
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false);
                             }
                         },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
@@ -211,16 +179,10 @@ pub fn cast_from_variant(
                             if let Some(d) = string_to_datetime64(v) {
                                 builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false);
                             }
                         },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));

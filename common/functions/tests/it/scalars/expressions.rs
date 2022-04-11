@@ -358,7 +358,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("4"),
                 ])],
                 expect: Series::from_data(vec![4u64, 3, 2, 4]),
-                error: "Failed to cast variant value X4 to UInt64",
+                error: "Cast error happens in casting from Variant to UInt64",
             },
         ),
         (CastFunction::create("cast", "int8")?, ScalarFunctionTest {
@@ -414,7 +414,7 @@ fn test_variant_cast_function() -> Result<()> {
                 json!("-4"),
             ])],
             expect: Series::from_data(vec![4i64, -3, 2, -4]),
-            error: "Failed to cast variant value X4 to Int64",
+            error: "Cast error happens in casting from Variant to Int64",
         }),
         (
             CastFunction::create("cast", "float32")?,
@@ -441,7 +441,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("-4.2"),
                 ])],
                 expect: Series::from_data(vec![1.2f32, -1.3, 2.1, -4.2]),
-                error: "Failed to cast variant value X4 to Float32",
+                error: "Cast error happens in casting from Variant to Float32",
             },
         ),
         (
@@ -469,7 +469,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("-4.2"),
                 ])],
                 expect: Series::from_data(vec![1.2f64, -1.3, 2.1, -4.2]),
-                error: "Failed to cast variant value X4 to Float64",
+                error: "Cast error happens in casting from Variant to Float64",
             },
         ),
         (
@@ -497,7 +497,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!(false),
                 ])],
                 expect: Series::from_data(vec![true, false, true, false]),
-                error: "Failed to cast variant value 1 to Boolean",
+                error: "Cast error happens in casting from Variant to Boolean",
             },
         ),
         (
@@ -521,7 +521,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("2021-10-24"),
                 ])],
                 expect: Series::from_data(vec![18691u16, 18924]),
-                error: "Failed to cast variant value \"a2021-03-05\" to Date16",
+                error: "Cast error happens in casting from Variant to Date16",
             },
         ),
         (
@@ -545,7 +545,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("2021-10-24"),
                 ])],
                 expect: Series::from_data(vec![18691i32, 18924]),
-                error: "Failed to cast variant value \"a2021-03-05\" to Date32",
+                error: "Cast error happens in casting from Variant to Date32",
             },
         ),
         (
@@ -569,7 +569,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("2021-10-24 10:10:10"),
                 ])],
                 expect: Series::from_data(vec![1614906061u32, 1635070210]),
-                error: "Failed to cast variant value \"a2021-03-05 01:01:01\" to DateTime32",
+                error: "Cast error happens in casting from Variant to DateTime32",
             },
         ),
         (
@@ -593,7 +593,7 @@ fn test_variant_cast_function() -> Result<()> {
                     json!("2021-10-24 10:10:10.123456789"),
                 ])],
                 expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
-                error: "Failed to cast variant value \"a2021-03-05 01:01:01.123\" to DateTime64",
+                error: "Cast error happens in casting from Variant to DateTime64(3)",
             },
         ),
     ];
