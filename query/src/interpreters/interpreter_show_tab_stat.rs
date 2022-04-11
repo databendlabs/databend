@@ -55,20 +55,27 @@ impl ShowTabStatInterpreter {
         created_on AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
         NULL AS Checksum, '' AS Comment"
             .to_string();
+
+        // Use `system.tables` as the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
+        //
+        // To constraint the schema of the final result-set,
+        //  `(select ${select_cols} from system.tables where ..)`
+        // is used as a derived table.
+        // (unlike mysql, alias of derived table is not required in databend).
         return match &self.plan.kind {
             PlanShowKind::All => Ok(format!(
-                "SELECT {} FROM system.tables WHERE database = '{}' \
-                ORDER BY database, name",
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                ORDER BY Name",
                 select_cols, database
             )),
             PlanShowKind::Like(v) => Ok(format!(
-                "SELECT {} FROM system.tables WHERE database = '{}' \
-                AND name LIKE {} ORDER BY database, name",
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                WHERE Name LIKE {} ORDER BY Name",
                 select_cols, database, v
             )),
             PlanShowKind::Where(v) => Ok(format!(
-                "SELECT {} FROM system.tables WHERE database = '{}' \
-                AND ({}) ORDER BY database, name",
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                WHERE ({}) ORDER BY Name",
                 select_cols, database, v
             )),
         };

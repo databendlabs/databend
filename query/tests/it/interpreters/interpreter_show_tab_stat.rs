@@ -89,7 +89,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
 
     // show table status where Name != 'data'.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show table status where name != 'data'").await?;
+        let plan = PlanParser::parse(ctx.clone(), "show table status where Name != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
         let stream = executor.execute(None).await?;
