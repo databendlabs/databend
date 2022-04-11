@@ -243,7 +243,7 @@ macro_rules! impl_from_option_iterator {
                             }
                         }
                         let column = builder.finish();
-                         NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
+                        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
                     }
                 }
          )*
@@ -274,7 +274,7 @@ macro_rules! impl_from_option_slices {
                             }
                         }
                         let column = builder.finish();
-                         NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
+                        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
                     }
                 }
          )*
