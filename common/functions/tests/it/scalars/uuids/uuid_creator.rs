@@ -40,5 +40,9 @@ fn test_uuid_creator_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(UUIDZeroFunction::try_create("")?, &tests, true)
+    test_scalar_functions(
+        UUIDZeroFunction::try_create("", &[&StringType::arc()])?,
+        &tests,
+        true,
+    )
 }

@@ -31,7 +31,11 @@ fn test_uuid_is_empty_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(UUIDIsEmptyFunction::try_create("")?, &tests, false)
+    test_scalar_functions(
+        UUIDIsEmptyFunction::try_create("", &[&StringType::arc()])?,
+        &tests,
+        false,
+    )
 }
 
 #[test]
@@ -46,5 +50,9 @@ fn test_uuid_is_not_empty_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(UUIDIsNotEmptyFunction::try_create("")?, &tests, false)
+    test_scalar_functions(
+        UUIDIsNotEmptyFunction::try_create("", &[&StringType::arc()])?,
+        &tests,
+        false,
+    )
 }

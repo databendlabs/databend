@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
+use crate::scalars::scalar_function2_test::test_eval;
 use crate::scalars::scalar_function2_test::test_scalar_functions;
 use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
@@ -110,7 +111,7 @@ fn test_log_function() -> Result<()> {
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions(test_function, &[test], true)?;
+        test_eval(&test_function, &test.columns, true)?;
     }
 
     Ok(())

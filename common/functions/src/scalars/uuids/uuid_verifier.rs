@@ -29,8 +29,8 @@ use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 pub type UUIDIsEmptyFunction = UUIDVerifierFunction<UUIDIsEmpty>;
 pub type UUIDIsNotEmptyFunction = UUIDVerifierFunction<UUIDIsNotEmpty>;
@@ -44,15 +44,25 @@ pub struct UUIDVerifierFunction<T> {
 impl<T> UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected string or null, but got {:?}",
+                args[0]
+            )));
+        }
+
         Ok(Box::new(UUIDVerifierFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .disable_passthrough_null()
                 .num_arguments(1),
@@ -107,15 +117,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
 
     fn return_type(
         &self,
-        args: &[&common_datavalues::DataTypePtr],
+        _args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
-        if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {:?}",
-                args[0]
-            )));
-        }
-
         Ok(BooleanType::arc())
     }
 

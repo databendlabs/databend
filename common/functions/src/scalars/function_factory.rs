@@ -38,30 +38,8 @@ use super::TupleClassFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
-pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
-
 pub type FactoryCreatorWithTypes =
     Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function>> + Send + Sync>;
-
-pub struct FunctionDescription {
-    pub(crate) features: FunctionFeatures,
-    function_creator: FactoryCreator,
-}
-
-impl FunctionDescription {
-    pub fn creator(creator: FactoryCreator) -> FunctionDescription {
-        FunctionDescription {
-            function_creator: creator,
-            features: FunctionFeatures::default(),
-        }
-    }
-
-    #[must_use]
-    pub fn features(mut self, features: FunctionFeatures) -> FunctionDescription {
-        self.features = features;
-        self
-    }
-}
 
 pub struct TypedFunctionDescription {
     pub(crate) features: FunctionFeatures,
@@ -84,7 +62,6 @@ impl TypedFunctionDescription {
 }
 
 pub struct FunctionFactory {
-    case_insensitive_desc: HashMap<String, FunctionDescription>,
     case_insensitive_typed_desc: HashMap<String, TypedFunctionDescription>,
 }
 
@@ -112,18 +89,12 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
 impl FunctionFactory {
     pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
         FunctionFactory {
-            case_insensitive_desc: Default::default(),
             case_insensitive_typed_desc: Default::default(),
         }
     }
 
     pub fn instance() -> &'static FunctionFactory {
         FUNCTION_FACTORY.as_ref()
-    }
-
-    pub fn register(&mut self, name: &str, desc: FunctionDescription) {
-        let case_insensitive_desc = &mut self.case_insensitive_desc;
-        case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
     pub fn register_typed(&mut self, name: &str, desc: TypedFunctionDescription) {
@@ -135,22 +106,13 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        match self.case_insensitive_desc.get(&lowercase_name) {
-            // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => match self.case_insensitive_typed_desc.get(&lowercase_name) {
-                None => Err(ErrorCode::UnknownFunction(format!(
-                    "Unsupported Function: {}",
-                    origin_name
-                ))),
-                Some(desc) => FunctionAdapter::try_create_by_typed(desc, origin_name, args),
-            },
-            Some(desc) => {
-                let inner = (desc.function_creator)(origin_name)?;
-                Ok(FunctionAdapter::create(
-                    inner,
-                    desc.features.passthrough_null,
-                ))
-            }
+        // TODO(Winter): we should write similar function names into error message if function name is not found.
+        match self.case_insensitive_typed_desc.get(&lowercase_name) {
+            Some(desc) => FunctionAdapter::try_create_by_typed(desc, origin_name, args),
+            None => Err(ErrorCode::UnknownFunction(format!(
+                "Unsupported Function: {}",
+                origin_name
+            ))),
         }
     }
 
@@ -158,16 +120,13 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        match self.case_insensitive_desc.get(&lowercase_name) {
-            // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => match self.case_insensitive_typed_desc.get(&lowercase_name) {
-                None => Err(ErrorCode::UnknownFunction(format!(
-                    "Unsupported Function: {}",
-                    origin_name
-                ))),
-                Some(desc) => Ok(desc.features.clone()),
-            },
+        // TODO(Winter): we should write similar function names into error message if function name is not found.
+        match self.case_insensitive_typed_desc.get(&lowercase_name) {
             Some(desc) => Ok(desc.features.clone()),
+            None => Err(ErrorCode::UnknownFunction(format!(
+                "Unsupported Function: {}",
+                origin_name
+            ))),
         }
     }
 
@@ -175,32 +134,22 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        if self.case_insensitive_desc.contains_key(&lowercase_name) {
-            return true;
-        }
         self.case_insensitive_typed_desc
             .contains_key(&lowercase_name)
     }
 
     pub fn registered_names(&self) -> Vec<String> {
-        self.case_insensitive_desc
+        self.case_insensitive_typed_desc
             .keys()
-            .chain(self.case_insensitive_typed_desc.keys())
             .cloned()
             .collect::<Vec<_>>()
     }
 
     pub fn registered_features(&self) -> Vec<FunctionFeatures> {
-        self.case_insensitive_desc
+        self.case_insensitive_typed_desc
             .values()
             .into_iter()
             .map(|v| &v.features)
-            .chain(
-                self.case_insensitive_typed_desc
-                    .values()
-                    .into_iter()
-                    .map(|v| &v.features),
-            )
             .cloned()
             .collect::<Vec<_>>()
     }

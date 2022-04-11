@@ -24,8 +24,8 @@ use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 pub type UUIDv4Function = UUIDCreatorFunction<UUIDv4>;
 pub type UUIDZeroFunction = UUIDCreatorFunction<UUIDZero>;
@@ -39,15 +39,18 @@ pub struct UUIDCreatorFunction<T> {
 impl<T> UUIDCreatorFunction<T>
 where T: UUIDCreator + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDCreatorFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default())
     }
 }

@@ -16,7 +16,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::test_eval;
 use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
@@ -51,7 +51,7 @@ fn test_abs_function() -> Result<()> {
     for (typ, test) in tests {
         match AbsFunction::try_create("abs", &[&typ]) {
             Ok(f) => {
-                test_scalar_functions(f, &[test], true)?;
+                test_eval(&f, &test.columns, true)?;
             }
             Err(cause) => {
                 assert_eq!(test.error, cause.message(), "{}", test.name);

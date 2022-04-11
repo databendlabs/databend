@@ -21,36 +21,41 @@ use super::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_tuple_function() -> Result<()> {
+    let types = vec![vec![UInt8Type::arc()], vec![
+        UInt8Type::arc(),
+        UInt8Type::arc(),
+    ]];
     let tests = vec![
-        ScalarFunctionTest {
-            name: "one element to tuple",
-            columns: vec![Series::from_data([0_u8])],
-            expect: Series::from_data([0_u8]),
-            error: "",
-        },
-        ScalarFunctionTest {
-            name: "more element to tuple",
-            columns: vec![Series::from_data([0_u8]), Series::from_data([0_u8])],
-            expect: Series::from_data([0_u8]),
-            error: "",
-        },
+        (
+            vec![DataValue::Struct(vec![DataValue::UInt64(0)])],
+            ScalarFunctionTest {
+                name: "one element to tuple",
+                columns: vec![Series::from_data([0_u8])],
+                expect: Series::from_data([0_u8]),
+                error: "",
+            },
+        ),
+        (
+            vec![DataValue::Struct(vec![
+                DataValue::UInt64(0),
+                DataValue::UInt64(0),
+            ])],
+            ScalarFunctionTest {
+                name: "more element to tuple",
+                columns: vec![Series::from_data([0_u8]), Series::from_data([0_u8])],
+                expect: Series::from_data([0_u8]),
+                error: "",
+            },
+        ),
     ];
 
-    let v1 = vec![DataValue::Struct(vec![DataValue::UInt64(0)])];
-    let v2 = vec![DataValue::Struct(vec![
-        DataValue::UInt64(0),
-        DataValue::UInt64(0),
-    ])];
-
-    let values = vec![v1, v2];
-
-    for (t, v) in tests.iter().zip(values.iter()) {
-        let func = TupleFunction::try_create_func("")?;
-        let result = test_eval(&func, &t.columns, false)?;
+    for ((val, test), typ) in tests.iter().zip(types.iter()) {
+        let func = TupleFunction::try_create_func("", &typ.iter().collect::<Vec<_>>())?;
+        let result = test_eval(&func, &test.columns, false)?;
         let result = result.convert_full_column();
 
         let result = (0..result.len()).map(|i| result.get(i)).collect::<Vec<_>>();
-        assert!(&result == v)
+        assert!(&result == val)
     }
 
     Ok(())

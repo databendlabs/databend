@@ -52,16 +52,6 @@ impl FunctionAdapter {
         })
     }
 
-    pub fn create_some(
-        inner: Option<Box<dyn Function>>,
-        passthrough_null: bool,
-    ) -> Box<dyn Function> {
-        Box::new(Self {
-            inner,
-            passthrough_null,
-        })
-    }
-
     pub fn try_create_by_typed(
         desc: &TypedFunctionDescription,
         name: &str,
@@ -72,7 +62,10 @@ impl FunctionAdapter {
         let inner = if passthrough_null {
             // one is null, result is null
             if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
-                return Ok(Self::create_some(None, true));
+                return Ok(Box::new(Self {
+                    inner: None,
+                    passthrough_null: true,
+                }));
             }
             let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
             let types = types.iter().collect::<Vec<_>>();

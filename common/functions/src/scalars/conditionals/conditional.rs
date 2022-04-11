@@ -26,7 +26,7 @@ impl ConditionalFunction {
         factory.register_typed("if", IfFunction::desc());
         factory.register_typed("isNull", IsNullFunction::desc());
         factory.register_typed("isNotNull", IsNotNullFunction::desc());
-        factory.register("in", InFunction::<false>::desc());
-        factory.register("not_in", InFunction::<true>::desc());
+        factory.register_typed("in", InFunction::<false>::desc());
+        factory.register_typed("not_in", InFunction::<true>::desc());
     }
 }
