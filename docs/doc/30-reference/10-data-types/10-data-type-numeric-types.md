@@ -1,5 +1,6 @@
 ---
 title: Numeric Data Types
+description: Basic Numeric data type.
 ---
 
 ## Integer Number
