@@ -1,7 +1,10 @@
 ---
-title: Integer Numbers
-description: Basic Integer Numbers data types
+title: Numeric Data Types
 ---
+
+## Integer Number
+
+Basic Integer Numbers data types.
 
 | Data Type        | Size      | Min Value              | Max Value   |
 | -----------------| --------- | ---------------------- | ----------- |
@@ -13,3 +16,13 @@ description: Basic Integer Numbers data types
 | UInt16           | 2 byte    |  0                     |  65535
 | UInt32           | 4 byte    |  0                     |  4294967295
 | UInt64           | 8 byte    |  0                     |  18446744073709551615
+
+## Floating Point Number
+
+Basic Float32/Float64 data types.
+
+| Data Type        | Size    |  Precision  | Syntax   |
+| -----------------| ------- |  ---------- | -------- |
+| Float32          | 4 byte  |  23 bits    | FLOAT
+| Float64          | 8 byte  |  53 bits    | DOUBLE
+

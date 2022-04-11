@@ -8,3 +8,8 @@ description: Semi-structured Types can hold any other data types
 | Array     | Array
 | Object    | Object
 | Variant   | Variant
+
+
+## Array
+
+Array in Databend is similar to an array in many other programming languages. 
