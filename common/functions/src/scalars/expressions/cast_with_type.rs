@@ -225,10 +225,7 @@ pub fn arrow_cast_compute(
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
-    if data_type.data_type_id() == TypeID::Variant
-        || data_type.data_type_id() == TypeID::VariantArray
-        || data_type.data_type_id() == TypeID::VariantObject
-    {
+    if data_type.data_type_id().is_variant() {
         return cast_to_variant(column, from_type, data_type);
     }
 

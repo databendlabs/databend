@@ -40,6 +40,7 @@ SELECT parse_json('"true"')::boolean;
 SELECT parse_json('"false"')::boolean;
 SELECT parse_json('"test"')::boolean; -- {ErrorCode 1010}
 SELECT parse_json(1)::boolean; -- {ErrorCode 1010}
+SELECT parse_json('null')::boolean; -- {ErrorCode 1010}
 SELECT parse_json(255)::uint8;
 SELECT parse_json(65535)::uint16;
 SELECT parse_json(4294967295)::uint32;
@@ -66,12 +67,14 @@ SELECT parse_json('"-9223372036854775808"')::int64;
 SELECT parse_json('"9223372036854775807"')::int64;
 SELECT parse_json('"test"')::uint64; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::int64; -- {ErrorCode 1010}
+SELECT parse_json('null')::int64; -- {ErrorCode 1010}
 SELECT parse_json(12.34)::float32;
 SELECT parse_json(1234.5678)::float64;
 SELECT parse_json('"12.34"')::float32;
 SELECT parse_json('"1234.5678"')::float64;
 SELECT parse_json('"test"')::float32; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::float64; -- {ErrorCode 1010}
+SELECT parse_json('null')::float64; -- {ErrorCode 1010}
 SELECT parse_json('"2022-01-01"')::date16;
 SELECT parse_json('"2022-01-01"')::date32;
 SELECT parse_json('"2022-01-01 01:01:01"')::datetime32;
@@ -80,9 +83,16 @@ SELECT parse_json('"test"')::date16; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::date32; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::datetime32; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::datetime64; -- {ErrorCode 1010}
+SELECT parse_json('null')::datetime64; -- {ErrorCode 1010}
 SELECT parse_json('[1,2,3]')::array;
 SELECT parse_json(1)::array;
 SELECT parse_json('"ab"')::array;
+SELECT parse_json('null')::array; -- {ErrorCode 1010}
 SELECT parse_json('{"a":1,"b":2}')::object;
 SELECT parse_json('"abc"')::object; -- {ErrorCode 1010}
 SELECT parse_json('[1,2,3]')::object; -- {ErrorCode 1010}
+SELECT parse_json('null')::object; -- {ErrorCode 1010}
+
+
+
+
