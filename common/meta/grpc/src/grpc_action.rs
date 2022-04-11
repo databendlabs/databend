@@ -19,11 +19,15 @@ use std::sync::Arc;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReply;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReply;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
@@ -57,6 +61,9 @@ pub enum MetaGrpcWriteReq {
     DropTable(DropTableReq),
     RenameTable(RenameTableReq),
     CommitTable(UpsertTableOptionReq),
+
+    CreateShare(CreateShareReq),
+    DropShare(DropShareReq),
 
     UpsertKV(UpsertKVAction),
 }
@@ -202,6 +209,14 @@ impl RequestFor for RenameTableReq {
 
 impl RequestFor for GetTableReq {
     type Reply = Arc<TableInfo>;
+}
+
+impl RequestFor for CreateShareReq {
+    type Reply = CreateShareReply;
+}
+
+impl RequestFor for DropShareReq {
+    type Reply = DropShareReply;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

@@ -17,11 +17,15 @@ use std::sync::Arc;
 
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReply;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReply;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
@@ -77,6 +81,11 @@ pub trait MetaApi: Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError>;
+
+    // share
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError>;
+
+    async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError>;
 
     fn name(&self) -> String;
 }

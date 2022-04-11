@@ -183,6 +183,10 @@ build_exceptions! {
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
 
+    // Share error codes.
+    ShareAlreadyExists(2705),
+    UnknownShare(2706),
+
     // Variable error codes.
     UnknownVariable(2801),
 

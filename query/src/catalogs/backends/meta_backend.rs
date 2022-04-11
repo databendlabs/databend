@@ -19,11 +19,15 @@ use std::time::Duration;
 use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReply;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReply;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
@@ -162,6 +166,16 @@ impl MetaApi for MetaBackend {
         req: UpsertTableOptionReq,
     ) -> std::result::Result<UpsertTableOptionReply, MetaError> {
         self.query_backend(move |cli| async move { cli.upsert_table_option(req).await })
+            .await
+    }
+
+    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
+        self.query_backend(move |cli| async move { cli.create_share(req).await })
+            .await
+    }
+
+    async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
+        self.query_backend(move |cli| async move { cli.drop_share(req).await })
             .await
     }
 

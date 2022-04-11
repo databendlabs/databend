@@ -65,9 +65,13 @@ use crate::sled_key_spaces::Databases;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
+use crate::sled_key_spaces::ShareLookup;
+use crate::sled_key_spaces::Shares;
 use crate::sled_key_spaces::StateMachineMeta;
 use crate::sled_key_spaces::TableLookup;
 use crate::sled_key_spaces::Tables;
+use crate::state_machine::share_lookup::ShareLookupKey;
+use crate::state_machine::share_lookup::ShareLookupValue;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::DatabaseLookupKey;
 use crate::state_machine::StateMachineMetaKey;
@@ -84,6 +88,8 @@ const SEQ_DATABASE_ID: &str = "database_id";
 const SEQ_TABLE_ID: &str = "table_id";
 /// seq number key to database meta version
 const SEQ_DATABASE_META_ID: &str = "database_meta_id";
+/// seq number key to generate share id
+const SEQ_SHARE_ID: &str = "share_id";
 
 /// sled db tree name for nodes
 // const TREE_NODES: &str = "nodes";
@@ -469,6 +475,7 @@ impl StateMachine {
 
         let (table_id, prev, result) =
             self.txn_create_table(txn_tree, db_id, table_name, table_meta)?;
+
         if prev.is_some() {
             return Ok(AppliedState::TableMeta(Change::nochange_with_id(
                 table_id.unwrap(),
@@ -692,6 +699,16 @@ impl StateMachine {
                 new_table_name,
                 txn_tree,
             ),
+
+            Cmd::CreateShare {
+                ref tenant,
+                ref share_name,
+            } => self.apply_create_share_cmd(tenant, share_name, txn_tree),
+
+            Cmd::DropShare {
+                ref tenant,
+                ref share_name,
+            } => self.apply_drop_share_cmd(tenant, share_name, txn_tree),
 
             Cmd::UpsertKV {
                 key,
@@ -1140,21 +1157,118 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn lookup_table_id(
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_create_share_cmd(
         &self,
-        db_id: u64,
-        name: &str,
-    ) -> Result<Option<SeqV<TableLookupValue>>, MetaError> {
-        match self.table_lookup().get(
-            &(TableLookupKey {
-                database_id: db_id,
-                table_name: name.to_string(),
-            }),
-        ) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
+        tenant: &str,
+        share_name: &str,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let share_lookup_tree = txn_tree.key_space::<ShareLookup>();
+        let share_tree = txn_tree.key_space::<Shares>();
+
+        let share_lookup_key = ShareLookupKey::new(tenant.to_string(), share_name.to_string());
+
+        let seq_share_id = share_lookup_tree.get(&share_lookup_key)?;
+
+        if let Some(u) = seq_share_id {
+            let share_id = u.data.0;
+            let prev = share_tree.get(&share_id)?;
+            return Ok(AppliedState::ShareInfo(Change::nochange_with_id(
+                share_id, prev,
+            )));
         }
+
+        let share_id = self.txn_incr_seq(SEQ_SHARE_ID, txn_tree)?;
+
+        let (prev, _) = self.txn_sub_tree_upsert(
+            &share_lookup_tree,
+            &share_lookup_key,
+            &MatchSeq::Exact(0),
+            Operation::Update(ShareLookupValue(share_id)),
+            None,
+        )?;
+
+        // if it is just created
+        if prev.is_some() {
+            let share_id = prev.unwrap().data;
+            let prev = share_tree.get(&share_id.0)?;
+            if let Some(prev) = prev {
+                return Ok(AppliedState::ShareInfo(Change::nochange_with_id(
+                    share_id.0,
+                    Some(prev),
+                )));
+            }
+        }
+
+        let (prev, result) = self.txn_sub_tree_upsert(
+            &share_tree,
+            &share_id,
+            &MatchSeq::Exact(0),
+            Operation::Update(Default::default()),
+            None,
+        )?;
+
+        tracing::debug!(
+            "applied create Share: {}, share_id: {}",
+            share_name,
+            share_id,
+        );
+
+        Ok(AppliedState::ShareInfo(Change::new_with_id(
+            share_id, prev, result,
+        )))
+    }
+
+    fn apply_drop_share_cmd(
+        &self,
+        tenant: &str,
+        share_name: &str,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let share_lookup_tree = txn_tree.key_space::<ShareLookup>();
+
+        let share_lookup_key = ShareLookupKey::new(tenant.to_string(), share_name.to_string());
+
+        let (prev, result) = self.txn_sub_tree_upsert(
+            &share_lookup_tree,
+            &share_lookup_key,
+            &MatchSeq::Any,
+            Operation::Delete,
+            None,
+        )?;
+
+        assert!(
+            result.is_none(),
+            "delete with MatchSeq::Any always succeeds"
+        );
+
+        // if it is just deleted
+        if let Some(seq_share_id) = prev {
+            let share_id = seq_share_id.data;
+            let share_tree = txn_tree.key_space::<Shares>();
+
+            let (prev_meta, result_meta) = self.txn_sub_tree_upsert(
+                &share_tree,
+                &share_id.0,
+                &MatchSeq::Any,
+                Operation::Delete,
+                None,
+            )?;
+
+            tracing::debug!("applied drop Share: {} {:?}", share_name, result);
+
+            return Ok(AppliedState::ShareInfo(Change::new_with_id(
+                share_id.0,
+                prev_meta,
+                result_meta,
+            )));
+        }
+
+        // not exist
+
+        tracing::debug!("applied drop Share: {} {:?}", share_name, result);
+        Ok(AppliedState::ShareInfo(Change::new(None, None)))
     }
 }
 

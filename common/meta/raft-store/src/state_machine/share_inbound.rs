@@ -25,11 +25,11 @@ use common_meta_types::ToMetaStorageError;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub type ShareKey = u64;
+pub type ShareID = u64;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ShareInboundKey {
     pub consumer: String,
-    pub share_key: ShareKey,
+    pub share_id: ShareID,
 }
 
 impl SledOrderedSerde for ShareInboundKey {
@@ -37,7 +37,7 @@ impl SledOrderedSerde for ShareInboundKey {
         let mut buf = BytesMut::new();
         buf.write_string(&self.consumer)
             .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "write_string")?;
-        buf.write_uvarint(self.ShareKey)
+        buf.write_uvarint(self.share_id)
             .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "write_uvarint")?;
         Ok(IVec::from(buf.to_vec()))
     }
@@ -53,20 +53,20 @@ impl SledOrderedSerde for ShareInboundKey {
             .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "read_uvarint")?;
         Ok(ShareInboundKey {
             consumer,
-            share_key,
+            share_id: share_key,
         })
     }
 }
 
 impl fmt::Display for ShareInboundKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "ShareInboundKey{}-{}", self.consumer, self.share_key)
+        write!(f, "ShareInboundKey{}-{}", self.consumer, self.share_id)
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct ShareInboundValue {
-    share_id: ShareKey,
+    share_id: ShareID,
     database_name: Option<String>,
 }
 

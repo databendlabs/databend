@@ -13,15 +13,10 @@
 // limitations under the License.
 
 use std::fmt;
-use std::io::Cursor;
 
-use bytes::BytesMut;
-use common_io::prelude::BinaryRead;
-use common_io::prelude::BinaryWriteBuf;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::MetaStorageError;
-use common_meta_types::ToMetaStorageError;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -31,6 +26,15 @@ const DELIMITER: char = '/';
 pub struct ShareLookupKey {
     pub provider: String,
     pub share_name: String,
+}
+
+impl ShareLookupKey {
+    pub fn new(provider: String, share_name: String) -> Self {
+        ShareLookupKey {
+            provider,
+            share_name,
+        }
+    }
 }
 
 impl SledOrderedSerde for ShareLookupKey {
@@ -47,7 +51,7 @@ impl SledOrderedSerde for ShareLookupKey {
 
         Ok(ShareLookupKey {
             provider: share_lookup_key[0].to_string(),
-            share_name: db_lookup_key[1].to_string(),
+            share_name: share_lookup_key[1].to_string(),
         })
     }
 }

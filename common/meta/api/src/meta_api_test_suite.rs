@@ -19,9 +19,11 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
@@ -951,6 +953,36 @@ impl MetaApiTestSuite {
                 assert_eq!(1, res[0].ident.table_id);
                 assert_eq!(2, res[1].ident.table_id);
             }
+        }
+
+        Ok(())
+    }
+
+    pub async fn share_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant1 = "tenant1";
+        let share_name1 = "share1";
+        tracing::info!("--- create {}", share_name1);
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                tenant: tenant1.to_string(),
+                share_name: share_name1.to_string(),
+            };
+
+            let res = mt.create_share(req).await;
+            tracing::info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "first share id is 1");
+        }
+
+        tracing::info!("--- drop share1");
+        {
+            mt.drop_share(DropShareReq {
+                if_exists: false,
+                tenant: tenant1.to_string(),
+                share_name: share_name1.to_string(),
+            })
+            .await?;
         }
 
         Ok(())

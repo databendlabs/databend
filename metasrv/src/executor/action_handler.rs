@@ -75,6 +75,16 @@ impl ActionHandler {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }
+
+            // share
+            MetaGrpcWriteReq::CreateShare(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
+            MetaGrpcWriteReq::DropShare(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
         }
     }
 
