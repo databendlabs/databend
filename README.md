@@ -41,7 +41,7 @@
 
 ## What is Databend?
 
-Databend is an open source **Elastic** and **Scalable** Modern Cloud Data Warehouse.
+Databend is an open source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
 

@@ -42,11 +42,10 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 
 :::tip
 Data type reference:
-* [Integer Numbers Data Type](../../../10-data-types/10-data-type-integer-number.md)
-* [Real Numbers Data Type](../../../10-data-types/11-data-type-real-number.md)
-* [Time and Date Data Type](../../../10-data-types/20-data-type-time-date-types.md)
-* [String Data Type](../../../10-data-types/30-data-type-string-types.md)
-* [Semi-structured Data Type](../../../10-data-types/40-data-type-semi-structured-types.md)
+* [Numeric Data Types](../../../10-data-types/10-data-type-numeric-types.md)
+* [Date & Time Data Types](../../../10-data-types/20-data-type-time-date-types.md)
+* [String Data Types](../../../10-data-types/30-data-type-string-types.md)
+* [Semi-structured Data Types](../../../10-data-types/40-data-type-semi-structured-types.md)
 :::
 
 ### Create Table LIKE
