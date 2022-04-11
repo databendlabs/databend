@@ -151,7 +151,7 @@ pub fn cast_with_type(
     let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
     if data_type.is_nullable() {
-        return NullableColumn::wrap_inner(result, bitmap);
+        return Ok(NullableColumn::wrap_inner(result, bitmap));
     }
 
     if let Some(bitmap) = bitmap {

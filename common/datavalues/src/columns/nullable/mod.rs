@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_exception::Result;
 pub use mutable::*;
 
 use crate::prelude::*;
@@ -31,7 +30,31 @@ pub struct NullableColumn {
 }
 
 impl NullableColumn {
-    pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
+    pub fn wrap_inner(column: ColumnRef, validity: Option<Bitmap>) -> ColumnRef {
+        if column.is_nullable() {
+            return column;
+        }
+
+        if !column.is_const() {
+            Self::new_from_opt(column, validity).arc()
+        } else {
+            let c: &ConstColumn = Series::check_get(&column).unwrap();
+            let inner = c.inner().clone();
+            let validity = validity.map(|b| b.slice(0, 1));
+            let nullable_column = Self::new_from_opt(inner, validity).arc();
+            ConstColumn::new(nullable_column, c.len()).arc()
+        }
+    }
+
+    pub fn inner(&self) -> &ColumnRef {
+        &self.column
+    }
+
+    pub fn ensure_validity(&self) -> &Bitmap {
+        &self.validity
+    }
+
+    fn new(column: ColumnRef, validity: Bitmap) -> Self {
         debug_assert!(!column.is_const());
         debug_assert!(
             column.data_type().can_inside_nullable(),
@@ -41,7 +64,7 @@ impl NullableColumn {
         Self { column, validity }
     }
 
-    pub fn new_from_opt(column: ColumnRef, validity: Option<Bitmap>) -> Self {
+    fn new_from_opt(column: ColumnRef, validity: Option<Bitmap>) -> Self {
         let validity = match validity {
             Some(v) => v,
             None => {
@@ -52,30 +75,6 @@ impl NullableColumn {
         };
 
         Self::new(column, validity)
-    }
-
-    pub fn wrap_inner(column: ColumnRef, validity: Option<Bitmap>) -> Result<ColumnRef> {
-        if column.is_nullable() {
-            return Ok(column);
-        }
-
-        if !column.is_const() {
-            Ok(Self::new_from_opt(column, validity).arc())
-        } else {
-            let c: &ConstColumn = Series::check_get(&column)?;
-            let inner = c.inner().clone();
-            let validity = validity.map(|b| b.slice(0, 1));
-            let nullable_column = Self::new_from_opt(inner, validity).arc();
-            return Ok(ConstColumn::new(nullable_column, c.len()).arc());
-        }
-    }
-
-    pub fn inner(&self) -> &ColumnRef {
-        &self.column
-    }
-
-    pub fn ensure_validity(&self) -> &Bitmap {
-        &self.validity
     }
 }
 
@@ -167,7 +166,7 @@ impl Column for NullableColumn {
         for (index, value) in inner_values.iter().enumerate().take(scattered_size) {
             let bitmap = bitmaps.get_mut(index).unwrap();
             let bitmap = std::mem::take(bitmap).into();
-            results.push(Arc::new(NullableColumn::new(value.clone(), bitmap)) as ColumnRef);
+            results.push(NullableColumn::wrap_inner(value.clone(), Some(bitmap)));
         }
 
         results
