@@ -10,9 +10,9 @@ description: Semi-structured Types can hold any other data types.
 | Variant   | Variant
 
 
-## ARRAY
+## Array
 
-Array in Databend is similar to an array in many other programming languages, but the value in an ARRAY types can be different, each value in an ARRAY is VARIANT type.
+Array in Databend is similar to an array in many other programming languages, but the value in an Array types can be different, each value in an Array is Variant type.
 
 ### Example
 
