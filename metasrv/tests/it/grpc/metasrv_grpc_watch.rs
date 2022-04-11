@@ -19,6 +19,7 @@ use common_base::tokio::sync::mpsc::UnboundedSender;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::event::EventType;
+use common_meta_types::protobuf::watch_create_request::FilterType;
 use common_meta_types::protobuf::watch_request::RequestUnion;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchCreateRequest;
@@ -45,6 +46,7 @@ async fn watcher_client_main(
         request_union: Some(RequestUnion::CreateRequest(WatchCreateRequest {
             key,
             key_end,
+            filter_type: FilterType::All.into(),
         })),
     };
 
@@ -119,74 +121,76 @@ async fn test_watch() -> anyhow::Result<()> {
     //let mut grpc_client = client.make_client().await?;
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    // update some events
-    let key_a = "a".to_string();
-    let key_b = "z".to_string();
-    let key_z = "z".to_string();
+    // 1.update some events
+    {
+        let key_a = "a".to_string();
+        let key_b = "z".to_string();
+        let key_z = "z".to_string();
 
-    let empty = "".as_bytes().to_vec();
-    let val_a = "a".as_bytes().to_vec();
-    let val_b = "b".as_bytes().to_vec();
-    let val_new = "new".as_bytes().to_vec();
-    let val_z = "z".as_bytes().to_vec();
+        let empty = "".as_bytes().to_vec();
+        let val_a = "a".as_bytes().to_vec();
+        let val_b = "b".as_bytes().to_vec();
+        let val_new = "new".as_bytes().to_vec();
+        let val_z = "z".as_bytes().to_vec();
 
-    let events = vec![
-        // set a->a
-        Event {
-            key: key_a.clone(),
-            event: EventType::UpInsert.into(),
-            current: val_a.clone(),
-            prev: empty.clone(),
-        },
-        // set z->z
-        Event {
-            key: key_z.clone(),
-            event: EventType::UpInsert.into(),
-            current: val_z.clone(),
-            prev: empty.clone(),
-        },
-        // set b->b
-        Event {
-            key: key_b.clone(),
-            event: EventType::UpInsert.into(),
-            current: val_b.clone(),
-            prev: empty.clone(),
-        },
-        // update b->new
-        Event {
-            key: key_b.clone(),
-            event: EventType::UpInsert.into(),
-            current: val_new.clone(),
-            prev: val_b.clone(),
-        },
-        // delete b
-        Event {
-            key: key_b.clone(),
-            event: EventType::Delete.into(),
-            current: empty.clone(),
-            prev: val_new.clone(),
-        },
-    ];
+        let events = vec![
+            // set a->a
+            Event {
+                key: key_a.clone(),
+                event: EventType::Update.into(),
+                current: val_a.clone(),
+                prev: empty.clone(),
+            },
+            // set z->z
+            Event {
+                key: key_z.clone(),
+                event: EventType::Update.into(),
+                current: val_z.clone(),
+                prev: empty.clone(),
+            },
+            // set b->b
+            Event {
+                key: key_b.clone(),
+                event: EventType::Update.into(),
+                current: val_b.clone(),
+                prev: empty.clone(),
+            },
+            // update b->new
+            Event {
+                key: key_b.clone(),
+                event: EventType::Update.into(),
+                current: val_new.clone(),
+                prev: val_b.clone(),
+            },
+            // delete b
+            Event {
+                key: key_b.clone(),
+                event: EventType::Delete.into(),
+                current: empty.clone(),
+                prev: val_new.clone(),
+            },
+        ];
 
-    let _ = events_tx.send(events);
+        let _ = events_tx.send(events);
 
-    // wait client stream recv events
-    let _ = start_rx.recv();
+        // wait client stream recv events
+        let _ = start_rx.recv();
 
-    // update kv
-    let updates = vec![
-        UpsertKVAction::new("a", MatchSeq::Any, Operation::Update(val_a), None),
-        UpsertKVAction::new("z", MatchSeq::Any, Operation::Update(val_z), None),
-        UpsertKVAction::new("b", MatchSeq::Any, Operation::Update(val_b), None),
-        UpsertKVAction::new("b", MatchSeq::Any, Operation::Update(val_new), None),
-        UpsertKVAction::new("b", MatchSeq::Any, Operation::Delete, None),
-    ];
-    for update in updates.iter() {
-        let _ = client.upsert_kv(update.clone()).await;
+        // update kv
+        let updates = vec![
+            UpsertKVAction::new("a", MatchSeq::Any, Operation::Update(val_a), None),
+            UpsertKVAction::new("z", MatchSeq::Any, Operation::Update(val_z), None),
+            UpsertKVAction::new("b", MatchSeq::Any, Operation::Update(val_b), None),
+            UpsertKVAction::new("b", MatchSeq::Any, Operation::Update(val_new), None),
+            UpsertKVAction::new("b", MatchSeq::Any, Operation::Delete, None),
+        ];
+        for update in updates.iter() {
+            let _ = client.upsert_kv(update.clone()).await;
+        }
+
+        // wait client stream recv notify
+        let _ = start_rx.recv();
     }
-
-    // wait client stream recv notify
-    let _ = start_rx.recv();
 
     // ok, shutdown client main
     shutdown_tx.send(()).expect("shutdown client stream error");

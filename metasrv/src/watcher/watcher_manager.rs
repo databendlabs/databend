@@ -23,8 +23,8 @@ use common_base::tokio::time::interval;
 use common_base::tokio::time::Duration;
 use common_base::tokio::time::Interval;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
-use common_meta_raft_store::state_machine::UpdateType;
 use common_meta_types::protobuf::event::EventType;
+use common_meta_types::protobuf::watch_create_request::FilterType;
 use common_meta_types::protobuf::watch_request::RequestUnion::CancelRequest;
 use common_meta_types::protobuf::watch_request::RequestUnion::CreateRequest;
 use common_meta_types::protobuf::Event;
@@ -40,6 +40,7 @@ use tonic::Streaming;
 
 use super::Watcher;
 use super::WatcherConfig;
+use super::WatcherKey;
 use super::WatcherStream;
 
 pub type WatcherId = i64;
@@ -52,7 +53,7 @@ type CreateWatcherEvent = (Streaming<WatchRequest>, WatcherStreamSender);
 #[derive(Clone, Debug)]
 struct StateMachineKvData {
     pub key: String,
-    pub update: UpdateType,
+    pub event: EventType,
     pub prev: Option<SeqV>,
     pub current: Option<SeqV>,
 }
@@ -104,7 +105,7 @@ struct WatcherManagerCore {
     watchers: BTreeMap<WatcherId, Watcher>,
 
     /// map range to WatcherId
-    watcher_range_set: RangeSet<String, WatcherId>,
+    watcher_range_set: RangeSet<String, WatcherKey>,
 
     current_stream_id: WatcherStreamId,
 
@@ -201,14 +202,6 @@ impl WatcherManagerCore {
         }
     }
 
-    fn from_update_type_to_event_type(update: UpdateType) -> EventType {
-        if update == UpdateType::UpInsert {
-            EventType::UpInsert
-        } else {
-            EventType::Delete
-        }
-    }
-
     async fn notify_events(&mut self) {
         let kv_vec = &self.kv_vec;
 
@@ -224,18 +217,25 @@ impl WatcherManagerCore {
                 Some(prev) => prev.data.clone(),
                 None => vec![],
             };
-            let event: i32 =
-                WatcherManagerCore::from_update_type_to_event_type(kv.update.clone()).into();
+            let event = kv.event;
 
             let set = self.watcher_range_set.get_by_point(&kv.key);
             for range_key in set.iter() {
-                let watcher_id = range_key.key;
+                let watcher_id = range_key.key.id;
+                let filter = range_key.key.filter;
+
+                // filter out event
+                if (filter == FilterType::Noupdate && event == EventType::Update)
+                    || (filter == FilterType::Nodelete && event == EventType::Delete)
+                {
+                    continue;
+                }
                 let events = event_maps.get_mut(&watcher_id);
                 match events {
                     Some(events) => {
                         events.push(Event {
                             key: kv.key.clone(),
-                            event,
+                            event: kv.event.into(),
                             current: current.clone(),
                             prev: prev.clone(),
                         });
@@ -243,7 +243,7 @@ impl WatcherManagerCore {
                     None => {
                         let events = vec![Event {
                             key: kv.key.clone(),
-                            event,
+                            event: kv.event.into(),
                             current: current.clone(),
                             prev: prev.clone(),
                         }];
@@ -331,9 +331,13 @@ impl WatcherManagerCore {
 
         let watcher_id = self.current_watcher_id;
         self.current_watcher_id += 1;
+        let filter = create.filter_type();
         let watcher = Watcher::new(watcher_id, stream_id, create);
 
-        self.watcher_range_set.insert(range, watcher_id);
+        self.watcher_range_set.insert(range, WatcherKey {
+            id: watcher_id,
+            filter,
+        });
         self.watchers.insert(watcher_id, watcher);
 
         stream.add_watcher(watcher_id);
@@ -352,7 +356,10 @@ impl WatcherManagerCore {
         let watcher = self.watchers.get(&watcher_id).unwrap();
         assert_eq!(watcher.owner_id, stream_id);
         let range = WatcherManagerCore::get_range_key(&watcher.key, &watcher.key_end);
-        self.watcher_range_set.remove(range, watcher_id);
+        self.watcher_range_set.remove(range, WatcherKey {
+            id: watcher_id,
+            filter: FilterType::All,
+        });
         self.watchers.remove(&watcher_id);
     }
 
@@ -382,18 +389,16 @@ impl WatcherManagerCore {
 
 #[async_trait::async_trait]
 impl StateMachineSubscriber for WatcherStateMachineSubscriber {
-    async fn kv_changed(
-        &self,
-        key: &str,
-        update: UpdateType,
-        prev: &Option<SeqV>,
-        current: &Option<SeqV>,
-    ) {
+    async fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>) {
+        let event = match current {
+            Some(_) => EventType::Update,
+            None => EventType::Delete,
+        };
         let _ = self.sm_tx.send(StateMachineKvData {
             key: key.to_string(),
-            update,
-            prev: prev.clone(),
-            current: current.clone(),
+            event,
+            prev,
+            current,
         });
     }
 }
