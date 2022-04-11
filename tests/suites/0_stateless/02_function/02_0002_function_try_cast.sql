@@ -15,5 +15,6 @@ SELECT try_cast('aa' as Float64) is null;
 
 SELECT try_cast(parse_json('null') as float64) is null;
 
--- TODO(b41sh)
--- SELECT try_cast(parse_json('"test"') as int32) is null;
+SELECT try_cast(parse_json('"test"') as int32) is null;
+SELECT try_cast(parse_json('123') as int32)  = 123;
+

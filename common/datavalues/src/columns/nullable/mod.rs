@@ -34,12 +34,13 @@ impl NullableColumn {
         if column.is_nullable() {
             return column;
         }
-
         if !column.is_const() {
             Self::new_from_opt(column, validity).arc()
         } else {
             let c: &ConstColumn = Series::check_get(&column).unwrap();
             let inner = c.inner().clone();
+            // If the column is const, it means the `inner` column is just one size
+            // So we just need the first bit of the validity
             let validity = validity.map(|b| b.slice(0, 1));
             let nullable_column = Self::new_from_opt(inner, validity).arc();
             ConstColumn::new(nullable_column, c.len()).arc()
@@ -54,6 +55,7 @@ impl NullableColumn {
         &self.validity
     }
 
+    // Set `new` to private, this avoids the user to put wrong column to construct a nullable column
     fn new(column: ColumnRef, validity: Bitmap) -> Self {
         debug_assert!(!column.is_const());
         debug_assert!(

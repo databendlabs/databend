@@ -30,17 +30,21 @@ pub struct TransformCompact<T: Compactor + Send + 'static> {
     compactor: T,
 }
 
+/// Compactor is a trait that defines how to compact blocks.
 pub trait Compactor {
     fn name() -> &'static str;
 
+    /// `use_partial_compact` enable the compactor to compact the blocks when a new block is pushed
     fn use_partial_compact() -> bool {
         false
     }
 
+    /// `compact_partial` is called when a new block is pushed and `use_partial_compact` is enabled
     fn compact_partial(&self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         Ok(vec![])
     }
 
+    /// `compact_final` is called when all the blocks are pushed to finish the compaction
     fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }
 
