@@ -91,10 +91,6 @@ impl Default for HttpSession {
     }
 }
 
-pub struct ResponseInitialState {
-    pub session_id: String,
-}
-
 #[derive(Debug, Clone)]
 pub struct ResponseState {
     pub running_time_ms: f64,
@@ -105,7 +101,7 @@ pub struct ResponseState {
 
 pub struct HttpQueryResponseInternal {
     pub data: Option<ResponseData>,
-    pub initial_state: Option<ResponseInitialState>,
+    pub session_id: String,
     pub state: ResponseState,
 }
 
@@ -184,18 +180,10 @@ impl HttpQuery {
         self.request.pagination.wait_time_secs == 0
     }
 
-    pub async fn get_response_page(
-        &self,
-        page_no: usize,
-        init: bool,
-    ) -> Result<HttpQueryResponseInternal> {
+    pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         Ok(HttpQueryResponseInternal {
             data: Some(self.get_page(page_no).await?),
-            initial_state: if init {
-                Some(self.get_initial_state().await)
-            } else {
-                None
-            },
+            session_id: self.session_id.clone(),
             state: self.get_state().await,
         })
     }
@@ -203,14 +191,8 @@ impl HttpQuery {
     pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
         HttpQueryResponseInternal {
             data: None,
-            initial_state: None,
-            state: self.get_state().await,
-        }
-    }
-
-    pub async fn get_initial_state(&self) -> ResponseInitialState {
-        ResponseInitialState {
             session_id: self.session_id.clone(),
+            state: self.get_state().await,
         }
     }
 
