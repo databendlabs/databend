@@ -40,7 +40,6 @@ impl ValueSource {
     }
 
     pub async fn read<'a>(self, reader: &mut CpBufferReader<'a>) -> Result<DataBlock> {
-        let mut buf = Vec::new();
         let mut desers = self
             .schema
             .fields()
@@ -58,49 +57,10 @@ impl ValueSource {
             }
             // not the first row
             if rows != 0 {
-                reader.until(b',', &mut buf)?;
-            }
-            let _ = reader.ignore_white_spaces()?;
-            reader.checkpoint();
-
-            let mut datavalues: Option<Vec<DataValue>> = None;
-
-            if !reader.ignore_byte(b'(')? {
-                return Err(ErrorCode::BadDataValueType(
-                    "Must start with parentheses".to_string(),
-                ));
+                let _ = reader.must_ignore_byte(b',')?;
             }
 
-            for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
-                if let Some(values) = &datavalues {
-                    deser.append_data_value(values[col].clone())?;
-                    continue;
-                }
-                let _ = reader.ignore_white_spaces()?;
-                if col > 0 {
-                    reader.must_ignore_byte(b',')?;
-                    let _ = reader.ignore_white_spaces()?;
-                }
-
-                if deser.de_text_quoted(reader).is_err() {
-                    skip_to_next_row(reader, 1)?;
-                    // parse from expression
-                    // set datavalues
-                    let buf = reader.get_checkpoint_buffer();
-                    let exprs = parse_exprs(buf)?;
-                    reader.reset_checkpoint();
-
-                    let values = exprs_to_datavalue(exprs, &self.analyzer, &self.schema).await?;
-                    deser.append_data_value(values[col].clone())?;
-                    datavalues = Some(values);
-                } else {
-                    // Check ')' for last colomn
-                    if col + 1 == col_size {
-                        let _ = reader.ignore_white_spaces()?;
-                        reader.must_ignore_byte(b')')?;
-                    }
-                }
-            }
+            self.parse_single_row(reader, col_size, &mut desers).await?;
 
             rows += 1;
         }
@@ -116,9 +76,65 @@ impl ValueSource {
 
         Ok(DataBlock::create(self.schema.clone(), columns))
     }
+
+    /// Parse single row value, like ('111', '222', 333)
+    async fn parse_single_row<'a>(
+        &self,
+        reader: &mut CpBufferReader<'a>,
+        col_size: usize,
+        desers: &mut [Box<dyn TypeDeserializer>],
+    ) -> Result<()> {
+        let mut expr_path = false;
+        let mut datavalues: Option<Vec<DataValue>> = None;
+
+        let _ = reader.ignore_white_spaces()?;
+        reader.checkpoint();
+
+        // Start of the row --- '('
+        if !reader.ignore_byte(b'(')? {
+            return Err(ErrorCode::BadDataValueType(
+                "Must start with parentheses".to_string(),
+            ));
+        }
+
+        for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
+            if let Some(values) = &datavalues {
+                deser.append_data_value(values[col].clone())?;
+                continue;
+            }
+
+            let _ = reader.ignore_white_spaces()?;
+            if col > 0 {
+                reader.must_ignore_byte(b',')?;
+                let _ = reader.ignore_white_spaces()?;
+            }
+
+            if deser.de_text_quoted(reader).is_err() {
+                expr_path = true;
+                skip_to_next_row(reader, 1)?;
+                // parse from expression
+                // set datavalues
+                let buf = reader.get_checkpoint_buffer();
+                let exprs = parse_exprs(buf)?;
+                reader.reset_checkpoint();
+
+                let values = exprs_to_datavalue(exprs, &self.analyzer, &self.schema).await?;
+                deser.append_data_value(values[col].clone())?;
+                datavalues = Some(values);
+            }
+        }
+
+        // Since parsing row-value via expr will eat ')', so we only check the ')' in deserialize way.
+        if !expr_path {
+            let _ = reader.ignore_white_spaces()?;
+            reader.must_ignore_byte(b')')?;
+        }
+
+        Ok(())
+    }
 }
 
-// values |(xxx), (yyy), (zzz)
+// Values |(xxx), (yyy), (zzz)
 pub fn skip_to_next_row(reader: &mut CpBufferReader, mut balance: i32) -> Result<()> {
     let _ = reader.ignore_white_spaces()?;
 
@@ -206,8 +222,6 @@ async fn exprs_to_datavalue(
 }
 
 fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Expr>, ParserError> {
-    println!("buf -> {:?}", String::from_utf8_lossy(buf).to_string());
-
     let dialect = GenericDialect {};
     let sql = std::str::from_utf8(buf).unwrap();
     let mut tokenizer = Tokenizer::new(&dialect, sql);

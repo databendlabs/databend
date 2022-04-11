@@ -92,31 +92,31 @@ async fn test_insert_into_interpreter() -> Result<()> {
     }
 
     // Insert into output table.
-    // {
-    //     let query = "insert into default.output_table select * from default.input_table";
+    {
+        let query = "insert into default.output_table select * from default.input_table";
 
-    //     let plan = PlanParser::parse(ctx.clone(), query).await?;
-    //     let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-    //     let _ = executor.execute(None).await?;
-    // }
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
+    }
 
     // select.
-    // {
-    //     let query = "select * from default.output_table";
-    //     let plan = PlanParser::parse(ctx.clone(), query).await?;
-    //     let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-    //     let stream = executor.execute(None).await?;
-    //     let result = stream.try_collect::<Vec<_>>().await?;
-    //     let expected = vec![
-    //         "+---+---+---+---+---+",
-    //         "| a | b | c | d | e |",
-    //         "+---+---+---+---+---+",
-    //         "| 1 | 1 | 1 | 1 | 1 |",
-    //         "| 2 | 2 | 2 | 2 | 2 |",
-    //         "+---+---+---+---+---+",
-    //     ];
-    //     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    // }
+    {
+        let query = "select * from default.output_table";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---+---+---+---+---+",
+            "| a | b | c | d | e |",
+            "+---+---+---+---+---+",
+            "| 1 | 1 | 1 | 1 | 1 |",
+            "| 2 | 2 | 2 | 2 | 2 |",
+            "+---+---+---+---+---+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
 
     Ok(())
 }
