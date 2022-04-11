@@ -3,7 +3,7 @@ title: What is Databend?
 slug: ../
 ---
 
-Databend is an open source **Elastic** and **Scalable** Modern Cloud Data Warehouse written in Rust from scratch.
+Databend is an open source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse written in Rust from scratch.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
 
@@ -17,7 +17,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system; Databend also supports semi-structured data types:[VARIANT,OBJECT,ARRAY](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured data (JSON).
 
 - __MySQL/ClickHouse Compatible__
 
