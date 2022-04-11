@@ -51,6 +51,7 @@ mod user_stage;
 
 pub mod error_context;
 mod principal_identity;
+mod share;
 mod warehouse_meta;
 
 // reexport
@@ -133,6 +134,9 @@ pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
+pub use share::ShareInboundMeta;
+pub use share::ShareInfo;
+pub use share::ShareOutboundMeta;
 pub use table::CreateTableReply;
 pub use table::CreateTableReq;
 pub use table::DropTableReply;
