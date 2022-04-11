@@ -16,6 +16,7 @@ mod binary;
 mod cast;
 mod cast_from_datetimes;
 mod cast_from_string;
+mod cast_from_variant;
 mod cast_with_type;
 mod ctx;
 mod expression;
