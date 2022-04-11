@@ -49,8 +49,11 @@ impl MySQLFederated {
     // Block is built by the variables.
     fn variable_lazy_block(query: &str) -> Option<DataBlock> {
         let mut default_map = HashMap::new();
-        default_map.insert("tx_isolation", "AUTOCOMMIT");
-        default_map.insert("tx_transaction_isolation", "AUTOCOMMIT");
+        // DBeaver.
+        default_map.insert("tx_isolation", "REPEATABLE-READ");
+        default_map.insert("session.tx_isolation", "REPEATABLE-READ");
+        default_map.insert("transaction_isolation", "REPEATABLE-READ");
+        default_map.insert("session.transaction_isolation", "REPEATABLE-READ");
         default_map.insert("session.transaction_read_only", "0");
         default_map.insert("time_zone", "UTC");
         default_map.insert("system_time_zone", "UTC");
