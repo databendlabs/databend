@@ -19,8 +19,8 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct FieldFunction {
@@ -28,14 +28,17 @@ pub struct FieldFunction {
 }
 
 impl FieldFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
         Ok(Box::new(FieldFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, usize::MAX - 1),
@@ -48,10 +51,7 @@ impl Function for FieldFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(u64::to_data_type())
     }
 

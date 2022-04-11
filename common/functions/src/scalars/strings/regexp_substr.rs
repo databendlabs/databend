@@ -27,8 +27,8 @@ use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct RegexpSubStrFunction {
@@ -36,27 +36,7 @@ pub struct RegexpSubStrFunction {
 }
 
 impl RegexpSubStrFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Self {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .variadic_arguments(2, 5),
-        )
-    }
-}
-
-impl Function for RegexpSubStrFunction {
-    fn name(&self) -> &str {
-        &self.display_name
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         for (i, arg) in args.iter().enumerate() {
             if i < 2 || i == 4 {
                 assert_string(*arg)?;
@@ -71,6 +51,26 @@ impl Function for RegexpSubStrFunction {
             }
         }
 
+        Ok(Box::new(Self {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 5),
+        )
+    }
+}
+
+impl Function for RegexpSubStrFunction {
+    fn name(&self) -> &str {
+        &self.display_name
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Arc::new(NullableType::create(StringType::arc())))
     }
 

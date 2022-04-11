@@ -12,126 +12,141 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
+use common_functions::scalars::LocateFunction;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_locate_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "none, none, none",
-            nullable: true,
             columns: vec![
-                Series::new([Option::<&str>::None]).into(),
-                Series::new([Option::<&str>::None]).into(),
-                Series::new([Option::<&str>::None]).into(),
+                Series::from_data([Option::<&str>::None]),
+                Series::from_data([Option::<&str>::None]),
+                Series::from_data([Option::<u64>::None]),
             ],
-            expect: Series::new([Option::<u64>::None]).into(),
+            expect: Series::from_data([Option::<u64>::None]),
             error: "",
         },
         ScalarFunctionTest {
             name: "const, const, const",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(DataValue::String(Some(b"ab".to_vec())), 1),
-                DataColumn::Constant(DataValue::String(Some(b"abcdabcd".to_vec())), 1),
-                DataColumn::Constant(DataValue::UInt64(Some(2)), 1),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some("ab")]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![Some("abcdabcd")]),
+                    1,
+                )),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some(2u64)]), 1)),
             ],
-            expect: DataColumn::Constant(DataValue::UInt64(Some(5)), 1),
+            expect: Arc::new(ConstColumn::new(Series::from_data(vec![Some(5u64)]), 1)),
             error: "",
         },
         ScalarFunctionTest {
             name: "const, const, none",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(DataValue::String(Some(b"ab".to_vec())), 1),
-                DataColumn::Constant(DataValue::String(Some(b"abcdabcd".to_vec())), 1),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some("ab")]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![Some("abcdabcd")]),
+                    1,
+                )),
             ],
-            expect: DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
+            expect: Arc::new(ConstColumn::new(Series::from_data(vec![Some(1u64)]), 1)),
             error: "",
         },
         ScalarFunctionTest {
             name: "series, series, const",
-            nullable: false,
             columns: vec![
-                Series::new(["abcd", "efgh"]).into(),
-                Series::new(["_abcd_", "__efgh__"]).into(),
-                DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
+                Series::from_data(["abcd", "efgh"]),
+                Series::from_data(["_abcd_", "__efgh__"]),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some(1u64)]), 2)),
             ],
-            expect: Series::new([2_u64, 3_u64]).into(),
+            expect: Series::from_data([Some(2_u64), Some(3_u64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "const, series, const",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
-                DataColumn::Array(Series::new(["_11_", "__11__"])),
-                DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some("11")]), 2)),
+                Series::from_data(["_11_", "__11__"]),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some(1u64)]), 2)),
             ],
-            expect: Series::new([2_u64, 3_u64]).into(),
+            expect: Series::from_data([Some(2_u64), Some(3_u64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "series, const, const",
-            nullable: false,
             columns: vec![
-                DataColumn::Array(Series::new(["11", "22"])),
-                DataColumn::Constant(DataValue::String(Some(b"_11_22_".to_vec())), 1),
-                DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
+                Series::from_data(["11", "22"]),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![Some("_11_22_")]),
+                    2,
+                )),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some(1u64)]), 2)),
             ],
-            expect: Series::new([2_u64, 5_u64]).into(),
+            expect: Series::from_data([Some(2_u64), Some(5_u64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "const, const, series",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
-                DataColumn::Constant(DataValue::String(Some(b"_11_11_".to_vec())), 1),
-                DataColumn::Array(Series::new([1_u64, 3_u64])),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some("11")]), 2)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![Some("_11_11_")]),
+                    2,
+                )),
+                Series::from_data([1_u64, 3_u64]),
             ],
-            expect: Series::new([2_u64, 5_u64]).into(),
+            expect: Series::from_data([Some(2_u64), Some(5_u64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "series, const, series",
-            nullable: false,
             columns: vec![
-                DataColumn::Array(Series::new(["11", "22"])),
-                DataColumn::Constant(DataValue::String(Some(b"_11_22_".to_vec())), 1),
-                DataColumn::Array(Series::new([1_u64, 3_u64])),
+                Series::from_data(["11", "22"]),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![Some("_11_22_")]),
+                    2,
+                )),
+                Series::from_data([1_u64, 3_u64]),
             ],
-            expect: Series::new([2_u64, 5_u64]).into(),
+            expect: Series::from_data([Some(2_u64), Some(5_u64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "const, series, series",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
-                DataColumn::Array(Series::new(["_11_", "__11__"])),
-                DataColumn::Array(Series::new([1_u64, 2_u64])),
+                Arc::new(ConstColumn::new(Series::from_data(vec![Some("11")]), 2)),
+                Series::from_data(["_11_", "__11__"]),
+                Series::from_data([1_u64, 2_u64]),
             ],
-            expect: Series::new([2_u64, 3_u64]).into(),
+            expect: Series::from_data([Some(2_u64), Some(3_u64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "series, series, series",
-            nullable: false,
             columns: vec![
-                DataColumn::Array(Series::new(["11", "22"])),
-                DataColumn::Array(Series::new(["_11_", "__22__"])),
-                DataColumn::Array(Series::new([1_u64, 2_u64])),
+                Series::from_data(["11", "22"]),
+                Series::from_data(["_11_", "__22__"]),
+                Series::from_data([1_u64, 2_u64]),
             ],
-            expect: Series::new([2_u64, 3_u64]).into(),
+            expect: Series::from_data([2_u64, 3_u64]),
             error: "",
         },
     ];
 
-    test_scalar_functions(LocateFunction::try_create("locate")?, &tests, true)
+    test_scalar_functions(
+        LocateFunction::try_create("locate", &[
+            &StringType::arc(),
+            &StringType::arc(),
+            &UInt64Type::arc(),
+        ])?,
+        &tests,
+        true,
+    )
 }

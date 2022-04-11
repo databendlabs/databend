@@ -23,8 +23,8 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::cast_with_type;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
 
 #[derive(Clone)]
@@ -33,27 +33,7 @@ pub struct ExportSetFunction {
 }
 
 impl ExportSetFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Self {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .variadic_arguments(3, 5),
-        )
-    }
-}
-
-impl Function for ExportSetFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         assert_string(args[1])?;
         assert_string(args[2])?;
@@ -66,6 +46,26 @@ impl Function for ExportSetFunction {
             assert_numeric(args[4])?;
         }
 
+        Ok(Box::new(Self {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(3, 5),
+        )
+    }
+}
+
+impl Function for ExportSetFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Vu8::to_data_type())
     }
 

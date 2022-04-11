@@ -21,6 +21,36 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_instr_function() -> Result<()> {
+    let types = vec![
+        vec![StringType::arc(), StringType::arc()],
+        vec![StringType::arc(), StringType::arc(), Int64Type::arc()],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            StringType::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            StringType::arc(),
+        ],
+    ];
     let tests = vec![
         ScalarFunctionTest {
             name: "regexp-substr-two-column-passed",
@@ -93,11 +123,15 @@ fn test_regexp_instr_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RegexpSubStrFunction::try_create("regexp_substr")?,
-        &tests,
-        true,
-    )
+    for (typ, test) in types.iter().zip(tests) {
+        test_scalar_functions(
+            RegexpSubStrFunction::try_create("regexp_substr", &typ.iter().collect::<Vec<_>>())?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
@@ -135,7 +169,12 @@ fn test_regexp_substr_constant_column() -> Result<()> {
     ];
 
     test_scalar_functions(
-        RegexpSubStrFunction::try_create("regexp_substr")?,
+        RegexpSubStrFunction::try_create("regexp_substr", &[
+            &StringType::arc(),
+            &StringType::arc(),
+            &Int64Type::arc(),
+            &Int64Type::arc(),
+        ])?,
         &tests,
         true,
     )

@@ -16,13 +16,13 @@ use std::cmp::Ordering;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_numeric;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 trait OctString {
     fn oct_string(self) -> String;
@@ -56,14 +56,15 @@ pub struct OctFunction {
 }
 
 impl OctFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(OctFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -73,14 +74,7 @@ impl Function for OctFunction {
         "oct"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_numeric() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(StringType::arc())
     }
 

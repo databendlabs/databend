@@ -19,8 +19,8 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct ConcatFunction {
@@ -28,14 +28,17 @@ pub struct ConcatFunction {
 }
 
 impl ConcatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
         Ok(Box::new(ConcatFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 1024),
@@ -48,10 +51,7 @@ impl Function for ConcatFunction {
         "concat"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Vu8::to_data_type())
     }
 

@@ -20,8 +20,8 @@ use common_exception::Result;
 use crate::scalars::assert_numeric;
 use crate::scalars::default_column_cast;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct CharFunction {
@@ -29,14 +29,17 @@ pub struct CharFunction {
 }
 
 impl CharFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(CharFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 1024),
@@ -49,10 +52,7 @@ impl Function for CharFunction {
         "char"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Vu8::to_data_type())
     }
 

@@ -21,6 +21,54 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_instr_function() -> Result<()> {
+    let types = vec![
+        vec![StringType::arc(), StringType::arc()],
+        vec![StringType::arc(), StringType::arc(), Int64Type::arc()],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            StringType::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+        ],
+        vec![
+            StringType::arc(),
+            StringType::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            Int64Type::arc(),
+            StringType::arc(),
+        ],
+    ];
+
     let tests = vec![
         ScalarFunctionTest {
             name: "regexp-instr-two-column-passed",
@@ -141,18 +189,22 @@ fn test_regexp_instr_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RegexpInStrFunction::try_create("regexp_instr")?,
-        &tests,
-        true,
-    )
+    for (typ, test) in types.iter().zip(tests) {
+        test_scalar_functions(
+            RegexpInStrFunction::try_create("regexp_instr", &typ.iter().collect::<Vec<_>>())?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_regexp_instr_constant_column() -> Result<()> {
-    let data_type = DataValue::String("dog".as_bytes().into());
-    let data_value1 = StringType::arc().create_constant_column(&data_type, 3)?;
-    let data_value2 = StringType::arc().create_constant_column(&data_type, 3)?;
+    let data = DataValue::String("dog".as_bytes().into());
+    let data_value1 = StringType::arc().create_constant_column(&data, 3)?;
+    let data_value2 = StringType::arc().create_constant_column(&data, 3)?;
 
     let tests = vec![
         ScalarFunctionTest {
@@ -182,7 +234,13 @@ fn test_regexp_instr_constant_column() -> Result<()> {
     ];
 
     test_scalar_functions(
-        RegexpInStrFunction::try_create("regexp_instr")?,
+        RegexpInStrFunction::try_create("regexp_instr", &[
+            &StringType::arc(),
+            &StringType::arc(),
+            &Int64Type::arc(),
+            &Int64Type::arc(),
+            &Int64Type::arc(),
+        ])?,
         &tests,
         true,
     )

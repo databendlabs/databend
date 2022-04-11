@@ -20,8 +20,8 @@ use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 const MAX_REPEAT_TIMES: u64 = 1000000;
 
@@ -31,24 +31,7 @@ pub struct RepeatFunction {
 }
 
 impl RepeatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(RepeatFunction {
-            _display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-}
-
-impl Function for RepeatFunction {
-    fn name(&self) -> &str {
-        "repeat"
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 1 is string, but got {}",
@@ -63,6 +46,23 @@ impl Function for RepeatFunction {
             )));
         }
 
+        Ok(Box::new(RepeatFunction {
+            _display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+impl Function for RepeatFunction {
+    fn name(&self) -> &str {
+        "repeat"
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(StringType::arc())
     }
 

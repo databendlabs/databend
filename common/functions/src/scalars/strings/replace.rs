@@ -19,8 +19,8 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[inline]
 fn apply<'a>(str: &'a [u8], from: &'a [u8], to: &'a [u8], buf: &mut Vec<u8>) {
@@ -49,14 +49,17 @@ pub struct ReplaceFunction {
 }
 
 impl ReplaceFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(3))
     }
 }
@@ -66,10 +69,7 @@ impl Function for ReplaceFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(Vu8::to_data_type())
     }
 

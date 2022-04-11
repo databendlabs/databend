@@ -21,6 +21,13 @@ use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_substring_function() -> Result<()> {
+    let types = vec![
+        vec![StringType::arc(), Int64Type::arc(), UInt64Type::arc()],
+        vec![StringType::arc(), Int64Type::arc(), UInt64Type::arc()],
+        vec![StringType::arc(), StringType::arc(), StringType::arc()],
+        vec![StringType::arc(), Int64Type::arc()],
+        vec![StringType::arc(), Int64Type::arc(), UInt64Type::arc()],
+    ];
     let tests = vec![
         ScalarFunctionTest {
             name: "substring-abcde-passed",
@@ -73,7 +80,15 @@ fn test_substring_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests, true)
+    for (typ, test) in types.iter().zip(tests) {
+        test_scalar_functions(
+            SubstringFunction::try_create("substring", &typ.iter().collect::<Vec<_>>())?,
+            &[test],
+            true,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
@@ -89,5 +104,13 @@ fn test_substring_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests, true)
+    test_scalar_functions(
+        SubstringFunction::try_create("substring", &[
+            &StringType::arc(),
+            &Int64Type::arc(),
+            &UInt64Type::arc(),
+        ])?,
+        &tests,
+        true,
+    )
 }

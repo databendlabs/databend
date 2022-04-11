@@ -20,8 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 pub trait NumberOperator<R>: Send + Sync + Clone + Default + 'static {
     const IS_DETERMINISTIC: bool;
@@ -42,7 +42,15 @@ where
     T: NumberOperator<R>,
     R: PrimitiveType + Clone + ToDataType,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        // We allow string AND null as input
+        if !args[0].data_type_id().is_string() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected string, numeric or null, but got {:?}",
+                args[0]
+            )));
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -50,7 +58,7 @@ where
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> TypedFunctionDescription {
         let mut features = FunctionFeatures::default().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
@@ -61,7 +69,7 @@ where
             features = features.monotonicity();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
@@ -76,19 +84,8 @@ where
         &self.display_name
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        // We allow string AND null as input
-        if args[0].data_type_id().is_string() {
-            Ok(R::to_data_type())
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected string, numeric or null, but got {:?}",
-                args[0]
-            )))
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(R::to_data_type())
     }
 
     fn eval(

@@ -21,8 +21,8 @@ use itertools::izip;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct SubstringIndexFunction {
@@ -30,24 +30,7 @@ pub struct SubstringIndexFunction {
 }
 
 impl SubstringIndexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(SubstringIndexFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(3))
-    }
-}
-
-impl Function for SubstringIndexFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_numeric()
             && !args[0].data_type_id().is_string()
             && !args[0].data_type_id().is_null()
@@ -75,6 +58,23 @@ impl Function for SubstringIndexFunction {
                 args[2].data_type_id()
             )));
         }
+        Ok(Box::new(SubstringIndexFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(3))
+    }
+}
+
+impl Function for SubstringIndexFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(StringType::arc())
     }
 

@@ -26,8 +26,8 @@ use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct RegexpLikeFunction {
@@ -35,14 +35,18 @@ pub struct RegexpLikeFunction {
 }
 
 impl RegexpLikeFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .bool_function()
@@ -56,11 +60,7 @@ impl Function for RegexpLikeFunction {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(BooleanType::arc())
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like

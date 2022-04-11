@@ -21,8 +21,8 @@ use itertools::izip;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
@@ -30,27 +30,7 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(SubstringFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .variadic_arguments(2, 3),
-        )
-    }
-}
-
-impl Function for SubstringFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
@@ -79,6 +59,26 @@ impl Function for SubstringFunction {
             )));
         }
 
+        Ok(Box::new(SubstringFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 3),
+        )
+    }
+}
+
+impl Function for SubstringFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(StringType::arc())
     }
 

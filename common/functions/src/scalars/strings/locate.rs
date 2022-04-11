@@ -21,8 +21,8 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::default_column_cast;
 use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 const FUNC_LOCATE: u8 = 1;
 const FUNC_POSITION: u8 = 2;
@@ -38,13 +38,18 @@ pub struct LocatingFunction<const T: u8> {
 }
 
 impl<const T: u8> LocatingFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+        assert_string(args[1])?;
+        if args.len() > 2 {
+            assert_numeric(args[2])?;
+        }
         Ok(Box::new(LocatingFunction::<T> {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> TypedFunctionDescription {
         let mut feature = FunctionFeatures::default().deterministic();
         feature = if T == FUNC_LOCATE {
             feature.variadic_arguments(2, 3)
@@ -52,7 +57,7 @@ impl<const T: u8> LocatingFunction<T> {
             feature.num_arguments(2)
         };
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(feature)
+        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(feature)
     }
 }
 
@@ -61,12 +66,7 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_string(args[0])?;
-        assert_string(args[1])?;
-        if args.len() > 2 {
-            assert_numeric(args[2])?;
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(u64::to_data_type())
     }
 
