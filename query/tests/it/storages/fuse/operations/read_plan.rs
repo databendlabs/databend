@@ -23,6 +23,7 @@ use common_planners::Extras;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
+use databend_query::storages::fuse::meta::Compression;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::index::ColumnStatistics;
 use futures::TryStreamExt;
@@ -68,6 +69,7 @@ fn test_to_partitions() -> Result<()> {
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
         location: ("".to_owned(), 0),
+        compression: Compression::Lz4Raw,
     };
 
     let blocks_metas = (0..num_of_block)

@@ -100,6 +100,18 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
+            CastFunction::create("cast", "datetime64")?,
+            ScalarFunctionTest {
+                name: "cast-string-to-datetime64-passed",
+                columns: vec![Series::from_data(vec![
+                    "2021-03-05 01:01:01.123",
+                    "2021-10-24 10:10:10.123",
+                ])],
+                expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
+                error: "",
+            },
+        ),
+        (
             CastFunction::create("cast", "variant")?,
             ScalarFunctionTest {
                 name: "cast-bool-to-variant-passed",
@@ -281,6 +293,315 @@ fn test_datetime_cast_function() -> Result<()> {
 
 #[test]
 fn test_variant_cast_function() -> Result<()> {
+    let tests = vec![
+        (CastFunction::create("cast", "uint8")?, ScalarFunctionTest {
+            name: "cast-variant-to-uint8-passed",
+            columns: vec![Series::from_data(vec![
+                json!(4u64),
+                json!(3u64),
+                json!("2"),
+                json!("4"),
+            ])],
+            expect: Series::from_data(vec![4u8, 3, 2, 4]),
+            error: "",
+        }),
+        (
+            CastFunction::create("cast", "uint16")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-uint16-passed",
+                columns: vec![Series::from_data(vec![
+                    json!(4u64),
+                    json!(3u64),
+                    json!("2"),
+                    json!("4"),
+                ])],
+                expect: Series::from_data(vec![4u16, 3, 2, 4]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "uint32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-uint32-passed",
+                columns: vec![Series::from_data(vec![
+                    json!(4u64),
+                    json!(3u64),
+                    json!("2"),
+                    json!("4"),
+                ])],
+                expect: Series::from_data(vec![4u32, 3, 2, 4]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "uint64")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-uint64-passed",
+                columns: vec![Series::from_data(vec![
+                    json!(4u64),
+                    json!(3u64),
+                    json!("2"),
+                    json!("4"),
+                ])],
+                expect: Series::from_data(vec![4u64, 3, 2, 4]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "uint64")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-uint64-error",
+                columns: vec![Series::from_data(vec![
+                    json!("X4"),
+                    json!(3u64),
+                    json!("2"),
+                    json!("4"),
+                ])],
+                expect: Series::from_data(vec![4u64, 3, 2, 4]),
+                error: "Failed to cast variant value X4 to UInt64",
+            },
+        ),
+        (CastFunction::create("cast", "int8")?, ScalarFunctionTest {
+            name: "cast-variant-to-int8-passed",
+            columns: vec![Series::from_data(vec![
+                json!(4i64),
+                json!(-3i64),
+                json!("2"),
+                json!("-4"),
+            ])],
+            expect: Series::from_data(vec![4i8, -3, 2, -4]),
+            error: "",
+        }),
+        (CastFunction::create("cast", "int16")?, ScalarFunctionTest {
+            name: "cast-variant-to-int16-passed",
+            columns: vec![Series::from_data(vec![
+                json!(4i64),
+                json!(-3i64),
+                json!("2"),
+                json!("-4"),
+            ])],
+            expect: Series::from_data(vec![4i16, -3, 2, -4]),
+            error: "",
+        }),
+        (CastFunction::create("cast", "int32")?, ScalarFunctionTest {
+            name: "cast-variant-to-int32-passed",
+            columns: vec![Series::from_data(vec![
+                json!(4i64),
+                json!(-3i64),
+                json!("2"),
+                json!("-4"),
+            ])],
+            expect: Series::from_data(vec![4i32, -3, 2, -4]),
+            error: "",
+        }),
+        (CastFunction::create("cast", "int64")?, ScalarFunctionTest {
+            name: "cast-variant-to-int64-passed",
+            columns: vec![Series::from_data(vec![
+                json!(4i64),
+                json!(-3i64),
+                json!("2"),
+                json!("-4"),
+            ])],
+            expect: Series::from_data(vec![4i64, -3, 2, -4]),
+            error: "",
+        }),
+        (CastFunction::create("cast", "int64")?, ScalarFunctionTest {
+            name: "cast-variant-to-int64-error",
+            columns: vec![Series::from_data(vec![
+                json!("X4"),
+                json!(-3i64),
+                json!("2"),
+                json!("-4"),
+            ])],
+            expect: Series::from_data(vec![4i64, -3, 2, -4]),
+            error: "Failed to cast variant value X4 to Int64",
+        }),
+        (
+            CastFunction::create("cast", "float32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-float32-passed",
+                columns: vec![Series::from_data(vec![
+                    json!(1.2f64),
+                    json!(-1.3f64),
+                    json!("2.1"),
+                    json!("-4.2"),
+                ])],
+                expect: Series::from_data(vec![1.2f32, -1.3, 2.1, -4.2]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "float32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-float32-error",
+                columns: vec![Series::from_data(vec![
+                    json!("X4"),
+                    json!(-1.3f64),
+                    json!("2.1"),
+                    json!("-4.2"),
+                ])],
+                expect: Series::from_data(vec![1.2f32, -1.3, 2.1, -4.2]),
+                error: "Failed to cast variant value X4 to Float32",
+            },
+        ),
+        (
+            CastFunction::create("cast", "float64")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-float64-passed",
+                columns: vec![Series::from_data(vec![
+                    json!(1.2f64),
+                    json!(-1.3f64),
+                    json!("2.1"),
+                    json!("-4.2"),
+                ])],
+                expect: Series::from_data(vec![1.2f64, -1.3, 2.1, -4.2]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "float64")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-float64-error",
+                columns: vec![Series::from_data(vec![
+                    json!("X4"),
+                    json!(-1.3f64),
+                    json!("2.1"),
+                    json!("-4.2"),
+                ])],
+                expect: Series::from_data(vec![1.2f64, -1.3, 2.1, -4.2]),
+                error: "Failed to cast variant value X4 to Float64",
+            },
+        ),
+        (
+            CastFunction::create("cast", "boolean")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-boolean-passed",
+                columns: vec![Series::from_data(vec![
+                    json!(true),
+                    json!(false),
+                    json!("true"),
+                    json!("false"),
+                ])],
+                expect: Series::from_data(vec![true, false, true, false]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "boolean")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-boolean-error",
+                columns: vec![Series::from_data(vec![
+                    json!(1),
+                    json!("test"),
+                    json!(true),
+                    json!(false),
+                ])],
+                expect: Series::from_data(vec![true, false, true, false]),
+                error: "Failed to cast variant value 1 to Boolean",
+            },
+        ),
+        (
+            CastFunction::create("cast", "date16")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-date16-passed",
+                columns: vec![Series::from_data(vec![
+                    json!("2021-03-05"),
+                    json!("2021-10-24"),
+                ])],
+                expect: Series::from_data(vec![18691u16, 18924]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "date16")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-date16-error",
+                columns: vec![Series::from_data(vec![
+                    json!("a2021-03-05"),
+                    json!("2021-10-24"),
+                ])],
+                expect: Series::from_data(vec![18691u16, 18924]),
+                error: "Failed to cast variant value \"a2021-03-05\" to Date16",
+            },
+        ),
+        (
+            CastFunction::create("cast", "date32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-date32-passed",
+                columns: vec![Series::from_data(vec![
+                    json!("2021-03-05"),
+                    json!("2021-10-24"),
+                ])],
+                expect: Series::from_data(vec![18691i32, 18924]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "date32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-date32-error",
+                columns: vec![Series::from_data(vec![
+                    json!("a2021-03-05"),
+                    json!("2021-10-24"),
+                ])],
+                expect: Series::from_data(vec![18691i32, 18924]),
+                error: "Failed to cast variant value \"a2021-03-05\" to Date32",
+            },
+        ),
+        (
+            CastFunction::create("cast", "datetime32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-datetime32-passed",
+                columns: vec![Series::from_data(vec![
+                    json!("2021-03-05 01:01:01"),
+                    json!("2021-10-24 10:10:10"),
+                ])],
+                expect: Series::from_data(vec![1614906061u32, 1635070210]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "datetime32")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-datetime32-error",
+                columns: vec![Series::from_data(vec![
+                    json!("a2021-03-05 01:01:01"),
+                    json!("2021-10-24 10:10:10"),
+                ])],
+                expect: Series::from_data(vec![1614906061u32, 1635070210]),
+                error: "Failed to cast variant value \"a2021-03-05 01:01:01\" to DateTime32",
+            },
+        ),
+        (
+            CastFunction::create("cast", "datetime64")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-datetime64-passed",
+                columns: vec![Series::from_data(vec![
+                    json!("2021-03-05 01:01:01.123"),
+                    json!("2021-10-24 10:10:10.123"),
+                ])],
+                expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "datetime64")?,
+            ScalarFunctionTest {
+                name: "cast-variant-to-datetime64-error",
+                columns: vec![Series::from_data(vec![
+                    json!("a2021-03-05 01:01:01.123"),
+                    json!("2021-10-24 10:10:10.123456789"),
+                ])],
+                expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
+                error: "Failed to cast variant value \"a2021-03-05 01:01:01.123\" to DateTime64",
+            },
+        ),
+    ];
+
+    for (test_func, test) in tests {
+        test_scalar_functions(test_func, &[test], false)?;
+    }
+
     let tests = vec![
         (
             CastFunction::create("cast", "array")?,

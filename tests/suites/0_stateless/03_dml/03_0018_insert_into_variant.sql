@@ -31,17 +31,33 @@ select '==Array==';
 
 CREATE TABLE IF NOT EXISTS t3(id Int null, arr Array null) Engine = Memory;
 
-INSERT INTO t3 SELECT 1, parse_json('[1,2,3,4]');
+INSERT INTO t3 SELECT 1, parse_json('[1,2,3,["a","b","c"],{"k":"v"}]');
 
 select * from t3;
+select arr[0] from t3;
+select arr[5] from t3;
+select arr[3][0] from t3;
+select arr[4]["k"] from t3;
+select arr[4][0] from t3;
 
 select '==Object==';
 
 CREATE TABLE IF NOT EXISTS t4(id Int null, obj Object null) Engine = Memory;
 
 INSERT INTO t4 SELECT 1, parse_json('["a","b","c"]');  -- {ErrorCode 1010}
-INSERT INTO t4 SELECT 1, parse_json('{"a":1,"b":2}');
+INSERT INTO t4 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
 
 select * from t4;
+select obj:a from t4;
+select obj["a"] from t4;
+select obj[0] from t4;
+select obj:x from t4;
+select obj:b from t4;
+select obj:b:k from t4;
+select obj:b.k from t4;
+select obj:c from t4;
+select obj:c[0] from t4;
+select obj["c"][0] from t4;
+select obj["c"][3] from t4;
 
 DROP DATABASE db1;

@@ -64,39 +64,35 @@ use crate::interpreters::ShowMetricsInterpreter;
 use crate::interpreters::ShowProcessListInterpreter;
 use crate::interpreters::ShowRolesInterpreter;
 use crate::interpreters::ShowSettingsInterpreter;
+use crate::interpreters::ShowTabStatInterpreter;
 use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
 
+/// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactory;
 
+/// InterpreterFactory provides `get` method which transforms the PlanNode into the corresponding interpreter.
+/// Such as: SelectPlan -> SelectInterpreter, ExplainPlan -> ExplainInterpreter, ...
 impl InterpreterFactory {
     pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         let ctx_clone = ctx.clone();
         let inner = match plan.clone() {
-            // Query.
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
-
-            // Select.
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
-
-            // Insert.
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
-
-            // Copy.
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
-
-            // Call.
             PlanNode::Call(v) => CallInterpreter::try_create(ctx_clone, v),
-
-            // Show.
             PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
                 ShowDatabasesInterpreter::try_create(ctx_clone, v)
             }
             PlanNode::Show(ShowPlan::ShowTables(v)) => {
                 ShowTablesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowTabStat(v)) => {
+                ShowTabStatInterpreter::try_create(ctx_clone, v)
             }
             PlanNode::Show(ShowPlan::ShowEngines(v)) => {
                 ShowEnginesInterpreter::try_create(ctx_clone, v)
@@ -123,14 +119,14 @@ impl InterpreterFactory {
                 ShowRolesInterpreter::try_create(ctx_clone, v)
             }
 
-            // Database.
+            // Database related transforms.
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::DropDatabase(v) => DropDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateDatabase(v) => {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
 
-            // Table.
+            // Table related transforms
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
             PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
@@ -139,49 +135,42 @@ impl InterpreterFactory {
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
 
-            // View.
+            // View related transforms
             PlanNode::CreateView(v) => CreateViewInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterView(v) => AlterViewInterpreter::try_create(ctx_clone, v),
             PlanNode::DropView(v) => DropViewInterpreter::try_create(ctx_clone, v),
 
-            // User.
+            // User related transforms
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
 
-            // Grant.
+            // Privilege related transforms
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
             PlanNode::GrantRole(v) => GrantRoleInterpreter::try_create(ctx_clone, v),
 
-            // Revoke.
             PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
             PlanNode::RevokeRole(v) => RevokeRoleInterpreter::try_create(ctx_clone, v),
 
-            // Role
             PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
             PlanNode::DropRole(v) => DropRoleInterpreter::try_create(ctx_clone, v),
 
-            // UDF.
+            // UDF related transforms
             PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserUDF(v) => DropUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUserUDF(v) => AlterUserUDFInterpreter::try_create(ctx_clone, v),
 
-            // Stage
+            // Stage related transforms
             PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
 
+            // others
             PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),
-
-            // Use.
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
-
-            // Kill.
             PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
-
-            // Set.
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
 
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(

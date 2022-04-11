@@ -75,7 +75,7 @@ create table books
 <TabItem value="csv" label="CSV">
 
 ```shell title='Request'
-echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_header:0\" -H \"field_delimiter:','\" -H \"record_delimiter:'\n'\" -F  \"upload=@./books.csv\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+curl -XPUT 'http://127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format CSV' -H 'skip_header: 0' -H 'field_delimiter: ,' -H 'record_delimiter: \n' -F 'upload=@"./books.csv"'
 ```
 
 ```json title='Response'
@@ -107,7 +107,7 @@ echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_heade
 <TabItem value="parquet" label="Parquet">
 
 ```shell title='Request'
-echo curl -H \"insert_sql:insert into book_db.books format Parquet\" -F  \"upload=@./books.parquet\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+curl -XPUT 'http://127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into book_db.books format Parquet' -F 'upload=@"./books.parquet"'
 ```
 
 ```json title='Response'

@@ -22,6 +22,7 @@ use sqlparser::tokenizer::Token;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowKind;
+use crate::sql::statements::DfShowTabStat;
 use crate::sql::statements::DfShowTables;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -29,24 +30,54 @@ use crate::sql::DfStatement;
 impl<'a> DfParser<'a> {
     // parse show tables.
     pub(crate) fn parse_show_tables(&mut self, full: bool) -> Result<DfStatement<'a>, ParserError> {
+        let mut fromdb = None;
+        if self.consume_token("FROM") | self.consume_token("IN") {
+            fromdb = Some(self.parser.parse_object_name()?.0[0].value.clone());
+        }
         let tok = self.parser.next_token();
         match &tok {
             Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::create(
                 DfShowKind::All,
                 full,
+                fromdb,
             ))),
             Token::Word(w) => match w.keyword {
                 Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::Like(self.parser.parse_identifier()?),
                     full,
+                    fromdb,
                 ))),
                 Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::Where(self.parser.parse_expr()?),
                     full,
+                    fromdb,
                 ))),
-                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::create(
-                    DfShowKind::FromOrIn(self.parser.parse_object_name()?),
-                    full,
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
+        }
+    }
+
+    //parse show table status
+    pub(crate) fn parse_show_tab_stat(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let mut fromdb = None;
+        if self.consume_token("FROM") | self.consume_token("IN") {
+            fromdb = Some(self.parser.parse_object_name()?.0[0].value.clone());
+        }
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
+                DfShowKind::All,
+                fromdb,
+            ))),
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
+                    DfShowKind::Like(self.parser.parse_identifier()?),
+                    fromdb,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowTabStat(DfShowTabStat::create(
+                    DfShowKind::Where(self.parser.parse_expr()?),
+                    fromdb,
                 ))),
                 _ => self.expected("like or where", tok),
             },
@@ -68,9 +99,6 @@ impl<'a> DfParser<'a> {
                 Keyword::WHERE => Ok(DfStatement::ShowDatabases(DfShowDatabases::create(
                     DfShowKind::Where(self.parser.parse_expr()?),
                 ))),
-                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowDatabases(
-                    DfShowDatabases::create(DfShowKind::FromOrIn(self.parser.parse_object_name()?)),
-                )),
                 _ => self.expected("like or where", tok),
             },
             _ => self.expected("like or where", tok),

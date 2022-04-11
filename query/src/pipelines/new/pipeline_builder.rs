@@ -31,6 +31,7 @@ use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::SubQueriesSetPlan;
 
+use super::processors::SortMergeCompactor;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
@@ -47,7 +48,11 @@ use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
-
+/// Builder for query pipeline
+/// ```
+/// # let builder = QueryPipelineBuilder::create(ctx);
+/// # let pipeline = builder.finalize(plan)?;
+/// ```
 pub struct QueryPipelineBuilder {
     ctx: Arc<QueryContext>,
     pipeline: NewPipeline,
@@ -56,6 +61,7 @@ pub struct QueryPipelineBuilder {
 }
 
 impl QueryPipelineBuilder {
+    /// Create a Builder from QueryContext, others params are default
     pub fn create(ctx: Arc<QueryContext>) -> QueryPipelineBuilder {
         QueryPipelineBuilder {
             ctx,
@@ -64,7 +70,9 @@ impl QueryPipelineBuilder {
             offset: 0,
         }
     }
-
+    /// The core of generating the pipeline
+    /// It will recursively visit the entire plan tree, and create a `SimplePipe` for each node,
+    /// adding it to the pipeline
     pub fn finalize(mut self, plan: &SelectPlan) -> Result<NewPipeline> {
         self.visit_select(plan)?;
         Ok(self.pipeline)
@@ -249,8 +257,10 @@ impl PlanVisitor for QueryPipelineBuilder {
                 TransformSortMerge::try_create(
                     transform_input_port,
                     transform_output_port,
-                    rows_limit,
-                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    SortMergeCompactor::new(
+                        rows_limit,
+                        get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    ),
                 )
             })?;
 
@@ -265,8 +275,10 @@ impl PlanVisitor for QueryPipelineBuilder {
                 TransformSortMerge::try_create(
                     transform_input_port,
                     transform_output_port,
-                    rows_limit,
-                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    SortMergeCompactor::new(
+                        rows_limit,
+                        get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    ),
                 )
             })
     }

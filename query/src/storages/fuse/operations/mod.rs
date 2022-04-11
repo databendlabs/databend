@@ -16,11 +16,9 @@ mod append;
 mod commit;
 mod operation_log;
 mod optimize;
-mod part_info;
 mod read;
 mod read_partitions;
 mod truncate;
 
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
-pub use part_info::PartInfo;

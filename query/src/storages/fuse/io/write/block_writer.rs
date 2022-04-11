@@ -19,11 +19,11 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::parquet::encoding::Encoding;
+use common_arrow::parquet::FileMetaData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
-use parquet_format_async_temp::FileMetaData;
 
 pub async fn write_block(
     arrow_schema: &ArrowSchema,
@@ -33,7 +33,7 @@ pub async fn write_block(
 ) -> Result<(u64, FileMetaData)> {
     let options = WriteOptions {
         write_statistics: false,
-        compression: Compression::Lz4, // let's begin with lz4
+        compression: Compression::Lz4Raw,
         version: Version::V2,
     };
     let batch = Chunk::try_from(block)?;

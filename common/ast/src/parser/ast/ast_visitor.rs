@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use sqlparser::ast::Value;
 
 use crate::parser::ast::BinaryOperator;
 use crate::parser::ast::ColumnDefinition;
@@ -71,6 +72,7 @@ pub trait AstVisitor {
             } => self.visit_case(operand, conditions, results, else_result),
             Expr::Exists(query) => self.visit_exists(query),
             Expr::Subquery(query) => self.visit_query(query),
+            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys),
         }
     }
 
@@ -157,6 +159,10 @@ pub trait AstVisitor {
         self.visit_set_expr(&query.body)?;
         self.visit_order_by_exprs(&query.order_by)?;
         self.visit_expr(query.limit.as_ref().unwrap())
+    }
+
+    fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
+        self.visit_expr(expr)
     }
 
     fn visit_set_expr(&mut self, set_expr: &SetExpr) -> Result<()> {
