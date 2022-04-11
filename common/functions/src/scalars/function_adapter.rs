@@ -149,7 +149,6 @@ impl Function for FunctionAdapter {
             } else {
                 ConstColumn::new(col, input_rows).arc()
             };
-
             return Ok(col);
         }
 
