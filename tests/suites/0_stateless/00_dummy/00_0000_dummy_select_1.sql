@@ -15,3 +15,4 @@ SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a; -- 
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number; -- {ErrorCode 1058}
 SELECT number, 'number', "number" FROM numbers(3) AS a order by a.number;
 SELECT 'That\'s good.';
+SELECT *; -- {ErrorCode 1015}

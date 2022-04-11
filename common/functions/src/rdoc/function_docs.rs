@@ -64,7 +64,7 @@ macro_rules! doc {
         {
             let mut m = FunctionDocs::default();
             $(
-                crate::set_doc!(&mut m, $key, $value);
+                $crate::set_doc!(&mut m, $key, $value);
             )+
             m
         }

@@ -52,5 +52,5 @@ uuid = { version = "0.8.2", features = ["v4"] }
 [dev-dependencies]
 bumpalo = "3.9.1"
 common-datablocks = { path = "../datablocks" }
-pretty_assertions = "1.2.1"
 float-cmp = "0.9.0"
+pretty_assertions = "1.2.1"

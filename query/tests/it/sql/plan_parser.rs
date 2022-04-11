@@ -266,6 +266,12 @@ async fn test_plan_parser() -> Result<()> {
             sql: "DROP ROLE role1",
             expect: "Drop role role1 if_exists:false",
             error: "",
+        },
+        Test {
+            name: "select-without-table",
+            sql: "SELECT *",
+            expect: "",
+            error: "Code: 1015, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
         }
     ];
 
