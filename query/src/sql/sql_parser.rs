@@ -332,7 +332,9 @@ impl<'a> DfParser<'a> {
             self.parse_show_tab_stat()
         } else if self.consume_token("DATABASES") {
             self.parse_show_databases()
-        } else if self.consume_token("SETTINGS") {
+        } else if self.consume_token("SCHEMAS") {
+            self.parse_show_databases()
+	} else if self.consume_token("SETTINGS") {
             Ok(DfStatement::ShowSettings(DfShowSettings))
         } else if self.consume_token("CREATE") {
             self.parse_show_create()
