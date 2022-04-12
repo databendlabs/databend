@@ -14,11 +14,12 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_infallible::Mutex;
+use crossbeam_queue::SegQueue;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
@@ -27,14 +28,14 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
     finished: AtomicBool,
-    workers_tasks: Mutex<ExecutorTasks>,
+    workers_tasks: ExecutorTasks,
 }
 
 impl ExecutorTasksQueue {
     pub fn create(workers_size: usize) -> Arc<ExecutorTasksQueue> {
         Arc::new(ExecutorTasksQueue {
             finished: AtomicBool::new(false),
-            workers_tasks: Mutex::new(ExecutorTasks::create(workers_size)),
+            workers_tasks: ExecutorTasks::create(workers_size),
         })
     }
 
@@ -53,17 +54,14 @@ impl ExecutorTasksQueue {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
         {
-            let mut workers_tasks = self.workers_tasks.lock();
-
-            if !workers_tasks.is_empty() {
-                let task = workers_tasks.pop_task(context.get_worker_num());
+            if !self.workers_tasks.is_empty() {
+                let task = self.workers_tasks.pop_task(context.get_worker_num());
                 context.set_task(task);
 
                 let workers_notify = context.get_workers_notify();
-                if !workers_tasks.is_empty() && !workers_notify.is_empty() {
+                if !self.workers_tasks.is_empty() && !workers_notify.is_empty() {
                     let worker_id = context.get_worker_num();
-                    let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
-                    drop(workers_tasks);
+                    let wakeup_worker_id = self.workers_tasks.best_worker_id(worker_id + 1);
                     workers_notify.wakeup(wakeup_worker_id);
                 }
 
@@ -84,12 +82,11 @@ impl ExecutorTasksQueue {
 
     pub unsafe fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
         let mut worker_id = 0;
-        let mut workers_tasks = self.workers_tasks.lock();
         while let Some(task) = tasks.pop_front() {
-            workers_tasks.push_task(worker_id, task);
+            self.workers_tasks.push_task(worker_id, task);
 
             worker_id += 1;
-            if worker_id == workers_tasks.workers_sync_tasks.len() {
+            if worker_id == self.workers_tasks.workers_sync_tasks.len() {
                 worker_id = 0;
             }
         }
@@ -101,12 +98,11 @@ impl ExecutorTasksQueue {
             let mut wake_worker_id = None;
             {
                 let worker_id = ctx.get_worker_num();
-                let mut workers_tasks = self.workers_tasks.lock();
                 while let Some(task) = tasks.pop_front() {
-                    workers_tasks.push_task(worker_id, task);
+                    self.workers_tasks.push_task(worker_id, task);
                 }
 
-                wake_worker_id = Some(workers_tasks.best_worker_id(worker_id + 1));
+                wake_worker_id = Some(self.workers_tasks.best_worker_id(worker_id + 1));
             }
 
             if let Some(wake_worker_id) = wake_worker_id {
@@ -116,11 +112,9 @@ impl ExecutorTasksQueue {
     }
 
     pub fn completed_async_task(&self, task: CompletedAsyncTask) {
-        let mut workers_tasks = self.workers_tasks.lock();
-
         let worker_id = task.worker_id;
-        workers_tasks.tasks_size += 1;
-        workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
+        self.workers_tasks.tasks_size.fetch_add(1, Ordering::SeqCst);
+        self.workers_tasks.workers_completed_async_tasks[worker_id].push(task);
     }
 }
 
@@ -141,10 +135,10 @@ impl CompletedAsyncTask {
 }
 
 struct ExecutorTasks {
-    tasks_size: usize,
-    workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
-    workers_async_tasks: Vec<VecDeque<ProcessorPtr>>,
-    workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
+    tasks_size: AtomicUsize,
+    workers_sync_tasks: Vec<SegQueue<ProcessorPtr>>,
+    workers_async_tasks: Vec<SegQueue<ProcessorPtr>>,
+    workers_completed_async_tasks: Vec<SegQueue<CompletedAsyncTask>>,
 }
 
 unsafe impl Send for ExecutorTasks {}
@@ -156,13 +150,13 @@ impl ExecutorTasks {
         let mut workers_completed_async_tasks = Vec::with_capacity(workers_size);
 
         for _index in 0..workers_size {
-            workers_sync_tasks.push(VecDeque::new());
-            workers_async_tasks.push(VecDeque::new());
-            workers_completed_async_tasks.push(VecDeque::new());
+            workers_sync_tasks.push(SegQueue::new());
+            workers_async_tasks.push(SegQueue::new());
+            workers_completed_async_tasks.push(SegQueue::new());
         }
 
         ExecutorTasks {
-            tasks_size: 0,
+            tasks_size: AtomicUsize::new(0),
             workers_sync_tasks,
             workers_async_tasks,
             workers_completed_async_tasks,
@@ -170,20 +164,20 @@ impl ExecutorTasks {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tasks_size == 0
+        self.tasks_size.load(Ordering::Relaxed) == 0
     }
 
     #[inline]
-    fn pop_worker_task(&mut self, worker_id: usize) -> ExecutorTask {
-        if let Some(processor) = self.workers_sync_tasks[worker_id].pop_front() {
+    fn pop_worker_task(&self, worker_id: usize) -> ExecutorTask {
+        if let Some(processor) = self.workers_sync_tasks[worker_id].pop() {
             return ExecutorTask::Sync(processor);
         }
 
-        if let Some(task) = self.workers_completed_async_tasks[worker_id].pop_front() {
+        if let Some(task) = self.workers_completed_async_tasks[worker_id].pop() {
             return ExecutorTask::AsyncCompleted(task);
         }
 
-        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
+        if let Some(processor) = self.workers_async_tasks[worker_id].pop() {
             return ExecutorTask::Async(processor);
         }
 
@@ -214,7 +208,7 @@ impl ExecutorTasks {
         worker_id
     }
 
-    pub unsafe fn pop_task(&mut self, mut worker_id: usize) -> ExecutorTask {
+    pub unsafe fn pop_task(&self, mut worker_id: usize) -> ExecutorTask {
         for _index in 0..self.workers_sync_tasks.len() {
             match self.pop_worker_task(worker_id) {
                 ExecutorTask::None => {
@@ -232,17 +226,17 @@ impl ExecutorTasks {
         ExecutorTask::None
     }
 
-    pub unsafe fn push_task(&mut self, worker_id: usize, task: ExecutorTask) {
-        self.tasks_size += 1;
-        let sync_queue = &mut self.workers_sync_tasks[worker_id];
-        let async_queue = &mut self.workers_async_tasks[worker_id];
-        let completed_queue = &mut self.workers_completed_async_tasks[worker_id];
+    pub unsafe fn push_task(&self, worker_id: usize, task: ExecutorTask) {
+        self.tasks_size.fetch_add(1, Ordering::SeqCst);
+        let sync_queue = &self.workers_sync_tasks[worker_id];
+        let async_queue = &self.workers_async_tasks[worker_id];
+        let completed_queue = &self.workers_completed_async_tasks[worker_id];
 
         match task {
             ExecutorTask::None => unreachable!(),
-            ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
-            ExecutorTask::Async(processor) => async_queue.push_back(processor),
-            ExecutorTask::AsyncCompleted(task) => completed_queue.push_back(task),
+            ExecutorTask::Sync(processor) => sync_queue.push(processor),
+            ExecutorTask::Async(processor) => async_queue.push(processor),
+            ExecutorTask::AsyncCompleted(task) => completed_queue.push(task),
         }
     }
 }

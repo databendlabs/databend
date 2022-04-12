@@ -1758,6 +1758,7 @@ dependencies = [
  "common-streams",
  "common-tracing",
  "criterion",
+ "crossbeam-queue",
  "dyn-clone",
  "futures",
  "headers",
