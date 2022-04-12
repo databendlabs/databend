@@ -14,10 +14,11 @@ use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::{NewPipe, NewPipeline, QueryPipelineBuilder};
 use crate::sessions::QueryContext;
 use common_base::tokio;
-use common_base::tokio::sync::mpsc::{Receiver, Sender};
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_grpc::ConnectionFactory;
 use common_planners::PlanNode;
+use crate::api::rpc::exchange::exchange_channel::{channel, Sender};
 use crate::api::rpc::exchange::exchange_params::{HashExchangeParams, MergeExchangeParams, ExchangeParams};
 use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
 use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
@@ -105,7 +106,7 @@ impl DataExchangeManager {
         self.prepare_executors(actions.prepare_packets(ctx.clone())?, timeout).await?;
 
         // Get local pipeline of local task
-        let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id)?;
+        // let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id)?;
 
         // TODO: prepare connections(sink)
         // TODO: execute distributed query
@@ -113,9 +114,9 @@ impl DataExchangeManager {
         // Ok(root_pipeline)
     }
 
-    fn build_root_pipeline(&self, query_id: String, fragment_id: String) -> Result<NewPipeline> {
+    fn build_root_pipeline(&self, query_id: String, fragment_id: String, schema: DataSchemaRef) -> Result<NewPipeline> {
         let mut pipeline = NewPipeline::create();
-        self.get_fragment_source(query_id, fragment_id, &mut pipeline)?;
+        self.get_fragment_source(query_id, fragment_id, schema, &mut pipeline)?;
         Ok(pipeline)
     }
 
@@ -128,12 +129,12 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_fragment_source(&self, query_id: String, fragment_id: String, pipeline: &mut NewPipeline) -> Result<()> {
+    pub fn get_fragment_source(&self, query_id: String, fragment_id: String, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::LogicalError("Query not exists.")),
-            Some(query_coordinator) => query_coordinator.subscribe_fragment(fragment_id, pipeline)
+            Some(query_coordinator) => query_coordinator.subscribe_fragment(fragment_id, schema, pipeline)
         }
     }
 }
@@ -143,7 +144,7 @@ struct QueryCoordinator {
     query_id: String,
     executor_id: String,
     publish_fragments: HashMap<String, Sender<FlightData>>,
-    subscribe_fragments: HashMap<String, Sender<Option<FlightData>>>,
+    subscribe_fragments: HashMap<String, Sender<FlightData>>,
     fragments_coordinator: HashMap<String, FragmentCoordinator>,
 }
 
@@ -176,11 +177,11 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn subscribe_fragment(&mut self, fragment_id: String, pipeline: &mut NewPipeline) -> Result<()> {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    pub fn subscribe_fragment(&mut self, fragment_id: String, schema: DataSchemaRef, pipeline: &mut NewPipeline) -> Result<()> {
+        let (tx, mut rx) = channel(1);
 
         // Register subscriber for data exchange.
-        self.subscribe_fragments.insert(fragment_id, tx);
+        self.subscribe_fragments.insert(fragment_id.clone(), tx);
 
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
@@ -190,18 +191,18 @@ impl QueryCoordinator {
                 return Err(ErrorCode::LogicalError("Pipeline is none, maybe query fragment circular dependency."));
             }
 
-            *pipeline = fragment_coordinator.pipeline.unwrap();
             let exchange_params = fragment_coordinator.create_exchange_params(self)?;
+            *pipeline = fragment_coordinator.pipeline.unwrap();
 
             // Add exchange data publisher.
-            ExchangePublisher::via_exchange(&self.ctx, &exchange_params, pipeline);
+            ExchangePublisher::via_exchange(&self.ctx, &exchange_params, pipeline)?;
 
             // Add exchange data subscriber.
             return ExchangeSubscriber::via_exchange(rx, &exchange_params, pipeline);
         }
 
         // Add exchange data subscriber.
-        ExchangeSubscriber::create_source(rx, pipeline)
+        ExchangeSubscriber::create_source(rx, schema, pipeline)
     }
 }
 
@@ -230,6 +231,7 @@ impl FragmentCoordinator {
         match &self.data_exchange {
             DataExchange::Merge(exchange) => Ok(ExchangeParams::MergeExchange(
                 MergeExchangeParams {
+                    schema: self.node.schema(),
                     query_id: query.query_id.to_string(),
                     fragment_id: self.fragment_id.to_owned(),
                     destination_id: exchange.destination_id.clone(),

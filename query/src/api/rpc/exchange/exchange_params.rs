@@ -29,6 +29,7 @@ pub struct MergeExchangeParams {
     pub query_id: String,
     pub fragment_id: String,
     pub destination_id: String,
+    pub schema: DataSchemaRef,
 }
 
 pub enum ExchangeParams {
@@ -42,7 +43,7 @@ impl HashExchangeParams {
         let ipc_fields = default_ipc_fields(&arrow_schema.fields);
 
         for (index, executor) in self.destination_ids.iter().enumerate() {
-            if executor == self.executor_id {
+            if executor == &self.executor_id {
                 return Ok(SerializeParams {
                     ipc_fields,
                     local_executor_pos: index,
@@ -52,5 +53,14 @@ impl HashExchangeParams {
         }
 
         Err(ErrorCode::LogicalError("Not found local executor."))
+    }
+}
+
+impl ExchangeParams {
+    pub fn get_schema(&self) -> DataSchemaRef {
+        match self {
+            ExchangeParams::HashExchange(exchange) => exchange.schema.clone(),
+            ExchangeParams::MergeExchange(exchange) => exchange.schema.clone()
+        }
     }
 }

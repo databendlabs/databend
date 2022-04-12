@@ -23,6 +23,7 @@ use common_planners::Expression;
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::pipelines::transforms::ExpressionExecutor;
 
+#[derive(Clone)]
 pub struct HashFlightScatter {
     scatter_expression_executor: Arc<ExpressionExecutor>,
     scatter_expression_name: String,

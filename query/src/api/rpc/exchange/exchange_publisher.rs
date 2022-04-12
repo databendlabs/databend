@@ -3,7 +3,7 @@ use common_arrow::arrow::io::flight::{serialize_batch, serialize_schema};
 use common_arrow::arrow::io::ipc::IpcField;
 use common_arrow::arrow::io::ipc::write::{default_ipc_fields, WriteOptions};
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_base::tokio::sync::mpsc::{Permit, Sender};
+use common_base::tokio::sync::mpsc::{Permit};
 use common_base::tokio::sync::mpsc::error::TrySendError;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -12,6 +12,7 @@ use crate::sessions::QueryContext;
 use common_exception::{ErrorCode, Result};
 use common_planners::Expression;
 use crate::api::{DataExchange, HashDataExchange, MergeExchange};
+use crate::api::rpc::exchange::exchange_channel::{Sender, SendError};
 use crate::api::rpc::exchange::exchange_params::{HashExchangeParams, MergeExchangeParams, ExchangeParams, SerializeParams};
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
@@ -38,7 +39,7 @@ impl ExchangePublisher {
 
     pub fn via_exchange(ctx: &Arc<QueryContext>, params: &ExchangeParams, pipeline: &mut NewPipeline) -> Result<()> {
         match params {
-            ExchangeParams::MergeExchange(ref params) => Self::via_merge_exchange(ctx, params),
+            ExchangeParams::MergeExchange(params) => Self::via_merge_exchange(ctx, params),
             ExchangeParams::HashExchange(params) => {
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     ViaHashExchangePublisher::try_create(
@@ -134,11 +135,13 @@ impl Processor for ViaHashExchangePublisher {
             let mut need_async_send = false;
             for (index, publisher) in self.peer_endpoint_publisher.iter().enumerate() {
                 if output_data.serialized_blocks[index].is_some() {
-                    match publisher.try_reserve() {
-                        Err(TrySendError::Full(_)) => { need_async_send = true; }
-                        Err(TrySendError::Closed(_)) => { return Err(ErrorCode::LogicalError("")); }
-                        Ok(permit) => {
-                            permit.send(output_data.serialized_blocks[index].take().unwrap());
+                    let data = output_data.serialized_blocks[index].take().unwrap();
+                    match publisher.try_send(data) {
+                        Ok(_) => { /* do nothing*/ }
+                        Err(SendError::Finished) => { return Ok(Event::Finished); }
+                        Err(SendError::QueueIsFull(value)) => {
+                            need_async_send = true;
+                            output_data.serialized_blocks[index] = Some(value);
                         }
                     }
                 }
