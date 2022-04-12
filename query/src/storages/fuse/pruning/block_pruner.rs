@@ -65,11 +65,12 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
-        let limit = if let Some(Extras { limit: Some(l), .. }) = push_down {
-            *l
-        } else {
-            usize::MAX
-        };
+        let mut limit = usize::MAX;
+        if let Some(p) = push_down.as_ref() {
+            if p.order_by.is_empty() && p.limit.is_some() {
+                limit = p.limit.unwrap();
+            }
+        }
 
         // Segments and blocks are accumulated concurrently, thus an atomic counter is used
         // to **try** collecting as less blocks as possible. But concurrency is preferred to

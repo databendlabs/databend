@@ -75,10 +75,13 @@ impl FuseTable {
         blocks_metas: &[BlockMeta],
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
-        let limit = push_downs
-            .as_ref()
-            .and_then(|p| p.limit)
-            .unwrap_or(usize::MAX);
+        let mut limit = usize::MAX;
+        if let Some(p) = push_downs.as_ref() {
+            if p.order_by.is_empty() && p.limit.is_some() {
+                limit = p.limit.unwrap();
+            }
+        }
+
         let (mut statistics, partitions) = match &push_downs {
             None => Self::all_columns_partitions(blocks_metas, limit),
             Some(extras) => match &extras.projection {
