@@ -81,7 +81,7 @@ impl PlanBuilder {
 
         // Let's validate the expressions firstly
         for expr in projection_exprs.iter() {
-            validate_expression(expr)?;
+            validate_expression(expr, &input_schema)?;
         }
 
         // Merge fields.
@@ -196,7 +196,7 @@ impl PlanBuilder {
 
     /// Apply a filter
     pub fn filter(&self, expr: Expression) -> Result<Self> {
-        validate_expression(&expr)?;
+        validate_expression(&expr, &self.plan.schema())?;
         Ok(Self::from(&PlanNode::Filter(FilterPlan {
             predicate: expr.clone(),
             schema: self.plan.schema(),
@@ -206,7 +206,7 @@ impl PlanBuilder {
 
     /// Apply a having
     pub fn having(&self, expr: Expression) -> Result<Self> {
-        validate_expression(&expr)?;
+        validate_expression(&expr, &self.plan.schema())?;
         Ok(Self::from(&PlanNode::Having(HavingPlan {
             predicate: expr.clone(),
             schema: self.plan.schema(),

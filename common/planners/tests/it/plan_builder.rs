@@ -90,14 +90,14 @@ fn test_plan_builds() -> Result<()> {
         TestCase {
             name: "filter-pass",
             plan: (PlanBuilder::from(&source)
-                .filter(col("c1").eq(lit(1i64)))?
+                .filter(col("number").eq(lit(1i64)))?
                 .expression(&[col("number"), col("number").alias("c1")], "Before Projection")?
                 .project(&[col("c1")])?
                 .build()),
             expect:"\
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
-            \n    Filter: (c1 = 1)\
+            \n    Filter: (number = 1)\
             \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
             err : "",
         },
