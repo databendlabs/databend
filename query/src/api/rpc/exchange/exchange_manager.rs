@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
@@ -17,9 +18,12 @@ use common_base::tokio::sync::mpsc::{Receiver, Sender};
 use common_datablocks::DataBlock;
 use common_grpc::ConnectionFactory;
 use common_planners::PlanNode;
+use crate::api::rpc::exchange::exchange_params::{HashExchangeParams, MergeExchangeParams, ExchangeParams};
 use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
 use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
 use crate::api::rpc::flight_actions::PrepareExecutor;
+use crate::api::rpc::flight_scatter::FlightScatter;
+use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::configs::Config;
 use crate::pipelines::new::processors::port::InputPort;
 
@@ -89,18 +93,24 @@ impl DataExchangeManager {
         Ok(())
     }
 
+    // async fn execute_action(&self)
+
     pub async fn submit_query_actions(&self, ctx: Arc<QueryContext>, actions: QueryFragmentsActions) -> Result<NewPipeline> {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
         let root_fragment_id = root_actions.fragment_id.to_owned();
 
-        // Submit distributed tasks to all nodes and run them
-        self.prepare_executors(actions.to_packets(ctx.clone())?, timeout).await?;
+        // Submit distributed tasks to all nodes.
+        self.prepare_executors(actions.prepare_packets(ctx.clone())?, timeout).await?;
 
         // Get local pipeline of local task
+        let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id)?;
+
+        // TODO: prepare connections(sink)
+        // TODO: execute distributed query
         unimplemented!()
-        // self.build_root_pipeline(ctx.get_id(), root_fragment_id)
+        // Ok(root_pipeline)
     }
 
     fn build_root_pipeline(&self, query_id: String, fragment_id: String) -> Result<NewPipeline> {
@@ -109,7 +119,14 @@ impl DataExchangeManager {
         Ok(pipeline)
     }
 
-    pub fn get_fragment_sink(&self, query_id: &str, executor_id: &str) -> Result<Sender<DataBlock>> {}
+    pub fn get_fragment_sink(&self, query_id: &str, endpoint: &str) -> Result<Sender<FlightData>> {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+
+        match queries_coordinator.get(query_id) {
+            None => Err(ErrorCode::LogicalError("Query not exists.")),
+            Some(coordinator) => coordinator.get_fragment_sink(endpoint),
+        }
+    }
 
     pub fn get_fragment_source(&self, query_id: String, fragment_id: String, pipeline: &mut NewPipeline) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
@@ -123,8 +140,10 @@ impl DataExchangeManager {
 
 struct QueryCoordinator {
     ctx: Arc<QueryContext>,
-    publish_fragments: HashMap<String, Sender<DataBlock>>,
-    subscribe_fragments: HashMap<String, Sender<Option<DataBlock>>>,
+    query_id: String,
+    executor_id: String,
+    publish_fragments: HashMap<String, Sender<FlightData>>,
+    subscribe_fragments: HashMap<String, Sender<Option<FlightData>>>,
     fragments_coordinator: HashMap<String, FragmentCoordinator>,
 }
 
@@ -135,11 +154,11 @@ impl QueryCoordinator {
         for fragment in &executor.fragments {
             fragments_coordinator.insert(
                 fragment.fragment_id.to_owned(),
-                FragmentCoordinator::create(&fragment.node, fragment.data_exchange.clone()),
+                FragmentCoordinator::create(&fragment),
             );
         }
 
-        QueryCoordinator { ctx: ctx.clone(), publish_fragments: Default::default(), subscribe_fragments: Default::default(), fragments_coordinator }
+        QueryCoordinator { query_id: executor.query_id.to_owned(), ctx: ctx.clone(), publish_fragments: Default::default(), subscribe_fragments: Default::default(), fragments_coordinator, executor_id: executor.executor.to_owned() }
     }
 
     pub fn init(&mut self) -> Result<()> {
@@ -148,6 +167,13 @@ impl QueryCoordinator {
         }
 
         Ok(())
+    }
+
+    pub fn get_fragment_sink(&self, endpoint: &str) -> Result<Sender<FlightData>> {
+        match self.publish_fragments.get(endpoint) {
+            None => Err(ErrorCode::LogicalError(format!("Not found node {} in cluster", endpoint))),
+            Some(publisher) => Ok(publisher.clone())
+        }
     }
 
     pub fn subscribe_fragment(&mut self, fragment_id: String, pipeline: &mut NewPipeline) -> Result<()> {
@@ -165,28 +191,22 @@ impl QueryCoordinator {
             }
 
             *pipeline = fragment_coordinator.pipeline.unwrap();
-            let data_exchange = &fragment_coordinator.data_exchange;
+            let exchange_params = fragment_coordinator.create_exchange_params(self)?;
 
             // Add exchange data publisher.
-            ExchangePublisher::via_exchange(&self.ctx, data_exchange, pipeline);
+            ExchangePublisher::via_exchange(&self.ctx, &exchange_params, pipeline);
 
             // Add exchange data subscriber.
-            return ExchangeSubscriber::via_exchange(rx, data_exchange, pipeline);
+            return ExchangeSubscriber::via_exchange(rx, &exchange_params, pipeline);
         }
 
         // Add exchange data subscriber.
-        // pipeline.add_pipe()
-        // pipeline.add_pipe(NewPipe::ResizePipe {
-        //     outputs_port: vec![],
-        //     inputs_port: vec![input_port],
-        //     // processors: vec![],
-        // });
-        Ok(())
-        // unimplemented!()
+        ExchangeSubscriber::create_source(rx, pipeline)
     }
 }
 
 struct FragmentCoordinator {
+    fragment_id: String,
     node: PlanNode,
     initialized: bool,
     data_exchange: DataExchange,
@@ -195,8 +215,41 @@ struct FragmentCoordinator {
 }
 
 impl FragmentCoordinator {
-    pub fn create(node: &PlanNode, data_exchange: DataExchange) -> FragmentCoordinator {
-        FragmentCoordinator { node: node.clone(), initialized: false, data_exchange, pipeline: None, executor: None }
+    pub fn create(packet: &FragmentPacket) -> FragmentCoordinator {
+        FragmentCoordinator {
+            initialized: false,
+            node: packet.node.clone(),
+            fragment_id: packet.fragment_id.to_owned(),
+            data_exchange: packet.data_exchange.clone(),
+            pipeline: None,
+            executor: None,
+        }
+    }
+
+    pub fn create_exchange_params(&self, query: &QueryCoordinator) -> Result<ExchangeParams> {
+        match &self.data_exchange {
+            DataExchange::Merge(exchange) => Ok(ExchangeParams::MergeExchange(
+                MergeExchangeParams {
+                    query_id: query.query_id.to_string(),
+                    fragment_id: self.fragment_id.to_owned(),
+                    destination_id: exchange.destination_id.clone(),
+                }
+            )),
+            DataExchange::HashDataExchange(exchange) => Ok(ExchangeParams::HashExchange(
+                HashExchangeParams {
+                    schema: self.node.schema(),
+                    query_id: query.query_id.to_string(),
+                    fragment_id: self.fragment_id.to_string(),
+                    executor_id: query.executor_id.to_string(),
+                    destination_ids: exchange.destination_ids.to_owned(),
+                    hash_scatter: HashFlightScatter::try_create(
+                        self.node.schema(),
+                        Some(exchange.exchange_expression.clone()),
+                        exchange.destination_ids.len(),
+                    )?,
+                }
+            )),
+        }
     }
 
     pub fn init(&mut self, ctx: &Arc<QueryContext>) -> Result<()> {
@@ -205,10 +258,8 @@ impl FragmentCoordinator {
         }
 
         self.initialized = true;
-        let async_runtime = ctx.get_storage_runtime();
         let query_pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
         self.pipeline = Some(query_pipeline_builder.finalize(&self.node)?);
-        common_tracing::tracing::error!("Set pipeline is Some");
         // let pipeline = query_pipeline_builder.finalize(&self.node)?;
         //
         // if pipeline.is_pushing_pipeline()? || pipeline.is_complete_pipeline()? || !pipeline.is_pulling_pipeline()? {

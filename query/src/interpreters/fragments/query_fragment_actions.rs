@@ -93,7 +93,7 @@ impl QueryFragmentsActions {
         Ok(())
     }
 
-    pub fn to_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutorPacket>> {
+    pub fn prepare_packets(&self, ctx: Arc<QueryContext>) -> Result<Vec<ExecutorPacket>> {
         let fragments_packets = self.get_executors_fragments();
         let mut executors_packets = Vec::with_capacity(fragments_packets.len());
 

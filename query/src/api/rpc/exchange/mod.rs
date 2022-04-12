@@ -2,6 +2,7 @@ mod exchange_manager;
 mod exchange_publisher;
 mod exchange_subscriber;
 mod data_exchange;
+mod exchange_params;
 
 pub use exchange_manager::DataExchangeManager;
 pub use data_exchange::DataExchange;
