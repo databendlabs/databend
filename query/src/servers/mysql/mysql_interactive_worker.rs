@@ -254,16 +254,19 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    fn federated_server_setup_command_check(&self, query: &str) -> Option<DataBlock> {
+    fn federated_server_command_check(&self, query: &str) -> Option<DataBlock> {
         let federated = MySQLFederated::create();
         federated.check(query)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        match self.federated_server_setup_command_check(query) {
+        match self.federated_server_command_check(query) {
             Some(data_block) => {
                 tracing::info!("Federated query: {}", query);
+                if data_block.num_rows() > 0 {
+                    tracing::info!("Federated response: {:?}", data_block);
+                }
                 Ok((vec![data_block], String::from("")))
             }
             None => {
