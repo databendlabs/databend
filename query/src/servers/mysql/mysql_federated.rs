@@ -173,7 +173,7 @@ impl MySQLFederated {
     // Check SHOW VARIABLES LIKE.
     fn federated_show_variables_check(&self, query: &str) -> Option<DataBlock> {
         let rules: Vec<(&str, Option<DataBlock>)> = vec![
-            // SQLAlchemy==1.4.22
+            // sqlalchemy < 1.4.30
             (
                 "(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))",
                 Self::show_variables_block("sql_mode",
@@ -184,6 +184,7 @@ impl MySQLFederated {
                 Self::show_variables_block("lower_case_table_names",
                                            "0"),
             ),
+            ("(?i)^(show collation where(.*))", Self::show_variables_block("", "")),
             ("(?i)^(SHOW VARIABLES(.*))", Self::show_variables_block("", "")),
         ];
         self.block_match_rule(query, rules)
