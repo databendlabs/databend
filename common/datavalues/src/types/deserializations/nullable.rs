@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
@@ -116,6 +114,6 @@ impl TypeDeserializer for NullableDeserializer {
     fn finish_to_column(&mut self) -> ColumnRef {
         let inner_column = self.inner.finish_to_column();
         let bitmap = std::mem::take(&mut self.bitmap);
-        Arc::new(NullableColumn::new(inner_column, bitmap.into()))
+        NullableColumn::wrap_inner(inner_column, Some(bitmap.into()))
     }
 }

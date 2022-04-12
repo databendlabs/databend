@@ -317,11 +317,9 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             Expression::Cast {
                 expr: nested_expr,
                 data_type,
-                is_nullable,
             } => Ok(Expression::Cast {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 data_type: data_type.clone(),
-                is_nullable: *is_nullable,
             }),
 
             Expression::Column(_)

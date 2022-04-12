@@ -446,7 +446,9 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg py3-pip "$PACKAGE_MANAGER"
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py mysql-connector-python toml
+	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml
+	# drivers
+	python3 -m pip install --quiet mysql-connector-python pymysql sqlalchemy
 
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"

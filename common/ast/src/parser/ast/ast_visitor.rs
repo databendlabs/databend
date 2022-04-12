@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use sqlparser::ast::Value;
 
 use crate::parser::ast::BinaryOperator;
 use crate::parser::ast::ColumnDefinition;
@@ -54,6 +55,7 @@ pub trait AstVisitor {
             } => self.visit_between(expr, low, high, not),
             Expr::BinaryOp { op, left, right } => self.visit_binary_op(op, left, right),
             Expr::UnaryOp { op, expr } => self.visit_unary_op(op, expr),
+            Expr::TryCast { expr, target_type } => self.visit_try_cast(expr, target_type),
             Expr::Cast { expr, target_type } => self.visit_cast(expr, target_type),
             Expr::Literal(_) => self.visit_literal(),
             Expr::CountAll => self.visit_count_all(),
@@ -71,6 +73,7 @@ pub trait AstVisitor {
             } => self.visit_case(operand, conditions, results, else_result),
             Expr::Exists(query) => self.visit_exists(query),
             Expr::Subquery(query) => self.visit_query(query),
+            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys),
         }
     }
 
@@ -119,6 +122,10 @@ pub trait AstVisitor {
         self.visit_expr(expr)
     }
 
+    fn visit_try_cast(&mut self, expr: &Expr, _type_name: &TypeName) -> Result<()> {
+        self.visit_expr(expr)
+    }
+
     fn visit_function_call(
         &mut self,
         _: &bool,
@@ -157,6 +164,10 @@ pub trait AstVisitor {
         self.visit_set_expr(&query.body)?;
         self.visit_order_by_exprs(&query.order_by)?;
         self.visit_expr(query.limit.as_ref().unwrap())
+    }
+
+    fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
+        self.visit_expr(expr)
     }
 
     fn visit_set_expr(&mut self, set_expr: &SetExpr) -> Result<()> {

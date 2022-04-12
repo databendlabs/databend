@@ -185,6 +185,11 @@ impl QueryNormalizer {
         for item in &query.projection {
             match item {
                 SelectItem::Wildcard => {
+                    if query.from.is_empty() {
+                        return Err(ErrorCode::LogicalError(
+                            "SELECT * with no tables specified is not valid",
+                        ));
+                    }
                     output_columns.push(Expression::Wildcard);
                 }
                 SelectItem::UnnamedExpr(expr) => {

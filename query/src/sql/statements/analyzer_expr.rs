@@ -71,6 +71,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
                 ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
+                ExprRPNItem::MapAccess(v) => self.analyze_map_access(v, &mut stack)?,
             }
         }
 
@@ -329,7 +330,6 @@ impl ExpressionAnalyzer {
                 args.push(Expression::Cast {
                     expr: Box::new(inner_expr),
                     data_type: data_type.clone(),
-                    is_nullable: false,
                 });
                 Ok(())
             }
@@ -363,6 +363,47 @@ impl ExpressionAnalyzer {
 
         Ok(())
     }
+
+    fn analyze_map_access(&self, keys: &[Value], args: &mut Vec<Expression>) -> Result<()> {
+        match args.pop() {
+            None => Err(ErrorCode::LogicalError(
+                "MapAccess operator must be one children.",
+            )),
+            Some(inner_expr) => {
+                let mut arguments = Vec::with_capacity(2);
+                arguments.push(inner_expr);
+                let path_name: String = keys
+                    .iter()
+                    .enumerate()
+                    .map(|(i, k)| match k {
+                        k @ Value::Number(_, _) => format!("[{}]", k),
+                        Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
+                        Value::ColonString(s) => {
+                            let key = if i == 0 {
+                                s.to_string()
+                            } else {
+                                format!(":{}", s)
+                            };
+                            key
+                        }
+                        Value::PeriodString(s) => format!(".{}", s),
+                        _ => format!("[{}]", k),
+                    })
+                    .collect();
+
+                let path =
+                    Expression::create_literal(DataValue::String(path_name.as_bytes().to_vec()));
+                arguments.push(path);
+
+                let op = "get_path".to_string();
+                args.push(Expression::ScalarFunction {
+                    op,
+                    args: arguments,
+                });
+                Ok(())
+            }
+        }
+    }
 }
 
 enum OperatorKind {
@@ -395,6 +436,7 @@ enum ExprRPNItem {
     Cast(DataTypePtr),
     Between(bool),
     InList(InListInfo),
+    MapAccess(Vec<Value>),
 }
 
 impl ExprRPNItem {
@@ -496,6 +538,13 @@ impl ExprRPNBuilder {
                 self.rpn
                     .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
             }
+            Expr::TryCast { data_type, .. } => {
+                let mut ty = SQLCommon::make_data_type(data_type)?;
+                if ty.can_inside_nullable() {
+                    ty = Arc::new(NullableType::create(ty))
+                }
+                self.rpn.push(ExprRPNItem::Cast(ty));
+            }
             Expr::TypedString { data_type, value } => {
                 self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
                     value.to_string(),
@@ -564,6 +613,9 @@ impl ExprRPNBuilder {
                     .rpn
                     .push(ExprRPNItem::function(String::from("toSecond"), 1)),
             },
+            Expr::MapAccess { keys, .. } => {
+                self.rpn.push(ExprRPNItem::MapAccess(keys.to_owned()));
+            }
             _ => (),
         }
 

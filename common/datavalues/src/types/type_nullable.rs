@@ -122,7 +122,7 @@ impl DataType for NullableType {
             data.clone()
         };
         let column = self.inner.create_constant_column(&data, size)?;
-        Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
+        Ok(NullableColumn::wrap_inner(column, Some(bitmap.into())))
     }
 
     fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
@@ -139,7 +139,7 @@ impl DataType for NullableType {
             }
         }
         let column = self.inner.create_column(&res)?;
-        Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
+        Ok(NullableColumn::wrap_inner(column, Some(bitmap.into())))
     }
 }
 

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_scalar_types_error;
@@ -106,7 +104,7 @@ fn test_builder() -> Result<()> {
             for i in 0..size {
                 bm.push(i % 3 == 1);
             }
-            column = Arc::new(NullableColumn::new(column, bm.into()));
+            column = NullableColumn::wrap_inner(column, Some(bm.into()));
         }
 
         let ty = remove_nullable(&column.data_type());

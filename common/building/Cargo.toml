@@ -11,5 +11,10 @@ doctest = false
 test = false
 
 [dependencies]
+common-tracing = { path = "../tracing" }
+
+cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
+
+cargo_metadata = "0.14.2"
 run_script = "0.9.0"
 vergen = "7.0.0"

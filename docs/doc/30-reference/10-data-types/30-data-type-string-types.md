@@ -1,6 +1,6 @@
 ---
-title: String Types
-description: Basic String data type
+title: String Data Types
+description: Basic String data type.
 ---
 
 Strings of an arbitrary length.

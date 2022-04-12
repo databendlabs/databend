@@ -36,7 +36,6 @@ async fn test_show_databases_interpreter() -> Result<()> {
             "+--------------------+",
             "| INFORMATION_SCHEMA |",
             "| default            |",
-            "| information_schema |",
             "| system             |",
             "+--------------------+",
         ];

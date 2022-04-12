@@ -60,7 +60,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .map(|c| {
                 let mut validity = MutableBitmap::new();
                 validity.extend_constant(c.len(), true);
-                NullableColumn::new(c.clone(), validity.into()).arc()
+                NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
             })
             .collect();
         DataBlock::create(schema, columns)

@@ -21,6 +21,7 @@ use common_planners::PlanShowKind;
 use common_planners::ShowTabStatPlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::DatabaseCatalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -43,26 +44,38 @@ impl ShowTabStatInterpreter {
         if let Some(v) = &self.plan.fromdb {
             database = v.to_string();
         }
-        let select_cols = "table_name AS Name, engine AS Engine, 0 AS Version, \
-        NULL AS Row_format, NULL AS Rows, NULL AS Avg_row_length, NULL AS Data_length, \
+
+        if DatabaseCatalog::is_case_insensitive_db(&database) {
+            database = database.to_uppercase()
+        }
+
+        let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
+        NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
         NULL AS Max_data_length, NULL AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
-        create_time AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
+        created_on AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
         NULL AS Checksum, '' AS Comment"
             .to_string();
+
+        // Use `system.tables` as the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
+        //
+        // To constraint the schema of the final result-set,
+        //  `(select ${select_cols} from system.tables where ..)`
+        // is used as a derived table.
+        // (unlike mysql, alias of derived table is not required in databend).
         return match &self.plan.kind {
             PlanShowKind::All => Ok(format!(
-                "SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' \
-                ORDER BY table_schema, table_name",
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                ORDER BY Name",
                 select_cols, database
             )),
             PlanShowKind::Like(v) => Ok(format!(
-                "SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' \
-                AND table_name LIKE {} ORDER BY table_schema, table_name",
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                WHERE Name LIKE {} ORDER BY Name",
                 select_cols, database, v
             )),
             PlanShowKind::Where(v) => Ok(format!(
-                "SELECT {} FROM information_schema.TABLES WHERE table_schema = '{}' \
-                AND ({}) ORDER BY table_schema, table_name",
+                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                WHERE ({}) ORDER BY Name",
                 select_cols, database, v
             )),
         };

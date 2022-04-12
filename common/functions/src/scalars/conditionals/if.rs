@@ -195,7 +195,6 @@ impl IfFunction {
             let lhs_viewer = $T::try_create_viewer(&lhs)?;
             let rhs_viewer = $T::try_create_viewer(&rhs)?;
             let mut builder = NullableColumnBuilder::<$T>::with_capacity(input_rows);
-
             for ((predicate, l), (row, r)) in cond_col
                 .iter()
                 .zip(lhs_viewer.iter())

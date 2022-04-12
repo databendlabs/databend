@@ -14,6 +14,7 @@
 
 use std::path::Path;
 
+use common_tracing::tracing;
 use vergen::vergen;
 use vergen::Config;
 use vergen::ShaKind;
@@ -33,6 +34,7 @@ pub fn add_building_env_vars() {
     set_env_config();
     add_env_git_tag();
     add_env_commit_authors();
+    add_env_credits_info();
 }
 
 pub fn set_env_config() {
@@ -67,4 +69,39 @@ pub fn add_env_commit_authors() {
         Err(e) => e.to_string(),
     };
     println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS={}", authors);
+}
+
+pub fn add_env_credits_info() {
+    let metadata_command = cargo_metadata::MetadataCommand::new();
+
+    let deps = match cargo_license::get_dependencies_from_cargo_lock(metadata_command, false, false)
+    {
+        Ok(v) => v,
+        Err(err) => {
+            tracing::error!("{:?}", err);
+            vec![]
+        }
+    };
+
+    let names: Vec<String> = deps.iter().map(|x| (&x.name).to_string()).collect();
+    let versions: Vec<String> = deps.iter().map(|x| x.version.to_string()).collect();
+    let licenses: Vec<String> = deps
+        .iter()
+        .map(|x| match &x.license {
+            None => "UNKNOWN".to_string(),
+            Some(license) => license.to_string(),
+        })
+        .collect();
+    println!(
+        "cargo:rustc-env=DATABEND_CREDITS_NAMES={}",
+        names.join(", ")
+    );
+    println!(
+        "cargo:rustc-env=DATABEND_CREDITS_VERSIONS={}",
+        versions.join(", ")
+    );
+    println!(
+        "cargo:rustc-env=DATABEND_CREDITS_LICENSES={}",
+        licenses.join(", ")
+    );
 }
