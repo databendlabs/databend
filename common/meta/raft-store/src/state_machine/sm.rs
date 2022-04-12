@@ -476,10 +476,12 @@ impl StateMachine {
         let (table_id, prev, result) =
             self.txn_create_table(txn_tree, db_id, table_name, table_meta)?;
 
-        if prev.is_some() {
+        let table_id = table_id.unwrap();
+
+        if let Some(prev) = prev {
             return Ok(AppliedState::TableMeta(Change::nochange_with_id(
-                table_id.unwrap(),
-                prev,
+                table_id,
+                Some(prev),
             )));
         }
         if result.is_some() {
@@ -487,9 +489,7 @@ impl StateMachine {
         }
 
         Ok(AppliedState::TableMeta(Change::new_with_id(
-            table_id.unwrap(),
-            prev,
-            result,
+            table_id, prev, result,
         )))
     }
 
@@ -1190,8 +1190,8 @@ impl StateMachine {
         )?;
 
         // if it is just created
-        if prev.is_some() {
-            let share_id = prev.unwrap().data;
+        if let Some(prev) = prev {
+            let share_id = prev.data;
             let prev = share_tree.get(&share_id.0)?;
             if let Some(prev) = prev {
                 return Ok(AppliedState::ShareInfo(Change::nochange_with_id(
