@@ -100,6 +100,10 @@ impl Function for RegexpLikeFunction {
             mt,
         )?))
     }
+
+    fn passthrough_constant(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for RegexpLikeFunction {
