@@ -26,8 +26,10 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::S3StageTableInfo;
 use common_streams::CsvSourceBuilder;
+use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use futures::io::BufReader;
 use opendal::io_util::SeekableReader;
 use opendal::BytesReader;
 use opendal::Operator;
@@ -106,6 +108,32 @@ impl StageSource {
         Ok(Box::new(builder.build(reader)?))
     }
 
+    // Get json source stream.
+    async fn json_source(
+        ctx: Arc<QueryContext>,
+        schema: DataSchemaRef,
+        stage_info: &UserStageInfo,
+        reader: BytesReader,
+    ) -> Result<Box<dyn Source>> {
+        let mut builder = NDJsonSourceBuilder::create(schema);
+        let size_limit = stage_info.copy_options.size_limit;
+
+        // Size limit.
+        {
+            if size_limit > 0 {
+                builder.size_limit(size_limit);
+            }
+        }
+
+        // Block size.
+        {
+            let max_block_size = ctx.get_settings().get_max_block_size()?;
+            builder.block_size(max_block_size as usize);
+        }
+
+        Ok(Box::new(builder.build(BufReader::new(reader))?))
+    }
+
     // Get parquet source stream.
     async fn parquet_source(
         _ctx: Arc<QueryContext>,
@@ -156,6 +184,13 @@ impl StageSource {
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
             StageFileFormatType::Csv => Ok(Self::csv_source(
+                ctx.clone(),
+                self.schema.clone(),
+                stage,
+                Box::new(object.reader().await?),
+            )
+            .await?),
+            StageFileFormatType::Json => Ok(Self::json_source(
                 ctx.clone(),
                 self.schema.clone(),
                 stage,

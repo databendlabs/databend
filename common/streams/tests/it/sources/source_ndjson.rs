@@ -35,7 +35,7 @@ async fn test_source_ndjson() -> Result<()> {
     "#
     .as_bytes();
 
-    let reader = std::io::Cursor::new(bytes);
+    let reader = futures::io::Cursor::new(bytes);
 
     let builder = NDJsonSourceBuilder::create(schema);
     let mut json_source = builder.build(reader).unwrap();
