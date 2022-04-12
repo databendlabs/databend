@@ -61,3 +61,21 @@ show users;
 | user-b | localhost | sha256_password      | 5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8 |
 +--------+-----------+----------------------+------------------------------------------------------------------+
 ```
+
+### Grant privileges to the user
+
+```text title='mysql>'
+grant all privileges on *.* TO 'user-a'@'%';
+```
+
+```text
+show grants for 'user-a'@'%';
+```
+
+```text
++------------------------------------------+
+| Grants                                   |
++------------------------------------------+
+| GRANT ALL ON 'default'.* TO 'user-a'@'%' |
++------------------------------------------+
+```
