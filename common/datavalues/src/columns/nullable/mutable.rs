@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
@@ -57,7 +55,7 @@ impl MutableColumn for MutableNullableColumn {
     fn to_column(&mut self) -> ColumnRef {
         let col = self.inner.to_column();
         let validity = std::mem::take(&mut self.values);
-        Arc::new(NullableColumn::new(col, validity.into()))
+        NullableColumn::wrap_inner(col, Some(validity.into()))
     }
 
     fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {

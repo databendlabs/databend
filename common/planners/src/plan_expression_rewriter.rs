@@ -129,12 +129,10 @@ pub trait ExpressionRewriter: Sized {
         typ: &DataTypePtr,
         expr: Expression,
         _origin_expr: &Expression,
-        is_nullable: bool,
     ) -> Result<Expression> {
         Ok(Expression::Cast {
             expr: Box::new(expr),
             data_type: typ.clone(),
-            is_nullable,
         })
     }
 
@@ -288,21 +286,13 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 self.stack.push(new_expr);
                 Ok(self)
             }
-            Expression::Cast {
-                data_type,
-                is_nullable,
-                ..
-            } => match self.stack.pop() {
+            Expression::Cast { data_type, .. } => match self.stack.pop() {
                 None => Err(ErrorCode::LogicalError(
                     "Cast expr expected 1 parameters, actual 0.",
                 )),
                 Some(new_expr) => {
-                    self.stack.push(self.inner.mutate_cast(
-                        data_type,
-                        new_expr,
-                        expr,
-                        *is_nullable,
-                    )?);
+                    self.stack
+                        .push(self.inner.mutate_cast(data_type, new_expr, expr)?);
                     Ok(self)
                 }
             },
