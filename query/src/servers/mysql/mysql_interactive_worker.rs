@@ -377,7 +377,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
 
         let mut scramble: [u8; 20] = [0; 20];
         for i in 0..20 {
-            scramble[i] = bs[i];
+            scramble[i] = bs[i] & 0x7fu8;
             if scramble[i] == b'\0' || scramble[i] == b'$' {
                 scramble[i] += 1;
             }
