@@ -244,7 +244,7 @@ impl DfCreateTable {
                 let expr: Expression =
                     serde_json::from_slice::<Expression>(default_expr.as_slice())?;
 
-                validate_expression(&expr, &schema)?;
+                validate_expression(&expr, schema)?;
             }
         }
         Ok(())
