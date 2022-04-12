@@ -156,7 +156,7 @@ impl SledKeySpace for TableLookup {
 
 pub struct Shares {}
 impl SledKeySpace for Shares {
-    const PREFIX: u8 = 12;
+    const PREFIX: u8 = 20;
     const NAME: &'static str = "shares";
     type K = u64;
     type V = SeqV<ShareInfo>;
@@ -164,7 +164,7 @@ impl SledKeySpace for Shares {
 
 pub struct ShareLookup {}
 impl SledKeySpace for ShareLookup {
-    const PREFIX: u8 = 14;
+    const PREFIX: u8 = 21;
     const NAME: &'static str = "share-look-up";
     type K = ShareLookupKey;
     type V = SeqV<ShareLookupValue>;
@@ -172,7 +172,7 @@ impl SledKeySpace for ShareLookup {
 
 pub struct ShareOutbounds {}
 impl SledKeySpace for ShareOutbounds {
-    const PREFIX: u8 = 15;
+    const PREFIX: u8 = 22;
     const NAME: &'static str = "share-outbounds";
     type K = ShareOutboundKey;
     type V = SeqV<ShareOutboundValue>;
@@ -180,7 +180,7 @@ impl SledKeySpace for ShareOutbounds {
 
 pub struct ShareInbounds {}
 impl SledKeySpace for ShareInbounds {
-    const PREFIX: u8 = 16;
+    const PREFIX: u8 = 23;
     const NAME: &'static str = "share-inbounds";
     type K = ShareInboundKey;
     type V = SeqV<ShareInboundValue>;
