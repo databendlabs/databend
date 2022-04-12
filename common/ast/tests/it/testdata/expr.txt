@@ -412,6 +412,7 @@ BinaryOp {
                             target_type: SmallInt(
                                 None,
                             ),
+                            pg_style: false,
                         },
                     },
                 },
@@ -442,6 +443,7 @@ BinaryOp {
                         target_type: SmallInt(
                             None,
                         ),
+                        pg_style: false,
                     },
                 },
             },
@@ -463,6 +465,7 @@ BinaryOp {
                     target_type: SmallInt(
                         None,
                     ),
+                    pg_style: false,
                 },
                 high: Cast {
                     expr: Literal(
@@ -473,6 +476,7 @@ BinaryOp {
                     target_type: SmallInt(
                         None,
                     ),
+                    pg_style: false,
                 },
                 not: false,
             },

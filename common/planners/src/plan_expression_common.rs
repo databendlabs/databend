@@ -317,11 +317,19 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             Expression::Cast {
                 expr: nested_expr,
                 data_type,
+                pg_style,
             } => Ok(Expression::Cast {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 data_type: data_type.clone(),
+                pg_style: *pg_style,
             }),
-
+            Expression::MapAccess { name, args } => Ok(Expression::MapAccess {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+            }),
             Expression::Column(_)
             | Expression::QualifiedColumn(_)
             | Expression::Literal { .. }
@@ -479,6 +487,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 self.stack.push(inner_type.clone());
                 Ok(self)
             }
+            Expression::MapAccess { args, .. } => self.visit_function("get_path", args.len()),
             Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
         }
     }
