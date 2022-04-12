@@ -172,13 +172,12 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn watch(
         &self,
-        request: Request<Streaming<WatchRequest>>,
+        request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
-        let stream = request.into_inner();
         let (tx, rx) = mpsc::channel(4);
 
         let meta_node = &self.action_handler.meta_node;
-        meta_node.create_watcher_stream(stream, tx);
+        meta_node.create_watcher_stream(request, tx);
 
         let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(output_stream) as Self::WatchStream))

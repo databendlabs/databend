@@ -59,8 +59,8 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
+use tonic::Request;
 use tonic::Status;
-use tonic::Streaming;
 
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
@@ -844,7 +844,7 @@ impl MetaNode {
         res
     }
 
-    pub fn create_watcher_stream(&self, stream: Streaming<WatchRequest>, tx: WatcherStreamSender) {
-        self.watcher.create_watcher_stream(stream, tx)
+    pub fn create_watcher_stream(&self, request: Request<WatchRequest>, tx: WatcherStreamSender) {
+        self.watcher.create_watcher_stream(request, tx)
     }
 }

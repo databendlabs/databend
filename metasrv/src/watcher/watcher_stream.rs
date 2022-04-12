@@ -13,108 +13,45 @@
 //  limitations under the License.
 //
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use common_base::tokio;
 use common_base::tokio::sync::mpsc;
-use common_meta_types::protobuf::WatchCreateRequest;
-use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_tracing::tracing;
-use tonic::Streaming;
 
 use super::CloseWatcherStreamReq;
 use super::WatcherId;
-use super::WatcherStreamId;
 use super::WatcherStreamSender;
 
 #[derive(Debug)]
-pub struct Watcher {
-    pub id: WatcherId,
+pub struct WatcherStream {
+    id: WatcherId,
 
-    // owner watcher stream id
-    pub owner_id: WatcherStreamId,
+    tx: WatcherStreamSender,
 
     pub key: String,
 
     pub key_end: String,
-}
-
-impl Watcher {
-    pub fn new(id: WatcherId, owner_id: WatcherStreamId, create: WatchCreateRequest) -> Watcher {
-        Watcher {
-            id,
-            owner_id,
-            key: create.key,
-            key_end: create.key_end,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct WatcherStream {
-    id: WatcherStreamId,
-
-    tx: WatcherStreamSender,
 
     /// notify manager to stop watcher stream
     close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
-
-    shutdown_tx: mpsc::UnboundedSender<()>,
-
-    /// save stream watcher ids
-    pub watchers: BTreeSet<WatcherId>,
-}
-
-pub struct WatcherStreamCore {
-    id: WatcherStreamId,
-
-    stream: Streaming<WatchRequest>,
-
-    watch_tx: Arc<mpsc::UnboundedSender<(WatcherStreamId, WatchRequest)>>,
-
-    /// notify manager to stop watcher stream
-    close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
-
-    /// notify the core shutdown
-    shutdown_rx: mpsc::UnboundedReceiver<()>,
 }
 
 impl WatcherStream {
-    pub fn spawn(
-        id: WatcherStreamId,
-        stream: Streaming<WatchRequest>,
+    pub fn new(
+        id: WatcherId,
         tx: WatcherStreamSender,
-        watch_tx: Arc<mpsc::UnboundedSender<(WatcherStreamId, WatchRequest)>>,
         close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
+        key: String,
+        key_end: String,
     ) -> Self {
-        let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel::<()>();
-        let core = WatcherStreamCore {
-            id,
-            stream,
-            watch_tx,
-            shutdown_rx,
-            close_stream_tx: close_stream_tx.clone(),
-        };
-
-        let _ = tokio::spawn(core.watcher_main());
-
         WatcherStream {
             id,
             tx,
+            key,
+            key_end,
             close_stream_tx,
-            shutdown_tx,
-            watchers: BTreeSet::new(),
         }
-    }
-
-    pub fn add_watcher(&mut self, id: WatcherId) {
-        self.watchers.insert(id);
-    }
-
-    pub fn get_watchers(&self) -> &BTreeSet<WatcherId> {
-        &self.watchers
     }
 
     pub async fn send(&self, resp: WatchResponse) {
@@ -126,42 +63,6 @@ impl WatcherStream {
                 err
             );
             let _ = self.close_stream_tx.send((self.id, err.to_string()));
-            let _ = self.shutdown_tx.send(());
-        }
-    }
-}
-
-impl WatcherStreamCore {
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn watcher_main(mut self) {
-        loop {
-            tokio::select! {
-                    msg = self.stream.message() => {
-                    match msg {
-                        Ok(msg) => {
-                            if let Some(req) = msg {
-                                let _ = self.watch_tx.send((self.id, req));
-                            }
-                        }
-                        Err(err) => {
-                            tracing::info!(
-                                "close watcher stream {:?} cause recv err: {:?}",
-                                self.id,
-                                err
-                            );
-                            let _ = self.close_stream_tx.send((self.id, err.to_string()));
-                            break;
-                        }
-                    }
-                },
-                _ = self.shutdown_rx.recv() => {
-                    tracing::info!(
-                        "close watcher stream {:?} has been shutdown",
-                        self.id,
-                    );
-                    break;
-                }
-            }
         }
     }
 }

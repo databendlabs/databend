@@ -23,7 +23,5 @@ pub use watcher_key::WatcherKey;
 pub use watcher_manager::CloseWatcherStreamReq;
 pub use watcher_manager::WatcherId;
 pub use watcher_manager::WatcherManager;
-pub use watcher_manager::WatcherStreamId;
 pub use watcher_manager::WatcherStreamSender;
-pub use watcher_stream::Watcher;
 pub use watcher_stream::WatcherStream;

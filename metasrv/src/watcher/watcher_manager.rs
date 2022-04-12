@@ -24,31 +24,25 @@ use common_base::tokio::time::Duration;
 use common_base::tokio::time::Interval;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
 use common_meta_types::protobuf::event::EventType;
-use common_meta_types::protobuf::watch_create_request::FilterType;
-use common_meta_types::protobuf::watch_request::RequestUnion::CancelRequest;
-use common_meta_types::protobuf::watch_request::RequestUnion::CreateRequest;
+use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
-use common_meta_types::protobuf::WatchCancelRequest;
-use common_meta_types::protobuf::WatchCreateRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::SeqV;
 use common_range_set::RangeSet;
 use common_tracing::tracing;
+use tonic::Request;
 use tonic::Status;
-use tonic::Streaming;
 
-use super::Watcher;
 use super::WatcherConfig;
 use super::WatcherKey;
 use super::WatcherStream;
 
 pub type WatcherId = i64;
-pub type WatcherStreamId = i64;
 pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
-pub type CloseWatcherStreamReq = (WatcherStreamId, String);
+pub type CloseWatcherStreamReq = (WatcherId, String);
 
-type CreateWatcherEvent = (Streaming<WatchRequest>, WatcherStreamSender);
+type CreateWatcherEvent = (Request<WatchRequest>, WatcherStreamSender);
 
 #[derive(Clone, Debug)]
 struct StateMachineKvData {
@@ -78,12 +72,6 @@ struct WatcherManagerCore {
     /// A channel for receiving create watcher request from grpc service.
     create_rx: mpsc::UnboundedReceiver<CreateWatcherEvent>,
 
-    /// A channel for sending watch request.
-    watch_tx: Arc<mpsc::UnboundedSender<(WatcherStreamId, WatchRequest)>>,
-
-    /// A channel for receiving watch request from grpc client stream.
-    watch_rx: mpsc::UnboundedReceiver<(WatcherStreamId, WatchRequest)>,
-
     sm_rx: mpsc::UnboundedReceiver<StateMachineKvData>,
 
     /// A channel for sending stop stream request.
@@ -100,14 +88,10 @@ struct WatcherManagerCore {
 
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 
-    watcher_streams: BTreeMap<WatcherStreamId, WatcherStream>,
-
-    watchers: BTreeMap<WatcherId, Watcher>,
+    watcher_streams: BTreeMap<WatcherId, WatcherStream>,
 
     /// map range to WatcherId
     watcher_range_set: RangeSet<String, WatcherKey>,
-
-    current_stream_id: WatcherStreamId,
 
     current_watcher_id: WatcherId,
 }
@@ -115,15 +99,12 @@ struct WatcherManagerCore {
 impl WatcherManager {
     pub fn create(config: WatcherConfig) -> Self {
         let (create_tx, create_rx) = mpsc::unbounded_channel();
-        let (watch_tx, watch_rx) = mpsc::unbounded_channel::<(WatcherStreamId, WatchRequest)>();
         let (close_stream_tx, close_stream_rx) = mpsc::unbounded_channel::<CloseWatcherStreamReq>();
         let (sm_tx, sm_rx) = mpsc::unbounded_channel::<StateMachineKvData>();
         let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel::<()>();
 
         let core = WatcherManagerCore {
             create_rx,
-            watch_tx: Arc::new(watch_tx),
-            watch_rx,
             close_stream_tx: Arc::new(close_stream_tx),
             close_stream_rx,
             sm_rx,
@@ -131,9 +112,7 @@ impl WatcherManager {
             notify_interval: interval(Duration::from_millis(config.watcher_notify_internal)),
             shutdown_rx,
             watcher_streams: BTreeMap::new(),
-            watchers: BTreeMap::new(),
             watcher_range_set: RangeSet::new(),
-            current_stream_id: 1,
             current_watcher_id: 1,
         };
 
@@ -150,8 +129,8 @@ impl WatcherManager {
         let _ = self.shutdown_tx.send(());
     }
 
-    pub fn create_watcher_stream(&self, stream: Streaming<WatchRequest>, tx: WatcherStreamSender) {
-        let _ = self.create_tx.send((stream, tx));
+    pub fn create_watcher_stream(&self, request: Request<WatchRequest>, tx: WatcherStreamSender) {
+        let _ = self.create_tx.send((request, tx));
     }
 }
 
@@ -163,12 +142,6 @@ impl WatcherManagerCore {
                 create = self.create_rx.recv() => {
                     match create {
                         Some((streaming, tx)) => {self.create_watcher_stream(streaming, tx).await;},
-                        None => {},
-                    }
-                },
-                req = self.watch_rx.recv() => {
-                    match req {
-                        Some((stream_id,req)) => {self.watch_request(stream_id, req).await;},
                         None => {},
                     }
                 },
@@ -192,34 +165,38 @@ impl WatcherManagerCore {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    fn close_stream(&mut self, stream_id: WatcherStreamId, err: String) {
-        tracing::info!("close watcher steam {:?} since {:?}", stream_id, err);
-        let stream = self.watcher_streams.get(&stream_id).unwrap();
-        let watchers = stream.get_watchers().clone();
-        self.watcher_streams.remove(&stream_id);
-        for watcher_id in watchers.iter() {
-            self.remove_watcher(stream_id, *watcher_id);
+    fn close_stream(&mut self, id: WatcherId, err: String) {
+        tracing::info!("close watcher steam {:?} since {:?}", id, err);
+
+        let watcher = self.watcher_streams.get(&id);
+        if let Some(watcher) = watcher {
+            let range = watcher.key.clone()..watcher.key_end.clone();
+            self.watcher_range_set.remove(range, WatcherKey {
+                id,
+                filter: FilterType::All,
+            });
+
+            self.watcher_streams.remove(&id);
         }
     }
 
     async fn notify_events(&mut self) {
         let kv_vec = &self.kv_vec;
-
+        if kv_vec.is_empty() {
+            return;
+        }
         let mut event_maps = BTreeMap::<WatcherId, Vec<Event>>::new();
 
         // first aggregate events for each watcher
         for kv in kv_vec {
-            let current = match &kv.current {
-                Some(current) => current.data.clone(),
-                None => vec![],
-            };
-            let prev = match &kv.prev {
-                Some(prev) => prev.data.clone(),
-                None => vec![],
-            };
+            let current = kv.current.as_ref().map(|current| current.data.clone());
+
+            let prev = kv.prev.as_ref().map(|prev| prev.data.clone());
+
             let event = kv.event;
 
             let set = self.watcher_range_set.get_by_point(&kv.key);
+
             for range_key in set.iter() {
                 let watcher_id = range_key.key.id;
                 let filter = range_key.key.filter;
@@ -230,6 +207,7 @@ impl WatcherManagerCore {
                 {
                     continue;
                 }
+
                 let events = event_maps.get_mut(&watcher_id);
                 match events {
                     Some(events) => {
@@ -258,8 +236,8 @@ impl WatcherManagerCore {
             if let Some(stream) = self.watcher_streams.get(watcher_id) {
                 let resp = WatchResponse {
                     watch_id: *watcher_id,
-                    created: false,
-                    canceled: false,
+                    created: None,
+                    canceled: None,
                     events: events.to_vec(),
                 };
 
@@ -277,119 +255,62 @@ impl WatcherManagerCore {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn create_watcher_stream(
         &mut self,
-        mut stream: Streaming<WatchRequest>,
+        req: Request<WatchRequest>,
         tx: WatcherStreamSender,
     ) {
-        let req = stream.message().await.unwrap().unwrap();
+        let create = req.get_ref();
 
-        if let Some(CreateRequest(create)) = req.request_union {
-            tracing::info!("create_watcher_stream: {:?}", create);
+        tracing::info!("create_watcher_stream: {:?}", create);
 
-            let watcher_stream = WatcherStream::spawn(
-                self.current_stream_id,
-                stream,
-                tx,
-                self.watch_tx.clone(),
-                self.close_stream_tx.clone(),
-            );
-
-            self.watcher_streams
-                .insert(self.current_stream_id, watcher_stream);
-
-            self.current_stream_id += 1;
-
-            self.create_watcher(self.current_stream_id, create);
-        }
-    }
-
-    async fn watch_request(&mut self, stream_id: WatcherStreamId, req: WatchRequest) {
-        match req.request_union {
-            Some(req) => match req {
-                CreateRequest(create) => {
-                    self.create_watcher(stream_id, create);
-                }
-                CancelRequest(cancel) => {
-                    self.cancel_watcher(stream_id, cancel).await;
-                }
-            },
-            None => {}
-        }
-    }
-
-    fn get_range_key(key: &str, key_end: &String) -> Range<String> {
-        key.to_owned()..format!("{:?}\x00", key_end)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn create_watcher(&mut self, stream_id: WatcherStreamId, create: WatchCreateRequest) {
-        if create.key < create.key_end {
-            return;
-        }
-        let stream = self.watcher_streams.get_mut(&stream_id).unwrap();
-
-        let range = WatcherManagerCore::get_range_key(&create.key, &create.key_end);
+        let range = match WatcherManagerCore::get_range_key(create.key.clone(), &create.key_end) {
+            Ok(range) => range,
+            Err(_) => return,
+        };
 
         let watcher_id = self.current_watcher_id;
-        self.current_watcher_id += 1;
+        let watcher_stream = WatcherStream::new(
+            self.current_watcher_id,
+            tx,
+            self.close_stream_tx.clone(),
+            range.start.clone(),
+            range.end.clone(),
+        );
+
         let filter = create.filter_type();
-        let watcher = Watcher::new(watcher_id, stream_id, create);
 
         self.watcher_range_set.insert(range, WatcherKey {
             id: watcher_id,
             filter,
         });
-        self.watchers.insert(watcher_id, watcher);
 
-        stream.add_watcher(watcher_id);
-        tracing::info!("create watcher {:?} of stream {:?}", watcher_id, stream_id);
-        let _ = stream.send(WatchResponse {
+        let _ = watcher_stream.send(WatchResponse {
             watch_id: watcher_id,
-            created: true,
-            canceled: false,
+            created: Some(true),
+            canceled: None,
             events: vec![],
         });
+
+        self.watcher_streams
+            .insert(self.current_watcher_id, watcher_stream);
+
+        self.current_watcher_id += 1;
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn remove_watcher(&mut self, stream_id: WatcherStreamId, watcher_id: WatcherId) {
-        tracing::info!("remove watcher {:?} of stream {:?}", watcher_id, stream_id);
-        let watcher = self.watchers.get(&watcher_id).unwrap();
-        assert_eq!(watcher.owner_id, stream_id);
-        let range = WatcherManagerCore::get_range_key(&watcher.key, &watcher.key_end);
-        self.watcher_range_set.remove(range, WatcherKey {
-            id: watcher_id,
-            filter: FilterType::All,
-        });
-        self.watchers.remove(&watcher_id);
-    }
-
-    async fn remove_watcher_from_stream(
-        &mut self,
-        stream_id: WatcherStreamId,
-        watcher_id: WatcherId,
-    ) {
-        let stream = self.watcher_streams.get(&stream_id).unwrap();
-        let _ = stream
-            .send(WatchResponse {
-                watch_id: watcher_id,
-                created: false,
-                canceled: true,
-                events: vec![],
-            })
-            .await;
-    }
-
-    async fn cancel_watcher(&mut self, stream_id: WatcherStreamId, cancel: WatchCancelRequest) {
-        self.remove_watcher_from_stream(stream_id, cancel.watcher_id)
-            .await;
-
-        self.remove_watcher(stream_id, cancel.watcher_id);
+    fn get_range_key(key: String, key_end: &Option<String>) -> Result<Range<String>, bool> {
+        match key_end {
+            Some(key_end) => {
+                if &key > key_end {
+                    return Err(false);
+                }
+                Ok(key..format!("{}\x00", key_end))
+            }
+            None => Ok(key.clone()..key),
+        }
     }
 }
 
-#[async_trait::async_trait]
 impl StateMachineSubscriber for WatcherStateMachineSubscriber {
-    async fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>) {
+    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>) {
         let event = match current {
             Some(_) => EventType::Update,
             None => EventType::Delete,

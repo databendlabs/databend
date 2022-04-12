@@ -90,22 +90,9 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 // const TREE_META: &str = "meta";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum UpdateType {
-    UpInsert,
-    Delete,
-}
-
 /// StateMachine subscriber trait
-#[async_trait::async_trait]
 pub trait StateMachineSubscriber: Debug + Sync + Send {
-    async fn kv_changed(
-        &self,
-        key: &str,
-        update: UpdateType,
-        prev: &Option<SeqV>,
-        current: &Option<SeqV>,
-    );
+    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>);
 }
 
 /// The state machine of the `MemStore`.
@@ -584,12 +571,14 @@ impl StateMachine {
         tracing::debug!("applied UpsertKV: {} {:?}", key, result);
 
         if let Some(subscriber) = &self.subscriber {
-            let update = match value_op {
-                Operation::Update(_v) => UpdateType::UpInsert,
-                Operation::Delete => UpdateType::Delete,
-                Operation::AsIs => UpdateType::UpInsert,
+            match value_op {
+                Operation::Delete => {
+                    let _ = subscriber.kv_changed(&key_str, prev.clone(), None);
+                }
+                _ => {
+                    let _ = subscriber.kv_changed(&key_str, prev.clone(), result.clone());
+                }
             };
-            let _ = subscriber.kv_changed(&key_str, update, &prev, &result);
         }
 
         Ok(Change::new(prev, result).into())

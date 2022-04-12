@@ -80,7 +80,7 @@ impl MetaService for GrpcServiceForTestImpl {
 
     async fn watch(
         &self,
-        _request: Request<Streaming<WatchRequest>>,
+        _request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
         todo!()
     }
