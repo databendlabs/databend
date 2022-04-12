@@ -52,6 +52,7 @@ impl PipelineExecutor {
             }
 
             global_tasks_queue.init_tasks(tasks);
+
             Ok(Arc::new(PipelineExecutor {
                 graph,
                 threads_num,

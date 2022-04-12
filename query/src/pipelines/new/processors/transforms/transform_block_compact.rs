@@ -18,21 +18,21 @@ use common_exception::Result;
 use super::Compactor;
 use super::TransformCompact;
 
-pub struct BlockCompactCompactor {
+pub struct BlockCompactor {
     max_row_per_block: usize,
     min_row_per_block: usize,
 }
 
-impl BlockCompactCompactor {
+impl BlockCompactor {
     pub fn new(max_row_per_block: usize, min_row_per_block: usize) -> Self {
-        BlockCompactCompactor {
+        BlockCompactor {
             max_row_per_block,
             min_row_per_block,
         }
     }
 }
 
-impl Compactor for BlockCompactCompactor {
+impl Compactor for BlockCompactor {
     fn name() -> &'static str {
         "BlockCompactTransform"
     }
@@ -128,4 +128,4 @@ impl Compactor for BlockCompactCompactor {
     }
 }
 
-pub type TransformBlockCompact = TransformCompact<BlockCompactCompactor>;
+pub type TransformBlockCompact = TransformCompact<BlockCompactor>;
