@@ -239,7 +239,7 @@ impl Session {
     }
 
     pub fn get_config(&self) -> Config {
-        self.session_mgr.get_config()
+        self.session_mgr.get_conf()
     }
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
