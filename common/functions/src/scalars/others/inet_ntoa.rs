@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use crate::scalars::cast_with_type;
 use crate::scalars::CastOptions;
+use crate::scalars::FunctionContext;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
@@ -81,7 +82,12 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         }
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         if columns[0].column().data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }

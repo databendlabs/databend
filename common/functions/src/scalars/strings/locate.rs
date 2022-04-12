@@ -70,7 +70,12 @@ impl<const T: u8> Function for LocatingFunction<T> {
         Ok(u64::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let (ss_column, s_column) = if T == FUNC_INSTR {
             (columns[1].column(), columns[0].column())
         } else {
@@ -120,3 +125,4 @@ fn find_at(str: &[u8], substr: &[u8], pos: u64) -> u64 {
         0_u64
     }
 }
+use crate::scalars::FunctionContext;

@@ -21,6 +21,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -83,7 +84,12 @@ impl Function for RunningDifferenceFunction {
         }
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let dt = remove_nullable(columns[0].data_type());
         let col = columns[0].column();
         match dt.data_type_id() {

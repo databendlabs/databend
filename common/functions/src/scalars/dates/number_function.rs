@@ -29,6 +29,7 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::FunctionFeatures;
@@ -354,6 +355,7 @@ where
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
+        _eval_options: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let type_id = columns[0].field().data_type().data_type_id();
 
@@ -404,8 +406,8 @@ where
             return Ok(Monotonicity::default());
         }
 
-        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
-        let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
+        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1, FunctionContext{tz: None})?.get(0);
+        let right_val = func.eval(&[args[0].right.clone().unwrap()], 1, FunctionContext { tz: None })?.get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {
             return Ok(Monotonicity::clone_without_range(&args[0]));

@@ -74,3 +74,4 @@ impl StringOperator for Trim {
 pub type LTrimFunction = String2StringFunction<LTrim>;
 pub type RTrimFunction = String2StringFunction<RTrim>;
 pub type TrimFunction = String2StringFunction<Trim>;
+use crate::scalars::FunctionContext;

@@ -65,7 +65,12 @@ impl Function for FloorFunction {
         Ok(Float64Type::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
              let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), floor::<$S>, &mut ctx)?;
@@ -87,3 +92,4 @@ impl fmt::Display for FloorFunction {
         write!(f, "{}", self.display_name.to_uppercase())
     }
 }
+use crate::scalars::FunctionContext;

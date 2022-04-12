@@ -46,3 +46,4 @@ impl EvalContext {
         }
     }
 }
+use crate::scalars::FunctionContext;

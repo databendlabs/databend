@@ -31,3 +31,4 @@ impl StringOperator for Reverse {
 }
 
 pub type ReverseFunction = String2StringFunction<Reverse>;
+use crate::scalars::FunctionContext;

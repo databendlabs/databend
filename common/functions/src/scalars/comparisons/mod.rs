@@ -33,3 +33,5 @@ pub use comparison_lt_eq::ComparisonLtEqFunction;
 pub use comparison_not_eq::ComparisonNotEqFunction;
 pub use comparison_regexp::ComparisonNotRegexpFunction;
 pub use comparison_regexp::ComparisonRegexpFunction;
+
+use crate::scalars::FunctionContext;

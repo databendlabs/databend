@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use futures::Stream;
 use futures::StreamExt;
+use common_functions::scalars::FunctionContext;
 
 use crate::SendableDataBlockStream;
 
@@ -53,7 +54,7 @@ impl CastStream {
         let mut columns = Vec::with_capacity(data_block.num_columns());
         for ((cast_func, input_field), column) in iter {
             let column = ColumnWithField::new(column.clone(), input_field.clone());
-            columns.push(cast_func.eval(&[column], rows)?);
+            columns.push(cast_func.eval(&[column], rows, FunctionContext { tz: None })?);
         }
 
         Ok(DataBlock::create(self.output_schema.clone(), columns))

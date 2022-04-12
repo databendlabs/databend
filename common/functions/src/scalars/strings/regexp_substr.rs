@@ -75,7 +75,12 @@ impl Function for RegexpSubStrFunction {
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut match_type = ConstColumn::new(Series::from_data(vec![""]), input_rows).arc();
@@ -242,3 +247,4 @@ impl fmt::Display for RegexpSubStrFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

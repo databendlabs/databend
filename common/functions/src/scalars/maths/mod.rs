@@ -55,3 +55,5 @@ pub use trigonometric::TrigonometricCosFunction;
 pub use trigonometric::TrigonometricCotFunction;
 pub use trigonometric::TrigonometricSinFunction;
 pub use trigonometric::TrigonometricTanFunction;
+
+use crate::scalars::FunctionContext;

@@ -19,6 +19,7 @@ use regex::bytes::Regex as BytesRegex;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
+use crate::scalars::FunctionContext;
 
 pub type ComparisonLikeFunction = StringSearchCreator<false, StringSearchLike>;
 pub type ComparisonNotLikeFunction = StringSearchCreator<true, StringSearchLike>;

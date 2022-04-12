@@ -74,7 +74,12 @@ impl Function for RegexpInStrFunction {
         Ok(u64::to_data_type())
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut return_option = ConstColumn::new(Series::from_data(vec![0_i64]), input_rows).arc();
@@ -273,3 +278,4 @@ impl fmt::Display for RegexpInStrFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

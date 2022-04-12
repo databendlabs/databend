@@ -22,6 +22,7 @@ use super::comparison::ComparisonImpl;
 use super::comparison_gt_eq::BooleanSimdGtEq;
 use super::utils::*;
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 
 pub type ComparisonLtEqFunction = ComparisonFunctionCreator<ComparisonLtEqImpl>;
 

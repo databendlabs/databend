@@ -53,7 +53,12 @@ impl Function for FindInSetFunction {
         Ok(u64::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, u64, _>(
             columns[0].column(),
             columns[1].column(),
@@ -85,3 +90,4 @@ fn find_in_set(str: &[u8], list: &[u8], _ctx: &mut EvalContext) -> u64 {
     }
     0
 }
+use crate::scalars::FunctionContext;

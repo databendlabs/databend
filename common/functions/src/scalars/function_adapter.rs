@@ -118,14 +118,19 @@ impl Function for FunctionAdapter {
         }
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         if self.inner.is_none() {
             return Ok(Arc::new(NullColumn::new(input_rows)));
         }
 
         let inner = self.inner.as_ref().unwrap();
         if columns.is_empty() {
-            return inner.eval(columns, input_rows);
+            return inner.eval(columns, input_rows, FunctionContext { tz: None });
         }
 
         // is there nullable constant? Did not consider this case
@@ -141,7 +146,7 @@ impl Function for FunctionAdapter {
                 })
                 .collect::<Vec<_>>();
 
-            let col = self.eval(&columns, 1)?;
+            let col = self.eval(&columns, 1, FunctionContext { tz: None })?;
             let col = if col.is_const() && col.len() == 1 {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
@@ -186,7 +191,7 @@ impl Function for FunctionAdapter {
                     })
                     .collect::<Vec<_>>();
 
-                let col = self.eval(&columns, input_rows)?;
+                let col = self.eval(&columns, input_rows, FunctionContext { tz: None })?;
 
                 // The'try' series functions always return Null when they failed the try.
                 // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
@@ -214,7 +219,7 @@ impl Function for FunctionAdapter {
             }
         }
 
-        inner.eval(columns, input_rows)
+        inner.eval(columns, input_rows, FunctionContext { tz: None })
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
@@ -241,3 +246,4 @@ impl std::fmt::Display for FunctionAdapter {
         }
     }
 }
+use crate::scalars::FunctionContext;

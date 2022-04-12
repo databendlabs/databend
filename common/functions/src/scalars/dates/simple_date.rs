@@ -24,6 +24,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFeatures;
 
@@ -110,6 +111,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         &self,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
+        _eval_options: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
         let column = Series::from_data(&[value as u16]);

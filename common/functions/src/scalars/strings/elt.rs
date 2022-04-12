@@ -78,7 +78,12 @@ impl Function for EltFunction {
         }
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         if columns[0].data_type().is_null() {
             return Ok(NullColumn::new(input_rows).arc());
         }
@@ -170,3 +175,4 @@ impl fmt::Display for EltFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

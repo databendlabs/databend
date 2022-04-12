@@ -163,7 +163,12 @@ impl Function for ConcatWsFunction {
         }
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let seperator = &columns[0];
         if seperator.data_type().is_null() {
             return Ok(NullColumn::new(input_rows).arc());
@@ -200,3 +205,4 @@ impl fmt::Display for ConcatWsFunction {
         write!(f, "CONCAT_WS")
     }
 }
+use crate::scalars::FunctionContext;

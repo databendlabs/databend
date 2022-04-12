@@ -34,3 +34,5 @@ pub use arithmetic_negate::ArithmeticNegateFunction;
 pub use arithmetic_plus::ArithmeticPlusFunction;
 pub use binary_arithmetic::BinaryArithmeticFunction;
 pub use unary_arithmetic::UnaryArithmeticFunction;
+
+use crate::scalars::FunctionContext;

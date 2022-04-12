@@ -84,7 +84,12 @@ impl Function for OctFunction {
         Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
         match columns[0].data_type().data_type_id() {
@@ -112,3 +117,4 @@ impl fmt::Display for OctFunction {
         write!(f, "OCT")
     }
 }
+use crate::scalars::FunctionContext;

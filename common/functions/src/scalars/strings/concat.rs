@@ -55,7 +55,12 @@ impl Function for ConcatFunction {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let viewers = columns
             .iter()
             .map(|c| Vu8::try_create_viewer(c.column()))
@@ -82,3 +87,4 @@ impl fmt::Display for ConcatFunction {
         write!(f, "CONCAT")
     }
 }
+use crate::scalars::FunctionContext;

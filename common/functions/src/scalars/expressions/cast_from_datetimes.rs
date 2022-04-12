@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::CastOptions;
+use crate::scalars::FunctionContext;
 
 const DATE_FMT: &str = "%Y-%m-%d";
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";

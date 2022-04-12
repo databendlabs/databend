@@ -28,3 +28,5 @@ pub use cast_with_type::*;
 pub use ctx::EvalContext;
 pub use expression::ToCastFunction;
 pub use unary::*;
+
+use crate::scalars::FunctionContext;

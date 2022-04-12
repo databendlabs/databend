@@ -120,7 +120,12 @@ impl<T: PadOperator> Function for PadFunction<T> {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let col1 = Vu8::try_create_viewer(columns[0].column())?;
         let col3 = Vu8::try_create_viewer(columns[2].column())?;
         let mut t = T::default();
@@ -144,3 +149,4 @@ impl<F> fmt::Display for PadFunction<F> {
         f.write_str(&self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

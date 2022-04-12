@@ -22,6 +22,7 @@ use num::traits::AsPrimitive;
 use num_traits::WrappingNeg;
 
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;

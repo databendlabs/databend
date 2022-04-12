@@ -32,3 +32,4 @@ impl SemiStructuredFunction {
         factory.register("get_path", GetPathFunction::desc());
     }
 }
+use crate::scalars::FunctionContext;

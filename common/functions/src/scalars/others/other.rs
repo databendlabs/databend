@@ -52,3 +52,4 @@ impl OtherFunction {
         factory.register("TryIPv4NumToString", TryInetNtoaFunction::desc());
     }
 }
+use crate::scalars::FunctionContext;

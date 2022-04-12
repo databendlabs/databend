@@ -66,3 +66,4 @@ where
 
     Ok(PrimitiveColumn::<O>::new_from_vec(values))
 }
+use crate::scalars::FunctionContext;

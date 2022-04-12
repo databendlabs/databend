@@ -23,3 +23,4 @@ impl TupleClassFunction {
         factory.register("tuple", TupleFunction::desc());
     }
 }
+use crate::scalars::FunctionContext;

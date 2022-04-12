@@ -20,6 +20,7 @@ use crate::scalars::AbsFunction;
 use crate::scalars::BaseHashFunction;
 use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
+use crate::scalars::FunctionContext;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
 use crate::scalars::FunctionFactory;

@@ -23,3 +23,5 @@ pub use logic::LogicFunction;
 pub use not::LogicNotFunction;
 pub use or::LogicOrFunction;
 pub use xor::LogicXorFunction;
+
+use crate::scalars::FunctionContext;

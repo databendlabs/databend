@@ -17,3 +17,5 @@ mod tuple_class;
 
 pub use tuple::TupleFunction;
 pub use tuple_class::TupleClassFunction;
+
+use crate::scalars::FunctionContext;

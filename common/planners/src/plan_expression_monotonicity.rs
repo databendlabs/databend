@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
+use common_functions::scalars::FunctionContext;
 
 use crate::col;
 use crate::Expression;
@@ -99,7 +100,7 @@ impl ExpressionMonotonicityVisitor {
                 .map(|col_opt| col_opt.unwrap())
                 .collect::<Vec<_>>();
 
-            let col = func.eval(&input_columns, 1)?;
+            let col = func.eval(&input_columns, 1, FunctionContext { tz: None })?;
             let data_field = DataField::new("dummy", result_type.clone());
             let data_column_field = ColumnWithField::new(col, data_field);
             Ok(Some(data_column_field))

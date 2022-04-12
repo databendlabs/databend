@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_planners::CallPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -51,7 +52,11 @@ impl Interpreter for CallInterpreter {
 
         let name = plan.name.clone();
         let func = ProcedureFactory::instance().get(name)?;
-        let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;
+        let blocks = func
+            .eval(self.ctx.clone(), plan.args.clone(), FunctionContext {
+                tz: None,
+            })
+            .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.schema(),
             None,

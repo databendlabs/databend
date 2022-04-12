@@ -23,6 +23,7 @@ use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 
@@ -93,7 +94,12 @@ impl Function for AbsFunction {
         Ok(data_type)
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::Int8 => impl_abs_function!(columns[0], i8, i64, u8),
             TypeID::Int16 => impl_abs_function!(columns[0], i16, i64, u16),

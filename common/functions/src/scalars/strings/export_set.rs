@@ -69,7 +69,12 @@ impl Function for ExportSetFunction {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let sep_col = if columns.len() >= 4 {
             columns[3].column().clone()
         } else {
@@ -162,3 +167,4 @@ fn export_set<'a>(
         }
     }
 }
+use crate::scalars::FunctionContext;

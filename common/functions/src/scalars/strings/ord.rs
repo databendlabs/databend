@@ -44,3 +44,4 @@ impl NumberOperator<u64> for Ord {
 }
 
 pub type OrdFunction = String2NumberFunction<Ord, u64>;
+use crate::scalars::FunctionContext;

@@ -19,6 +19,7 @@ use sha1::Digest;
 
 use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
+use crate::scalars::FunctionContext;
 
 #[derive(Clone, Default)]
 pub struct Sha1 {}

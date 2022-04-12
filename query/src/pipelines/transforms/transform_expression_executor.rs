@@ -24,6 +24,7 @@ use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 use common_tracing::tracing;
+use common_functions::scalars::FunctionContext;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
@@ -187,7 +188,8 @@ impl ExpressionExecutor {
             arg_columns.push(column);
         }
 
-        let column = f.func.eval(&arg_columns, rows)?;
+        // TODO(veeupup): get session's eval tz options
+        let column = f.func.eval(&arg_columns, rows, FunctionContext { tz: None })?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),

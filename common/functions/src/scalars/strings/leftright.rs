@@ -80,7 +80,12 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         match IS_LEFT {
             true => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
@@ -107,3 +112,4 @@ impl<const IS_LEFT: bool> fmt::Display for LeftRightFunction<IS_LEFT> {
         f.write_str(&self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

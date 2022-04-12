@@ -24,6 +24,7 @@ use common_exception::Result;
 use crate::scalars::function_common::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -70,7 +71,12 @@ impl Function for SignFunction {
         Ok(i8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             let col = scalar_unary_op::<$S, i8, _>(columns[0].column(), sign::<$S>, &mut ctx)?;

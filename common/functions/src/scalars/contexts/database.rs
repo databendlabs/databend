@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::StringType;
 use common_exception::Result;
 
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -55,6 +56,7 @@ impl Function for DatabaseFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
+        _eval_options: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         Ok(columns[0].column().clone())
     }

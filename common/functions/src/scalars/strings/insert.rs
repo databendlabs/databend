@@ -82,7 +82,12 @@ impl Function for InsertFunction {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let s_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let ss_viewer = Vu8::try_create_viewer(columns[3].column())?;
 
@@ -122,3 +127,4 @@ impl fmt::Display for InsertFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

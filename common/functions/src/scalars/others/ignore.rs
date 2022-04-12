@@ -22,6 +22,7 @@ use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -67,7 +68,12 @@ impl Function for IgnoreFunction {
         Ok(BooleanType::arc())
     }
 
-    fn eval(&self, _columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_option: FunctionContext,
+    ) -> Result<ColumnRef> {
         let return_type = BooleanType::arc();
         let return_value = DataValue::try_from(false)?;
         return_type.create_constant_column(&return_value, input_rows)

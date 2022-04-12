@@ -64,7 +64,12 @@ impl Function for RegexpLikeFunction {
         Ok(BooleanType::arc())
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
         if let Ok(col1) = col1 {
             let lhs = columns[0].column();
@@ -240,3 +245,4 @@ pub fn build_regexp_from_pattern(
         ))
     })
 }
+use crate::scalars::FunctionContext;

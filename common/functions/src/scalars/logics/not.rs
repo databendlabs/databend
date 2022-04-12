@@ -16,9 +16,11 @@ use common_exception::Result;
 
 use super::logic::LogicOperator;
 use super::LogicFunction;
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+
 #[derive(Clone)]
 pub struct LogicNotFunction;
 

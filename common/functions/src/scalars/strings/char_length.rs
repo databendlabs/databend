@@ -31,3 +31,4 @@ impl NumberOperator<u64> for CharLength {
 }
 
 pub type CharLengthFunction = String2NumberFunction<CharLength, u64>;
+use crate::scalars::FunctionContext;

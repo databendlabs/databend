@@ -28,3 +28,4 @@ impl NumberOperator<u8> for Ascii {
 }
 
 pub type AsciiFunction = String2NumberFunction<Ascii, u8>;
+use crate::scalars::FunctionContext;

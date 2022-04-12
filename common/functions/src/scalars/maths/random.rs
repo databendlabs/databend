@@ -24,6 +24,7 @@ use rand::prelude::*;
 use crate::scalars::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -58,7 +59,12 @@ impl Function for RandomFunction {
         Ok(f64::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         match columns.len() {
             0 => {
                 let mut rng = rand::rngs::SmallRng::from_entropy();

@@ -66,7 +66,12 @@ impl Function for RepeatFunction {
         Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let col1 = cast_column_field(&columns[0], &StringType::arc())?;
         let col1_viewer = Vu8::try_create_viewer(&col1)?;
 
@@ -101,3 +106,4 @@ fn repeat(string: impl AsRef<[u8]>, times: u64) -> Result<Vec<u8>> {
     }
     Ok(string.as_ref().repeat(times as usize))
 }
+use crate::scalars::FunctionContext;

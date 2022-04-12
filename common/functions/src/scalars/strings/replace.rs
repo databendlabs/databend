@@ -73,7 +73,12 @@ impl Function for ReplaceFunction {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_options: FunctionContext,
+    ) -> Result<ColumnRef> {
         let view0 = Vu8::try_create_viewer(columns[0].column())?;
         let view1 = Vu8::try_create_viewer(columns[1].column())?;
         let view2 = Vu8::try_create_viewer(columns[2].column())?;
@@ -101,3 +106,4 @@ impl fmt::Display for ReplaceFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

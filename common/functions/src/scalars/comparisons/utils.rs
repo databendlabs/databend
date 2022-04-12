@@ -16,6 +16,7 @@ use common_arrow::arrow::bitmap::binary;
 use common_arrow::arrow::bitmap::unary;
 use common_datavalues::prelude::*;
 
+use crate::scalars::FunctionContext;
 pub trait BooleanSimdImpl: Sync + Send + Clone + 'static {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn;
 

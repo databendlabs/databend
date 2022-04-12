@@ -83,3 +83,4 @@ impl StringOperator for Quote {
 }
 
 pub type QuoteFunction = String2StringFunction<Quote>;
+use crate::scalars::FunctionContext;
