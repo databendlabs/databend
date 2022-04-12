@@ -91,7 +91,7 @@ fn test_expression_validate() -> Result<()> {
             desc: "today-not-pass",
             expression: Expression::ScalarFunction {
                 op: "today".to_string(),
-                args: vec![col("33")],
+                args: vec![col("a")],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
                 "Function `today` expect to have 0 arguments, but got 1",
@@ -107,8 +107,12 @@ fn test_expression_validate() -> Result<()> {
         },
     ];
 
+    let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        "a",
+        u64::to_data_type(),
+    )]));
     for t in cases.iter() {
-        let result = validate_expression(&t.expression);
+        let result = validate_expression(&t.expression, &schema);
         match t.error {
             Some(_) => {
                 assert_eq!(

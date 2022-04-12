@@ -48,8 +48,15 @@ CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b F
 SELECT a FROM db2.test5;
 SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
 
+
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); -- {ErrorCode 1006}
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1006}
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
+
+
 -- clean up test databases
 DROP DATABASE db1;
 DROP DATABASE db2;
 
 CREATE TABLE system.test; -- {ErrorCode 1002}
+
