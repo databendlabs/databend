@@ -91,7 +91,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- create db1 again with if_not_exists=true");
         {
             let req = CreateDatabaseReq {
-                if_not_exists: false,
+                if_not_exists: true,
                 tenant: tenant.to_string(),
                 db: "db1".to_string(),
                 meta: DatabaseMeta {
@@ -102,11 +102,8 @@ impl MetaApiTestSuite {
 
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::DatabaseAlreadyExists("").code(),
-                ErrorCode::from(err).code()
-            );
+            let res = res.unwrap();
+            assert_eq!(1, res.database_id, "db1 id is 1");
         }
 
         tracing::info!("--- get db1");
