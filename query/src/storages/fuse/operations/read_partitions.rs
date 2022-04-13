@@ -73,16 +73,15 @@ impl FuseTable {
 
     pub fn to_partitions(
         blocks_metas: &[BlockMeta],
-        push_downs: Option<Extras>,
+        push_down: Option<Extras>,
     ) -> (Statistics, Partitions) {
-        let mut limit = usize::MAX;
-        if let Some(p) = push_downs.as_ref() {
-            if p.order_by.is_empty() && p.limit.is_some() {
-                limit = p.limit.unwrap();
-            }
-        }
+        let limit = push_down
+            .as_ref()
+            .filter(|p| p.order_by.is_empty())
+            .and_then(|p| p.limit)
+            .unwrap_or(usize::MAX);
 
-        let (mut statistics, partitions) = match &push_downs {
+        let (mut statistics, partitions) = match &push_down {
             None => Self::all_columns_partitions(blocks_metas, limit),
             Some(extras) => match &extras.projection {
                 None => Self::all_columns_partitions(blocks_metas, limit),
@@ -90,7 +89,7 @@ impl FuseTable {
             },
         };
 
-        statistics.is_exact = statistics.is_exact && Self::is_exact(&push_downs);
+        statistics.is_exact = statistics.is_exact && Self::is_exact(&push_down);
         (statistics, partitions)
     }
 
