@@ -5,24 +5,48 @@ description:
    How to Work with Databend in Node.js.
 ---
 
-### Before You Begin
+## Before You Begin
 
 * **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
-* Install the mysql node module using the NPM: npm install --save mysql
+* [How to Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md)
+* [How to Grant Privileges to User](../30-reference/30-sql/00-ddl/30-user/10-grant-privileges.md)
 
-### Node.js
+## Create Databend User
+
+```shell
+mysql -h127.0.0.1 -uroot -P3307
+```
+
+### Create a User
+
+```sql title='mysql>'
+create user user1 identified by 'abc123';
+```
+
+### Grants Privileges
+
+Grants `ALL` privileges to the user `user1`:
+```sql title='mysql>'
+grant all on *.* to 'user1';
+```
+
+## Node.js
 
 This guideline show how to connect and query to Databend using Node.js.
 
 We will be creating a table named `books` and insert a row, then query it.
 
-```js
+```text
+npm install --save mysql
+```
+
+```js title='databend.js'
 const mysql = require('mysql');
 const con = mysql.createConnection({
    host: 'localhost',
    port: 3307,
-   user: 'root',
-   password: '',
+   user: 'user1',
+   password: 'abc123',
 });
 
 con.connect((err) => {
@@ -61,9 +85,10 @@ con.connect((err) => {
 });
 ```
 
-The output:
-```shell
-Connected to MySQL Server!
+Run `nodejs databend.js`:
+
+```text
+Connected to Databend Server!
 Dataabse created
 Table created
 1 record inserted
