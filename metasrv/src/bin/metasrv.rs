@@ -49,7 +49,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         conf
     );
 
-    let meta_node = MetaNode::start(&conf.raft_config, &conf.watcher_config).await?;
+    let meta_node = MetaNode::start(&conf.raft_config).await?;
 
     let mut stop_handler = StopHandle::create();
     let stop_tx = StopHandle::install_termination_handle();

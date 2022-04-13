@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod watcher_config;
 mod watcher_key;
 mod watcher_manager;
 mod watcher_stream;
 
-pub use watcher_config::WatcherConfig;
-pub use watcher_config::METASRV_WATCHER_NOTIFY_INTERNAL;
 pub use watcher_key::WatcherKey;
 pub use watcher_manager::CloseWatcherStreamReq;
 pub use watcher_manager::WatcherId;

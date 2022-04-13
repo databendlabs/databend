@@ -95,11 +95,7 @@ message WatchResponse {
   // All events sent to the created watcher will attach with the same watch_id.
   optional bool created = 2;
 
-  // canceled is set to true if the response is for a cancel watch request.
-  // No further events will be sent to the canceled watcher.
-  optional bool canceled = 4;
-
-  repeated Event events = 3;
+  optional Event event = 3;
 }
 
 service RaftService {

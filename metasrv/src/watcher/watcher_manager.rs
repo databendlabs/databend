@@ -19,9 +19,6 @@ use std::sync::Arc;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::Sender;
-use common_base::tokio::time::interval;
-use common_base::tokio::time::Duration;
-use common_base::tokio::time::Interval;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
 use common_meta_types::protobuf::event::EventType;
 use common_meta_types::protobuf::watch_request::FilterType;
@@ -34,7 +31,6 @@ use common_tracing::tracing;
 use tonic::Request;
 use tonic::Status;
 
-use super::WatcherConfig;
 use super::WatcherKey;
 use super::WatcherStream;
 
@@ -80,12 +76,6 @@ struct WatcherManagerCore {
     /// A channel for receiving stop stream request.
     close_stream_rx: mpsc::UnboundedReceiver<CloseWatcherStreamReq>,
 
-    /// save subscribe kv data
-    kv_vec: Vec<StateMachineKvData>,
-
-    /// update events to watcher internal
-    notify_interval: Interval,
-
     shutdown_rx: mpsc::UnboundedReceiver<()>,
 
     watcher_streams: BTreeMap<WatcherId, WatcherStream>,
@@ -97,7 +87,7 @@ struct WatcherManagerCore {
 }
 
 impl WatcherManager {
-    pub fn create(config: WatcherConfig) -> Self {
+    pub fn create() -> Self {
         let (create_tx, create_rx) = mpsc::unbounded_channel();
         let (close_stream_tx, close_stream_rx) = mpsc::unbounded_channel::<CloseWatcherStreamReq>();
         let (sm_tx, sm_rx) = mpsc::unbounded_channel::<StateMachineKvData>();
@@ -108,8 +98,6 @@ impl WatcherManager {
             close_stream_tx: Arc::new(close_stream_tx),
             close_stream_rx,
             sm_rx,
-            kv_vec: Vec::new(),
-            notify_interval: interval(Duration::from_millis(config.watcher_notify_internal)),
             shutdown_rx,
             watcher_streams: BTreeMap::new(),
             watcher_range_set: RangeSet::new(),
@@ -152,11 +140,8 @@ impl WatcherManagerCore {
                     }
                 },
                 kv = self.sm_rx.recv() => {
-                    if let Some(kv) = kv { self.recv_kv(kv);}
+                    if let Some(kv) = kv { self.recv_kv(kv).await;}
                 }
-                _ = self.notify_interval.tick() => {
-                    self.notify_events().await;
-                },
                 _ = self.shutdown_rx.recv() => {
                     break;
                 }
@@ -180,76 +165,43 @@ impl WatcherManagerCore {
         }
     }
 
-    async fn notify_events(&mut self) {
-        let kv_vec = &self.kv_vec;
-        if kv_vec.is_empty() {
+    async fn recv_kv(&mut self, kv: StateMachineKvData) {
+        let set = self.watcher_range_set.get_by_point(&kv.key);
+        if set.is_empty() {
             return;
         }
-        let mut event_maps = BTreeMap::<WatcherId, Vec<Event>>::new();
+        let current = kv.current.as_ref().map(|current| current.data.clone());
 
-        // first aggregate events for each watcher
-        for kv in kv_vec {
-            let current = kv.current.as_ref().map(|current| current.data.clone());
+        let prev = kv.prev.as_ref().map(|prev| prev.data.clone());
 
-            let prev = kv.prev.as_ref().map(|prev| prev.data.clone());
+        let event = kv.event;
 
-            let event = kv.event;
+        for range_key in set.iter() {
+            let watcher_id = range_key.key.id;
+            let filter = range_key.key.filter;
 
-            let set = self.watcher_range_set.get_by_point(&kv.key);
-
-            for range_key in set.iter() {
-                let watcher_id = range_key.key.id;
-                let filter = range_key.key.filter;
-
-                // filter out event
-                if (filter == FilterType::Delete && event == EventType::Update)
-                    || (filter == FilterType::Update && event == EventType::Delete)
-                {
-                    continue;
-                }
-
-                let events = event_maps.get_mut(&watcher_id);
-                match events {
-                    Some(events) => {
-                        events.push(Event {
-                            key: kv.key.clone(),
-                            event: kv.event.into(),
-                            current: current.clone(),
-                            prev: prev.clone(),
-                        });
-                    }
-                    None => {
-                        let events = vec![Event {
-                            key: kv.key.clone(),
-                            event: kv.event.into(),
-                            current: current.clone(),
-                            prev: prev.clone(),
-                        }];
-                        event_maps.insert(watcher_id, events);
-                    }
-                }
+            // filter out event
+            if (filter == FilterType::Delete && event == EventType::Update)
+                || (filter == FilterType::Update && event == EventType::Delete)
+            {
+                continue;
             }
-        }
 
-        // then send events to watchers
-        for (watcher_id, events) in event_maps.iter() {
-            if let Some(stream) = self.watcher_streams.get(watcher_id) {
+            if let Some(stream) = self.watcher_streams.get(&watcher_id) {
                 let resp = WatchResponse {
-                    watch_id: *watcher_id,
+                    watch_id: watcher_id,
                     created: None,
-                    canceled: None,
-                    events: events.to_vec(),
+                    event: Some(Event {
+                        key: kv.key.clone(),
+                        event: kv.event.into(),
+                        current: current.clone(),
+                        prev: prev.clone(),
+                    }),
                 };
 
                 stream.send(resp).await;
             }
         }
-
-        self.kv_vec = Vec::new();
-    }
-
-    fn recv_kv(&mut self, kv: StateMachineKvData) {
-        self.kv_vec.push(kv);
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -286,8 +238,7 @@ impl WatcherManagerCore {
         let _ = watcher_stream.send(WatchResponse {
             watch_id: watcher_id,
             created: Some(true),
-            canceled: None,
-            events: vec![],
+            event: None,
         });
 
         self.watcher_streams

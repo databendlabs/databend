@@ -53,17 +53,18 @@ async fn watcher_client_main(
         tokio::select! {
             resp = client_stream.message() => {
                 if let Ok(Some(resp)) = resp {
-                    assert!(!watch_events.is_empty());
+                    if let Some(event) = resp.event {
+                        assert!(!watch_events.is_empty());
 
-                    for event in resp.events {
                         assert_eq!(watch_events.get(0), Some(&event));
                         watch_events.remove(0);
+
+                        if watch_events.is_empty() {
+                            // notify has recv all the notify events
+                            let _ = start_tx.send(());
+                        }
                     }
 
-                    if watch_events.is_empty() {
-                        // notify has recv all the notify events
-                        let _ = start_tx.send(());
-                    }
                 }
             },
             _ = shutdown_rx.recv() => {
