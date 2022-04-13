@@ -15,6 +15,7 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Function;
+use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionAdapter;
 use pretty_assertions::assert_eq;
 
@@ -142,5 +143,6 @@ pub fn test_eval_with_type(
 ) -> Result<ColumnRef> {
     let adaptor = FunctionAdapter::create(test_function.clone(), passthrough_null);
     adaptor.return_type(arguments_type)?;
-    adaptor.eval(arguments, rows_size)
+    let func_ctx = FunctionContext{tz:None};
+    adaptor.eval(arguments, rows_size, func_ctx)
 }

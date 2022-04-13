@@ -22,6 +22,7 @@ use databend_query::pipelines::processors::*;
 use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_limit_by() -> Result<()> {
@@ -36,14 +37,16 @@ async fn test_transform_limit_by() -> Result<()> {
     pipeline.merge_processor()?;
 
     if let PlanNode::Expression(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
-        .expression(&[modular(col("number"), lit(3)), col("number")], "")?
+        .expression(&[modular(col("number"), lit::<u32>(3)), col("number")], "")?
         .build()?
     {
+        let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone(),
+                ctx.clone()
             )?))
         })?;
 
@@ -55,11 +58,13 @@ async fn test_transform_limit_by() -> Result<()> {
 
         // make col("number % 3") be the first column, then we will have a well-sorted block to test
         // col("number") is useless, and it may have unstable results so we don't need it any more
+        let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.schema(),
                 DataSchemaRefExt::create(vec![col("(number % 3)").to_data_field(&plan.schema())?]),
                 vec![col("(number % 3)"), col("number")],
+                ctx.clone()
             )?))
         })?;
     }

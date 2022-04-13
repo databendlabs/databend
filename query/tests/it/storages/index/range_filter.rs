@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
@@ -24,9 +25,10 @@ use databend_query::storages::index::range_filter::BlockStatistics;
 use databend_query::storages::index::range_filter::StatColumns;
 use databend_query::storages::index::ColumnStatistics;
 use databend_query::storages::index::RangeFilter;
+use crate::tests::create_query_context;
 
-#[test]
-fn test_range_filter() -> Result<()> {
+#[tokio::test]
+async fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", i64::to_data_type()),
         DataField::new("b", i32::to_data_type()),
@@ -168,8 +170,9 @@ fn test_range_filter() -> Result<()> {
         },
     ];
 
+    let ctx = create_query_context().await?;
     for test in tests {
-        let prune = RangeFilter::try_create(&test.expr, schema.clone())?;
+        let prune = RangeFilter::try_create(&test.expr, schema.clone(), ctx.clone())?;
 
         match prune.eval(&stats) {
             Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),

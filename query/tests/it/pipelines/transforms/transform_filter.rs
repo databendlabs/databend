@@ -21,6 +21,7 @@ use databend_query::pipelines::processors::*;
 use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_filter() -> Result<()> {
@@ -36,10 +37,12 @@ async fn test_transform_filter() -> Result<()> {
         .filter(col("number").eq(lit(2021)))?
         .build()?
     {
+        let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(WhereTransform::try_create(
                 plan.input.schema(),
                 plan.predicate.clone(),
+                ctx.clone()
             )?))
         })?;
     }
@@ -77,7 +80,8 @@ async fn test_transform_filter_error() -> Result<()> {
         .and_then(|x| x.build())?;
 
     if let PlanNode::Filter(plan) = plan {
-        let result = WhereTransform::try_create(plan.schema(), plan.predicate);
+        let ctx = create_query_context().await?;
+        let result = WhereTransform::try_create(plan.schema(), plan.predicate, ctx);
         let actual = format!("{}", result.err().unwrap());
         let expect = "Code: 1006, displayText = Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
         assert_eq!(expect, actual);
