@@ -56,7 +56,12 @@ impl Function for CharFunction {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let column_count = columns.len();
         let mut values: Vec<u8> = vec![0; input_rows * column_count];
         let values_ptr = values.as_mut_ptr();
@@ -99,3 +104,4 @@ impl fmt::Display for CharFunction {
         write!(f, "CHAR")
     }
 }
+use crate::scalars::FunctionContext;

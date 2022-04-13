@@ -58,11 +58,12 @@ impl AnalyzableStatement for DfCreateDatabase {
 
 impl DfCreateDatabase {
     fn database_name(&self) -> Result<String> {
-        if self.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
+        match self.name.0.len() {
+            1 => Ok(self.name.0[0].value.clone()),
+            _ => Err(ErrorCode::SyntaxException(
+                "Compact database name must be [`db`]",
+            )),
         }
-
-        Ok(self.name.0[0].value.clone())
     }
 
     fn database_meta(&self) -> Result<DatabaseMeta> {

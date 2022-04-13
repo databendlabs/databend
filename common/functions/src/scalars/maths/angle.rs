@@ -25,6 +25,7 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
@@ -65,7 +66,12 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         Ok(Float64Type::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
              let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), T::convert, &mut ctx)?;

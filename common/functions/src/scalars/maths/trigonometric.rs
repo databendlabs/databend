@@ -25,6 +25,7 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -79,7 +80,12 @@ impl Function for TrigonometricFunction {
         Ok(f64::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         match columns.len() {
             1 => {

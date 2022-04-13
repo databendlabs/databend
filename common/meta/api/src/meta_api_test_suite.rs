@@ -754,7 +754,7 @@ impl MetaApiTestSuite {
 
             let got = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
             let want = TableInfo {
-                ident: TableIdent::new(2, 2),
+                ident: TableIdent::new(1, 2),
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
                 name: new_tbl_name.into(),
                 meta: table_meta(created_on),
@@ -795,12 +795,12 @@ impl MetaApiTestSuite {
         tracing::info!("--- create table again after rename, ok");
         {
             let res = mt.create_table(req.clone()).await?;
-            assert_eq!(3, res.table_id, "table id is 3");
+            assert_eq!(2, res.table_id, "table id should be 2");
 
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
 
             let want = TableInfo {
-                ident: TableIdent::new(3, 3),
+                ident: TableIdent::new(2, 3),
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                 name: tbl_name.into(),
                 meta: table_meta(created_on),
@@ -882,7 +882,7 @@ impl MetaApiTestSuite {
                 .get_table((tenant, new_db_name, new_tbl_name).into())
                 .await?;
             let want = TableInfo {
-                ident: TableIdent::new(4, 4),
+                ident: TableIdent::new(2, 4),
                 desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
                 name: new_tbl_name.into(),
                 meta: table_meta(created_on),

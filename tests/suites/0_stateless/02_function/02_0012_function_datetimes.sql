@@ -191,6 +191,7 @@ select toDateTime64('2022-04-01 06:50:20.000')   = '2022-04-01 06:50:20.000';
 select toDateTime64('2022-04-01 06:50:20.000')   > '2022-04-01 04:50:20.000';
 select toDateTime64('2022-04-01 06:50:20.000')   < '2022-04-02 04:50:20.000';
 
+select '===INSERT===';
 drop table if exists ts;
 create table ts(a DateTime64, b DateTime, c Date, d Date32);
 insert into ts values(now(), now(), today(), today());

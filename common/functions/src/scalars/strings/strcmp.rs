@@ -56,7 +56,12 @@ impl Function for StrcmpFunction {
         Ok(i8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, i8, _>(
             columns[0].column(),
             columns[1].column(),
@@ -97,3 +102,4 @@ fn strcmp(s1: &[u8], s2: &[u8], _ctx: &mut EvalContext) -> i8 {
         Ordering::Less => -1,
     }
 }
+use crate::scalars::FunctionContext;

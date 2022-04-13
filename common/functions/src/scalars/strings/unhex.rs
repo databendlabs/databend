@@ -57,7 +57,12 @@ impl Function for UnhexFunction {
         Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 
         let col = cast_column_field(&columns[0], &StringType::arc())?;
@@ -98,3 +103,4 @@ impl fmt::Display for UnhexFunction {
         write!(f, "UNHEX")
     }
 }
+use crate::scalars::FunctionContext;

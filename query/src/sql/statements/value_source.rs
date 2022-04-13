@@ -14,6 +14,7 @@
 //
 
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -27,6 +28,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
@@ -99,12 +101,13 @@ impl ValueSource {
         self,
         bytes: &[u8],
         analyzer: ExpressionAnalyzer,
+        ctx: Arc<QueryContext>,
     ) -> Result<DataBlock> {
         let values = parse_exprs(bytes)?;
 
         let mut blocks = vec![];
         for value in values {
-            let block = exprs_to_datablock(value, &analyzer, &self.schema).await?;
+            let block = exprs_to_datablock(value, &analyzer, &self.schema, ctx.clone()).await?;
             blocks.push(block);
         }
         DataBlock::concat_blocks(&blocks)
@@ -115,6 +118,7 @@ async fn exprs_to_datablock(
     exprs: Vec<Expr>,
     analyzer: &ExpressionAnalyzer,
     schema: &DataSchemaRef,
+    ctx: Arc<QueryContext>,
 ) -> Result<DataBlock> {
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
@@ -141,6 +145,7 @@ async fn exprs_to_datablock(
         schema.clone(),
         expressions,
         true,
+        ctx,
     )?;
     executor.execute(&one_row_block)
 }

@@ -31,6 +31,7 @@ use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
 
@@ -51,7 +52,11 @@ pub struct RangeFilter {
 }
 
 impl RangeFilter {
-    pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
+    pub fn try_create(
+        expr: &Expression,
+        schema: DataSchemaRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
         let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
         let input_fields = stat_columns
@@ -68,6 +73,7 @@ impl RangeFilter {
             output_schema,
             vec![verifiable_expr],
             false,
+            ctx,
         )?;
 
         Ok(Self {

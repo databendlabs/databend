@@ -59,7 +59,12 @@ impl Function for HexFunction {
         Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
                 let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
@@ -102,3 +107,4 @@ impl fmt::Display for HexFunction {
         write!(f, "HEX")
     }
 }
+use crate::scalars::FunctionContext;

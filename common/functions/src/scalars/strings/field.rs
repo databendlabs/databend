@@ -55,7 +55,12 @@ impl Function for FieldFunction {
         Ok(u64::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let basic_viewer = Vu8::try_create_viewer(columns[0].column())?;
 
         let viewers = columns
@@ -90,3 +95,4 @@ impl fmt::Display for FieldFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

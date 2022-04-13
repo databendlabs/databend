@@ -49,7 +49,12 @@ impl Function for PiFunction {
         Ok(Float64Type::arc())
     }
 
-    fn eval(&self, _columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _columns: &ColumnsWithField,
+        input_rows: usize,
+        _eval_option: FunctionContext,
+    ) -> Result<ColumnRef> {
         Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())
     }
 }
@@ -59,3 +64,4 @@ impl fmt::Display for PiFunction {
         write!(f, "{}", self.display_name)
     }
 }
+use crate::scalars::FunctionContext;

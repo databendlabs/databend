@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
+use common_functions::scalars::FunctionContext;
 use common_meta_types::TableInfo;
 use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
@@ -92,10 +93,12 @@ impl Processor for SinkTransform {
                 let cast_function = CastFunction::create("cast", &name).unwrap();
                 functions.push(cast_function);
             }
+            // TODO(veeupup): construct func_ctx from query context
             input_stream = Box::pin(CastStream::try_create(
                 input_stream,
                 cast_schema.clone(),
                 functions,
+                FunctionContext { tz: None },
             )?);
         }
 
@@ -106,6 +109,7 @@ impl Processor for SinkTransform {
                 input_stream,
                 input_schema,
                 output_schema,
+                self.ctx.clone(),
             )?)
         }
 

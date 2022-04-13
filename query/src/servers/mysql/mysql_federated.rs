@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRefExt;
 use regex::RegexSet;
 
 use crate::servers::mysql::MYSQL_VERSION;
+type LazyBlockFunc = fn(&str) -> Option<DataBlock>;
 
 pub struct MySQLFederated {
     mysql_version: String,
@@ -34,8 +35,11 @@ impl MySQLFederated {
         }
     }
 
-    // Block is built by constant.
-    fn variable_constant_block(name: &str, value: &str) -> Option<DataBlock> {
+    // Build block for select @@variable.
+    // Format:
+    // |@@variable|
+    // |value|
+    fn select_variable_block(name: &str, value: &str) -> Option<DataBlock> {
         Some(DataBlock::create(
             DataSchemaRefExt::create(vec![DataField::new(
                 &format!("@@{}", name),
@@ -45,9 +49,65 @@ impl MySQLFederated {
         ))
     }
 
+    // Build block for show variable statement.
+    // Format is:
+    // |variable_name| Value|
+    // | xx          | yy   |
+    fn show_variables_block(name: &str, value: &str) -> Option<DataBlock> {
+        Some(DataBlock::create(
+            DataSchemaRefExt::create(vec![
+                DataField::new("Variable_name", StringType::arc()),
+                DataField::new("Value", StringType::arc()),
+            ]),
+            vec![
+                Series::from_data(vec![name]),
+                Series::from_data(vec![value]),
+            ],
+        ))
+    }
+
+    fn block_match_rule(
+        &self,
+        query: &str,
+        rules: Vec<(&str, Option<DataBlock>)>,
+    ) -> Option<DataBlock> {
+        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
+        let regex_set = RegexSet::new(&regex_rules).unwrap();
+        let matches = regex_set.matches(query);
+        for (index, (_regex, data_block)) in rules.iter().enumerate() {
+            if matches.matched(index) {
+                return match data_block {
+                    None => Some(DataBlock::empty()),
+                    Some(data_block) => Some(data_block.clone()),
+                };
+            }
+        }
+
+        None
+    }
+
+    fn lazy_block_match_rule(
+        &self,
+        query: &str,
+        rules: Vec<(&str, LazyBlockFunc)>,
+    ) -> Option<DataBlock> {
+        let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
+        let regex_set = RegexSet::new(&regex_rules).unwrap();
+        let matches = regex_set.matches(query);
+        for (index, (_regex, func)) in rules.iter().enumerate() {
+            if matches.matched(index) {
+                return match func(query) {
+                    None => Some(DataBlock::empty()),
+                    Some(data_block) => Some(data_block),
+                };
+            }
+        }
+        None
+    }
+
     // SELECT @@aa, @@bb as cc, @dd...
     // Block is built by the variables.
-    fn variable_lazy_block(query: &str) -> Option<DataBlock> {
+    fn select_variable_data_block(query: &str) -> Option<DataBlock> {
         let mut default_map = HashMap::new();
         // DBeaver.
         default_map.insert("tx_isolation", "REPEATABLE-READ");
@@ -98,44 +158,48 @@ impl MySQLFederated {
         Some(DataBlock::create(DataSchemaRefExt::create(fields), values))
     }
 
-    // Lazy check for data block is built in runtime only when the regex matched.
-    fn federated_lazy_check(&self, query: &str) -> Option<DataBlock> {
-        type LazyBlockFunc = fn(&str) -> Option<DataBlock>;
-        let rules_lazy: Vec<(&str, LazyBlockFunc)> = vec![
-            ("(?i)^(SELECT @@(.*))", Self::variable_lazy_block),
+    // Check SELECT @@variable, @@variable
+    fn federated_select_variable_check(&self, query: &str) -> Option<DataBlock> {
+        let rules: Vec<(&str, LazyBlockFunc)> = vec![
+            ("(?i)^(SELECT @@(.*))", Self::select_variable_data_block),
             (
                 "(?i)^(/\\* mysql-connector-java(.*))",
-                Self::variable_lazy_block,
+                Self::select_variable_data_block,
             ),
         ];
-
-        let regex_rules = rules_lazy.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
-        let matches = regex_set.matches(query);
-        for (index, (_regex, func)) in rules_lazy.iter().enumerate() {
-            if matches.matched(index) {
-                return match func(query) {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block),
-                };
-            }
-        }
-
-        None
+        self.lazy_block_match_rule(query, rules)
     }
 
-    // Light check for the data block is built in compiler time whether the regex matched or not.
-    fn federated_light_check(&self, query: &str) -> Option<DataBlock> {
-        let rules_light: Vec<(&str, Option<DataBlock>)> = vec![
+    // Check SHOW VARIABLES LIKE.
+    fn federated_show_variables_check(&self, query: &str) -> Option<DataBlock> {
+        let rules: Vec<(&str, Option<DataBlock>)> = vec![
+            // sqlalchemy < 1.4.30
+            (
+                "(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))",
+                Self::show_variables_block("sql_mode",
+                                           "ONLY_FULL_GROUP_BY STRICT_TRANS_TABLES NO_ZERO_IN_DATE NO_ZERO_DATE ERROR_FOR_DIVISION_BY_ZERO NO_ENGINE_SUBSTITUTION"),
+            ),
+            (
+                "(?i)^(SHOW VARIABLES LIKE 'lower_case_table_names'(.*))",
+                Self::show_variables_block("lower_case_table_names",
+                                           "0"),
+            ),
+            ("(?i)^(show collation where(.*))", Self::show_variables_block("", "")),
+            ("(?i)^(SHOW VARIABLES(.*))", Self::show_variables_block("", "")),
+        ];
+        self.block_match_rule(query, rules)
+    }
+
+    // Check for SET or others query, this is the final check of the federated query.
+    fn federated_mixed_check(&self, query: &str) -> Option<DataBlock> {
+        let rules: Vec<(&str, Option<DataBlock>)> = vec![
             (
                 "(?i)^(SELECT VERSION())",
-                Self::variable_constant_block(
+                Self::select_variable_block(
                     "version()",
                     format!("{}-{}", self.mysql_version, self.databend_version.clone()).as_str(),
                 ),
             ),
-            // Show.
-            ("(?i)^(SHOW VARIABLES(.*))", None),
             // Txn.
             ("(?i)^(ROLLBACK(.*))", None),
             ("(?i)^(COMMIT(.*))", None),
@@ -147,8 +211,6 @@ impl MySQLFederated {
             ("(?i)^(SET sql_mode(.*))", None),
             ("(?i)^(SET @@(.*))", None),
             ("(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))", None),
-            // JDBC.
-            //("(?i)^(/\\* mysql-connector-java(.*))", None),
             // DBeaver.
             ("(?i)^(SHOW WARNINGS)", None),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
@@ -169,29 +231,25 @@ impl MySQLFederated {
             ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
         ];
 
-        let regex_rules = rules_light.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
-        let matches = regex_set.matches(query);
-        for (index, (_regex, data_block)) in rules_light.iter().enumerate() {
-            if matches.matched(index) {
-                return match data_block {
-                    None => Some(DataBlock::empty()),
-                    Some(data_block) => Some(data_block.clone()),
-                };
-            }
-        }
-
-        None
+        self.block_match_rule(query, rules)
     }
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
     pub fn check(&self, query: &str) -> Option<DataBlock> {
-        let lazy = self.federated_lazy_check(query);
-        if lazy.is_none() {
-            self.federated_light_check(query)
-        } else {
-            lazy
+        // First to check the select @@variables.
+        let select_variable = self.federated_select_variable_check(query);
+        if select_variable.is_some() {
+            return select_variable;
         }
+
+        // Then to check the show variables like ''.
+        let show_variables = self.federated_show_variables_check(query);
+        if show_variables.is_some() {
+            return show_variables;
+        }
+
+        // Last check.
+        self.federated_mixed_check(query)
     }
 }

@@ -52,7 +52,8 @@ impl BlockPruner {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
-                let verifiable_expression = RangeFilter::try_create(&exprs.filters[0], schema)?;
+                let verifiable_expression =
+                    RangeFilter::try_create(&exprs.filters[0], schema, Arc::new(ctx.clone()))?;
                 Box::new(move |v: &BlockStatistics| verifiable_expression.eval(v))
             }
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
@@ -65,11 +66,11 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
-        let limit = if let Some(Extras { limit: Some(l), .. }) = push_down {
-            *l
-        } else {
-            usize::MAX
-        };
+        let limit = push_down
+            .as_ref()
+            .filter(|p| p.order_by.is_empty())
+            .and_then(|p| p.limit)
+            .unwrap_or(usize::MAX);
 
         // Segments and blocks are accumulated concurrently, thus an atomic counter is used
         // to **try** collecting as less blocks as possible. But concurrency is preferred to

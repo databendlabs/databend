@@ -25,6 +25,7 @@ use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -84,7 +85,12 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         Ok(Arc::new(NullableType::create(VariantType::arc())))
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let path_keys = if BY_PATH {
             parse_path_keys(columns[1].column())?
         } else {

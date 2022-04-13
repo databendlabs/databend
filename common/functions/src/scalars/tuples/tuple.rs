@@ -66,6 +66,7 @@ impl Function for TupleFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut cols = vec![];
         let mut types = vec![];
@@ -91,3 +92,4 @@ impl std::fmt::Display for TupleFunction {
         write!(f, "TUPLE")
     }
 }
+use crate::scalars::FunctionContext;

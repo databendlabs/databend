@@ -677,7 +677,9 @@ impl TransformerSqlparser {
                 op: self.transform_unary_operator(op)?,
                 expr: Box::new(self.transform_expr(expr)?),
             }),
-            SqlparserExpr::Cast { expr, data_type } => Ok(Expr::Cast {
+            SqlparserExpr::Cast {
+                expr, data_type, ..
+            } => Ok(Expr::Cast {
                 expr: Box::new(self.transform_expr(expr)?),
                 target_type: self.transform_data_type(data_type)?,
             }),

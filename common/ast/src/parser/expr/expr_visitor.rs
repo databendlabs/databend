@@ -57,7 +57,11 @@ pub trait ExprVisitor: Sized + Send {
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
             Expr::Function(function) => self.visit_function(function).await,
             Expr::TryCast { expr, data_type } => self.visit_try_cast(expr, data_type).await,
-            Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type).await,
+            Expr::Cast {
+                expr,
+                data_type,
+                pg_style: _pg_style,
+            } => self.visit_cast(expr, data_type).await,
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
             Expr::Position {
                 substr_expr,

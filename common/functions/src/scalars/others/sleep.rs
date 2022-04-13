@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -65,6 +66,7 @@ impl Function for SleepFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let c = columns[0].column();
         if c.len() != 1 {
