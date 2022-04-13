@@ -25,6 +25,7 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op_ref;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -112,4 +113,3 @@ impl<const IS_LEFT: bool> fmt::Display for LeftRightFunction<IS_LEFT> {
         f.write_str(&self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

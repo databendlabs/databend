@@ -37,6 +37,7 @@ use common_exception::Result;
 use super::Function;
 use super::FunctionDescription;
 use super::Monotonicity;
+use crate::scalars::FunctionContext;
 
 #[derive(Clone)]
 pub struct FunctionAdapter {
@@ -127,7 +128,7 @@ impl Function for FunctionAdapter {
                 .collect::<Vec<_>>();
 
             let col = self.eval(&columns, 1, func_ctx)?;
-            let col = if col.is_const() && col.len() != 1 {
+            let col = if col.is_const() && col.len() != input_rows {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
                 NullColumn::new(input_rows).arc()
@@ -216,4 +217,3 @@ impl std::fmt::Display for FunctionAdapter {
         }
     }
 }
-use crate::scalars::FunctionContext;

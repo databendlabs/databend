@@ -15,7 +15,6 @@
 use std::fmt;
 use std::net::Ipv4Addr;
 use std::str;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -76,7 +75,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if SUPPRESS_CAST_ERROR {
-            let cast_to: DataTypePtr = Arc::new(NullableType::create(UInt32Type::arc()));
+            let cast_to: DataTypePtr = NullableType::arc(UInt32Type::arc());
             let cast_options = CastOptions {
                 // we allow cast failure
                 exception_mode: ExceptionMode::Zero,

@@ -22,6 +22,7 @@ use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -107,4 +108,3 @@ impl fmt::Display for HexFunction {
         write!(f, "HEX")
     }
 }
-use crate::scalars::FunctionContext;

@@ -27,6 +27,7 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -121,4 +122,3 @@ impl fmt::Display for FormatFunction {
         write!(f, "FORMAT")
     }
 }
-use crate::scalars::FunctionContext;

@@ -36,10 +36,7 @@ pub struct IgnoreFunction {
 }
 
 impl IgnoreFunction {
-    pub fn try_create(
-        display_name: &str,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(IgnoreFunction {
             display_name: display_name.to_string(),
         }))

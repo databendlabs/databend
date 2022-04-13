@@ -30,6 +30,7 @@ use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -45,10 +46,7 @@ pub struct UUIDVerifierFunction<T> {
 impl<T> UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
-    pub fn try_create(
-        display_name: &str,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {:?}",
@@ -146,4 +144,3 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         Ok(Arc::new(result_column))
     }
 }
-use crate::scalars::FunctionContext;

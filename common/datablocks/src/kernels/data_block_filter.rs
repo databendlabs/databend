@@ -64,14 +64,7 @@ impl DataBlock {
             Ok(Arc::new(ConstColumn::new(inner_boolean, col.len())))
         } else if predict.is_nullable() {
             let col: &NullableColumn = unsafe { Series::static_cast(predict) };
-            let inner = col.inner();
-            if inner.is_const() {
-                let col: &ConstColumn = unsafe { Series::static_cast(inner) };
-                let inner_boolean = Self::cast_to_nonull_boolean(inner)?;
-                return Ok(Arc::new(ConstColumn::new(inner_boolean, col.len())));
-            }
-
-            let inner_boolean = Self::cast_to_nonull_boolean(inner)?;
+            let inner_boolean = Self::cast_to_nonull_boolean(col.inner())?;
             // no const nullable or nullable constant
             let inner: &BooleanColumn = Series::check_get(&inner_boolean)?;
             let validity = col.ensure_validity();

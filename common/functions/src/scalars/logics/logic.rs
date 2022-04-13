@@ -53,7 +53,7 @@ pub struct LogicFunctionImpl<F> {
 }
 
 pub trait LogicExpression: Sync + Send {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef>;
+    fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef>;
 }
 
 impl<F> LogicFunctionImpl<F>

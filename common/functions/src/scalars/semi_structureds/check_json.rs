@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -49,7 +48,7 @@ impl Function for CheckJsonFunction {
     }
 
     fn return_type(&self) -> DataTypePtr {
-        Arc::new(NullableType::create(StringType::arc()))
+        NullableType::arc(StringType::arc())
     }
 
     fn eval(

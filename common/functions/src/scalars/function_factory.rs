@@ -43,7 +43,7 @@ pub type FactoryCreator =
 
 pub struct FunctionDescription {
     pub(crate) features: FunctionFeatures,
-    pub function_creator: FactoryCreator,
+    pub(crate) function_creator: FactoryCreator,
 }
 
 impl FunctionDescription {
@@ -106,28 +106,30 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        // TODO(Winter): we should write similar function names into error message if function name is not found.
-        match self.case_insensitive_desc.get(&lowercase_name) {
-            Some(desc) => FunctionAdapter::try_create(desc, origin_name, args),
-            None => Err(ErrorCode::UnknownFunction(format!(
-                "Unsupported Function: {}",
-                origin_name
-            ))),
-        }
+        let desc = self
+            .case_insensitive_desc
+            .get(&lowercase_name)
+            .ok_or_else(|| {
+                // TODO(Winter): we should write similar function names into error message if function name is not found.
+                ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))
+            })?;
+
+        FunctionAdapter::try_create(desc, origin_name, args)
     }
 
     pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        // TODO(Winter): we should write similar function names into error message if function name is not found.
-        match self.case_insensitive_desc.get(&lowercase_name) {
-            Some(desc) => Ok(desc.features.clone()),
-            None => Err(ErrorCode::UnknownFunction(format!(
-                "Unsupported Function: {}",
-                origin_name
-            ))),
-        }
+        let desc = self
+            .case_insensitive_desc
+            .get(&lowercase_name)
+            .ok_or_else(|| {
+                // TODO(Winter): we should write similar function names into error message if function name is not found.
+                ErrorCode::UnknownFunction(format!("Unsupported Function: {}", origin_name))
+            })?;
+
+        Ok(desc.features.clone())
     }
 
     pub fn check(&self, name: impl AsRef<str>) -> bool {

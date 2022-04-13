@@ -27,6 +27,7 @@ use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -40,10 +41,7 @@ impl RegexpInStrFunction {
         for (i, arg) in args.iter().enumerate() {
             if i < 2 || i == 5 {
                 assert_string(*arg)?;
-            } else if !arg.data_type_id().is_integer()
-                && !arg.data_type_id().is_string()
-                && !arg.data_type_id().is_null()
-            {
+            } else if !arg.data_type_id().is_integer() && !arg.data_type_id().is_string() {
                 return Err(ErrorCode::IllegalDataType(format!(
                     "Expected integer or string or null, but got {}",
                     args[i].data_type_id()
@@ -279,4 +277,3 @@ impl fmt::Display for RegexpInStrFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

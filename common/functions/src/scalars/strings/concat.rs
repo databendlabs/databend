@@ -19,6 +19,7 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -87,4 +88,3 @@ impl fmt::Display for ConcatFunction {
         write!(f, "CONCAT")
     }
 }
-use crate::scalars::FunctionContext;

@@ -33,10 +33,7 @@ pub struct SleepFunction {
 }
 
 impl SleepFunction {
-    pub fn try_create(
-        display_name: &str,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),

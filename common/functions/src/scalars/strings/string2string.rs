@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_datavalues::StringType;
-use common_datavalues::TypeID;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -44,12 +44,7 @@ pub struct String2StringFunction<T> {
 
 impl<T: StringOperator> String2StringFunction<T> {
     pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        if args[0].data_type_id() != TypeID::String {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string arg, but got {:?}",
-                args[0]
-            )));
-        }
+        assert_string(args[0])?;
 
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
@@ -93,4 +88,3 @@ impl<F> fmt::Display for String2StringFunction<F> {
         f.write_str(&self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

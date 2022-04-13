@@ -25,6 +25,7 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 
@@ -92,4 +93,3 @@ impl fmt::Display for FloorFunction {
         write!(f, "{}", self.display_name.to_uppercase())
     }
 }
-use crate::scalars::FunctionContext;

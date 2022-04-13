@@ -25,6 +25,7 @@ use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -40,10 +41,7 @@ pub struct UUIDCreatorFunction<T> {
 impl<T> UUIDCreatorFunction<T>
 where T: UUIDCreator + Clone + Sync + Send + 'static
 {
-    pub fn try_create(
-        display_name: &str,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDCreatorFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -107,4 +105,3 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         Ok(ConstColumn::new(col.arc(), input_rows).arc())
     }
 }
-use crate::scalars::FunctionContext;

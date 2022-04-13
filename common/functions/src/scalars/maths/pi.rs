@@ -20,6 +20,7 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
@@ -64,4 +65,3 @@ impl fmt::Display for PiFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

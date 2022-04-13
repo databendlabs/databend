@@ -21,6 +21,7 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -90,4 +91,3 @@ fn find_in_set(str: &[u8], list: &[u8], _ctx: &mut EvalContext) -> u64 {
     }
     0
 }
-use crate::scalars::FunctionContext;

@@ -30,7 +30,7 @@ macro_rules! impl_logic_expression {
         impl LogicExpression for $name {
             fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef> {
                 let dt = if nullable {
-                    Arc::new(NullableType::create(BooleanType::arc()))
+                    NullableType::arc(BooleanType::arc())
                 } else {
                     BooleanType::arc()
                 };

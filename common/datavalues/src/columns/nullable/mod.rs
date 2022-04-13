@@ -87,7 +87,7 @@ impl Column for NullableColumn {
 
     fn data_type(&self) -> DataTypePtr {
         let nest = self.column.data_type();
-        Arc::new(NullableType::create(nest))
+        NullableType::arc(nest)
     }
 
     fn column_type_name(&self) -> String {

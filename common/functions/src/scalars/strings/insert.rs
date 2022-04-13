@@ -22,6 +22,7 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -127,4 +128,3 @@ impl fmt::Display for InsertFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

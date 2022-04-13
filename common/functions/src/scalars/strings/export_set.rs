@@ -23,6 +23,7 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::cast_with_type;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
@@ -167,4 +168,3 @@ fn export_set<'a>(
         }
     }
 }
-use crate::scalars::FunctionContext;

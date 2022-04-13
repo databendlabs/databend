@@ -21,6 +21,7 @@ use common_exception::Result;
 use crate::scalars::assert_numeric;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -109,4 +110,3 @@ impl fmt::Display for BinFunction {
         write!(f, "BIN")
     }
 }
-use crate::scalars::FunctionContext;

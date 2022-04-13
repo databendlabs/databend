@@ -25,6 +25,7 @@ use num_traits::AsPrimitive;
 
 use super::utils::rem_scalar;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -160,4 +161,3 @@ where
         write!(f, "div")
     }
 }
-use crate::scalars::FunctionContext;

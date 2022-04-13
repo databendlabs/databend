@@ -21,6 +21,7 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::default_column_cast;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -125,4 +126,3 @@ fn find_at(str: &[u8], substr: &[u8], pos: u64) -> u64 {
         0_u64
     }
 }
-use crate::scalars::FunctionContext;

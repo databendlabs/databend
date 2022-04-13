@@ -32,10 +32,7 @@ pub struct NullableType {
 
 impl NullableType {
     pub fn arc(inner: DataTypePtr) -> DataTypePtr {
-        Arc::new(Self {
-            name: format!("Nullable({})", inner.name()),
-            inner,
-        })
+        Arc::new(Self::create(inner))
     }
 
     pub fn create(inner: DataTypePtr) -> Self {

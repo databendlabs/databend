@@ -123,12 +123,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         if column.is_nullable() {
             let (_, valids) = column.validity();
             let nullable_column: &NullableColumn = Series::check_get(column)?;
-            let mut inner = nullable_column.inner();
-            if inner.is_const() {
-                let const_column: &ConstColumn = unsafe { Series::static_cast(inner) };
-                inner = const_column.inner();
-            }
-
+            let column = nullable_column.inner();
             let data_type = remove_nullable(data_type);
 
             let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
@@ -138,7 +133,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
                 || data_type.data_type_id() == TypeID::Variant
             {
                 let serializer = data_type.create_serializer();
-                match serializer.serialize_json_object(inner, valids) {
+                match serializer.serialize_json_object(column, valids) {
                     Ok(values) => {
                         for (i, v) in values.iter().enumerate() {
                             if let Some(valids) = valids {

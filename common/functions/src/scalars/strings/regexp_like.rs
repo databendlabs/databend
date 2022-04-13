@@ -26,6 +26,7 @@ use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -245,4 +246,3 @@ pub fn build_regexp_from_pattern(
         ))
     })
 }
-use crate::scalars::FunctionContext;

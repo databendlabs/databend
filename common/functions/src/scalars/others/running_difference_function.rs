@@ -48,7 +48,7 @@ impl RunningDifferenceFunction {
             | TypeID::DateTime64
             | TypeID::Interval => Ok(type_primitive::Int64Type::arc()),
             TypeID::Float32 | TypeID::Float64 => Ok(type_primitive::Float64Type::arc()),
-            _ => Result::Err(ErrorCode::IllegalDataType(
+            _ => Err(ErrorCode::IllegalDataType(
                 "Argument for function runningDifference must have numeric type",
             )),
         }?;

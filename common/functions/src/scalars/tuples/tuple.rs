@@ -21,6 +21,7 @@ use common_datavalues::StructType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -33,7 +34,7 @@ pub struct TupleFunction {
 impl TupleFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&common_datavalues::DataTypePtr],
+        args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
         let names = (0..args.len())
             .map(|i| format!("item_{}", i))
@@ -86,4 +87,3 @@ impl std::fmt::Display for TupleFunction {
         write!(f, "TUPLE")
     }
 }
-use crate::scalars::FunctionContext;
