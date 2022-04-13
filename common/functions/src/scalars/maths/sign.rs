@@ -67,8 +67,8 @@ impl Function for SignFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Int8Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Int8Type::arc()
     }
 
     fn eval(

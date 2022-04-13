@@ -135,7 +135,7 @@ impl ExpressionMonotonicityVisitor {
         let arg_types: Vec<&DataTypePtr> = arg_types.iter().collect();
         let func = instance.get(op, &arg_types)?;
 
-        let return_type = func.return_type(&arg_types)?;
+        let return_type = func.return_type();
         let mut monotonic = match self.single_point {
             false => func.get_monotonicity(monotonicity_vec.as_ref())?,
             true => {

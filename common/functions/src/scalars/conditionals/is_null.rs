@@ -54,8 +54,8 @@ impl Function for IsNullFunction {
         "IsNullFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(bool::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        bool::to_data_type()
     }
 
     fn eval(

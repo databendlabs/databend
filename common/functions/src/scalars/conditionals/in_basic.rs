@@ -111,11 +111,11 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         "InFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         if self.is_null {
-            return Ok(NullType::arc());
+            return NullType::arc();
         }
-        Ok(BooleanType::arc())
+        BooleanType::arc()
     }
 
     fn eval(

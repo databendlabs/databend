@@ -80,8 +80,8 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(NullableType::arc(VariantType::arc()))
+    fn return_type(&self) -> DataTypePtr {
+        NullableType::arc(VariantType::arc())
     }
 
     fn eval(

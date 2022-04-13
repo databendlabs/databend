@@ -83,18 +83,18 @@ impl Function for FunctionAdapter {
         self.inner.as_ref().map_or("null", |v| v.name())
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         if self.inner.is_none() {
-            return Ok(NullType::arc());
+            return NullType::arc();
         }
 
         let inner = self.inner.as_ref().unwrap();
-        let typ = inner.return_type(args)?;
+        let typ = inner.return_type();
 
         if self.has_nullable {
-            Ok(wrap_nullable(&typ))
+            wrap_nullable(&typ)
         } else {
-            Ok(typ)
+            typ
         }
     }
 
@@ -146,8 +146,7 @@ impl Function for FunctionAdapter {
                 let (is_all_null, valid) = v.column().validity();
                 if is_all_null {
                     // If only null, return null directly.
-                    let args = columns.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                    let inner_type = remove_nullable(&inner.return_type(args.as_slice())?);
+                    let inner_type = remove_nullable(&inner.return_type());
                     return Ok(NullableColumn::wrap_inner(
                         inner_type
                             .create_constant_column(&inner_type.default_value(), input_rows)?,

@@ -60,8 +60,8 @@ impl Function for RegexpLikeFunction {
         &self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(

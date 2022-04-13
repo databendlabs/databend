@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::Column;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataTypePtr;
 use common_datavalues::NewColumn;
 use common_datavalues::StringColumn;
 use common_datavalues::StringType;
@@ -90,11 +91,8 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(

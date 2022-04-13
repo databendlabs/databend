@@ -351,10 +351,10 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         match T::return_type() {
-            None => Ok(R::to_data_type()),
-            Some(v) => Ok(v),
+            None => R::to_data_type(),
+            Some(v) => v,
         }
     }
 

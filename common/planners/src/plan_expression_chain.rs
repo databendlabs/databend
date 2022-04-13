@@ -127,7 +127,7 @@ impl ExpressionChain {
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let return_type = func.return_type(&arg_types2)?;
+                let return_type = func.return_type();
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -149,7 +149,7 @@ impl ExpressionChain {
 
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let return_type = func.return_type(&arg_types2)?;
+                let return_type = func.return_type();
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -172,7 +172,7 @@ impl ExpressionChain {
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
 
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let return_type = func.return_type(&arg_types2)?;
+                let return_type = func.return_type();
 
                 let function = ActionFunction {
                     name: expr.column_name(),

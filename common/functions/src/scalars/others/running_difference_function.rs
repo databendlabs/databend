@@ -83,8 +83,8 @@ impl Function for RunningDifferenceFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.result_type.clone())
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
     fn eval(

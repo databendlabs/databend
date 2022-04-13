@@ -61,11 +61,11 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         if SUPPRESS_CAST_ERROR {
-            Ok(NullableType::arc(StringType::arc()))
+            NullableType::arc(StringType::arc())
         } else {
-            Ok(StringType::arc())
+            StringType::arc()
         }
     }
 

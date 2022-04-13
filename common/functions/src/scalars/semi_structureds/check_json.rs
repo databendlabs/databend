@@ -48,8 +48,8 @@ impl Function for CheckJsonFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Arc::new(NullableType::create(StringType::arc())))
+    fn return_type(&self) -> DataTypePtr {
+        Arc::new(NullableType::create(StringType::arc()))
     }
 
     fn eval(

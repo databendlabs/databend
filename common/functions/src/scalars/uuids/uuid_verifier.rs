@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
+use common_datavalues::DataTypePtr;
 use common_datavalues::Scalar;
 use common_datavalues::ScalarColumn;
 use common_datavalues::ScalarViewer;
@@ -115,11 +116,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
 
     fn eval(

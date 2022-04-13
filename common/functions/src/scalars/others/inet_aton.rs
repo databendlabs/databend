@@ -60,11 +60,11 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         if SUPPRESS_PARSE_ERROR {
-            Ok(NullableType::arc(UInt32Type::arc()))
+            NullableType::arc(UInt32Type::arc())
         } else {
-            Ok(UInt32Type::arc())
+            UInt32Type::arc()
         }
     }
 

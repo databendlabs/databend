@@ -70,8 +70,8 @@ impl Function for RegexpSubStrFunction {
         &self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Arc::new(NullableType::create(StringType::arc())))
+    fn return_type(&self) -> DataTypePtr {
+        Arc::new(NullableType::create(StringType::arc()))
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr

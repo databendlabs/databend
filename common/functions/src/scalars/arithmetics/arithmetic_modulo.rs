@@ -73,8 +73,8 @@ where
         "ModuloFunctionImpl"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(O::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        O::to_data_type()
     }
 
     fn eval(

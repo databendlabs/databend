@@ -44,7 +44,7 @@ pub struct WeekFunction<T, R> {
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> Result<DataTypePtr>;
+    fn return_type() -> DataTypePtr;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
     fn factor_function() -> Option<Box<dyn Function>> {
         None
@@ -57,8 +57,8 @@ pub struct ToStartOfWeek;
 impl WeekResultFunction<u32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataTypePtr> {
-        Ok(Date16Type::arc())
+    fn return_type() -> DataTypePtr {
+        Date16Type::arc()
     }
     fn to_number(value: DateTime<Utc>, week_mode: u64) -> u32 {
         let mut weekday = value.weekday().number_from_sunday();
@@ -118,7 +118,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         T::return_type()
     }
 

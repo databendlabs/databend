@@ -87,8 +87,8 @@ impl Function for ComparisonFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
 
     fn eval(

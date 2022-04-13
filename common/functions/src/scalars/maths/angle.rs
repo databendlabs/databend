@@ -62,8 +62,8 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         "AngleFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Float64Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
     fn eval(

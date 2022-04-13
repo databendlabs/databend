@@ -62,11 +62,8 @@ impl Function for TupleFunction {
         "TupleFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(self.result_type.clone())
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
     fn eval(

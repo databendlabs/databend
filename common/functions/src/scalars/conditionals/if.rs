@@ -250,8 +250,8 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.least_supertype.clone())
+    fn return_type(&self) -> DataTypePtr {
+        self.least_supertype.clone()
     }
 
     fn eval(

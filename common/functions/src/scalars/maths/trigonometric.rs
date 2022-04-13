@@ -73,8 +73,8 @@ impl Function for TrigonometricFunction {
         "TrigonometricFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        f64::to_data_type()
     }
 
     fn eval(

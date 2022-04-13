@@ -66,8 +66,8 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(DateTime32Type::arc(None))
+    fn return_type(&self) -> DataTypePtr {
+        DateTime32Type::arc(None)
     }
 
     fn eval(

@@ -100,8 +100,8 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Date16Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Date16Type::arc()
     }
 
     fn eval(

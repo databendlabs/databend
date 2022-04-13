@@ -119,7 +119,7 @@ pub fn test_eval_with_type(
     arguments_type: &[&DataTypePtr],
 ) -> Result<ColumnRef> {
     let func = FunctionFactory::instance().get(op, arguments_type)?;
-    func.return_type(arguments_type)?;
+    func.return_type();
     let func_ctx = FunctionContext { tz: None };
     func.eval(arguments, rows_size, func_ctx)
 }

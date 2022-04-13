@@ -43,7 +43,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr>;
+    fn return_type(&self) -> DataTypePtr;
 
     /// Evaluate the function, e.g. run/execute the function.
     fn eval(

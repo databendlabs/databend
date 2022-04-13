@@ -80,8 +80,8 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(R::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        R::to_data_type()
     }
 
     fn eval(

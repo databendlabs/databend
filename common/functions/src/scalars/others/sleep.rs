@@ -15,6 +15,7 @@
 use std::fmt;
 use std::time::Duration;
 
+use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 use common_datavalues::Int8Type;
 use common_exception::ErrorCode;
@@ -53,11 +54,8 @@ impl Function for SleepFunction {
         "SleepFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(Int8Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Int8Type::arc()
     }
 
     fn eval(

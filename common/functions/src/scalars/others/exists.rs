@@ -45,11 +45,8 @@ impl Function for ExistsFunction {
         "ExistsFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(bool::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        bool::to_data_type()
     }
 
     fn eval(

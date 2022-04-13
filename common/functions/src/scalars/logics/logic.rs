@@ -87,11 +87,11 @@ where F: LogicExpression + Clone
         "LogicFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         if self.nullable {
-            Ok(NullableType::arc(BooleanType::arc()))
+            NullableType::arc(BooleanType::arc())
         } else {
-            Ok(BooleanType::arc())
+            BooleanType::arc()
         }
     }
 
