@@ -4,6 +4,7 @@ mod exchange_subscriber;
 mod data_exchange;
 mod exchange_params;
 mod exchange_channel;
+mod worker_publisher;
 
 pub use exchange_manager::DataExchangeManager;
 pub use data_exchange::DataExchange;

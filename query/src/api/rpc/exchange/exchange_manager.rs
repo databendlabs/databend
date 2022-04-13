@@ -17,8 +17,9 @@ use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_grpc::ConnectionFactory;
+use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
-use crate::api::rpc::exchange::exchange_channel::{channel, Sender};
+use crate::api::rpc::exchange::exchange_channel::{channel, Receiver, Sender};
 use crate::api::rpc::exchange::exchange_params::{HashExchangeParams, MergeExchangeParams, ExchangeParams};
 use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
 use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
@@ -44,7 +45,7 @@ impl DataExchangeManager {
         let publisher_packet = &prepare.publisher_packet;
         match queries_coordinator.get_mut(&publisher_packet.query_id) {
             None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", publisher_packet.query_id))),
-            Some(coordinator) => coordinator.init_publisher(publisher_packet)
+            Some(coordinator) => coordinator.init_publisher(self.config.clone(), publisher_packet)
         }
     }
 
@@ -81,19 +82,6 @@ impl DataExchangeManager {
         };
     }
 
-    async fn create_conn(&self, executor_packet: &ExecutorPacket) -> Result<FlightClient> {
-        let executors_info = &executor_packet.executors_info;
-
-        if !executors_info.contains_key(&executor_packet.executor) {
-            return Err(ErrorCode::LogicalError(format!(
-                "Not found {} node in cluster", &executor_packet.executor
-            )));
-        }
-
-        let executor_info = &executors_info[&executor_packet.executor];
-        self.create_client(&executor_info.flight_address).await
-    }
-
     async fn prepare_executors(&self, packets: Vec<ExecutorPacket>, timeout: u64) -> Result<()> {
         for executor_packet in packets.into_iter() {
             if !executor_packet.executors_info.contains_key(&executor_packet.executor) {
@@ -113,13 +101,13 @@ impl DataExchangeManager {
 
     async fn prepare_publisher(&self, packets: Vec<PublisherPacket>, timeout: u64) -> Result<()> {
         for publisher_packet in packets.into_iter() {
-            if !publisher_packet.executors_info.contains_key(&publisher_packet.executor) {
+            if !publisher_packet.data_endpoints.contains_key(&publisher_packet.executor) {
                 return Err(ErrorCode::LogicalError(format!(
                     "Not found {} node in cluster", &publisher_packet.executor
                 )));
             }
 
-            let executor_info = &publisher_packet.executors_info[&publisher_packet.executor];
+            let executor_info = &publisher_packet.data_endpoints[&publisher_packet.executor];
             let mut connection = self.create_client(&executor_info.flight_address).await?;
             let action = FlightAction::PreparePublisher(PreparePublisher { publisher_packet });
             connection.execute_action(action, timeout).await?;
@@ -204,14 +192,18 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn init_publisher(&mut self, packet: &PublisherPacket) -> Result<()> {
-        for (executor, info) in &packet.executors_info {
+    pub fn init_publisher(&mut self, config: Config, packet: &PublisherPacket) -> Result<()> {
+        for (executor, info) in &packet.data_endpoints {
+            if executor == packet.request_server {
+                // Send log, metric, trace, (progress?)
+            }
+
             if executor != &packet.executor {
                 match self.publish_fragments.entry(executor.to_string()) {
                     Entry::Occupied(_) => Err(ErrorCode::LogicalError("Publisher id already exists")),
                     Entry::Vacant(entry) => {
-                        // TODO: add flight channel for this
                         let (tx, rx) = channel(2);
+                        Self::spawn_publish_worker(config.clone(), rx, info.clone());
                         entry.insert(tx);
                         Ok(())
                     }
@@ -220,6 +212,41 @@ impl QueryCoordinator {
         }
 
         Ok(())
+    }
+
+    async fn create_client(config: Config, address: &str) -> Result<FlightClient> {
+        return match config.tls_query_cli_enabled() {
+            true => Ok(FlightClient::new(FlightServiceClient::new(
+                ConnectionFactory::create_rpc_channel(
+                    address.to_owned(),
+                    None,
+                    Some(config.tls_query_client_conf()),
+                )?,
+            ))),
+            false => Ok(FlightClient::new(FlightServiceClient::new(
+                ConnectionFactory::create_rpc_channel(
+                    address.to_owned(),
+                    None,
+                    None,
+                )?,
+            ))),
+        };
+    }
+
+    fn spawn_publish_worker(config: Config, rx: Receiver<FlightData>, info: Arc<NodeInfo>) {
+        tokio::spawn(async move {
+            let mut connection = Self::create_client(config, &info.flight_address).await?;
+            let tx = connection.pushed_stream().await?;
+
+            // TODO: rx.finished if error.
+            // TODO: we push log, metric and trace to request server if timeout.
+            while let Ok(flight_data) = rx.recv().await {
+                if let Err(cause) = tx.send(flight_data).await {
+                    // TODO: remote cannot send, get remote exception or finished.
+                    continue;
+                }
+            }
+        });
     }
 
     pub fn get_fragment_sink(&self, endpoint: &str) -> Result<Sender<FlightData>> {

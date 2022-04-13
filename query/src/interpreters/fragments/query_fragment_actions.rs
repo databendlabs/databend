@@ -114,10 +114,12 @@ impl QueryFragmentsActions {
         let nodes_info = Self::nodes_info(&ctx);
         let mut publisher_packets = Vec::with_capacity(nodes_info.len());
 
+        let cluster = ctx.get_cluster();
         for (node_id, node_info) in &nodes_info {
             publisher_packets.push(PublisherPacket::create(
                 ctx.get_id(),
                 node_id.to_owned(),
+                cluster.local_id(),
                 nodes_info.clone(),
             ));
         }

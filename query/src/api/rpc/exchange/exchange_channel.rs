@@ -154,6 +154,10 @@ impl<T> Receiver<T> {
         self.channel.recv().await
     }
 
+    // pub fn finished(&self) -> Result<()> {
+    //
+    // }
+
     pub fn try_recv(&self) -> Result<T, RecvError> {
         self.channel.try_recv()
     }
