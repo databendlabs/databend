@@ -254,19 +254,6 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<Vec<Self::HashKey<'_>>> {
         let mut group_keys = Vec::with_capacity(rows);
         {
-            // TODO: Optimize the SmallVec size by group_key_len
-
-            // let mut group_key_len = 0;
-            // for col in group_columns {
-            //     let typ = col.data_type();
-            //     let typ_id = typ.data_type_id();
-            //     if typ_id.is_integer() {
-            //         group_key_len += typ_id.numeric_byte_size()?;
-            //     } else {
-            //         group_key_len += 4;
-            //     }
-            // }
-
             for _i in 0..rows {
                 group_keys.push(SmallVu8::new());
             }
@@ -319,12 +306,9 @@ where T: PrimitiveType
             .iter()
             .map(|c| {
                 let ty = c.data_type();
-                remove_nullable(ty)
-                    .data_type_id()
-                    .numeric_byte_size()
-                    .unwrap()
+                remove_nullable(ty).data_type_id().numeric_byte_size()
             })
-            .sum();
+            .sum::<Result<usize>>()?;
 
         let mut sorted_group_fields = group_fields.to_vec();
         sorted_group_fields.sort_by(|a, b| {
