@@ -27,6 +27,8 @@ use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
@@ -157,14 +159,15 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
         let resp = m.sm_tree.txn(true, |t| {
             Ok(m.apply_cmd(
-                &Cmd::CreateDatabase {
+                &Cmd::CreateDatabase(CreateDatabaseReq {
+                    if_not_exists: false,
                     tenant: tenant.to_string(),
-                    name: c.name.to_string(),
+                    db: c.name.to_string(),
                     meta: DatabaseMeta {
                         engine: c.engine.to_string(),
                         ..Default::default()
                     },
-                },
+                }),
                 &t,
             )
             .unwrap())
@@ -201,14 +204,15 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
     m.sm_tree.txn(true, |t| {
         Ok(m.apply_cmd(
-            &Cmd::CreateDatabase {
+            &Cmd::CreateDatabase(CreateDatabaseReq {
+                if_not_exists: false,
                 tenant: tenant.to_string(),
-                name: "db1".to_string(),
+                db: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "defeault".to_string(),
                     ..Default::default()
                 },
-            },
+            }),
             &t,
         )
         .unwrap())
@@ -216,12 +220,13 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
     let resp = m.sm_tree.txn(true, |t| {
         Ok(m.apply_cmd(
-            &Cmd::CreateTable {
+            &Cmd::CreateTable(CreateTableReq {
+                if_not_exists: false,
                 tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
-                table_name: "tb1".to_string(),
+                db: "db1".to_string(),
+                table: "tb1".to_string(),
                 table_meta: Default::default(),
-            },
+            }),
             &t,
         )
         .unwrap())

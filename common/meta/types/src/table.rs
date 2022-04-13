@@ -197,6 +197,16 @@ pub struct CreateTableReq {
     pub table_meta: TableMeta,
 }
 
+impl Display for CreateTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "create_table(if_not_exists={}):{}/{}-{}={}",
+            self.if_not_exists, self.tenant, self.db, self.table, self.table_meta
+        )
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateTableReply {
     pub table_id: u64,
@@ -210,6 +220,16 @@ pub struct DropTableReq {
     pub table: String,
 }
 
+impl Display for DropTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "drop_table(if_exists={}):{}/{}-{}",
+            self.if_exists, self.tenant, self.db, self.table
+        )
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReply {}
 
@@ -221,6 +241,16 @@ pub struct RenameTableReq {
     pub table_name: String,
     pub new_db: String,
     pub new_table_name: String,
+}
+
+impl Display for RenameTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "rename_table:{}/{}-{}=>{}-{}",
+            self.tenant, self.db, self.table_name, self.new_db, self.new_table_name
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -251,6 +281,16 @@ impl UpsertTableOptionReq {
             seq: MatchSeq::Exact(table_ident.version),
             options: hashmap! {key.into() => Some(value.into())},
         }
+    }
+}
+
+impl Display for UpsertTableOptionReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "upsert-table-options: table-id:{}({:?}) = {:?}",
+            self.table_id, self.seq, self.options
+        )
     }
 }
 

@@ -78,6 +78,16 @@ pub struct CreateDatabaseReq {
     pub meta: DatabaseMeta,
 }
 
+impl Display for CreateDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "create_db(if_not_exists={}):{}/{}={:?}",
+            self.if_not_exists, self.tenant, self.db, self.meta
+        )
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub database_id: u64,
@@ -88,6 +98,16 @@ pub struct DropDatabaseReq {
     pub if_exists: bool,
     pub tenant: String,
     pub db: String,
+}
+
+impl Display for DropDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "drop_db(if_exists={}):{}/{}",
+            self.if_exists, self.tenant, self.db
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
