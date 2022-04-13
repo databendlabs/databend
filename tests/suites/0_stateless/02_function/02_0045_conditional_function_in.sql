@@ -15,3 +15,5 @@ DROP TABLE IF EXISTS t1;
 CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Memory;
 INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
 SELECT a FROM t1 WHERE b IN (NULL,3);
+DROP TABLE t1;
+
