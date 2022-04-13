@@ -25,6 +25,7 @@ use tokio_stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 /// Executes certain expressions over the block and append the result column to the new block.
 /// Aims to transform a block to another format, such as add one or more columns against the Expressions.
 ///
@@ -50,6 +51,7 @@ impl ExpressionTransform {
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
+        ctx: Arc<QueryContext>
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(
             "expression executor",
@@ -57,6 +59,7 @@ impl ExpressionTransform {
             output_schema,
             exprs,
             false,
+            ctx
         )?;
         executor.validate()?;
 

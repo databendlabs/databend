@@ -28,6 +28,7 @@ use tokio_stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub type HavingTransform = FilterTransform<true>;
 pub type WhereTransform = FilterTransform<false>;
@@ -39,8 +40,8 @@ pub struct FilterTransform<const HAVING: bool> {
 }
 
 impl<const HAVING: bool> FilterTransform<HAVING> {
-    pub fn try_create(schema: DataSchemaRef, predicate: Expression) -> Result<Self> {
-        let predicate_executor = Self::expr_executor(&schema, &predicate)?;
+    pub fn try_create(schema: DataSchemaRef, predicate: Expression, ctx: Arc<QueryContext>) -> Result<Self> {
+        let predicate_executor = Self::expr_executor(&schema, &predicate, ctx)?;
         predicate_executor.validate()?;
 
         Ok(FilterTransform {
@@ -50,7 +51,7 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
         })
     }
 
-    fn expr_executor(schema: &DataSchemaRef, expr: &Expression) -> Result<ExpressionExecutor> {
+    fn expr_executor(schema: &DataSchemaRef, expr: &Expression, ctx: Arc<QueryContext>) -> Result<ExpressionExecutor> {
         let expr_field = expr.to_data_field(schema)?;
         let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
@@ -60,6 +61,7 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
             expr_schema,
             vec![expr.clone()],
             false,
+            ctx
         )
     }
 

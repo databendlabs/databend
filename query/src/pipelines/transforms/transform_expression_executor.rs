@@ -26,6 +26,8 @@ use common_planners::ExpressionChain;
 use common_tracing::tracing;
 use common_functions::scalars::FunctionContext;
 
+use crate::sessions::QueryContext;
+
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
 #[derive(Debug, Clone)]
@@ -37,6 +39,7 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
+    ctx: Arc<QueryContext>,
 }
 
 impl ExpressionExecutor {
@@ -46,6 +49,7 @@ impl ExpressionExecutor {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
         alias_project: bool,
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
 
@@ -55,6 +59,7 @@ impl ExpressionExecutor {
             output_schema,
             chain: Arc::new(chain),
             alias_project,
+            ctx,
         })
     }
 

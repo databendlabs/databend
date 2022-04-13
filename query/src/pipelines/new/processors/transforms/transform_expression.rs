@@ -25,6 +25,7 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::transforms::transform::Transform;
 use crate::pipelines::new::processors::transforms::transform::Transformer;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub type ProjectionTransform = ExpressionTransformImpl<true>;
 pub type ExpressionTransform = ExpressionTransformImpl<false>;
@@ -42,6 +43,7 @@ where Self: Transform
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
+        ctx: Arc<QueryContext>
     ) -> Result<ProcessorPtr> {
         let executor = ExpressionExecutor::try_create(
             "expression executor",
@@ -49,6 +51,7 @@ where Self: Transform
             output_schema,
             exprs,
             ALIAS_PROJECT,
+            ctx
         )?;
         executor.validate()?;
 

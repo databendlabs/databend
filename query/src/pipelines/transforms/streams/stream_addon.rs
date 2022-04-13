@@ -27,6 +27,7 @@ use futures::Stream;
 use futures::StreamExt;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 /// Add missing column into the block stream
 pub struct AddOnStream {
@@ -44,6 +45,7 @@ impl AddOnStream {
         input: SendableDataBlockStream,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let mut default_expr_fields = Vec::new();
         let mut default_exprs = Vec::new();
@@ -77,6 +79,7 @@ impl AddOnStream {
             schema_after_default_expr,
             default_exprs,
             true,
+            ctx
         )?;
 
         Ok(AddOnStream {

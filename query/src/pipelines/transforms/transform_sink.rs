@@ -106,6 +106,7 @@ impl Processor for SinkTransform {
                 input_stream,
                 input_schema,
                 output_schema,
+                self.ctx.clone()
             )?)
         }
 

@@ -22,11 +22,13 @@ use common_planners::Expression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub struct HashFlightScatter {
     scatter_expression_executor: Arc<ExpressionExecutor>,
     scatter_expression_name: String,
     scattered_size: usize,
+    ctx: Arc<QueryContext>
 }
 
 impl FlightScatter for HashFlightScatter {
@@ -34,12 +36,13 @@ impl FlightScatter for HashFlightScatter {
         schema: DataSchemaRef,
         expr: Option<Expression>,
         num: usize,
+        ctx: Arc<QueryContext>,
     ) -> common_exception::Result<Self> {
         match expr {
             None => Err(ErrorCode::LogicalError(
                 "Hash flight scatter need expression.",
             )),
-            Some(expr) => HashFlightScatter::try_create_impl(schema, num, expr),
+            Some(expr) => HashFlightScatter::try_create_impl(schema, num, expr, ctx),
         }
     }
 
@@ -55,15 +58,16 @@ impl FlightScatter for HashFlightScatter {
 }
 
 impl HashFlightScatter {
-    fn try_create_impl(schema: DataSchemaRef, num: usize, expr: Expression) -> Result<Self> {
+    fn try_create_impl(schema: DataSchemaRef, num: usize, expr: Expression, ctx: Arc<QueryContext>) -> Result<Self> {
         let expression = Self::expr_action(num, expr);
-        let indices_expr_executor = Self::expr_executor(schema, &expression)?;
+        let indices_expr_executor = Self::expr_executor(schema, &expression, ctx.clone())?;
         indices_expr_executor.validate()?;
 
         Ok(HashFlightScatter {
             scatter_expression_executor: Arc::new(indices_expr_executor),
             scatter_expression_name: expression.column_name(),
             scattered_size: num,
+            ctx,
         })
     }
 
@@ -71,13 +75,14 @@ impl HashFlightScatter {
         DataSchemaRefExt::create(vec![DataField::new(output_name, u64::to_data_type())])
     }
 
-    fn expr_executor(schema: DataSchemaRef, expr: &Expression) -> Result<ExpressionExecutor> {
+    fn expr_executor(schema: DataSchemaRef, expr: &Expression, ctx: Arc<QueryContext>) -> Result<ExpressionExecutor> {
         ExpressionExecutor::try_create(
             "indices expression in FlightScatterByHash",
             schema,
             Self::indices_expr_schema(&expr.column_name()),
             vec![expr.clone()],
             false,
+            ctx,
         )
     }
 

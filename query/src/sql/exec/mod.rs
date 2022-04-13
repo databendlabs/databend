@@ -99,6 +99,7 @@ impl Executor {
                 input_schema.clone(),
                 output_schema.clone(),
                 exprs.clone(),
+                self.ctx.clone(),
             )?))
         })?;
         Ok(pipeline)

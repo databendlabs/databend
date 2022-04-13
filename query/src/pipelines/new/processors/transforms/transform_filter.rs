@@ -26,6 +26,7 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::transforms::transform::Transform;
 use crate::pipelines::new::processors::transforms::transform::Transformer;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub type TransformHaving = TransformFilterImpl<true>;
 pub type TransformFilter = TransformFilterImpl<false>;
@@ -43,8 +44,9 @@ where Self: Transform
         predicate: Expression,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        ctx: Arc<QueryContext>
     ) -> Result<ProcessorPtr> {
-        let executor = Self::expr_executor(&schema, &predicate)?;
+        let executor = Self::expr_executor(&schema, &predicate, ctx)?;
         executor.validate()?;
         Ok(Transformer::create(input, output, TransformFilterImpl {
             schema,
@@ -52,7 +54,7 @@ where Self: Transform
         }))
     }
 
-    fn expr_executor(schema: &DataSchemaRef, expr: &Expression) -> Result<ExpressionExecutor> {
+    fn expr_executor(schema: &DataSchemaRef, expr: &Expression, ctx: Arc<QueryContext>) -> Result<ExpressionExecutor> {
         let expr_field = expr.to_data_field(schema)?;
         let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
@@ -62,6 +64,7 @@ where Self: Transform
             expr_schema,
             vec![expr.clone()],
             false,
+            ctx
         )
     }
 
