@@ -395,12 +395,9 @@ where
             .iter()
             .map(|c| {
                 let ty = c.data_type();
-                remove_nullable(&ty)
-                    .data_type_id()
-                    .numeric_byte_size()
-                    .unwrap()
+                remove_nullable(&ty).data_type_id().numeric_byte_size()
             })
-            .sum();
+            .sum::<Result<usize>>()?;
 
         let mut group_columns = group_columns.to_vec();
         group_columns.sort_by(|a, b| {
