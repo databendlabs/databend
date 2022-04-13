@@ -119,9 +119,9 @@ impl AnalyzableStatement for DfCopy {
         let from = ReadDataSourcePlan {
             source_info: SourceInfo::S3StageSource(S3StageTableInfo {
                 schema: schema.clone(),
-                file_name: None,
                 stage_info,
                 path,
+                files: vec![],
             }),
             scan_fields: None,
             parts: vec![],

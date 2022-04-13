@@ -83,10 +83,10 @@ impl CopyInterpreter {
     // Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
     fn rewrite_read_plan_file_name(
         mut plan: ReadDataSourcePlan,
-        file_name: Option<String>,
+        files: Vec<String>,
     ) -> ReadDataSourcePlan {
         if let SourceInfo::S3StageSource(ref mut s3) = plan.source_info {
-            s3.file_name = file_name;
+            s3.files = files
         }
         plan
     }
@@ -104,15 +104,13 @@ impl CopyInterpreter {
         let settings = self.ctx.get_settings();
 
         let mut pipeline = NewPipeline::create();
-        for file in files {
-            let read_source_plan = self.plan.from.clone();
-            let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, Some(file));
-            tracing::info!("copy_one_file_to_table: source plan:{:?}", read_source_plan);
-            let table = ctx.build_table_from_source_plan(&read_source_plan)?;
-            let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
-            if let Err(e) = res {
-                return Err(e);
-            }
+        let read_source_plan = self.plan.from.clone();
+        let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
+        tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);
+        let table = ctx.build_table_from_source_plan(&read_source_plan)?;
+        let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
+        if let Err(e) = res {
+            return Err(e);
         }
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 

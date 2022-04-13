@@ -1232,6 +1232,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "common-meta-types",
  "once_cell",
  "pretty_assertions",
