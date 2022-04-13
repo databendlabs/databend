@@ -47,9 +47,6 @@ impl ExecutorTasksQueue {
     }
 
     /// Pull task from the global task queue
-    ///
-    /// # Safety
-    ///
     /// Method is thread unsafe and require thread safe call
     pub fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
         {
@@ -232,11 +229,11 @@ impl ExecutorTasks {
 
     pub fn push_task(&mut self, worker_id: usize, task: ExecutorTask) {
         self.tasks_size += 1;
-        assert!(worker_id < self.workers_sync_tasks.len(), "out of index");
+        debug_assert!(worker_id < self.workers_sync_tasks.len(), "out of index");
         let sync_queue = &mut self.workers_sync_tasks[worker_id];
-        assert!(worker_id < self.workers_async_tasks.len(), "out of index");
+        debug_assert!(worker_id < self.workers_async_tasks.len(), "out of index");
         let async_queue = &mut self.workers_async_tasks[worker_id];
-        assert!(
+        debug_assert!(
             worker_id < self.workers_completed_async_tasks.len(),
             "out of index"
         );
