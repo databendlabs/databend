@@ -70,7 +70,12 @@ impl Function for FormatFunction {
         Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
                     let col = scalar_binary_op::<$F, $N, Vu8, _>(columns[0].column(), columns[1].column(), format_en_us,&mut EvalContext::default())?;
@@ -116,3 +121,4 @@ impl fmt::Display for FormatFunction {
         write!(f, "FORMAT")
     }
 }
+use crate::scalars::FunctionContext;

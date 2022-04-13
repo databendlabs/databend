@@ -24,6 +24,7 @@ use super::LogicNotFunction;
 use super::LogicOrFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
@@ -219,7 +220,12 @@ impl Function for LogicFunction {
         }
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         match self.op {
             LogicOperator::Not => self.eval_not(columns, input_rows),
             _ => self.eval_and_not_or(columns, input_rows),

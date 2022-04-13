@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -61,6 +62,7 @@ impl Function for IsNullFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let (all_null, validity) = columns[0].column().validity();
         if all_null {

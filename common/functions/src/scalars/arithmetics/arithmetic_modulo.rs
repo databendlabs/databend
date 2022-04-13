@@ -77,7 +77,12 @@ where
         Ok(O::to_data_type())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         let lhs = columns[0].column();
         let rhs = columns[1].column();
         match (lhs.is_const(), rhs.is_const()) {
@@ -155,3 +160,4 @@ where
         write!(f, "div")
     }
 }
+use crate::scalars::FunctionContext;

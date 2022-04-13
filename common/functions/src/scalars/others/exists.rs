@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -52,6 +53,7 @@ impl Function for ExistsFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         if columns[0].column().is_const() || columns[0].column().len() == 1 {
             let value = columns[0].column().get(0);

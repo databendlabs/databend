@@ -16,6 +16,7 @@ use common_base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_functions::scalars::CastFunction;
+use common_functions::scalars::FunctionContext;
 use common_streams::*;
 use futures::stream::StreamExt;
 
@@ -66,8 +67,13 @@ async fn test_cast_stream() {
     let to_uint16 = CastFunction::create("cast", "UInt16").unwrap();
 
     let functions = vec![to_uint8, to_uint16];
-    let mut cast_stream =
-        CastStream::try_create(Box::pin(stream), output_schema.clone(), functions).unwrap();
+    let mut cast_stream = CastStream::try_create(
+        Box::pin(stream),
+        output_schema.clone(),
+        functions,
+        FunctionContext { tz: None },
+    )
+    .unwrap();
 
     let expected = vec![
         vec![

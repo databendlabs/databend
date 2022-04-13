@@ -19,6 +19,7 @@ use super::LogicFunction;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+
 #[derive(Clone)]
 pub struct LogicNotFunction;
 

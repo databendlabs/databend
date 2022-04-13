@@ -27,6 +27,7 @@ use tokio_stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub struct ProjectionTransform {
     executor: ExpressionExecutor,
@@ -38,6 +39,7 @@ impl ProjectionTransform {
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(
             "projection executor",
@@ -45,6 +47,7 @@ impl ProjectionTransform {
             output_schema,
             exprs,
             true,
+            ctx,
         )?;
 
         Ok(ProjectionTransform {

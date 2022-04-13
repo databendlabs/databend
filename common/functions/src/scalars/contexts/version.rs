@@ -18,6 +18,7 @@ use common_datavalues::StringType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -58,6 +59,7 @@ impl Function for VersionFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         Ok(columns[0].column().clone())
     }

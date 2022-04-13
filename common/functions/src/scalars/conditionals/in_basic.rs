@@ -23,6 +23,7 @@ use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -114,7 +115,12 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         Ok(BooleanType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _func_ctx: FunctionContext,
+    ) -> Result<ColumnRef> {
         for col in columns {
             let dt = col.column().data_type();
             let type_id = remove_nullable(&dt).data_type_id();

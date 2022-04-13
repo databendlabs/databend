@@ -19,11 +19,14 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 use common_tracing::tracing;
+
+use crate::sessions::QueryContext;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
@@ -36,6 +39,7 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
+    _ctx: Arc<QueryContext>,
 }
 
 impl ExpressionExecutor {
@@ -45,6 +49,7 @@ impl ExpressionExecutor {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
         alias_project: bool,
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
 
@@ -54,6 +59,7 @@ impl ExpressionExecutor {
             output_schema,
             chain: Arc::new(chain),
             alias_project,
+            _ctx: ctx,
         })
     }
 
@@ -187,7 +193,10 @@ impl ExpressionExecutor {
             arg_columns.push(column);
         }
 
-        let column = f.func.eval(&arg_columns, rows)?;
+        // TODO(veeupup): get session's eval tz options
+        let column = f
+            .func
+            .eval(&arg_columns, rows, FunctionContext { tz: None })?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),

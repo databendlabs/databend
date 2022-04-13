@@ -22,6 +22,8 @@ use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
+use crate::tests::create_query_context;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_filter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
@@ -36,10 +38,12 @@ async fn test_transform_filter() -> Result<()> {
         .filter(col("number").eq(lit(2021)))?
         .build()?
     {
+        let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(WhereTransform::try_create(
                 plan.input.schema(),
                 plan.predicate.clone(),
+                ctx.clone(),
             )?))
         })?;
     }

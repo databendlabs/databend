@@ -79,6 +79,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
         let column: &StringColumn = Series::check_get(columns[0].column())?;
@@ -95,3 +96,4 @@ impl<F> fmt::Display for String2StringFunction<F> {
         f.write_str(&self.display_name)
     }
 }
+use crate::scalars::FunctionContext;
