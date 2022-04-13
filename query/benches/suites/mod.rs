@@ -25,6 +25,7 @@ use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;
+pub mod bench_global_task_queue;
 pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 

@@ -40,6 +40,7 @@ impl PipelineExecutor {
     pub fn create(async_rt: Arc<Runtime>, pipeline: NewPipeline) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let threads_num = pipeline.get_max_threads();
+            dbg!(threads_num);
             let workers_notify = WorkersNotify::create(threads_num);
             let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
 
@@ -50,6 +51,8 @@ impl PipelineExecutor {
             while let Some(task) = init_schedule_queue.pop_task() {
                 tasks.push_back(task);
             }
+
+            dbg!(tasks.len());
 
             global_tasks_queue.init_tasks(tasks);
             Ok(Arc::new(PipelineExecutor {
