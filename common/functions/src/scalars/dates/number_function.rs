@@ -25,11 +25,11 @@ use common_datavalues::Date16Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::TypedFunctionDescription;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::FactoryCreatorWithTypes;
+use crate::scalars::FactoryCreator;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::FunctionContext;
@@ -328,17 +328,17 @@ where
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
         }
 
-        let function_creator: FactoryCreatorWithTypes =
+        let function_creator: FactoryCreator =
             Box::new(move |display_name, _args| Self::try_create(display_name));
 
-        TypedFunctionDescription::creator(function_creator).features(features)
+        FunctionDescription::creator(function_creator).features(features)
     }
 }
 

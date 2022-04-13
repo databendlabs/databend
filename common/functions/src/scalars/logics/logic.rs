@@ -30,10 +30,10 @@ pub struct LogicFunction;
 
 impl LogicFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("and", LogicAndFunction::desc());
-        factory.register_typed("or", LogicOrFunction::desc());
-        factory.register_typed("not", LogicNotFunction::desc());
-        factory.register_typed("xor", LogicXorFunction::desc());
+        factory.register("and", LogicAndFunction::desc());
+        factory.register("or", LogicOrFunction::desc());
+        factory.register("not", LogicNotFunction::desc());
+        factory.register("xor", LogicXorFunction::desc());
     }
 }
 

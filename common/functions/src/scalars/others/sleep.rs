@@ -23,8 +23,8 @@ use common_exception::Result;
 use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct SleepFunction {
@@ -42,8 +42,8 @@ impl SleepFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
     }
 }

@@ -24,11 +24,11 @@ pub struct SemiStructuredFunction;
 
 impl SemiStructuredFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("parse_json", ParseJsonFunction::desc());
-        factory.register_typed("try_parse_json", TryParseJsonFunction::desc());
-        factory.register_typed("check_json", CheckJsonFunction::desc());
-        factory.register_typed("get", GetFunction::desc());
-        factory.register_typed("get_ignore_case", GetIgnoreCaseFunction::desc());
-        factory.register_typed("get_path", GetPathFunction::desc());
+        factory.register("parse_json", ParseJsonFunction::desc());
+        factory.register("try_parse_json", TryParseJsonFunction::desc());
+        factory.register("check_json", CheckJsonFunction::desc());
+        factory.register("get", GetFunction::desc());
+        factory.register("get_ignore_case", GetIgnoreCaseFunction::desc());
+        factory.register("get_path", GetPathFunction::desc());
     }
 }

@@ -27,8 +27,8 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
@@ -181,8 +181,8 @@ impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),

@@ -27,8 +27,8 @@ use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 // This is not a correct implementation of stateful hasher. But just a thin wrapper of stateless hash for leveraging DFHash trait.
 // It is good enough for column hashing because we don't really need stream hashing.
@@ -99,8 +99,8 @@ impl City64WithSeedFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

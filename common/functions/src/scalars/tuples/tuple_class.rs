@@ -20,6 +20,6 @@ pub struct TupleClassFunction;
 
 impl TupleClassFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("tuple", TupleFunction::desc());
+        factory.register("tuple", TupleFunction::desc());
     }
 }

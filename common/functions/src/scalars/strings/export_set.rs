@@ -23,8 +23,8 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::cast_with_type;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
 
 #[derive(Clone)]
@@ -51,8 +51,8 @@ impl ExportSetFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(3, 5),

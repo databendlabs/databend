@@ -26,8 +26,8 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct TrigonometricFunction {
@@ -175,8 +175,8 @@ impl TrigonometricSinFunction {
         TrigonometricFunction::try_create_func(Trigonometric::SIN)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -194,8 +194,8 @@ impl TrigonometricCosFunction {
         TrigonometricFunction::try_create_func(Trigonometric::COS)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -213,8 +213,8 @@ impl TrigonometricTanFunction {
         TrigonometricFunction::try_create_func(Trigonometric::TAN)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -232,8 +232,8 @@ impl TrigonometricCotFunction {
         TrigonometricFunction::try_create_func(Trigonometric::COT)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -251,8 +251,8 @@ impl TrigonometricAsinFunction {
         TrigonometricFunction::try_create_func(Trigonometric::ASIN)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -270,8 +270,8 @@ impl TrigonometricAcosFunction {
         TrigonometricFunction::try_create_func(Trigonometric::ACOS)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -289,8 +289,8 @@ impl TrigonometricAtanFunction {
         TrigonometricFunction::try_create_func(Trigonometric::ATAN)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),
@@ -311,8 +311,8 @@ impl TrigonometricAtan2Function {
         TrigonometricFunction::try_create_func(Trigonometric::ATAN2)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

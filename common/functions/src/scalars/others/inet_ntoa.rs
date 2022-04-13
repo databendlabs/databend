@@ -26,9 +26,9 @@ use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::ParsingMode;
-use crate::scalars::TypedFunctionDescription;
 
 #[doc(alias = "TryNumToIPv4StringFunction")]
 pub type TryInetNtoaFunction = InetNtoaFunctionImpl<true>;
@@ -50,8 +50,8 @@ impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> 
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }

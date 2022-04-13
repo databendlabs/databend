@@ -34,16 +34,16 @@ pub type SipHash64Function = BaseHashFunction<DefaultHasher, u64>;
 
 impl HashesFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("md5", Md5HashFunction::desc());
-        factory.register_typed("sha", Sha1HashFunction::desc());
-        factory.register_typed("sha1", Sha1HashFunction::desc());
-        factory.register_typed("sha2", Sha2HashFunction::desc());
+        factory.register("md5", Md5HashFunction::desc());
+        factory.register("sha", Sha1HashFunction::desc());
+        factory.register("sha1", Sha1HashFunction::desc());
+        factory.register("sha2", Sha2HashFunction::desc());
 
-        factory.register_typed("blake3", Blake3HashFunction::desc());
-        factory.register_typed("xxhash32", XxHash32Function::desc());
-        factory.register_typed("xxhash64", XxHash64Function::desc());
-        factory.register_typed("siphash64", SipHash64Function::desc());
-        factory.register_typed("siphash", SipHash64Function::desc());
-        factory.register_typed("city64WithSeed", City64WithSeedFunction::desc());
+        factory.register("blake3", Blake3HashFunction::desc());
+        factory.register("xxhash32", XxHash32Function::desc());
+        factory.register("xxhash64", XxHash64Function::desc());
+        factory.register("siphash64", SipHash64Function::desc());
+        factory.register("siphash", SipHash64Function::desc());
+        factory.register("city64WithSeed", City64WithSeedFunction::desc());
     }
 }

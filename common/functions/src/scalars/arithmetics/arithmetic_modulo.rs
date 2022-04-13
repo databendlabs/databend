@@ -25,8 +25,8 @@ use num_traits::AsPrimitive;
 
 use super::utils::rem_scalar;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 pub struct ArithmeticModuloFunction;
 
@@ -44,8 +44,8 @@ impl ArithmeticModuloFunction {
         })
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

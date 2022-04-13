@@ -23,8 +23,8 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct EltFunction {
@@ -63,8 +63,8 @@ impl EltFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .disable_passthrough_null()

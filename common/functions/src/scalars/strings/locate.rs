@@ -21,8 +21,8 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::default_column_cast;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 const FUNC_LOCATE: u8 = 1;
 const FUNC_POSITION: u8 = 2;
@@ -49,7 +49,7 @@ impl<const T: u8> LocatingFunction<T> {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
+    pub fn desc() -> FunctionDescription {
         let mut feature = FunctionFeatures::default().deterministic();
         feature = if T == FUNC_LOCATE {
             feature.variadic_arguments(2, 3)
@@ -57,7 +57,7 @@ impl<const T: u8> LocatingFunction<T> {
             feature.num_arguments(2)
         };
 
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(feature)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(feature)
     }
 }
 

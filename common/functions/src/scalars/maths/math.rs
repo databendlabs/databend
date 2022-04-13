@@ -48,36 +48,36 @@ pub struct MathsFunction;
 
 impl MathsFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("abs", AbsFunction::desc());
-        factory.register_typed("sign", SignFunction::desc());
-        factory.register_typed("pi", PiFunction::desc());
-        factory.register_typed("crc32", CRC32Function::desc());
-        factory.register_typed("exp", ExpFunction::desc());
-        factory.register_typed("sqrt", SqrtFunction::desc());
-        factory.register_typed("ceil", CeilFunction::desc());
-        factory.register_typed("ceiling", CeilFunction::desc());
-        factory.register_typed("floor", FloorFunction::desc());
+        factory.register("abs", AbsFunction::desc());
+        factory.register("sign", SignFunction::desc());
+        factory.register("pi", PiFunction::desc());
+        factory.register("crc32", CRC32Function::desc());
+        factory.register("exp", ExpFunction::desc());
+        factory.register("sqrt", SqrtFunction::desc());
+        factory.register("ceil", CeilFunction::desc());
+        factory.register("ceiling", CeilFunction::desc());
+        factory.register("floor", FloorFunction::desc());
 
-        factory.register_typed("log", LogFunction::desc());
-        factory.register_typed("log10", Log10Function::desc());
-        factory.register_typed("log2", Log2Function::desc());
-        factory.register_typed("ln", LnFunction::desc());
-        factory.register_typed("pow", PowFunction::desc());
-        factory.register_typed("power", PowFunction::desc());
-        factory.register_typed("rand", RandomFunction::desc());
-        factory.register_typed("round", RoundNumberFunction::desc());
-        factory.register_typed("truncate", TruncNumberFunction::desc());
+        factory.register("log", LogFunction::desc());
+        factory.register("log10", Log10Function::desc());
+        factory.register("log2", Log2Function::desc());
+        factory.register("ln", LnFunction::desc());
+        factory.register("pow", PowFunction::desc());
+        factory.register("power", PowFunction::desc());
+        factory.register("rand", RandomFunction::desc());
+        factory.register("round", RoundNumberFunction::desc());
+        factory.register("truncate", TruncNumberFunction::desc());
 
-        factory.register_typed("sin", TrigonometricSinFunction::desc());
-        factory.register_typed("cos", TrigonometricCosFunction::desc());
-        factory.register_typed("tan", TrigonometricTanFunction::desc());
-        factory.register_typed("cot", TrigonometricCotFunction::desc());
-        factory.register_typed("asin", TrigonometricAsinFunction::desc());
-        factory.register_typed("acos", TrigonometricAcosFunction::desc());
-        factory.register_typed("atan", TrigonometricAtanFunction::desc());
-        factory.register_typed("atan2", TrigonometricAtan2Function::desc());
+        factory.register("sin", TrigonometricSinFunction::desc());
+        factory.register("cos", TrigonometricCosFunction::desc());
+        factory.register("tan", TrigonometricTanFunction::desc());
+        factory.register("cot", TrigonometricCotFunction::desc());
+        factory.register("asin", TrigonometricAsinFunction::desc());
+        factory.register("acos", TrigonometricAcosFunction::desc());
+        factory.register("atan", TrigonometricAtanFunction::desc());
+        factory.register("atan2", TrigonometricAtan2Function::desc());
 
-        factory.register_typed("degrees", DegressFunction::desc());
-        factory.register_typed("radians", RadiansFunction::desc());
+        factory.register("degrees", DegressFunction::desc());
+        factory.register("radians", RadiansFunction::desc());
     }
 }

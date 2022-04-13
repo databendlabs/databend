@@ -38,31 +38,31 @@ use super::TupleClassFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
-pub type FactoryCreatorWithTypes =
+pub type FactoryCreator =
     Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function>> + Send + Sync>;
 
-pub struct TypedFunctionDescription {
+pub struct FunctionDescription {
     pub(crate) features: FunctionFeatures,
-    pub typed_function_creator: FactoryCreatorWithTypes,
+    pub function_creator: FactoryCreator,
 }
 
-impl TypedFunctionDescription {
-    pub fn creator(creator: FactoryCreatorWithTypes) -> TypedFunctionDescription {
-        TypedFunctionDescription {
-            typed_function_creator: creator,
+impl FunctionDescription {
+    pub fn creator(creator: FactoryCreator) -> FunctionDescription {
+        FunctionDescription {
+            function_creator: creator,
             features: FunctionFeatures::default(),
         }
     }
 
     #[must_use]
-    pub fn features(mut self, features: FunctionFeatures) -> TypedFunctionDescription {
+    pub fn features(mut self, features: FunctionFeatures) -> FunctionDescription {
         self.features = features;
         self
     }
 }
 
 pub struct FunctionFactory {
-    case_insensitive_typed_desc: HashMap<String, TypedFunctionDescription>,
+    case_insensitive_desc: HashMap<String, FunctionDescription>,
 }
 
 static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
@@ -89,7 +89,7 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
 impl FunctionFactory {
     pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
         FunctionFactory {
-            case_insensitive_typed_desc: Default::default(),
+            case_insensitive_desc: Default::default(),
         }
     }
 
@@ -97,9 +97,9 @@ impl FunctionFactory {
         FUNCTION_FACTORY.as_ref()
     }
 
-    pub fn register_typed(&mut self, name: &str, desc: TypedFunctionDescription) {
-        let case_insensitive_typed_desc = &mut self.case_insensitive_typed_desc;
-        case_insensitive_typed_desc.insert(name.to_lowercase(), desc);
+    pub fn register(&mut self, name: &str, desc: FunctionDescription) {
+        let case_insensitive_desc = &mut self.case_insensitive_desc;
+        case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
     pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
@@ -107,8 +107,8 @@ impl FunctionFactory {
         let lowercase_name = origin_name.to_lowercase();
 
         // TODO(Winter): we should write similar function names into error message if function name is not found.
-        match self.case_insensitive_typed_desc.get(&lowercase_name) {
-            Some(desc) => FunctionAdapter::try_create_by_typed(desc, origin_name, args),
+        match self.case_insensitive_desc.get(&lowercase_name) {
+            Some(desc) => FunctionAdapter::try_create(desc, origin_name, args),
             None => Err(ErrorCode::UnknownFunction(format!(
                 "Unsupported Function: {}",
                 origin_name
@@ -121,7 +121,7 @@ impl FunctionFactory {
         let lowercase_name = origin_name.to_lowercase();
 
         // TODO(Winter): we should write similar function names into error message if function name is not found.
-        match self.case_insensitive_typed_desc.get(&lowercase_name) {
+        match self.case_insensitive_desc.get(&lowercase_name) {
             Some(desc) => Ok(desc.features.clone()),
             None => Err(ErrorCode::UnknownFunction(format!(
                 "Unsupported Function: {}",
@@ -134,19 +134,18 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        self.case_insensitive_typed_desc
-            .contains_key(&lowercase_name)
+        self.case_insensitive_desc.contains_key(&lowercase_name)
     }
 
     pub fn registered_names(&self) -> Vec<String> {
-        self.case_insensitive_typed_desc
+        self.case_insensitive_desc
             .keys()
             .cloned()
             .collect::<Vec<_>>()
     }
 
     pub fn registered_features(&self) -> Vec<FunctionFeatures> {
-        self.case_insensitive_typed_desc
+        self.case_insensitive_desc
             .values()
             .into_iter()
             .map(|v| &v.features)

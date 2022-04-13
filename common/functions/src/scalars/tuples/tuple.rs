@@ -21,8 +21,8 @@ use common_datavalues::StructType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct TupleFunction {
@@ -47,8 +47,8 @@ impl TupleFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .disable_passthrough_null()

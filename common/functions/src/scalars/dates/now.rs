@@ -20,7 +20,7 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::TypedFunctionDescription;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
@@ -38,8 +38,8 @@ impl NowFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default())
     }
 }

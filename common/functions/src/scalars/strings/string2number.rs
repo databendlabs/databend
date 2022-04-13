@@ -20,8 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 pub trait NumberOperator<R>: Send + Sync + Clone + Default + 'static {
     const IS_DETERMINISTIC: bool;
@@ -58,7 +58,7 @@ where
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
@@ -69,7 +69,7 @@ where
             features = features.monotonicity();
         }
 
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 

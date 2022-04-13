@@ -24,8 +24,8 @@ use ordered_float::OrderedFloat;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool> {
@@ -52,8 +52,8 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
         Ok(Box::new(InFunction::<NEGATED> { is_null }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .bool_function()
                 .disable_passthrough_null()

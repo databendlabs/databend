@@ -44,9 +44,9 @@ use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -56,19 +56,19 @@ pub struct ComparisonFunction {
 
 impl ComparisonFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("=", ComparisonEqFunction::desc("<>"));
-        factory.register_typed("<", ComparisonLtFunction::desc(">="));
-        factory.register_typed(">", ComparisonGtFunction::desc("<="));
-        factory.register_typed("<=", ComparisonLtEqFunction::desc(">"));
-        factory.register_typed(">=", ComparisonGtEqFunction::desc("<"));
-        factory.register_typed("!=", ComparisonNotEqFunction::desc("="));
-        factory.register_typed("<>", ComparisonNotEqFunction::desc("="));
-        factory.register_typed("like", ComparisonLikeFunction::desc("not like"));
-        factory.register_typed("not like", ComparisonNotLikeFunction::desc("like"));
-        factory.register_typed("regexp", ComparisonRegexpFunction::desc("not regexp"));
-        factory.register_typed("not regexp", ComparisonNotRegexpFunction::desc("regexp"));
-        factory.register_typed("rlike", ComparisonRegexpFunction::desc("not regexp"));
-        factory.register_typed("not rlike", ComparisonNotRegexpFunction::desc("regexp"));
+        factory.register("=", ComparisonEqFunction::desc("<>"));
+        factory.register("<", ComparisonLtFunction::desc(">="));
+        factory.register(">", ComparisonGtFunction::desc("<="));
+        factory.register("<=", ComparisonLtEqFunction::desc(">"));
+        factory.register(">=", ComparisonGtEqFunction::desc("<"));
+        factory.register("!=", ComparisonNotEqFunction::desc("="));
+        factory.register("<>", ComparisonNotEqFunction::desc("="));
+        factory.register("like", ComparisonLikeFunction::desc("not like"));
+        factory.register("not like", ComparisonNotLikeFunction::desc("like"));
+        factory.register("regexp", ComparisonRegexpFunction::desc("not regexp"));
+        factory.register("not regexp", ComparisonNotRegexpFunction::desc("regexp"));
+        factory.register("rlike", ComparisonRegexpFunction::desc("not regexp"));
+        factory.register("not rlike", ComparisonNotRegexpFunction::desc("regexp"));
     }
 
     pub fn try_create_func(
@@ -167,8 +167,8 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
         })
     }
 
-    pub fn desc(negative_name: &str) -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc(negative_name: &str) -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
@@ -197,8 +197,8 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
         ComparisonFunction::try_create_func(display_name, func)
     }
 
-    pub fn desc(negative_name: &str) -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc(negative_name: &str) -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)

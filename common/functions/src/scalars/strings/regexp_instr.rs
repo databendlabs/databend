@@ -27,8 +27,8 @@ use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct RegexpInStrFunction {
@@ -56,8 +56,8 @@ impl RegexpInStrFunction {
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 6),

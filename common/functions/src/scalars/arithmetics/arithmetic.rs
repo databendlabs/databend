@@ -26,18 +26,18 @@ pub struct ArithmeticFunction;
 
 impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_typed("negate", ArithmeticNegateFunction::desc());
-        factory.register_typed("+", ArithmeticPlusFunction::desc());
-        factory.register_typed("plus", ArithmeticPlusFunction::desc());
-        factory.register_typed("-", ArithmeticMinusFunction::desc());
-        factory.register_typed("minus", ArithmeticMinusFunction::desc());
-        factory.register_typed("*", ArithmeticMulFunction::desc());
-        factory.register_typed("multiply", ArithmeticMulFunction::desc());
-        factory.register_typed("/", ArithmeticDivFunction::desc());
-        factory.register_typed("divide", ArithmeticDivFunction::desc());
-        factory.register_typed("div", ArithmeticIntDivFunction::desc());
-        factory.register_typed("%", ArithmeticModuloFunction::desc());
-        factory.register_typed("modulo", ArithmeticModuloFunction::desc());
-        factory.register_typed("mod", ArithmeticModuloFunction::desc());
+        factory.register("negate", ArithmeticNegateFunction::desc());
+        factory.register("+", ArithmeticPlusFunction::desc());
+        factory.register("plus", ArithmeticPlusFunction::desc());
+        factory.register("-", ArithmeticMinusFunction::desc());
+        factory.register("minus", ArithmeticMinusFunction::desc());
+        factory.register("*", ArithmeticMulFunction::desc());
+        factory.register("multiply", ArithmeticMulFunction::desc());
+        factory.register("/", ArithmeticDivFunction::desc());
+        factory.register("divide", ArithmeticDivFunction::desc());
+        factory.register("div", ArithmeticIntDivFunction::desc());
+        factory.register("%", ArithmeticModuloFunction::desc());
+        factory.register("modulo", ArithmeticModuloFunction::desc());
+        factory.register("mod", ArithmeticModuloFunction::desc());
     }
 }

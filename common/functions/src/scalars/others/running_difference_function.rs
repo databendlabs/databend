@@ -22,8 +22,8 @@ use common_exception::Result;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {
@@ -69,8 +69,8 @@ impl RunningDifferenceFunction {
     // If we set passthrough_null to be true, the input will be optimized with non-null + masking.
     // Considering tht we actually need two masks(one for value[index], the other value[index-1]) for validity,
     // we choose to handler the nullable ourselves.
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .disable_passthrough_null()
                 .num_arguments(1),

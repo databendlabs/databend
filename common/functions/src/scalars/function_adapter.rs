@@ -35,8 +35,8 @@ use common_datavalues::TypeID;
 use common_exception::Result;
 
 use super::Function;
+use super::FunctionDescription;
 use super::Monotonicity;
-use super::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct FunctionAdapter {
@@ -52,8 +52,8 @@ impl FunctionAdapter {
         })
     }
 
-    pub fn try_create_by_typed(
-        desc: &TypedFunctionDescription,
+    pub fn try_create(
+        desc: &FunctionDescription,
         name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
@@ -69,9 +69,9 @@ impl FunctionAdapter {
             let has_nullable = args.iter().any(|v| v.is_nullable());
             let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
             let types = types.iter().collect::<Vec<_>>();
-            ((desc.typed_function_creator)(name, &types)?, has_nullable)
+            ((desc.function_creator)(name, &types)?, has_nullable)
         } else {
-            ((desc.typed_function_creator)(name, args)?, false)
+            ((desc.function_creator)(name, args)?, false)
         };
 
         Ok(Self::create(inner, has_nullable))

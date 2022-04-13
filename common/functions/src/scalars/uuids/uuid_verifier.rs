@@ -29,8 +29,8 @@ use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 pub type UUIDIsEmptyFunction = UUIDVerifierFunction<UUIDIsEmpty>;
 pub type UUIDIsNotEmptyFunction = UUIDVerifierFunction<UUIDIsNotEmpty>;
@@ -61,8 +61,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .disable_passthrough_null()
                 .num_arguments(1),

@@ -21,7 +21,7 @@ use common_exception::Result;
 use num::cast::AsPrimitive;
 
 use crate::scalars::function_common::assert_numeric;
-use crate::scalars::function_factory::TypedFunctionDescription;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
@@ -49,8 +49,8 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }

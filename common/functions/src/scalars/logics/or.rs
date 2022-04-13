@@ -24,8 +24,8 @@ use crate::calcute;
 use crate::impl_logic_expression;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 impl_logic_expression!(LogicOrExpression, |, |lhs: bool, rhs: bool, lhs_v: bool, rhs_v: bool| -> (bool, bool) {
     (lhs | rhs,  (lhs_v & rhs_v) | (lhs | rhs))
@@ -39,8 +39,8 @@ impl LogicOrFunction {
         LogicFunctionImpl::<LogicOrExpression>::try_create(LogicOperator::Or, args)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .disable_passthrough_null()

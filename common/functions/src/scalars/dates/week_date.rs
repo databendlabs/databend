@@ -30,9 +30,9 @@ use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
-use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone, Debug)]
 pub struct WeekFunction<T, R> {
@@ -93,7 +93,7 @@ where
         }))
     }
 
-    pub fn desc() -> TypedFunctionDescription {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default()
             .monotonicity()
             .variadic_arguments(1, 2);
@@ -102,7 +102,7 @@ where
             features = features.deterministic();
         }
 
-        TypedFunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
