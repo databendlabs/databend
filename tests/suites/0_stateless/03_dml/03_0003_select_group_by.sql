@@ -37,7 +37,7 @@ SELECT '==GROUP BY DATETIMES==';
 CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32);
 
 insert into t_datetime select toDate('2022-04-01') + number % 2,  toDateTime('2022-04-01 00:00:00') + number % 2, 1 from numbers(10);
-select created_at, sum(count) from t_datetime group by created_at;
-select created_time, sum(count) from t_datetime group by created_time;
+select created_at, sum(count) from t_datetime group by created_at order by created_at;
+select created_time, sum(count) from t_datetime group by created_time order by created_time;
 
 drop table t_datetime;
