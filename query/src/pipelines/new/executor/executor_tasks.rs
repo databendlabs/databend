@@ -224,6 +224,7 @@ impl ExecutorTasks {
                     }
                 }
                 other => {
+                    self.tasks_size -= 1;
                     return other;
                 }
             }

@@ -33,6 +33,7 @@ impl WorkerNotify {
 
 struct WorkersNotifyMutable {
     pub waiting_size: usize,
+    pub running_async_worker: usize,
     pub workers_waiting: Vec<bool>,
 }
 
@@ -58,13 +59,24 @@ impl WorkersNotify {
             mutable_state: Mutex::new(WorkersNotifyMutable {
                 waiting_size: 0,
                 workers_waiting,
+                running_async_worker: 0,
             }),
         })
     }
 
     pub fn active_workers(&self) -> usize {
         let mutable_state = self.mutable_state.lock();
-        self.workers - mutable_state.waiting_size
+        (self.workers - mutable_state.waiting_size) + mutable_state.running_async_worker
+    }
+
+    pub fn inc_active_async_worker(&self) {
+        let mut mutable_state = self.mutable_state.lock();
+        mutable_state.running_async_worker += 1;
+    }
+
+    pub fn dec_active_async_worker(&self) {
+        let mut mutable_state = self.mutable_state.lock();
+        mutable_state.running_async_worker -= 1;
     }
 
     pub fn is_empty(&self) -> bool {
