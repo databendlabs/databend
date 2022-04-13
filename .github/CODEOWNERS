@@ -34,7 +34,10 @@ common/grpc/           @datafuselabs/databend-meta-reviewer
 /query/src/storages/   @datafuselabs/databend-storage-reviewer
 
 
-# Website rule
+# API and handler
+/query/src/servers/    @datafuselabs/databend-api-reviewer
+
+# Website
 /website/              @datafuselabs/databend-document-reviewer
 /docs/                 @datafuselabs/databend-document-reviewer
 
