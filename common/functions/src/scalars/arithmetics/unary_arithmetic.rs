@@ -23,8 +23,8 @@ use common_exception::Result;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -73,7 +73,7 @@ where
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let col = scalar_unary_op(
             columns[0].column(),

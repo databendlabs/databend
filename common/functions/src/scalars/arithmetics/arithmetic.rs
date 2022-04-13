@@ -41,4 +41,3 @@ impl ArithmeticFunction {
         factory.register_typed("mod", ArithmeticModuloFunction::desc());
     }
 }
-use crate::scalars::FunctionContext;

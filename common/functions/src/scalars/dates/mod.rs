@@ -47,5 +47,3 @@ pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
 pub use week_date::ToStartOfWeekFunction;
-
-use crate::scalars::FunctionContext;

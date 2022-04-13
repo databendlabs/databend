@@ -24,7 +24,6 @@ use common_exception::Result;
 use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::new_mutable_bitmap;
 use super::cast_with_type::CastOptions;
-use crate::scalars::FunctionContext;
 
 pub fn cast_from_string(
     column: &ColumnRef,

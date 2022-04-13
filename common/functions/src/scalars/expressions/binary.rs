@@ -24,7 +24,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::EvalContext;
-use crate::scalars::FunctionContext;
 
 pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
     l: &ColumnRef,

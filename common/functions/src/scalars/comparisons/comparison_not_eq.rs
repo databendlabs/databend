@@ -21,7 +21,6 @@ use super::comparison::ComparisonFunctionCreator;
 use super::comparison::ComparisonImpl;
 use super::utils::*;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 
 pub type ComparisonNotEqFunction = ComparisonFunctionCreator<ComparisonNotEqImpl>;
 

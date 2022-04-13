@@ -25,7 +25,6 @@ use super::cast_from_string::string_to_date;
 use super::cast_from_string::string_to_datetime;
 use super::cast_from_string::string_to_datetime64;
 use super::cast_with_type::new_mutable_bitmap;
-use crate::scalars::FunctionContext;
 
 pub fn cast_from_variant(
     column: &ColumnRef,

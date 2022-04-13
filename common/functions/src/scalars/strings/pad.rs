@@ -124,7 +124,7 @@ impl<T: PadOperator> Function for PadFunction<T> {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let col1 = Vu8::try_create_viewer(columns[0].column())?;
         let col3 = Vu8::try_create_viewer(columns[2].column())?;

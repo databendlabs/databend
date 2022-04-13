@@ -60,7 +60,7 @@ impl Function for CharFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let column_count = columns.len();
         let mut values: Vec<u8> = vec![0; input_rows * column_count];

@@ -18,8 +18,8 @@ use common_datavalues::DataValue;
 use common_datavalues::StringType;
 use common_exception::Result;
 
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -61,7 +61,7 @@ impl Function for ToTypeNameFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let type_name = format!("{:?}", columns[0].data_type());
         let value = DataValue::String(type_name.as_bytes().to_vec());

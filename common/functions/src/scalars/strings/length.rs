@@ -28,4 +28,3 @@ impl NumberOperator<u64> for Length {
 }
 
 pub type LengthFunction = String2NumberFunction<Length, u64>;
-use crate::scalars::FunctionContext;

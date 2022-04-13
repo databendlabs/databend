@@ -28,8 +28,8 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::sql::statements::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
+use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
     schema: DataSchemaRef,
@@ -101,7 +101,7 @@ impl ValueSource {
         self,
         bytes: &[u8],
         analyzer: ExpressionAnalyzer,
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<DataBlock> {
         let values = parse_exprs(bytes)?;
 

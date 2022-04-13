@@ -74,7 +74,7 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let (ss_column, s_column) = if T == FUNC_INSTR {
             (columns[1].column(), columns[0].column())

@@ -105,4 +105,3 @@ pub use unhex::UnhexFunction;
 pub use upper::UpperFunction;
 
 pub use self::hex::HexFunction;
-use crate::scalars::FunctionContext;

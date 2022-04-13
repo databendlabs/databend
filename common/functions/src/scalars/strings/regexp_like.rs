@@ -68,7 +68,7 @@ impl Function for RegexpLikeFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
         if let Ok(col1) = col1 {

@@ -28,4 +28,3 @@ impl NumberOperator<u64> for BitLength {
 }
 
 pub type BitLengthFunction = String2NumberFunction<BitLength, u64>;
-use crate::scalars::FunctionContext;

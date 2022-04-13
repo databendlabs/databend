@@ -102,4 +102,3 @@ impl StringOperator for Soundex {
 }
 
 pub type SoundexFunction = String2StringFunction<Soundex>;
-use crate::scalars::FunctionContext;

@@ -162,7 +162,7 @@ impl PlanVisitor for QueryPipelineBuilder {
                     plan.input.schema(),
                     plan.schema(),
                     plan.exprs.to_owned(),
-                    self.ctx.clone()
+                    self.ctx.clone(),
                 )
             })
     }
@@ -192,7 +192,7 @@ impl PlanVisitor for QueryPipelineBuilder {
                     plan.predicate.clone(),
                     transform_input_port,
                     transform_output_port,
-                    self.ctx.clone()
+                    self.ctx.clone(),
                 )
             })
     }

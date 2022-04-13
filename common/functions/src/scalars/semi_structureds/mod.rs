@@ -24,5 +24,3 @@ pub use get::GetPathFunction;
 pub use parse_json::ParseJsonFunction;
 pub use parse_json::TryParseJsonFunction;
 pub use semi_structured::SemiStructuredFunction;
-
-use crate::scalars::FunctionContext;

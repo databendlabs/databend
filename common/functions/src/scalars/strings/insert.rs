@@ -86,7 +86,7 @@ impl Function for InsertFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let s_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let ss_viewer = Vu8::try_create_viewer(columns[3].column())?;

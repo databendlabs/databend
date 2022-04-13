@@ -47,7 +47,7 @@ impl ProjectionTransform {
             output_schema,
             exprs,
             true,
-            ctx
+            ctx,
         )?;
 
         Ok(ProjectionTransform {

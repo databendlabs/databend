@@ -21,5 +21,3 @@ pub use context::ContextFunction;
 pub use current_user::CurrentUserFunction;
 pub use database::DatabaseFunction;
 pub use version::VersionFunction;
-
-use crate::scalars::FunctionContext;

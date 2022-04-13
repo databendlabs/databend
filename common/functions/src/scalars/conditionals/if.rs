@@ -21,8 +21,8 @@ use common_datavalues::with_match_scalar_type;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -267,7 +267,7 @@ impl Function for IfFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let cond_col = columns[0].column();
         let cond_col = DataBlock::cast_to_nonull_boolean(cond_col)?;

@@ -32,9 +32,9 @@ use crate::define_datetime64_add_year_months;
 use crate::impl_interval_year_month;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 use crate::scalars::FactoryCreatorWithTypes;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::TypedFunctionDescription;
 
@@ -158,7 +158,7 @@ where
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
         let mut ctx = EvalContext::new(self.factor, self.precision, None);

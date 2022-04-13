@@ -122,7 +122,7 @@ impl Function for FunctionAdapter {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if self.inner.is_none() {
             return Ok(Arc::new(NullColumn::new(input_rows)));
@@ -130,7 +130,7 @@ impl Function for FunctionAdapter {
 
         let inner = self.inner.as_ref().unwrap();
         if columns.is_empty() {
-            return inner.eval(columns, input_rows, FunctionContext { tz: None });
+            return inner.eval(columns, input_rows, func_ctx);
         }
 
         // is there nullable constant? Did not consider this case
@@ -146,7 +146,7 @@ impl Function for FunctionAdapter {
                 })
                 .collect::<Vec<_>>();
 
-            let col = self.eval(&columns, 1, FunctionContext { tz: None })?;
+            let col = self.eval(&columns, 1, func_ctx)?;
             let col = if col.is_const() && col.len() == 1 {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
@@ -191,7 +191,7 @@ impl Function for FunctionAdapter {
                     })
                     .collect::<Vec<_>>();
 
-                let col = self.eval(&columns, input_rows, FunctionContext { tz: None })?;
+                let col = self.eval(&columns, input_rows, func_ctx)?;
 
                 // The'try' series functions always return Null when they failed the try.
                 // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
@@ -219,7 +219,7 @@ impl Function for FunctionAdapter {
             }
         }
 
-        inner.eval(columns, input_rows, FunctionContext { tz: None })
+        inner.eval(columns, input_rows, func_ctx)
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {

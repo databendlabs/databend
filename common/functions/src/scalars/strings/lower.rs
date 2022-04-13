@@ -42,4 +42,3 @@ impl StringOperator for Lower {
 }
 
 pub type LowerFunction = String2StringFunction<Lower>;
-use crate::scalars::FunctionContext;

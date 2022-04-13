@@ -27,4 +27,3 @@ impl ContextFunction {
         factory.register("current_user", CurrentUserFunction::desc());
     }
 }
-use crate::scalars::FunctionContext;

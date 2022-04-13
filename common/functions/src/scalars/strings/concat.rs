@@ -59,7 +59,7 @@ impl Function for ConcatFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let viewers = columns
             .iter()

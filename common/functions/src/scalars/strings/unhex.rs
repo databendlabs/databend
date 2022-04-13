@@ -61,7 +61,7 @@ impl Function for UnhexFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 

@@ -30,4 +30,3 @@ impl ConditionalFunction {
         factory.register("not_in", InFunction::<true>::desc());
     }
 }
-use crate::scalars::FunctionContext;

@@ -70,7 +70,7 @@ impl Function for RepeatFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let col1 = cast_column_field(&columns[0], &StringType::arc())?;
         let col1_viewer = Vu8::try_create_viewer(&col1)?;

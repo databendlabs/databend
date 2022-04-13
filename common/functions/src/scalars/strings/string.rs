@@ -116,4 +116,3 @@ impl StringFunction {
         factory.register("instr", InstrFunction::desc());
     }
 }
-use crate::scalars::FunctionContext;

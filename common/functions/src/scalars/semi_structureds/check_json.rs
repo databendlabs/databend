@@ -21,8 +21,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
 
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -65,7 +65,7 @@ impl Function for CheckJsonFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let data_type = remove_nullable(columns[0].field().data_type());
         let mut column = columns[0].column();

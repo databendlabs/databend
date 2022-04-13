@@ -19,7 +19,6 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::validate_function_arg;
-use common_functions::scalars::FunctionContext;
 
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -57,12 +56,7 @@ pub trait Procedure: Sync + Send {
         Ok(())
     }
 
-    async fn eval(
-        &self,
-        ctx: Arc<QueryContext>,
-        args: Vec<String>,
-        eval_options: FunctionContext,
-    ) -> Result<DataBlock> {
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         self.validate(ctx.clone(), &args)?;
         self.inner_eval(ctx, args).await
     }

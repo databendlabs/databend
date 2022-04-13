@@ -222,7 +222,7 @@ impl PipelineBuilder {
             Ok(Box::new(WhereTransform::try_create(
                 node.schema(),
                 node.predicate.clone(),
-                self.ctx.clone()
+                self.ctx.clone(),
             )?))
         })?;
         Ok(pipeline)
@@ -234,7 +234,7 @@ impl PipelineBuilder {
             Ok(Box::new(HavingTransform::try_create(
                 node.schema(),
                 node.predicate.clone(),
-                self.ctx.clone()
+                self.ctx.clone(),
             )?))
         })?;
         Ok(pipeline)

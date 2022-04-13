@@ -51,7 +51,7 @@ impl ExpressionTransform {
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(
             "expression executor",
@@ -59,7 +59,7 @@ impl ExpressionTransform {
             output_schema,
             exprs,
             false,
-            ctx
+            ctx,
         )?;
         executor.validate()?;
 

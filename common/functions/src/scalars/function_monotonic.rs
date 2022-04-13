@@ -123,4 +123,3 @@ impl Monotonicity {
         Ok(0)
     }
 }
-use crate::scalars::FunctionContext;

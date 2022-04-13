@@ -95,7 +95,7 @@ where
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
         let column: &StringColumn = Series::check_get(columns[0].column())?;

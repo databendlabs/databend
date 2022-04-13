@@ -25,6 +25,7 @@ use databend_query::storages::index::range_filter::BlockStatistics;
 use databend_query::storages::index::range_filter::StatColumns;
 use databend_query::storages::index::ColumnStatistics;
 use databend_query::storages::index::RangeFilter;
+
 use crate::tests::create_query_context;
 
 #[tokio::test]

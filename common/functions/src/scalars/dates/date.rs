@@ -41,7 +41,6 @@ use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;

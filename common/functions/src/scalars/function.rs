@@ -23,6 +23,7 @@ use dyn_clone::DynClone;
 use super::Monotonicity;
 
 /// for now, this is only store Timezone
+#[derive(Clone)]
 pub struct FunctionContext {
     pub tz: Option<String>,
 }
@@ -49,7 +50,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
         &self,
         _columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef>;
 
     /// If all args are constant column, then we just return the constant result

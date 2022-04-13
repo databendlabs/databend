@@ -81,7 +81,7 @@ where
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let lhs = columns[0].column();
         let rhs = columns[1].column();

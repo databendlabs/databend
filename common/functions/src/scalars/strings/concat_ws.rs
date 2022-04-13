@@ -167,7 +167,7 @@ impl Function for ConcatWsFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let seperator = &columns[0];
         if seperator.data_type().is_null() {

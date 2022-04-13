@@ -73,7 +73,7 @@ impl Function for ExportSetFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let sep_col = if columns.len() >= 4 {
             columns[3].column().clone()

@@ -23,11 +23,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_tracing::tracing;
-use opensrv_clickhouse::protocols::QueryClientInfo;
 
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::storages::index::IndexSchemaVersion;
 use crate::sessions::QueryContext;
+use crate::storages::index::IndexSchemaVersion;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
 ///
@@ -93,7 +92,7 @@ impl BloomFilterIndexer {
     pub fn from_bloom_block(
         source_table_schema: DataSchemaRef,
         bloom_block: DataBlock,
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
@@ -114,7 +113,11 @@ impl BloomFilterIndexer {
     /// Create a bloom filter block from source data blocks and seed(s).
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn try_create_with_seed(blocks: &[DataBlock], seed: u64, ctx: Arc<QueryContext>) -> Result<Self> {
+    pub fn try_create_with_seed(
+        blocks: &[DataBlock],
+        seed: u64,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
@@ -170,7 +173,7 @@ impl BloomFilterIndexer {
         column_name: &str,
         target: DataValue,
         typ: DataTypePtr,
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
@@ -484,7 +487,11 @@ impl BloomFilter {
         seed2.0
     }
 
-    fn compute_column_city_hash(seed: u64, column: &ColumnRef, ctx: Arc<QueryContext>) -> Result<ColumnRef> {
+    fn compute_column_city_hash(
+        seed: u64,
+        column: &ColumnRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<ColumnRef> {
         let input_column = "input"; // create a dummy column name
         let input_field = DataField::new(input_column, column.data_type());
         let input_schema = Arc::new(DataSchema::new(vec![input_field]));
@@ -521,8 +528,13 @@ impl BloomFilter {
         Ok(output.column(0).clone())
     }
 
-    fn compute_column_double_hashes(&self, column: &ColumnRef, ctx: Arc<QueryContext>) -> Result<(ColumnRef, ColumnRef)> {
-        let hash1_column: ColumnRef = Self::compute_column_city_hash(self.seed, column, ctx.clone())?;
+    fn compute_column_double_hashes(
+        &self,
+        column: &ColumnRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<(ColumnRef, ColumnRef)> {
+        let hash1_column: ColumnRef =
+            Self::compute_column_city_hash(self.seed, column, ctx.clone())?;
         let seed2 = self.generate_seed_2();
         let hash2_column: ColumnRef = Self::compute_column_city_hash(seed2, column, ctx)?;
 
@@ -582,7 +594,7 @@ impl BloomFilter {
         &self,
         data_value: DataValue,
         data_type: DataTypePtr,
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<(u64, u64)> {
         let col = data_value.as_const_column(&data_type, 1)?;
 

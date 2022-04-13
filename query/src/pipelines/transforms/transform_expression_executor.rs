@@ -19,12 +19,12 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 use common_tracing::tracing;
-use common_functions::scalars::FunctionContext;
 
 use crate::sessions::QueryContext;
 
@@ -39,7 +39,7 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
-    ctx: Arc<QueryContext>,
+    _ctx: Arc<QueryContext>,
 }
 
 impl ExpressionExecutor {
@@ -59,7 +59,7 @@ impl ExpressionExecutor {
             output_schema,
             chain: Arc::new(chain),
             alias_project,
-            ctx,
+            _ctx: ctx,
         })
     }
 
@@ -194,7 +194,9 @@ impl ExpressionExecutor {
         }
 
         // TODO(veeupup): get session's eval tz options
-        let column = f.func.eval(&arg_columns, rows, FunctionContext { tz: None })?;
+        let column = f
+            .func
+            .eval(&arg_columns, rows, FunctionContext { tz: None })?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),

@@ -30,7 +30,6 @@ use super::cast_from_string::cast_from_string;
 use super::cast_from_variant::cast_from_variant;
 use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime32;
 use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime64;
-use crate::scalars::FunctionContext;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CastOptions {

@@ -123,7 +123,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let result_column = if columns[0].data_type().data_type_id() == TypeID::String {
             let viewer = Vu8::try_create_viewer(columns[0].column())?;

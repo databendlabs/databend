@@ -43,7 +43,7 @@ where Self: Transform
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
-        ctx: Arc<QueryContext>
+        ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let executor = ExpressionExecutor::try_create(
             "expression executor",
@@ -51,7 +51,7 @@ where Self: Transform
             output_schema,
             exprs,
             ALIAS_PROJECT,
-            ctx
+            ctx,
         )?;
         executor.validate()?;
 

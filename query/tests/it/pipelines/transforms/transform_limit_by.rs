@@ -22,6 +22,7 @@ use databend_query::pipelines::processors::*;
 use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+
 use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -46,7 +47,7 @@ async fn test_transform_limit_by() -> Result<()> {
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone(),
-                ctx.clone()
+                ctx.clone(),
             )?))
         })?;
 
@@ -64,7 +65,7 @@ async fn test_transform_limit_by() -> Result<()> {
                 plan.schema(),
                 DataSchemaRefExt::create(vec![col("(number % 3)").to_data_field(&plan.schema())?]),
                 vec![col("(number % 3)"), col("number")],
-                ctx.clone()
+                ctx.clone(),
             )?))
         })?;
     }

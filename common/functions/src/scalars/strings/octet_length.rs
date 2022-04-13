@@ -28,4 +28,3 @@ impl NumberOperator<u64> for OctetLength {
 }
 
 pub type OctetLengthFunction = String2NumberFunction<OctetLength, u64>;
-use crate::scalars::FunctionContext;

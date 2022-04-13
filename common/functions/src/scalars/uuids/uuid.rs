@@ -28,4 +28,3 @@ impl UUIDFunction {
         factory.register("isnotemptyUUID", UUIDIsNotEmptyFunction::desc());
     }
 }
-use crate::scalars::FunctionContext;

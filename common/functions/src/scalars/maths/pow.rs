@@ -24,8 +24,8 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -72,7 +72,7 @@ impl Function for PowFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {

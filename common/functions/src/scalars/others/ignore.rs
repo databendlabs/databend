@@ -22,8 +22,8 @@ use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 

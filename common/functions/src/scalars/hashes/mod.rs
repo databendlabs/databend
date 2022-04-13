@@ -27,5 +27,3 @@ pub use hash_base::BaseHashFunction;
 pub use md5hash::Md5HashFunction;
 pub use sha1hash::Sha1HashFunction;
 pub use sha2hash::Sha2HashFunction;
-
-use crate::scalars::FunctionContext;

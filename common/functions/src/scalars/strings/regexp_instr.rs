@@ -78,7 +78,7 @@ impl Function for RegexpInStrFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();

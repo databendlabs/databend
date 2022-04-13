@@ -72,7 +72,7 @@ impl Function for CastFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         cast_column_field(&columns[0], &self.cast_type)
     }

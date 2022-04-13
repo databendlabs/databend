@@ -31,5 +31,3 @@ pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;
 pub use sleep::SleepFunction;
 pub use to_type_name::ToTypeNameFunction;
-
-use crate::scalars::FunctionContext;

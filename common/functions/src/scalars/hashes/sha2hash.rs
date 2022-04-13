@@ -23,8 +23,8 @@ use common_exception::Result;
 use sha2::Digest;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -75,7 +75,7 @@ impl Function for Sha2HashFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let col_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());

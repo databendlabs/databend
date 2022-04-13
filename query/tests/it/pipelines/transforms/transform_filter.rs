@@ -21,6 +21,7 @@ use databend_query::pipelines::processors::*;
 use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+
 use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -42,7 +43,7 @@ async fn test_transform_filter() -> Result<()> {
             Ok(Box::new(WhereTransform::try_create(
                 plan.input.schema(),
                 plan.predicate.clone(),
-                ctx.clone()
+                ctx.clone(),
             )?))
         })?;
     }

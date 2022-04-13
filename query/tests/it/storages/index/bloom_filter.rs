@@ -20,6 +20,7 @@ use databend_query::storages::index::BloomFilter;
 use databend_query::storages::index::BloomFilterExprEvalResult;
 use databend_query::storages::index::BloomFilterIndexer;
 use pretty_assertions::assert_eq;
+
 use crate::tests::create_query_context;
 
 fn create_seed() -> u64 {
@@ -53,16 +54,44 @@ async fn test_bloom_add_find_string() -> Result<()> {
 
     let ctx = create_query_context().await?;
     bloom.add(col, ctx.clone())?;
-    assert!(bloom.find(DataValue::String(b"Alice".to_vec()), StringType::arc(), ctx.clone())?);
-    assert!(bloom.find(DataValue::String(b"Bob".to_vec()), StringType::arc(), ctx.clone())?);
-    assert!(bloom.find(DataValue::String(b"Batman".to_vec()), StringType::arc(), ctx.clone())?);
-    assert!(bloom.find(DataValue::String(b"Superman".to_vec()), StringType::arc(), ctx.clone())?);
+    assert!(bloom.find(
+        DataValue::String(b"Alice".to_vec()),
+        StringType::arc(),
+        ctx.clone()
+    )?);
+    assert!(bloom.find(
+        DataValue::String(b"Bob".to_vec()),
+        StringType::arc(),
+        ctx.clone()
+    )?);
+    assert!(bloom.find(
+        DataValue::String(b"Batman".to_vec()),
+        StringType::arc(),
+        ctx.clone()
+    )?);
+    assert!(bloom.find(
+        DataValue::String(b"Superman".to_vec()),
+        StringType::arc(),
+        ctx.clone()
+    )?);
     assert!(bloom.find(DataValue::UInt64(123), StringType::arc(), ctx.clone())?); // cast will happen to convert 123 to "123"
 
     // this case no false positive
-    assert!(!bloom.find(DataValue::String(b"alice1".to_vec()), StringType::arc(), ctx.clone())?);
-    assert!(!bloom.find(DataValue::String(b"alice2".to_vec()), StringType::arc(), ctx.clone())?);
-    assert!(!bloom.find(DataValue::String(b"alice3".to_vec()), StringType::arc(), ctx)?);
+    assert!(!bloom.find(
+        DataValue::String(b"alice1".to_vec()),
+        StringType::arc(),
+        ctx.clone()
+    )?);
+    assert!(!bloom.find(
+        DataValue::String(b"alice2".to_vec()),
+        StringType::arc(),
+        ctx.clone()
+    )?);
+    assert!(!bloom.find(
+        DataValue::String(b"alice3".to_vec()),
+        StringType::arc(),
+        ctx
+    )?);
 
     Ok(())
 }
@@ -161,9 +190,21 @@ async fn test_bloom_f64_serialization() -> Result<()> {
     let buf = bloom.to_vec()?;
     let bloom = BloomFilter::from_vec(buf.as_slice())?;
 
-    assert!(bloom.find(DataValue::Float64(1234.1234_f64), Float64Type::arc(), ctx.clone())?);
-    assert!(bloom.find(DataValue::Float64(-4321.4321_f64), Float64Type::arc(), ctx.clone())?);
-    assert!(bloom.find(DataValue::Float64(88.88_f64), Float64Type::arc(), ctx.clone())?);
+    assert!(bloom.find(
+        DataValue::Float64(1234.1234_f64),
+        Float64Type::arc(),
+        ctx.clone()
+    )?);
+    assert!(bloom.find(
+        DataValue::Float64(-4321.4321_f64),
+        Float64Type::arc(),
+        ctx.clone()
+    )?);
+    assert!(bloom.find(
+        DataValue::Float64(88.88_f64),
+        Float64Type::arc(),
+        ctx.clone()
+    )?);
 
     // a random number not exist
     assert!(!bloom.find(DataValue::Float64(88.88001_f64), Float64Type::arc(), ctx)?);

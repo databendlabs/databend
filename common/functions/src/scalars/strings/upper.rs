@@ -42,4 +42,3 @@ impl StringOperator for Upper {
 }
 
 pub type UpperFunction = String2StringFunction<Upper>;
-use crate::scalars::FunctionContext;

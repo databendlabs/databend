@@ -20,8 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
 
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -77,7 +77,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         if data_type.data_type_id() == TypeID::VariantArray

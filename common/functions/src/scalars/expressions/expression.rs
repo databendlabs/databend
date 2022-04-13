@@ -21,7 +21,6 @@ use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct ToCastFunction;
-use crate::scalars::FunctionContext;
 
 impl ToCastFunction {
     fn cast_function_creator(type_name: &'static str) -> Result<FunctionDescription> {

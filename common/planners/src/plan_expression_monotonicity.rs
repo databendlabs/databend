@@ -20,9 +20,9 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;
+use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
-use common_functions::scalars::FunctionContext;
 
 use crate::col;
 use crate::Expression;
@@ -99,7 +99,7 @@ impl ExpressionMonotonicityVisitor {
                 .into_iter()
                 .map(|col_opt| col_opt.unwrap())
                 .collect::<Vec<_>>();
-
+            // TODO(veeupup): whether we need to pass function context here?
             let col = func.eval(&input_columns, 1, FunctionContext { tz: None })?;
             let data_field = DataField::new("dummy", result_type.clone());
             let data_column_field = ColumnWithField::new(col, data_field);

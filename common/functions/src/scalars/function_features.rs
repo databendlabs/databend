@@ -93,4 +93,3 @@ impl FunctionFeatures {
         self
     }
 }
-use crate::scalars::FunctionContext;

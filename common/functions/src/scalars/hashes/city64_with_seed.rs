@@ -25,8 +25,8 @@ use naive_cityhash::cityhash64_with_seed;
 
 use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -120,7 +120,7 @@ impl Function for City64WithSeedFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let column = columns[0].column();
         let physical_data_type = columns[0].data_type().data_type_id().to_physical_type();

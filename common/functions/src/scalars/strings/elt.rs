@@ -82,7 +82,7 @@ impl Function for EltFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if columns[0].data_type().is_null() {
             return Ok(NullColumn::new(input_rows).arc());

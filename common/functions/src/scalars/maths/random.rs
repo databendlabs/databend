@@ -24,8 +24,8 @@ use rand::prelude::*;
 use crate::scalars::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -63,7 +63,7 @@ impl Function for RandomFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         match columns.len() {
             0 => {

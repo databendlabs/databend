@@ -45,4 +45,3 @@ pub fn assert_date_or_datetime(data_type: &DataTypePtr) -> Result<()> {
     }
     Ok(())
 }
-use crate::scalars::FunctionContext;

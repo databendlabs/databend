@@ -205,4 +205,3 @@ impl FunctionFactory {
             .collect::<Vec<_>>()
     }
 }
-use crate::scalars::FunctionContext;

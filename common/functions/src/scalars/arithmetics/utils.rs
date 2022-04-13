@@ -22,8 +22,6 @@ use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
-use crate::scalars::FunctionContext;
-
 // https://github.com/jorgecarleitao/arrow2/blob/main/src/compute/arithmetics/basic/rem.rs#L95
 pub fn rem_scalar<L, R, O>(
     lhs: &<L as Scalar>::ColumnType,

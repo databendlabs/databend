@@ -48,8 +48,16 @@ impl ConstantFoldingImpl {
             .any(|expr| !matches!(expr, Expression::Literal { .. }))
     }
 
-    fn rewrite_function<F>(op: &str, args: Expressions, name: String, f: F, ctx: Arc<QueryContext>) -> Result<Expression>
-    where F: Fn(&str, Expressions) -> Expression {
+    fn rewrite_function<F>(
+        op: &str,
+        args: Expressions,
+        name: String,
+        f: F,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Expression>
+    where
+        F: Fn(&str, Expressions) -> Expression,
+    {
         let factory = FunctionFactory::instance();
         let function_features = factory.get_features(op)?;
 
@@ -58,14 +66,18 @@ impl ConstantFoldingImpl {
             return ConstantFoldingImpl::execute_expression(
                 Expression::ScalarFunction { op, args },
                 name,
-                ctx
+                ctx,
             );
         }
 
         Ok(f(op, args))
     }
 
-    fn expr_executor(schema: &DataSchemaRef, expr: Expression, ctx: Arc<QueryContext>) -> Result<ExpressionExecutor> {
+    fn expr_executor(
+        schema: &DataSchemaRef,
+        expr: Expression,
+        ctx: Arc<QueryContext>,
+    ) -> Result<ExpressionExecutor> {
         let output_fields = vec![expr.to_data_field(schema)?];
         let output_schema = DataSchemaRefExt::create(output_fields);
         ExpressionExecutor::try_create(
@@ -78,7 +90,11 @@ impl ConstantFoldingImpl {
         )
     }
 
-    fn execute_expression(expression: Expression, origin_name: String, ctx: Arc<QueryContext>) -> Result<Expression> {
+    fn execute_expression(
+        expression: Expression,
+        origin_name: String,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Expression> {
         let input_fields = vec![DataField::new("_dummy", u8::to_data_type())];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
@@ -127,9 +143,7 @@ impl PlanRewriter for ConstantFoldingImpl {
                 origin_expr: &Expression,
             ) -> Result<Expression> {
                 let origin_name = origin_expr.column_name();
-                let ctx = unsafe {
-                    (*self.0).ctx.clone()
-                };
+                let ctx = unsafe { (*self.0).ctx.clone() };
                 ConstantFoldingImpl::rewrite_function(
                     name,
                     args,
@@ -146,15 +160,13 @@ impl PlanRewriter for ConstantFoldingImpl {
                 origin_expr: &Expression,
             ) -> Result<Expression> {
                 let origin_name = origin_expr.column_name();
-                let ctx = unsafe {
-                    (*self.0).ctx.clone()
-                };
+                let ctx = unsafe { (*self.0).ctx.clone() };
                 ConstantFoldingImpl::rewrite_function(
                     op,
                     vec![expr],
                     origin_name,
                     Expression::create_unary_expression,
-                    ctx
+                    ctx,
                 )
             }
 
@@ -166,15 +178,13 @@ impl PlanRewriter for ConstantFoldingImpl {
                 origin_expr: &Expression,
             ) -> Result<Expression> {
                 let origin_name = origin_expr.column_name();
-                let ctx = unsafe {
-                    (*self.0).ctx.clone()
-                };
+                let ctx = unsafe { (*self.0).ctx.clone() };
                 ConstantFoldingImpl::rewrite_function(
                     op,
                     vec![left, right],
                     origin_name,
                     Expression::create_binary_expression,
-                    ctx
+                    ctx,
                 )
             }
 
@@ -191,13 +201,11 @@ impl PlanRewriter for ConstantFoldingImpl {
                         data_type: typ.clone(),
                         is_nullable,
                     };
-                    let ctx = unsafe {
-                        (*self.0).ctx.clone()
-                    };
+                    let ctx = unsafe { (*self.0).ctx.clone() };
                     return ConstantFoldingImpl::execute_expression(
                         optimize_expr,
                         origin_expr.column_name(),
-                        ctx
+                        ctx,
                     );
                 }
 
@@ -251,7 +259,7 @@ impl ConstantFoldingImpl {
     pub fn new(ctx: Arc<QueryContext>) -> ConstantFoldingImpl {
         ConstantFoldingImpl {
             before_group_by_schema: None,
-            ctx
+            ctx,
         }
     }
 }
@@ -269,8 +277,6 @@ impl Optimizer for ConstantFoldingOptimizer {
 
 impl ConstantFoldingOptimizer {
     pub fn create(ctx: Arc<QueryContext>) -> Self {
-        ConstantFoldingOptimizer {
-            ctx
-        }
+        ConstantFoldingOptimizer { ctx }
     }
 }

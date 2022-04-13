@@ -21,7 +21,6 @@ use num::traits::AsPrimitive;
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;

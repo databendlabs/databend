@@ -60,7 +60,7 @@ impl Function for SpaceFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {

@@ -23,7 +23,6 @@ use super::comparison::ComparisonImpl;
 use super::comparison_gt::BooleanSimdGt;
 use super::utils::*;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 
 pub type ComparisonLtFunction = ComparisonFunctionCreator<ComparisonLtImpl>;
 

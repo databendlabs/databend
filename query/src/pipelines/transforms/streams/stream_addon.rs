@@ -79,7 +79,7 @@ impl AddOnStream {
             schema_after_default_expr,
             default_exprs,
             true,
-            ctx
+            ctx,
         )?;
 
         Ok(AddOnStream {

@@ -19,7 +19,6 @@ use common_exception::Result;
 
 use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
-use crate::scalars::FunctionContext;
 
 #[derive(Clone, Default)]
 pub struct Md5 {}

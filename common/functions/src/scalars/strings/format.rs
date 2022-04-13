@@ -74,7 +74,7 @@ impl Function for FormatFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _eval_options: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {

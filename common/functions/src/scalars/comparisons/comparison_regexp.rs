@@ -22,7 +22,6 @@ use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
-use crate::scalars::FunctionContext;
 
 pub type ComparisonRegexpFunction = StringSearchCreator<false, StringSearchRegex>;
 pub type ComparisonNotRegexpFunction = StringSearchCreator<true, StringSearchRegex>;

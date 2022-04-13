@@ -19,7 +19,6 @@ use common_exception::Result;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
-use crate::scalars::FunctionContext;
 
 #[derive(Clone, Default)]
 pub struct Encode {}

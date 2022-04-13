@@ -25,7 +25,6 @@ use num_traits::WrappingSub;
 
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::FunctionContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFeatures;
