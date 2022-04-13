@@ -219,8 +219,8 @@ async fn test_watch() -> anyhow::Result<()> {
         let watch = WatchRequest {
             key: key_str.to_string(),
             key_end: None,
-            // filter out update
-            filter_type: FilterType::Noupdate.into(),
+            // filter only delete events
+            filter_type: FilterType::Delete.into(),
         };
 
         let key = key_str.to_string();

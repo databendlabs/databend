@@ -59,10 +59,10 @@ message WatchRequest {
   enum FilterType {
     // recv all kind update event.
     ALL = 0;    
-    // filter out update event.
-    NOUPDATE = 1;
-    // filter out delete event.
-    NODELETE = 2;
+    // filter only update event.
+    UPDATE = 1;
+    // filter only delete event.
+    DELETE = 2;
   }  
   FilterType filter_type = 3;
 }

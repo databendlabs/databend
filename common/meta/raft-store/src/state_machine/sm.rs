@@ -571,14 +571,7 @@ impl StateMachine {
         tracing::debug!("applied UpsertKV: {} {:?}", key, result);
 
         if let Some(subscriber) = &self.subscriber {
-            match value_op {
-                Operation::Delete => {
-                    let _ = subscriber.kv_changed(&key_str, prev.clone(), None);
-                }
-                _ => {
-                    let _ = subscriber.kv_changed(&key_str, prev.clone(), result.clone());
-                }
-            };
+            subscriber.kv_changed(&key_str, prev.clone(), result.clone());
         }
 
         Ok(Change::new(prev, result).into())

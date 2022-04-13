@@ -202,8 +202,8 @@ impl WatcherManagerCore {
                 let filter = range_key.key.filter;
 
                 // filter out event
-                if (filter == FilterType::Noupdate && event == EventType::Update)
-                    || (filter == FilterType::Nodelete && event == EventType::Delete)
+                if (filter == FilterType::Delete && event == EventType::Update)
+                    || (filter == FilterType::Update && event == EventType::Delete)
                 {
                     continue;
                 }
