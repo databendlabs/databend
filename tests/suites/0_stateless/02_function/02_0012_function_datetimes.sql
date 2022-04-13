@@ -206,10 +206,3 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');
 
 select * from t order by d64;
 drop table t;
-
-select '===TIMEZONE===';
-set timezone='UTC';
-select toDatetime(1649750545) = '2022-04-12 08:02:25';
-set timezone='Asia/Shanghai';
-select toDatetime(1649750545) = '2022-04-12 16:02:25';
-select addDays(toDatetime(1649750545), 1) = '2022-04-13 08:02:25';
