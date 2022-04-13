@@ -1,43 +1,44 @@
 # Global rule
 *    @BohuTANG
 
-# Query rule
-/query/                  @datafuselabs/query-members
-/common/array/           @datafuselabs/query-members
-/common/cache/           @datafuselabs/query-members
-/common/clickhouse-srv/  @datafuselabs/query-members
-/common/context/         @datafuselabs/query-members
-/common/datablocks/      @datafuselabs/query-members
-/common/datavalues/      @datafuselabs/query-members
-/common/flight-rpc/      @datafuselabs/query-members
-/common/functions/       @datafuselabs/query-members
-/common/infallible/      @datafuselabs/query-members
-/common/io/              @datafuselabs/query-members
-/common/management/      @datafuselabs/query-members
-/common/mem-allocator/   @datafuselabs/query-members
-/common/metrics/         @datafuselabs/query-members
-/common/planners/        @datafuselabs/query-members
-/common/streams/         @datafuselabs/query-members
-/common/tracing/         @datafuselabs/query-members
-/common/base/            @datafuselabs/query-members
-/common/building/        @datafuselabs/query-members
+# Query
+/common/arrow/ @databend-query-reviewer
+/common/arrow/ @databend-query-reviewer
+/common/datablocks/ @databend-query-reviewer
+/common/datavalues/ @databend-query-reviewer
+/common/functions/ @databend-query-reviewer
+/common/io/ @databend-query-reviewer
+/common/management/ @databend-query-reviewer
+/common/streams/ @databend-query-reviewer
 
-# Storage rule
-/common/dal/             @datafuselabs/storage-members
-/query/src/datasources/  @datafuselabs/storage-members
+# Executor
+/query/src/clusters/ @databend-executor-reviewer
+/query/src/pipelines/ @databend-executor-reviewer
+/query/src/api/rpc/ @databend-executor-reviewer
+/common/base/  @databend-executor-reviewer
+/common/exception/  @databend-executor-reviewer
+/common/planners/  @databend-executor-reviewer
 
-# Meta rule
-/metasrv                 @datafuselabs/meta-members
-/kvsrv                   @datafuselabs/meta-members
-/common/meta/            @datafuselabs/meta-members
-/common/raft-store/      @datafuselabs/meta-members
-/common/sled-store/      @datafuselabs/meta-members
+# Planner
+/common/ast/ @databend-planner-reviewer
+/query/src/optimizers/ @databend-planner-reviewer
 
-# Cli rule
-/docker                  @datafuselabs/cli-members
-/cli                     @datafuselabs/cli-members
+# MetaSrv
+/metasrv/ @databend-meta-reviewer
+/common/meta/ @databend-meta-reviewer
+common/grpc/ @databend-meta-reviewer
 
-# Tests rule
+# Storage
+/common/cache/
+/query/src/catalogs/ @databend-storage-reviewer
+/query/src/storages/ @databend-storage-reviewer
+
 
 # Website rule
-/website  @datafuselabs/doc-members
+/website/  @databend-document-reviewer
+/docs/ @databend-document-reviewer
+
+# Tool
+/docker/ @databend-tool-reviewer
+/scripts/ @databend-tool-reviewer
+/.github/ @databend-tool-reviewer
