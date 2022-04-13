@@ -460,6 +460,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "boxcar"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38c99613cb3cd7429889a08dfcf651721ca971c86afa30798461f8eee994de47"
+
+[[package]]
 name = "brotli"
 version = "3.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1724,6 +1730,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bit-vec",
+ "boxcar",
  "bumpalo",
  "byteorder",
  "bytes 1.1.0",

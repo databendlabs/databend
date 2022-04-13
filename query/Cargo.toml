@@ -65,12 +65,14 @@ async-trait = "0.1.53"
 backoff = "0.4.0"
 base64 = "0.13.0"
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
+boxcar = "0.1.0"
 bumpalo = "3.9.1"
 byteorder = "1.4.3"
 bytes = "1.1.0"
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
 clap = { version = "3.1.8", features = ["derive", "env"] }
+crossbeam-queue = "0.3"
 dyn-clone = "1.0.5"
 futures = "0.3.21"
 headers = "0.3.7"
@@ -106,7 +108,6 @@ tonic = "=0.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-crossbeam-queue = "0.3"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }

@@ -136,18 +136,18 @@ impl CompletedAsyncTask {
 
 struct ExecutorTasks {
     tasks_size: AtomicUsize,
-    workers_sync_tasks: Vec<SegQueue<ProcessorPtr>>,
-    workers_async_tasks: Vec<SegQueue<ProcessorPtr>>,
-    workers_completed_async_tasks: Vec<SegQueue<CompletedAsyncTask>>,
+    workers_sync_tasks: boxcar::Vec<SegQueue<ProcessorPtr>>,
+    workers_async_tasks: boxcar::Vec<SegQueue<ProcessorPtr>>,
+    workers_completed_async_tasks: boxcar::Vec<SegQueue<CompletedAsyncTask>>,
 }
 
 unsafe impl Send for ExecutorTasks {}
 
 impl ExecutorTasks {
     pub fn create(workers_size: usize) -> ExecutorTasks {
-        let mut workers_sync_tasks = Vec::with_capacity(workers_size);
-        let mut workers_async_tasks = Vec::with_capacity(workers_size);
-        let mut workers_completed_async_tasks = Vec::with_capacity(workers_size);
+        let workers_sync_tasks = boxcar::Vec::with_capacity(workers_size);
+        let workers_async_tasks = boxcar::Vec::with_capacity(workers_size);
+        let workers_completed_async_tasks = boxcar::Vec::with_capacity(workers_size);
 
         for _index in 0..workers_size {
             workers_sync_tasks.push(SegQueue::new());
