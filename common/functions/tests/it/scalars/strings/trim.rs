@@ -14,12 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::LTrimFunction;
-use common_functions::scalars::RTrimFunction;
-use common_functions::scalars::TrimFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_ltrim_function() -> Result<()> {
@@ -30,11 +27,7 @@ fn test_ltrim_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        LTrimFunction::try_create("ltrim", &[&StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("ltrim", &tests)
 }
 
 #[test]
@@ -46,11 +39,7 @@ fn test_rtrim_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        RTrimFunction::try_create("rtrim", &[&StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("rtrim", &tests)
 }
 
 #[test]
@@ -70,11 +59,7 @@ fn test_trim_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        TrimFunction::try_create("trim", &[&StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("trim", &tests)
 }
 
 #[test]
@@ -86,9 +71,5 @@ fn test_trim_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        TrimFunction::try_create("trim", &[&StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("trim", &tests)
 }

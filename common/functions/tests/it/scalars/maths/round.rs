@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_round_number_function() -> Result<()> {
@@ -156,11 +155,7 @@ fn test_round_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RoundNumberFunction::try_create("round", &[&Float64Type::arc(), &Float64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("round", &tests)
 }
 
 #[test]
@@ -233,9 +228,5 @@ fn test_trunc_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        TruncNumberFunction::try_create("trunc", &[&Float64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("truncate", &tests)
 }

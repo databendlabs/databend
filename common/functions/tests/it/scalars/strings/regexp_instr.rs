@@ -14,61 +14,12 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::RegexpInStrFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_instr_function() -> Result<()> {
-    let types = vec![
-        vec![StringType::arc(), StringType::arc()],
-        vec![StringType::arc(), StringType::arc(), Int64Type::arc()],
-        vec![
-            StringType::arc(),
-            StringType::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-        ],
-        vec![
-            StringType::arc(),
-            StringType::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-        ],
-        vec![
-            StringType::arc(),
-            StringType::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            StringType::arc(),
-        ],
-        vec![
-            StringType::arc(),
-            StringType::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-        ],
-        vec![
-            StringType::arc(),
-            StringType::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-        ],
-        vec![
-            StringType::arc(),
-            StringType::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            Int64Type::arc(),
-            StringType::arc(),
-        ],
-    ];
-
     let tests = vec![
         ScalarFunctionTest {
             name: "regexp-instr-two-column-passed",
@@ -189,15 +140,7 @@ fn test_regexp_instr_function() -> Result<()> {
         },
     ];
 
-    for (typ, test) in types.iter().zip(tests) {
-        test_scalar_functions(
-            RegexpInStrFunction::try_create("regexp_instr", &typ.iter().collect::<Vec<_>>())?,
-            &[test],
-            true,
-        )?;
-    }
-
-    Ok(())
+    test_scalar_functions("regexp_instr", &tests)
 }
 
 #[test]
@@ -233,15 +176,5 @@ fn test_regexp_instr_constant_column() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RegexpInStrFunction::try_create("regexp_instr", &[
-            &StringType::arc(),
-            &StringType::arc(),
-            &Int64Type::arc(),
-            &Int64Type::arc(),
-            &Int64Type::arc(),
-        ])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("regexp_instr", &tests)
 }

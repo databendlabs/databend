@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_exp_function() -> Result<()> {
@@ -36,9 +35,5 @@ fn test_exp_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        ExpFunction::try_create("exp", &[&Int32Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("exp", &tests)
 }

@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_uuid_is_empty_functions() -> Result<()> {
@@ -31,11 +30,7 @@ fn test_uuid_is_empty_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        UUIDIsEmptyFunction::try_create("", &[&StringType::arc()])?,
-        &tests,
-        false,
-    )
+    test_scalar_functions("isemptyUUID", &tests)
 }
 
 #[test]
@@ -50,9 +45,5 @@ fn test_uuid_is_not_empty_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        UUIDIsNotEmptyFunction::try_create("", &[&StringType::arc()])?,
-        &tests,
-        false,
-    )
+    test_scalar_functions("isnotemptyUUID", &tests)
 }

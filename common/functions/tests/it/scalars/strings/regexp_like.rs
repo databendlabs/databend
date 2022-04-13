@@ -14,21 +14,12 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::RegexpLikeFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_like_function() -> Result<()> {
-    let types = vec![
-        vec![StringType::arc(), StringType::arc()],
-        vec![StringType::arc(), StringType::arc(), StringType::arc()],
-        vec![StringType::arc(), Int32Type::arc()],
-        vec![StringType::arc(), StringType::arc(), StringType::arc()],
-        vec![StringType::arc(), StringType::arc(), StringType::arc()],
-        vec![StringType::arc(), StringType::arc(), StringType::arc()],
-    ];
     let tests = vec![
         ScalarFunctionTest {
             name: "regexp-like-two-column-passed",
@@ -90,18 +81,7 @@ fn test_regexp_like_function() -> Result<()> {
         },
     ];
 
-    for (typ, test) in types.iter().zip(tests) {
-        match RegexpLikeFunction::try_create("regexp_like", &typ.iter().collect::<Vec<_>>()) {
-            Ok(f) => {
-                test_scalar_functions(f, &[test], true)?;
-            }
-            Err(cause) => {
-                assert_eq!(test.error, cause.message(), "{}", test.name);
-            }
-        }
-    }
-
-    Ok(())
+    test_scalar_functions("regexp_like", &tests)
 }
 
 #[test]
@@ -129,13 +109,5 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RegexpLikeFunction::try_create("regexp_like", &[
-            &StringType::arc(),
-            &StringType::arc(),
-            &StringType::arc(),
-        ])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("regexp_like", &tests)
 }

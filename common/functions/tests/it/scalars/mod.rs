@@ -22,7 +22,7 @@ mod logics;
 mod maths;
 mod nullables;
 mod others;
-mod scalar_function2_test;
+mod scalar_function_test;
 mod semi_structureds;
 mod strings;
 mod tuples;

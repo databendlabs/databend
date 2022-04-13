@@ -12,35 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::ParseJsonFunction;
-use common_functions::scalars::TryParseJsonFunction;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_parse_json_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
-    let types = vec![
-        BooleanType::arc(),
-        Int16Type::arc(),
-        Float64Type::arc(),
-        StringType::arc(),
-        StringType::arc(),
-        StringType::arc(),
-        StringType::arc(),
-        NullableType::arc(BooleanType::arc()),
-        NullableType::arc(Int16Type::arc()),
-        NullableType::arc(Float64Type::arc()),
-        NullableType::arc(StringType::arc()),
-        NullableType::arc(StringType::arc()),
-        NullableType::arc(StringType::arc()),
-        NullableType::arc(StringType::arc()),
-    ];
     let tests = vec![
         ScalarFunctionTest {
             name: "parse_json_bool",
@@ -184,31 +165,11 @@ fn test_parse_json_function() -> Result<()> {
         },
     ];
 
-    for (typ, test) in types.iter().zip(tests) {
-        test_scalar_functions(
-            ParseJsonFunction::try_create("parse_json", &[typ])?,
-            &[test],
-            false,
-        )?;
-    }
-
-    Ok(())
+    test_scalar_functions("parse_json", &tests)
 }
 
 #[test]
 fn test_try_parse_json_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
-    let types = vec![
-        BooleanType::arc(),
-        Int16Type::arc(),
-        Float64Type::arc(),
-        StringType::arc(),
-        StringType::arc(),
-        StringType::arc(),
-        StringType::arc(),
-    ];
-
     let tests = vec![
         ScalarFunctionTest {
             name: "parse_json_bool",
@@ -282,13 +243,5 @@ fn test_try_parse_json_function() -> Result<()> {
         },
     ];
 
-    for (typ, test) in types.iter().zip(tests) {
-        test_scalar_functions(
-            TryParseJsonFunction::try_create("try_parse_json", &[typ])?,
-            &[test],
-            true,
-        )?;
-    }
-
-    Ok(())
+    test_scalar_functions("try_parse_json", &tests)
 }

@@ -14,17 +14,12 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use super::scalar_function2_test::test_eval;
-use super::scalar_function2_test::ScalarFunctionTest;
+use super::scalar_function_test::test_eval;
+use super::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_tuple_function() -> Result<()> {
-    let types = vec![vec![UInt8Type::arc()], vec![
-        UInt8Type::arc(),
-        UInt8Type::arc(),
-    ]];
     let tests = vec![
         (
             vec![DataValue::Struct(vec![DataValue::UInt64(0)])],
@@ -49,9 +44,8 @@ fn test_tuple_function() -> Result<()> {
         ),
     ];
 
-    for ((val, test), typ) in tests.iter().zip(types.iter()) {
-        let func = TupleFunction::try_create_func("", &typ.iter().collect::<Vec<_>>())?;
-        let result = test_eval(&func, &test.columns, false)?;
+    for (val, test) in tests.iter() {
+        let result = test_eval("tuple", &test.columns)?;
         let result = result.convert_full_column();
 
         let result = (0..result.len()).map(|i| result.get(i)).collect::<Vec<_>>();

@@ -106,8 +106,8 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
 
     fn eval(
         &self,
-        columns: &common_datavalues::ColumnsWithField,
-        _input_rows: usize,
+        _columns: &common_datavalues::ColumnsWithField,
+        input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
