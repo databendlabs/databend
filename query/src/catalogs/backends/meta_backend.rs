@@ -31,6 +31,7 @@ use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -38,6 +39,7 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -176,6 +178,11 @@ impl MetaApi for MetaBackend {
 
     async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
         self.query_backend(move |cli| async move { cli.drop_share(req).await })
+            .await
+    }
+
+    async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+        self.query_backend(move |cli| async move { cli.get_share(req).await })
             .await
     }
 

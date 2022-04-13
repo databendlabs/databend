@@ -128,6 +128,12 @@ impl ActionHandler {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }
+
+            // share
+            MetaGrpcReadReq::GetShare(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
         }
     }
 }

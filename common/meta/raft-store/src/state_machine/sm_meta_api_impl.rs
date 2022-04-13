@@ -36,6 +36,7 @@ use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -412,6 +413,12 @@ impl MetaApi for StateMachine {
         }
 
         Ok(DropShareReply {})
+    }
+
+    async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+        let share_id = self.get_share_id(&req.tenant, &req.share_name)?;
+        let seq_share_info = self.get_share_info_by_id(&share_id)?;
+        Ok(Arc::new(seq_share_info.data))
     }
 
     fn name(&self) -> String {

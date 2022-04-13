@@ -32,6 +32,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -40,6 +41,7 @@ use common_meta_types::MetaId;
 use common_meta_types::PrefixListReply;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -76,6 +78,8 @@ pub enum MetaGrpcReadReq {
     GetTable(GetTableReq),
     GetTableExt(GetTableExtReq),
     ListTables(ListTableReq),
+
+    GetShare(GetShareReq),
 
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
@@ -211,14 +215,6 @@ impl RequestFor for GetTableReq {
     type Reply = Arc<TableInfo>;
 }
 
-impl RequestFor for CreateShareReq {
-    type Reply = CreateShareReply;
-}
-
-impl RequestFor for DropShareReq {
-    type Reply = DropShareReply;
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableExtReq {
     pub tbl_id: MetaId,
@@ -237,4 +233,16 @@ impl RequestFor for ListTableReq {
 
 impl RequestFor for ListDatabaseReq {
     type Reply = Vec<Arc<DatabaseInfo>>;
+}
+
+impl RequestFor for CreateShareReq {
+    type Reply = CreateShareReply;
+}
+
+impl RequestFor for DropShareReq {
+    type Reply = DropShareReply;
+}
+
+impl RequestFor for GetShareReq {
+    type Reply = Arc<ShareInfo>;
 }

@@ -206,6 +206,22 @@ impl UnknownShare {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UnknownShareID: {share_id} while {context}")]
+pub struct UnknownShareId {
+    share_id: u64,
+    context: String,
+}
+
+impl UnknownShareId {
+    pub fn new(share_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            share_id,
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AppError {
     #[error(transparent)]
@@ -234,6 +250,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownShare(#[from] UnknownShare),
+
+    #[error(transparent)]
+    UnknownShareId(#[from] UnknownShareId),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -276,6 +295,12 @@ impl AppErrorMessage for UnknownShare {
     }
 }
 
+impl AppErrorMessage for UnknownShareId {
+    fn message(&self) -> String {
+        format!("Unknown share id '{}'", self.share_id)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -290,6 +315,7 @@ impl From<AppError> for ErrorCode {
             }
             AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
             AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
+            AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
         }
     }
 }

@@ -51,6 +51,7 @@ use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableMeta;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownDatabaseId;
+use common_meta_types::UnknownShare;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_tracing::tracing;
@@ -1202,7 +1203,7 @@ impl StateMachine {
             }
         }
 
-        let share_info = ShareInfo::new(share_id, &share_name);
+        let share_info = ShareInfo::new(share_id, share_name);
 
         let (prev, result) = self.txn_sub_tree_upsert(
             &share_tree,
@@ -1273,6 +1274,25 @@ impl StateMachine {
         tracing::debug!("applied drop Share: {} {:?}", share_name, result);
         Ok(AppliedState::ShareInfo(Change::new(None, None)))
     }
+
+    pub fn get_share_id(&self, tenant: &str, share_name: &str) -> MetaStorageResult<u64> {
+        let seq_share_id = self
+            .share_lookup()
+            .get(&(ShareLookupKey::new(tenant.to_string(), share_name.to_string())))?
+            .ok_or_else(|| AppError::from(UnknownShare::new(share_name, "get_share_id")))?;
+
+        Ok(seq_share_id.data.0)
+    }
+
+    pub fn get_share_info_by_id(&self, share_id: &u64) -> MetaStorageResult<SeqV<ShareInfo>> {
+        let x = self.shares().get(share_id)?.ok_or_else(|| {
+            MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                *share_id,
+                "get_share_info_by_id".to_string(),
+            )))
+        })?;
+        Ok(x)
+    }
 }
 
 /// Key space support
@@ -1315,6 +1335,14 @@ impl StateMachine {
     }
 
     pub fn table_lookup(&self) -> AsKeySpace<TableLookup> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn shares(&self) -> AsKeySpace<Shares> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn share_lookup(&self) -> AsKeySpace<ShareLookup> {
         self.sm_tree.key_space()
     }
 }

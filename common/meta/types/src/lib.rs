@@ -140,6 +140,7 @@ pub use share::CreateShareReply;
 pub use share::CreateShareReq;
 pub use share::DropShareReply;
 pub use share::DropShareReq;
+pub use share::GetShareReq;
 pub use share::ShareInfo;
 pub use table::CreateTableReply;
 pub use table::CreateTableReq;
