@@ -99,20 +99,20 @@ pub fn cast_from_string(
 // currently use UTC by default
 // TODO support timezone
 #[inline]
-fn string_to_datetime(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
+pub fn string_to_datetime(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S").ok())
 }
 
 // TODO support timezone
 #[inline]
-fn string_to_datetime64(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
+pub fn string_to_datetime64(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S%.9f").ok())
 }
 
 #[inline]
-fn string_to_date(date_str: impl AsRef<[u8]>) -> Option<NaiveDate> {
+pub fn string_to_date(date_str: impl AsRef<[u8]>) -> Option<NaiveDate> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     s.and_then(|c| c.parse::<NaiveDate>().ok())
 }

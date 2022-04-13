@@ -1,5 +1,5 @@
 ---
-title: Date and Time Types
+title: Date & Time Data Types
 description: Basic Date and Time data type.
 ---
 

@@ -70,7 +70,7 @@ where T: Scalar
     pub fn build(&mut self, length: usize) -> ColumnRef {
         let validity = std::mem::take(&mut self.validity).into();
         let column = self.build_nonull(length);
-        Arc::new(NullableColumn::new(column, validity))
+        NullableColumn::wrap_inner(column, Some(validity))
     }
 
     #[inline]

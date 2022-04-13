@@ -62,7 +62,7 @@ pub async fn statement_handler(
     match query {
         Ok(query) => {
             let resp = query
-                .get_response_page(0, true)
+                .get_response_page(0)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             http_query_manager.remove_query(&query_id).await;

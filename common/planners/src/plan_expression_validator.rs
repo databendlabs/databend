@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -85,7 +86,8 @@ pub fn validate_function_arg(
 }
 
 // Can works before expression,filter,having in PlanBuilder
-pub fn validate_expression(expr: &Expression) -> Result<()> {
+pub fn validate_expression(expr: &Expression, schema: &DataSchemaRef) -> Result<()> {
+    let _ = expr.to_data_field(schema)?;
     let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
         Expression::ScalarFunction { op, args } => {
             let features = FunctionFactory::instance().get_features(op)?;

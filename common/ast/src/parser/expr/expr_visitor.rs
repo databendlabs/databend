@@ -56,6 +56,7 @@ pub trait ExprVisitor: Sized + Send {
             Expr::Exists(subquery) => self.visit_exists(subquery),
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
             Expr::Function(function) => self.visit_function(function).await,
+            Expr::TryCast { expr, data_type } => self.visit_try_cast(expr, data_type).await,
             Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type).await,
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
             Expr::Position {
@@ -79,6 +80,7 @@ pub trait ExprVisitor: Sized + Send {
             Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
             Expr::InList { expr, list, .. } => self.visit_inlist(expr, list).await,
             Expr::Extract { field, expr } => self.visit_extract(field, expr).await,
+            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -164,6 +166,10 @@ pub trait ExprVisitor: Sized + Send {
         ExprTraverser::accept(expr, self).await
     }
 
+    async fn visit_try_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
+    }
+
     fn visit_typed_string(&mut self, _data_type: &DataType, _value: &str) -> Result<()> {
         Ok(())
     }
@@ -223,6 +229,10 @@ pub trait ExprVisitor: Sized + Send {
     }
 
     async fn visit_extract(&mut self, _field: &DateTimeField, expr: &Expr) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
+    }
+
+    async fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
         ExprTraverser::accept(expr, self).await
     }
 }

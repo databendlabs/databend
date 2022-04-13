@@ -151,29 +151,20 @@ fn test_create_constant() -> Result<()> {
             .create_constant_column(&test.value, test.size)
             .unwrap();
 
-        if !test.data_type.is_nullable() {
-            let c: &ConstColumn = Series::check_get(&column).unwrap();
-            let full_column = c.convert_full_column();
+        let full_column = column.convert_full_column();
 
-            assert!(
-                full_column == test.column_expected,
-                "case: {:#?}",
-                test.name
-            );
+        assert!(
+            full_column == test.column_expected,
+            "case: {:#?}",
+            test.name
+        );
 
-            let values: Vec<DataValue> = std::iter::repeat(test.value.clone())
-                .take(test.size)
-                .into_iter()
-                .collect();
-            let full_column2 = test.data_type.create_column(&values).unwrap();
-
-            assert_eq!(full_column, full_column2, "case: {:#?}", test.name);
-        } else {
-            let c: &NullableColumn = Series::check_get(&column).unwrap();
-            let full_column = c.convert_full_column();
-
-            assert_eq!(full_column, test.column_expected, "case: {:#?}", test.name);
-        }
+        let values: Vec<DataValue> = std::iter::repeat(test.value.clone())
+            .take(test.size)
+            .into_iter()
+            .collect();
+        let full_column2 = test.data_type.create_column(&values).unwrap();
+        assert_eq!(full_column, full_column2, "case: {:#?}", test.name);
     }
     Ok(())
 }

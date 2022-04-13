@@ -95,7 +95,7 @@ create stage my_internal_s1;
 
 Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/10-put-to-stage.md) API:
 ```shell
-curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8081/v1/upload_to_stage"
 ```
 
 Final, copy the file into `mytable` from the `my_internal_s1` named internal stage:

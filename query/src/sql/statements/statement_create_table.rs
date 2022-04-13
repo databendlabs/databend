@@ -21,7 +21,9 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableMeta;
+use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
+use common_planners::Expression;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
@@ -125,14 +127,16 @@ impl DfCreateTable {
     async fn table_meta(&self, ctx: Arc<QueryContext>, db_name: &str) -> Result<TableMeta> {
         let engine = self.engine.clone();
         let schema = self.table_schema(ctx.clone()).await?;
+
+        self.validate_table_options()?;
+        self.validata_default_exprs(&schema)?;
+
         let meta = TableMeta {
             schema,
             engine,
             options: self.options.clone(),
             ..Default::default()
         };
-        self.validate_table_options()?;
-
         self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
     }
 
@@ -232,5 +236,17 @@ impl DfCreateTable {
         } else {
             Ok(())
         }
+    }
+
+    fn validata_default_exprs(&self, schema: &DataSchemaRef) -> Result<()> {
+        for f in schema.fields() {
+            if let Some(default_expr) = f.default_expr() {
+                let expr: Expression =
+                    serde_json::from_slice::<Expression>(default_expr.as_slice())?;
+
+                validate_expression(&expr, schema)?;
+            }
+        }
+        Ok(())
     }
 }

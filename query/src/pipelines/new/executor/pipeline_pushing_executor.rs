@@ -69,7 +69,7 @@ impl PipelinePushingExecutor {
             ));
         }
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(pipeline.output_len());
+        let (tx, rx) = std::sync::mpsc::sync_channel(pipeline.input_len());
         let mut source_pipe_builder = SourcePipeBuilder::create();
 
         let mut new_pipeline = NewPipeline::create();

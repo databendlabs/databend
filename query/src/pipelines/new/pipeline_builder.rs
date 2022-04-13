@@ -31,6 +31,7 @@ use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::SubQueriesSetPlan;
 
+use super::processors::SortMergeCompactor;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
@@ -256,8 +257,10 @@ impl PlanVisitor for QueryPipelineBuilder {
                 TransformSortMerge::try_create(
                     transform_input_port,
                     transform_output_port,
-                    rows_limit,
-                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    SortMergeCompactor::new(
+                        rows_limit,
+                        get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    ),
                 )
             })?;
 
@@ -272,8 +275,10 @@ impl PlanVisitor for QueryPipelineBuilder {
                 TransformSortMerge::try_create(
                     transform_input_port,
                     transform_output_port,
-                    rows_limit,
-                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    SortMergeCompactor::new(
+                        rows_limit,
+                        get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                    ),
                 )
             })
     }

@@ -87,10 +87,9 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
     }
 
-    // show table status where table_name != 'data'.
+    // show table status where Name != 'data'.
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "show table status where table_name != 'data'").await?;
+        let plan = PlanParser::parse(ctx.clone(), "show table status where Name != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
         let stream = executor.execute(None).await?;

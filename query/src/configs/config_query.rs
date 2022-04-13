@@ -308,6 +308,20 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
+            http_handler_host,
+            String,
+            QUERY_HTTP_HANDLER_HOST
+        );
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_port,
+            u16,
+            QUERY_HTTP_HANDLER_PORT
+        );
+        env_helper!(
+            mut_config,
+            query,
             flight_api_address,
             String,
             QUERY_FLIGHT_API_ADDRESS

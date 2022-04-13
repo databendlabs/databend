@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
@@ -39,28 +38,18 @@ impl SyncSystemTable for CreditsTable {
     }
 
     fn get_full_data(&self, _: Arc<QueryContext>) -> Result<DataBlock> {
-        let metadata_command = cargo_metadata::MetadataCommand::new();
-
-        let deps =
-            match cargo_license::get_dependencies_from_cargo_lock(metadata_command, false, false) {
-                Ok(v) => v,
-                Err(err) => {
-                    tracing::error!("{:?}", err);
-                    vec![]
-                }
-            };
-
-        let names: Vec<&[u8]> = deps.iter().map(|x| x.name.as_bytes()).collect();
-        let version_strings: Vec<String> = deps.iter().map(|x| x.version.to_string()).collect();
-        let versions: Vec<&[u8]> = version_strings.iter().map(|x| x.as_bytes()).collect();
-        let licenses: Vec<&[u8]> = deps
-            .iter()
-            .map(|x| match &x.license {
-                None => b"UNKNOWN",
-                Some(license) => license.as_bytes(),
-            })
+        let names: Vec<&[u8]> = env!("DATABEND_CREDITS_NAMES")
+            .split_terminator(',')
+            .map(|x| x.trim().as_bytes())
             .collect();
-
+        let versions: Vec<&[u8]> = env!("DATABEND_CREDITS_VERSIONS")
+            .split_terminator(',')
+            .map(|x| x.trim().as_bytes())
+            .collect();
+        let licenses: Vec<&[u8]> = env!("DATABEND_CREDITS_LICENSES")
+            .split_terminator(',')
+            .map(|x| x.trim().as_bytes())
+            .collect();
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(names),
             Series::from_data(versions),

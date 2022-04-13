@@ -364,7 +364,7 @@ where T: PrimitiveType
                     let bitmap = col.values().not();
                     deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
                     let inner = deserializer.finish_to_column();
-                    NullableColumn::new(inner, bitmap).arc()
+                    NullableColumn::wrap_inner(inner, Some(bitmap))
                 }
             };
 

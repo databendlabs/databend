@@ -96,7 +96,7 @@ fn databend_eq(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
         })
     });
 
-    Ok(Arc::new(NullableColumn::new(col, validity.unwrap())))
+    NullableColumn::wrap_inner(col, Some(validity))
 }
 
 fn databend_eq_simd(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
@@ -133,7 +133,7 @@ fn databend_eq_simd(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
         Arc::new(eq::<$T>(&left, &right))
     });
 
-    Ok(Arc::new(NullableColumn::new(col, validity.unwrap())))
+    NullableColumn::wrap_inner(col, Some(validity))
 }
 
 fn cast(column: &ColumnRef, data_type: &DataTypePtr) -> Result<ColumnRef> {

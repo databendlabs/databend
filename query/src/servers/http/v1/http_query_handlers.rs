@@ -100,7 +100,7 @@ impl QueryResponse {
             None => (JsonBlock::empty(), None),
         };
         let schema = data.schema().clone();
-        let session_id = r.initial_state.as_ref().map(|v| v.session_id.clone());
+        let session_id = r.session_id.clone();
         let stats = QueryStats {
             scan_progress: state.scan_progress.clone(),
             running_time_ms: state.running_time_ms,
@@ -109,7 +109,7 @@ impl QueryResponse {
             data: data.into(),
             state: state.state,
             schema: Some(schema),
-            session_id,
+            session_id: Some(session_id),
             stats,
             id: id.clone(),
             next_uri: next_url,
@@ -187,7 +187,7 @@ async fn query_page_handler(
         Some(query) => {
             query.clear_expire_time().await;
             let resp = query
-                .get_response_page(page_no, false)
+                .get_response_page(page_no)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;
@@ -214,7 +214,7 @@ pub(crate) async fn query_handler(
     match query {
         Ok(query) => {
             let resp = query
-                .get_response_page(0, true)
+                .get_response_page(0)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;
