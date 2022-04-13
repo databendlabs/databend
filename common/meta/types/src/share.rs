@@ -12,11 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// both id and name will not change after created
+// id used to distinguish share with same name (but never the same time)
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct ShareInfo {
-    share_name: String,
-    database: Option<String>,
-    tables: Vec<String>,
+    pub id: u64,
+    pub name: String,
+    pub meta: ShareMeta,
+}
+
+impl ShareInfo {
+    pub fn new(id: u64, name: &str) -> Self {
+        ShareInfo {
+            id,
+            name: name.to_string(),
+            meta: Default::default(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct ShareMeta {
+    pub database: Option<String>,
+    pub tables: Vec<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -40,3 +58,18 @@ pub struct DropShareReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropShareReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct GetShareReq {
+    pub tenant: String,
+    pub share_name: String,
+}
+
+impl GetShareReq {
+    pub fn new(tenant: &str, share_name: &str) -> Self {
+        GetShareReq {
+            tenant: tenant.to_string(),
+            share_name: share_name.to_string(),
+        }
+    }
+}

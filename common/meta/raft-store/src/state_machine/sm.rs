@@ -46,6 +46,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableMeta;
 use common_meta_types::UnknownDatabase;
@@ -1201,11 +1202,13 @@ impl StateMachine {
             }
         }
 
+        let share_info = ShareInfo::new(share_id, &share_name);
+
         let (prev, result) = self.txn_sub_tree_upsert(
             &share_tree,
             &share_id,
             &MatchSeq::Exact(0),
-            Operation::Update(Default::default()),
+            Operation::Update(share_info),
             None,
         )?;
 
