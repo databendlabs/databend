@@ -2,43 +2,43 @@
 *    @BohuTANG
 
 # Query
-/common/arrow/ @databend-query-reviewer
-/common/arrow/ @databend-query-reviewer
-/common/datablocks/ @databend-query-reviewer
-/common/datavalues/ @databend-query-reviewer
-/common/functions/ @databend-query-reviewer
-/common/io/ @databend-query-reviewer
-/common/management/ @databend-query-reviewer
-/common/streams/ @databend-query-reviewer
+/common/arrow/         @datafuselabs/databend-query-reviewer
+/common/arrow/         @datafuselabs/databend-query-reviewer
+/common/datablocks/    @datafuselabs/databend-query-reviewer
+/common/datavalues/    @datafuselabs/databend-query-reviewer
+/common/functions/     @datafuselabs/databend-query-reviewer
+/common/io/            @datafuselabs/databend-query-reviewer
+/common/management/    @datafuselabs/databend-query-reviewer
+/common/streams/       @datafuselabs/databend-query-reviewer
 
 # Executor
-/query/src/clusters/ @databend-executor-reviewer
-/query/src/pipelines/ @databend-executor-reviewer
-/query/src/api/rpc/ @databend-executor-reviewer
-/common/base/  @databend-executor-reviewer
-/common/exception/  @databend-executor-reviewer
-/common/planners/  @databend-executor-reviewer
+/query/src/clusters/   @datafuselabs/databend-executor-reviewer
+/query/src/pipelines/  @datafuselabs/databend-executor-reviewer
+/query/src/api/rpc/    @datafuselabs/databend-executor-reviewer
+/common/base/          @datafuselabs/databend-executor-reviewer
+/common/exception/     @datafuselabs/databend-executor-reviewer
+/common/planners/      @datafuselabs/databend-executor-reviewer
 
 # Planner
-/common/ast/ @databend-planner-reviewer
-/query/src/optimizers/ @databend-planner-reviewer
+/common/ast/           @datafuselabs/databend-planner-reviewer
+/query/src/optimizers/ @datafuselabs/databend-planner-reviewer
 
 # MetaSrv
-/metasrv/ @databend-meta-reviewer
-/common/meta/ @databend-meta-reviewer
-common/grpc/ @databend-meta-reviewer
+/metasrv/              @datafuselabs/databend-meta-reviewer
+/common/meta/          @datafuselabs/databend-meta-reviewer
+common/grpc/           @datafuselabs/databend-meta-reviewer
 
 # Storage
-/common/cache/
-/query/src/catalogs/ @databend-storage-reviewer
-/query/src/storages/ @databend-storage-reviewer
+/common/cache/         @datafuselabs/databend-storage-reviewer
+/query/src/catalogs/   @datafuselabs/databend-storage-reviewer
+/query/src/storages/   @datafuselabs/databend-storage-reviewer
 
 
 # Website rule
-/website/  @databend-document-reviewer
-/docs/ @databend-document-reviewer
+/website/              @datafuselabs/databend-document-reviewer
+/docs/                 @datafuselabs/databend-document-reviewer
 
 # Tool
-/docker/ @databend-tool-reviewer
-/scripts/ @databend-tool-reviewer
-/.github/ @databend-tool-reviewer
+/docker/               @datafuselabs/databend-tool-reviewer
+/scripts/              @datafuselabs/databend-tool-reviewer
+/.github/              @datafuselabs/databend-tool-reviewer
