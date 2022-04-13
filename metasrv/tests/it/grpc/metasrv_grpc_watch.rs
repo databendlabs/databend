@@ -20,7 +20,6 @@ use common_base::tokio::sync::mpsc::UnboundedReceiver;
 use common_base::tokio::sync::mpsc::UnboundedSender;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
-use common_meta_types::protobuf::event::EventType;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
@@ -169,35 +168,30 @@ async fn test_watch() -> anyhow::Result<()> {
             // set a->a
             Event {
                 key: key_a.clone(),
-                event: EventType::Update.into(),
                 current: Some(val_a.clone()),
                 prev: None,
             },
             // set z->z
             Event {
                 key: key_z.clone(),
-                event: EventType::Update.into(),
                 current: Some(val_z.clone()),
                 prev: None,
             },
             // set b->b
             Event {
                 key: key_b.clone(),
-                event: EventType::Update.into(),
                 current: Some(val_b.clone()),
                 prev: None,
             },
             // update b->new
             Event {
                 key: key_b.clone(),
-                event: EventType::Update.into(),
                 current: Some(val_new.clone()),
                 prev: Some(val_b.clone()),
             },
             // delete b
             Event {
                 key: key_b.clone(),
-                event: EventType::Delete.into(),
                 prev: Some(val_new.clone()),
                 current: None,
             },
@@ -233,14 +227,12 @@ async fn test_watch() -> anyhow::Result<()> {
             // delete 1 first time
             Event {
                 key: key.clone(),
-                event: EventType::Delete.into(),
                 prev: Some(val.clone()),
                 current: None,
             },
             // delete 1 second time
             Event {
                 key: key.clone(),
-                event: EventType::Delete.into(),
                 prev: Some(val_new.clone()),
                 current: None,
             },

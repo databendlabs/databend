@@ -19,7 +19,8 @@ use common_base::tokio::sync::mpsc;
 use common_meta_types::protobuf::WatchResponse;
 use common_tracing::tracing;
 
-use super::CloseWatcherStreamReq;
+use super::CloseWatcherStream;
+use super::WatcherEvent;
 use super::WatcherId;
 use super::WatcherStreamSender;
 
@@ -34,14 +35,14 @@ pub struct WatcherStream {
     pub key_end: String,
 
     /// notify manager to stop watcher stream
-    close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
+    close_stream_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
 }
 
 impl WatcherStream {
     pub fn new(
         id: WatcherId,
         tx: WatcherStreamSender,
-        close_stream_tx: Arc<mpsc::UnboundedSender<CloseWatcherStreamReq>>,
+        close_stream_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
         key: String,
         key_end: String,
     ) -> Self {
@@ -62,7 +63,10 @@ impl WatcherStream {
                 self.id,
                 err
             );
-            let _ = self.close_stream_tx.send((self.id, err.to_string()));
+            let close_req: CloseWatcherStream = (self.id, err.to_string());
+            let _ = self
+                .close_stream_tx
+                .send(WatcherEvent::CloseWatcherStreamEvent(close_req));
         }
     }
 }
