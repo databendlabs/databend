@@ -330,7 +330,6 @@ impl ExpressionAnalyzer {
                 args.push(Expression::Cast {
                     expr: Box::new(inner_expr),
                     data_type: data_type.clone(),
-                    is_nullable: false,
                 });
                 Ok(())
             }
@@ -538,6 +537,13 @@ impl ExprRPNBuilder {
             Expr::Cast { data_type, .. } => {
                 self.rpn
                     .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+            }
+            Expr::TryCast { data_type, .. } => {
+                let mut ty = SQLCommon::make_data_type(data_type)?;
+                if ty.can_inside_nullable() {
+                    ty = Arc::new(NullableType::create(ty))
+                }
+                self.rpn.push(ExprRPNItem::Cast(ty));
             }
             Expr::TypedString { data_type, value } => {
                 self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(

@@ -55,6 +55,7 @@ pub trait AstVisitor {
             } => self.visit_between(expr, low, high, not),
             Expr::BinaryOp { op, left, right } => self.visit_binary_op(op, left, right),
             Expr::UnaryOp { op, expr } => self.visit_unary_op(op, expr),
+            Expr::TryCast { expr, target_type } => self.visit_try_cast(expr, target_type),
             Expr::Cast { expr, target_type } => self.visit_cast(expr, target_type),
             Expr::Literal(_) => self.visit_literal(),
             Expr::CountAll => self.visit_count_all(),
@@ -118,6 +119,10 @@ pub trait AstVisitor {
     }
 
     fn visit_cast(&mut self, expr: &Expr, _type_name: &TypeName) -> Result<()> {
+        self.visit_expr(expr)
+    }
+
+    fn visit_try_cast(&mut self, expr: &Expr, _type_name: &TypeName) -> Result<()> {
         self.visit_expr(expr)
     }
 

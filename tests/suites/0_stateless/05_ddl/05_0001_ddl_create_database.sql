@@ -11,3 +11,5 @@ DROP DATABASE IF EXISTS db;
 
 CREATE DATABASE system; -- {ErrorCode 2301}
 DROP DATABASE system; -- {ErrorCode 1002}
+
+CREATE DATABASE db.t; -- {ErrorCode 1005}

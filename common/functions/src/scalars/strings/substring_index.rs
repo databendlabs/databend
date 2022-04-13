@@ -129,7 +129,7 @@ fn substring_index<'a>(str: &'a [u8], delim: &'a [u8], count: &i64) -> &'a [u8] 
             }
         }
     } else {
-        let count = (*count).abs() as usize;
+        let count = (*count).unsigned_abs() as usize;
         let mut c = 0;
         for (p, w) in str.windows(delim.len()).rev().enumerate() {
             if w == delim {

@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -185,17 +184,9 @@ where A: AsRef<dyn Array>
     }
 
     fn into_nullable_column(self) -> ColumnRef {
-        let size = self.as_ref().len();
         let validity = self.as_ref().validity().cloned();
         let column = self.as_ref().into_column();
-        Arc::new(NullableColumn::new(
-            column,
-            validity.unwrap_or_else(|| {
-                let mut bm = MutableBitmap::with_capacity(size);
-                bm.extend_constant(size, true);
-                Bitmap::from(bm)
-            }),
-        ))
+        NullableColumn::wrap_inner(column, validity)
     }
 }
 

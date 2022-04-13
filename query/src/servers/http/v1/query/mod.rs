@@ -29,7 +29,6 @@ pub use http_query::HttpQueryResponseInternal;
 pub use http_query::HttpSession;
 pub use http_query::HttpSessionConf;
 pub use http_query::PaginationConf;
-pub use http_query::ResponseInitialState;
 pub use http_query::ResponseState;
 pub use http_query_manager::HttpQueryManager;
 pub use result_data_manager::Page;

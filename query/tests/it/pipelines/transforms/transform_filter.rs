@@ -78,14 +78,13 @@ async fn test_transform_filter_error() -> Result<()> {
 
     let plan = PlanBuilder::create(test_source.number_schema_for_test()?)
         .filter(col("not_found_filed").eq(lit(2021)))
-        .and_then(|x| x.build())?;
+        .and_then(|x| x.build());
 
-    if let PlanNode::Filter(plan) = plan {
-        let ctx = create_query_context().await?;
-        let result = WhereTransform::try_create(plan.schema(), plan.predicate, ctx);
-        let actual = format!("{}", result.err().unwrap());
-        let expect = "Code: 1006, displayText = Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
-        assert_eq!(expect, actual);
-    }
+    assert!(plan.is_err());
+
+    let err = plan.unwrap_err();
+
+    assert!(err.message().contains("Unable to get field named"));
+    assert_eq!(err.code(), 1006);
     Ok(())
 }

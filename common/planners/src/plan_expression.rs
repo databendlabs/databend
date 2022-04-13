@@ -118,8 +118,6 @@ pub enum Expression {
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
         data_type: DataTypePtr,
-        /// default false, if it's try_cast, is_null is true
-        is_nullable: bool,
     },
 
     /// Scalar sub query. such as `SELECT (SELECT 1)`
@@ -211,7 +209,12 @@ impl Expression {
             Expression::Cast {
                 expr, data_type, ..
             } => {
-                format!("cast({} as {:?})", expr.column_name(), data_type)
+                if data_type.is_nullable() {
+                    let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
+                    format!("try_cast({} as {:?})", expr.column_name(), ty.inner_type())
+                } else {
+                    format!("cast({} as {:?})", expr.column_name(), data_type)
+                }
             }
             Expression::Subquery { name, .. } => name.clone(),
             Expression::ScalarSubquery { name, .. } => name.clone(),

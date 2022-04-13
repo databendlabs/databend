@@ -19,7 +19,7 @@ common-functions = { path = "../functions" }
 # TODO (andylokandy): Use the version from crates.io once
 # https://github.com/brendanzab/codespan/pull/331 is released.
 codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "1c8d3f1" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "08b8c31" }
 
 # Crates.io dependencies
 async-trait = "0.1.53"
@@ -30,6 +30,6 @@ pratt = "0.3.0"
 thiserror = "1.0.30"
 
 [dev-dependencies]
+common-base = { path = "../base" }
 goldenfile = "1.1.0"
 pretty_assertions = "1.2.1"
-common-base = { path = "../base" }

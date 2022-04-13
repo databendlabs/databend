@@ -127,11 +127,10 @@ where
         let dest_column = columns[index].column();
 
         return match (nullable, dest_column.data_type().can_inside_nullable()) {
-            (true, true) => Ok(NullableColumn::new(
+            (true, true) => Ok(NullableColumn::wrap_inner(
                 dest_column.clone(),
-                const_validitiess(input_rows, true),
-            )
-            .arc()),
+                Some(const_validitiess(input_rows, true)),
+            )),
             _ => Ok(dest_column.clone()),
         };
     }

@@ -862,6 +862,9 @@ dependencies = [
 name = "common-building"
 version = "0.1.0"
 dependencies = [
+ "cargo-license",
+ "cargo_metadata",
+ "common-tracing",
  "run_script",
  "vergen",
 ]
@@ -1724,8 +1727,6 @@ dependencies = [
  "bumpalo",
  "byteorder",
  "bytes 1.1.0",
- "cargo-license",
- "cargo_metadata",
  "chrono",
  "chrono-tz",
  "clap 3.1.8",
@@ -5675,7 +5676,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=1c8d3f1#1c8d3f1b77039649b4a9fc798ed319d413182d3b"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=08b8c31#08b8c31f5ee44de1a209dedfe1a76c45f7afe391"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

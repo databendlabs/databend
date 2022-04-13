@@ -154,7 +154,6 @@ impl Function for FunctionAdapter {
             } else {
                 ConstColumn::new(col, input_rows).arc()
             };
-
             return Ok(col);
         }
 
@@ -211,11 +210,11 @@ impl Function for FunctionAdapter {
 
                 let col = if col.is_nullable() {
                     let nullable_column: &NullableColumn = Series::check_get(&col)?;
-                    NullableColumn::new(nullable_column.inner().clone(), validity)
+                    NullableColumn::wrap_inner(nullable_column.inner().clone(), Some(validity))
                 } else {
-                    NullableColumn::new(col, validity)
+                    NullableColumn::wrap_inner(col, Some(validity))
                 };
-                return Ok(Arc::new(col));
+                return Ok(col);
             }
         }
 

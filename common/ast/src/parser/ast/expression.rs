@@ -70,6 +70,12 @@ pub enum Expr {
         expr: Box<Expr>,
         target_type: TypeName,
     },
+
+    /// `TRY_CAST` expression`
+    TryCast {
+        expr: Box<Expr>,
+        target_type: TypeName,
+    },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
     /// `COUNT(*)` expression
@@ -423,6 +429,9 @@ impl Display for Expr {
             }
             Expr::Cast { expr, target_type } => {
                 write!(f, "CAST({} AS {})", expr, target_type)?;
+            }
+            Expr::TryCast { expr, target_type } => {
+                write!(f, "TRY_CAST({} AS {})", expr, target_type)?;
             }
             Expr::Literal(lit) => {
                 write!(f, "{}", lit)?;

@@ -128,6 +128,8 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
     std::env::set_var("QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
     std::env::set_var("QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
+    std::env::set_var("QUERY_HTTP_HANDLER_HOST", "1.2.3.4");
+    std::env::set_var("QUERY_HTTP_HANDLER_PORT", "8001");
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_ADMIN_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
@@ -160,6 +162,8 @@ fn test_env_config() -> Result<()> {
     assert_eq!(255, configured.query.max_active_sessions);
     assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
     assert_eq!(9000, configured.query.clickhouse_handler_port);
+    assert_eq!("1.2.3.4", configured.query.http_handler_host);
+    assert_eq!(8001, configured.query.http_handler_port);
 
     assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
     assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);

@@ -195,13 +195,12 @@ impl ExpressionChain {
             Expression::Cast {
                 expr: sub_expr,
                 data_type,
-                is_nullable,
             } => {
                 let func_name = "cast".to_string();
                 let return_type = data_type.clone();
                 let type_name = format!("{:?}", data_type);
 
-                let func = if *is_nullable {
+                let func = if data_type.is_nullable() {
                     CastFunction::create_try(&func_name, &type_name)
                 } else {
                     CastFunction::create(&func_name, &type_name)

@@ -210,7 +210,7 @@ pub async fn clickhouse_handler_post(
 
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
     let builder = NDJsonSourceBuilder::create(plan.schema());
-    let cursor = std::io::Cursor::new(
+    let cursor = futures::io::Cursor::new(
         body.into_vec()
             .await
             .map_err_to_code(ErrorCode::BadBytes, || "fail to read body")?,
