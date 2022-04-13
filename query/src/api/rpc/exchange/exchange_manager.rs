@@ -8,7 +8,7 @@ use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::{ErrorCode, Result};
 use common_infallible::{Mutex, ReentrantMutex, RwLock};
-use crate::api::{DataExchange, ExecutorPacket, FlightAction, FlightClient, FragmentPacket};
+use crate::api::{DataExchange, ExecutorPacket, FlightAction, FlightClient, FragmentPacket, PublisherPacket};
 use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::{NewPipe, NewPipeline, QueryPipelineBuilder};
@@ -22,7 +22,7 @@ use crate::api::rpc::exchange::exchange_channel::{channel, Sender};
 use crate::api::rpc::exchange::exchange_params::{HashExchangeParams, MergeExchangeParams, ExchangeParams};
 use crate::api::rpc::exchange::exchange_publisher::ExchangePublisher;
 use crate::api::rpc::exchange::exchange_subscriber::ExchangeSubscriber;
-use crate::api::rpc::flight_actions::PrepareExecutor;
+use crate::api::rpc::flight_actions::{PrepareExecutor, PreparePublisher};
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::configs::Config;
@@ -38,7 +38,17 @@ impl DataExchangeManager {
         Arc::new(DataExchangeManager { config, queries_coordinator: ReentrantMutex::new(HashMap::new()) })
     }
 
-    pub fn handle_prepare(&self, ctx: &Arc<QueryContext>, prepare: &PrepareExecutor) -> Result<()> {
+    pub fn handle_prepare_publisher(&self, prepare: &PreparePublisher) -> Result<()> {
+        let mut queries_coordinator = self.queries_coordinator.lock();
+
+        let publisher_packet = &prepare.publisher_packet;
+        match queries_coordinator.get_mut(&publisher_packet.query_id) {
+            None => Err(ErrorCode::LogicalError(format!("Query {} not found in cluster.", publisher_packet.query_id))),
+            Some(coordinator) => coordinator.init_publisher(publisher_packet)
+        }
+    }
+
+    pub fn handle_prepare_executor(&self, ctx: &Arc<QueryContext>, prepare: &PrepareExecutor) -> Result<()> {
         let mut queries_coordinator = self.queries_coordinator.lock();
 
         let executor_packet = &prepare.executor_packet;
@@ -86,8 +96,32 @@ impl DataExchangeManager {
 
     async fn prepare_executors(&self, packets: Vec<ExecutorPacket>, timeout: u64) -> Result<()> {
         for executor_packet in packets.into_iter() {
-            let mut connection = self.create_conn(&executor_packet).await?;
+            if !executor_packet.executors_info.contains_key(&executor_packet.executor) {
+                return Err(ErrorCode::LogicalError(format!(
+                    "Not found {} node in cluster", &executor_packet.executor
+                )));
+            }
+
+            let executor_info = &executor_packet.executors_info[&executor_packet.executor];
+            let mut connection = self.create_client(&executor_info.flight_address).await?;
             let action = FlightAction::PrepareExecutor(PrepareExecutor { executor_packet });
+            connection.execute_action(action, timeout).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn prepare_publisher(&self, packets: Vec<PublisherPacket>, timeout: u64) -> Result<()> {
+        for publisher_packet in packets.into_iter() {
+            if !publisher_packet.executors_info.contains_key(&publisher_packet.executor) {
+                return Err(ErrorCode::LogicalError(format!(
+                    "Not found {} node in cluster", &publisher_packet.executor
+                )));
+            }
+
+            let executor_info = &publisher_packet.executors_info[&publisher_packet.executor];
+            let mut connection = self.create_client(&executor_info.flight_address).await?;
+            let action = FlightAction::PreparePublisher(PreparePublisher { publisher_packet });
             connection.execute_action(action, timeout).await?;
         }
 
@@ -108,7 +142,7 @@ impl DataExchangeManager {
         // Get local pipeline of local task
         // let root_pipeline = self.build_root_pipeline(ctx.get_id(), root_fragment_id)?;
 
-        // TODO: prepare connections(sink)
+        self.prepare_publisher(actions.prepare_publisher(ctx.clone())?, timeout).await?;
         // TODO: execute distributed query
         unimplemented!()
         // Ok(root_pipeline)
@@ -165,6 +199,24 @@ impl QueryCoordinator {
     pub fn init(&mut self) -> Result<()> {
         for (_, coordinator) in self.fragments_coordinator.iter_mut() {
             coordinator.init(&self.ctx)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn init_publisher(&mut self, packet: &PublisherPacket) -> Result<()> {
+        for (executor, info) in &packet.executors_info {
+            if executor != &packet.executor {
+                match self.publish_fragments.entry(executor.to_string()) {
+                    Entry::Occupied(_) => Err(ErrorCode::LogicalError("Publisher id already exists")),
+                    Entry::Vacant(entry) => {
+                        // TODO: add flight channel for this
+                        let (tx, rx) = channel(2);
+                        entry.insert(tx);
+                        Ok(())
+                    }
+                }?;
+            }
         }
 
         Ok(())

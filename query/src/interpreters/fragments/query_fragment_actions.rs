@@ -2,10 +2,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use common_ast::parser::rule::expr::query;
 use common_exception::{ErrorCode, Result};
 use common_meta_types::NodeInfo;
 use common_planners::PlanNode;
-use crate::api::{DataExchange, ExecutorPacket, FragmentPacket};
+use crate::api::{DataExchange, ExecutorPacket, FragmentPacket, PublisherPacket};
 use crate::clusters::Cluster;
 use crate::interpreters::fragments::partition_state::PartitionState;
 use crate::sessions::QueryContext;
@@ -107,6 +108,21 @@ impl QueryFragmentsActions {
         }
 
         Ok(executors_packets)
+    }
+
+    pub fn prepare_publisher(&self, ctx: Arc<QueryContext>) -> Result<Vec<PublisherPacket>> {
+        let nodes_info = Self::nodes_info(&ctx);
+        let mut publisher_packets = Vec::with_capacity(nodes_info.len());
+
+        for (node_id, node_info) in &nodes_info {
+            publisher_packets.push(PublisherPacket::create(
+                ctx.get_id(),
+                node_id.to_owned(),
+                nodes_info.clone(),
+            ));
+        }
+
+        Ok(publisher_packets)
     }
 
     fn nodes_info(ctx: &Arc<QueryContext>) -> HashMap<String, Arc<NodeInfo>> {

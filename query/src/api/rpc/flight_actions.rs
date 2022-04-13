@@ -21,7 +21,7 @@ use common_exception::ToErrorCode;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use tonic::Status;
-use crate::api::ExecutorPacket;
+use crate::api::{ExecutorPacket, PublisherPacket};
 use crate::sessions::QueryContext;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -142,7 +142,37 @@ impl TryInto<Vec<u8>> for PrepareExecutor {
 
     fn try_into(self) -> Result<Vec<u8>, Self::Error> {
         serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
-            "Logical error: cannot serialize BroadcastAction."
+            "Logical error: cannot serialize PrepareExecutor."
+        })
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct PreparePublisher {
+    pub publisher_packet: PublisherPacket,
+}
+
+
+impl TryInto<PreparePublisher> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<PreparePublisher, Self::Error> {
+        match std::str::from_utf8(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(utf8_body) => match serde_json::from_str::<PreparePublisher>(utf8_body) {
+                Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+                Ok(action) => Ok(action),
+            },
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for PreparePublisher {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(ErrorCode::LogicalError, || {
+            "Logical error: cannot serialize PreparePublisher."
         })
     }
 }
@@ -153,6 +183,7 @@ pub enum FlightAction {
     BroadcastAction(BroadcastAction),
     CancelAction(CancelAction),
     PrepareExecutor(PrepareExecutor),
+    PreparePublisher(PreparePublisher),
 }
 
 impl FlightAction {
@@ -206,6 +237,7 @@ impl TryInto<FlightAction> for Action {
             "BroadcastAction" => Ok(FlightAction::BroadcastAction(self.body.try_into()?)),
             "CancelAction" => Ok(FlightAction::CancelAction(self.body.try_into()?)),
             "PrepareExecutor" => Ok(FlightAction::PrepareExecutor(self.body.try_into()?)),
+            "PreparePublisher" => Ok(FlightAction::PreparePublisher(self.body.try_into()?)),
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented
@@ -234,6 +266,10 @@ impl TryInto<Action> for FlightAction {
             FlightAction::PrepareExecutor(executor) => Ok(Action {
                 r#type: String::from("PrepareExecutor"),
                 body: executor.try_into()?,
+            }),
+            FlightAction::PreparePublisher(publisher) => Ok(Action {
+                r#type: String::from("PreparePublisher"),
+                body: publisher.try_into()?,
             })
         }
     }

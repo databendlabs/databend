@@ -188,7 +188,12 @@ impl FlightService for DatabendQueryFlightService {
                 let session = self.sessions.create_session(SessionType::FlightRPC).await?;
                 let query_context = session.create_query_context().await?;
                 let exchange_manager = self.sessions.get_data_exchange_manager();
-                exchange_manager.handle_prepare(&query_context, packet)?;
+                exchange_manager.handle_prepare_executor(&query_context, packet)?;
+                FlightResult { body: vec![] }
+            }
+            FlightAction::PreparePublisher(packet) => {
+                let exchange_manager = self.sessions.get_data_exchange_manager();
+                exchange_manager.handle_prepare_publisher(packet)?;
                 FlightResult { body: vec![] }
             }
         };

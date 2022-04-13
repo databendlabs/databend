@@ -41,3 +41,4 @@ pub use exchange::DataExchangeManager;
 pub use exchange::DataExchange;
 pub use exchange::HashDataExchange;
 pub use exchange::MergeExchange;
+pub use packet::PublisherPacket;
