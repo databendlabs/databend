@@ -19,6 +19,7 @@ use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::Sender;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
+use common_meta_types::protobuf::event;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
@@ -137,16 +138,23 @@ impl WatcherManagerCore {
         }
     }
 
+    fn convert_seqv_to_pb(seqv: &Option<SeqV>) -> Option<event::SeqV> {
+        seqv.as_ref().map(|seqv| event::SeqV {
+            seq: seqv.seq,
+            data: seqv.data.clone(),
+        })
+    }
+
     async fn notify_event(&mut self, kv: StateMachineKvData) {
         let set = self.watcher_range_set.get_by_point(&kv.key);
         if set.is_empty() {
             return;
         }
-        let current = kv.current.as_ref().map(|current| current.data.clone());
 
-        let prev = kv.prev.as_ref().map(|prev| prev.data.clone());
+        let current = kv.current;
+        let prev = kv.prev;
 
-        let is_delete_event = kv.current.is_none();
+        let is_delete_event = current.is_none();
         let mut remove_watcher_id: Vec<WatcherId> = vec![];
 
         for range_key in set.iter() {
@@ -165,8 +173,8 @@ impl WatcherManagerCore {
                 let resp = WatchResponse {
                     event: Some(Event {
                         key: kv.key.clone(),
-                        current: current.clone(),
-                        prev: prev.clone(),
+                        current: WatcherManagerCore::convert_seqv_to_pb(&current),
+                        prev: WatcherManagerCore::convert_seqv_to_pb(&prev),
                     }),
                 };
 

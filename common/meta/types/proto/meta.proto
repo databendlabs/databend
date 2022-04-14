@@ -67,14 +67,20 @@ message WatchRequest {
   FilterType filter_type = 3;
 }
 
+
 message Event {
   string key = 1;
 
+  message SeqV {
+    uint64 seq = 1;
+    bytes data = 2;
+  }
+
   // current hold current value of key(if any)
-  optional bytes current = 2;
+  optional SeqV current = 2;
 
   // prev value of key(if any)
-  optional bytes prev = 3;
+  optional SeqV prev = 3;
 }
 
 message WatchResponse {

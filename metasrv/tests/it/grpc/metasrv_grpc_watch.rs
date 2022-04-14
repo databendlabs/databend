@@ -20,6 +20,7 @@ use common_base::tokio::sync::mpsc::UnboundedReceiver;
 use common_base::tokio::sync::mpsc::UnboundedSender;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
+use common_meta_types::protobuf::event::SeqV;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
@@ -147,6 +148,7 @@ async fn test_watch() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
+    let mut seq: u64 = 1;
     // 1.update some events
     {
         let watch = WatchRequest {
@@ -168,35 +170,54 @@ async fn test_watch() -> anyhow::Result<()> {
             // set a->a
             Event {
                 key: key_a.clone(),
-                current: Some(val_a.clone()),
+                current: Some(SeqV {
+                    seq,
+                    data: val_a.clone(),
+                }),
                 prev: None,
             },
             // set z->z
             Event {
                 key: key_z.clone(),
-                current: Some(val_z.clone()),
+                current: Some(SeqV {
+                    seq: seq + 1,
+                    data: val_z.clone(),
+                }),
                 prev: None,
             },
             // set b->b
             Event {
                 key: key_b.clone(),
-                current: Some(val_b.clone()),
+                current: Some(SeqV {
+                    seq: seq + 2,
+                    data: val_b.clone(),
+                }),
                 prev: None,
             },
             // update b->new
             Event {
                 key: key_b.clone(),
-                current: Some(val_new.clone()),
-                prev: Some(val_b.clone()),
+                current: Some(SeqV {
+                    seq: seq + 3,
+                    data: val_new.clone(),
+                }),
+                prev: Some(SeqV {
+                    seq: seq + 2,
+                    data: val_b.clone(),
+                }),
             },
             // delete b
             Event {
                 key: key_b.clone(),
-                prev: Some(val_new.clone()),
+                prev: Some(SeqV {
+                    seq: seq + 3,
+                    data: val_new.clone(),
+                }),
                 current: None,
             },
         ];
 
+        seq += 3;
         // update kv
         let updates = vec![
             UpsertKVAction::new("a", MatchSeq::Any, Operation::Update(val_a), None),
@@ -227,13 +248,19 @@ async fn test_watch() -> anyhow::Result<()> {
             // delete 1 first time
             Event {
                 key: key.clone(),
-                prev: Some(val.clone()),
+                prev: Some(SeqV {
+                    seq: seq + 1,
+                    data: val.clone(),
+                }),
                 current: None,
             },
             // delete 1 second time
             Event {
                 key: key.clone(),
-                prev: Some(val_new.clone()),
+                prev: Some(SeqV {
+                    seq: seq + 2,
+                    data: val_new.clone(),
+                }),
                 current: None,
             },
         ];
