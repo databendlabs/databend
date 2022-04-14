@@ -13,58 +13,37 @@
 //  limitations under the License.
 //
 
-use common_base::tokio::sync::mpsc;
+use common_base::tokio::sync::mpsc::error::SendError;
 use common_meta_types::protobuf::WatchResponse;
-use common_tracing::tracing;
+use tonic::Status;
 
-use super::CloseWatcherStream;
-use super::WatcherEvent;
 use super::WatcherId;
 use super::WatcherStreamSender;
 
-#[derive(Debug)]
 pub struct WatcherStream {
-    id: WatcherId,
+    pub id: WatcherId,
 
     tx: WatcherStreamSender,
 
     pub key: String,
 
     pub key_end: String,
-
-    /// notify manager to stop watcher stream
-    close_stream_tx: mpsc::UnboundedSender<WatcherEvent>,
 }
 
 impl WatcherStream {
-    pub fn new(
-        id: WatcherId,
-        tx: WatcherStreamSender,
-        close_stream_tx: mpsc::UnboundedSender<WatcherEvent>,
-        key: String,
-        key_end: String,
-    ) -> Self {
+    pub fn new(id: WatcherId, tx: WatcherStreamSender, key: String, key_end: String) -> Self {
         WatcherStream {
             id,
             tx,
             key,
             key_end,
-            close_stream_tx,
         }
     }
 
-    pub async fn send(&self, resp: WatchResponse) {
-        let ret = self.tx.send(Ok(resp)).await;
-        if let Err(err) = ret {
-            tracing::info!(
-                "close watcher stream {:?} cause send err: {:?}",
-                self.id,
-                err
-            );
-            let close_req: CloseWatcherStream = (self.id, err.to_string());
-            let _ = self
-                .close_stream_tx
-                .send(WatcherEvent::CloseWatcherStreamEvent(close_req));
-        }
+    pub async fn send(
+        &self,
+        resp: WatchResponse,
+    ) -> Result<(), SendError<Result<WatchResponse, Status>>> {
+        self.tx.send(Ok(resp)).await
     }
 }

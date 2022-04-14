@@ -33,7 +33,6 @@ use super::WatcherStream;
 
 pub type WatcherId = i64;
 pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
-pub type CloseWatcherStream = (WatcherId, String);
 
 type CreateWatcherEvent = (WatchRequest, WatcherStreamSender);
 
@@ -53,7 +52,6 @@ pub struct WatcherStateMachineSubscriber {
 pub enum WatcherEvent {
     CreateWatcherEvent(CreateWatcherEvent),
     StateMachineKvDataEvent(StateMachineKvData),
-    CloseWatcherStreamEvent(CloseWatcherStream),
     ShutdownEvent(()),
 }
 
@@ -66,8 +64,6 @@ pub struct WatcherManager {
 
 struct WatcherManagerCore {
     event_rx: mpsc::UnboundedReceiver<WatcherEvent>,
-
-    event_tx: mpsc::UnboundedSender<WatcherEvent>,
 
     watcher_streams: BTreeMap<WatcherId, WatcherStream>,
 
@@ -83,7 +79,6 @@ impl WatcherManager {
 
         let core = WatcherManagerCore {
             event_rx,
-            event_tx: event_tx.clone(),
             watcher_streams: BTreeMap::new(),
             watcher_range_set: RangeSet::new(),
             current_watcher_id: 1,
@@ -117,10 +112,10 @@ impl WatcherManagerCore {
                         match event {
                             WatcherEvent::CreateWatcherEvent((req, tx)) => {self.create_watcher_stream(req, tx).await;},
                             WatcherEvent::StateMachineKvDataEvent(kv) => {self.recv_kv(kv).await;},
-                            WatcherEvent::CloseWatcherStreamEvent((stream_id, err)) => {self.close_stream(stream_id, err);},
                             WatcherEvent::ShutdownEvent(_) => {
                                 tracing::info!("watcher manager has been shutdown");
-                                break;}
+                                break;
+                            }
                         }
                     }
                 },
@@ -129,9 +124,7 @@ impl WatcherManagerCore {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    fn close_stream(&mut self, id: WatcherId, err: String) {
-        tracing::info!("close watcher steam {:?} since {:?}", id, err);
-
+    fn close_stream(&mut self, id: WatcherId) {
         let watcher = self.watcher_streams.get(&id);
         if let Some(watcher) = watcher {
             let range = watcher.key.clone()..watcher.key_end.clone();
@@ -154,6 +147,7 @@ impl WatcherManagerCore {
         let prev = kv.prev.as_ref().map(|prev| prev.data.clone());
 
         let is_delete_event = kv.current.is_none();
+        let mut remove_watcher_id: Vec<WatcherId> = vec![];
 
         for range_key in set.iter() {
             let watcher_id = range_key.key.id;
@@ -167,6 +161,7 @@ impl WatcherManagerCore {
             }
 
             if let Some(stream) = self.watcher_streams.get(&watcher_id) {
+                assert_eq!(stream.id, watcher_id);
                 let resp = WatchResponse {
                     event: Some(Event {
                         key: kv.key.clone(),
@@ -175,8 +170,18 @@ impl WatcherManagerCore {
                     }),
                 };
 
-                stream.send(resp).await;
+                if let Err(err) = stream.send(resp).await {
+                    tracing::info!(
+                        "close watcher stream {:?} cause send err: {:?}",
+                        watcher_id,
+                        err
+                    );
+                    remove_watcher_id.push(watcher_id);
+                };
             }
+        }
+        for id in remove_watcher_id {
+            self.close_stream(id);
         }
     }
 
@@ -189,11 +194,13 @@ impl WatcherManagerCore {
             Err(_) => return,
         };
 
+        while self.watcher_streams.get(&self.current_watcher_id).is_some() {
+            self.current_watcher_id += 1;
+        }
         let watcher_id = self.current_watcher_id;
         let watcher_stream = WatcherStream::new(
             self.current_watcher_id,
             tx,
-            self.event_tx.clone(),
             range.start.clone(),
             range.end.clone(),
         );
@@ -205,13 +212,10 @@ impl WatcherManagerCore {
             filter,
         });
 
-        // send None event to notify stream has been created.
         let _ = watcher_stream.send(WatchResponse { event: None });
 
         self.watcher_streams
             .insert(self.current_watcher_id, watcher_stream);
-
-        self.current_watcher_id += 1;
     }
 
     fn get_range_key(key: String, key_end: &Option<String>) -> Result<Range<String>, bool> {
