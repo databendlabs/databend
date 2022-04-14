@@ -102,18 +102,18 @@ impl WatcherManagerCore {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn watcher_manager_main(mut self) {
         loop {
-            tokio::select! {
-                event = self.event_rx.recv() => {
-                    if let Some(event) = event {
-                        match event {
-                            WatcherEvent::CreateWatcherEvent((req, tx)) => {self.create_watcher_stream(req, tx).await;},
-                            WatcherEvent::StateMachineKvDataEvent(kv) => {self.notify_event(kv).await;},
-                        }
-                    } else {
-                        tracing::info!("watcher manager has been shutdown");
-                        break;
+            if let Some(event) = self.event_rx.recv().await {
+                match event {
+                    WatcherEvent::CreateWatcherEvent((req, tx)) => {
+                        self.create_watcher_stream(req, tx).await;
                     }
-                },
+                    WatcherEvent::StateMachineKvDataEvent(kv) => {
+                        self.notify_event(kv).await;
+                    }
+                }
+            } else {
+                tracing::info!("watcher manager has been shutdown");
+                break;
             }
         }
     }
