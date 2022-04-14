@@ -314,11 +314,11 @@ fn test_cast_variant_function() -> Result<()> {
 
     for (test_func, test) in tests {
         match test_func.eval(
-            &test.columns,
-            test.columns[0].column().len(),
-            FunctionOptions {
+            FunctionContext {
                 tz: "UTC".to_string(),
             },
+            &test.columns,
+            test.columns[0].column().len(),
         ) {
             Ok(v) => {
                 let v = v.convert_full_column();
@@ -640,11 +640,11 @@ fn test_variant_cast_function() -> Result<()> {
 
     for (test_func, test) in tests {
         match test_func.eval(
-            &test.columns,
-            test.columns[0].column().len(),
-            FunctionOptions {
+            FunctionContext {
                 tz: "UTC".to_string(),
             },
+            &test.columns,
+            test.columns[0].column().len(),
         ) {
             Ok(v) => {
                 let v = v.convert_full_column();

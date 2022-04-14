@@ -24,9 +24,9 @@ use sha2::Digest;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct Sha2HashFunction {
@@ -71,9 +71,9 @@ impl Function for Sha2HashFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let col_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());

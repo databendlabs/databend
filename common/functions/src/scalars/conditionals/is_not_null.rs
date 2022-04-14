@@ -18,9 +18,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct IsNotNullFunction {
@@ -60,9 +60,9 @@ impl Function for IsNotNullFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let (all_null, validity) = columns[0].column().validity();
         if all_null {

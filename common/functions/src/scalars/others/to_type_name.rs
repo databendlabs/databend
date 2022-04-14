@@ -20,9 +20,9 @@ use common_datavalues::StringType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
@@ -57,9 +57,9 @@ impl Function for ToTypeNameFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let type_name = format!("{:?}", columns[0].data_type());
         let value = DataValue::String(type_name.as_bytes().to_vec());

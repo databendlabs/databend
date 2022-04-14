@@ -20,9 +20,9 @@ use common_exception::Result;
 use serde_json::Value as JsonValue;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct CheckJsonFunction {
@@ -53,9 +53,9 @@ impl Function for CheckJsonFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         let column = columns[0].column();

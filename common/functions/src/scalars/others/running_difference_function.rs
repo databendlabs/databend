@@ -21,9 +21,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {
@@ -89,9 +89,9 @@ impl Function for RunningDifferenceFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let dt = remove_nullable(columns[0].data_type());
         let col = columns[0].column();

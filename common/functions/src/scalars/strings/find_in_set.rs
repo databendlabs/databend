@@ -21,9 +21,9 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct FindInSetFunction {
@@ -56,9 +56,9 @@ impl Function for FindInSetFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, u64, _>(
             columns[0].column(),

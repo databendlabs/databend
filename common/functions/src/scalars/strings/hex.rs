@@ -22,9 +22,9 @@ use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct HexFunction {
@@ -62,9 +62,9 @@ impl Function for HexFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {

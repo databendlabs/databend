@@ -23,8 +23,8 @@ use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -98,9 +98,9 @@ impl Function for AbsFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::Int8 => impl_abs_function!(columns[0], i8, i64, u8),

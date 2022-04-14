@@ -21,7 +21,7 @@ use common_exception::Result;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionOptions;
+use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -72,9 +72,9 @@ impl Function for RoundFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let func = |val: u32, _ctx: &mut EvalContext| self.execute(val);
         let col =

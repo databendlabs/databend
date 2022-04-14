@@ -20,9 +20,9 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct UnhexFunction {
@@ -54,9 +54,9 @@ impl Function for UnhexFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 

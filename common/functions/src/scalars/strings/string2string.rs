@@ -21,9 +21,9 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
     fn try_apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Result<usize>;
@@ -69,9 +69,9 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
         let column: &StringColumn = Series::check_get(columns[0].column())?;

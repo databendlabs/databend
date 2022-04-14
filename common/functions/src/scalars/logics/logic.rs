@@ -22,8 +22,8 @@ use super::LogicAndFunction;
 use super::LogicNotFunction;
 use super::LogicOrFunction;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFactory;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct LogicFunction;
@@ -97,9 +97,9 @@ where F: LogicExpression + Clone
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         F::eval(columns, input_rows, self.nullable)
     }

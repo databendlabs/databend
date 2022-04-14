@@ -24,7 +24,7 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionOptions;
+use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -71,9 +71,9 @@ where
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col = scalar_unary_op(
             columns[0].column(),

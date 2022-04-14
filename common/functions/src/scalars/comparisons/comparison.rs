@@ -43,10 +43,10 @@ use crate::scalars::ComparisonNotRegexpFunction;
 use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -93,9 +93,9 @@ impl Function for ComparisonFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col = self.func.eval(&columns[0], &columns[1])?;
         Ok(Arc::new(col))

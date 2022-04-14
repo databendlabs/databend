@@ -22,9 +22,9 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[doc(alias = "TryIPv4StringToNumFunction")]
 pub type TryInetAtonFunction = InetAtonFunctionImpl<true>;
@@ -67,9 +67,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let viewer = Vu8::try_create_viewer(columns[0].column())?;
         let viewer_iter = viewer.iter();

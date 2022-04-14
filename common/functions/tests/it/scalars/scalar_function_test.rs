@@ -14,8 +14,8 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
-use common_functions::scalars::FunctionOptions;
 use pretty_assertions::assert_eq;
 
 pub struct ScalarFunctionTest {
@@ -120,8 +120,8 @@ pub fn test_eval_with_type(
 ) -> Result<ColumnRef> {
     let func = FunctionFactory::instance().get(op, arguments_type)?;
     func.return_type();
-    let func_opts = FunctionOptions {
+    let func_ctx = FunctionContext {
         tz: "UTC".to_string(),
     };
-    func.eval(arguments, rows_size, func_opts)
+    func.eval(func_ctx, arguments, rows_size)
 }

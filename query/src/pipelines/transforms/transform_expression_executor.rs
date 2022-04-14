@@ -19,7 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionOptions;
+use common_functions::scalars::FunctionContext;
 use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
@@ -197,8 +197,8 @@ impl ExpressionExecutor {
         let tz = String::from_utf8(tz).map_err(|_| {
             ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
         })?;
-        let func_opts = FunctionOptions { tz };
-        let column = f.func.eval(&arg_columns, rows, func_opts)?;
+        let func_ctx = FunctionContext { tz };
+        let column = f.func.eval(func_ctx, &arg_columns, rows)?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),

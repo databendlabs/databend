@@ -23,9 +23,9 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 pub type LeftPadFunction = PadFunction<LeftPad>;
 pub type RightPadFunction = PadFunction<RightPad>;
@@ -123,9 +123,9 @@ impl<T: PadOperator> Function for PadFunction<T> {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col1 = Vu8::try_create_viewer(columns[0].column())?;
         let col3 = Vu8::try_create_viewer(columns[2].column())?;

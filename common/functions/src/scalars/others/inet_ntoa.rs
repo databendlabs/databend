@@ -24,9 +24,9 @@ use crate::scalars::cast_with_type;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 use crate::scalars::ParsingMode;
 
 #[doc(alias = "TryNumToIPv4StringFunction")]
@@ -70,9 +70,9 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         if SUPPRESS_CAST_ERROR {
             let cast_to: DataTypePtr = NullableType::arc(UInt32Type::arc());

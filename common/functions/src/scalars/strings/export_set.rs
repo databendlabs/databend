@@ -23,9 +23,9 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::cast_with_type;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
 
 #[derive(Clone)]
@@ -72,9 +72,9 @@ impl Function for ExportSetFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let sep_col = if columns.len() >= 4 {
             columns[3].column().clone()

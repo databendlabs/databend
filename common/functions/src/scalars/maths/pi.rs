@@ -20,8 +20,8 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct PiFunction {
@@ -52,9 +52,9 @@ impl Function for PiFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_option: FunctionOptions,
     ) -> Result<ColumnRef> {
         Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())
     }

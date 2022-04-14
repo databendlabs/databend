@@ -26,9 +26,9 @@ use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct RegexpLikeFunction {
@@ -67,9 +67,9 @@ impl Function for RegexpLikeFunction {
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
         if let Ok(col1) = col1 {

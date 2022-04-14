@@ -19,9 +19,9 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[inline]
 fn apply<'a>(str: &'a [u8], from: &'a [u8], to: &'a [u8], buf: &mut Vec<u8>) {
@@ -76,9 +76,9 @@ impl Function for ReplaceFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let view0 = Vu8::try_create_viewer(columns[0].column())?;
         let view1 = Vu8::try_create_viewer(columns[1].column())?;

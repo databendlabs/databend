@@ -20,9 +20,9 @@ use common_exception::Result;
 use serde_json::Value as JsonValue;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 pub type TryParseJsonFunction = ParseJsonFunctionImpl<true>;
 
@@ -83,9 +83,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         if data_type.data_type_id() == TypeID::Null {

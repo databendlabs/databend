@@ -22,9 +22,9 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::FunctionOptions;
 
 #[inline]
 fn apply_insert<'a, S: AsPrimitive<i64>, T: AsPrimitive<i64>>(
@@ -85,9 +85,9 @@ impl Function for InsertFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let s_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let ss_viewer = Vu8::try_create_viewer(columns[3].column())?;
