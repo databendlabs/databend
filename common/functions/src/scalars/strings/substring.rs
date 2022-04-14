@@ -19,8 +19,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
 
+use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -30,7 +32,26 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+
+        if !args[1].data_type_id().is_integer() && !args[1].data_type_id().is_string() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected integer or string or null, but got {}",
+                args[1].data_type_id()
+            )));
+        }
+
+        if args.len() > 2
+            && !args[2].data_type_id().is_integer()
+            && !args[2].data_type_id().is_string()
+        {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected integer or string or null, but got {}",
+                args[2].data_type_id()
+            )));
+        }
+
         Ok(Box::new(SubstringFunction {
             display_name: display_name.to_string(),
         }))
@@ -50,36 +71,8 @@ impl Function for SubstringFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
-        if !args[1].data_type_id().is_integer()
-            && !args[1].data_type_id().is_string()
-            && !args[1].data_type_id().is_null()
-        {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[1].data_type_id()
-            )));
-        }
-
-        if args.len() > 2
-            && !args[2].data_type_id().is_integer()
-            && !args[2].data_type_id().is_string()
-            && !args[2].data_type_id().is_null()
-        {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[2].data_type_id()
-            )));
-        }
-
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(
@@ -156,4 +149,3 @@ fn substr<'a>(str: &'a [u8], pos: &i64, len: &u64) -> &'a [u8] {
     }
     &str[0..0]
 }
-use crate::scalars::FunctionContext;

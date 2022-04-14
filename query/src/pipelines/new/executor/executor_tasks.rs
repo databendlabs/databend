@@ -47,11 +47,8 @@ impl ExecutorTasksQueue {
     }
 
     /// Pull task from the global task queue
-    ///
-    /// # Safety
-    ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
+    pub fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         if !workers_tasks.is_empty() {
@@ -88,7 +85,7 @@ impl ExecutorTasksQueue {
         context.get_workers_notify().wait(context.get_worker_num());
     }
 
-    pub unsafe fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
+    pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
         let mut worker_id = 0;
         let mut workers_tasks = self.workers_tasks.lock();
         while let Some(task) = tasks.pop_front() {
@@ -103,21 +100,19 @@ impl ExecutorTasksQueue {
 
     #[allow(unused_assignments)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
-        unsafe {
-            let mut wake_worker_id = None;
-            {
-                let worker_id = ctx.get_worker_num();
-                let mut workers_tasks = self.workers_tasks.lock();
-                while let Some(task) = tasks.pop_front() {
-                    workers_tasks.push_task(worker_id, task);
-                }
-
-                wake_worker_id = Some(workers_tasks.best_worker_id(worker_id + 1));
+        let mut wake_worker_id = None;
+        {
+            let worker_id = ctx.get_worker_num();
+            let mut workers_tasks = self.workers_tasks.lock();
+            while let Some(task) = tasks.pop_front() {
+                workers_tasks.push_task(worker_id, task);
             }
 
-            if let Some(wake_worker_id) = wake_worker_id {
-                ctx.get_workers_notify().wakeup(wake_worker_id);
-            }
+            wake_worker_id = Some(workers_tasks.best_worker_id(worker_id + 1));
+        }
+
+        if let Some(wake_worker_id) = wake_worker_id {
+            ctx.get_workers_notify().wakeup(wake_worker_id);
         }
     }
 
@@ -220,7 +215,7 @@ impl ExecutorTasks {
         worker_id
     }
 
-    pub unsafe fn pop_task(&mut self, mut worker_id: usize) -> ExecutorTask {
+    pub fn pop_task(&mut self, mut worker_id: usize) -> ExecutorTask {
         for _index in 0..self.workers_sync_tasks.len() {
             match self.pop_worker_task(worker_id) {
                 ExecutorTask::None => {
@@ -239,10 +234,16 @@ impl ExecutorTasks {
         ExecutorTask::None
     }
 
-    pub unsafe fn push_task(&mut self, worker_id: usize, task: ExecutorTask) {
+    pub fn push_task(&mut self, worker_id: usize, task: ExecutorTask) {
         self.tasks_size += 1;
+        debug_assert!(worker_id < self.workers_sync_tasks.len(), "out of index");
         let sync_queue = &mut self.workers_sync_tasks[worker_id];
+        debug_assert!(worker_id < self.workers_async_tasks.len(), "out of index");
         let async_queue = &mut self.workers_async_tasks[worker_id];
+        debug_assert!(
+            worker_id < self.workers_completed_async_tasks.len(),
+            "out of index"
+        );
         let completed_queue = &mut self.workers_completed_async_tasks[worker_id];
 
         match task {

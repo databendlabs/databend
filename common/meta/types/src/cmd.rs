@@ -32,10 +32,15 @@ use crate::UpsertTableOptionReq;
 #[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.
-    IncrSeq { key: String },
+    IncrSeq {
+        key: String,
+    },
 
     /// Add node if absent
-    AddNode { node_id: NodeId, node: Node },
+    AddNode {
+        node_id: NodeId,
+        node: Node,
+    },
 
     /// Add a database if absent
     CreateDatabase {
@@ -45,7 +50,10 @@ pub enum Cmd {
     },
 
     /// Drop a database if absent
-    DropDatabase { tenant: String, name: String },
+    DropDatabase {
+        tenant: String,
+        name: String,
+    },
 
     /// Create a table if absent
     CreateTable {
@@ -69,6 +77,16 @@ pub enum Cmd {
         table_name: String,
         new_db_name: String,
         new_table_name: String,
+    },
+
+    /// Create a share if absent
+    CreateShare {
+        tenant: String,
+        share_name: String,
+    },
+    DropShare {
+        tenant: String,
+        share_name: String,
     },
 
     /// Update, remove or insert table options.
@@ -144,6 +162,12 @@ impl fmt::Display for Cmd {
                     "rename_table:{}/{}-{}=>{}-{}",
                     tenant, db_name, table_name, new_db_name, new_table_name
                 )
+            }
+            Cmd::CreateShare { tenant, share_name } => {
+                write!(f, "create_share:{}/{}", tenant, share_name)
+            }
+            Cmd::DropShare { tenant, share_name } => {
+                write!(f, "drop_share:{}/{}", tenant, share_name)
             }
             Cmd::UpsertKV {
                 key,

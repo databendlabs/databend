@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
 use super::number_function::ToYearFunction;
@@ -41,7 +39,6 @@ use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFeatures;
@@ -51,8 +48,8 @@ pub struct DateFunction {}
 
 impl DateFunction {
     fn round_function_creator(round: u32) -> FunctionDescription {
-        let creator: FactoryCreator = Box::new(move |display_name| -> Result<Box<dyn Function>> {
-            RoundFunction::try_create(display_name, round)
+        let creator: FactoryCreator = Box::new(move |display_name, args| {
+            RoundFunction::try_create(display_name, args, round)
         });
 
         FunctionDescription::creator(creator).features(
@@ -102,17 +99,17 @@ impl DateFunction {
         factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
 
         //interval functions
-        factory.register_typed("addYears", AddYearsFunction::desc(1));
-        factory.register_typed("addMonths", AddMonthsFunction::desc(1));
-        factory.register_typed("addDays", AddDaysFunction::desc(1));
-        factory.register_typed("addHours", AddTimesFunction::desc(3600));
-        factory.register_typed("addMinutes", AddTimesFunction::desc(60));
-        factory.register_typed("addSeconds", AddTimesFunction::desc(1));
-        factory.register_typed("subtractYears", AddYearsFunction::desc(-1));
-        factory.register_typed("subtractMonths", AddMonthsFunction::desc(-1));
-        factory.register_typed("subtractDays", AddDaysFunction::desc(-1));
-        factory.register_typed("subtractHours", AddTimesFunction::desc(-3600));
-        factory.register_typed("subtractMinutes", AddTimesFunction::desc(-60));
-        factory.register_typed("subtractSeconds", AddTimesFunction::desc(-1));
+        factory.register("addYears", AddYearsFunction::desc(1));
+        factory.register("addMonths", AddMonthsFunction::desc(1));
+        factory.register("addDays", AddDaysFunction::desc(1));
+        factory.register("addHours", AddTimesFunction::desc(3600));
+        factory.register("addMinutes", AddTimesFunction::desc(60));
+        factory.register("addSeconds", AddTimesFunction::desc(1));
+        factory.register("subtractYears", AddYearsFunction::desc(-1));
+        factory.register("subtractMonths", AddMonthsFunction::desc(-1));
+        factory.register("subtractDays", AddDaysFunction::desc(-1));
+        factory.register("subtractHours", AddTimesFunction::desc(-3600));
+        factory.register("subtractMinutes", AddTimesFunction::desc(-60));
+        factory.register("subtractSeconds", AddTimesFunction::desc(-1));
     }
 }

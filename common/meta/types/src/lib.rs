@@ -51,6 +51,7 @@ mod user_stage;
 
 pub mod error_context;
 mod principal_identity;
+mod share;
 mod warehouse_meta;
 
 // reexport
@@ -112,11 +113,13 @@ pub use meta_storage_errors::AppError;
 pub use meta_storage_errors::DatabaseAlreadyExists;
 pub use meta_storage_errors::MetaStorageError;
 pub use meta_storage_errors::MetaStorageResult;
+pub use meta_storage_errors::ShareAlreadyExists;
 pub use meta_storage_errors::TableAlreadyExists;
 pub use meta_storage_errors::TableVersionMismatched;
 pub use meta_storage_errors::ToMetaStorageError;
 pub use meta_storage_errors::UnknownDatabase;
 pub use meta_storage_errors::UnknownDatabaseId;
+pub use meta_storage_errors::UnknownShare;
 pub use meta_storage_errors::UnknownTable;
 pub use meta_storage_errors::UnknownTableId;
 pub use operation::MetaId;
@@ -133,6 +136,12 @@ pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
+pub use share::CreateShareReply;
+pub use share::CreateShareReq;
+pub use share::DropShareReply;
+pub use share::DropShareReq;
+pub use share::GetShareReq;
+pub use share::ShareInfo;
 pub use table::CreateTableReply;
 pub use table::CreateTableReq;
 pub use table::DropTableReply;

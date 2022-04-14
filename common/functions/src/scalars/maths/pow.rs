@@ -35,7 +35,10 @@ pub struct PowFunction {
 }
 
 impl PowFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(PowFunction {
             display_name: display_name.to_string(),
         }))
@@ -61,11 +64,8 @@ impl Function for PowFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
     fn eval(

@@ -16,10 +16,11 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -42,7 +43,9 @@ where
     T: NumberOperator<R>,
     R: PrimitiveType + Clone + ToDataType,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -76,19 +79,8 @@ where
         &self.display_name
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        // We allow string AND null as input
-        if args[0].data_type_id().is_string() {
-            Ok(R::to_data_type())
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected string, numeric or null, but got {:?}",
-                args[0]
-            )))
-        }
+    fn return_type(&self) -> DataTypePtr {
+        R::to_data_type()
     }
 
     fn eval(
@@ -114,4 +106,3 @@ impl<T, R> fmt::Display for String2NumberFunction<T, R> {
         write!(f, "{}()", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

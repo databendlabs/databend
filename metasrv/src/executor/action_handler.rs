@@ -75,6 +75,16 @@ impl ActionHandler {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }
+
+            // share
+            MetaGrpcWriteReq::CreateShare(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
+            MetaGrpcWriteReq::DropShare(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
         }
     }
 
@@ -115,6 +125,12 @@ impl ActionHandler {
                 RaftReply::from(r)
             }
             MetaGrpcReadReq::GetTableExt(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
+
+            // share
+            MetaGrpcReadReq::GetShare(a) => {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }

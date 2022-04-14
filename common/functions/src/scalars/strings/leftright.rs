@@ -25,6 +25,7 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op_ref;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -57,7 +58,9 @@ pub struct LeftRightFunction<const IS_LEFT: bool> {
 }
 
 impl<const IS_LEFT: bool> LeftRightFunction<IS_LEFT> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+        assert_numeric(args[1])?;
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -74,10 +77,8 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_string(args[0])?;
-        assert_numeric(args[1])?;
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
     fn eval(
@@ -112,4 +113,3 @@ impl<const IS_LEFT: bool> fmt::Display for LeftRightFunction<IS_LEFT> {
         f.write_str(&self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

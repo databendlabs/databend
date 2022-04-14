@@ -15,12 +15,11 @@
 use std::fmt;
 use std::net::Ipv4Addr;
 use std::str;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_numeric;
 use crate::scalars::cast_with_type;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
@@ -42,7 +41,9 @@ pub struct InetNtoaFunctionImpl<const SUPPRESS_CAST_ERROR: bool> {
 }
 
 impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
+
         Ok(Box::new(InetNtoaFunctionImpl::<SUPPRESS_CAST_ERROR> {
             display_name: display_name.to_string(),
         }))
@@ -59,26 +60,11 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let input_type = args[0];
-        if input_type.data_type_id() == TypeID::Null {
-            return Ok(NullType::arc());
-        }
-
-        let output_type = if input_type.data_type_id().is_numeric() {
-            Ok(StringType::arc())
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric or null type, but got {}",
-                args[0].name()
-            )))
-        }?;
-
+    fn return_type(&self) -> DataTypePtr {
         if SUPPRESS_CAST_ERROR {
-            // For invalid input, the function should return null. So the return type must be nullable.
-            Ok(Arc::new(NullableType::create(output_type)))
+            NullableType::arc(StringType::arc())
         } else {
-            Ok(output_type)
+            StringType::arc()
         }
     }
 
@@ -88,12 +74,8 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
-        if columns[0].column().data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-        }
-
         if SUPPRESS_CAST_ERROR {
-            let cast_to: DataTypePtr = Arc::new(NullableType::create(UInt32Type::arc()));
+            let cast_to: DataTypePtr = NullableType::arc(UInt32Type::arc());
             let cast_options = CastOptions {
                 // we allow cast failure
                 exception_mode: ExceptionMode::Zero,

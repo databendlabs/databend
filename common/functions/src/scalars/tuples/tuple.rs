@@ -15,23 +15,36 @@
 use std::fmt;
 use std::sync::Arc;
 
+use common_datavalues::DataTypePtr;
 use common_datavalues::StructColumn;
 use common_datavalues::StructType;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct TupleFunction {
     _display_name: String,
+    result_type: DataTypePtr,
 }
 
 impl TupleFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        let names = (0..args.len())
+            .map(|i| format!("item_{}", i))
+            .collect::<Vec<_>>();
+        let types = args.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
+        let result_type = Arc::new(StructType::create(names, types));
+
         Ok(Box::new(TupleFunction {
             _display_name: "tuple".to_string(),
+            result_type,
         }))
     }
 
@@ -50,16 +63,8 @@ impl Function for TupleFunction {
         "TupleFunction"
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        let names = (0..args.len())
-            .map(|i| format!("item_{}", i))
-            .collect::<Vec<_>>();
-        let types = args.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
-        let t = Arc::new(StructType::create(names, types));
-        Ok(t)
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
     fn eval(
@@ -68,21 +73,11 @@ impl Function for TupleFunction {
         _input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
-        let mut cols = vec![];
-        let mut types = vec![];
-
-        let names = (0..columns.len())
-            .map(|i| format!("item_{}", i))
+        let cols = columns
+            .iter()
+            .map(|v| v.column().clone())
             .collect::<Vec<_>>();
-
-        for c in columns {
-            cols.push(c.column().clone());
-            types.push(c.data_type().clone());
-        }
-
-        let t = Arc::new(StructType::create(names, types));
-
-        let arr: StructColumn = StructColumn::from_data(cols, t);
+        let arr: StructColumn = StructColumn::from_data(cols, self.result_type.clone());
         Ok(Arc::new(arr))
     }
 }
@@ -92,4 +87,3 @@ impl std::fmt::Display for TupleFunction {
         write!(f, "TUPLE")
     }
 }
-use crate::scalars::FunctionContext;

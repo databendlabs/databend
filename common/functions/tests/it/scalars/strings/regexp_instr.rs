@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::RegexpInStrFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_instr_function() -> Result<()> {
@@ -141,18 +140,14 @@ fn test_regexp_instr_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RegexpInStrFunction::try_create("regexp_instr")?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("regexp_instr", &tests)
 }
 
 #[test]
 fn test_regexp_instr_constant_column() -> Result<()> {
-    let data_type = DataValue::String("dog".as_bytes().into());
-    let data_value1 = StringType::arc().create_constant_column(&data_type, 3)?;
-    let data_value2 = StringType::arc().create_constant_column(&data_type, 3)?;
+    let data = DataValue::String("dog".as_bytes().into());
+    let data_value1 = StringType::arc().create_constant_column(&data, 3)?;
+    let data_value2 = StringType::arc().create_constant_column(&data, 3)?;
 
     let tests = vec![
         ScalarFunctionTest {
@@ -181,9 +176,5 @@ fn test_regexp_instr_constant_column() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        RegexpInStrFunction::try_create("regexp_instr")?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("regexp_instr", &tests)
 }
