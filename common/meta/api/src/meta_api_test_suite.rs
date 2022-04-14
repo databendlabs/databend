@@ -19,11 +19,14 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -88,7 +91,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- create db1 again with if_not_exists=true");
         {
             let req = CreateDatabaseReq {
-                if_not_exists: false,
+                if_not_exists: true,
                 tenant: tenant.to_string(),
                 db: "db1".to_string(),
                 meta: DatabaseMeta {
@@ -99,11 +102,8 @@ impl MetaApiTestSuite {
 
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::DatabaseAlreadyExists("").code(),
-                ErrorCode::from(err).code()
-            );
+            let res = res.unwrap();
+            assert_eq!(1, res.database_id, "db1 id is 1");
         }
 
         tracing::info!("--- get db1");
@@ -951,6 +951,141 @@ impl MetaApiTestSuite {
                 assert_eq!(1, res[0].ident.table_id);
                 assert_eq!(2, res[1].ident.table_id);
             }
+        }
+
+        Ok(())
+    }
+
+    pub async fn share_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant1 = "tenant1";
+        let share_name1 = "share1";
+        let share_name2 = "share2";
+        tracing::info!("--- create {}", share_name1);
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                tenant: tenant1.to_string(),
+                share_name: share_name1.to_string(),
+            };
+
+            let res = mt.create_share(req).await;
+            tracing::info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "first share id is 1");
+        }
+
+        tracing::info!("--- get share1");
+        {
+            let res = mt.get_share(GetShareReq::new(tenant1, share_name1)).await;
+            tracing::debug!("get present share res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.id, "db1 id is 1");
+            assert_eq!(
+                share_name1.to_string(),
+                res.name,
+                "share1.db is {}",
+                share_name1
+            );
+        }
+
+        tracing::info!("--- create share1 again with if_not_exists=false");
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                tenant: tenant1.to_string(),
+                share_name: share_name1.to_string(),
+            };
+
+            let res = mt.create_share(req).await;
+            tracing::info!("create share res: {:?}", res);
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::ShareAlreadyExists("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
+
+        tracing::info!("--- create share1 again with if_not_exists=true");
+        {
+            let req = CreateShareReq {
+                if_not_exists: true,
+                tenant: tenant1.to_string(),
+                share_name: share_name1.to_string(),
+            };
+
+            let res = mt.create_share(req).await;
+            tracing::info!("create database res: {:?}", res);
+
+            let res = res.unwrap();
+            assert_eq!(1, res.share_id, "share1 id is 1");
+        }
+
+        tracing::info!("--- create share2");
+        {
+            let req = CreateShareReq {
+                if_not_exists: false,
+                tenant: tenant1.to_string(),
+                share_name: share_name2.to_string(),
+            };
+
+            let res = mt.create_share(req).await;
+            tracing::info!("create share res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(2, res.share_id, "second share id is 2 ");
+        }
+
+        tracing::info!("--- get share2");
+        {
+            let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await?;
+            assert_eq!(2, res.id, "share2 id is 2");
+            assert_eq!(
+                share_name2.to_string(),
+                res.name,
+                "share2.name is {}",
+                share_name2
+            );
+        }
+
+        tracing::info!("--- get absent share");
+        {
+            let res = mt.get_share(GetShareReq::new(tenant1, "absent")).await;
+            tracing::debug!("=== get absent share res: {:?}", res);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            let err_code = ErrorCode::from(err);
+
+            assert_eq!(ErrorCode::unknown_share_code(), err_code.code());
+            assert!(err_code.message().contains("absent"));
+        }
+
+        tracing::info!("--- drop share2");
+        {
+            mt.drop_share(DropShareReq {
+                if_exists: false,
+                tenant: tenant1.to_string(),
+                share_name: share_name2.to_string(),
+            })
+            .await?;
+        }
+
+        tracing::info!("--- get share2 should not found");
+        {
+            let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await;
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownShare("").code(),
+                ErrorCode::from(err).code()
+            );
+        }
+
+        tracing::info!("--- drop share2 with if_exists=true returns no error");
+        {
+            mt.drop_share(DropShareReq {
+                if_exists: true,
+                tenant: tenant1.to_string(),
+                share_name: share_name2.to_string(),
+            })
+            .await?;
         }
 
         Ok(())
