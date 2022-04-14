@@ -25,7 +25,15 @@ use super::Monotonicity;
 /// for now, this is only store Timezone
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: Option<String>,
+    pub tz: String,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self {
+            tz: "UTC".to_string(),
+        }
+    }
 }
 
 pub trait Function: fmt::Display + Sync + Send + DynClone {
@@ -48,9 +56,9 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Evaluate the function, e.g. run/execute the function.
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef>;
 
     /// If all args are constant column, then we just return the constant result

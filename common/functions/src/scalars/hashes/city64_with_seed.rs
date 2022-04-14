@@ -116,9 +116,9 @@ impl Function for City64WithSeedFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let column = columns[0].column();
         let physical_data_type = columns[0].data_type().data_type_id().to_physical_type();

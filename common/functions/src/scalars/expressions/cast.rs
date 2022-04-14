@@ -70,9 +70,9 @@ impl Function for CastFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         cast_column_field(&columns[0], &self.cast_type)
     }

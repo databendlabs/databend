@@ -71,9 +71,9 @@ impl Function for Sha2HashFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let col_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());

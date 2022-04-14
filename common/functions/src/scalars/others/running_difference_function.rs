@@ -89,9 +89,9 @@ impl Function for RunningDifferenceFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let dt = remove_nullable(columns[0].data_type());
         let col = columns[0].column();

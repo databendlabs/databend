@@ -97,9 +97,9 @@ where F: LogicExpression + Clone
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         F::eval(columns, input_rows, self.nullable)
     }

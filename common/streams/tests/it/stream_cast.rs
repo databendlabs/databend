@@ -71,7 +71,7 @@ async fn test_cast_stream() {
         Box::pin(stream),
         output_schema.clone(),
         functions,
-        FunctionContext { tz: None },
+        FunctionContext::default(),
     )
     .unwrap();
 

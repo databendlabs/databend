@@ -39,7 +39,7 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
-    _ctx: Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 impl ExpressionExecutor {
@@ -59,7 +59,7 @@ impl ExpressionExecutor {
             output_schema,
             chain: Arc::new(chain),
             alias_project,
-            _ctx: ctx,
+            ctx,
         })
     }
 
@@ -193,10 +193,12 @@ impl ExpressionExecutor {
             arg_columns.push(column);
         }
 
-        // TODO(veeupup): get session's eval tz options
-        let column = f
-            .func
-            .eval(&arg_columns, rows, FunctionContext { tz: None })?;
+        let tz = self.ctx.get_settings().get_timezone()?;
+        let tz = String::from_utf8(tz).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+        })?;
+        let func_ctx = FunctionContext { tz };
+        let column = f.func.eval(func_ctx, &arg_columns, rows)?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),

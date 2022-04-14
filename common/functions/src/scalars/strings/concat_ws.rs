@@ -170,9 +170,9 @@ impl Function for ConcatWsFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if self.result_type.is_null() {
             return Ok(NullColumn::new(input_rows).arc());

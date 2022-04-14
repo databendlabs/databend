@@ -256,9 +256,9 @@ impl Function for IfFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let cond_col = columns[0].column();
         let cond_col = DataBlock::cast_to_nonull_boolean(cond_col)?;

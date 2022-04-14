@@ -77,9 +77,9 @@ impl Function for SubstringFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let s_column = cast_column_field(&columns[0], &StringType::arc())?;
         let s_viewer = Vu8::try_create_viewer(&s_column)?;

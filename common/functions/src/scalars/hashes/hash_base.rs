@@ -86,9 +86,9 @@ where
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         with_match_scalar_types_error!(columns[0].data_type().data_type_id().to_physical_type(), |$S| {
             let col = scalar_unary_op::<$S, R, _>(columns[0].column(), hash_func::<H, $S, R>, &mut EvalContext::default())?;
