@@ -111,7 +111,7 @@ impl WatcherManagerCore {
                     if let Some(event) = event {
                         match event {
                             WatcherEvent::CreateWatcherEvent((req, tx)) => {self.create_watcher_stream(req, tx).await;},
-                            WatcherEvent::StateMachineKvDataEvent(kv) => {self.recv_kv(kv).await;},
+                            WatcherEvent::StateMachineKvDataEvent(kv) => {self.notify_event(kv).await;},
                             WatcherEvent::ShutdownEvent(_) => {
                                 tracing::info!("watcher manager has been shutdown");
                                 break;
@@ -137,7 +137,7 @@ impl WatcherManagerCore {
         }
     }
 
-    async fn recv_kv(&mut self, kv: StateMachineKvData) {
+    async fn notify_event(&mut self, kv: StateMachineKvData) {
         let set = self.watcher_range_set.get_by_point(&kv.key);
         if set.is_empty() {
             return;
@@ -211,8 +211,6 @@ impl WatcherManagerCore {
             id: watcher_id,
             filter,
         });
-
-        let _ = watcher_stream.send(WatchResponse { event: None });
 
         self.watcher_streams
             .insert(self.current_watcher_id, watcher_stream);

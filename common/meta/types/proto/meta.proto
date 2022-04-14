@@ -78,8 +78,7 @@ message Event {
 }
 
 message WatchResponse {
-  // watcher events, when created at first time clien will recvive None event.
-  optional Event event = 1;
+  Event event = 1;
 }
 
 service RaftService {
