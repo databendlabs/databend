@@ -212,7 +212,7 @@ impl<'a> DfParser<'a> {
                 //TODO:make stage to sql parser keyword
                 match w.keyword {
                     Keyword::TABLE => self.parse_create_table(),
-                    Keyword::DATABASE => self.parse_create_database(),
+                    Keyword::DATABASE | Keyword::SCHEMA => self.parse_create_database(),
                     Keyword::USER => self.parse_create_user(),
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
@@ -311,7 +311,7 @@ impl<'a> DfParser<'a> {
     fn parse_drop(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::DATABASE => self.parse_drop_database(),
+                Keyword::DATABASE | Keyword::SCHEMA => self.parse_drop_database(),
                 Keyword::TABLE => self.parse_drop_table(),
                 Keyword::USER => self.parse_drop_user(),
                 Keyword::ROLE => self.parse_drop_role(),
@@ -359,7 +359,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_show_create_table(),
-                Keyword::DATABASE => self.parse_show_create_database(),
+                Keyword::DATABASE | Keyword::SCHEMA => self.parse_show_create_database(),
                 _ => self.expected("show create statement", Token::Word(w)),
             },
             unexpected => self.expected("show create statement", unexpected),

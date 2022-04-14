@@ -7,7 +7,7 @@ Create a database.
 ## Syntax
 
 ```sql
-CREATE DATABASE <database_name>
+CREATE DATABASE [IF NOT EXISTS] <database_name>
 ```
 
 ## Examples
