@@ -16,7 +16,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use common_range_set::RangeKey;
+use common_range_map::RangeKey;
 
 fn upsert_cmp_map(map: &mut BTreeMap<String, BTreeSet<String>>, k: String, v: String) {
     if map.get(&k).is_none() {

@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 use core::ops::Range;
-use std::collections::BTreeSet;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
@@ -25,8 +24,8 @@ use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::SeqV;
-use common_range_set::RangeKey;
-use common_range_set::RangeMap;
+use common_range_map::RangeKey;
+use common_range_map::RangeMap;
 use common_tracing::tracing;
 use tonic::Status;
 
@@ -69,8 +68,6 @@ struct WatcherManagerCore {
     watcher_range_map: RangeMap<String, WatcherId, WatcherStream>,
 
     current_watcher_id: WatcherId,
-
-    id_set: BTreeSet<WatcherId>,
 }
 
 impl WatcherManager {
@@ -81,7 +78,6 @@ impl WatcherManager {
             event_rx,
             watcher_range_map: RangeMap::new(),
             current_watcher_id: 1,
-            id_set: BTreeSet::new(),
         };
 
         let _h = tokio::spawn(core.watcher_manager_main());
@@ -121,7 +117,6 @@ impl WatcherManagerCore {
     #[tracing::instrument(level = "debug", skip(self))]
     fn close_stream(&mut self, key: RangeKey<String, WatcherId>) {
         self.watcher_range_map.remove_by_key(&key);
-        self.id_set.remove(&key.key);
     }
 
     fn convert_seqv_to_pb(seqv: &Option<SeqV>) -> Option<event::SeqV> {
@@ -191,10 +186,7 @@ impl WatcherManagerCore {
             Err(_) => return,
         };
 
-        while self.id_set.get(&self.current_watcher_id).is_some() {
-            self.current_watcher_id += 1;
-        }
-        self.id_set.insert(self.current_watcher_id);
+        self.current_watcher_id += 1;
         let watcher_id = self.current_watcher_id;
         let filter = create.filter_type();
 
