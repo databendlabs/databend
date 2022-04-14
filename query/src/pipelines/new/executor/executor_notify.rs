@@ -69,19 +69,25 @@ impl WorkersNotify {
         (self.workers - mutable_state.waiting_size) + mutable_state.running_async_worker
     }
 
+    pub fn get_waiting(&self) -> usize {
+        let mutable_state = self.mutable_state.lock();
+        mutable_state.waiting_size
+    }
+
     pub fn inc_active_async_worker(&self) {
         let mut mutable_state = self.mutable_state.lock();
         mutable_state.running_async_worker += 1;
     }
 
+    pub fn get_waiting_and_inc_active_async_worker(&self) -> usize {
+        let mut mutable_state = self.mutable_state.lock();
+        mutable_state.running_async_worker += 1;
+        mutable_state.waiting_size
+    }
+
     pub fn dec_active_async_worker(&self) {
         let mut mutable_state = self.mutable_state.lock();
         mutable_state.running_async_worker -= 1;
-    }
-
-    pub fn is_empty(&self) -> bool {
-        let mutable_state = self.mutable_state.lock();
-        mutable_state.waiting_size == 0
     }
 
     pub fn wakeup(&self, worker_id: usize) {
