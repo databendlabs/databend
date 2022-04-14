@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -27,8 +29,8 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StageSource;
 use crate::storages::Table;
@@ -88,22 +90,31 @@ impl Table for S3StageTable {
         _plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
+        let settings = ctx.get_settings();
+        let mut builder = SourcePipeBuilder::create();
         let table_info = &self.table_info;
         let schema = table_info.schema.clone();
+        let mut files_deque = VecDeque::with_capacity(table_info.files.len());
+        for f in &table_info.files {
+            files_deque.push_back(f.to_string());
+        }
+        let files = Arc::new(Mutex::new(files_deque));
 
-        // Add StageSource Pipe to the pipeline.
-        let output = OutputPort::create();
-        pipeline.add_pipe(NewPipe::SimplePipe {
-            inputs_port: vec![],
-            outputs_port: vec![output.clone()],
-            processors: vec![StageSource::try_create(
-                ctx,
-                output,
-                schema,
-                table_info.clone(),
-            )?],
-        });
+        for _index in 0..settings.get_max_threads()? {
+            let output = OutputPort::create();
+            builder.add_source(
+                output.clone(),
+                StageSource::try_create(
+                    ctx.clone(),
+                    output,
+                    schema.clone(),
+                    table_info.clone(),
+                    files.clone(),
+                )?,
+            );
+        }
 
+        pipeline.add_pipe(builder.finalize());
         Ok(())
     }
 

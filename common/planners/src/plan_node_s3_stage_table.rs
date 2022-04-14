@@ -21,9 +21,9 @@ use common_meta_types::UserStageInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct S3StageTableInfo {
     pub schema: DataSchemaRef,
-    pub file_name: Option<String>,
     pub stage_info: UserStageInfo,
     pub path: String,
+    pub files: Vec<String>,
 }
 
 impl S3StageTableInfo {
