@@ -71,9 +71,7 @@ async fn test_cast_stream() {
         Box::pin(stream),
         output_schema.clone(),
         functions,
-        FunctionContext {
-            tz: "UTC".to_string(),
-        },
+        FunctionContext::default(),
     )
     .unwrap();
 

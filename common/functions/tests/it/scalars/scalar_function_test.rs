@@ -120,8 +120,5 @@ pub fn test_eval_with_type(
 ) -> Result<ColumnRef> {
     let func = FunctionFactory::instance().get(op, arguments_type)?;
     func.return_type();
-    let func_ctx = FunctionContext {
-        tz: "UTC".to_string(),
-    };
-    func.eval(func_ctx, arguments, rows_size)
+    func.eval(FunctionContext::default(), arguments, rows_size)
 }

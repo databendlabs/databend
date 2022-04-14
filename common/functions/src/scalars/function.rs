@@ -28,6 +28,14 @@ pub struct FunctionContext {
     pub tz: String,
 }
 
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self {
+            tz: "UTC".to_string(),
+        }
+    }
+}
+
 pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
     fn name(&self) -> &str;

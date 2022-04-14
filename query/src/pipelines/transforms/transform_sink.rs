@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
@@ -93,14 +94,16 @@ impl Processor for SinkTransform {
                 let cast_function = CastFunction::create("cast", &name).unwrap();
                 functions.push(cast_function);
             }
-            // TODO(veeupup): construct func_ctx from query context
+            let tz = self.ctx.get_settings().get_timezone()?;
+            let tz = String::from_utf8(tz).map_err(|_| {
+                ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+            })?;
+            let func_ctx = FunctionContext { tz };
             input_stream = Box::pin(CastStream::try_create(
                 input_stream,
                 cast_schema.clone(),
                 functions,
-                FunctionContext {
-                    tz: "UTC".to_string(),
-                },
+                func_ctx,
             )?);
         }
 

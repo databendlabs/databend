@@ -415,18 +415,14 @@ where
 
         let left_val = func
             .eval(
-                FunctionContext {
-                    tz: "UTC".to_string(),
-                },
+                FunctionContext::default(),
                 &[args[0].left.clone().unwrap()],
                 1,
             )?
             .get(0);
         let right_val = func
             .eval(
-                FunctionContext {
-                    tz: "UTC".to_string(),
-                },
+                FunctionContext::default(),
                 &[args[0].right.clone().unwrap()],
                 1,
             )?

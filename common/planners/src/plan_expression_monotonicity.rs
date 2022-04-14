@@ -100,13 +100,7 @@ impl ExpressionMonotonicityVisitor {
                 .map(|col_opt| col_opt.unwrap())
                 .collect::<Vec<_>>();
             // TODO(veeupup): whether we need to pass function context here?
-            let col = func.eval(
-                FunctionContext {
-                    tz: "UTC".to_string(),
-                },
-                &input_columns,
-                1,
-            )?;
+            let col = func.eval(FunctionContext::default(), &input_columns, 1)?;
             let data_field = DataField::new("dummy", result_type.clone());
             let data_column_field = ColumnWithField::new(col, data_field);
             Ok(Some(data_column_field))
