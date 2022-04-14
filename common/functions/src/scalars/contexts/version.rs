@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use common_datavalues::DataTypePtr;
 use common_datavalues::StringType;
 use common_exception::Result;
 
@@ -28,7 +29,7 @@ pub struct VersionFunction {
 }
 
 impl VersionFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(VersionFunction {
             _display_name: display_name.to_string(),
         }))
@@ -48,11 +49,8 @@ impl Function for VersionFunction {
         "VersionFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(

@@ -32,7 +32,14 @@ pub struct HexFunction {
 }
 
 impl HexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected integer or string but got {}",
+                args[0].data_type_id()
+            )));
+        }
+
         Ok(Box::new(HexFunction {
             _display_name: display_name.to_string(),
         }))
@@ -49,15 +56,8 @@ impl Function for HexFunction {
         "hex"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(

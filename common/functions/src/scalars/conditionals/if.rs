@@ -29,12 +29,17 @@ use crate::scalars::FunctionOptions;
 #[derive(Clone, Debug)]
 pub struct IfFunction {
     display_name: String,
+    least_supertype: DataTypePtr,
 }
 
 impl IfFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        let dts = vec![args[1].clone(), args[2].clone()];
+        let least_supertype = aggregate_types(dts.as_slice())?;
+
         Ok(Box::new(IfFunction {
             display_name: display_name.to_string(),
+            least_supertype,
         }))
     }
 
@@ -80,12 +85,8 @@ impl IfFunction {
             (&columns[1], &columns[0], true)
         };
 
-        // cast to least super type
-        let dts = vec![lhs_col.data_type().clone(), rhs_col.data_type().clone()];
-        let least_supertype = aggregate_types(dts.as_slice())?;
-
-        let lhs = cast_column_field(lhs_col, &least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &least_supertype)?;
+        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
+        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
 
@@ -184,13 +185,10 @@ impl IfFunction {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let dts = vec![lhs_col.data_type().clone(), rhs_col.data_type().clone()];
-        let least_supertype = aggregate_types(dts.as_slice())?;
+        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
+        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
 
-        let lhs = cast_column_field(lhs_col, &least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &least_supertype)?;
-
-        let type_id = remove_nullable(&least_supertype).data_type_id();
+        let type_id = remove_nullable(&self.least_supertype).data_type_id();
 
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
             let lhs_viewer = $T::try_create_viewer(&lhs)?;
@@ -223,14 +221,11 @@ impl IfFunction {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let dts = vec![lhs_col.data_type().clone(), rhs_col.data_type().clone()];
-        let least_supertype = aggregate_types(dts.as_slice())?;
+        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
+        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
 
-        let lhs = cast_column_field(lhs_col, &least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &least_supertype)?;
-
-        debug_assert!(!least_supertype.is_nullable());
-        let type_id = least_supertype.data_type_id();
+        debug_assert!(!self.least_supertype.is_nullable());
+        let type_id = self.least_supertype.data_type_id();
 
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
             let lhs = Series::check_get_scalar::<$T>(&lhs)?;
@@ -255,11 +250,8 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let dts = vec![args[1].clone(), args[2].clone()];
-        let least_supertype = aggregate_types(dts.as_slice())?;
-
-        Ok(least_supertype)
+    fn return_type(&self) -> DataTypePtr {
+        self.least_supertype.clone()
     }
 
     fn eval(

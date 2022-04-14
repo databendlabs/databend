@@ -32,7 +32,7 @@ pub struct NowFunction {
 }
 
 impl NowFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(NowFunction {
             display_name: display_name.to_string(),
         }))
@@ -48,11 +48,8 @@ impl Function for NowFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(DateTime32Type::arc(None))
+    fn return_type(&self) -> DataTypePtr {
+        DateTime32Type::arc(None)
     }
 
     fn eval(

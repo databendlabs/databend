@@ -34,7 +34,19 @@ pub struct ExportSetFunction {
 }
 
 impl ExportSetFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
+        assert_string(args[1])?;
+        assert_string(args[2])?;
+
+        if args.len() >= 4 {
+            assert_string(args[3])?;
+        }
+
+        if args.len() >= 5 {
+            assert_numeric(args[4])?;
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -54,20 +66,8 @@ impl Function for ExportSetFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        assert_string(args[1])?;
-        assert_string(args[2])?;
-
-        if args.len() >= 4 {
-            assert_string(args[3])?;
-        }
-
-        if args.len() >= 5 {
-            assert_numeric(args[4])?;
-        }
-
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
     fn eval(

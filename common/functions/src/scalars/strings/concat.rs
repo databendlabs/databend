@@ -29,7 +29,10 @@ pub struct ConcatFunction {
 }
 
 impl ConcatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
         Ok(Box::new(ConcatFunction {
             _display_name: display_name.to_string(),
         }))
@@ -49,11 +52,8 @@ impl Function for ConcatFunction {
         "concat"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
     fn eval(

@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,19 +30,15 @@ pub struct CheckJsonFunction {
 }
 
 impl CheckJsonFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(CheckJsonFunction {
             display_name: display_name.to_string(),
         }))
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .monotonicity()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -53,12 +47,8 @@ impl Function for CheckJsonFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if args[0].data_type_id() == TypeID::Null {
-            return Ok(NullType::arc());
-        }
-
-        Ok(Arc::new(NullableType::create(StringType::arc())))
+    fn return_type(&self) -> DataTypePtr {
+        NullableType::arc(StringType::arc())
     }
 
     fn eval(
@@ -67,19 +57,8 @@ impl Function for CheckJsonFunction {
         input_rows: usize,
         _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
-        let data_type = remove_nullable(columns[0].field().data_type());
-        let mut column = columns[0].column();
-        let mut _all_null = false;
-        let mut source_valids: Option<&Bitmap> = None;
-        if column.is_nullable() {
-            (_all_null, source_valids) = column.validity();
-            let nullable_column: &NullableColumn = Series::check_get(column)?;
-            column = nullable_column.inner();
-        }
-
-        if data_type.data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-        }
+        let data_type = columns[0].field().data_type();
+        let column = columns[0].column();
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
 
@@ -89,14 +68,7 @@ impl Function for CheckJsonFunction {
             }
         } else if data_type.data_type_id() == TypeID::String {
             let c: &StringColumn = Series::check_get(column)?;
-            for (i, v) in c.iter().enumerate() {
-                if let Some(source_valids) = source_valids {
-                    if !source_valids.get_bit(i) {
-                        builder.append_null();
-                        continue;
-                    }
-                }
-
+            for v in c.iter() {
                 match std::str::from_utf8(v) {
                     Ok(v) => match serde_json::from_str::<JsonValue>(v) {
                         Ok(_v) => builder.append_null(),

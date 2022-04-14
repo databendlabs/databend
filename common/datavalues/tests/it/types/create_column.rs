@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -82,7 +80,7 @@ fn test_create_constant() -> Result<()> {
         },
         Test {
             name: "nullable_i32",
-            data_type: Arc::new(NullableType::create(Int32Type::arc())),
+            data_type: NullableType::arc(Int32Type::arc()),
             value: DataValue::Null,
             size: 2,
             column_expected: Series::from_data(&[None, None, Some(1i32)][0..2]),

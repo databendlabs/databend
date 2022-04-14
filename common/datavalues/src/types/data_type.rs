@@ -179,7 +179,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
 
     let is_nullable = f.is_nullable;
     if is_nullable && ty.can_inside_nullable() {
-        Arc::new(NullableType::create(ty))
+        NullableType::arc(ty)
     } else {
         ty
     }
@@ -209,7 +209,7 @@ pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     if !data_type.can_inside_nullable() {
         return data_type.clone();
     }
-    Arc::new(NullableType::create(data_type.clone()))
+    NullableType::arc(data_type.clone())
 }
 
 pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {

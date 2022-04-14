@@ -32,7 +32,21 @@ pub struct RepeatFunction {
 }
 
 impl RepeatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if !args[0].data_type_id().is_string() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected parameter 1 is string, but got {}",
+                args[0].data_type_id()
+            )));
+        }
+
+        if !args[1].data_type_id().is_unsigned_integer() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected parameter 2 is unsigned integer or null, but got {}",
+                args[1].data_type_id()
+            )));
+        }
+
         Ok(Box::new(RepeatFunction {
             _display_name: display_name.to_string(),
         }))
@@ -49,22 +63,8 @@ impl Function for RepeatFunction {
         "repeat"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected parameter 1 is string, but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
-        if !args[1].data_type_id().is_unsigned_integer() && !args[1].data_type_id().is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected parameter 2 is unsigned integer or null, but got {}",
-                args[1].data_type_id()
-            )));
-        }
-
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(
@@ -73,8 +73,7 @@ impl Function for RepeatFunction {
         input_rows: usize,
         _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
-        let col1 = cast_column_field(&columns[0], &StringType::arc())?;
-        let col1_viewer = Vu8::try_create_viewer(&col1)?;
+        let col1_viewer = Vu8::try_create_viewer(columns[0].column())?;
 
         let col2 = cast_column_field(&columns[1], &UInt64Type::arc())?;
         let col2_viewer = u64::try_create_viewer(&col2)?;

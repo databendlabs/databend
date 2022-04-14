@@ -36,7 +36,11 @@ pub struct RegexpLikeFunction {
 }
 
 impl RegexpLikeFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -57,12 +61,8 @@ impl Function for RegexpLikeFunction {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(

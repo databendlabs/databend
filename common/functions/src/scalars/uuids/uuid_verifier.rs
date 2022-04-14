@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
+use common_datavalues::DataTypePtr;
 use common_datavalues::Scalar;
 use common_datavalues::ScalarColumn;
 use common_datavalues::ScalarViewer;
@@ -45,7 +46,14 @@ pub struct UUIDVerifierFunction<T> {
 impl<T> UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected string or null, but got {:?}",
+                args[0]
+            )));
+        }
+
         Ok(Box::new(UUIDVerifierFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -106,18 +114,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {:?}",
-                args[0]
-            )));
-        }
-
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
 
     fn eval(

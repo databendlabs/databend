@@ -31,7 +31,9 @@ pub struct FindInSetFunction {
 }
 
 impl FindInSetFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+        assert_string(args[1])?;
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -48,10 +50,8 @@ impl Function for FindInSetFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_string(args[0])?;
-        assert_string(args[1])?;
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        u64::to_data_type()
     }
 
     fn eval(

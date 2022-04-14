@@ -42,7 +42,12 @@ pub struct FormatFunction {
 // Formats the number X to a format like '#,###,###.##', rounded to D decimal places, and returns the result as a string.
 // If D is 0, the result has no decimal point or fractional part.
 impl FormatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
+        assert_numeric(args[1])?;
+        if args.len() >= 3 {
+            assert_string(args[2])?;
+        }
         Ok(Box::new(FormatFunction {
             _display_name: display_name.to_string(),
         }))
@@ -62,13 +67,8 @@ impl Function for FormatFunction {
         "format"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        assert_numeric(args[1])?;
-        if args.len() >= 3 {
-            assert_string(args[2])?;
-        }
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
     fn eval(

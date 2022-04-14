@@ -330,7 +330,7 @@ impl<'a> DfParser<'a> {
             self.parse_show_tables(full)
         } else if self.consume_token("TABLE") && self.consume_token("STATUS") {
             self.parse_show_tab_stat()
-        } else if self.consume_token("DATABASES") {
+        } else if self.consume_token("DATABASES") || self.consume_token("SCHEMAS") {
             self.parse_show_databases()
         } else if self.consume_token("SETTINGS") {
             Ok(DfStatement::ShowSettings(DfShowSettings))

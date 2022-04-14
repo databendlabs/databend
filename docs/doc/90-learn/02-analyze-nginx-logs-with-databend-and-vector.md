@@ -1,5 +1,5 @@
 ---
-title: Analyzing Nginx Logs with Databend and Vector
+title: Analyzing Nginx Access Logs with Databend
 sidebar_label: Analyzing Nginx Logs
 ---
 
@@ -9,7 +9,7 @@ sidebar_label: Analyzing Nginx Logs
 
 Systems are producing all kinds metrics and logs time by time, do you want to gather them and analyze the logs in real time? 
 
-Databend provides [integration with Vector](../40-integrations/00-vector.md), easy to do it now!
+Databend provides [integration with Vector](../40-integrations/10-data-tool/00-vector.md), easy to do it now!
 
 Lets ingesting Nginx access logs into Databend from Vector step by step.
 
@@ -67,13 +67,14 @@ Connect to Databend server with MySQL client:
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
+Create a user:
 ```shell title='mysql>'
-create user 'vector' identified by 'vector123';
+create user user1 identified by 'abc123';
 ```
-Please replace `vector`, `vector123` to your own username and password.
 
+Grant privileges for the user:
 ```shell title='mysql>'
-grant insert on nginx.* TO 'vector'@'%';
+grant insert on nginx.* to user1;
 ```
 
 ## Step 2. Nginx
@@ -219,9 +220,9 @@ source = """
 [sinks.nginx_access_log_to_databend.auth]
   strategy = "basic"
   // highlight-next-line
-  user = "vector" #Databend username
+  user = "user1" #Databend username
   // highlight-next-line
-  password = "vector123" #Databend password
+  password = "abc123" #Databend password
 
 [[tests]]
 name = "extract fields from access log"

@@ -20,13 +20,17 @@ use common_meta_types::AddResult;
 use common_meta_types::AppError;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
+use common_meta_types::Cmd::CreateShare;
 use common_meta_types::Cmd::CreateTable;
 use common_meta_types::Cmd::DropDatabase;
+use common_meta_types::Cmd::DropShare;
 use common_meta_types::Cmd::DropTable;
 use common_meta_types::Cmd::RenameTable;
 use common_meta_types::Cmd::UpsertTableOptions;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReply;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseAlreadyExists;
@@ -34,9 +38,12 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReply;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -45,12 +52,15 @@ use common_meta_types::MetaError;
 use common_meta_types::OkOrExist;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
+use common_meta_types::ShareAlreadyExists;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableVersionMismatched;
 use common_meta_types::UnknownDatabase;
+use common_meta_types::UnknownShare;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReply;
@@ -337,5 +347,80 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
         }
 
         Ok(UpsertTableOptionReply {})
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<CreateShareReq> for ActionHandler {
+    async fn handle(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
+        let tenant = req.tenant;
+        let share_name = &req.share_name;
+        let if_not_exists = req.if_not_exists;
+
+        let cr = LogEntry {
+            txid: None,
+            cmd: CreateShare {
+                tenant,
+                share_name: share_name.clone(),
+            },
+        };
+
+        let res = self.meta_node.write(cr).await?;
+
+        let mut ch: Change<ShareInfo> = res
+            .try_into()
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
+        let share_id = ch.ident.take().expect("Some(share_id)");
+        let (prev, _result) = ch.unpack_data();
+
+        if prev.is_some() && !if_not_exists {
+            let ae = AppError::from(ShareAlreadyExists::new(
+                share_name,
+                "RequestHandler: create_share",
+            ));
+
+            return Err(MetaError::from(ae));
+        }
+
+        Ok(CreateShareReply { share_id })
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<DropShareReq> for ActionHandler {
+    async fn handle(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
+        let tenant = req.tenant;
+        let share_name = &req.share_name;
+        let if_exists = req.if_exists;
+        let cr = LogEntry {
+            txid: None,
+            cmd: DropShare {
+                tenant,
+                share_name: share_name.clone(),
+            },
+        };
+
+        let res = self.meta_node.write(cr).await?;
+
+        let ch: Change<ShareInfo> = res
+            .try_into()
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
+        let (prev, _result) = ch.unpack_data();
+
+        if prev.is_some() || if_exists {
+            Ok(DropShareReply {})
+        } else {
+            let ae = AppError::from(UnknownShare::new(share_name, "RequestHandler: drop_share"));
+
+            Err(MetaError::from(ae))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<GetShareReq> for ActionHandler {
+    async fn handle(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+        let res = self.meta_node.consistent_read(req).await?;
+        Ok(res)
     }
 }

@@ -36,7 +36,7 @@ pub struct IgnoreFunction {
 }
 
 impl IgnoreFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(IgnoreFunction {
             display_name: display_name.to_string(),
         }))
@@ -64,8 +64,8 @@ impl Function for IgnoreFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
 
     fn eval(

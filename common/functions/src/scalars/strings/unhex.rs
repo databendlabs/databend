@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -30,7 +30,8 @@ pub struct UnhexFunction {
 }
 
 impl UnhexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
         Ok(Box::new(UnhexFunction {
             _display_name: display_name.to_string(),
         }))
@@ -47,15 +48,8 @@ impl Function for UnhexFunction {
         "unhex"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(
@@ -66,8 +60,11 @@ impl Function for UnhexFunction {
     ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 
-        let col = cast_column_field(&columns[0], &StringType::arc())?;
-        let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
+        let col = columns[0]
+            .column()
+            .as_any()
+            .downcast_ref::<StringColumn>()
+            .unwrap();
 
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 

@@ -37,7 +37,18 @@ pub struct RegexpInStrFunction {
 }
 
 impl RegexpInStrFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for (i, arg) in args.iter().enumerate() {
+            if i < 2 || i == 5 {
+                assert_string(*arg)?;
+            } else if !arg.data_type_id().is_integer() && !arg.data_type_id().is_string() {
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected integer or string or null, but got {}",
+                    args[i].data_type_id()
+                )));
+            }
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -57,23 +68,10 @@ impl Function for RegexpInStrFunction {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for (i, arg) in args.iter().enumerate() {
-            if i < 2 || i == 5 {
-                assert_string(*arg)?;
-            } else if !arg.data_type_id().is_integer()
-                && !arg.data_type_id().is_string()
-                && !arg.data_type_id().is_null()
-            {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected integer or string or null, but got {}",
-                    args[i].data_type_id()
-                )));
-            }
-        }
-
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        u64::to_data_type()
     }
+
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
     fn eval(
         &self,

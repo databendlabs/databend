@@ -70,8 +70,8 @@ where
         "BinaryArithmeticFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.result_type.clone())
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
     fn eval(
