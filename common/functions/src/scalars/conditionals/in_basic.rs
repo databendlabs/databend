@@ -28,11 +28,28 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct InFunction<const NEGATED: bool>;
+pub struct InFunction<const NEGATED: bool> {
+    is_null: bool,
+}
 
 impl<const NEGATED: bool> InFunction<NEGATED> {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(InFunction::<NEGATED> {}))
+    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for dt in args {
+            let type_id = remove_nullable(dt).data_type_id();
+            if type_id.is_date_or_date_time()
+                || type_id.is_interval()
+                || type_id.is_array()
+                || type_id.is_struct()
+            {
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{} type is not supported for IN now",
+                    type_id
+                )));
+            }
+        }
+
+        let is_null = args[0].data_type_id() == TypeID::Null;
+        Ok(Box::new(InFunction::<NEGATED> { is_null }))
     }
 
     pub fn desc() -> FunctionDescription {
@@ -94,25 +111,11 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         "InFunction"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for dt in args {
-            let type_id = remove_nullable(dt).data_type_id();
-            if type_id.is_date_or_date_time()
-                || type_id.is_interval()
-                || type_id.is_array()
-                || type_id.is_struct()
-            {
-                return Err(ErrorCode::UnexpectedError(format!(
-                    "{} type is not supported for IN now",
-                    type_id
-                )));
-            }
+    fn return_type(&self) -> DataTypePtr {
+        if self.is_null {
+            return NullType::arc();
         }
-        let input_dt = remove_nullable(args[0]).data_type_id();
-        if input_dt == TypeID::Null {
-            return Ok(NullType::arc());
-        }
-        Ok(BooleanType::arc())
+        BooleanType::arc()
     }
 
     fn eval(
@@ -121,24 +124,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
-        for col in columns {
-            let dt = col.column().data_type();
-            let type_id = remove_nullable(&dt).data_type_id();
-            if type_id.is_date_or_date_time()
-                || type_id.is_interval()
-                || type_id.is_array()
-                || type_id.is_struct()
-            {
-                return Err(ErrorCode::UnexpectedError(format!(
-                    "{} type is not supported for IN now",
-                    type_id
-                )));
-            }
-        }
-
-        let input_col = &columns[0];
-        let input_dt = remove_nullable(input_col.data_type()).data_type_id();
-        if input_dt == TypeID::Null {
+        if self.is_null {
             let col = NullType::arc().create_constant_column(&DataValue::Null, input_rows)?;
             return Ok(col);
         }
@@ -147,7 +133,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         let least_super_dt = aggregate_types(&types)?;
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
 
-        let input_col = cast_column_field(input_col, &least_super_dt)?;
+        let input_col = cast_column_field(&columns[0], &least_super_dt)?;
 
         match least_super_type_id {
             TypeID::Boolean => {

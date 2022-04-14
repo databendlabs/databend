@@ -38,7 +38,7 @@ impl ToCastFunction {
         };
 
         let function_creator: FactoryCreator =
-            Box::new(move |display_name| CastFunction::create(display_name, type_name));
+            Box::new(move |display_name, _args| CastFunction::create(display_name, type_name));
 
         Ok(FunctionDescription::creator(function_creator).features(features))
     }

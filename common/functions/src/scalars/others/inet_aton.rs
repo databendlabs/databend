@@ -15,12 +15,12 @@
 use std::fmt;
 use std::net::Ipv4Addr;
 use std::str;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -38,20 +38,17 @@ pub struct InetAtonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+
         Ok(Box::new(InetAtonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
             display_name: display_name.to_string(),
         }))
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().deterministic().num_arguments(1);
-        // Null will cause parse error when SUPPRESS_PARSE_ERROR is false.
-        // In this case we need to check null and skip the parsing, so passthrough_null should be false.
-        if !SUPPRESS_PARSE_ERROR {
-            features = features.disable_passthrough_null()
-        }
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -60,26 +57,11 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let input_type = remove_nullable(args[0]);
-        let output_type = match input_type.data_type_id() {
-            TypeID::Null => return Ok(NullType::arc()),
-            TypeID::String => Ok(type_primitive::UInt32Type::arc()),
-            _ => Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null type, but got {}",
-                args[0].name()
-            ))),
-        }?;
-
+    fn return_type(&self) -> DataTypePtr {
         if SUPPRESS_PARSE_ERROR {
-            // For invalid input, we suppress parse error and return null. So the return type must be nullable.
-            return Ok(Arc::new(NullableType::create(output_type)));
-        }
-
-        if args[0].is_nullable() {
-            Ok(Arc::new(NullableType::create(output_type)))
+            NullableType::arc(UInt32Type::arc())
         } else {
-            Ok(output_type)
+            UInt32Type::arc()
         }
     }
 
@@ -89,10 +71,6 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
         input_rows: usize,
         _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
-        if columns[0].column().data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-        }
-
         let viewer = Vu8::try_create_viewer(columns[0].column())?;
         let viewer_iter = viewer.iter();
 
@@ -100,7 +78,6 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
             let mut builder = NullableColumnBuilder::<u32>::with_capacity(input_rows);
 
             for (i, input) in viewer_iter.enumerate() {
-                // We skip the null check because the function has passthrough_null is true.
                 // This is arguably correct because the address parsing is not optimized by SIMD, not quite sure how much we can gain from skipping branch prediction.
                 // Think about the case if we have 1000 rows and 999 are Nulls.
                 let addr_str = String::from_utf8_lossy(input);
@@ -115,48 +92,24 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
             return Ok(builder.build(input_rows));
         }
 
-        if columns[0].column().is_nullable() {
-            let mut builder = NullableColumnBuilder::<u32>::with_capacity(input_rows);
-            for (i, input) in viewer_iter.enumerate() {
-                if viewer.null_at(i) {
-                    builder.append_null();
-                    continue;
+        // We skip the null check because the function has passthrough_null is true.
+        let mut builder = ColumnBuilder::<u32>::with_capacity(input_rows);
+        for input in viewer_iter {
+            let addr_str = String::from_utf8_lossy(input);
+            match addr_str.parse::<Ipv4Addr>() {
+                Ok(addr) => {
+                    let addr_binary: u32 = u32::from(addr);
+                    builder.append(addr_binary);
                 }
-
-                let addr_str = String::from_utf8_lossy(input);
-                match addr_str.parse::<Ipv4Addr>() {
-                    Ok(addr) => {
-                        let addr_binary: u32 = u32::from(addr);
-                        builder.append(addr_binary, viewer.valid_at(i));
-                    }
-                    Err(err) => {
-                        return Err(ErrorCode::StrParseError(format!(
-                            "Failed to parse '{}' into a IPV4 address, {}",
-                            addr_str, err
-                        )));
-                    }
+                Err(err) => {
+                    return Err(ErrorCode::StrParseError(format!(
+                        "Failed to parse '{}' into a IPV4 address, {}",
+                        addr_str, err
+                    )));
                 }
             }
-            Ok(builder.build(input_rows))
-        } else {
-            let mut builder = ColumnBuilder::<u32>::with_capacity(input_rows);
-            for input in viewer_iter {
-                let addr_str = String::from_utf8_lossy(input);
-                match addr_str.parse::<Ipv4Addr>() {
-                    Ok(addr) => {
-                        let addr_binary: u32 = u32::from(addr);
-                        builder.append(addr_binary);
-                    }
-                    Err(err) => {
-                        return Err(ErrorCode::StrParseError(format!(
-                            "Failed to parse '{}' into a IPV4 address, {}",
-                            addr_str, err
-                        )));
-                    }
-                }
-            }
-            Ok(builder.build(input_rows))
         }
+        Ok(builder.build(input_rows))
     }
 }
 

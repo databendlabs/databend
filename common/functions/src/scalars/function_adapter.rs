@@ -35,53 +35,47 @@ use common_datavalues::TypeID;
 use common_exception::Result;
 
 use super::Function;
+use super::FunctionDescription;
 use super::Monotonicity;
-use super::TypedFunctionDescription;
+use crate::scalars::FunctionContext;
 
 #[derive(Clone)]
 pub struct FunctionAdapter {
     inner: Option<Box<dyn Function>>,
-    passthrough_null: bool,
+    has_nullable: bool,
 }
 
 impl FunctionAdapter {
-    pub fn create(inner: Box<dyn Function>, passthrough_null: bool) -> Box<dyn Function> {
+    pub fn create(inner: Box<dyn Function>, has_nullable: bool) -> Box<dyn Function> {
         Box::new(Self {
             inner: Some(inner),
-            passthrough_null,
+            has_nullable,
         })
     }
 
-    pub fn create_some(
-        inner: Option<Box<dyn Function>>,
-        passthrough_null: bool,
-    ) -> Box<dyn Function> {
-        Box::new(Self {
-            inner,
-            passthrough_null,
-        })
-    }
-
-    pub fn try_create_by_typed(
-        desc: &TypedFunctionDescription,
+    pub fn try_create(
+        desc: &FunctionDescription,
         name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        let passthrough_null = desc.features.passthrough_null;
-
-        let inner = if passthrough_null {
+        let (inner, has_nullable) = if desc.features.passthrough_null {
             // one is null, result is null
             if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
-                return Ok(Self::create_some(None, true));
+                return Ok(Box::new(Self {
+                    inner: None,
+                    has_nullable: false,
+                }));
             }
+
+            let has_nullable = args.iter().any(|v| v.is_nullable());
             let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
             let types = types.iter().collect::<Vec<_>>();
-            (desc.typed_function_creator)(name, &types)?
+            ((desc.function_creator)(name, &types)?, has_nullable)
         } else {
-            (desc.typed_function_creator)(name, args)?
+            ((desc.function_creator)(name, args)?, false)
         };
 
-        Ok(Self::create(inner, passthrough_null))
+        Ok(Self::create(inner, has_nullable))
     }
 }
 
@@ -90,31 +84,18 @@ impl Function for FunctionAdapter {
         self.inner.as_ref().map_or("null", |v| v.name())
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         if self.inner.is_none() {
-            return Ok(NullType::arc());
+            return NullType::arc();
         }
 
         let inner = self.inner.as_ref().unwrap();
+        let typ = inner.return_type();
 
-        if self.passthrough_null {
-            let has_null = args.iter().any(|v| v.is_null());
-            if has_null {
-                return Ok(NullType::arc());
-            }
-
-            let has_nullable = args.iter().any(|v| v.is_nullable());
-            let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
-            let types = types.iter().collect::<Vec<_>>();
-            let typ = inner.return_type(&types)?;
-
-            if has_nullable {
-                Ok(wrap_nullable(&typ))
-            } else {
-                Ok(typ)
-            }
+        if self.has_nullable {
+            wrap_nullable(&typ)
         } else {
-            inner.return_type(args)
+            typ
         }
     }
 
@@ -147,7 +128,7 @@ impl Function for FunctionAdapter {
                 .collect::<Vec<_>>();
 
             let col = self.eval(&columns, 1, func_ctx)?;
-            let col = if col.is_const() && col.len() == 1 {
+            let col = if col.is_const() && col.len() != input_rows {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
                 NullColumn::new(input_rows).arc()
@@ -157,65 +138,56 @@ impl Function for FunctionAdapter {
             return Ok(col);
         }
 
-        // nullable or null
-        if self.passthrough_null {
-            if columns
-                .iter()
-                .any(|v| v.data_type().data_type_id() == TypeID::Null)
-            {
-                return Ok(Arc::new(NullColumn::new(input_rows)));
-            }
+        // nullable
+        if self.has_nullable && columns.iter().any(|v| v.data_type().is_nullable()) {
+            let mut validity: Option<Bitmap> = None;
 
-            if columns.iter().any(|v| v.data_type().is_nullable()) {
-                let mut validity: Option<Bitmap> = None;
-                let mut has_all_null = false;
-
-                let columns = columns
-                    .iter()
-                    .map(|v| {
-                        let (is_all_null, valid) = v.column().validity();
-                        if is_all_null {
-                            has_all_null = true;
-                            let mut v = MutableBitmap::with_capacity(input_rows);
-                            v.extend_constant(input_rows, false);
-                            validity = Some(v.into());
-                        } else if !has_all_null {
-                            validity = combine_validities_2(validity.clone(), valid.cloned());
-                        }
-
-                        let ty = remove_nullable(v.data_type());
-                        let f = v.field();
-                        let col = Series::remove_nullable(v.column());
-                        ColumnWithField::new(col, DataField::new(f.name(), ty))
-                    })
-                    .collect::<Vec<_>>();
-
-                let col = self.eval(&columns, input_rows, func_ctx)?;
-
-                // The'try' series functions always return Null when they failed the try.
-                // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
-                // The same thing may happen on other 'try' functions. So we need to merge the validity.
-                if col.is_nullable() {
-                    let (_, bitmap) = col.validity();
-                    validity = validity.map_or(combine_validities(bitmap, None), |v| {
-                        combine_validities(bitmap, Some(&v))
-                    })
+            let mut input = Vec::with_capacity(columns.len());
+            for v in columns.iter() {
+                let (is_all_null, valid) = v.column().validity();
+                if is_all_null {
+                    // If only null, return null directly.
+                    let inner_type = remove_nullable(&inner.return_type());
+                    return Ok(NullableColumn::wrap_inner(
+                        inner_type
+                            .create_constant_column(&inner_type.default_value(), input_rows)?,
+                        Some(valid.unwrap().clone()),
+                    ));
                 }
+                validity = combine_validities_2(validity.clone(), valid.cloned());
 
-                let validity = validity.unwrap_or({
-                    let mut v = MutableBitmap::with_capacity(input_rows);
-                    v.extend_constant(input_rows, true);
-                    v.into()
-                });
-
-                let col = if col.is_nullable() {
-                    let nullable_column: &NullableColumn = Series::check_get(&col)?;
-                    NullableColumn::wrap_inner(nullable_column.inner().clone(), Some(validity))
-                } else {
-                    NullableColumn::wrap_inner(col, Some(validity))
-                };
-                return Ok(col);
+                let ty = remove_nullable(v.data_type());
+                let f = v.field();
+                let col = Series::remove_nullable(v.column());
+                let col = ColumnWithField::new(col, DataField::new(f.name(), ty));
+                input.push(col);
             }
+
+            let col = self.eval(&input, input_rows, func_ctx)?;
+
+            // The'try' series functions always return Null when they failed the try.
+            // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
+            // The same thing may happen on other 'try' functions. So we need to merge the validity.
+            if col.is_nullable() {
+                let (_, bitmap) = col.validity();
+                validity = validity.map_or(combine_validities(bitmap, None), |v| {
+                    combine_validities(bitmap, Some(&v))
+                })
+            }
+
+            let validity = validity.unwrap_or({
+                let mut v = MutableBitmap::with_capacity(input_rows);
+                v.extend_constant(input_rows, true);
+                v.into()
+            });
+
+            let col = if col.is_nullable() {
+                let nullable_column: &NullableColumn = Series::check_get(&col)?;
+                NullableColumn::wrap_inner(nullable_column.inner().clone(), Some(validity))
+            } else {
+                NullableColumn::wrap_inner(col, Some(validity))
+            };
+            return Ok(col);
         }
 
         inner.eval(columns, input_rows, func_ctx)
@@ -245,4 +217,3 @@ impl std::fmt::Display for FunctionAdapter {
         }
     }
 }
-use crate::scalars::FunctionContext;

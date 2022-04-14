@@ -57,7 +57,7 @@ where
     H: Hasher + Default + Clone + Sync + Send + 'static,
     R: Scalar + Clone + FromPrimitive + ToDataType + Sync + Send,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(BaseHashFunction::<H, R> {
             display_name: display_name.to_string(),
             h: PhantomData,
@@ -80,11 +80,8 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(R::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        R::to_data_type()
     }
 
     fn eval(

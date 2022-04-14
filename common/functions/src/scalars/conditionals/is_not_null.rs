@@ -28,7 +28,10 @@ pub struct IsNotNullFunction {
 }
 
 impl IsNotNullFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        _args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNotNullFunction {
             _display_name: "isNotNull".to_string(),
         }))
@@ -51,11 +54,8 @@ impl Function for IsNotNullFunction {
         "IsNotNullFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(bool::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        bool::to_data_type()
     }
 
     fn eval(

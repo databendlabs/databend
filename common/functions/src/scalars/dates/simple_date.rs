@@ -80,7 +80,7 @@ impl NoArgDateFunction for Tomorrow {
 impl<T> SimpleFunction<T>
 where T: NoArgDateFunction + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(SimpleFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -100,11 +100,8 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(Date16Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Date16Type::arc()
     }
 
     fn eval(
