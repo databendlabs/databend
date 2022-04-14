@@ -22,9 +22,9 @@ use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
-use crate::scalars::TypedFunctionDescription;
 
 #[inline]
 fn div_scalar(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, _ctx: &mut EvalContext) -> f64 {
@@ -53,8 +53,8 @@ impl ArithmeticDivFunction {
         arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

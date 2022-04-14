@@ -114,7 +114,7 @@ impl TypeFactory {
         let mut nulls = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
             if v.can_inside_nullable() {
-                let data_type: DataTypePtr = Arc::new(NullableType::create(v.clone()));
+                let data_type: DataTypePtr = NullableType::arc(v.clone());
                 nulls.insert(
                     format!("Nullable({})", k).to_ascii_lowercase(),
                     data_type.clone(),

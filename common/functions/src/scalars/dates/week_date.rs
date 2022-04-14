@@ -44,7 +44,7 @@ pub struct WeekFunction<T, R> {
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> Result<DataTypePtr>;
+    fn return_type() -> DataTypePtr;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
     fn factor_function() -> Option<Box<dyn Function>> {
         None
@@ -57,8 +57,8 @@ pub struct ToStartOfWeek;
 impl WeekResultFunction<u32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataTypePtr> {
-        Ok(Date16Type::arc())
+    fn return_type() -> DataTypePtr {
+        Date16Type::arc()
     }
     fn to_number(value: DateTime<Utc>, week_mode: u64) -> u32 {
         let mut weekday = value.weekday().number_from_sunday();
@@ -80,7 +80,12 @@ where
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_date_or_datetime(args[0])?;
+        if args.len() > 1 {
+            assert_numeric(args[1])?;
+        }
+
         Ok(Box::new(WeekFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -113,11 +118,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_date_or_datetime(args[0])?;
-        if args.len() > 1 {
-            assert_numeric(args[1])?;
-        }
+    fn return_type(&self) -> DataTypePtr {
         T::return_type()
     }
 

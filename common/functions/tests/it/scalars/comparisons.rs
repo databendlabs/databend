@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use super::scalar_function2_test::test_scalar_functions;
-use super::scalar_function2_test::ScalarFunctionTest;
+use super::scalar_function_test::test_scalar_functions;
+use super::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_eq_comparison_function() -> Result<()> {
@@ -31,11 +30,7 @@ fn test_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("=", &tests)
 }
 
 #[test]
@@ -50,11 +45,7 @@ fn test_gt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonGtFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions(">", &tests)
 }
 
 #[test]
@@ -69,11 +60,7 @@ fn test_gt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonGtEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions(">=", &tests)
 }
 
 #[test]
@@ -88,11 +75,7 @@ fn test_lt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonLtFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("<", &tests)
 }
 
 #[test]
@@ -107,11 +90,7 @@ fn test_lt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonLtEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("<=", &tests)
 }
 
 #[test]
@@ -126,11 +105,7 @@ fn test_not_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonNotEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("<>", &tests)
 }
 
 #[test]
@@ -145,11 +120,7 @@ fn test_like_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonLikeFunction::try_create_func("", &[&StringType::arc(), &StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("like", &tests)
 }
 
 #[test]
@@ -164,11 +135,7 @@ fn test_not_like_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonNotLikeFunction::try_create_func("", &[&StringType::arc(), &StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("not like", &tests)
 }
 
 #[test]
@@ -183,11 +150,7 @@ fn test_regexp_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonRegexpFunction::try_create_func("", &[&StringType::arc(), &StringType::arc()])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("regexp", &tests)
 }
 
 #[test]
@@ -202,12 +165,5 @@ fn test_not_regexp_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(
-        ComparisonNotRegexpFunction::try_create_func("", &[
-            &StringType::arc(),
-            &StringType::arc(),
-        ])?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("not regexp", &tests)
 }

@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::prelude::*;
@@ -27,6 +26,7 @@ use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -36,7 +36,18 @@ pub struct RegexpSubStrFunction {
 }
 
 impl RegexpSubStrFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for (i, arg) in args.iter().enumerate() {
+            if i < 2 || i == 4 {
+                assert_string(*arg)?;
+            } else if !arg.data_type_id().is_integer() && !arg.data_type_id().is_string() {
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected integer or string or null, but got {}",
+                    args[i].data_type_id()
+                )));
+            }
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -56,22 +67,8 @@ impl Function for RegexpSubStrFunction {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for (i, arg) in args.iter().enumerate() {
-            if i < 2 || i == 4 {
-                assert_string(*arg)?;
-            } else if !arg.data_type_id().is_integer()
-                && !arg.data_type_id().is_string()
-                && !arg.data_type_id().is_null()
-            {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected integer or string or null, but got {}",
-                    args[i].data_type_id()
-                )));
-            }
-        }
-
-        Ok(Arc::new(NullableType::create(StringType::arc())))
+    fn return_type(&self) -> DataTypePtr {
+        NullableType::arc(StringType::arc())
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
@@ -247,4 +244,3 @@ impl fmt::Display for RegexpSubStrFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

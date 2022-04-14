@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_uuid_creator_functions() -> Result<()> {
@@ -40,5 +39,5 @@ fn test_uuid_creator_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(UUIDZeroFunction::try_create("")?, &tests, true)
+    test_scalar_functions("zeroUUID", &tests)
 }

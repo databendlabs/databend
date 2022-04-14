@@ -36,7 +36,8 @@ pub struct SignFunction {
 }
 
 impl SignFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(SignFunction {
             display_name: display_name.to_string(),
         }))
@@ -66,9 +67,8 @@ impl Function for SignFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        Ok(i8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Int8Type::arc()
     }
 
     fn eval(

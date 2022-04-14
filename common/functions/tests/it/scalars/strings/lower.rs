@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::LowerFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_lower_function() -> Result<()> {
@@ -42,7 +41,7 @@ fn test_lower_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LowerFunction::try_create("lower")?, &tests, true)
+    test_scalar_functions("lower", &tests)
 }
 
 #[test]
@@ -54,5 +53,5 @@ fn test_lower_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(LowerFunction::try_create("lcase")?, &tests, true)
+    test_scalar_functions("lcase", &tests)
 }

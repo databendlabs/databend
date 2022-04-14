@@ -14,9 +14,8 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::Function;
-use common_functions::scalars::FunctionAdapter;
 use common_functions::scalars::FunctionContext;
+use common_functions::scalars::FunctionFactory;
 use pretty_assertions::assert_eq;
 
 pub struct ScalarFunctionTest {
@@ -33,11 +32,7 @@ pub struct ScalarFunctionWithFieldTest {
     pub error: &'static str,
 }
 
-pub fn test_scalar_functions(
-    test_function: Box<dyn Function>,
-    tests: &[ScalarFunctionTest],
-    passthrough_null: bool,
-) -> Result<()> {
+pub fn test_scalar_functions(op: &str, tests: &[ScalarFunctionTest]) -> Result<()> {
     let mut tests_with_type = Vec::with_capacity(tests.len());
     for test in tests {
         let mut arguments = Vec::with_capacity(test.columns.len());
@@ -59,13 +54,12 @@ pub fn test_scalar_functions(
         })
     }
 
-    test_scalar_functions_with_type(test_function, &tests_with_type, passthrough_null)
+    test_scalar_functions_with_type(op, &tests_with_type)
 }
 
 pub fn test_scalar_functions_with_type(
-    test_function: Box<dyn Function>,
+    op: &str,
     tests: &[ScalarFunctionWithFieldTest],
-    passthrough_null: bool,
 ) -> Result<()> {
     for test in tests {
         let mut rows_size = 0;
@@ -76,13 +70,7 @@ pub fn test_scalar_functions_with_type(
             rows_size = c.column().len();
         }
 
-        match test_eval_with_type(
-            &test_function,
-            rows_size,
-            &test.columns,
-            &arguments_type,
-            passthrough_null,
-        ) {
+        match test_eval_with_type(op, rows_size, &test.columns, &arguments_type) {
             Ok(v) => {
                 let v = v.convert_full_column();
 
@@ -98,11 +86,7 @@ pub fn test_scalar_functions_with_type(
 }
 
 #[allow(clippy::borrowed_box)]
-pub fn test_eval(
-    test_function: &Box<dyn Function>,
-    columns: &[ColumnRef],
-    passthrough_null: bool,
-) -> Result<ColumnRef> {
+pub fn test_eval(op: &str, columns: &[ColumnRef]) -> Result<ColumnRef> {
     let mut rows_size = 0;
     let mut arguments = Vec::with_capacity(columns.len());
     let mut arguments_type = Vec::with_capacity(columns.len());
@@ -124,25 +108,18 @@ pub fn test_eval(
         types.push(t);
     }
 
-    test_eval_with_type(
-        test_function,
-        rows_size,
-        &arguments,
-        &types,
-        passthrough_null,
-    )
+    test_eval_with_type(op, rows_size, &arguments, &types)
 }
 
 #[allow(clippy::borrowed_box)]
 pub fn test_eval_with_type(
-    test_function: &Box<dyn Function>,
+    op: &str,
     rows_size: usize,
     arguments: &[ColumnWithField],
     arguments_type: &[&DataTypePtr],
-    passthrough_null: bool,
 ) -> Result<ColumnRef> {
-    let adaptor = FunctionAdapter::create(test_function.clone(), passthrough_null);
-    adaptor.return_type(arguments_type)?;
+    let func = FunctionFactory::instance().get(op, arguments_type)?;
+    func.return_type();
     let func_ctx = FunctionContext { tz: None };
-    adaptor.eval(arguments, rows_size, func_ctx)
+    func.eval(arguments, rows_size, func_ctx)
 }

@@ -21,6 +21,7 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::default_column_cast;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -38,7 +39,12 @@ pub struct LocatingFunction<const T: u8> {
 }
 
 impl<const T: u8> LocatingFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+        assert_string(args[1])?;
+        if args.len() > 2 {
+            assert_numeric(args[2])?;
+        }
         Ok(Box::new(LocatingFunction::<T> {
             display_name: display_name.to_string(),
         }))
@@ -61,13 +67,8 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_string(args[0])?;
-        assert_string(args[1])?;
-        if args.len() > 2 {
-            assert_numeric(args[2])?;
-        }
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        u64::to_data_type()
     }
 
     fn eval(
@@ -125,4 +126,3 @@ fn find_at(str: &[u8], substr: &[u8], pos: u64) -> u64 {
         0_u64
     }
 }
-use crate::scalars::FunctionContext;

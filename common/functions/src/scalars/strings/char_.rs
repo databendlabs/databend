@@ -20,6 +20,7 @@ use common_exception::Result;
 use crate::scalars::assert_numeric;
 use crate::scalars::default_column_cast;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -29,7 +30,10 @@ pub struct CharFunction {
 }
 
 impl CharFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(CharFunction {
             _display_name: display_name.to_string(),
         }))
@@ -49,11 +53,8 @@ impl Function for CharFunction {
         "char"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
     fn eval(
@@ -104,4 +105,3 @@ impl fmt::Display for CharFunction {
         write!(f, "CHAR")
     }
 }
-use crate::scalars::FunctionContext;

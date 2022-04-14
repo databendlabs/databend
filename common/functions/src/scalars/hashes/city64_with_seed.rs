@@ -61,27 +61,7 @@ pub struct City64WithSeedFunction {
 
 // CityHash64WithSeed(value, seed)
 impl City64WithSeedFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(City64WithSeedFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-}
-
-impl Function for City64WithSeedFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         if !matches!(
             args[0].data_type_id(),
             TypeID::UInt8
@@ -113,7 +93,25 @@ impl Function for City64WithSeedFunction {
                 args[1]
             )));
         }
-        Ok(UInt64Type::arc())
+
+        Ok(Box::new(City64WithSeedFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+impl Function for City64WithSeedFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self) -> DataTypePtr {
+        UInt64Type::arc()
     }
 
     fn eval(

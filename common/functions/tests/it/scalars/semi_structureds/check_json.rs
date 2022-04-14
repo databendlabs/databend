@@ -14,17 +14,15 @@
 
 use std::sync::Arc;
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::CheckJsonFunction;
 use serde_json::json;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_check_json_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "check_json_bool",
@@ -203,5 +201,5 @@ fn test_check_json_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(CheckJsonFunction::try_create("check_json")?, &tests, false)
+    test_scalar_functions("check_json", &tests)
 }

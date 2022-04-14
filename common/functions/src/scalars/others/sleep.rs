@@ -15,11 +15,13 @@
 use std::fmt;
 use std::time::Duration;
 
+use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 use common_datavalues::Int8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -31,7 +33,8 @@ pub struct SleepFunction {
 }
 
 impl SleepFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
         }))
@@ -48,18 +51,8 @@ impl Function for SleepFunction {
         "SleepFunction"
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if !args[0].data_type_id().is_numeric() {
-            return Err(ErrorCode::BadArguments(format!(
-                "Illegal type {} of argument of function {}, expected numeric",
-                args[0].data_type_id(),
-                self.display_name
-            )));
-        }
-        Ok(Int8Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Int8Type::arc()
     }
 
     fn eval(
