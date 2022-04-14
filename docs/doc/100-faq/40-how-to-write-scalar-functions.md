@@ -29,9 +29,9 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 ####  Logical datatypes and physical datatypes.
 
 Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
-Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `DFInt32Array`.
+Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Int32Column`.
 
-We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `DataColumn`.
+We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `ColumnRef`.
 `ColumnsWithField` has `data_type` function which returns the logical datatype.
 
 ####  Arrow's memory layout
@@ -121,7 +121,8 @@ pub struct SqrtFunction {
 
 ```rust
 impl SqrtFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(SqrtFunction {
             display_name: display_name.to_string(),
         }))
@@ -157,9 +158,8 @@ impl Function for SqrtFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        Ok(Float64Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize, _func_ctx: FunctionContext) -> Result<ColumnRef>{
