@@ -2,7 +2,7 @@
 title: Using Databend as a Sink for Vector
 sidebar_label: Vector
 description:
-  Using Databend as a Sink for Vector
+  Using Databend as a Sink for Vector.
 ---
 
 <p align="center">
@@ -17,7 +17,7 @@ description:
 
 Databend supports ClickHouse REST API, so it's easy to integration with Vector to stream, aggregate, and gain insights.
 
-## Create a Databend User for Vector
+## Create a Databend User
 
 Connect to Databend server with MySQL client:
 ```shell

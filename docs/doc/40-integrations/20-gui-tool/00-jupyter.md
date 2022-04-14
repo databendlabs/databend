@@ -2,7 +2,7 @@
 title: Visualization Databend data in Jupyter Notebook
 sidebar_label: Jupyter
 description:
-  Visualization Databend data in Jupyter Notebook
+  Visualization Databend data in Jupyter Notebook.
 ---
 
 
@@ -16,7 +16,7 @@ The Jupyter Notebook is the original web application for creating and sharing co
 
 ## Jupyter
 
-### Create a Databend User for Jupyter
+### Create a Databend User
 
 Connect to Databend server with MySQL client:
 ```shell
