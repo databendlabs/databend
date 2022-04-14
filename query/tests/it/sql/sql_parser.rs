@@ -33,6 +33,23 @@ pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     Ok(())
 }
 
+pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
+    let (statements, _) = DfParser::parse_sql(sql)?;
+    assert_eq!(
+        statements.len(),
+        1,
+        "Expected to parse exactly one statement"
+    );
+    let (statements2, _) = DfParser::parse_sql(sql2)?;
+    assert_eq!(
+        statements2.len(),
+        1,
+        "Expected to parse exactly one statement"
+    );
+    assert_eq!(statements[0], statements2[0]);
+    Ok(())
+}
+
 pub fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
     let result = DfParser::parse_sql(sql);
     assert!(result.is_err(), "'{}' SHOULD BE '{}'", sql, expected);
