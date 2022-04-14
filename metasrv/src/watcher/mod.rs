@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod watcher_key;
 mod watcher_manager;
 mod watcher_stream;
 
-pub use watcher_key::WatcherKey;
 pub use watcher_manager::WatcherEvent;
 pub use watcher_manager::WatcherId;
 pub use watcher_manager::WatcherManager;

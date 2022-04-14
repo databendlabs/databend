@@ -14,6 +14,7 @@
 //
 
 use common_base::tokio::sync::mpsc::error::SendError;
+use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchResponse;
 use tonic::Status;
 
@@ -23,6 +24,8 @@ use super::WatcherStreamSender;
 pub struct WatcherStream {
     pub id: WatcherId,
 
+    pub filter_type: FilterType,
+
     tx: WatcherStreamSender,
 
     pub key: String,
@@ -31,9 +34,16 @@ pub struct WatcherStream {
 }
 
 impl WatcherStream {
-    pub fn new(id: WatcherId, tx: WatcherStreamSender, key: String, key_end: String) -> Self {
+    pub fn new(
+        id: WatcherId,
+        filter_type: FilterType,
+        tx: WatcherStreamSender,
+        key: String,
+        key_end: String,
+    ) -> Self {
         WatcherStream {
             id,
+            filter_type,
             tx,
             key,
             key_end,

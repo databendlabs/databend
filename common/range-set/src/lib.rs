@@ -13,7 +13,9 @@
 // limitations under the License.
 
 mod range_key;
+mod range_map;
 mod range_set;
 
 pub use range_key::RangeKey;
+pub use range_map::RangeMap;
 pub use range_set::RangeSet;

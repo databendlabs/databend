@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 use core::ops::Range;
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
@@ -25,11 +25,11 @@ use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::SeqV;
-use common_range_set::RangeSet;
+use common_range_set::RangeKey;
+use common_range_set::RangeMap;
 use common_tracing::tracing;
 use tonic::Status;
 
-use super::WatcherKey;
 use super::WatcherStream;
 
 pub type WatcherId = i64;
@@ -53,7 +53,6 @@ pub struct WatcherStateMachineSubscriber {
 pub enum WatcherEvent {
     CreateWatcherEvent(CreateWatcherEvent),
     StateMachineKvDataEvent(StateMachineKvData),
-    ShutdownEvent(()),
 }
 
 #[derive(Debug)]
@@ -66,12 +65,12 @@ pub struct WatcherManager {
 struct WatcherManagerCore {
     event_rx: mpsc::UnboundedReceiver<WatcherEvent>,
 
-    watcher_streams: BTreeMap<WatcherId, WatcherStream>,
-
     /// map range to WatcherId
-    watcher_range_set: RangeSet<String, WatcherKey>,
+    watcher_range_map: RangeMap<String, WatcherId, WatcherStream>,
 
     current_watcher_id: WatcherId,
+
+    id_set: BTreeSet<WatcherId>,
 }
 
 impl WatcherManager {
@@ -80,9 +79,9 @@ impl WatcherManager {
 
         let core = WatcherManagerCore {
             event_rx,
-            watcher_streams: BTreeMap::new(),
-            watcher_range_set: RangeSet::new(),
+            watcher_range_map: RangeMap::new(),
             current_watcher_id: 1,
+            id_set: BTreeSet::new(),
         };
 
         let _h = tokio::spawn(core.watcher_manager_main());
@@ -91,10 +90,6 @@ impl WatcherManager {
             event_tx: event_tx.clone(),
             subscriber: WatcherStateMachineSubscriber { event_tx },
         }
-    }
-
-    pub fn stop(&self) {
-        let _ = self.event_tx.send(WatcherEvent::ShutdownEvent(()));
     }
 
     pub fn create_watcher_stream(&self, request: WatchRequest, tx: WatcherStreamSender) {
@@ -113,11 +108,10 @@ impl WatcherManagerCore {
                         match event {
                             WatcherEvent::CreateWatcherEvent((req, tx)) => {self.create_watcher_stream(req, tx).await;},
                             WatcherEvent::StateMachineKvDataEvent(kv) => {self.notify_event(kv).await;},
-                            WatcherEvent::ShutdownEvent(_) => {
-                                tracing::info!("watcher manager has been shutdown");
-                                break;
-                            }
                         }
+                    } else {
+                        tracing::info!("watcher manager has been shutdown");
+                        break;
                     }
                 },
             }
@@ -125,17 +119,9 @@ impl WatcherManagerCore {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    fn close_stream(&mut self, id: WatcherId) {
-        let watcher = self.watcher_streams.get(&id);
-        if let Some(watcher) = watcher {
-            let range = watcher.key.clone()..watcher.key_end.clone();
-            self.watcher_range_set.remove(range, WatcherKey {
-                id,
-                filter: FilterType::All,
-            });
-
-            self.watcher_streams.remove(&id);
-        }
+    fn close_stream(&mut self, key: RangeKey<String, WatcherId>) {
+        self.watcher_range_map.remove_by_key(&key);
+        self.id_set.remove(&key.key);
     }
 
     fn convert_seqv_to_pb(seqv: &Option<SeqV>) -> Option<event::SeqV> {
@@ -146,7 +132,7 @@ impl WatcherManagerCore {
     }
 
     async fn notify_event(&mut self, kv: StateMachineKvData) {
-        let set = self.watcher_range_set.get_by_point(&kv.key);
+        let set = self.watcher_range_map.get_by_point(&kv.key);
         if set.is_empty() {
             return;
         }
@@ -155,11 +141,10 @@ impl WatcherManagerCore {
         let prev = kv.prev;
 
         let is_delete_event = current.is_none();
-        let mut remove_watcher_id: Vec<WatcherId> = vec![];
+        let mut remove_watcher_id: Vec<RangeKey<String, WatcherId>> = vec![];
 
         for range_key in set.iter() {
-            let watcher_id = range_key.key.id;
-            let filter = range_key.key.filter;
+            let filter = range_key.1.filter_type;
 
             // filter out event
             if (filter == FilterType::Delete && !is_delete_event)
@@ -168,26 +153,30 @@ impl WatcherManagerCore {
                 continue;
             }
 
-            if let Some(stream) = self.watcher_streams.get(&watcher_id) {
-                assert_eq!(stream.id, watcher_id);
-                let resp = WatchResponse {
-                    event: Some(Event {
-                        key: kv.key.clone(),
-                        current: WatcherManagerCore::convert_seqv_to_pb(&current),
-                        prev: WatcherManagerCore::convert_seqv_to_pb(&prev),
-                    }),
-                };
+            let watcher_id = range_key.0.key;
+            let stream = range_key.1;
+            assert_eq!(stream.id, watcher_id);
+            let resp = WatchResponse {
+                event: Some(Event {
+                    key: kv.key.clone(),
+                    current: WatcherManagerCore::convert_seqv_to_pb(&current),
+                    prev: WatcherManagerCore::convert_seqv_to_pb(&prev),
+                }),
+            };
 
-                if let Err(err) = stream.send(resp).await {
-                    tracing::info!(
-                        "close watcher stream {:?} cause send err: {:?}",
-                        watcher_id,
-                        err
-                    );
-                    remove_watcher_id.push(watcher_id);
-                };
-            }
+            if let Err(err) = stream.send(resp).await {
+                tracing::info!(
+                    "close watcher stream {:?} cause send err: {:?}",
+                    watcher_id,
+                    err
+                );
+                remove_watcher_id.push(RangeKey::new(
+                    stream.key.clone()..stream.key_end.clone(),
+                    watcher_id,
+                ));
+            };
         }
+
         for id in remove_watcher_id {
             self.close_stream(id);
         }
@@ -202,26 +191,23 @@ impl WatcherManagerCore {
             Err(_) => return,
         };
 
-        while self.watcher_streams.get(&self.current_watcher_id).is_some() {
+        while self.id_set.get(&self.current_watcher_id).is_some() {
             self.current_watcher_id += 1;
         }
+        self.id_set.insert(self.current_watcher_id);
         let watcher_id = self.current_watcher_id;
+        let filter = create.filter_type();
+
         let watcher_stream = WatcherStream::new(
             self.current_watcher_id,
+            filter,
             tx,
             range.start.clone(),
             range.end.clone(),
         );
 
-        let filter = create.filter_type();
-
-        self.watcher_range_set.insert(range, WatcherKey {
-            id: watcher_id,
-            filter,
-        });
-
-        self.watcher_streams
-            .insert(self.current_watcher_id, watcher_stream);
+        self.watcher_range_map
+            .insert(range, watcher_id, watcher_stream);
     }
 
     fn get_range_key(key: String, key_end: &Option<String>) -> Result<Range<String>, bool> {
