@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio::sync::mpsc;
 use common_meta_types::protobuf::WatchResponse;
 use common_tracing::tracing;
@@ -35,14 +33,14 @@ pub struct WatcherStream {
     pub key_end: String,
 
     /// notify manager to stop watcher stream
-    close_stream_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
+    close_stream_tx: mpsc::UnboundedSender<WatcherEvent>,
 }
 
 impl WatcherStream {
     pub fn new(
         id: WatcherId,
         tx: WatcherStreamSender,
-        close_stream_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
+        close_stream_tx: mpsc::UnboundedSender<WatcherEvent>,
         key: String,
         key_end: String,
     ) -> Self {

@@ -14,7 +14,6 @@
 //
 use core::ops::Range;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
@@ -47,7 +46,7 @@ pub struct StateMachineKvData {
 
 #[derive(Clone, Debug)]
 pub struct WatcherStateMachineSubscriber {
-    event_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
+    event_tx: mpsc::UnboundedSender<WatcherEvent>,
 }
 
 #[derive(Clone)]
@@ -60,7 +59,7 @@ pub enum WatcherEvent {
 
 #[derive(Debug)]
 pub struct WatcherManager {
-    event_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
+    event_tx: mpsc::UnboundedSender<WatcherEvent>,
 
     pub subscriber: WatcherStateMachineSubscriber,
 }
@@ -68,7 +67,7 @@ pub struct WatcherManager {
 struct WatcherManagerCore {
     event_rx: mpsc::UnboundedReceiver<WatcherEvent>,
 
-    event_tx: Arc<mpsc::UnboundedSender<WatcherEvent>>,
+    event_tx: mpsc::UnboundedSender<WatcherEvent>,
 
     watcher_streams: BTreeMap<WatcherId, WatcherStream>,
 
@@ -84,7 +83,7 @@ impl WatcherManager {
 
         let core = WatcherManagerCore {
             event_rx,
-            event_tx: Arc::new(event_tx.clone()),
+            event_tx: event_tx.clone(),
             watcher_streams: BTreeMap::new(),
             watcher_range_set: RangeSet::new(),
             current_watcher_id: 1,
@@ -93,10 +92,8 @@ impl WatcherManager {
         let _h = tokio::spawn(core.watcher_manager_main());
 
         WatcherManager {
-            event_tx: Arc::new(event_tx.clone()),
-            subscriber: WatcherStateMachineSubscriber {
-                event_tx: Arc::new(event_tx),
-            },
+            event_tx: event_tx.clone(),
+            subscriber: WatcherStateMachineSubscriber { event_tx },
         }
     }
 
@@ -171,7 +168,6 @@ impl WatcherManagerCore {
 
             if let Some(stream) = self.watcher_streams.get(&watcher_id) {
                 let resp = WatchResponse {
-                    watch_id: watcher_id,
                     event: Some(Event {
                         key: kv.key.clone(),
                         current: current.clone(),
@@ -209,10 +205,8 @@ impl WatcherManagerCore {
             filter,
         });
 
-        let _ = watcher_stream.send(WatchResponse {
-            watch_id: watcher_id,
-            event: None,
-        });
+        // send None event to notify stream has been created.
+        let _ = watcher_stream.send(WatchResponse { event: None });
 
         self.watcher_streams
             .insert(self.current_watcher_id, watcher_stream);

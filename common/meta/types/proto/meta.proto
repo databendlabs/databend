@@ -78,11 +78,8 @@ message Event {
 }
 
 message WatchResponse {
-  //ResponseHeader header = 1;
-  // watch_id is the ID of the watcher that corresponds to the response.
-  int64 watch_id = 1;
-
-  optional Event event = 2;
+  // watcher events, when created at first time clien will recvive None event.
+  optional Event event = 1;
 }
 
 service RaftService {
