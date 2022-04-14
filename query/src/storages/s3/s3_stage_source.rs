@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
@@ -46,6 +48,7 @@ pub struct StageSource {
     table_info: S3StageTableInfo,
     initialized: bool,
     source: Option<Box<dyn Source>>,
+    files: Arc<Mutex<VecDeque<String>>>,
 }
 
 impl StageSource {
@@ -54,6 +57,7 @@ impl StageSource {
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         table_info: S3StageTableInfo,
+        files: Arc<Mutex<VecDeque<String>>>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, StageSource {
             ctx,
@@ -61,6 +65,7 @@ impl StageSource {
             table_info,
             initialized: false,
             source: None,
+            files,
         })
     }
 
@@ -171,14 +176,13 @@ impl StageSource {
         }
     }
 
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, file_name: String) -> Result<()> {
         let ctx = self.ctx.clone();
-        let file_name = self.table_info.file_name.clone();
         let stage = &self.table_info.stage_info;
         let file_format = stage.file_format_options.format.clone();
 
         let op = Self::get_op(&self.ctx, &self.table_info.stage_info).await?;
-        let path = file_name.unwrap_or_else(|| "".to_string());
+        let path = file_name;
         let object = op.object(&path);
 
         // Get the format(CSV, Parquet) source stream.
@@ -222,11 +226,18 @@ impl AsyncSource for StageSource {
     type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
+        let mut files_guard = self.files.lock();
+        let file_name = files_guard.pop_front();
+        drop(files_guard);
         async move {
             if !self.initialized {
                 self.initialized = true;
-                self.initialize().await?;
             }
+
+            if file_name.is_none() {
+                return Ok(None);
+            }
+            self.initialize(file_name.unwrap()).await?;
 
             match &mut self.source {
                 None => Err(ErrorCode::LogicalError("Please init source first!")),
