@@ -26,9 +26,9 @@ use naive_cityhash::cityhash64_with_seed;
 use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 // This is not a correct implementation of stateful hasher. But just a thin wrapper of stateless hash for leveraging DFHash trait.
 // It is good enough for column hashing because we don't really need stream hashing.
@@ -120,7 +120,7 @@ impl Function for City64WithSeedFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let column = columns[0].column();
         let physical_data_type = columns[0].data_type().data_type_id().to_physical_type();

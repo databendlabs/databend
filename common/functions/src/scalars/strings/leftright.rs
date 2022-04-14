@@ -27,6 +27,7 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 pub type LeftFunction = LeftRightFunction<true>;
 pub type RightFunction = LeftRightFunction<false>;
@@ -84,7 +85,7 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match IS_LEFT {
             true => {
@@ -112,4 +113,3 @@ impl<const IS_LEFT: bool> fmt::Display for LeftRightFunction<IS_LEFT> {
         f.write_str(&self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

@@ -22,6 +22,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct BinFunction {
@@ -61,7 +62,7 @@ impl Function for BinFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
@@ -114,4 +115,3 @@ impl fmt::Display for BinFunction {
         write!(f, "BIN")
     }
 }
-use crate::scalars::FunctionContext;

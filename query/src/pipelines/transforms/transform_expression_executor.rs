@@ -19,7 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
+use common_functions::scalars::FunctionOptions;
 use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
@@ -39,7 +39,7 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
-    _ctx: Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 impl ExpressionExecutor {
@@ -59,7 +59,7 @@ impl ExpressionExecutor {
             output_schema,
             chain: Arc::new(chain),
             alias_project,
-            _ctx: ctx,
+            ctx,
         })
     }
 
@@ -193,10 +193,12 @@ impl ExpressionExecutor {
             arg_columns.push(column);
         }
 
-        // TODO(veeupup): get session's eval tz options
-        let column = f
-            .func
-            .eval(&arg_columns, rows, FunctionContext { tz: None })?;
+        let tz = self.ctx.get_settings().get_timezone()?;
+        let tz = String::from_utf8(tz).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+        })?;
+        let func_opts = FunctionOptions { tz };
+        let column = f.func.eval(&arg_columns, rows, func_opts)?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),

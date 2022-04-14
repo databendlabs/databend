@@ -23,6 +23,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 trait OctString {
     fn oct_string(self) -> String;
@@ -88,7 +89,7 @@ impl Function for OctFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
@@ -117,4 +118,3 @@ impl fmt::Display for OctFunction {
         write!(f, "OCT")
     }
 }
-use crate::scalars::FunctionContext;

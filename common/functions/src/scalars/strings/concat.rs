@@ -21,6 +21,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct ConcatFunction {
@@ -59,7 +60,7 @@ impl Function for ConcatFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let viewers = columns
             .iter()
@@ -87,4 +88,3 @@ impl fmt::Display for ConcatFunction {
         write!(f, "CONCAT")
     }
 }
-use crate::scalars::FunctionContext;

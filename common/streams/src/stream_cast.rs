@@ -19,7 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Function;
-use common_functions::scalars::FunctionContext;
+use common_functions::scalars::FunctionOptions;
 use futures::Stream;
 use futures::StreamExt;
 
@@ -29,7 +29,7 @@ pub struct CastStream {
     input: SendableDataBlockStream,
     output_schema: DataSchemaRef,
     functions: Vec<Box<dyn Function>>,
-    func_ctx: FunctionContext,
+    func_opts: FunctionOptions,
 }
 
 impl CastStream {
@@ -37,13 +37,13 @@ impl CastStream {
         input: SendableDataBlockStream,
         output_schema: DataSchemaRef,
         functions: Vec<Box<dyn Function>>,
-        func_ctx: FunctionContext,
+        func_opts: FunctionOptions,
     ) -> Result<Self> {
         Ok(CastStream {
             input,
             output_schema,
             functions,
-            func_ctx,
+            func_opts,
         })
     }
 
@@ -58,7 +58,7 @@ impl CastStream {
         for ((cast_func, input_field), column) in iter {
             let column = ColumnWithField::new(column.clone(), input_field.clone());
             // TODO(veeupup): we nned to use the real function context here
-            columns.push(cast_func.eval(&[column], rows, self.func_ctx.clone())?);
+            columns.push(cast_func.eval(&[column], rows, self.func_opts.clone())?);
         }
 
         Ok(DataBlock::create(self.output_schema.clone(), columns))

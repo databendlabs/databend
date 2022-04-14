@@ -23,6 +23,7 @@ use crate::scalars::default_column_cast;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 const FUNC_LOCATE: u8 = 1;
 const FUNC_POSITION: u8 = 2;
@@ -74,7 +75,7 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let (ss_column, s_column) = if T == FUNC_INSTR {
             (columns[1].column(), columns[0].column())
@@ -125,4 +126,3 @@ fn find_at(str: &[u8], substr: &[u8], pos: u64) -> u64 {
         0_u64
     }
 }
-use crate::scalars::FunctionContext;

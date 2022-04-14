@@ -29,9 +29,9 @@ use crate::scalars::assert_date_or_datetime;
 use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
@@ -125,7 +125,7 @@ where
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut mode = 0;
         if columns.len() > 1 {
@@ -200,13 +200,13 @@ where
 
         let func = FunctionAdapter::create(func, true);
         let left_val = func
-            .eval(&[args[0].left.clone().unwrap()], 1, FunctionContext {
-                tz: None,
+            .eval(&[args[0].left.clone().unwrap()], 1, FunctionOptions {
+                tz: "UTC".to_string(),
             })?
             .get(0);
         let right_val = func
-            .eval(&[args[0].right.clone().unwrap()], 1, FunctionContext {
-                tz: None,
+            .eval(&[args[0].right.clone().unwrap()], 1, FunctionOptions {
+                tz: "UTC".to_string(),
             })?
             .get(0);
         // The function is monotonous, if the factor eval returns the same values for them.

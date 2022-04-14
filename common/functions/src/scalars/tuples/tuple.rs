@@ -22,6 +22,7 @@ use common_exception::Result;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct TupleFunction {
@@ -66,7 +67,7 @@ impl Function for TupleFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut cols = vec![];
         let mut types = vec![];
@@ -92,4 +93,3 @@ impl std::fmt::Display for TupleFunction {
         write!(f, "TUPLE")
     }
 }
-use crate::scalars::FunctionContext;

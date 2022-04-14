@@ -25,6 +25,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct EltFunction {
@@ -82,7 +83,7 @@ impl Function for EltFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         if columns[0].data_type().is_null() {
             return Ok(NullColumn::new(input_rows).arc());
@@ -174,4 +175,3 @@ impl fmt::Display for EltFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

@@ -22,8 +22,8 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 // TODO: try move it to simple function?
 #[derive(Clone)]
@@ -59,7 +59,7 @@ impl Function for NowFunction {
         &self,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
         let value = (utc.timestamp_millis() / 1000) as u32;

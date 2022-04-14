@@ -25,6 +25,7 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct StrcmpFunction {
@@ -60,7 +61,7 @@ impl Function for StrcmpFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, i8, _>(
             columns[0].column(),
@@ -102,4 +103,3 @@ fn strcmp(s1: &[u8], s2: &[u8], _ctx: &mut EvalContext) -> i8 {
         Ordering::Less => -1,
     }
 }
-use crate::scalars::FunctionContext;

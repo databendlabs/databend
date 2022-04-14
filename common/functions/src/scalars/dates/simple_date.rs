@@ -25,8 +25,8 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone, Debug)]
 pub struct SimpleFunction<T> {
@@ -111,7 +111,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         &self,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
         let column = Series::from_data(&[value as u16]);

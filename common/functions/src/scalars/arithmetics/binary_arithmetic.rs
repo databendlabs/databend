@@ -27,7 +27,7 @@ use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
+use crate::scalars::FunctionOptions;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -78,7 +78,7 @@ where
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op(
             columns[0].column(),

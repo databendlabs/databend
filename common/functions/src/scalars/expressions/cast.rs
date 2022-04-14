@@ -20,7 +20,7 @@ use common_exception::Result;
 
 use super::cast_with_type::cast_column_field;
 use crate::scalars::function::Function;
-use crate::scalars::FunctionContext;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct CastFunction {
@@ -72,7 +72,7 @@ impl Function for CastFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         cast_column_field(&columns[0], &self.cast_type)
     }

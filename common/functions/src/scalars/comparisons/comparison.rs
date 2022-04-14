@@ -43,9 +43,9 @@ use crate::scalars::ComparisonNotRegexpFunction;
 use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
@@ -95,7 +95,7 @@ impl Function for ComparisonFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col = self.func.eval(&columns[0], &columns[1])?;
         Ok(Arc::new(col))

@@ -23,9 +23,9 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 // ignore(...) is a function that takes any arguments, and always returns 0.
 // it can be used in performance tests
@@ -72,7 +72,7 @@ impl Function for IgnoreFunction {
         &self,
         _columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_option: FunctionContext,
+        _eval_option: FunctionOptions,
     ) -> Result<ColumnRef> {
         let return_type = BooleanType::arc();
         let return_value = DataValue::try_from(false)?;

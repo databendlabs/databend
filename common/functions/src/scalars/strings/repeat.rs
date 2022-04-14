@@ -22,6 +22,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 const MAX_REPEAT_TIMES: u64 = 1000000;
 
@@ -70,7 +71,7 @@ impl Function for RepeatFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col1 = cast_column_field(&columns[0], &StringType::arc())?;
         let col1_viewer = Vu8::try_create_viewer(&col1)?;
@@ -106,4 +107,3 @@ fn repeat(string: impl AsRef<[u8]>, times: u64) -> Result<Vec<u8>> {
     }
     Ok(string.as_ref().repeat(times as usize))
 }
-use crate::scalars::FunctionContext;

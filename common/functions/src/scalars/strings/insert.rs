@@ -24,6 +24,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[inline]
 fn apply_insert<'a, S: AsPrimitive<i64>, T: AsPrimitive<i64>>(
@@ -86,7 +87,7 @@ impl Function for InsertFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let s_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let ss_viewer = Vu8::try_create_viewer(columns[3].column())?;
@@ -127,4 +128,3 @@ impl fmt::Display for InsertFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

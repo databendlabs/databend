@@ -28,6 +28,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct RegexpLikeFunction {
@@ -68,7 +69,7 @@ impl Function for RegexpLikeFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
         if let Ok(col1) = col1 {
@@ -245,4 +246,3 @@ pub fn build_regexp_from_pattern(
         ))
     })
 }
-use crate::scalars::FunctionContext;

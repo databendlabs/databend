@@ -31,8 +31,8 @@ use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::Monotonicity;
 use crate::scalars::RoundFunction;
 
@@ -355,7 +355,7 @@ where
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let type_id = columns[0].field().data_type().data_type_id();
 
@@ -407,13 +407,13 @@ where
         }
 
         let left_val = func
-            .eval(&[args[0].left.clone().unwrap()], 1, FunctionContext {
-                tz: None,
+            .eval(&[args[0].left.clone().unwrap()], 1, FunctionOptions {
+                tz: "UTC".to_string(),
             })?
             .get(0);
         let right_val = func
-            .eval(&[args[0].right.clone().unwrap()], 1, FunctionContext {
-                tz: None,
+            .eval(&[args[0].right.clone().unwrap()], 1, FunctionOptions {
+                tz: "UTC".to_string(),
             })?
             .get(0);
         // The function is monotonous, if the factor eval returns the same values for them.

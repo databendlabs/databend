@@ -18,9 +18,9 @@ use common_datavalues::StringType;
 use common_exception::Result;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct CurrentUserFunction {}
@@ -55,7 +55,7 @@ impl Function for CurrentUserFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         Ok(columns[0].column().clone())
     }

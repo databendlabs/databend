@@ -37,6 +37,7 @@ use common_exception::Result;
 use super::Function;
 use super::Monotonicity;
 use super::TypedFunctionDescription;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct FunctionAdapter {
@@ -122,7 +123,7 @@ impl Function for FunctionAdapter {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        func_ctx: FunctionContext,
+        func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         if self.inner.is_none() {
             return Ok(Arc::new(NullColumn::new(input_rows)));
@@ -130,7 +131,7 @@ impl Function for FunctionAdapter {
 
         let inner = self.inner.as_ref().unwrap();
         if columns.is_empty() {
-            return inner.eval(columns, input_rows, func_ctx);
+            return inner.eval(columns, input_rows, func_opts);
         }
 
         // is there nullable constant? Did not consider this case
@@ -146,7 +147,7 @@ impl Function for FunctionAdapter {
                 })
                 .collect::<Vec<_>>();
 
-            let col = self.eval(&columns, 1, func_ctx)?;
+            let col = self.eval(&columns, 1, func_opts)?;
             let col = if col.is_const() && col.len() == 1 {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
@@ -190,7 +191,7 @@ impl Function for FunctionAdapter {
                     })
                     .collect::<Vec<_>>();
 
-                let col = self.eval(&columns, input_rows, func_ctx)?;
+                let col = self.eval(&columns, input_rows, func_opts)?;
 
                 // The'try' series functions always return Null when they failed the try.
                 // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
@@ -218,7 +219,7 @@ impl Function for FunctionAdapter {
             }
         }
 
-        inner.eval(columns, input_rows, func_ctx)
+        inner.eval(columns, input_rows, func_opts)
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
@@ -245,4 +246,3 @@ impl std::fmt::Display for FunctionAdapter {
         }
     }
 }
-use crate::scalars::FunctionContext;

@@ -31,6 +31,7 @@ use uuid::Uuid;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 pub type UUIDIsEmptyFunction = UUIDVerifierFunction<UUIDIsEmpty>;
 pub type UUIDIsNotEmptyFunction = UUIDVerifierFunction<UUIDIsNotEmpty>;
@@ -123,7 +124,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         &self,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let result_column = if columns[0].data_type().data_type_id() == TypeID::String {
             let viewer = Vu8::try_create_viewer(columns[0].column())?;
@@ -145,4 +146,3 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         Ok(Arc::new(result_column))
     }
 }
-use crate::scalars::FunctionContext;

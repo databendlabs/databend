@@ -22,9 +22,9 @@ use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction {
@@ -266,7 +266,7 @@ impl Function for IfFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let cond_col = columns[0].column();
         let cond_col = DataBlock::cast_to_nonull_boolean(cond_col)?;

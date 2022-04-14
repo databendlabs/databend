@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::FunctionContext;
+use common_functions::scalars::FunctionOptions;
 use common_streams::*;
 use futures::stream::StreamExt;
 
@@ -71,7 +71,9 @@ async fn test_cast_stream() {
         Box::pin(stream),
         output_schema.clone(),
         functions,
-        FunctionContext { tz: None },
+        FunctionOptions {
+            tz: "UTC".to_string(),
+        },
     )
     .unwrap();
 

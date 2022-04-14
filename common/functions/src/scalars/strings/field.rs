@@ -21,6 +21,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct FieldFunction {
@@ -59,7 +60,7 @@ impl Function for FieldFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let basic_viewer = Vu8::try_create_viewer(columns[0].column())?;
 
@@ -95,4 +96,3 @@ impl fmt::Display for FieldFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

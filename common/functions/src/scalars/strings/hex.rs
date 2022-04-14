@@ -24,6 +24,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct HexFunction {
@@ -63,7 +64,7 @@ impl Function for HexFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
@@ -107,4 +108,3 @@ impl fmt::Display for HexFunction {
         write!(f, "HEX")
     }
 }
-use crate::scalars::FunctionContext;

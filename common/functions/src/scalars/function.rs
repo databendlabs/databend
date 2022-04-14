@@ -24,8 +24,8 @@ use super::Monotonicity;
 
 /// for now, this is only store Timezone
 #[derive(Clone)]
-pub struct FunctionContext {
-    pub tz: Option<String>,
+pub struct FunctionOptions {
+    pub tz: String,
 }
 
 pub trait Function: fmt::Display + Sync + Send + DynClone {
@@ -50,7 +50,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
         &self,
         _columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef>;
 
     /// If all args are constant column, then we just return the constant result

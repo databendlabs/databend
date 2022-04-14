@@ -22,6 +22,7 @@ use crate::scalars::default_column_cast;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct CharFunction {
@@ -60,7 +61,7 @@ impl Function for CharFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let column_count = columns.len();
         let mut values: Vec<u8> = vec![0; input_rows * column_count];
@@ -104,4 +105,3 @@ impl fmt::Display for CharFunction {
         write!(f, "CHAR")
     }
 }
-use crate::scalars::FunctionContext;

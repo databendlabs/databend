@@ -26,6 +26,7 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 // Returns a string consisting of N space characters.
 #[derive(Clone)]
@@ -60,7 +61,7 @@ impl Function for SpaceFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
@@ -78,4 +79,3 @@ impl fmt::Display for SpaceFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

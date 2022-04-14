@@ -25,9 +25,9 @@ use crate::scalars::cast_with_type;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::ParsingMode;
 
 #[doc(alias = "TryNumToIPv4StringFunction")]
@@ -86,7 +86,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         if columns[0].column().data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);

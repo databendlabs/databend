@@ -34,8 +34,8 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::FactoryCreatorWithTypes;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::TypedFunctionDescription;
 
 pub struct IntervalFunctionCreator<T> {
@@ -158,7 +158,7 @@ where
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
         let mut ctx = EvalContext::new(self.factor, self.precision, None);

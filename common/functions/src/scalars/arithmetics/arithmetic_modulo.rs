@@ -26,6 +26,7 @@ use num_traits::AsPrimitive;
 use super::utils::rem_scalar;
 use crate::scalars::Function;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::TypedFunctionDescription;
 
 pub struct ArithmeticModuloFunction;
@@ -81,7 +82,7 @@ where
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let lhs = columns[0].column();
         let rhs = columns[1].column();
@@ -160,4 +161,3 @@ where
         write!(f, "div")
     }
 }
-use crate::scalars::FunctionContext;

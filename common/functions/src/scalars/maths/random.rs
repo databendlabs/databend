@@ -25,9 +25,9 @@ use crate::scalars::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct RandomFunction {
@@ -63,7 +63,7 @@ impl Function for RandomFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match columns.len() {
             0 => {

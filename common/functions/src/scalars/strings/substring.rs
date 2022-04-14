@@ -23,6 +23,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
@@ -86,7 +87,7 @@ impl Function for SubstringFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let s_column = cast_column_field(&columns[0], &StringType::arc())?;
         let s_viewer = Vu8::try_create_viewer(&s_column)?;
@@ -156,4 +157,3 @@ fn substr<'a>(str: &'a [u8], pos: &i64, len: &u64) -> &'a [u8] {
     }
     &str[0..0]
 }
-use crate::scalars::FunctionContext;

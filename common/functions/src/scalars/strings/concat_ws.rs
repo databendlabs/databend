@@ -21,6 +21,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct ConcatWsFunction {
@@ -167,7 +168,7 @@ impl Function for ConcatWsFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let seperator = &columns[0];
         if seperator.data_type().is_null() {
@@ -205,4 +206,3 @@ impl fmt::Display for ConcatWsFunction {
         write!(f, "CONCAT_WS")
     }
 }
-use crate::scalars::FunctionContext;

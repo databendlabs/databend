@@ -29,6 +29,7 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 const FORMAT_MAX_DECIMALS: i64 = 30;
 
@@ -74,7 +75,7 @@ impl Function for FormatFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
@@ -121,4 +122,3 @@ impl fmt::Display for FormatFunction {
         write!(f, "FORMAT")
     }
 }
-use crate::scalars::FunctionContext;

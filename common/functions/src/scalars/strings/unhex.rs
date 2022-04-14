@@ -22,6 +22,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct UnhexFunction {
@@ -61,7 +62,7 @@ impl Function for UnhexFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 
@@ -103,4 +104,3 @@ impl fmt::Display for UnhexFunction {
         write!(f, "UNHEX")
     }
 }
-use crate::scalars::FunctionContext;

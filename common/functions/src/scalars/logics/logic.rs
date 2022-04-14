@@ -24,8 +24,8 @@ use super::LogicNotFunction;
 use super::LogicOrFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -224,7 +224,7 @@ impl Function for LogicFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match self.op {
             LogicOperator::Not => self.eval_not(columns, input_rows),

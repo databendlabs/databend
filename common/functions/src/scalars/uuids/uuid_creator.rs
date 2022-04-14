@@ -26,6 +26,7 @@ use uuid::Uuid;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 pub type UUIDv4Function = UUIDCreatorFunction<UUIDv4>;
 pub type UUIDZeroFunction = UUIDCreatorFunction<UUIDZero>;
@@ -98,7 +99,7 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         &self,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let uuid = T::create();
         let col = StringColumn::new_from_slice(vec![uuid.to_string()]);
@@ -106,4 +107,3 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         Ok(ConstColumn::new(col.arc(), input_rows).arc())
     }
 }
-use crate::scalars::FunctionContext;

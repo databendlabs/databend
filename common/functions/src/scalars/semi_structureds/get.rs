@@ -25,9 +25,9 @@ use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 pub type GetFunction = GetFunctionImpl<false, false>;
 
@@ -89,7 +89,7 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let path_keys = if BY_PATH {
             parse_path_keys(columns[1].column())?

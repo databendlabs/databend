@@ -27,9 +27,9 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 /// Const f64 is now allowed.
 /// feature(adt_const_params) is not stable & complete
@@ -115,7 +115,7 @@ impl<T: Base> Function for GenericLogFunction<T> {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         if columns.len() == 1 {

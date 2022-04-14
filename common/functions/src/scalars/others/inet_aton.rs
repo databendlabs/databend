@@ -22,9 +22,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[doc(alias = "TryIPv4StringToNumFunction")]
 pub type TryInetAtonFunction = InetAtonFunctionImpl<true>;
@@ -87,7 +87,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         if columns[0].column().data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);

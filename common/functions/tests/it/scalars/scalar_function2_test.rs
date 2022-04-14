@@ -16,7 +16,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionAdapter;
-use common_functions::scalars::FunctionContext;
+use common_functions::scalars::FunctionOptions;
 use pretty_assertions::assert_eq;
 
 pub struct ScalarFunctionTest {
@@ -143,6 +143,8 @@ pub fn test_eval_with_type(
 ) -> Result<ColumnRef> {
     let adaptor = FunctionAdapter::create(test_function.clone(), passthrough_null);
     adaptor.return_type(arguments_type)?;
-    let func_ctx = FunctionContext { tz: None };
-    adaptor.eval(arguments, rows_size, func_ctx)
+    let func_opts = FunctionOptions {
+        tz: "UTC".to_string(),
+    };
+    adaptor.eval(arguments, rows_size, func_opts)
 }

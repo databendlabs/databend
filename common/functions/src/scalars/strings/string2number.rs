@@ -22,6 +22,7 @@ use common_exception::Result;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 pub trait NumberOperator<R>: Send + Sync + Clone + Default + 'static {
     const IS_DETERMINISTIC: bool;
@@ -95,7 +96,7 @@ where
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
         let column: &StringColumn = Series::check_get(columns[0].column())?;
@@ -114,4 +115,3 @@ impl<T, R> fmt::Display for String2NumberFunction<T, R> {
         write!(f, "{}()", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

@@ -26,6 +26,7 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -69,7 +70,7 @@ impl Function for FloorFunction {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
@@ -92,4 +93,3 @@ impl fmt::Display for FloorFunction {
         write!(f, "{}", self.display_name.to_uppercase())
     }
 }
-use crate::scalars::FunctionContext;

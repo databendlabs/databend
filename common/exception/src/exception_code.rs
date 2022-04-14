@@ -119,6 +119,7 @@ build_exceptions! {
     UnmarshalError(1064),
     SemanticError(1065),
     InvalidAuthInfo(1066),
+    InvalidTimezone(1067),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),

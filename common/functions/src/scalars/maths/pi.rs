@@ -53,7 +53,7 @@ impl Function for PiFunction {
         &self,
         _columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_option: FunctionContext,
+        _eval_option: FunctionOptions,
     ) -> Result<ColumnRef> {
         Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())
     }
@@ -64,4 +64,4 @@ impl fmt::Display for PiFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;
+use crate::scalars::FunctionOptions;

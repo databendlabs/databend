@@ -26,9 +26,9 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
@@ -96,7 +96,7 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
         &self,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         match IS_TRUNC {
             false => eval_round(columns),

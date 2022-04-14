@@ -21,9 +21,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct SleepFunction {
@@ -66,7 +66,7 @@ impl Function for SleepFunction {
         &self,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<common_datavalues::ColumnRef> {
         let c = columns[0].column();
         if c.len() != 1 {

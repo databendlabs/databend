@@ -21,6 +21,7 @@ use crate::scalars::assert_string;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[inline]
 fn apply<'a>(str: &'a [u8], from: &'a [u8], to: &'a [u8], buf: &mut Vec<u8>) {
@@ -77,7 +78,7 @@ impl Function for ReplaceFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let view0 = Vu8::try_create_viewer(columns[0].column())?;
         let view1 = Vu8::try_create_viewer(columns[1].column())?;
@@ -106,4 +107,3 @@ impl fmt::Display for ReplaceFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

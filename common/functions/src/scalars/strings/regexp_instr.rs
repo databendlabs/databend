@@ -29,6 +29,7 @@ use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct RegexpInStrFunction {
@@ -78,7 +79,7 @@ impl Function for RegexpInStrFunction {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
@@ -278,4 +279,3 @@ impl fmt::Display for RegexpInStrFunction {
         write!(f, "{}", self.display_name)
     }
 }
-use crate::scalars::FunctionContext;

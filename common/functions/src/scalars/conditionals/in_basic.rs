@@ -23,9 +23,9 @@ use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
-use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+use crate::scalars::FunctionOptions;
 
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool>;
@@ -119,7 +119,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         &self,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
+        _func_opts: FunctionOptions,
     ) -> Result<ColumnRef> {
         for col in columns {
             let dt = col.column().data_type();
