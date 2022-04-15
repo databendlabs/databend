@@ -74,14 +74,6 @@ impl UserInfo {
     pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
         self.option.has_option_flag(flag)
     }
-
-    pub fn format_grants(&self) -> Vec<Vec<u8>> {
-        self.grants
-            .entries()
-            .iter()
-            .map(|e| format!("{} TO {}", e, self.identity()).into_bytes())
-            .collect::<Vec<_>>()
-    }
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {

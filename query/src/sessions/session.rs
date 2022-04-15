@@ -206,15 +206,19 @@ impl Session {
             .await?
             .get_role_cache_manager();
         let role_verified = role_cache
-            .verify_privilege(&tenant, &current_user.grants.roles(), object, privilege)
-            .await?;
+            .find_related_roles(&tenant, &current_user.grants.roles())
+            .await?
+            .iter()
+            .any(|r| r.grants.verify_privilege(object, privilege));
         if role_verified {
             return Ok(());
         }
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, user '{}'@'{}' requires {} privilege on {}",
-            &current_user.name, &current_user.hostname, privilege, object
+            "Permission denied, user {} requires {} privilege on {}",
+            &current_user.identity(),
+            privilege,
+            object
         )))
     }
 
