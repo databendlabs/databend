@@ -124,9 +124,9 @@ where
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let mut mode = 0;
         if columns.len() > 1 {
@@ -201,14 +201,18 @@ where
 
         let func = FunctionAdapter::create(func, true);
         let left_val = func
-            .eval(&[args[0].left.clone().unwrap()], 1, FunctionContext {
-                tz: None,
-            })?
+            .eval(
+                FunctionContext::default(),
+                &[args[0].left.clone().unwrap()],
+                1,
+            )?
             .get(0);
         let right_val = func
-            .eval(&[args[0].right.clone().unwrap()], 1, FunctionContext {
-                tz: None,
-            })?
+            .eval(
+                FunctionContext::default(),
+                &[args[0].right.clone().unwrap()],
+                1,
+            )?
             .get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {

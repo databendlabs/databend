@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_meta_types::TableIdent;
@@ -48,7 +48,7 @@ impl TablesTable {
             '' AS TABLE_COMMENT
         FROM system.tables;";
 
-        let mut options = HashMap::new();
+        let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
             desc: "'INFORMATION_SCHEMA'.'TABLES'".to_string(),

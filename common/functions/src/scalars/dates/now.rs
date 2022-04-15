@@ -54,9 +54,9 @@ impl Function for NowFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
         let value = (utc.timestamp_millis() / 1000) as u32;

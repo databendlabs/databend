@@ -93,9 +93,9 @@ impl Function for ComparisonFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let col = self.func.eval(&columns[0], &columns[1])?;
         Ok(Arc::new(col))

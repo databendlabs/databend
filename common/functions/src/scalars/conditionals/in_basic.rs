@@ -120,9 +120,9 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if self.is_null {
             let col = NullType::arc().create_constant_column(&DataValue::Null, input_rows)?;

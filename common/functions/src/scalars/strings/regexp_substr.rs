@@ -74,9 +74,9 @@ impl Function for RegexpSubStrFunction {
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();

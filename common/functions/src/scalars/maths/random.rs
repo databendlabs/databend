@@ -61,9 +61,9 @@ impl Function for RandomFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         match columns.len() {
             0 => {

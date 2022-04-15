@@ -48,9 +48,9 @@ impl Function for ExistsFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         if columns[0].column().is_const() || columns[0].column().len() == 1 {
             let value = columns[0].column().get(0);

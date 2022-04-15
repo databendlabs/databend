@@ -113,9 +113,9 @@ impl<T: Base> Function for GenericLogFunction<T> {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         if columns.len() == 1 {

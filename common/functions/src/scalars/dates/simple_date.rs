@@ -106,9 +106,9 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
         let column = Series::from_data(&[value as u16]);

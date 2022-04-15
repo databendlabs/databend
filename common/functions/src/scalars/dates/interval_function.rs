@@ -156,9 +156,9 @@ where
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
         let mut ctx = EvalContext::new(self.factor, self.precision, None);

@@ -86,9 +86,9 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let path_keys = if BY_PATH {
             parse_path_keys(columns[1].column())?

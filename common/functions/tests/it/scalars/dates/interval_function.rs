@@ -89,8 +89,11 @@ fn test_add_months() -> Result<()> {
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months =
                 AddMonthsFunction::try_create_func("addMonths", 1, &[&Date16Type::arc(), arg])?;
-            let func_ctx = FunctionContext { tz: None };
-            let col = add_months.eval(&[column("date16"), column(field)], 1, func_ctx)?;
+            let col = add_months.eval(
+                FunctionContext::default(),
+                &[column("date16"), column(field)],
+                1,
+            )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::UInt16);
             expects.push(col.get_u64(0)? as u16);
@@ -115,8 +118,11 @@ fn test_add_months() -> Result<()> {
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months =
                 AddMonthsFunction::try_create_func("addMonths", 1, &[&Date32Type::arc(), arg])?;
-            let func_ctx = FunctionContext { tz: None };
-            let col = add_months.eval(&[column("date32"), column(field)], 1, func_ctx)?;
+            let col = add_months.eval(
+                FunctionContext::default(),
+                &[column("date32"), column(field)],
+                1,
+            )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::Int32);
             expects.push(col.get_i64(0)? as i32);
@@ -143,8 +149,11 @@ fn test_add_months() -> Result<()> {
                 &DateTime32Type::arc(None),
                 arg,
             ])?;
-            let func_ctx = FunctionContext { tz: None };
-            let col = add_months.eval(&[column("datetime32"), column(field)], 1, func_ctx)?;
+            let col = add_months.eval(
+                FunctionContext::default(),
+                &[column("datetime32"), column(field)],
+                1,
+            )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
             expects.push(col.get_u64(0)? as u32);
@@ -229,8 +238,11 @@ fn test_add_subtract_seconds() -> Result<()> {
                 &DateTime32Type::arc(None),
                 arg,
             ])?;
-            let func_ctx = FunctionContext { tz: None };
-            let col = add_seconds.eval(&[column("datetime32"), column(field)], 1, func_ctx)?;
+            let col = add_seconds.eval(
+                FunctionContext::default(),
+                &[column("datetime32"), column(field)],
+                1,
+            )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
             expects.push(col.get_u64(0)? as u32);
@@ -257,8 +269,11 @@ fn test_add_subtract_seconds() -> Result<()> {
                 &DateTime32Type::arc(None),
                 arg,
             ])?;
-            let func_ctx = FunctionContext { tz: None };
-            let col = add_seconds.eval(&[column("datetime32"), column(field)], 1, func_ctx)?;
+            let col = add_seconds.eval(
+                FunctionContext::default(),
+                &[column("datetime32"), column(field)],
+                1,
+            )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
             expects.push(col.get_u64(0)? as u32);

@@ -2,11 +2,11 @@
 title: Using Databend as a Sink for Vector
 sidebar_label: Vector
 description:
-  Using Databend as a Sink for Vector
+  Using Databend as a Sink for Vector.
 ---
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/integration-databend-vector.png" width="550"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/integration/integration-databend-vector.png" width="550"/>
 </p>
 
 ## What is [Vector](https://vector.dev/)?
@@ -16,6 +16,25 @@ description:
 * Made up of three components (sources, transforms, sinks) of two types (logs, metrics).
 
 Databend supports ClickHouse REST API, so it's easy to integration with Vector to stream, aggregate, and gain insights.
+
+## Create a Databend User
+
+Connect to Databend server with MySQL client:
+```shell
+mysql -h127.0.0.1 -uroot -P3307 
+```
+
+Create a user:
+```shell title='mysql>'
+create user user1 identified by 'abc123';
+```
+
+Grant insert privileges for the user:
+```shell title='mysql>'
+grant insert on nginx.* to user1;
+```
+
+See also [How To Create User](../../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
 
 ## Configure Vector
 
@@ -38,29 +57,11 @@ compression = "gzip"
 [sinks.databend_sink.auth]
 strategy = "basic"
 // highlight-next-line
-user = "vector" #Databend username
+user = "user1" #Databend username
 // highlight-next-line
-password = "vector123" #Databend password
-```
-
-## Create a User for Vector
-
-Connect to Databend server with MySQL client:
-```shell
-mysql -h127.0.0.1 -uroot -P3307 
-```
-
-```shell title='mysql>'
-create user 'vector' identified by 'vector123';
-```
-Please replace `vector`, `vector123` to your own username and password.
-
-```shell title='mysql>'
-grant insert on nginx.* TO 'vector'@'%';
+password = "abc123" #Databend password
 ```
 
 ## Tutorial
 
-[How to Ingest Nginx Access Logs into Databend with Vector](../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)
-
-
+[How to Analyze Nginx Access Logs With Databend](../../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)

@@ -72,9 +72,9 @@ impl Function for RoundFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let func = |val: u32, _ctx: &mut EvalContext| self.execute(val);
         let col =

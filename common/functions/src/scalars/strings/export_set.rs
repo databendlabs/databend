@@ -72,9 +72,9 @@ impl Function for ExportSetFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let sep_col = if columns.len() >= 4 {
             columns[3].column().clone()

@@ -83,9 +83,9 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         match IS_LEFT {
             true => {

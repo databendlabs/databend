@@ -46,6 +46,7 @@ async fn test_settings_table() -> Result<()> {
         "| storage_occ_backoff_max_delay_ms   | 20000   | 20000   | SESSION | The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds. | UInt64 |",
         "| storage_occ_backoff_max_elapsed_ms | 120000  | 120000  | SESSION | The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.                    | UInt64 |",
         "| storage_read_buffer_size           | 1048576 | 1048576 | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                                                             | UInt64 |",
+        "| timezone                           | UTC     | UTC     | SESSION | Timezone, default value: UTC,                                                                                                              | String |",
         "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

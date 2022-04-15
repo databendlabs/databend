@@ -53,9 +53,9 @@ impl Function for CheckJsonFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         let column = columns[0].column();

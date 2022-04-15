@@ -70,9 +70,9 @@ impl Function for IgnoreFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &ColumnsWithField,
         input_rows: usize,
-        _eval_option: FunctionContext,
     ) -> Result<ColumnRef> {
         let return_type = BooleanType::arc();
         let return_value = DataValue::try_from(false)?;
