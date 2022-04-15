@@ -136,10 +136,10 @@ impl WatcherManagerCore {
         let prev = kv.prev;
 
         let is_delete_event = current.is_none();
-        let mut remove_watcher_id: Vec<RangeKey<String, WatcherId>> = vec![];
+        let mut remove_range_keys: Vec<RangeKey<String, WatcherId>> = vec![];
 
-        for range_key in set.iter() {
-            let filter = range_key.1.filter_type;
+        for range_key_stream in set.iter() {
+            let filter = range_key_stream.1.filter_type;
 
             // filter out event
             if (filter == FilterType::Delete && !is_delete_event)
@@ -148,8 +148,8 @@ impl WatcherManagerCore {
                 continue;
             }
 
-            let watcher_id = range_key.0.key;
-            let stream = range_key.1;
+            let watcher_id = range_key_stream.0.key;
+            let stream = range_key_stream.1;
             assert_eq!(stream.id, watcher_id);
             let resp = WatchResponse {
                 event: Some(Event {
@@ -165,15 +165,15 @@ impl WatcherManagerCore {
                     watcher_id,
                     err
                 );
-                remove_watcher_id.push(RangeKey::new(
+                remove_range_keys.push(RangeKey::new(
                     stream.key.clone()..stream.key_end.clone(),
                     watcher_id,
                 ));
             };
         }
 
-        for id in remove_watcher_id {
-            self.close_stream(id);
+        for range_key in remove_range_keys {
+            self.close_stream(range_key);
         }
     }
 
@@ -191,7 +191,7 @@ impl WatcherManagerCore {
         let filter = create.filter_type();
 
         let watcher_stream = WatcherStream::new(
-            self.current_watcher_id,
+            watcher_id,
             filter,
             tx,
             range.start.clone(),

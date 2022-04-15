@@ -35,7 +35,6 @@ async fn watcher_client_main(
     watch: WatchRequest,
     start_tx: UnboundedSender<()>,
     mut events_rx: UnboundedReceiver<Vec<Event>>,
-    mut shutdown_rx: UnboundedReceiver<()>,
 ) -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
     let mut grpc_client = client.make_client().await?;
@@ -67,9 +66,6 @@ async fn watcher_client_main(
 
                 }
             },
-            _ = shutdown_rx.recv() => {
-                break;
-            }
             events = events_rx.recv() => {
                 assert!(watch_events.is_empty());
                 if let Some(events) = events {
@@ -82,7 +78,6 @@ async fn watcher_client_main(
             }
         }
     }
-    Ok(())
 }
 
 fn wait_notify(start_rx: &mut UnboundedReceiver<()>, wait_ms: i32) {
@@ -106,14 +101,12 @@ async fn test_watch_main(
 
     let (start_tx, mut start_rx) = mpsc::unbounded_channel::<()>();
     let (events_tx, events_rx) = mpsc::unbounded_channel::<Vec<Event>>();
-    let (shutdown_tx, shutdown_rx) = mpsc::unbounded_channel::<()>();
 
-    let _h = tokio::spawn(watcher_client_main(
+    let h = tokio::spawn(watcher_client_main(
         addr.clone(),
         watch,
         start_tx,
         events_rx,
-        shutdown_rx,
     ));
 
     // wait for client stream start up
@@ -132,7 +125,7 @@ async fn test_watch_main(
     wait_notify(&mut start_rx, 2000);
 
     // ok, shutdown client main
-    shutdown_tx.send(()).expect("shutdown client stream error");
+    h.abort();
 
     Ok(())
 }
@@ -229,7 +222,7 @@ async fn test_watch() -> anyhow::Result<()> {
         test_watch_main(addr.clone(), watch, events, updates).await?;
     }
 
-    // 1. test filter
+    // 2. test filter
     {
         let key_str = "1";
         let watch = WatchRequest {
