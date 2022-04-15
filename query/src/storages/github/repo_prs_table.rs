@@ -56,8 +56,8 @@ impl RepoPRsTable {
         let req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: options.owner.clone(),
-            table: format!("{}_{}", options.repo.clone(), "prs"),
+            db_name: options.owner.clone(),
+            table_name: format!("{}_{}", options.repo.clone(), "prs"),
             table_meta: TableMeta {
                 schema: RepoPRsTable::schema(),
                 engine: "GITHUB".into(),

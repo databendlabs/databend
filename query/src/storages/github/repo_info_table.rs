@@ -53,8 +53,8 @@ impl RepoInfoTable {
         let req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: options.owner.clone(),
-            table: options.repo.clone(),
+            db_name: options.owner.clone(),
+            table_name: options.repo.clone(),
             table_meta: TableMeta {
                 schema: RepoInfoTable::schema(),
                 engine: "GITHUB".into(),
