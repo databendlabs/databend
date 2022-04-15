@@ -40,8 +40,8 @@ impl From<CreateTablePlan> for CreateTableReq {
         CreateTableReq {
             if_not_exists: p.if_not_exists,
             tenant: p.tenant,
-            db: p.db,
-            table: p.table,
+            db_name: p.db,
+            table_name: p.table,
             table_meta: p.table_meta,
         }
     }

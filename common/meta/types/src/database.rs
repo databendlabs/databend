@@ -74,7 +74,7 @@ impl DatabaseInfo {
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub db: String,
+    pub db_name: String,
     pub meta: DatabaseMeta,
 }
 
@@ -83,7 +83,7 @@ impl Display for CreateDatabaseReq {
         write!(
             f,
             "create_db(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.tenant, self.db, self.meta
+            self.if_not_exists, self.tenant, self.db_name, self.meta
         )
     }
 }
@@ -97,7 +97,7 @@ pub struct CreateDatabaseReply {
 pub struct DropDatabaseReq {
     pub if_exists: bool,
     pub tenant: String,
-    pub db: String,
+    pub db_name: String,
 }
 
 impl Display for DropDatabaseReq {
@@ -105,7 +105,7 @@ impl Display for DropDatabaseReq {
         write!(
             f,
             "drop_db(if_exists={}):{}/{}",
-            self.if_exists, self.tenant, self.db
+            self.if_exists, self.tenant, self.db_name
         )
     }
 }

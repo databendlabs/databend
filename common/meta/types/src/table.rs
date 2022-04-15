@@ -192,8 +192,8 @@ impl Display for TableInfo {
 pub struct CreateTableReq {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub db: String,
-    pub table: String,
+    pub db_name: String,
+    pub table_name: String,
     pub table_meta: TableMeta,
 }
 
@@ -202,7 +202,7 @@ impl Display for CreateTableReq {
         write!(
             f,
             "create_table(if_not_exists={}):{}/{}-{}={}",
-            self.if_not_exists, self.tenant, self.db, self.table, self.table_meta
+            self.if_not_exists, self.tenant, self.db_name, self.table_name, self.table_meta
         )
     }
 }
@@ -216,8 +216,8 @@ pub struct CreateTableReply {
 pub struct DropTableReq {
     pub if_exists: bool,
     pub tenant: String,
-    pub db: String,
-    pub table: String,
+    pub db_name: String,
+    pub table_name: String,
 }
 
 impl Display for DropTableReq {
@@ -225,7 +225,7 @@ impl Display for DropTableReq {
         write!(
             f,
             "drop_table(if_exists={}):{}/{}-{}",
-            self.if_exists, self.tenant, self.db, self.table
+            self.if_exists, self.tenant, self.db_name, self.table_name
         )
     }
 }
@@ -237,9 +237,9 @@ pub struct DropTableReply {}
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub tenant: String,
-    pub db: String,
+    pub db_name: String,
     pub table_name: String,
-    pub new_db: String,
+    pub new_db_name: String,
     pub new_table_name: String,
 }
 
@@ -248,7 +248,7 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant, self.db, self.table_name, self.new_db, self.new_table_name
+            self.tenant, self.db_name, self.table_name, self.new_db_name, self.new_table_name
         )
     }
 }

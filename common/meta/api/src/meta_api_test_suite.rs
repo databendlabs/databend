@@ -54,7 +54,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: "db1".to_string(),
+                db_name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -72,7 +72,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: "db1".to_string(),
+                db_name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..Default::default()
@@ -93,7 +93,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: true,
                 tenant: tenant.to_string(),
-                db: "db1".to_string(),
+                db_name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -120,7 +120,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: "db2".to_string(),
+                db_name: "db2".to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -159,7 +159,7 @@ impl MetaApiTestSuite {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: "db2".to_string(),
+                db_name: "db2".to_string(),
             })
             .await?;
         }
@@ -179,7 +179,7 @@ impl MetaApiTestSuite {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
                 tenant: tenant.to_string(),
-                db: "db2".to_string(),
+                db_name: "db2".to_string(),
             })
             .await?;
         }
@@ -198,7 +198,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant1.to_string(),
-                db: "db1".to_string(),
+                db_name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -216,7 +216,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant1.to_string(),
-                db: "db2".to_string(),
+                db_name: "db2".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -234,7 +234,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant2.to_string(),
-                db: "db1".to_string(),
+                db_name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -287,7 +287,7 @@ impl MetaApiTestSuite {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
                 tenant: tenant1.to_string(),
-                db: "db2".to_string(),
+                db_name: "db2".to_string(),
             })
             .await?;
         }
@@ -307,7 +307,7 @@ impl MetaApiTestSuite {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
                 tenant: tenant1.to_string(),
-                db: "db2".to_string(),
+                db_name: "db2".to_string(),
             })
             .await?;
         }
@@ -416,8 +416,8 @@ impl MetaApiTestSuite {
             let req = CreateTableReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
-                table: tbl_name.to_string(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
                 table_meta: table_meta(created_on),
             };
             // test create table
@@ -451,8 +451,8 @@ impl MetaApiTestSuite {
             let plan = DropTableReq {
                 if_exists: false,
                 tenant: tenant.into(),
-                db: db_name.into(),
-                table: tbl_name.into(),
+                db_name: db_name.into(),
+                table_name: tbl_name.into(),
             };
 
             let got = mt.drop_table(plan).await;
@@ -468,7 +468,7 @@ impl MetaApiTestSuite {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -488,8 +488,8 @@ impl MetaApiTestSuite {
             let mut req = CreateTableReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
-                table: tbl_name.to_string(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
                 table_meta: table_meta(created_on),
             };
 
@@ -600,8 +600,8 @@ impl MetaApiTestSuite {
                 let plan = DropTableReq {
                     if_exists: false,
                     tenant: tenant.to_string(),
-                    db: db_name.to_string(),
-                    table: tbl_name.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
                 };
                 mt.drop_table(plan.clone()).await?;
 
@@ -625,8 +625,8 @@ impl MetaApiTestSuite {
                 let plan = DropTableReq {
                     if_exists: false,
                     tenant: tenant.to_string(),
-                    db: db_name.to_string(),
-                    table: tbl_name.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
                 };
                 let res = mt.drop_table(plan.clone()).await;
                 let err = res.unwrap_err();
@@ -643,8 +643,8 @@ impl MetaApiTestSuite {
                 let plan = DropTableReq {
                     if_exists: true,
                     tenant: tenant.to_string(),
-                    db: db_name.to_string(),
-                    table: tbl_name.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
                 };
                 mt.drop_table(plan.clone()).await?;
             }
@@ -682,9 +682,9 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
-                new_db: db_name.to_string(),
+                new_db_name: db_name.to_string(),
                 new_table_name: new_tbl_name.to_string(),
             };
             let got = mt.rename_table(req.clone()).await;
@@ -702,7 +702,7 @@ impl MetaApiTestSuite {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -719,8 +719,8 @@ impl MetaApiTestSuite {
         let req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: db_name.to_string(),
-            table: tbl_name.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
             table_meta: table_meta(created_on),
         };
 
@@ -745,9 +745,9 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
-                new_db: db_name.to_string(),
+                new_db_name: db_name.to_string(),
                 new_table_name: new_tbl_name.to_string(),
             };
             mt.rename_table(req.clone()).await?;
@@ -777,9 +777,9 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
-                new_db: db_name.to_string(),
+                new_db_name: db_name.to_string(),
                 new_table_name: new_tbl_name.to_string(),
             };
             let res = mt.rename_table(req.clone()).await;
@@ -813,9 +813,9 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
-                new_db: db_name.to_string(),
+                new_db_name: db_name.to_string(),
                 new_table_name: new_tbl_name.to_string(),
             };
             let res = mt.rename_table(req.clone()).await;
@@ -833,9 +833,9 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
-                new_db: new_db_name.to_string(),
+                new_db_name: new_db_name.to_string(),
                 new_table_name: new_tbl_name.to_string(),
             };
             let res = mt.rename_table(req.clone()).await;
@@ -853,7 +853,7 @@ impl MetaApiTestSuite {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: new_db_name.to_string(),
+                db_name: new_db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -871,9 +871,9 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
-                new_db: new_db_name.to_string(),
+                new_db_name: new_db_name.to_string(),
                 new_table_name: new_tbl_name.to_string(),
             };
             mt.rename_table(req.clone()).await?;
@@ -926,8 +926,8 @@ impl MetaApiTestSuite {
             let mut plan = CreateTableReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
-                table: "tb1".to_string(),
+                db_name: db_name.to_string(),
+                table_name: "tb1".to_string(),
                 table_meta: TableMeta {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),
@@ -940,7 +940,7 @@ impl MetaApiTestSuite {
                 let res = mt.create_table(plan.clone()).await?;
                 assert_eq!(1, res.table_id, "table id is 1");
 
-                plan.table = "tb2".to_string();
+                plan.table_name = "tb2".to_string();
                 let res = mt.create_table(plan.clone()).await?;
                 assert_eq!(2, res.table_id, "table id is 2");
             }
@@ -1104,7 +1104,7 @@ impl MetaApiTestSuite {
         let req = CreateDatabaseReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: db_name.to_string(),
+            db_name: db_name.to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -1132,7 +1132,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: "db1".to_string(),
+                db_name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1189,7 +1189,7 @@ impl MetaApiTestSuite {
                 let req = CreateDatabaseReq {
                     if_not_exists: false,
                     tenant: tenant.to_string(),
-                    db: db_name.to_string(),
+                    db_name: db_name.to_string(),
                     meta: DatabaseMeta {
                         engine: "github".to_string(),
                         ..Default::default()
@@ -1233,7 +1233,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1254,8 +1254,8 @@ impl MetaApiTestSuite {
                 let req = CreateTableReq {
                     if_not_exists: false,
                     tenant: tenant.to_string(),
-                    db: db_name.to_string(),
-                    table: tb.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tb.to_string(),
                     table_meta: TableMeta {
                         schema: schema.clone(),
                         engine: "JSON".to_string(),
@@ -1297,7 +1297,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
+                db_name: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1317,8 +1317,8 @@ impl MetaApiTestSuite {
             let req = CreateTableReq {
                 if_not_exists: false,
                 tenant: tenant.to_string(),
-                db: db_name.to_string(),
-                table: "tb1".to_string(),
+                db_name: db_name.to_string(),
+                table_name: "tb1".to_string(),
                 table_meta: TableMeta {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),

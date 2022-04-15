@@ -212,7 +212,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     cmd: Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: false,
                         tenant: tenant.to_string(),
-                        db: name.to_string(),
+                        db_name: name.to_string(),
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
                             ..Default::default()

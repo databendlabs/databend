@@ -351,7 +351,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let tenant = &req.tenant;
-        let name = &req.db;
+        let name = &req.db_name;
         let meta = &req.meta;
 
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
@@ -416,7 +416,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let tenant = &req.tenant;
-        let name = &req.db;
+        let name = &req.db_name;
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
@@ -460,10 +460,10 @@ impl StateMachine {
         req: &CreateTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
 
         let (table_id, prev, result) =
-            self.txn_create_table(txn_tree, db_id, None, &req.table, &req.table_meta)?;
+            self.txn_create_table(txn_tree, db_id, None, &req.table_name, &req.table_meta)?;
         let table_id = table_id.unwrap();
 
         if prev.is_some() {
@@ -486,9 +486,9 @@ impl StateMachine {
         req: &DropTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
 
-        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table)?;
+        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
         if prev.is_none() {
             return Ok(Change::<TableMeta>::new(None, None).into());
         }
@@ -504,7 +504,7 @@ impl StateMachine {
         req: &RenameTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
         let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
         if prev.is_none() {
             return Err(MetaStorageError::AppError(AppError::UnknownTable(
@@ -514,7 +514,7 @@ impl StateMachine {
         assert!(result.is_none());
 
         let table_meta = &prev.as_ref().unwrap().data;
-        let db_id = self.txn_get_database_id(&req.tenant, &req.new_db, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.new_db_name, txn_tree)?;
         let (new_table_id, new_prev, new_result) =
             self.txn_create_table(txn_tree, db_id, table_id, &req.new_table_name, table_meta)?;
         if new_prev.is_some() {

@@ -85,8 +85,8 @@ impl CreateViewInterpreter {
         let plan = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,
             tenant: self.plan.tenant.clone(),
-            db: self.plan.db.clone(),
-            table: self.plan.viewname.clone(),
+            db_name: self.plan.db.clone(),
+            table_name: self.plan.viewname.clone(),
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
                 options,

@@ -88,8 +88,8 @@ impl AlterViewInterpreter {
         let plan = DropTableReq {
             if_exists: true,
             tenant: self.plan.tenant.clone(),
-            db: self.plan.db.clone(),
-            table: self.plan.viewname.clone(),
+            db_name: self.plan.db.clone(),
+            table_name: self.plan.viewname.clone(),
         };
         catalog.drop_table(plan).await?;
 
@@ -99,8 +99,8 @@ impl AlterViewInterpreter {
         let plan = CreateTableReq {
             if_not_exists: true,
             tenant: self.plan.tenant.clone(),
-            db: self.plan.db.clone(),
-            table: self.plan.viewname.clone(),
+            db_name: self.plan.db.clone(),
+            table_name: self.plan.viewname.clone(),
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
                 options,
