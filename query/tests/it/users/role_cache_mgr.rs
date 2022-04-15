@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
-use common_meta_types::UserPrivilegeType;
 use databend_query::users::role_cache_mgr::find_all_related_roles;
 use databend_query::users::RoleCacheMgr;
 use databend_query::users::UserApiProvider;
@@ -38,36 +37,10 @@ async fn test_role_cache_mgr() -> Result<()> {
     user_api.add_role("tenant1", role1, false).await?;
 
     let role_cache_mgr = RoleCacheMgr::new(user_api);
-    assert!(
-        role_cache_mgr
-            .verify_privilege(
-                "tenant1",
-                &["role1".to_string()],
-                &GrantObject::Database("db1".to_string()),
-                UserPrivilegeType::Create,
-            )
-            .await?
-    );
-    assert!(
-        !role_cache_mgr
-            .verify_privilege(
-                "tenant1",
-                &["role1".to_string()],
-                &GrantObject::Global,
-                UserPrivilegeType::Create,
-            )
-            .await?
-    );
-    assert!(
-        !role_cache_mgr
-            .verify_privilege(
-                "tenant2",
-                &["role1".to_string()],
-                &GrantObject::Database("db1".to_string()),
-                UserPrivilegeType::Create,
-            )
-            .await?
-    );
+    let roles = role_cache_mgr
+        .find_related_roles("tenant1", &["role1".to_string()])
+        .await?;
+    assert!(roles.len() == 1);
     Ok(())
 }
 

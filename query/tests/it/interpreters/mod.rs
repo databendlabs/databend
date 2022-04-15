@@ -28,6 +28,7 @@ mod interpreter_setting;
 mod interpreter_show_databases;
 mod interpreter_show_engines;
 mod interpreter_show_functions;
+mod interpreter_show_grant;
 mod interpreter_show_metrics;
 mod interpreter_show_processlist;
 mod interpreter_show_roles;
