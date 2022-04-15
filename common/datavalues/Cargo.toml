@@ -25,6 +25,7 @@ opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
 dyn-clone = "1.0.5"
+enum_dispatch = "0.3.8"
 itertools = "0.10.3"
 lexical-core = "0.8.3"
 num = "0.4.0"
@@ -51,4 +52,8 @@ harness = false
 
 [[bench]]
 name = "eq"
+harness = false
+
+[[bench]]
+name = "data_type"
 harness = false

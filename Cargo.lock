@@ -929,6 +929,7 @@ dependencies = [
  "common-mem-allocator",
  "criterion",
  "dyn-clone",
+ "enum_dispatch",
  "itertools",
  "lexical-core",
  "num",
@@ -2037,6 +2038,18 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c134c37760b27a871ba422106eedbb8247da973a09e82558bf26d619c882b159"
 dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "enum_dispatch"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
+dependencies = [
+ "once_cell",
  "proc-macro2",
  "quote",
  "syn",
