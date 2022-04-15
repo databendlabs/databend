@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -80,7 +80,7 @@ impl Interpreter for CreateViewInterpreter {
 impl CreateViewInterpreter {
     async fn create_view(&self) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
-        let mut options = HashMap::new();
+        let mut options = BTreeMap::new();
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,

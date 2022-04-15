@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
@@ -38,8 +38,8 @@ pub struct DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
-    pub engine_options: HashMap<String, String>,
-    pub options: HashMap<String, String>,
+    pub engine_options: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
     pub created_on: DateTime<Utc>,
 }
 
@@ -47,8 +47,8 @@ impl Default for DatabaseMeta {
     fn default() -> Self {
         DatabaseMeta {
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
             created_on: Utc::now(),
         }
     }

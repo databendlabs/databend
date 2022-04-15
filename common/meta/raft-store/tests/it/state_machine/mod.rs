@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -40,6 +40,7 @@ use common_meta_types::TableMeta;
 use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
+use maplit::btreemap;
 use maplit::hashmap;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
@@ -260,14 +261,14 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         tracing::info!("--- check prev state is returned");
         {
             assert_eq!(version, prev.seq);
-            assert_eq!(HashMap::new(), prev.data.options);
+            assert_eq!(BTreeMap::new(), prev.data.options);
         }
 
         tracing::info!("--- check result state, deleting b has no effect");
         {
             assert!(result.seq > version);
             assert_eq!(
-                hashmap! {
+                btreemap! {
                     "a".to_string() => "A".to_string()
                 },
                 result.data.options
@@ -280,7 +281,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         let got = m.get_table_meta_by_id(&table_id)?.unwrap();
         assert!(got.seq > version);
         assert_eq!(
-            hashmap! {
+            btreemap! {
                 "a".to_string() => "A".to_string()
             },
             got.data.options
@@ -358,7 +359,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         tracing::info!("--- check prev state is returned");
         assert_eq!(version, prev.seq);
         assert_eq!(
-            hashmap! {
+            btreemap! {
                 "a".to_string() => "A".to_string()
             },
             prev.data.options
@@ -367,7 +368,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         tracing::info!("--- check result state, delete a add c");
         assert!(result.seq > version);
         assert_eq!(
-            hashmap! {
+            btreemap! {
                 "c".to_string() => "C".to_string()
             },
             result.data.options
@@ -378,7 +379,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             let got = m.get_table_meta_by_id(&table_id)?.unwrap();
             assert!(got.seq > version);
             assert_eq!(
-                hashmap! {
+                btreemap! {
                     "c".to_string() => "C".to_string()
                 },
                 got.data.options

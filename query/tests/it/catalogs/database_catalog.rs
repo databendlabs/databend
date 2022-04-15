@@ -130,7 +130,7 @@ async fn test_catalogs_table() -> Result<()> {
             u64::to_data_type(),
         )]));
 
-        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+        let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {

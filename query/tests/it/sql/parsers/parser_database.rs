@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateDatabase;
@@ -31,8 +31,8 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -43,8 +43,8 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "github".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -55,8 +55,8 @@ fn create_database() -> Result<()> {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
         });
         expect_parse_ok(sql, expected)?;
     }

@@ -397,7 +397,7 @@ impl MetaApiTestSuite {
             )]))
         };
 
-        let options = || maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
         let table_meta = |created_on| TableMeta {
             schema: schema(),
@@ -667,7 +667,7 @@ impl MetaApiTestSuite {
             )]))
         };
 
-        let options = || maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
         let table_meta = |created_on| TableMeta {
             schema: schema(),
@@ -921,7 +921,7 @@ impl MetaApiTestSuite {
                 u64::to_data_type(),
             )]));
 
-            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+            let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let mut plan = CreateTableReq {
                 if_not_exists: false,
@@ -1249,7 +1249,7 @@ impl MetaApiTestSuite {
                 u64::to_data_type(),
             )]));
 
-            let options = maplit::hashmap! {"opt-1".into() => "val-1".into()};
+            let options = maplit::btreemap! {"opt-1".into() => "val-1".into()};
             for tb in tables {
                 let req = CreateTableReq {
                     if_not_exists: false,
@@ -1312,7 +1312,7 @@ impl MetaApiTestSuite {
                 u64::to_data_type(),
             )]));
 
-            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+            let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             let req = CreateTableReq {
                 if_not_exists: false,

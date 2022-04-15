@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -105,8 +106,8 @@ pub struct TableInfo {
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
-    pub engine_options: HashMap<String, String>,
-    pub options: HashMap<String, String>,
+    pub engine_options: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
     pub created_on: DateTime<Utc>,
 }
 
@@ -137,7 +138,7 @@ impl TableInfo {
         self.meta.schema.clone()
     }
 
-    pub fn options(&self) -> &HashMap<String, String> {
+    pub fn options(&self) -> &BTreeMap<String, String> {
         &self.meta.options
     }
 
@@ -145,7 +146,7 @@ impl TableInfo {
         &self.meta.engine
     }
 
-    pub fn engine_options(&self) -> &HashMap<String, String> {
+    pub fn engine_options(&self) -> &BTreeMap<String, String> {
         &self.meta.engine_options
     }
 
@@ -161,8 +162,8 @@ impl Default for TableMeta {
         TableMeta {
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
             created_on: Utc::now(),
         }
     }

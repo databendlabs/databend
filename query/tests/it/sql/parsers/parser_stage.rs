@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateUserStage;
@@ -29,7 +29,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: false,
             stage_name: "test_stage".to_string(),
             location: "s3://load/files/".to_string(),
-            credential_options: HashMap::from([
+            credential_options: BTreeMap::from([
                 ("aws_key_id".to_string(), "1a2b3c".to_string()),
                 ("aws_secret_key".to_string(), "4x5y6z".to_string())
             ]),
@@ -43,7 +43,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: true,
             stage_name: "test_stage".to_string(),
             location: "s3://load/files/".to_string(),
-            credential_options: HashMap::from([
+            credential_options: BTreeMap::from([
                 ("aws_key_id".to_string(), "1a2b3c".to_string()),
                 ("aws_secret_key".to_string(), "4x5y6z".to_string())
             ]),
@@ -56,11 +56,11 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: true,
             stage_name: "test_stage".to_string(),
             location: "s3://load/files/".to_string(),
-            credential_options: HashMap::from([
+            credential_options: BTreeMap::from([
                 ("aws_key_id".to_string(), "1a2b3c".to_string()),
                 ("aws_secret_key".to_string(), "4x5y6z".to_string())
             ]),
-            file_format_options: HashMap::from([
+            file_format_options: BTreeMap::from([
                 ("format".to_string(), "CSV".to_string()),
                 ("compression".to_string(), "GZIP".to_string()),
                 ("record_delimiter".to_string(), ",".to_string()),
