@@ -34,7 +34,7 @@ async fn watcher_client_main(
     addr: String,
     watch: WatchRequest,
     start_tx: UnboundedSender<()>,
-    mut events_rx: UnboundedReceiver<Vec<Event>>,
+    mut watch_events: Vec<Event>,
 ) -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
     let mut grpc_client = client.make_client().await?;
@@ -42,8 +42,6 @@ async fn watcher_client_main(
     let request = tonic::Request::new(watch);
 
     let mut client_stream = grpc_client.watch(request).await?.into_inner();
-
-    let mut watch_events = Vec::<Event>::new();
 
     // notify client stream has started
     let _ = start_tx.send(());
@@ -66,16 +64,6 @@ async fn watcher_client_main(
 
                 }
             },
-            events = events_rx.recv() => {
-                assert!(watch_events.is_empty());
-                if let Some(events) = events {
-                    for event in events {
-                        watch_events.push(event);
-                    }
-                }
-                // notify has recv evens
-                let _ = start_tx.send(());
-            }
         }
     }
 }
@@ -100,23 +88,13 @@ async fn test_watch_main(
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     let (start_tx, mut start_rx) = mpsc::unbounded_channel::<()>();
-    let (events_tx, events_rx) = mpsc::unbounded_channel::<Vec<Event>>();
 
-    let h = tokio::spawn(watcher_client_main(
-        addr.clone(),
-        watch,
-        start_tx,
-        events_rx,
-    ));
+    let h = tokio::spawn(watcher_client_main(addr.clone(), watch, start_tx, events));
 
     // wait for client stream start up
     wait_notify(&mut start_rx, 2000);
 
-    let _ = events_tx.send(events);
-
-    // wait client stream recv events
-    wait_notify(&mut start_rx, 2000);
-
+    // update some kv
     for update in updates.iter() {
         let _ = client.upsert_kv(update.clone()).await;
     }
