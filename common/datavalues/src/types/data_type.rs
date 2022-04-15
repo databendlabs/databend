@@ -53,7 +53,7 @@ pub type DataTypePtr = Arc<dyn DataType>;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[enum_dispatch(DataType)]
-pub enum DataTypeEnum {
+pub enum DataTypeImpl {
     Nullable(NullableType),
     Boolean(BooleanType),
     Int8(Int8Type),
