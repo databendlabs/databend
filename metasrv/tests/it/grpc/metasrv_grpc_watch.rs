@@ -11,13 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::thread;
-use std::time::Duration;
 
 use common_base::tokio;
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::mpsc::UnboundedReceiver;
-use common_base::tokio::sync::mpsc::UnboundedSender;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::event::SeqV;
@@ -30,21 +25,32 @@ use common_meta_types::UpsertKVAction;
 
 use crate::init_meta_ut;
 
-async fn watcher_client_main(
+async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVAction>) -> anyhow::Result<()> {
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+
+    // update some kv
+    for update in updates.iter() {
+        let _ = client.upsert_kv(update.clone()).await;
+    }
+
+    Ok(())
+}
+
+async fn test_watch_main(
     addr: String,
     watch: WatchRequest,
-    start_tx: UnboundedSender<()>,
     mut watch_events: Vec<Event>,
+    updates: Vec<UpsertKVAction>,
 ) -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+
     let mut grpc_client = client.make_client().await?;
 
     let request = tonic::Request::new(watch);
 
     let mut client_stream = grpc_client.watch(request).await?.into_inner();
 
-    // notify client stream has started
-    let _ = start_tx.send(());
+    let _h = tokio::spawn(upsert_kv_client_main(addr.clone(), updates));
 
     loop {
         tokio::select! {
@@ -57,8 +63,7 @@ async fn watcher_client_main(
                         watch_events.remove(0);
 
                         if watch_events.is_empty() {
-                            // notify has recv all the notify events
-                            let _ = start_tx.send(());
+                            break;
                         }
                     }
 
@@ -66,44 +71,6 @@ async fn watcher_client_main(
             },
         }
     }
-}
-
-fn wait_notify(start_rx: &mut UnboundedReceiver<()>, wait_ms: i32) {
-    let mut cnt = 0;
-    while start_rx.try_recv().is_err() {
-        thread::sleep(Duration::from_millis(100));
-        cnt += 100;
-        if cnt >= wait_ms {
-            panic!("wait out of time");
-        }
-    }
-}
-
-async fn test_watch_main(
-    addr: String,
-    watch: WatchRequest,
-    events: Vec<Event>,
-    updates: Vec<UpsertKVAction>,
-) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
-
-    let (start_tx, mut start_rx) = mpsc::unbounded_channel::<()>();
-
-    let h = tokio::spawn(watcher_client_main(addr.clone(), watch, start_tx, events));
-
-    // wait for client stream start up
-    wait_notify(&mut start_rx, 2000);
-
-    // update some kv
-    for update in updates.iter() {
-        let _ = client.upsert_kv(update.clone()).await;
-    }
-
-    // wait client stream recv notify
-    wait_notify(&mut start_rx, 2000);
-
-    // ok, shutdown client main
-    h.abort();
 
     Ok(())
 }
