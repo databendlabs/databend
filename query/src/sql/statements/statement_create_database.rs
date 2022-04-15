@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -32,8 +32,8 @@ pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
     pub engine: String,
-    pub engine_options: HashMap<String, String>,
-    pub options: HashMap<String, String>,
+    pub engine_options: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
 }
 
 #[async_trait::async_trait]

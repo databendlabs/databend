@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -38,10 +38,10 @@ pub struct DfCreateUserStage {
     pub stage_name: String,
 
     pub location: String,
-    pub credential_options: HashMap<String, String>,
-    pub encryption_options: HashMap<String, String>,
+    pub credential_options: BTreeMap<String, String>,
+    pub encryption_options: BTreeMap<String, String>,
 
-    pub file_format_options: HashMap<String, String>,
+    pub file_format_options: BTreeMap<String, String>,
     pub on_error: String,
     pub size_limit: String,
     pub validation_mode: String,

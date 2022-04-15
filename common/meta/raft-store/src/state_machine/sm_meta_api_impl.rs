@@ -70,14 +70,8 @@ impl MetaApi for StateMachine {
         &self,
         req: CreateDatabaseReq,
     ) -> Result<CreateDatabaseReply, MetaError> {
-        let cmd = Cmd::CreateDatabase {
-            tenant: req.tenant,
-            name: req.db.clone(),
-            meta: req.meta.clone(),
-        };
-
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t)?;
+            let r = self.apply_cmd(&Cmd::CreateDatabase(req.clone()), &t)?;
             Ok(r)
         })?;
 
@@ -88,7 +82,7 @@ impl MetaApi for StateMachine {
         assert!(result.is_some());
 
         if prev.is_some() && !req.if_not_exists {
-            let ae = AppError::from(DatabaseAlreadyExists::new(req.db, "create database"));
+            let ae = AppError::from(DatabaseAlreadyExists::new(req.db_name, "create database"));
             return Err(MetaError::from(ae));
         }
 
@@ -96,20 +90,15 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
-        let cmd = Cmd::DropDatabase {
-            tenant: req.tenant,
-            name: req.db.clone(),
-        };
-
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t)?;
+            let r = self.apply_cmd(&Cmd::DropDatabase(req.clone()), &t)?;
             Ok(r)
         })?;
 
         assert!(res.result().is_none());
 
         if res.prev().is_none() && !req.if_exists {
-            let ae = AppError::from(UnknownDatabase::new(req.db, "drop database"));
+            let ae = AppError::from(UnknownDatabase::new(req.db_name, "drop database"));
             return Err(MetaError::from(ae));
         }
 
@@ -154,24 +143,14 @@ impl MetaApi for StateMachine {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let tenant = &req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table;
+        let db_name = &req.db_name;
+        let table_name = &req.table_name;
         let if_not_exists = req.if_not_exists;
 
-        tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
-
-        let table_meta = req.table_meta;
-
-        let cr = Cmd::CreateTable {
-            tenant: tenant.clone(),
-            db_name: db_name.clone(),
-            table_name: table_name.clone(),
-            table_meta,
-        };
+        tracing::info!("create table: {:}-{}", &db_name, &table_name);
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cr, &t)?;
+            let r = self.apply_cmd(&Cmd::CreateTable(req.clone()), &t)?;
             Ok(r)
         })?;
 
@@ -190,19 +169,11 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table;
+        let table_name = req.table_name.clone();
         let if_exists = req.if_exists;
 
-        let cr = Cmd::DropTable {
-            tenant,
-            db_name: db_name.clone(),
-            table_name: table_name.clone(),
-        };
-
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cr, &t)?;
+            let r = self.apply_cmd(&Cmd::DropTable(req.clone()), &t)?;
             Ok(r)
         })?;
 
@@ -217,24 +188,11 @@ impl MetaApi for StateMachine {
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
-        let if_exists = req.if_exists;
-        let tenant = &req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table_name;
-        let new_db_name = &req.new_db;
-        let new_table_name = &req.new_table_name;
-
-        let cmd = Cmd::RenameTable {
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
-            new_db_name: new_db_name.to_string(),
-            new_table_name: new_table_name.to_string(),
-        };
-
-        let res = self.sm_tree.txn(true, |t| self.apply_cmd(&cmd, &t));
+        let res = self
+            .sm_tree
+            .txn(true, |t| self.apply_cmd(&Cmd::RenameTable(req.clone()), &t));
         if let Err(MetaStorageError::AppError(AppError::UnknownTable(e))) = res {
-            if if_exists {
+            if req.if_exists {
                 Ok(RenameTableReply { table_id: 0 })
             } else {
                 Err(MetaError::AppError(AppError::UnknownTable(e)))
@@ -361,19 +319,13 @@ impl MetaApi for StateMachine {
     }
 
     async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
-        let tenant = &req.tenant;
         let share_name = &req.share_name;
         let if_not_exists = req.if_not_exists;
 
-        tracing::info!("create share: {:}: {:?}", &tenant, &share_name);
-
-        let cr = Cmd::CreateShare {
-            tenant: tenant.clone(),
-            share_name: share_name.clone(),
-        };
+        tracing::info!("create share: {:}: {:?}", &req.tenant, &share_name);
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cr, &t)?;
+            let r = self.apply_cmd(&Cmd::CreateShare(req.clone()), &t)?;
             Ok(r)
         })?;
 
@@ -392,22 +344,17 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
-        let tenant = &req.tenant;
         let share_name = &req.share_name;
-
-        let cmd = Cmd::DropShare {
-            tenant: tenant.clone(),
-            share_name: share_name.clone(),
-        };
+        let if_exists = req.if_exists;
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t)?;
+            let r = self.apply_cmd(&Cmd::DropShare(req.clone()), &t)?;
             Ok(r)
         })?;
 
         assert!(res.result().is_none());
 
-        if res.prev().is_none() && !req.if_exists {
+        if res.prev().is_none() && !if_exists {
             let ae = AppError::from(UnknownShare::new(share_name, "drop share"));
             return Err(MetaError::from(ae));
         }

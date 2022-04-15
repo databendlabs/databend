@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -49,7 +50,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
-    pub options: HashMap<String, String>,
+    pub options: BTreeMap<String, String>,
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,

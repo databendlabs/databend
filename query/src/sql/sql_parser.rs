@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
@@ -377,8 +377,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    pub(crate) fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
-        let mut options = HashMap::new();
+    pub(crate) fn parse_options(&mut self) -> Result<BTreeMap<String, String>, ParserError> {
+        let mut options = BTreeMap::new();
         loop {
             let name = self.parser.parse_identifier();
             if name.is_err() {

@@ -18,12 +18,17 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::DatabaseMeta;
+use crate::CreateDatabaseReq;
+use crate::CreateShareReq;
+use crate::CreateTableReq;
+use crate::DropDatabaseReq;
+use crate::DropShareReq;
+use crate::DropTableReq;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
-use crate::TableMeta;
+use crate::RenameTableReq;
 use crate::UpsertTableOptionReq;
 
 /// A Cmd describes what a user want to do to raft state machine
@@ -43,51 +48,23 @@ pub enum Cmd {
     },
 
     /// Add a database if absent
-    CreateDatabase {
-        tenant: String,
-        name: String,
-        meta: DatabaseMeta,
-    },
+    CreateDatabase(CreateDatabaseReq),
 
     /// Drop a database if absent
-    DropDatabase {
-        tenant: String,
-        name: String,
-    },
+    DropDatabase(DropDatabaseReq),
 
     /// Create a table if absent
-    CreateTable {
-        tenant: String,
-        db_name: String,
-        table_name: String,
-        table_meta: TableMeta,
-    },
+    CreateTable(CreateTableReq),
 
     /// Drop a table if absent
-    DropTable {
-        tenant: String,
-        db_name: String,
-        table_name: String,
-    },
+    DropTable(DropTableReq),
 
     /// Rename a table
-    RenameTable {
-        tenant: String,
-        db_name: String,
-        table_name: String,
-        new_db_name: String,
-        new_table_name: String,
-    },
+    RenameTable(RenameTableReq),
 
     /// Create a share if absent
-    CreateShare {
-        tenant: String,
-        share_name: String,
-    },
-    DropShare {
-        tenant: String,
-        share_name: String,
-    },
+    CreateShare(CreateShareReq),
+    DropShare(DropShareReq),
 
     /// Update, remove or insert table options.
     ///
@@ -125,50 +102,14 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::CreateDatabase { tenant, name, meta } => {
-                write!(f, "create_db:{}/{}={}", tenant, name, meta)
-            }
-            Cmd::DropDatabase { tenant, name } => {
-                write!(f, "drop_db:{}/{}", tenant, name)
-            }
-            Cmd::CreateTable {
-                tenant,
-                db_name,
-                table_name,
-                table_meta,
-            } => {
-                write!(
-                    f,
-                    "create_table:{}/{}-{}={}",
-                    tenant, db_name, table_name, table_meta
-                )
-            }
-            Cmd::DropTable {
-                tenant,
-                db_name,
-                table_name,
-            } => {
-                write!(f, "delete_table:{}/{}-{}", tenant, db_name, table_name)
-            }
-            Cmd::RenameTable {
-                tenant,
-                db_name,
-                table_name,
-                new_db_name,
-                new_table_name,
-            } => {
-                write!(
-                    f,
-                    "rename_table:{}/{}-{}=>{}-{}",
-                    tenant, db_name, table_name, new_db_name, new_table_name
-                )
-            }
-            Cmd::CreateShare { tenant, share_name } => {
-                write!(f, "create_share:{}/{}", tenant, share_name)
-            }
-            Cmd::DropShare { tenant, share_name } => {
-                write!(f, "drop_share:{}/{}", tenant, share_name)
-            }
+            Cmd::CreateDatabase(req) => req.fmt(f),
+            Cmd::DropDatabase(req) => req.fmt(f),
+            Cmd::CreateTable(req) => req.fmt(f),
+            Cmd::DropTable(req) => req.fmt(f),
+            Cmd::RenameTable(req) => req.fmt(f),
+            Cmd::UpsertTableOptions(req) => req.fmt(f),
+            Cmd::CreateShare(req) => req.fmt(f),
+            Cmd::DropShare(req) => req.fmt(f),
             Cmd::UpsertKV {
                 key,
                 seq,
@@ -179,13 +120,6 @@ impl fmt::Display for Cmd {
                     f,
                     "upsert_kv: {}({:?}) = {:?} ({:?})",
                     key, seq, value, value_meta
-                )
-            }
-            Cmd::UpsertTableOptions(req) => {
-                write!(
-                    f,
-                    "upsert-table-options: table-id:{}({:?}) = {:?}",
-                    req.table_id, req.seq, req.options
                 )
             }
         }
