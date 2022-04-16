@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 
+use crate::validate_function_arg;
 use crate::Expression;
 use crate::ExpressionVisitor;
 use crate::Recursion;
@@ -395,6 +396,14 @@ impl ExpressionDataTypeVisitor {
     }
 
     fn visit_function(mut self, op: &str, args_size: usize) -> Result<ExpressionDataTypeVisitor> {
+        let features = FunctionFactory::instance().get_features(op)?;
+        validate_function_arg(
+            op,
+            args_size,
+            features.variadic_arguments,
+            features.num_arguments,
+        )?;
+
         let mut arguments = Vec::with_capacity(args_size);
         for index in 0..args_size {
             arguments.push(match self.stack.pop() {
