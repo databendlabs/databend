@@ -1,5 +1,5 @@
 ---
-title: countDistinct
+title: COUNT_DISTINCT
 title_includes: uniq
 ---
 
@@ -7,7 +7,9 @@ Aggregate function.
 
 The count(distinct ...) function calculates the uniq value of a set of values.
 
-**Note:** NULL values are not counted.
+:::caution
+ NULL values are not counted.
+:::
 
 ## Syntax
 
