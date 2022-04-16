@@ -1243,7 +1243,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-range-set"
+name = "common-range-map"
 version = "0.1.0"
 
 [[package]]
@@ -1675,6 +1675,7 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
+ "common-range-map",
  "common-tracing",
  "futures",
  "maplit",
@@ -5690,7 +5691,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=f88fb32#f88fb320e8a1534b94e575fc6f1bcf44b30c6eaa"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=818c0f9#818c0f96a2dcc81537fbfe6c6ee9584600ebcb44"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

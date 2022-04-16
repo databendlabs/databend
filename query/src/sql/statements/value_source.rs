@@ -23,12 +23,14 @@ use common_io::prelude::*;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::SessionType;
 use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
@@ -103,7 +105,7 @@ impl ValueSource {
         analyzer: ExpressionAnalyzer,
         ctx: Arc<QueryContext>,
     ) -> Result<DataBlock> {
-        let values = parse_exprs(bytes)?;
+        let values = parse_exprs(bytes, ctx.get_current_session().get_type())?;
 
         let mut blocks = vec![];
         for value in values {
@@ -150,11 +152,23 @@ async fn exprs_to_datablock(
     executor.execute(&one_row_block)
 }
 
-fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
-    let dialect = GenericDialect {};
-    let sql = std::str::from_utf8(buf).unwrap();
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let (tokens, position_map) = tokenizer.tokenize()?;
-    let mut parser = Parser::new(tokens, position_map, &dialect);
-    parser.parse_values()
+fn parse_exprs(buf: &[u8], typ: SessionType) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
+    match typ {
+        SessionType::MySQL => {
+            let dialect = MySqlDialect {};
+            let sql = std::str::from_utf8(buf).unwrap();
+            let mut tokenizer = Tokenizer::new(&dialect, sql);
+            let (tokens, position_map) = tokenizer.tokenize()?;
+            let mut parser = Parser::new(tokens, position_map, &dialect);
+            parser.parse_values()
+        }
+        _ => {
+            let dialect = GenericDialect {};
+            let sql = std::str::from_utf8(buf).unwrap();
+            let mut tokenizer = Tokenizer::new(&dialect, sql);
+            let (tokens, position_map) = tokenizer.tokenize()?;
+            let mut parser = Parser::new(tokens, position_map, &dialect);
+            parser.parse_values()
+        }
+    }
 }

@@ -19,16 +19,32 @@ use common_planners::Expression;
 use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Value;
 
+use crate::sessions::SessionType;
+
 pub struct ValueExprAnalyzer;
 
 impl ValueExprAnalyzer {
-    pub fn analyze(value: &Value) -> Result<Expression> {
+    pub fn analyze(value: &Value, typ: SessionType) -> Result<Expression> {
         match value {
             Value::Null => Self::analyze_null_value(),
             Value::Boolean(value) => Self::analyze_bool_value(value),
             Value::Number(value, _) => Self::analyze_number_value(value, None),
             Value::HexStringLiteral(value) => Self::analyze_number_value(value, Some(16)),
             Value::SingleQuotedString(value) => Self::analyze_string_value(value),
+            Value::DoubleQuotedString(value) => {
+                // Only MySQL dialect Support insert SQL like this:
+                // INSERT INTO t VALUES("val");
+                // https://github.com/datafuselabs/databend/issues/4861
+                if let SessionType::MySQL = typ {
+                    Self::analyze_string_value(value)
+                } else {
+                    Result::Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported value expression: {}, type: {:?}",
+                        value,
+                        Value::DoubleQuotedString(value.to_string())
+                    )))
+                }
+            }
             Value::Interval {
                 leading_precision: Some(_),
                 ..

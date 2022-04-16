@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS t1(a String, b String, c String, d String, e String, 
 """
 
 client1.run(sqls)
+
+sql1 = "INSERT INTO db1.t1(a) VALUES(%s);" % ('\"Test Some Inser\\"\'`ts\"')
+client1.run(sql1)
+sql2 = "INSERT INTO db1.t1(a) VALUES(%s);" % ("'Test Some Inser\"\\'`ts'")
+client1.run(sql2)
 time.sleep(2)
 mydb = mysql.connector.connect(host="127.0.0.1",
                                user="root",
@@ -36,6 +41,11 @@ assert res == [('t1',)]
 mycursor.execute("SHOW FULL TABLES FROM db1")
 res = mycursor.fetchall()
 assert res == [('t1', 'BASE TABLE')]
-
+sql3 = "SELECT COUNT(*) FROM db1.t1 WHERE a = %s" % ("\"Test Some Inser\\\"'`ts\"")
+mycursor.execute(sql3)
+res = mycursor.fetchall()
+for row in res:
+    cnt = row[0]
+    assert 2 == cnt
 sql = "DROP DATABASE db1;"
 client1.run(sql)
