@@ -1,7 +1,7 @@
 -- distinct
-select sumDistinct(number) from ( select number % 100 as number from numbers(100000));
-select countDistinct(number) from ( select number % 100 as number from numbers(100000));
-select sumDistinct(number) /  countDistinct(number) = avgDistinct(number) from ( select number % 100 as number from numbers(100000));
+select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
+select count_distinct(number) from ( select number % 100 as number from numbers(100000));
+select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
 
 -- if
 select sumIf(number, number >= 100000 - 1) from numbers(100000);
