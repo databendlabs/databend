@@ -1,5 +1,5 @@
 [package]
-name = "common-range-set"
+name = "common-range-map"
 version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"

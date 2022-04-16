@@ -15,32 +15,32 @@
 use core::fmt::Debug;
 use core::ops::Bound;
 use core::ops::Range;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use super::range_key::RangeKey;
 
 #[derive(Clone, Debug, Default)]
-pub struct RangeSet<T, K> {
-    pub(crate) set: BTreeSet<RangeKey<T, K>>,
+pub struct RangeMap<T, K, V> {
+    pub(crate) map: BTreeMap<RangeKey<T, K>, V>,
 }
 
-impl<T, K> RangeSet<T, K>
+impl<T, K, V> RangeMap<T, K, V>
 where
     T: Ord + Clone + Debug,
     K: Ord + Clone + Debug + Default,
 {
     pub fn new() -> Self {
-        RangeSet {
-            set: BTreeSet::new(),
+        RangeMap {
+            map: BTreeMap::new(),
         }
     }
 
-    pub fn insert(&mut self, range: Range<T>, key: K) {
+    pub fn insert(&mut self, range: Range<T>, key: K, val: V) {
         assert!(range.start <= range.end);
 
         let range_key: RangeKey<T, K> = RangeKey::new(range, key);
 
-        self.set.insert(range_key);
+        self.map.insert(range_key, val);
     }
 
     // Return a vector of `RangeKey` which contain the point in the [start, end).
@@ -49,17 +49,21 @@ where
     // 2. `get_by_point(2)` return [1,5],[2,4],[2,6]
     // 3. `get_by_point(5)` return [2,4],[2,6]
     // Use the default key when construct `RangeKey::key` for search.
-    pub fn get_by_point(&self, point: &T) -> Vec<&RangeKey<T, K>> {
+    pub fn get_by_point(&self, point: &T) -> Vec<(&RangeKey<T, K>, &V)> {
         let key = point.clone();
         let range_key = RangeKey::new(key.clone()..key.clone(), K::default());
 
-        self.set
+        self.map
             .range((Bound::Included(range_key), Bound::Unbounded))
-            .filter(|e| e.range.start <= key)
+            .filter(|e| e.0.range.start <= key)
             .collect()
     }
 
     pub fn remove(&mut self, range: Range<T>, k: K) {
-        self.set.remove(&RangeKey::new(range, k));
+        self.map.remove(&RangeKey::new(range, k));
+    }
+
+    pub fn remove_by_key(&mut self, key: &RangeKey<T, K>) {
+        self.map.remove(key);
     }
 }

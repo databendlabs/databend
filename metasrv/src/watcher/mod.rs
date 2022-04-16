@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod metasrv_grpc_api;
-mod metasrv_grpc_export;
-pub mod metasrv_grpc_kv_api;
-pub mod metasrv_grpc_kv_api_restart_cluster;
-pub mod metasrv_grpc_meta_api;
-pub mod metasrv_grpc_meta_api_follower_follower;
-pub mod metasrv_grpc_meta_api_leader_follower;
-pub mod metasrv_grpc_tls;
-pub mod metasrv_grpc_watch;
+mod watcher_manager;
+mod watcher_stream;
+
+pub use watcher_manager::WatcherEvent;
+pub use watcher_manager::WatcherId;
+pub use watcher_manager::WatcherManager;
+pub use watcher_manager::WatcherStreamSender;
+pub use watcher_stream::WatcherStream;

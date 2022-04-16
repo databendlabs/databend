@@ -105,9 +105,8 @@ const SEQ_SHARE_ID: &str = "share_id";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
 /// StateMachine subscriber trait
-#[async_trait::async_trait]
 pub trait StateMachineSubscriber: Debug + Sync + Send {
-    async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, meta: &Option<SeqV>);
+    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>);
 }
 
 /// The state machine of the `MemStore`.
@@ -315,7 +314,6 @@ impl StateMachine {
     fn apply_incr_seq_cmd(
         &self,
         key: &str,
-
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let r = self.txn_incr_seq(key, txn_tree)?;
@@ -328,7 +326,6 @@ impl StateMachine {
         &self,
         node_id: &u64,
         node: &Node,
-
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
@@ -556,7 +553,7 @@ impl StateMachine {
         tracing::debug!("applied UpsertKV: {} {:?}", key, result);
 
         if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.kv_changed(&key_str, &prev, &result);
+            subscriber.kv_changed(&key_str, prev.clone(), result.clone());
         }
 
         Ok(Change::new(prev, result).into())
