@@ -9,7 +9,7 @@ SELECT * FROM t1;
 SELECT sum(a) from t1;
 SELECT sum(b) from t1;
 
-CREATE TABLE IF NOT EXISTS t2(a Boolean, b Timestamp, c Date) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t2(a Boolean, b Datetime, c Date) Engine = fuse;
 INSERT INTO t2 (a,b,c) values(true, '2021-09-07 21:38:35', '2021-09-07'), (false, 1631050715, 18877);
 SELECT * FROM t2;
 

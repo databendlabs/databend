@@ -5,9 +5,9 @@ description: Semi-structured Types can hold any other data types.
 
 | Data Type | Syntax   |
 | ----------| -------- |
-| Array     | Array
-| Object    | Object
-| Variant   | Variant
+| Array     | ARRAY
+| Object    | OBJECT
+| Variant   | VARIANT
 
 
 ## Array
