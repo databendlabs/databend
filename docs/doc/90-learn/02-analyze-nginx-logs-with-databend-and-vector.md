@@ -367,7 +367,7 @@ select count(*) as count, request_uri as uri from nginx.access_logs group by req
 
 - __Top 10 HTTP 404 Pages__
 ```shell title='mysql>'
-select countif(status=404) as count, request_uri as uri from nginx.access_logs group by request_uri order by count desc limit 10;
+select count_if(status=404) as count, request_uri as uri from nginx.access_logs group by request_uri order by count desc limit 10;
 ```
 
 ```shell
