@@ -60,8 +60,8 @@ pub trait ExprVisitor: Sized + Send {
             Expr::Cast {
                 expr,
                 data_type,
-                pg_style: _pg_style,
-            } => self.visit_cast(expr, data_type).await,
+                pg_style,
+            } => self.visit_cast(expr, data_type, pg_style).await,
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
             Expr::Position {
                 substr_expr,
@@ -166,7 +166,12 @@ pub trait ExprVisitor: Sized + Send {
         Ok(())
     }
 
-    async fn visit_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
+    async fn visit_cast(
+        &mut self,
+        expr: &Expr,
+        _data_type: &DataType,
+        _pg_style: &bool,
+    ) -> Result<()> {
         ExprTraverser::accept(expr, self).await
     }
 

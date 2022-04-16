@@ -6,9 +6,15 @@ Int16
 Int32
 Int64
 UInt32
+Float32
+Float64
+UInt64
 2
 3
 0
+1
+1
+1
 1
 1
 ===DATE/DATETIME===
