@@ -1,9 +1,9 @@
 ---
-title: windowFunnel
+title: WINDOW_FUNNEL
 ---
 
 
-## windowFunnel
+## WINDOW_FUNNEL
 
 Similar to `windowFunnel` in ClickHouse (they were created by the same author), it searches for event chains in a sliding time window and calculates the maximum number of events that occurred from the chain.
 
@@ -17,7 +17,7 @@ The function works according to the algorithm:
 
 
 ``` sql
-windowFunnel(window)(timestamp, cond1, cond2, ..., condN)
+WINDOW_FUNNEL(window)(timestamp, cond1, cond2, ..., condN)
 ```
 
 **Arguments**
@@ -71,7 +71,7 @@ FROM
 (
     SELECT
         user_id,
-        windowFunnel(500)(timestamp, eventID = 1003, eventID = 1009, eventID = 1007, eventID = 1010) AS level
+        window_funnel(500)(timestamp, eventID = 1003, eventID = 1009, eventID = 1007, eventID = 1010) AS level
     FROM test
     GROUP BY user_id
 )

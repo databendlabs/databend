@@ -38,8 +38,8 @@ impl Aggregators {
         factory.register("min", aggregate_min_function_desc());
         factory.register("max", aggregate_max_function_desc());
 
-        factory.register("argMin", aggregate_arg_min_function_desc());
-        factory.register("argMax", aggregate_arg_max_function_desc());
+        factory.register("arg_min", aggregate_arg_min_function_desc());
+        factory.register("arg_max", aggregate_arg_max_function_desc());
 
         factory.register("stddev", aggregate_stddev_pop_function_desc());
         factory.register("stddev_pop", aggregate_stddev_pop_function_desc());
@@ -48,12 +48,12 @@ impl Aggregators {
         factory.register("covar_samp", aggregate_covariance_sample_desc());
         factory.register("covar_pop", aggregate_covariance_population_desc());
 
-        factory.register("windowFunnel", aggregate_window_funnel_function_desc());
+        factory.register("window_funnel", aggregate_window_funnel_function_desc());
         factory.register("uniq", AggregateDistinctCombinator::uniq_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
-        factory.register_combinator("distinct", AggregateDistinctCombinator::combinator_desc());
-        factory.register_combinator("if", AggregateIfCombinator::combinator_desc());
+        factory.register_combinator("_distinct", AggregateDistinctCombinator::combinator_desc());
+        factory.register_combinator("_if", AggregateIfCombinator::combinator_desc());
     }
 }

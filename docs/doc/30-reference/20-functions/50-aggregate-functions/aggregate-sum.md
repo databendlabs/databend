@@ -6,7 +6,9 @@ Aggregate function.
 
 The SUM() function calculates the sum of a set of values.
 
-**Note:** NULL values are not counted.
+:::caution
+NULL values are not counted.
+:::
 
 ## Syntax
 
