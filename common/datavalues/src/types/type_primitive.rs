@@ -57,6 +57,10 @@ macro_rules! impl_numeric {
             pub fn arc() -> DataTypePtr {
                 Arc::new(Self { _t: PhantomData })
             }
+
+            pub fn new() -> Self {
+                Self { _t: PhantomData }
+            }
         }
 
         impl DataType for PrimitiveDataType<$ty> {

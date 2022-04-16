@@ -79,8 +79,8 @@ impl Interpreter for DropViewInterpreter {
         let plan = DropTableReq {
             if_exists: self.plan.if_exists,
             tenant: self.plan.tenant.clone(),
-            db: db_name,
-            table: viewname,
+            db_name,
+            table_name: viewname,
         };
         catalog.drop_table(plan).await?;
 

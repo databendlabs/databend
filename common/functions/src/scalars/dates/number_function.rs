@@ -29,8 +29,10 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
+use crate::scalars::FactoryCreator;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 use crate::scalars::RoundFunction;
@@ -56,7 +58,7 @@ pub trait NumberOperator<R> {
         None
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         None
     }
 }
@@ -110,7 +112,7 @@ impl NumberOperator<u16> for ToStartOfYear {
         get_day(end) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -131,7 +133,7 @@ impl NumberOperator<u16> for ToStartOfISOYear {
         get_day(end) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -148,7 +150,7 @@ impl NumberOperator<u16> for ToStartOfQuarter {
         get_day(date) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -164,7 +166,7 @@ impl NumberOperator<u16> for ToStartOfMonth {
         get_day(date) as u16
     }
 
-    fn return_type() -> Option<common_datavalues::DataTypePtr> {
+    fn return_type() -> Option<DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -264,7 +266,10 @@ impl NumberOperator<u8> for ToMinute {
 
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(RoundFunction::try_create("toStartOfHour", 60 * 60).unwrap())
+        Some(
+            RoundFunction::try_create("toStartOfHour", &[&DateTime32Type::arc(None)], 60 * 60)
+                .unwrap(),
+        )
     }
 }
 
@@ -280,7 +285,10 @@ impl NumberOperator<u8> for ToSecond {
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(RoundFunction::try_create("toStartOfMinute", 60).unwrap())
+        Some(
+            RoundFunction::try_create("toStartOfMinute", &[&DateTime32Type::arc(None)], 60)
+                .unwrap(),
+        )
     }
 }
 
@@ -310,7 +318,7 @@ impl NumberOperator<u16> for ToYear {
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone + Sync + Send + 'static,
-    R: PrimitiveType + Clone + ToDataType + common_datavalues::Scalar<RefType<'static> = R>,
+    R: PrimitiveType + Clone + ToDataType + Scalar<RefType<'static> = R>,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(NumberFunction::<T, R> {
@@ -327,7 +335,10 @@ where
             features = features.deterministic();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        let function_creator: FactoryCreator =
+            Box::new(move |display_name, _args| Self::try_create(display_name));
+
+        FunctionDescription::creator(function_creator).features(features)
     }
 }
 
@@ -340,18 +351,16 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    fn return_type(&self) -> DataTypePtr {
         match T::return_type() {
-            None => Ok(R::to_data_type()),
-            Some(v) => Ok(v),
+            None => R::to_data_type(),
+            Some(v) => v,
         }
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -404,8 +413,20 @@ where
             return Ok(Monotonicity::default());
         }
 
-        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
-        let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
+        let left_val = func
+            .eval(
+                FunctionContext::default(),
+                &[args[0].left.clone().unwrap()],
+                1,
+            )?
+            .get(0);
+        let right_val = func
+            .eval(
+                FunctionContext::default(),
+                &[args[0].right.clone().unwrap()],
+                1,
+            )?
+            .get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {
             return Ok(Monotonicity::clone_without_range(&args[0]));

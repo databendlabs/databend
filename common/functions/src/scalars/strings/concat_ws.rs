@@ -19,18 +19,38 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct ConcatWsFunction {
     _display_name: String,
+    result_type: DataTypePtr,
 }
 
 impl ConcatWsFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        let result_type = if args[0].is_null() {
+            NullType::arc()
+        } else {
+            for arg in args {
+                let arg = remove_nullable(*arg);
+                if !arg.is_null() {
+                    assert_string(&arg)?;
+                }
+            }
+
+            let dt = Vu8::to_data_type();
+            match args[0].is_nullable() {
+                true => wrap_nullable(&dt),
+                false => dt,
+            }
+        };
+
         Ok(Box::new(ConcatWsFunction {
             _display_name: display_name.to_string(),
+            result_type,
         }))
     }
 
@@ -144,30 +164,21 @@ impl Function for ConcatWsFunction {
         "concat_ws"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if args[0].is_null() {
-            return Ok(NullType::arc());
-        }
-
-        for arg in args {
-            let arg = remove_nullable(*arg);
-            if !arg.is_null() {
-                assert_string(&arg)?;
-            }
-        }
-
-        let dt = Vu8::to_data_type();
-        match args[0].is_nullable() {
-            true => Ok(wrap_nullable(&dt)),
-            false => Ok(dt),
-        }
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let seperator = &columns[0];
-        if seperator.data_type().is_null() {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
+        if self.result_type.is_null() {
             return Ok(NullColumn::new(input_rows).arc());
         }
+
+        let seperator = &columns[0];
 
         // remove other null columns
         let cols: Vec<ColumnWithField> = columns[1..]
@@ -188,7 +199,7 @@ impl Function for ConcatWsFunction {
             );
         }
 
-        match columns[0].data_type().is_nullable() {
+        match self.result_type.is_nullable() {
             false => Self::concat_column_nonull(&columns[0], &cols, input_rows),
             true => Self::concat_column_null(&columns[0], &cols, input_rows),
         }

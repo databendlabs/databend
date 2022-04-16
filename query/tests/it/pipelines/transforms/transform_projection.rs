@@ -22,6 +22,8 @@ use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
+use crate::tests::create_query_context;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_projection() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
@@ -35,11 +37,13 @@ async fn test_transform_projection() -> Result<()> {
         .project(&[col("number"), col("number")])?
         .build()?
     {
+        let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.expr.clone(),
+                ctx.clone(),
             )?))
         })?;
         pipeline.add_simple_transform(|| {
@@ -47,6 +51,7 @@ async fn test_transform_projection() -> Result<()> {
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.expr.clone(),
+                ctx.clone(),
             )?))
         })?;
     }

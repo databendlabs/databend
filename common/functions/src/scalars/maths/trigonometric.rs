@@ -25,6 +25,7 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -72,14 +73,16 @@ impl Function for TrigonometricFunction {
         "TrigonometricFunction"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        f64::to_data_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         match columns.len() {
             1 => {
@@ -162,7 +165,13 @@ impl fmt::Display for TrigonometricFunction {
 pub struct TrigonometricSinFunction;
 
 impl TrigonometricSinFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::SIN)
     }
 
@@ -175,7 +184,13 @@ impl TrigonometricSinFunction {
 pub struct TrigonometricCosFunction;
 
 impl TrigonometricCosFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::COS)
     }
 
@@ -188,7 +203,13 @@ impl TrigonometricCosFunction {
 pub struct TrigonometricTanFunction;
 
 impl TrigonometricTanFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::TAN)
     }
 
@@ -201,7 +222,13 @@ impl TrigonometricTanFunction {
 pub struct TrigonometricCotFunction;
 
 impl TrigonometricCotFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::COT)
     }
 
@@ -214,7 +241,13 @@ impl TrigonometricCotFunction {
 pub struct TrigonometricAsinFunction;
 
 impl TrigonometricAsinFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ASIN)
     }
 
@@ -227,7 +260,13 @@ impl TrigonometricAsinFunction {
 pub struct TrigonometricAcosFunction;
 
 impl TrigonometricAcosFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ACOS)
     }
 
@@ -240,7 +279,13 @@ impl TrigonometricAcosFunction {
 pub struct TrigonometricAtanFunction;
 
 impl TrigonometricAtanFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ATAN)
     }
 
@@ -256,7 +301,13 @@ impl TrigonometricAtanFunction {
 pub struct TrigonometricAtan2Function;
 
 impl TrigonometricAtan2Function {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         TrigonometricFunction::try_create_func(Trigonometric::ATAN2)
     }
 

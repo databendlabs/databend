@@ -929,6 +929,7 @@ dependencies = [
  "common-mem-allocator",
  "criterion",
  "dyn-clone",
+ "enum_dispatch",
  "itertools",
  "lexical-core",
  "num",
@@ -1232,6 +1233,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "common-meta-types",
  "once_cell",
  "pretty_assertions",
@@ -2036,6 +2038,18 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c134c37760b27a871ba422106eedbb8247da973a09e82558bf26d619c882b159"
 dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "enum_dispatch"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
+dependencies = [
+ "once_cell",
  "proc-macro2",
  "quote",
  "syn",
@@ -5676,7 +5690,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=08b8c31#08b8c31f5ee44de1a209dedfe1a76c45f7afe391"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=f88fb32#f88fb320e8a1534b94e575fc6f1bcf44b30c6eaa"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

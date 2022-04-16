@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use common_exception::Result;
 use common_meta_types::DatabaseInfo;
@@ -27,11 +27,11 @@ pub trait Database: DynClone + Sync + Send {
         self.get_db_info().engine()
     }
 
-    fn engine_options(&self) -> &HashMap<String, String> {
+    fn engine_options(&self) -> &BTreeMap<String, String> {
         &self.get_db_info().meta.engine_options
     }
 
-    fn options(&self) -> &HashMap<String, String> {
+    fn options(&self) -> &BTreeMap<String, String> {
         &self.get_db_info().meta.options
     }
 

@@ -35,7 +35,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             tenant: p.tenant,
-            db: p.db,
+            db_name: p.db,
             meta: p.meta,
         }
     }
@@ -46,7 +46,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             tenant: p.tenant.clone(),
-            db: p.db.clone(),
+            db_name: p.db.clone(),
             meta: p.meta.clone(),
         }
     }

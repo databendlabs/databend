@@ -36,7 +36,7 @@ impl From<DropDatabasePlan> for DropDatabaseReq {
         DropDatabaseReq {
             if_exists: p.if_exists,
             tenant: p.tenant,
-            db: p.db,
+            db_name: p.db,
         }
     }
 }
@@ -46,7 +46,7 @@ impl From<&DropDatabasePlan> for DropDatabaseReq {
         DropDatabaseReq {
             if_exists: p.if_exists,
             tenant: p.tenant.clone(),
-            db: p.db.clone(),
+            db_name: p.db.clone(),
         }
     }
 }

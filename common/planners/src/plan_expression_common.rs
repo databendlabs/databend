@@ -409,7 +409,7 @@ impl ExpressionDataTypeVisitor {
         let arguments: Vec<&DataTypePtr> = arguments.iter().collect();
 
         let function = FunctionFactory::instance().get(op, &arguments)?;
-        let return_type = function.return_type(&arguments)?;
+        let return_type = function.return_type();
         self.stack.push(return_type);
         Ok(self)
     }

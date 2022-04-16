@@ -23,9 +23,7 @@ use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
-use common_meta_types::UserPrivilegeType;
 use common_tracing::tracing;
 
 use crate::users::UserApiProvider;
@@ -84,28 +82,23 @@ impl RoleCacheMgr {
         }));
     }
 
-    pub fn invalidate_cache(&mut self, tenant: &str) {
+    pub fn invalidate_cache(&self, tenant: &str) {
         let mut cached = self.cache.write();
         cached.remove(tenant);
     }
 
-    pub async fn verify_privilege(
+    pub async fn find_related_roles(
         &self,
         tenant: &str,
-        role_identities: &[String],
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
-    ) -> Result<bool> {
+        roles: &[String],
+    ) -> Result<Vec<RoleInfo>> {
         self.maybe_reload(tenant).await?;
         let cached = self.cache.read();
         let cached_roles = match cached.get(tenant) {
-            None => return Ok(false),
+            None => return Ok(vec![]),
             Some(cached_roles) => cached_roles,
         };
-        let related_roles = find_all_related_roles(&cached_roles.roles, role_identities);
-        Ok(related_roles
-            .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege)))
+        Ok(find_all_related_roles(&cached_roles.roles, roles))
     }
 
     // Load roles data if not found in cache. Watch this tenant's role data in background if

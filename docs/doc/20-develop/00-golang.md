@@ -5,17 +5,38 @@ description:
    How to Work with Databend in Golang.
 ---
 
-### Before You Begin
+## Before You Begin
 
 * **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
+* [How to Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md)
+* [How to Grant Privileges to User](../30-reference/30-sql/00-ddl/30-user/10-grant-privileges.md)
+ 
+## Create Databend User
 
-### Golang
+```shell
+mysql -h127.0.0.1 -uroot -P3307
+```
 
-This guideline show how to connect and query to Databend using Golang.
+### Create a User 
 
-We will be creating a table named `books` and insert a row, then query it.
+```sql title='mysql>'
+create user user1 identified by 'abc123';
+```
 
-```text
+### Grants Privileges
+
+Grants `ALL` privileges to the user `user1`:
+```sql title='mysql>'
+grant all on *.* to 'user1';
+```
+
+## Golang
+
+This guideline show how to connect and query to Databend using Golang. We will be creating a table named `books` and insert a row, then query it.
+
+### main.go 
+
+```text title='main.go'
 package main
 
 import (
@@ -27,10 +48,9 @@ import (
 )
 
 const (
-	username = "root"
-	password = ""
+	username = "user1"
+	password = "abc123"
 	hostname = "127.0.0.1:3307"
-	dbname   = "book_db"
 )
 
 type Book struct {
@@ -39,12 +59,12 @@ type Book struct {
 	Date   string
 }
 
-func dsn(dbName string) string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s", username, password, hostname, dbName)
+func dsn() string {
+	return fmt.Sprintf("%s:%s@tcp(%s)/", username, password, hostname)
 }
 
 func main() {
-	db, err := sql.Open("mysql", dsn(dbname))
+	db, err := sql.Open("mysql", dsn())
 
 	if err != nil {
 		log.Fatal(err)
@@ -104,4 +124,33 @@ func main() {
 	}
 
 }
+```
+
+### Golang mod
+
+```text
+go mod init databend-golang
+```
+
+```text title='go.mod'
+module databend-golang
+
+go 1.18
+
+require github.com/go-sql-driver/mysql v1.6.0
+```
+
+### Run main.go
+
+```shell
+go run main.go
+```
+
+```text title='Outputs'
+2022/04/13 12:20:07 Connected
+2022/04/13 12:20:07 Create database book_db success
+2022/04/13 12:20:07 Create table: books
+2022/04/13 12:20:07 Insert 1 row
+2022/04/13 12:20:08 Select:{mybook author 2022}
+2022/04/13 12:20:08 Select:{mybook author 2022}
 ```

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -25,6 +24,7 @@ use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -40,7 +40,28 @@ pub struct GetFunctionImpl<const BY_PATH: bool, const IGNORE_CASE: bool> {
 }
 
 impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNORE_CASE> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        let data_type = args[0];
+        let path_type = args[1];
+
+        if (IGNORE_CASE
+            && (!data_type.data_type_id().is_variant_or_object()
+                || !path_type.data_type_id().is_string()))
+            || (BY_PATH
+                && (!data_type.data_type_id().is_variant()
+                    || !path_type.data_type_id().is_string()))
+            || (!data_type.data_type_id().is_variant()
+                || (!path_type.data_type_id().is_string()
+                    && !path_type.data_type_id().is_unsigned_integer()))
+        {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Invalid argument types for function '{}': ({:?}, {:?})",
+                display_name.to_uppercase(),
+                data_type,
+                path_type
+            )));
+        }
+
         Ok(Box::new(GetFunctionImpl::<BY_PATH, IGNORE_CASE> {
             display_name: display_name.to_string(),
         }))
@@ -59,32 +80,16 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let data_type = args[0];
-        let path_type = args[1];
-
-        if (IGNORE_CASE
-            && (!data_type.data_type_id().is_variant_or_object()
-                || !path_type.data_type_id().is_string()))
-            || (BY_PATH
-                && (!data_type.data_type_id().is_variant()
-                    || !path_type.data_type_id().is_string()))
-            || (!data_type.data_type_id().is_variant()
-                || (!path_type.data_type_id().is_string()
-                    && !path_type.data_type_id().is_unsigned_integer()))
-        {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Invalid argument types for function '{}': ({:?}, {:?})",
-                self.display_name.to_uppercase(),
-                data_type,
-                path_type
-            )));
-        }
-
-        Ok(Arc::new(NullableType::create(VariantType::arc())))
+    fn return_type(&self) -> DataTypePtr {
+        NullableType::arc(VariantType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         let path_keys = if BY_PATH {
             parse_path_keys(columns[1].column())?
         } else {

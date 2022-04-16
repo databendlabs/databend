@@ -224,6 +224,7 @@ impl DatabendQueryFlightDispatcher {
             action.get_plan().schema(),
             action.get_scatter_expression(),
             action.get_sinks().len(),
+            query_context.clone(),
         )?;
 
         query_context.try_spawn(

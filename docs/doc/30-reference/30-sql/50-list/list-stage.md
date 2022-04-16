@@ -1,5 +1,5 @@
 ---
-title: List files in a stage
+title: LIST FILES IN STAGE
 ---
 
 

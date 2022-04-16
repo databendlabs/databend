@@ -19,11 +19,14 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
 use common_tracing::tracing;
+
+use crate::sessions::QueryContext;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
@@ -36,6 +39,7 @@ pub struct ExpressionExecutor {
     chain: Arc<ExpressionChain>,
     // whether to perform alias action in executor
     alias_project: bool,
+    ctx: Arc<QueryContext>,
 }
 
 impl ExpressionExecutor {
@@ -45,6 +49,7 @@ impl ExpressionExecutor {
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
         alias_project: bool,
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
 
@@ -54,6 +59,7 @@ impl ExpressionExecutor {
             output_schema,
             chain: Arc::new(chain),
             alias_project,
+            ctx,
         })
     }
 
@@ -187,7 +193,12 @@ impl ExpressionExecutor {
             arg_columns.push(column);
         }
 
-        let column = f.func.eval(&arg_columns, rows)?;
+        let tz = self.ctx.get_settings().get_timezone()?;
+        let tz = String::from_utf8(tz).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+        })?;
+        let func_ctx = FunctionContext { tz };
+        let column = f.func.eval(func_ctx, &arg_columns, rows)?;
         Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone()),
