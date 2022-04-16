@@ -17,26 +17,36 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::CastFunction;
+use common_functions::scalars::FunctionContext;
 use common_infallible::Mutex;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
+use common_planners::PlanNode;
+use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::TryStreamExt;
+use poem::trace;
 
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
+use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::BlocksSource;
 use crate::pipelines::new::processors::TransformAddOn;
+use crate::pipelines::new::processors::TransformCastSchema;
 use crate::pipelines::new::processors::TransformDummy;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::AddOnStream;
 use crate::sessions::QueryContext;
@@ -69,7 +79,7 @@ impl InsertInterpreter {
 
         let mut pipeline = self.create_new_pipeline()?;
         let mut builder = SourcePipeBuilder::create();
-
+        let mut need_cast_schema = false;
         match &self.plan.source {
             InsertInputSource::Values(values) => {
                 let blocks = Arc::new(Mutex::new(VecDeque::from_iter(vec![values.block.clone()])));
@@ -84,9 +94,14 @@ impl InsertInterpreter {
                 pipeline.add_pipe(builder.finalize());
             }
             InsertInputSource::StreamingWithFormat(_) => {}
-            InsertInputSource::SelectPlan(_) => {
-                // // todo!();
-                // Some(BlocksSource::create(vec![]))
+            InsertInputSource::SelectPlan(plan) => {
+                let builder = QueryPipelineBuilder::create(self.ctx.clone());
+                need_cast_schema = self.check_schema_cast(plan)?;
+                let optimized_plan = self.rewrite_plan(plan)?;
+                let select_plan = SelectPlan {
+                    input: Arc::new(optimized_plan),
+                };
+                pipeline = builder.finalize(&select_plan)?;
             }
         };
 
@@ -99,6 +114,30 @@ impl InsertInterpreter {
                     self.plan.schema(),
                     self.plan.schema(),
                     self.ctx.clone(),
+                )
+            })?;
+        }
+
+        // cast schema
+        if need_cast_schema {
+            let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
+            for field in self.plan.schema().fields() {
+                let name = format!("{:?}", field.data_type());
+                let cast_function = CastFunction::create("cast", &name).unwrap();
+                functions.push(cast_function);
+            }
+            let tz = self.ctx.get_settings().get_timezone()?;
+            let tz = String::from_utf8(tz).map_err(|_| {
+                ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+            })?;
+            let func_ctx = FunctionContext { tz };
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformCastSchema::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    self.plan.schema(),
+                    functions.clone(),
+                    func_ctx.clone(),
                 )
             })?;
         }
@@ -122,6 +161,27 @@ impl InsertInterpreter {
             None,
             vec![],
         )))
+    }
+
+    /// Call this method to optimize the logical plan before executing
+    fn rewrite_plan(&self, select_plan: &PlanNode) -> Result<PlanNode> {
+        plan_schedulers::apply_plan_rewrite(Optimizers::create(self.ctx.clone()), select_plan)
+    }
+
+    fn check_schema_cast(&self, plan_node: &PlanNode) -> common_exception::Result<bool> {
+        let output_schema = &self.plan.schema;
+        let select_schema = plan_node.schema();
+
+        // validate schema
+        if select_schema.fields().len() < output_schema.fields().len() {
+            return Err(ErrorCode::BadArguments(
+                "Fields in select statement is less than expected",
+            ));
+        }
+
+        // check if cast needed
+        let cast_needed = select_schema != *output_schema;
+        Ok(cast_needed)
     }
 }
 

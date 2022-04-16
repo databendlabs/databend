@@ -51,6 +51,7 @@ pub use transforms::SubQueriesPuller;
 pub use transforms::TransformAddOn;
 pub use transforms::TransformAggregator;
 pub use transforms::TransformBlockCompact;
+pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
 pub use transforms::TransformCreateSets;
 pub use transforms::TransformDummy;
