@@ -53,22 +53,17 @@ async fn test_watch_main(
     let _h = tokio::spawn(upsert_kv_client_main(addr.clone(), updates));
 
     loop {
-        tokio::select! {
-            resp = client_stream.message() => {
-                if let Ok(Some(resp)) = resp {
-                    if let Some(event) = resp.event {
-                        assert!(!watch_events.is_empty());
+        if let Ok(Some(resp)) = client_stream.message().await {
+            if let Some(event) = resp.event {
+                assert!(!watch_events.is_empty());
 
-                        assert_eq!(watch_events.get(0), Some(&event));
-                        watch_events.remove(0);
+                assert_eq!(watch_events.get(0), Some(&event));
+                watch_events.remove(0);
 
-                        if watch_events.is_empty() {
-                            break;
-                        }
-                    }
-
+                if watch_events.is_empty() {
+                    break;
                 }
-            },
+            }
         }
     }
 
