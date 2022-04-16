@@ -303,7 +303,7 @@ impl Expression {
             } => {
                 let mut func_name = op.clone();
                 if *distinct {
-                    func_name += "Distinct";
+                    func_name += "_distinct";
                 }
 
                 let mut fields = Vec::with_capacity(args.len());
