@@ -1,38 +1,42 @@
 ---
-title: Numeric Data Types
+title: Numeric
 description: Basic Numeric data type.
 ---
 
-## Integer Number
+## Integer Types
 
 Basic Integer Numbers data types.
 
-| Data Type | Syntax               | Size      | Min Value              | Max Value   |
+| Data Type | Syntax               | Size(Byte)      | Min Value              | Max Value   |
 | ----------|----------------------| --------- | ---------------------- | ----------- |
-| Int8      | TINYINT              | 1 byte    |  -128                  |  127        
-| UInt8     | TINYINT UNSIGNED     | 1 byte    |  0                     |  255
-| Int16     | SMALLINT             | 2 byte    |  -32768                |  32767
-| UInt16    | SMALLINT UNSIGNED    | 2 byte    |  0                     |  65535
-| Int32     | INT                  | 4 byte    |  -2147483648           |  2147483647
-| UInt32    | INT UNSIGNED         | 4 byte    |  0                     |  4294967295
-| Int64     | BIGINT               | 8 byte    |  -9223372036854775808  |  9223372036854775807
-| UInt64    | BIGINT UNSIGNED      | 8 byte    |  0                     |  18446744073709551615
+| Int8      | TINYINT              | 1 |  -128                  |  127        
+| UInt8     | TINYINT UNSIGNED     | 1 |  0                     |  255
+| Int16     | SMALLINT             | 2 |  -32768                |  32767
+| UInt16    | SMALLINT UNSIGNED    | 2 |  0                     |  65535
+| Int32     | INT                  | 4 |  -2147483648           |  2147483647
+| UInt32    | INT UNSIGNED         | 4 |  0                     |  4294967295
+| Int64     | BIGINT               | 8 |  -9223372036854775808  |  9223372036854775807
+| UInt64    | BIGINT UNSIGNED      | 8 |  0                     |  18446744073709551615
 
-## Floating Point Number
+## Floating-Point Types
 
 Basic Float32/Float64 data types.
 
-| Data Type  | Syntax    | Size    |  Min Value                |  Max Value |
+| Data Type  | Syntax    | Size(Byte)    |  Min Value                |  Max Value |
 | -----------|-----------| ------- |  ------------------------ |------------
-| Float32    |  FLOAT    | 4 byte  |  -3.40282347e+38          | 3.40282347e+38
-| Float64    |  DOUBLE   | 8 byte  |  -1.7976931348623157E+308 | 1.7976931348623157E+308
+| Float32    |  FLOAT    | 4 |  -3.40282347e+38          | 3.40282347e+38
+| Float64    |  DOUBLE   | 8 |  -1.7976931348623157E+308 | 1.7976931348623157E+308
+
+## Functions
+
+See [Numeric Functions](/doc/reference/functions/numeric-functions).
 
 ## Examples
 
 ```sql
-mysql> create table test_numeric(tiny tinyint, tiny_unsigned tinyint unsigned, smallint smallint, smallint_unsigned smallint unsigned, int int, int_unsigned int unsigned, bigint bigint, bigint_unsigned bigint unsigned);
+mysql> CREATE TABLE test_numeric(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED);
 
-mysql> desc test_numeric;
+mysql> DESC test_numeric;
 +-------------------+--------+------+---------+
 | Field             | Type   | Null | Default |
 +-------------------+--------+------+---------+

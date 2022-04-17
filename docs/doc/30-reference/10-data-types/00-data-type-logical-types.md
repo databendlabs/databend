@@ -1,9 +1,9 @@
 ---
-title: Logical Data Types
+title: Boolean
 description: Basic logical data type.
 ---
 
-The logical data types supported in Databend.
+The BOOLEAN type represents a statement of truth (“true” or “false”).
 
 ## Boolean
 
@@ -17,14 +17,18 @@ Boolean values can be implicitly converted from numeric values to boolean values
 * Zero (0) is converted to FALSE.
 * Any non-zero value is converted to TRUE.
 
+## Functions
+
+See [Conditional Functions](/doc/reference/functions/conditional-functions).
+
 ## Example
 
 ```sql title='mysql>'
-mysql> create table test_boolean(a boolean, s varchar);
+mysql> CREATE TABLE test_boolean(a BOOLEAN, s VARCHAR);
 
-mysql> insert into test_boolean values(true, 'true'),(false, 'false'), (0, 'false'),(10, 'true');
+mysql> INSERT INTO test_boolean VALUES(true, 'true'),(false, 'false'), (0, 'false'),(10, 'true');
 
-mysql> select * from test_boolean;
+mysql> SELECT * FROM test_boolean;
 +------+-------+
 | a    | s     |
 +------+-------+
