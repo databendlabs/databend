@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::S3File;
 use common_planners::CopyPlan;
-use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_streams::DataBlockStream;
@@ -33,7 +32,7 @@ use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::QueryPipelineBuilder;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::StageSource;
 
@@ -84,10 +83,10 @@ impl CopyInterpreter {
     // Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
     fn rewrite_read_plan_file_name(
         mut plan: ReadDataSourcePlan,
-        file_name: Option<String>,
+        files: Vec<String>,
     ) -> ReadDataSourcePlan {
         if let SourceInfo::S3StageSource(ref mut s3) = plan.source_info {
-            s3.file_name = file_name;
+            s3.files = files
         }
         plan
     }
@@ -99,24 +98,20 @@ impl CopyInterpreter {
     // 3. Read from the stream and write to the table.
     // Note:
     //  We parse the `s3://` to ReadSourcePlan instead of to a SELECT plan is that:
-    //  COPY should deal with the file one by one and do some error handler on the OnError strategy.
-
-    #[tracing::instrument(level = "debug", name = "copy_one_file_to_table", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn copy_one_file_to_table(&self, file_name: Option<String>) -> Result<Vec<DataBlock>> {
+    #[tracing::instrument(level = "debug", name = "copy_files_to_table", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn copy_files_to_table(&self, files: Vec<String>) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
         let settings = self.ctx.get_settings();
 
+        let mut pipeline = NewPipeline::create();
         let read_source_plan = self.plan.from.clone();
-        let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, file_name);
-
-        tracing::info!("copy_one_file_to_table: source plan:{:?}", read_source_plan);
-
-        let from_plan = PlanNode::Select(common_planners::SelectPlan {
-            input: Arc::new(PlanNode::ReadSource(read_source_plan)),
-        });
-
-        let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
-        let mut pipeline = pipeline_builder.finalize(&from_plan)?;
+        let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, files);
+        tracing::info!("copy_files_to_table: source plan:{:?}", read_source_plan);
+        let table = ctx.build_table_from_source_plan(&read_source_plan)?;
+        let res = table.read2(ctx.clone(), &read_source_plan, &mut pipeline);
+        if let Err(e) = res {
+            return Err(e);
+        }
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let async_runtime = ctx.get_storage_runtime();
@@ -169,11 +164,7 @@ impl Interpreter for CopyInterpreter {
 
         tracing::info!("copy file list:{:?}, pattern:{}", &files, pattern,);
 
-        let mut write_results = vec![];
-        for file in files {
-            let result = self.copy_one_file_to_table(Some(file)).await?;
-            write_results.extend_from_slice(result.as_slice());
-        }
+        let write_results = self.copy_files_to_table(files).await?;
 
         let table = self
             .ctx

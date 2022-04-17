@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -21,7 +22,9 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableMeta;
+use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
+use common_planners::Expression;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
@@ -47,7 +50,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
-    pub options: HashMap<String, String>,
+    pub options: BTreeMap<String, String>,
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,
@@ -125,14 +128,16 @@ impl DfCreateTable {
     async fn table_meta(&self, ctx: Arc<QueryContext>, db_name: &str) -> Result<TableMeta> {
         let engine = self.engine.clone();
         let schema = self.table_schema(ctx.clone()).await?;
+
+        self.validate_table_options()?;
+        self.validata_default_exprs(&schema)?;
+
         let meta = TableMeta {
             schema,
             engine,
             options: self.options.clone(),
             ..Default::default()
         };
-        self.validate_table_options()?;
-
         self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
     }
 
@@ -232,5 +237,17 @@ impl DfCreateTable {
         } else {
             Ok(())
         }
+    }
+
+    fn validata_default_exprs(&self, schema: &DataSchemaRef) -> Result<()> {
+        for f in schema.fields() {
+            if let Some(default_expr) = f.default_expr() {
+                let expr: Expression =
+                    serde_json::from_slice::<Expression>(default_expr.as_slice())?;
+
+                validate_expression(&expr, schema)?;
+            }
+        }
+        Ok(())
     }
 }

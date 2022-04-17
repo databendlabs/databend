@@ -33,12 +33,13 @@ use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
-use regex::RegexSet;
 use tokio_stream::StreamExt;
 
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
+use crate::servers::mysql::MySQLFederated;
+use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -251,72 +252,53 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     async fn do_close(&mut self, _: u32) {}
 
-    fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> bool {
-        let expr = RegexSet::new(&[
-            "(?i)^(SET NAMES(.*))",
-            "(?i)^(SET character_set_results(.*))",
-            "(?i)^(SET FOREIGN_KEY_CHECKS(.*))",
-            "(?i)^(SET AUTOCOMMIT(.*))",
-            "(?i)^(SET sql_mode(.*))",
-            "(?i)^(SET @@(.*))",
-            "(?i)^(SHOW VARIABLES(.*))",
-            "(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))",
-            // Just compatibility for jdbc
-            "(?i)^(/\\* mysql-connector-java(.*))",
-            // Just compatibility for DBeaver
-            "(?i)^(SHOW WARNINGS)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW PLUGINS)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW COLLATION)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW CHARSET)",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW ENGINES)",
-            "(?i)^(/\\* ApplicationName=(.*)SELECT @@(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW @@(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SET net_write_timeout(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SET SQL_SELECT_LIMIT(.*))",
-            "(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))",
-        ])
-        .unwrap();
-        tracing::debug!("the query is {}", query);
-        expr.is_match(query)
+    // Check the query is a federated or driver setup command.
+    // Here we fake some values for the command which Databend not supported.
+    fn federated_server_command_check(&self, query: &str) -> Option<DataBlock> {
+        let federated = MySQLFederated::create();
+        federated.check(query)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        tracing::debug!("{}", query);
+        match self.federated_server_command_check(query) {
+            Some(data_block) => {
+                tracing::info!("Federated query: {}", query);
+                if data_block.num_rows() > 0 {
+                    tracing::info!("Federated response: {:?}", data_block);
+                }
+                Ok((vec![data_block], String::from("")))
+            }
+            None => {
+                tracing::info!("Normal query: {}", query);
+                let context = self.session.create_query_context().await?;
+                context.attach_query_str(query);
+                let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
 
-        if self.federated_server_setup_set_or_jdbc_command(query) {
-            tracing::info!("the matched query is {}", query);
-            Ok((vec![DataBlock::empty()], String::from("")))
-        } else {
-            tracing::info!("the not matched query is {}", query);
-            let context = self.session.create_query_context().await?;
-            context.attach_query_str(query);
-            let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
-
-            match hints
-                .iter()
-                .find(|v| v.error_code.is_some())
-                .and_then(|x| x.error_code)
-            {
-                None => Self::exec_query(plan, &context).await,
-                Some(hint_error_code) => match Self::exec_query(plan, &context).await {
-                    Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                        "Expected server error code: {} but got: Ok.",
-                        hint_error_code
-                    ))),
-                    Err(error_code) => {
-                        if hint_error_code == error_code.code() {
-                            Ok((vec![DataBlock::empty()], String::from("")))
-                        } else {
-                            let actual_code = error_code.code();
-                            Err(error_code.add_message(format!(
-                                "Expected server error code: {} but got: {}.",
-                                hint_error_code, actual_code
-                            )))
+                match hints
+                    .iter()
+                    .find(|v| v.error_code.is_some())
+                    .and_then(|x| x.error_code)
+                {
+                    None => Self::exec_query(plan, &context).await,
+                    Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                        Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                            "Expected server error code: {} but got: Ok.",
+                            hint_error_code
+                        ))),
+                        Err(error_code) => {
+                            if hint_error_code == error_code.code() {
+                                Ok((vec![DataBlock::empty()], String::from("")))
+                            } else {
+                                let actual_code = error_code.code();
+                                Err(error_code.add_message(format!(
+                                    "Expected server error code: {} but got: {}.",
+                                    hint_error_code, actual_code
+                                )))
+                            }
                         }
-                    }
-                },
+                    },
+                }
             }
         }
     }
@@ -398,7 +380,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
 
         let mut scramble: [u8; 20] = [0; 20];
         for i in 0..20 {
-            scramble[i] = bs[i];
+            scramble[i] = bs[i] & 0x7fu8;
             if scramble[i] == b'\0' || scramble[i] == b'$' {
                 scramble[i] += 1;
             }
@@ -411,8 +393,11 @@ impl<W: std::io::Write> InteractiveWorker<W> {
                 generic_hold: PhantomData::default(),
             },
             salt: scramble,
-            // TODO: version
-            version: format!("{}-{}", "8.0.26", *crate::configs::DATABEND_COMMIT_VERSION),
+            version: format!(
+                "{}-{}",
+                MYSQL_VERSION,
+                *crate::configs::DATABEND_COMMIT_VERSION
+            ),
             client_addr,
         }
     }

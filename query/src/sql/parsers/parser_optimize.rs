@@ -25,7 +25,7 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    pub(crate) fn parse_optimize(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_optimize(&mut self) -> Result<DfStatement<'a>, ParserError> {
         // syntax: "optimize TABLE t [purge | compact | all]",  default action is "purge"
         self.expect_token("OPTIMIZE")?;
         self.parser.expect_keyword(Keyword::TABLE)?;

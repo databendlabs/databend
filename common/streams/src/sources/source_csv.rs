@@ -18,6 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_io::prelude::FormatSettings;
 use csv_async::AsyncReader;
 use csv_async::AsyncReaderBuilder;
 use csv_async::Terminator;
@@ -29,7 +30,8 @@ use crate::Source;
 #[derive(Debug, Clone)]
 pub struct CsvSourceBuilder {
     schema: DataSchemaRef,
-    skip_header: i32,
+    skip_header: bool,
+    empty_as_default: bool,
     block_size: usize,
     size_limit: usize,
     field_delimiter: u8,
@@ -37,12 +39,31 @@ pub struct CsvSourceBuilder {
 }
 
 impl CsvSourceBuilder {
-    pub fn create(schema: DataSchemaRef) -> Self {
+    pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+        let field_delimiter = match format_settings.field_delimiter.len() {
+            n if n >= 1 => format_settings.field_delimiter[0],
+            _ => b',',
+        };
+        let record_delimiter = match format_settings.record_delimiter.len() {
+            n if n >= 1 => format_settings.record_delimiter[0],
+            _ => b'\n',
+        };
+
+        let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
+            Terminator::CRLF
+        } else {
+            Terminator::Any(record_delimiter)
+        };
+
+        let empty_as_default = format_settings.empty_as_default;
+        let skip_header = format_settings.skip_header;
+
         CsvSourceBuilder {
             schema,
-            skip_header: 0,
-            field_delimiter: b',',
-            record_delimiter: Terminator::CRLF,
+            skip_header,
+            field_delimiter,
+            record_delimiter,
+            empty_as_default,
             block_size: 10000,
             size_limit: usize::MAX,
         }
@@ -58,8 +79,8 @@ impl CsvSourceBuilder {
         self
     }
 
-    // Number of lines at the start of the file to skip.
-    pub fn skip_header(&mut self, skip_header: i32) -> &mut Self {
+    // Whether to skip the header
+    pub fn skip_header(&mut self, skip_header: bool) -> &mut Self {
         self.skip_header = skip_header;
         self
     }
@@ -109,7 +130,7 @@ where R: AsyncRead + Unpin + Send
 {
     fn try_create(builder: CsvSourceBuilder, reader: R) -> Result<Self> {
         let reader = AsyncReaderBuilder::new()
-            .has_headers(builder.skip_header > 0)
+            .has_headers(builder.skip_header)
             .delimiter(builder.field_delimiter)
             .terminator(builder.record_delimiter)
             .create_reader(reader);
@@ -153,7 +174,13 @@ where R: AsyncRead + Unpin + Send
             }
             for (col, pack) in packs.iter_mut().enumerate() {
                 match record.get(col) {
-                    Some(bytes) => pack.de_text(bytes)?,
+                    Some(bytes) => {
+                        if bytes.is_empty() && self.builder.empty_as_default {
+                            pack.de_default();
+                        } else {
+                            pack.de_whole_text(bytes)?
+                        }
+                    }
                     None => pack.de_default(),
                 }
             }

@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use sqlparser::ast::Value;
+
 use super::Identifier;
 use super::Query;
 use crate::parser::ast::display_identifier_vec;
@@ -61,6 +63,13 @@ pub enum Expr {
     Cast {
         expr: Box<Expr>,
         target_type: TypeName,
+        pg_style: bool,
+    },
+
+    /// `TRY_CAST` expression`
+    TryCast {
+        expr: Box<Expr>,
+        target_type: TypeName,
     },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
@@ -85,6 +94,8 @@ pub enum Expr {
     Exists(Box<Query>),
     /// Scalar subquery, which will only return a single row with a single column.
     Subquery(Box<Query>),
+    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
+    MapAccess { expr: Box<Expr>, keys: Vec<Value> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -409,8 +420,19 @@ impl Display for Expr {
             Expr::UnaryOp { op, expr } => {
                 write!(f, "{} {}", op, expr)?;
             }
-            Expr::Cast { expr, target_type } => {
-                write!(f, "CAST({} AS {})", expr, target_type)?;
+            Expr::Cast {
+                expr,
+                target_type,
+                pg_style,
+            } => {
+                if *pg_style {
+                    write!(f, "{}::{}", expr, target_type)?;
+                } else {
+                    write!(f, "CAST({} AS {})", expr, target_type)?;
+                }
+            }
+            Expr::TryCast { expr, target_type } => {
+                write!(f, "TRY_CAST({} AS {})", expr, target_type)?;
             }
             Expr::Literal(lit) => {
                 write!(f, "{}", lit)?;
@@ -470,6 +492,18 @@ impl Display for Expr {
             }
             Expr::Subquery(subquery) => {
                 write!(f, "({})", subquery)?;
+            }
+            Expr::MapAccess { expr, keys } => {
+                write!(f, "{}", expr)?;
+                for k in keys {
+                    match k {
+                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
+                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
+                        Value::ColonString(s) => write!(f, ":{}", s)?,
+                        Value::PeriodString(s) => write!(f, ".{}", s)?,
+                        _ => write!(f, "[{}]", k)?,
+                    }
+                }
             }
         }
 

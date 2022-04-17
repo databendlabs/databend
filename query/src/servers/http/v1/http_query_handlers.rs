@@ -32,11 +32,12 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 
-use super::query::ExecuteStateName;
+use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use super::JsonBlockRef;
+use crate::servers::http::v1::JsonBlock;
 use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
@@ -80,8 +81,8 @@ pub struct QueryResponse {
     pub id: String,
     pub session_id: Option<String>,
     pub schema: Option<DataSchemaRef>,
-    pub data: JsonBlockRef,
-    pub state: ExecuteStateName,
+    pub data: Vec<Vec<JsonValue>>,
+    pub state: ExecuteStateKind,
     // only sql query error
     pub error: Option<QueryError>,
     pub stats: QueryStats,
@@ -93,24 +94,22 @@ pub struct QueryResponse {
 
 impl QueryResponse {
     pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
-        let (data, next_url) = match &r.data {
-            Some(d) => (
-                d.page.data.clone(),
-                d.next_page_no.map(|n| make_page_uri(&id, n)),
-            ),
-            None => (Arc::new(vec![]), None),
+        let state = r.state.clone();
+        let (data, next_url) = match r.data {
+            Some(d) => (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n))),
+            None => (JsonBlock::empty(), None),
         };
-        let schema = r.initial_state.as_ref().and_then(|v| v.schema.clone());
-        let session_id = r.initial_state.as_ref().map(|v| v.session_id.clone());
+        let schema = data.schema().clone();
+        let session_id = r.session_id.clone();
         let stats = QueryStats {
-            scan_progress: r.state.scan_progress.clone(),
-            running_time_ms: r.state.running_time_ms,
+            scan_progress: state.scan_progress.clone(),
+            running_time_ms: state.running_time_ms,
         };
         QueryResponse {
-            data,
-            state: r.state.state,
-            schema,
-            session_id,
+            data: data.into(),
+            state: state.state,
+            schema: Some(schema),
+            session_id: Some(session_id),
             stats,
             id: id.clone(),
             next_uri: next_url,
@@ -124,8 +123,8 @@ impl QueryResponse {
         QueryResponse {
             id,
             stats: QueryStats::default(),
-            state: ExecuteStateName::Failed,
-            data: Arc::new(vec![]),
+            state: ExecuteStateKind::Failed,
+            data: vec![],
             schema: None,
             session_id: None,
             next_uri: None,
@@ -188,7 +187,7 @@ async fn query_page_handler(
         Some(query) => {
             query.clear_expire_time().await;
             let resp = query
-                .get_response_page(page_no, false)
+                .get_response_page(page_no)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;
@@ -215,7 +214,7 @@ pub(crate) async fn query_handler(
     match query {
         Ok(query) => {
             let resp = query
-                .get_response_page(0, true)
+                .get_response_page(0)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;

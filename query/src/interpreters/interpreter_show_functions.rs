@@ -52,10 +52,6 @@ impl ShowFunctionsInterpreter {
                 "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions WHERE {} ORDER BY name",
                 v
             )),
-            kind => Err(ErrorCode::UnImplement(format!(
-                "Show functions unsupported: {:?}",
-                kind
-            ))),
         };
     }
 }

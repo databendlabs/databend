@@ -50,6 +50,10 @@ impl Column for ConstColumn {
         self.column.data_type()
     }
 
+    fn column_type_name(&self) -> String {
+        format!("Const({})", self.column.column_type_name())
+    }
+
     fn is_nullable(&self) -> bool {
         self.column.is_nullable()
     }

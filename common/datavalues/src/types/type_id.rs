@@ -183,12 +183,30 @@ impl TypeID {
     }
 
     #[inline]
+    pub fn is_variant(&self) -> bool {
+        matches!(
+            self,
+            TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject
+        )
+    }
+
+    #[inline]
+    pub fn is_variant_or_array(&self) -> bool {
+        matches!(self, TypeID::Variant | TypeID::VariantArray)
+    }
+
+    #[inline]
+    pub fn is_variant_or_object(&self) -> bool {
+        matches!(self, TypeID::Variant | TypeID::VariantObject)
+    }
+
+    #[inline]
     pub fn numeric_byte_size(&self) -> Result<usize> {
         match self {
             TypeID::Int8 | TypeID::UInt8 => Ok(1),
-            TypeID::Int16 | TypeID::UInt16 => Ok(2),
-            TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 => Ok(4),
-            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 => Ok(8),
+            TypeID::Int16 | TypeID::UInt16 | TypeID::Date16 => Ok(2),
+            TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 | TypeID::DateTime32 => Ok(4),
+            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 | TypeID::DateTime64 => Ok(8),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
@@ -225,7 +243,11 @@ impl TypeID {
 
 impl std::fmt::Display for TypeID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            TypeID::VariantArray => write!(f, "Array"),
+            TypeID::VariantObject => write!(f, "Object"),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 

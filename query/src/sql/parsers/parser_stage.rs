@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
@@ -29,14 +29,14 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    pub(crate) fn parse_create_stage(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parser.parse_literal_string()?;
 
-        let mut credential_options = HashMap::default();
-        let mut encryption_options = HashMap::default();
+        let mut credential_options = BTreeMap::default();
+        let mut encryption_options = BTreeMap::default();
 
         // Is External
         let mut location = "".to_string();
@@ -62,7 +62,7 @@ impl<'a> DfParser<'a> {
         }
 
         // file_format = (type = csv field_delimiter = '|' skip_header = 1)
-        let mut file_format_options = HashMap::default();
+        let mut file_format_options = BTreeMap::default();
         if self.consume_token("FILE_FORMAT") {
             self.expect_token("=")?;
             self.expect_token("(")?;
@@ -117,7 +117,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateStage(create))
     }
 
-    pub(crate) fn parse_drop_stage(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parser.parse_literal_string()?;
 
@@ -126,14 +126,14 @@ impl<'a> DfParser<'a> {
     }
 
     // Desc stage.
-    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_desc_stage(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeUserStage { name: table_name };
         Ok(DfStatement::DescribeStage(desc))
     }
 
     // list stage files
-    pub(crate) fn parse_list_cmd(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_list_cmd(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let location = match self.parser.next_token() {
             Token::AtString(s) => Ok(format!("@{}", s)),
             unexpected => self.expected("@string_literal", unexpected),

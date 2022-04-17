@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -47,7 +47,7 @@ pub trait Table: Sync + Send {
         self.get_table_info().schema()
     }
 
-    fn options(&self) -> &HashMap<String, String> {
+    fn options(&self) -> &BTreeMap<String, String> {
         self.get_table_info().options()
     }
 
@@ -139,4 +139,15 @@ pub trait Table: Sync + Send {
     async fn optimize(&self, _ctx: Arc<QueryContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
+
+    async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+        Ok(None)
+    }
+}
+
+pub struct TableStatistics {
+    pub num_rows: Option<u64>,
+    pub data_length: Option<u64>,
+    pub data_length_compressed: Option<u64>,
+    pub index_length: Option<u64>,
 }

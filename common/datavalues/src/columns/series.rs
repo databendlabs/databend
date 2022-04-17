@@ -48,7 +48,7 @@ impl Series {
             .ok_or_else(|| {
                 ErrorCode::UnknownColumn(format!(
                     "downcast column error, column type: {:?}, expected column: {:?}",
-                    column.data_type(),
+                    column.column_type_name(),
                     std::any::type_name::<T>(),
                 ))
             });
@@ -59,7 +59,7 @@ impl Series {
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(
                 "downcast column error, column type: {:?}, expected column: {:?}",
-                column.data_type(),
+                column.column_type_name(),
                 std::any::type_name::<T>(),
             ))
         });
@@ -146,7 +146,7 @@ impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Serie
 
         let iter = v.as_ref().iter().map(|v| v.unwrap_or(""));
         let column = StringColumn::new_from_iter(iter);
-        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
     }
 }
 
@@ -216,7 +216,7 @@ impl SeriesFrom<Vec<Option<JsonValue>>, Vec<Option<JsonValue>>> for Series {
             }
         }
         let column = builder.finish();
-        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
     }
 }
 
@@ -243,7 +243,7 @@ macro_rules! impl_from_option_iterator {
                             }
                         }
                         let column = builder.finish();
-                        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+                        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
                     }
                 }
          )*
@@ -274,7 +274,7 @@ macro_rules! impl_from_option_slices {
                             }
                         }
                         let column = builder.finish();
-                        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+                        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
                     }
                 }
          )*
@@ -304,6 +304,6 @@ impl<'a, T: AsRef<[Option<Vu8>]>> SeriesFrom<T, [Option<Vu8>; 2]> for Series {
             }
         }
         let column = builder.finish();
-        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
     }
 }

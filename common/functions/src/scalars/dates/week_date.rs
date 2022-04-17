@@ -29,6 +29,7 @@ use crate::scalars::assert_date_or_datetime;
 use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
@@ -43,7 +44,7 @@ pub struct WeekFunction<T, R> {
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> Result<DataTypePtr>;
+    fn return_type() -> DataTypePtr;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
     fn factor_function() -> Option<Box<dyn Function>> {
         None
@@ -56,8 +57,8 @@ pub struct ToStartOfWeek;
 impl WeekResultFunction<u32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataTypePtr> {
-        Ok(Date16Type::arc())
+    fn return_type() -> DataTypePtr {
+        Date16Type::arc()
     }
     fn to_number(value: DateTime<Utc>, week_mode: u64) -> u32 {
         let mut weekday = value.weekday().number_from_sunday();
@@ -79,7 +80,12 @@ where
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_date_or_datetime(args[0])?;
+        if args.len() > 1 {
+            assert_numeric(args[1])?;
+        }
+
         Ok(Box::new(WeekFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -112,15 +118,16 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_date_or_datetime(args[0])?;
-        if args.len() > 1 {
-            assert_numeric(args[1])?;
-        }
+    fn return_type(&self) -> DataTypePtr {
         T::return_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         let mut mode = 0;
         if columns.len() > 1 {
             if input_rows != 1 && !columns[1].column().is_const() {
@@ -193,8 +200,20 @@ where
         }
 
         let func = FunctionAdapter::create(func, true);
-        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
-        let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
+        let left_val = func
+            .eval(
+                FunctionContext::default(),
+                &[args[0].left.clone().unwrap()],
+                1,
+            )?
+            .get(0);
+        let right_val = func
+            .eval(
+                FunctionContext::default(),
+                &[args[0].right.clone().unwrap()],
+                1,
+            )?
+            .get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {
             return Ok(Monotonicity::clone_without_range(&args[0]));

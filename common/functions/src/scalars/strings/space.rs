@@ -24,6 +24,7 @@ use crate::scalars::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -34,7 +35,8 @@ pub struct SpaceFunction {
 }
 
 impl SpaceFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -51,12 +53,16 @@ impl Function for SpaceFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             let func = |n: $S, _ctx: &mut EvalContext| -> Vu8 { vec![32u8; n.as_()] };

@@ -21,27 +21,35 @@ use common_streams::SendableDataBlockStream;
 use crate::pipelines::new::NewPipeline;
 
 #[async_trait::async_trait]
+/// Interpreter is a trait for different PlanNode
+/// Each type of planNode has its own corresponding interpreter
 pub trait Interpreter: Sync + Send {
+    /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
 
+    /// Return the schema of Interpreter
     fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])
     }
 
+    /// The core of the databend processor which will execute the logical plan and get the DataBlock
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream>;
 
-    // TODO: maybe remove async
-    fn execute2(&self) -> Result<NewPipeline> {
+    /// Create the new pipeline for databend's new execution model
+    /// Currently databend is developing a new execution model with a hybrid pull-based & push-based strategy
+    /// The method now only is implemented by SelectInterpreter
+    fn create_new_pipeline(&self) -> Result<NewPipeline> {
         Err(ErrorCode::UnImplement(format!(
-            "UnImplement execute2 method for {:?}",
+            "UnImplement create_new_pipeline method for {:?}",
             self.name()
         )))
     }
 
-    /// Do some start work for the interpreter.
+    /// Do some start work for the interpreter
+    /// Such as query counts, query start time and etc
     async fn start(&self) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement start method for {:?}",

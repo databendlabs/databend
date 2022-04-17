@@ -1,5 +1,5 @@
 ---
-title: Analyzing Nginx Logs with Databend and Vector
+title: Analyzing Nginx Access Logs with Databend
 sidebar_label: Analyzing Nginx Logs
 ---
 
@@ -9,7 +9,7 @@ sidebar_label: Analyzing Nginx Logs
 
 Systems are producing all kinds metrics and logs time by time, do you want to gather them and analyze the logs in real time? 
 
-Databend provides [integration with Vector](../40-integrations/00-vector.md), easy to do it now!
+Databend provides [integration with Vector](../40-integrations/10-data-tool/00-vector.md), easy to do it now!
 
 Lets ingesting Nginx access logs into Databend from Vector step by step.
 
@@ -40,21 +40,23 @@ create database nginx;
 
 ```sql title='mysql>'
 create table nginx.access_logs (
-  `time` Datetime32 Null,
-  `client` String Null,
-  `host` String Null,
-  `uri` String Null,
-  `args` String Null,
-  `connection` Int64 Null,
-  `content_type` String Null,
-  `method` String Null,
-  `request` String Null,
-  `status` Int32 Null,
-  `referer` String Null,
-  `user_agent` String Null,
-  `bytes_sent` Int32 Null,
-  `body_bytes_sent` Int32 Null,
-  `request_time` Float32 Null
+  `timestamp` Datetime32,
+  `remote_addr` String,
+  `remote_port` Int32,
+  `request_method` String,
+  `request_uri` String,
+  `server_protocol` String,
+  `status` Int32,
+  `bytes_sent` Int32,
+  `http_referer` String,
+  `http_user_agent` String,
+  `upstream_addr` String,
+  `scheme` String,
+  `gzip_ratio` String,
+  `request_length` Int32,
+  `request_time` Float32,
+  `ssl_protocol` String,
+  `upstream_response_time` String
 );
 ```
 
@@ -65,13 +67,14 @@ Connect to Databend server with MySQL client:
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
+Create a user:
 ```shell title='mysql>'
-create user 'vector' identified by 'vector123';
+create user user1 identified by 'abc123';
 ```
-Please replace `vector`, `vector123` to your own username and password.
 
+Grant privileges for the user:
 ```shell title='mysql>'
-grant insert on nginx.* TO 'vector'@'%';
+grant insert on nginx.* to user1;
 ```
 
 ## Step 2. Nginx
@@ -95,52 +98,18 @@ http {
         ##
         # Logging Settings
         ##
+	    log_format upstream '$remote_addr "$time_local" $host "$request_method $request_uri $server_protocol" $status $bytes_sent "$http_referer" "$http_user_agent" $remote_port $upstream_addr $scheme $gzip_ratio $request_length $request_time $ssl_protocol "$upstream_response_time"';
 
-        log_format json_combined escape=json
-  '{'
-    '"time":"$time_iso8601",' # local time in the ISO 8601 standard format 
-    '"client":"$remote_addr",' # client IP
-    '"host":"$host",'
-    '"uri":"$uri",'
-    '"args":"$args",' # args
-    '"connection":$connection,' # connection serial number
-    '"content_type":"$content_type",'
-    '"method":"$request_method",' # request method
-    '"request":"$request",' # full path no arguments if the request
-    '"status":$status,' # response status code
-    '"referer":"$http_referer",' # HTTP referer
-    '"user_agent":"$http_user_agent",' # HTTP user agent
-    '"bytes_sent":$bytes_sent,'  # the number of bytes sent to a client
-    '"body_bytes_sent":$body_bytes_sent,' # the number of body bytes exclude headers sent to a client
-    '"request_time":$request_time' # request processing time in seconds with msec resolution
-  '}';
- 
-        access_log /var/log/nginx/access.log json_combined;
+        access_log /var/log/nginx/access.log upstream;
         error_log /var/log/nginx/error.log;
 
         include /etc/nginx/conf.d/*.conf;
         include /etc/nginx/sites-enabled/*;
 }
 ```
-This is how the log message looks in JSON style log_format:
-```json
-{
-  "time": "2022-04-03T09:02:36+08:00",
-  "client": "127.0.0.1",
-  "host": "localhost",
-  "uri": "/db/abc",
-  "args": "good=iphone&uuid=8308140226",
-  "connection": 643334,
-  "content_type": "",
-  "method": "GET",
-  "request": "GET /db/abc?good=iphone&uuid=8308140226 HTTP/1.1",
-  "status": 404,
-  "referer": "",
-  "user_agent": "",
-  "bytes_sent": 326,
-  "body_bytes_sent": 162,
-  "request_time": 0
-}
+This is how the log message looks:
+```text
+::1 "09/Apr/2022:11:13:39 +0800" localhost "GET /?xx HTTP/1.1" 304 189 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36" 50758 - http - 1202 0.000 - "-"
 ```
 
 Use the new `nginx.conf` replace your Nginx configuration and restart the Nginx server.
@@ -157,40 +126,167 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.vector.dev | bash
 
 ### 3.2 Configure Vector
 
-```shell title='vector.toml'
-data_dir = "./vlog/"
-[sources.nginx_access_logs]
-  type         = "file"
-  include      = ["/var/log/nginx/access.log"]
-  ignore_older = 86400
+```toml title='vector.toml'
+[sources.nginx_access_log]
+type = "file"
+// highlight-next-line
+include = ["/var/log/nginx/access.log"]
+file_key = "file"
+max_read_bytes = 10240
 
-[transforms.nginx_access_logs_json]
-  type         = "remap"
-  inputs       = ["nginx_access_logs"]
-  source = '''
-. = parse_json!(.message)
-  #ISO8601/RFC3339, 2001-07-08T00:34:60.026490+09:30
-.time = parse_timestamp!(.time, format: "%+")
-  #2001-07-08 00:34:60
-.time = format_timestamp!(.time, format: "%F %X")
-'''
+[transforms.nginx_access_log_parser]
+type = "remap"
+inputs = ["nginx_access_log"]
+drop_on_error = true
 
-[sinks.databend_sink]
+// highlight-next-line
+#nginx log_format upstream '$remote_addr "$time_local" $host "$request_method $request_uri $server_protocol" $status $bytes_sent "$http_referer" "$http_user_agent" $remote_port $upstream_addr $scheme $gzip_ratio $request_length $request_time $ssl_protocol "$upstream_response_time"';
+
+source = """
+    parsed_log, err = parse_regex(.message, r'^(?P<remote_addr>\\S+) \
+\"(?P<time_local>\\S+ \\S+)\" \
+(?P<host>\\S+) \
+\"(?P<request_method>\\S+) (?P<request_uri>.+) (?P<server_protocol>HTTP/\\S+)\" \
+(?P<status>\\d+) \
+(?P<bytes_sent>\\d+) \
+\"(?P<http_referer>.*)\" \
+\"(?P<http_user_agent>.*)\" \
+(?P<remote_port>\\d+) \
+(?P<upstream_addr>.+) \
+(?P<scheme>\\S+) \
+(?P<gzip_ratio>\\S+) \
+(?P<request_length>\\d+) \
+(?P<request_time>\\S+) \
+(?P<ssl_protocol>\\S+) \
+\"(?P<upstream_response_time>.+)\"$')
+    if err != null {
+      log("Unable to parse access log: " + string!(.message), level: "warn")
+      abort
+    }
+    . = merge(., parsed_log)
+    .timestamp = parse_timestamp!(.time_local, format: "%d/%b/%Y:%H:%M:%S %z")
+    .timestamp = format_timestamp!(.timestamp, format: "%F %X")
+
+    # Convert from string into integer.
+    .remote_port, err = to_int(.remote_port)
+    if err != null {
+      log("Unable to parse access log: " + string!(.remote_port), level: "warn")
+      abort
+    }
+
+    # Convert from string into integer.
+    .status, err  = to_int(.status)
+    if err != null {
+      log("Unable to parse access log: " + string!(.status), level: "warn")
+      abort
+    }
+
+    # Convert from string into integer.
+    .bytes_sent, err = to_int(.bytes_sent)
+    if err != null {
+      log("Unable to parse access log: " + string!(.bytes_sent), level: "warn")
+      abort
+    }
+
+    # Convert from string into integer.
+    .request_length, err = to_int(.request_length)
+    if err != null {
+      log("Unable to parse access log: " + string!(.request_length), level: "warn")
+      abort
+    }
+
+    # Convert from string into float.
+    .request_time, err = to_float(.request_time)
+    if err != null {
+      log("Unable to parse access log: " + string!(.request_time), level: "warn")
+      abort
+    }
+  """
+
+
+[sinks.nginx_access_log_to_databend]
   type = "clickhouse"
-  inputs = [ "nginx_access_logs_json" ]
+  inputs = ["nginx_access_log_parser"]
+  // highlight-next-line
   database = "nginx" #Your database
+  // highlight-next-line
   table = "access_logs" #Your table
   #Databend ClickHouse REST API: http://{http_handler_host}:{http_handler_port}/clickhouse
+  // highlight-next-line
   endpoint = "http://localhost:8000/clickhouse"
   compression = "gzip"
 
-[sinks.databend_sink.auth]
+
+[sinks.nginx_access_log_to_databend.auth]
   strategy = "basic"
-  user = "vector" #Databend username
-  password = "vector123" #Databend password
+  // highlight-next-line
+  user = "user1" #Databend username
+  // highlight-next-line
+  password = "abc123" #Databend password
+
+[[tests]]
+name = "extract fields from access log"
+
+[[tests.inputs]]
+insert_at = "nginx_access_log_parser"
+type = "raw"
+// highlight-next-line
+value = '::1 "09/Apr/2022:11:13:39 +0800" localhost "GET /?xx HTTP/1.1" 304 189 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36" 50758 - http - 1202 0.000 - "-"'
+
+[[tests.outputs]]
+extract_from = "nginx_access_log_parser"
+
+[[tests.outputs.conditions]]
+type = "vrl"
+source = """
+        assert_eq!(.remote_addr, "::1")
+        assert_eq!(.time_local, "09/Apr/2022:11:13:39 +0800")
+        assert_eq!(.timestamp, "2022-04-09 03:13:39")
+        assert_eq!(.request_method, "GET")
+        assert_eq!(.request_uri, "/?xx")
+        assert_eq!(.server_protocol, "HTTP/1.1")
+        assert_eq!(.status, 304)
+        assert_eq!(.bytes_sent, 189)
+        assert_eq!(.http_referer, "-")
+        assert_eq!(.http_user_agent, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36")
+        assert_eq!(.remote_port, 50758)
+        assert_eq!(.upstream_addr, "-")
+        assert_eq!(.scheme, "http")
+        assert_eq!(.gzip_ratio, "-")
+        assert_eq!(.request_length, 1202)
+        assert_eq!(.request_time, 0.000)
+        assert_eq!(.ssl_protocol, "-")
+        assert_eq!(.upstream_response_time, "-")
+      """
+
+[[tests]]
+name = "no event from wrong access log"
+no_outputs_from = ["nginx_access_log_parser"]
+
+[[tests.inputs]]
+insert_at = "nginx_access_log_parser"
+type = "raw"
+value = 'I am not access log'
+
+```
+
+### 3.3 Configuration Validation
+
+Check the `nginx_access_log_parser` transform works or not:
+
+```shell
+vector test ./vector.toml
+```
+
+If it works the output is:
+```shell
+Running tests
+test extract fields from access log ... passed
+2022-04-09T04:03:09.704557Z  WARN transform{component_kind="transform" component_id=nginx_access_log_parser component_type=remap component_name=nginx_access_log_parser}: vrl_stdlib::log: "Unable to parse access log: I am not access log" internal_log_rate_secs=1 vrl_position=479
+test no event from wrong access log ... passed
 ```
   
-### 3.3 Run Vector
+### 3.4 Run Vector
 
 ```shell
 vector -c ./vector.toml
@@ -227,20 +323,20 @@ select count() as count, status from nginx.access_logs group by status limit 10;
 
 - __Top 10 Request Method__ 
 ```shell title='mysql>'
-select count() as count, method from nginx.access_logs  group by method limit 10;
+select count() as count, request_method from nginx.access_logs group by request_method limit 10;
 ```
 
 ```shell
-+-----------+--------+
-| count     | method |
-+-----------+--------+
-| 106218701 | GET    |
-+-----------+--------+
++-----------+----------------+
+| count     | request_method |
++-----------+----------------+
+| 106218701 |      GET       |
++-----------+----------------+
 ```
 
 - __Top 10 Request IPs__
 ```shell title='mysql>'
-select count(*) as count, client from nginx.access_logs group by client order by count desc limit 10;
+select count(*) as count, remote_addr as client from nginx.access_logs group by remote_addr order by count desc limit 10;
 ```
 
 ```shell
@@ -254,7 +350,7 @@ select count(*) as count, client from nginx.access_logs group by client order by
 
 - __Top 10 Request Pages__
 ```shell title='mysql>'
-select count(*) as count, uri from nginx.access_logs group by uri order by count desc limit 10;
+select count(*) as count, request_uri as uri from nginx.access_logs group by request_uri order by count desc limit 10;
 ```
 
 ```shell
@@ -271,7 +367,7 @@ select count(*) as count, uri from nginx.access_logs group by uri order by count
 
 - __Top 10 HTTP 404 Pages__
 ```shell title='mysql>'
-select countif(status=404) as count, uri from nginx.access_logs group by uri order by count desc limit 10;
+select count_if(status=404) as count, request_uri as uri from nginx.access_logs group by request_uri order by count desc limit 10;
 ```
 
 ```shell
@@ -287,22 +383,24 @@ select countif(status=404) as count, uri from nginx.access_logs group by uri ord
 
 - __Top 10 Requests__
 ```shell title='mysql>'
-select count(*) as count, request from nginx.access_logs group by request order by count desc limit 10;
+select count(*) as count, request_uri as request from nginx.access_logs group by request_uri order by count desc limit 10;
 ```
 
 ```shell
-+--------+---------------------------------------------------------------------------------------------------------+
-| count  | request                                                                                                 |
-+--------+---------------------------------------------------------------------------------------------------------+
-| 199852 | GET /index.html HTTP/1.0                                                                                |
-|   1000 | GET /db/abc?good=iphone&uuid=9329836906 HTTP/1.1                                                        |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=17967444396 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=16399821384 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=17033481055 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=17769945743 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=15414263117 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=18945218607 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=19889051988 HTTP/1.1 |
-|    900 | GET /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=15249667263 HTTP/1.1 |
-+--------+---------------------------------------------------------------------------------------------------------+
++--------+-----------------------------------------------------------------------------------------------------+
+| count  | request                                                                                             |
++--------+-----------------------------------------------------------------------------------------------------+
+| 199852 | /index.html HTTP/1.0                                                                                |
+|   1000 | /db/abc?good=iphone&uuid=9329836906 HTTP/1.1                                                        |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=17967444396 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=16399821384 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=17033481055 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=17769945743 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=15414263117 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=18945218607 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=19889051988 HTTP/1.1 |
+|    900 | /miaosha/i/miaosha?goodsRandomName=0e67e331-c521-406a-b705-64e557c4c06c&mobile=15249667263 HTTP/1.1 |
++--------+-----------------------------------------------------------------------------------------------------+
 ```
+
+**Enjoy your journey.** 

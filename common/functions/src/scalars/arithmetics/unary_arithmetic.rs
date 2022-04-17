@@ -24,6 +24,7 @@ use crate::scalars::scalar_unary_op;
 use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -64,11 +65,16 @@ where
         "UnaryArithmeticFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.result_type.clone())
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let col = scalar_unary_op(
             columns[0].column(),
             self.func.clone(),

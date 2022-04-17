@@ -20,7 +20,7 @@ mod http_query_manager;
 mod result_data_manager;
 
 pub(crate) use execute_state::ExecuteState;
-pub use execute_state::ExecuteStateName;
+pub use execute_state::ExecuteStateKind;
 pub(crate) use execute_state::Executor;
 pub use execute_state::HttpQueryHandle;
 pub use http_query::HttpQuery;
@@ -29,7 +29,6 @@ pub use http_query::HttpQueryResponseInternal;
 pub use http_query::HttpSession;
 pub use http_query::HttpSessionConf;
 pub use http_query::PaginationConf;
-pub use http_query::ResponseInitialState;
 pub use http_query::ResponseState;
 pub use http_query_manager::HttpQueryManager;
 pub use result_data_manager::Page;

@@ -52,6 +52,19 @@ impl AsyncSystemTable for TablesTable {
             }
         }
 
+        let mut num_rows: Vec<Option<u64>> = Vec::new();
+        let mut data_size: Vec<Option<u64>> = Vec::new();
+        let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
+        let mut index_size: Vec<Option<u64>> = Vec::new();
+
+        for (_, tbl) in &database_tables {
+            let stats = tbl.statistics(ctx.clone()).await?;
+            num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
+            data_size.push(stats.and_then(|v| v.data_length));
+            data_compressed_size.push(None);
+            index_size.push(None);
+        }
+
         let databases: Vec<&[u8]> = database_tables.iter().map(|(d, _)| d.as_bytes()).collect();
         let names: Vec<&[u8]> = database_tables
             .iter()
@@ -78,6 +91,10 @@ impl AsyncSystemTable for TablesTable {
             Series::from_data(names),
             Series::from_data(engines),
             Series::from_data(created_ons),
+            Series::from_data(num_rows),
+            Series::from_data(data_size),
+            Series::from_data(data_compressed_size),
+            Series::from_data(index_size),
         ]))
     }
 }
@@ -89,6 +106,10 @@ impl TablesTable {
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("engine", Vu8::to_data_type()),
             DataField::new("created_on", Vu8::to_data_type()),
+            DataField::new_nullable("num_rows", u64::to_data_type()),
+            DataField::new_nullable("data_size", u64::to_data_type()),
+            DataField::new_nullable("data_compressed_size", u64::to_data_type()),
+            DataField::new_nullable("index_size", u64::to_data_type()),
         ]);
 
         let table_info = TableInfo {

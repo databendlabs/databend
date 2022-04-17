@@ -25,6 +25,7 @@ use common_meta_sled_store::openraft::State;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
@@ -208,14 +209,15 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             let rst = mn
                 .write(LogEntry {
                     txid: None,
-                    cmd: Cmd::CreateDatabase {
+                    cmd: Cmd::CreateDatabase(CreateDatabaseReq {
+                        if_not_exists: false,
                         tenant: tenant.to_string(),
-                        name: name.to_string(),
+                        db_name: name.to_string(),
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
                             ..Default::default()
                         },
-                    },
+                    }),
                 })
                 .await;
 
@@ -579,9 +581,9 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
-    // TODO(xp): This function will replace `test_meta_node_restart` after disk backed state machine is ready.
+    // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.
 
-    // Test disk backed meta node restart.
+    // Test fs backed meta node restart.
     // - Start a cluster of a solo leader;
     // - Write one log.
     // - Restart.

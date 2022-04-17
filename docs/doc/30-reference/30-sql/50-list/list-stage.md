@@ -1,23 +1,33 @@
 ---
-title: List files in a stage
+title: LIST FILES IN STAGE
 ---
 
 
 ## Syntax
 
 ```
-list @<stage_name> [pattern = '<regexp_pattern>']
+LIST { internalStage | externalStage } [ PATTERN = '<regex_pattern>' ]
+```
+
+Where:
+```text
+  internalStage ::= @<internal_stage_name>
+```
+
+```text
+  externalStage ::= @<external_stage_name>
 ```
 
 ## Examples
 
-```sql
-MySQL [(none)]> list @named_external_stage PATTERN = 'ontime.*parquet';
+```sql title='mysql>'
+list @named_external_stage PATTERN = 'ontime.*parquet';
+```
+```
 +-----------------------+
 | file_name             |
 +-----------------------+
 | ontime_200.parquet    |
 | ontime_200_v1.parquet |
 +-----------------------+
-2 rows in set (2.150 sec)
 ```

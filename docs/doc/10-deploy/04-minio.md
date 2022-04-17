@@ -54,14 +54,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -69,7 +69,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nigh
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nightly/databend-v0.7.4-nightly-aarch64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -79,14 +79,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.4-nigh
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.7.14-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -94,7 +94,7 @@ tar xzvf databend-v0.7.4-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.4-nightly-aarch64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.14-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -174,10 +174,10 @@ meta_password = "root"
 
 
 [storage]
-# disk|s3
+# fs|s3
 storage_type = "s3"
 
-[storage.disk]
+[storage.fs]
 
 [storage.s3]
 bucket = "databend"

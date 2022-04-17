@@ -17,6 +17,8 @@ mod logic;
 mod not;
 mod or;
 mod xor;
+#[macro_use]
+mod macros;
 
 pub use and::LogicAndFunction;
 pub use logic::LogicFunction;

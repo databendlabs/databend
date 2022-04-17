@@ -31,16 +31,19 @@ use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
+/// SelectInterpreter struct which interprets SelectPlan
 pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
     select: SelectPlan,
 }
 
 impl SelectInterpreter {
+    /// Create the SelectInterpreter from SelectPlan
     pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 
+    /// Call this method to optimize the logical plan before executing
     fn rewrite_plan(&self) -> Result<PlanNode> {
         plan_schedulers::apply_plan_rewrite(
             Optimizers::create(self.ctx.clone()),
@@ -51,20 +54,24 @@ impl SelectInterpreter {
 
 #[async_trait::async_trait]
 impl Interpreter for SelectInterpreter {
+    /// Get the name of current interpreter
     fn name(&self) -> &str {
         "SelectInterpreter"
     }
 
+    /// Get the schema of SelectPlan
     fn schema(&self) -> DataSchemaRef {
         self.select.schema()
     }
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    /// Currently, the method has two sets of logic, if `get_enable_new_processor_framework` is turned on in the settings,
+    /// the execution will use the new processor, otherwise the old processing logic will be executed.
+    /// Note: there is an issue to track the progress of the new processor:  https://github.com/datafuselabs/databend/issues/3379
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // TODO: maybe panic?
         let settings = self.ctx.get_settings();
 
         if settings.get_enable_new_processor_framework()? != 0 {
@@ -86,7 +93,9 @@ impl Interpreter for SelectInterpreter {
         }
     }
 
-    fn execute2(&self) -> Result<NewPipeline> {
+    /// This method will create a new pipeline
+    /// The QueryPipelineBuilder will use the optimized plan to generate a NewPipeline
+    fn create_new_pipeline(&self) -> Result<NewPipeline> {
         let settings = self.ctx.get_settings();
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
 

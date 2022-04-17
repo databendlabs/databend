@@ -91,6 +91,10 @@ impl Column for ArrayColumn {
         self.data_type.clone()
     }
 
+    fn column_type_name(&self) -> String {
+        "Array".to_string()
+    }
+
     fn len(&self) -> usize {
         self.offsets.len() - 1
     }

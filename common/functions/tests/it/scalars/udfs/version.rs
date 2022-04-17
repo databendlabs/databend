@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_version_function() -> Result<()> {
@@ -28,5 +27,5 @@ fn test_version_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(VersionFunction::try_create("version")?, &tests, true)
+    test_scalar_functions("version", &tests)
 }

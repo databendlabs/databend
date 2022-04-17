@@ -22,6 +22,7 @@ use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -31,7 +32,14 @@ pub struct HexFunction {
 }
 
 impl HexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected integer or string but got {}",
+                args[0].data_type_id()
+            )));
+        }
+
         Ok(Box::new(HexFunction {
             _display_name: display_name.to_string(),
         }))
@@ -48,18 +56,16 @@ impl Function for HexFunction {
         "hex"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
                 let col = cast_column_field(&columns[0], &UInt64Type::arc())?;

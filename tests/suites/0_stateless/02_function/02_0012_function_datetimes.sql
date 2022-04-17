@@ -191,9 +191,18 @@ select toDateTime64('2022-04-01 06:50:20.000')   = '2022-04-01 06:50:20.000';
 select toDateTime64('2022-04-01 06:50:20.000')   > '2022-04-01 04:50:20.000';
 select toDateTime64('2022-04-01 06:50:20.000')   < '2022-04-02 04:50:20.000';
 
+select '===INSERT===';
 drop table if exists ts;
 create table ts(a DateTime64, b DateTime, c Date, d Date32);
 insert into ts values(now(), now(), today(), today());
 select toDateTime64(a) = toDateTime64(b),  toDateTime32(a) = toDateTime(b),  toDate32(c) = toDate32(d), toDate(c) = toDate(d) from ts;
 drop table if exists ts;
 
+
+create table t(d32 datetime32, d64 datetime64);
+
+insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28');
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');
+
+select * from t order by d64;
+drop table t;

@@ -30,7 +30,34 @@ pub struct NullableColumn {
 }
 
 impl NullableColumn {
-    pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
+    pub fn wrap_inner(column: ColumnRef, validity: Option<Bitmap>) -> ColumnRef {
+        if column.is_nullable() {
+            return column;
+        }
+        if !column.is_const() {
+            Self::new_from_opt(column, validity).arc()
+        } else {
+            let c: &ConstColumn = Series::check_get(&column).unwrap();
+            let inner = c.inner().clone();
+            // If the column is const, it means the `inner` column is just one size
+            // So we just need the first bit of the validity
+            let validity = validity.map(|b| b.slice(0, 1));
+            let nullable_column = Self::new_from_opt(inner, validity).arc();
+            ConstColumn::new(nullable_column, c.len()).arc()
+        }
+    }
+
+    pub fn inner(&self) -> &ColumnRef {
+        &self.column
+    }
+
+    pub fn ensure_validity(&self) -> &Bitmap {
+        &self.validity
+    }
+
+    // Set `new` to private, this avoids the user to put wrong column to construct a nullable column
+    fn new(column: ColumnRef, validity: Bitmap) -> Self {
+        debug_assert!(!column.is_const());
         debug_assert!(
             column.data_type().can_inside_nullable(),
             "{} can't be inside of nullable.",
@@ -39,7 +66,7 @@ impl NullableColumn {
         Self { column, validity }
     }
 
-    pub fn new_from_opt(column: ColumnRef, validity: Option<Bitmap>) -> Self {
+    fn new_from_opt(column: ColumnRef, validity: Option<Bitmap>) -> Self {
         let validity = match validity {
             Some(v) => v,
             None => {
@@ -49,15 +76,7 @@ impl NullableColumn {
             }
         };
 
-        Self { column, validity }
-    }
-
-    pub fn inner(&self) -> &ColumnRef {
-        &self.column
-    }
-
-    pub fn ensure_validity(&self) -> &Bitmap {
-        &self.validity
+        Self::new(column, validity)
     }
 }
 
@@ -68,7 +87,11 @@ impl Column for NullableColumn {
 
     fn data_type(&self) -> DataTypePtr {
         let nest = self.column.data_type();
-        Arc::new(NullableType::create(nest))
+        NullableType::arc(nest)
+    }
+
+    fn column_type_name(&self) -> String {
+        format!("Nullable({})", self.column.column_type_name())
     }
 
     fn is_nullable(&self) -> bool {
@@ -88,7 +111,7 @@ impl Column for NullableColumn {
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {
-        (false, Some(&self.validity))
+        (self.only_null(), Some(&self.validity))
     }
 
     fn memory_size(&self) -> usize {
@@ -145,7 +168,7 @@ impl Column for NullableColumn {
         for (index, value) in inner_values.iter().enumerate().take(scattered_size) {
             let bitmap = bitmaps.get_mut(index).unwrap();
             let bitmap = std::mem::take(bitmap).into();
-            results.push(Arc::new(NullableColumn::new(value.clone(), bitmap)) as ColumnRef);
+            results.push(NullableColumn::wrap_inner(value.clone(), Some(bitmap)));
         }
 
         results

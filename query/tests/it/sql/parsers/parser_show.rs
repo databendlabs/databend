@@ -18,6 +18,7 @@ use databend_query::sql::statements::DfShowEngines;
 use databend_query::sql::statements::DfShowFunctions;
 use databend_query::sql::statements::DfShowKind;
 use databend_query::sql::statements::DfShowSettings;
+use databend_query::sql::statements::DfShowTabStat;
 use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::*;
 use sqlparser::ast::*;
@@ -29,19 +30,19 @@ fn show_queries() -> Result<()> {
     // positive case
     expect_parse_ok(
         "SHOW TABLES",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false, None)),
     )?;
     expect_parse_ok(
         "SHOW FULL TABLES",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true, None)),
     )?;
     expect_parse_ok(
         "SHOW TABLES;",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false, None)),
     )?;
     expect_parse_ok(
         "SHOW FULL TABLES;",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true, None)),
     )?;
     expect_parse_ok("SHOW SETTINGS", DfStatement::ShowSettings(DfShowSettings))?;
     expect_parse_ok(
@@ -49,17 +50,18 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Like(Ident::with_quote('\'', "aaa")),
             false,
+            None,
         )),
     )?;
 
     expect_parse_ok(
         "SHOW TABLES --comments should not in sql case1",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, false, None)),
     )?;
 
     expect_parse_ok(
         "SHOW FULL TABLES --comments should not in sql case1",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true)),
+        DfStatement::ShowTables(DfShowTables::create(DfShowKind::All, true, None)),
     )?;
 
     expect_parse_ok(
@@ -67,6 +69,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Like(Ident::with_quote('\'', "aaa")),
             false,
+            None,
         )),
     )?;
 
@@ -75,6 +78,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Like(Ident::with_quote('\'', "aaa")),
             true,
+            None,
         )),
     )?;
 
@@ -83,6 +87,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa'")),
             false,
+            None,
         )),
     )?;
 
@@ -91,6 +96,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa'")),
             true,
+            None,
         )),
     )?;
 
@@ -99,6 +105,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Like(Ident::with_quote('\'', "aaa")),
             false,
+            None,
         )),
     )?;
 
@@ -107,6 +114,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Like(Ident::with_quote('\'', "aaa")),
             true,
+            None,
         )),
     )?;
 
@@ -115,6 +123,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa' AND t LIKE 'a%'")),
             false,
+            None,
         )),
     )?;
 
@@ -123,6 +132,7 @@ fn show_queries() -> Result<()> {
         DfStatement::ShowTables(DfShowTables::create(
             DfShowKind::Where(parse_sql_to_expr("t LIKE 'aaa' AND t LIKE 'a%'")),
             true,
+            None,
         )),
     )?;
 
@@ -131,32 +141,37 @@ fn show_queries() -> Result<()> {
 
 #[test]
 fn show_tables_test() -> Result<()> {
-    let mut ident = Ident::new("ss");
-    ident.quote_style = Some('`');
-    let v = vec![ident];
-    let name = ObjectName(v);
-    let name_two = name.clone();
-    let name_three = name_two.clone();
-    let name_four = name_three.clone();
-
     expect_parse_ok(
         "SHOW TABLES FROM `ss`",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name), false)),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::All,
+            false,
+            Some("ss".to_string()),
+        )),
     )?;
     expect_parse_ok(
         "SHOW FULL TABLES FROM `ss`",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name_two), true)),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::All,
+            true,
+            Some("ss".to_string()),
+        )),
     )?;
     expect_parse_ok(
         "SHOW TABLES IN `ss`",
         DfStatement::ShowTables(DfShowTables::create(
-            DfShowKind::FromOrIn(name_three),
+            DfShowKind::All,
             false,
+            Some("ss".to_string()),
         )),
     )?;
     expect_parse_ok(
         "SHOW FULL TABLES IN `ss`",
-        DfStatement::ShowTables(DfShowTables::create(DfShowKind::FromOrIn(name_four), true)),
+        DfStatement::ShowTables(DfShowTables::create(
+            DfShowKind::All,
+            true,
+            Some("ss".to_string()),
+        )),
     )?;
     Ok(())
 }
@@ -223,17 +238,23 @@ fn show_databases_test() -> Result<()> {
         "SHOW DATABASES",
         DfStatement::ShowDatabases(DfShowDatabases::create(DfShowKind::All)),
     )?;
+    expect_synonym_parse_eq("SHOW DATABASES", "SHOW SCHEMAS")?;
 
     expect_parse_ok(
         "SHOW DATABASES;",
         DfStatement::ShowDatabases(DfShowDatabases::create(DfShowKind::All)),
     )?;
+    expect_synonym_parse_eq("SHOW DATABASES;", "SHOW SCHEMAS;")?;
 
     expect_parse_ok(
         "SHOW DATABASES WHERE Database = 'ss'",
         DfStatement::ShowDatabases(DfShowDatabases::create(DfShowKind::Where(
             parse_sql_to_expr("Database = 'ss'"),
         ))),
+    )?;
+    expect_synonym_parse_eq(
+        "SHOW DATABASES WHERE Database = 'ss'",
+        "SHOW SCHEMAS WHERE Database = 'ss'",
     )?;
 
     expect_parse_ok(
@@ -242,6 +263,10 @@ fn show_databases_test() -> Result<()> {
             parse_sql_to_expr("Database Like 'ss%'"),
         ))),
     )?;
+    expect_synonym_parse_eq(
+        "SHOW DATABASES WHERE Database Like 'ss%'",
+        "SHOW SCHEMAS WHERE Database Like 'ss%'",
+    )?;
 
     expect_parse_ok(
         "SHOW DATABASES LIKE 'ss%'",
@@ -249,6 +274,7 @@ fn show_databases_test() -> Result<()> {
             Ident::with_quote('\'', "ss%"),
         ))),
     )?;
+    expect_synonym_parse_eq("SHOW DATABASES LIKE 'ss%'", "SHOW SCHEMAS LIKE 'ss%'")?;
 
     Ok(())
 }
@@ -258,5 +284,56 @@ fn show_engines_test() -> Result<()> {
     expect_parse_ok("show engines", DfStatement::ShowEngines(DfShowEngines))?;
 
     expect_parse_ok("SHOW ENGINES", DfStatement::ShowEngines(DfShowEngines))?;
+    Ok(())
+}
+
+#[test]
+fn show_tab_stat_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW TABLE STATUS",
+        DfStatement::ShowTabStat(DfShowTabStat::create(DfShowKind::All, None)),
+    )?;
+
+    expect_parse_ok(
+        "SHOW TABLE STATUS;",
+        DfStatement::ShowTabStat(DfShowTabStat::create(DfShowKind::All, None)),
+    )?;
+    expect_parse_ok(
+        "SHOW TABLE STATUS WHERE table_schema='ss%'",
+        DfStatement::ShowTabStat(DfShowTabStat::create(
+            DfShowKind::Where(parse_sql_to_expr("table_schema='ss%'")),
+            None,
+        )),
+    )?;
+    expect_parse_ok(
+        "SHOW TABLE STATUS WHERE table_schema Like 'ss%'",
+        DfStatement::ShowTabStat(DfShowTabStat::create(
+            DfShowKind::Where(parse_sql_to_expr("table_schema Like 'ss%'")),
+            None,
+        )),
+    )?;
+    expect_parse_ok(
+        "SHOW TABLE STATUS Like 'ss%'",
+        DfStatement::ShowTabStat(DfShowTabStat::create(
+            DfShowKind::Like(Ident::with_quote('\'', "ss%")),
+            None,
+        )),
+    )?;
+    expect_parse_ok(
+        "SHOW TABLE STATUS FROM `ss`",
+        DfStatement::ShowTabStat(DfShowTabStat::create(
+            DfShowKind::All,
+            Some("ss".to_string()),
+        )),
+    )?;
+
+    expect_parse_ok(
+        "SHOW TABLE STATUS IN `ss`",
+        DfStatement::ShowTabStat(DfShowTabStat::create(
+            DfShowKind::All,
+            Some("ss".to_string()),
+        )),
+    )?;
+
     Ok(())
 }

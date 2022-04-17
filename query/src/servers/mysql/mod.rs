@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
-
+mod mysql_federated;
 mod mysql_handler;
 mod mysql_interactive_worker;
 mod mysql_metrics;
@@ -22,3 +20,9 @@ mod mysql_session;
 #[allow(clippy::unused_io_amount)]
 mod reject_connection;
 mod writers;
+
+pub use self::mysql_federated::MySQLFederated;
+pub use self::mysql_handler::MySQLHandler;
+pub use self::mysql_session::MySQLConnection;
+
+const MYSQL_VERSION: &str = "8.0.26";

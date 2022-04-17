@@ -27,6 +27,7 @@ use serde_json::Value as JsonValue;
 use super::cast_from_datetimes::cast_from_date16;
 use super::cast_from_datetimes::cast_from_date32;
 use super::cast_from_string::cast_from_string;
+use super::cast_from_variant::cast_from_variant;
 use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime32;
 use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime64;
 
@@ -140,15 +141,17 @@ pub fn cast_with_type(
         TypeID::DateTime64 => {
             cast_from_datetime64(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
+        TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
+            cast_from_variant(column, &nonull_data_type)
+        }
         // TypeID::Interval => arrow_cast_compute(column, &nonull_data_type, cast_options),
         _ => arrow_cast_compute(column, &nonull_from_type, &nonull_data_type, cast_options),
     }?;
 
     let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
-
     if data_type.is_nullable() {
-        return Ok(Arc::new(NullableColumn::new_from_opt(result, bitmap)));
+        return Ok(NullableColumn::wrap_inner(result, bitmap));
     }
 
     if let Some(bitmap) = bitmap {
@@ -184,43 +187,15 @@ pub fn cast_to_variant(
     let size = column.len();
 
     if data_type.data_type_id() == TypeID::VariantArray {
-        if from_type.data_type_id() == TypeID::Variant {
-            let col: &JsonColumn = Series::check_get(&column)?;
-            let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
-            for v in col.iter() {
-                if v.is_array() {
-                    builder.append(v);
-                } else {
-                    let arr = JsonValue::Array(vec![v.clone()]);
-                    builder.append(&arr);
-                }
-            }
-            return Ok((builder.build(size), None));
-        }
         return Err(ErrorCode::BadDataValueType(format!(
             "Expression type does not match column data type, expecting ARRAY but got {}",
             from_type.data_type_id()
         )));
     } else if data_type.data_type_id() == TypeID::VariantObject {
-        if from_type.data_type_id() == TypeID::Variant {
-            let col: &JsonColumn = Series::check_get(&column)?;
-            for v in col.iter() {
-                if !v.is_object() {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "Failed to cast variant value {} to OBJECT",
-                        v
-                    )));
-                }
-            }
-            return Ok((column.clone(), None));
-        }
         return Err(ErrorCode::BadDataValueType(format!(
             "Expression type does not match column data type, expecting OBJECT but got {}",
             from_type.data_type_id()
         )));
-    }
-    if from_type.data_type_id() == TypeID::Variant {
-        return Ok((column.clone(), None));
     }
     let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
@@ -249,10 +224,7 @@ pub fn arrow_cast_compute(
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
-    if data_type.data_type_id() == TypeID::Variant
-        || data_type.data_type_id() == TypeID::VariantArray
-        || data_type.data_type_id() == TypeID::VariantObject
-    {
+    if data_type.data_type_id().is_variant() {
         return cast_to_variant(column, from_type, data_type);
     }
 

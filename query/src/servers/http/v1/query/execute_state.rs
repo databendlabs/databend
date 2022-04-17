@@ -22,7 +22,6 @@ use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -39,7 +38,7 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
-pub enum ExecuteStateName {
+pub enum ExecuteStateKind {
     Running,
     Failed,
     Succeeded,
@@ -51,15 +50,23 @@ pub(crate) enum ExecuteState {
 }
 
 impl ExecuteState {
-    pub(crate) fn extract(&self) -> (ExecuteStateName, Option<ErrorCode>) {
+    pub(crate) fn extract(&self) -> (ExecuteStateKind, Option<ErrorCode>) {
         match self {
-            ExecuteState::Running(_) => (ExecuteStateName::Running, None),
+            ExecuteState::Running(_) => (ExecuteStateKind::Running, None),
             ExecuteState::Stopped(v) => match &v.reason {
-                Ok(_) => (ExecuteStateName::Succeeded, None),
-                Err(e) => (ExecuteStateName::Failed, Some(e.clone())),
+                Ok(_) => (ExecuteStateKind::Succeeded, None),
+                Err(e) => (ExecuteStateKind::Failed, Some(e.clone())),
             },
         }
     }
+}
+
+pub(crate) struct ExecuteRunning {
+    // used to kill query
+    session: SessionRef,
+    // mainly used to get progress for now
+    context: Arc<QueryContext>,
+    interpreter: Arc<dyn Interpreter>,
 }
 
 pub(crate) struct ExecuteStopped {
@@ -80,6 +87,7 @@ impl Executor {
             Stopped(f) => f.progress.clone(),
         }
     }
+
     pub(crate) fn elapsed(&self) -> Duration {
         match &self.state {
             Running(_) => Instant::now() - self.start_time,
@@ -123,26 +131,17 @@ impl HttpQueryHandle {
     }
 }
 
-pub(crate) struct ExecuteRunning {
-    // used to kill query
-    session: SessionRef,
-    // mainly used to get progress for now
-    context: Arc<QueryContext>,
-    interpreter: Arc<dyn Interpreter>,
-}
-
 impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
         session: SessionRef,
         block_tx: mpsc::Sender<DataBlock>,
-    ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
+    ) -> Result<Arc<RwLock<Executor>>> {
         let sql = &request.sql;
         let start_time = Instant::now();
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(sql);
         let plan = PlanParser::parse(ctx.clone(), sql).await?;
-        let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.
@@ -182,7 +181,7 @@ impl ExecuteState {
             };
         })?;
 
-        Ok((executor, schema))
+        Ok(executor)
     }
 }
 

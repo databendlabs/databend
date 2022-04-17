@@ -33,7 +33,7 @@ runs:
     - name: Install python dependences
       shell: bash
       run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy
 
     - name: Run Stateless Tests with Cluster mode
       shell: bash

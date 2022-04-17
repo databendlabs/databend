@@ -51,10 +51,6 @@ impl ShowDatabasesInterpreter {
                 "SELECT name As Database FROM system.databases WHERE {} ORDER BY name",
                 v
             )),
-            kind => Err(ErrorCode::UnImplement(format!(
-                "Show databases unsupported: {:?}",
-                kind
-            ))),
         };
     }
 }

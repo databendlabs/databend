@@ -8,6 +8,7 @@ Convert a value from one data type to another data type.
 
 ```sql
 CAST(x AS t)
+x::t
 ```
 
 ## Arguments
@@ -30,6 +31,14 @@ mysql> SELECT CAST(1 AS VARCHAR);
 +-------------------+
 | 1                 |
 +-------------------+
+
+mysql> select 1::varchar;
++-----------+
+| 1::String |
++-----------+
+| 1         |
++-----------+
+1 row in set (0.014 sec)
 
 mysql> SELECT CAST(1 AS UInt64);
 +-------------------+

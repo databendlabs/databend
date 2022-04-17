@@ -50,21 +50,35 @@ impl Interpreter for ShowGrantsInterpreter {
         let schema = DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())]);
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
+        let role_cache_mgr = self.ctx.get_role_cache_manager();
 
         // TODO: add permission check on reading user grants
-        let grant_list = match self.plan.principal {
-            None => self.ctx.get_current_user()?.format_grants(),
+        let (identity, grant_set) = match self.plan.principal {
+            None => {
+                let user = self.ctx.get_current_user()?;
+                (user.identity().to_string(), user.grants)
+            }
             Some(ref principal) => match principal {
-                PrincipalIdentity::User(user) => user_mgr
-                    .get_user(&tenant, user.clone())
-                    .await?
-                    .format_grants(),
-                PrincipalIdentity::Role(role) => user_mgr
-                    .get_role(&tenant, role.clone())
-                    .await?
-                    .format_grants(),
+                PrincipalIdentity::User(user) => {
+                    let user = user_mgr.get_user(&tenant, user.clone()).await?;
+                    (user.identity().to_string(), user.grants)
+                }
+                PrincipalIdentity::Role(role) => {
+                    let role = user_mgr.get_role(&tenant, role.clone()).await?;
+                    (format!("'{}'", role.identity()), role.grants)
+                }
             },
         };
+        let grant_list = role_cache_mgr
+            .find_related_roles(&tenant, &grant_set.roles())
+            .await?
+            .into_iter()
+            .map(|role| role.grants)
+            .fold(grant_set, |a, b| a | b)
+            .entries()
+            .iter()
+            .map(|e| format!("{} TO {}", e, identity).into_bytes())
+            .collect::<Vec<_>>();
 
         let block = DataBlock::create(schema.clone(), vec![Series::from_data(grant_list)]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

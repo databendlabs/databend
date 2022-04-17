@@ -75,6 +75,14 @@ async fn test_constant_folding_optimizer() -> Result<()> {
                 \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             },
             Test {
+                name: "Projection PostgreSQL style cast const recursion",
+                query: "SELECT '1'::uint8",
+                expect: "\
+                Projection: '1'::UInt8:UInt8\
+                \n  Expression: 1:UInt8 (Before Projection)\
+                \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            },
+            Test {
                 name: "Projection hash const recursion",
                 query: "SELECT sipHash('test_string')",
                 expect: "\

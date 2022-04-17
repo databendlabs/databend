@@ -23,13 +23,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh -yb
+      - name: Cross setup
+        if: ${{ matrix.target == 'aarch64-apple-darwin' }}
+        run: |
           rustup target add aarch64-apple-darwin
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
       - name: Build Binary
         run: |
           cargo build --release --target=${{ matrix.target }}
@@ -68,6 +74,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
@@ -109,6 +117,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}

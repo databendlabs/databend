@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -26,7 +27,7 @@ use crate::scalars::FunctionFeatures;
 pub struct ExistsFunction;
 
 impl ExistsFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(ExistsFunction {}))
     }
 
@@ -41,15 +42,13 @@ impl Function for ExistsFunction {
         "ExistsFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(bool::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        bool::to_data_type()
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {

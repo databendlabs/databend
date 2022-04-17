@@ -25,6 +25,7 @@ use crate::scalars::assert_numeric;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -34,7 +35,10 @@ pub struct PowFunction {
 }
 
 impl PowFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(PowFunction {
             display_name: display_name.to_string(),
         }))
@@ -60,14 +64,16 @@ impl Function for PowFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
                 let col = scalar_binary_op::<$S, $T, f64, _>(columns[0].column(), columns[1].column(), scalar_pow, &mut EvalContext::default())?;

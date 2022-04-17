@@ -16,10 +16,9 @@ use std::f64::consts::E;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_log_function() -> Result<()> {
@@ -88,7 +87,7 @@ fn test_log_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LogFunction::try_create("log")?, &tests, true)
+    test_scalar_functions("log", &tests)
 }
 
 #[test]
@@ -108,7 +107,7 @@ fn test_ln_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LnFunction::try_create("ln")?, &tests, true)
+    test_scalar_functions("ln", &tests)
 }
 
 #[test]
@@ -120,7 +119,7 @@ fn test_log2_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Log2Function::try_create("log2")?, &tests, true)
+    test_scalar_functions("log2", &tests)
 }
 
 #[test]
@@ -132,5 +131,5 @@ fn test_log10_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Log10Function::try_create("log10")?, &tests, true)
+    test_scalar_functions("log10", &tests)
 }

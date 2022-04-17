@@ -43,12 +43,6 @@ body:
 
   - type: textarea
     attributes:
-      label: What You Expected?
-    validations:
-      required: true
-
-  - type: textarea
-    attributes:
       label: How to Reproduce?
       placeholder: >
         Please try to give reproducing steps to facilitate quick location of the problem.
@@ -59,10 +53,6 @@ body:
         - Cluster information: number of nodes, configuration, etc.
 
         If it is hard to reproduce, please also explain the general scene.
-
-  - type: textarea
-    attributes:
-      label: Anything Else?
 
 
   - type: checkboxes

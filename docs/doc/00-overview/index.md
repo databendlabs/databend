@@ -3,7 +3,7 @@ title: What is Databend?
 slug: ../
 ---
 
-Databend is an open source **Elastic** and **Scalable** Modern Cloud Data Warehouse written in Rust from scratch.
+Databend is an open source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse written in Rust from scratch.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
 
@@ -17,7 +17,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system; Databend also supports semi-structured data types:[VARIANT,OBJECT,ARRAY](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured data (JSON).
 
 - __MySQL/ClickHouse Compatible__
 
@@ -109,14 +109,24 @@ For efficient pruning, Databend also creates indexes for each Parquet file:
 With the indexes, we can speed up the queries by reducing the I/O and CPU cost.
 Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 has `min_max.idx` of `[4, 6)` in column `x`, if the query predicate is `WHERE x < 4`, only f1 needs to be accessed and processed.
 
-## Roadmap
-- [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
-- [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
+## Getting Started
+
+- [Databend Deploy](/doc/deploy)
+- [Databend Develop](/doc/develop)
+- [Databend Contributing](/doc/contributing)
+- [Databend Performance](/doc/performance)
+- [Databend Continuous Benchmarking](https://perf.databend.rs)
 
 ## Community
 
-- [Slack Channel](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
-- [@Databend](https://twitter.com/Datafuse_Labs) on Twitter
+- [Slack](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA) (For live discussion with the Community)
+- [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
+- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about the Databend)
+
+## Roadmap
+- [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
+- [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
 
 ## License
 

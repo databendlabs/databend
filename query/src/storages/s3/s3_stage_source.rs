@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
@@ -26,8 +28,10 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::S3StageTableInfo;
 use common_streams::CsvSourceBuilder;
+use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use futures::io::BufReader;
 use opendal::io_util::SeekableReader;
 use opendal::BytesReader;
 use opendal::Operator;
@@ -44,6 +48,7 @@ pub struct StageSource {
     table_info: S3StageTableInfo,
     initialized: bool,
     source: Option<Box<dyn Source>>,
+    files: Arc<Mutex<VecDeque<String>>>,
 }
 
 impl StageSource {
@@ -52,6 +57,7 @@ impl StageSource {
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         table_info: S3StageTableInfo,
+        files: Arc<Mutex<VecDeque<String>>>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, StageSource {
             ctx,
@@ -59,6 +65,7 @@ impl StageSource {
             table_info,
             initialized: false,
             source: None,
+            files,
         })
     }
 
@@ -69,7 +76,8 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let mut builder = CsvSourceBuilder::create(schema);
+        let settings = ctx.get_format_settings()?;
+        let mut builder = CsvSourceBuilder::create(schema, settings);
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.
@@ -87,7 +95,7 @@ impl StageSource {
 
         // Skip header.
         {
-            builder.skip_header(stage_info.file_format_options.skip_header);
+            builder.skip_header(stage_info.file_format_options.skip_header > 0);
         }
 
         // Field delimiter, default ','.
@@ -103,6 +111,32 @@ impl StageSource {
         }
 
         Ok(Box::new(builder.build(reader)?))
+    }
+
+    // Get json source stream.
+    async fn json_source(
+        ctx: Arc<QueryContext>,
+        schema: DataSchemaRef,
+        stage_info: &UserStageInfo,
+        reader: BytesReader,
+    ) -> Result<Box<dyn Source>> {
+        let mut builder = NDJsonSourceBuilder::create(schema);
+        let size_limit = stage_info.copy_options.size_limit;
+
+        // Size limit.
+        {
+            if size_limit > 0 {
+                builder.size_limit(size_limit);
+            }
+        }
+
+        // Block size.
+        {
+            let max_block_size = ctx.get_settings().get_max_block_size()?;
+            builder.block_size(max_block_size as usize);
+        }
+
+        Ok(Box::new(builder.build(BufReader::new(reader))?))
     }
 
     // Get parquet source stream.
@@ -142,19 +176,25 @@ impl StageSource {
         }
     }
 
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self, file_name: String) -> Result<()> {
         let ctx = self.ctx.clone();
-        let file_name = self.table_info.file_name.clone();
         let stage = &self.table_info.stage_info;
         let file_format = stage.file_format_options.format.clone();
 
         let op = Self::get_op(&self.ctx, &self.table_info.stage_info).await?;
-        let path = file_name.unwrap_or_else(|| "".to_string());
+        let path = file_name;
         let object = op.object(&path);
 
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
             StageFileFormatType::Csv => Ok(Self::csv_source(
+                ctx.clone(),
+                self.schema.clone(),
+                stage,
+                Box::new(object.reader().await?),
+            )
+            .await?),
+            StageFileFormatType::Json => Ok(Self::json_source(
                 ctx.clone(),
                 self.schema.clone(),
                 stage,
@@ -186,11 +226,18 @@ impl AsyncSource for StageSource {
     type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
+        let mut files_guard = self.files.lock();
+        let file_name = files_guard.pop_front();
+        drop(files_guard);
         async move {
             if !self.initialized {
                 self.initialized = true;
-                self.initialize().await?;
             }
+
+            if file_name.is_none() {
+                return Ok(None);
+            }
+            self.initialize(file_name.unwrap()).await?;
 
             match &mut self.source {
                 None => Err(ErrorCode::LogicalError("Please init source first!")),

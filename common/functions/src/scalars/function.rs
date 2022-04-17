@@ -22,6 +22,20 @@ use dyn_clone::DynClone;
 
 use super::Monotonicity;
 
+/// for now, this is only store Timezone
+#[derive(Clone)]
+pub struct FunctionContext {
+    pub tz: String,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self {
+            tz: "UTC".to_string(),
+        }
+    }
+}
+
 pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
     fn name(&self) -> &str;
@@ -37,10 +51,15 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr>;
+    fn return_type(&self) -> DataTypePtr;
 
     /// Evaluate the function, e.g. run/execute the function.
-    fn eval(&self, _columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef>;
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        _columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef>;
 
     /// If all args are constant column, then we just return the constant result
     /// TODO, we should cache the constant result inside the context for better performance

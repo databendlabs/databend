@@ -27,6 +27,7 @@ use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -36,7 +37,18 @@ pub struct RegexpInStrFunction {
 }
 
 impl RegexpInStrFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for (i, arg) in args.iter().enumerate() {
+            if i < 2 || i == 5 {
+                assert_string(*arg)?;
+            } else if !arg.data_type_id().is_integer() && !arg.data_type_id().is_string() {
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected integer or string or null, but got {}",
+                    args[i].data_type_id()
+                )));
+            }
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -56,25 +68,17 @@ impl Function for RegexpInStrFunction {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for (i, arg) in args.iter().enumerate() {
-            if i < 2 || i == 5 {
-                assert_string(*arg)?;
-            } else if !arg.data_type_id().is_integer()
-                && !arg.data_type_id().is_string()
-                && !arg.data_type_id().is_null()
-            {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected integer or string or null, but got {}",
-                    args[i].data_type_id()
-                )));
-            }
-        }
-
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        u64::to_data_type()
     }
+
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         let mut pos = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut occurrence = ConstColumn::new(Series::from_data(vec![1_i64]), input_rows).arc();
         let mut return_option = ConstColumn::new(Series::from_data(vec![0_i64]), input_rows).arc();
@@ -223,7 +227,15 @@ impl RegexpInStrFunction {
 #[inline]
 fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
     let occur = if occur < 1 { 1 } else { occur };
-    let mut pos = if pos < 1 { 0 } else { (pos - 1) as usize };
+    let pos = if pos < 1 { 0 } else { (pos - 1) as usize };
+
+    // the 'pos' postion is the character index,
+    // so we should iterate the character to find the byte index.
+    let mut pos = match s.char_indices().nth(pos) {
+        Some((start, _, _)) => start,
+        None => return 0,
+    };
+
     let mut i = 1_i64;
     let m = loop {
         let m = re.find_at(s, pos);
@@ -233,23 +245,29 @@ fn regexp_instr(s: &[u8], re: &Regex, pos: i64, occur: i64, ro: i64) -> u64 {
 
         i += 1;
         if let Some(m) = m {
-            pos += m.end();
-        }
-        if pos >= s.len() {
-            break None;
+            // set the start postion of 'find_at' function to the position following the matched substring
+            pos = m.end();
         }
     };
 
-    let instr = match m {
-        Some(m) => {
-            if ro == 0 {
-                m.start() + 1
-            } else {
-                m.end() + 1
+    if m.is_none() {
+        return 0;
+    }
+
+    // the matched result is the byte index, but the 'regexp_instr' function returns the character index,
+    // so we should iterate the character to find the character index.
+    let mut instr = 0_usize;
+    for (p, (start, end, _)) in s.char_indices().enumerate() {
+        if ro == 0 {
+            if start == m.unwrap().start() {
+                instr = p + 1;
+                break;
             }
+        } else if end == m.unwrap().end() {
+            instr = p + 2;
+            break;
         }
-        None => 0,
-    };
+    }
 
     instr as u64
 }

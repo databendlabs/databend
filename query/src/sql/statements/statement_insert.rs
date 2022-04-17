@@ -18,9 +18,9 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
+use common_planners::InsertValueBlock;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
@@ -28,21 +28,20 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
-use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
-use sqlparser::ast::Values;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::ValueSource;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::storages::Table;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfInsertStatement {
+pub struct DfInsertStatement<'a> {
     pub or: Option<SqliteOnConflict>,
     /// TABLE
     pub table_name: ObjectName,
@@ -51,7 +50,7 @@ pub struct DfInsertStatement {
     /// Overwrite (Hive)
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
-    pub source: Option<Box<Query>>,
+    pub source: InsertSource<'a>,
     /// partitioned insert (Hive)
     pub partitioned: Option<Vec<Expr>>,
     /// format name
@@ -64,8 +63,16 @@ pub struct DfInsertStatement {
     pub on: Option<OnInsert>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InsertSource<'a> {
+    /// for insert format
+    Empty,
+    Select(Box<Query>),
+    Values(&'a str),
+}
+
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfInsertStatement {
+impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
@@ -76,14 +83,12 @@ impl AnalyzableStatement for DfInsertStatement {
         let schema = self.insert_schema(write_table)?;
 
         let input_source = match &self.source {
-            None => self.analyze_insert_without_source().await,
-            Some(source) => match &source.body {
-                SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v, &schema).await,
-                SetExpr::Select(_) => self.analyze_insert_select(ctx.clone(), source).await,
-                _ => Err(ErrorCode::SyntaxException(
-                    "Insert must be have values or select source.",
-                )),
-            },
+            InsertSource::Empty => self.analyze_insert_without_source().await,
+            InsertSource::Values(values_str) => {
+                self.analyze_insert_values(ctx.clone(), *values_str, &schema)
+                    .await
+            }
+            InsertSource::Select(select) => self.analyze_insert_select(ctx.clone(), select).await,
         }?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
@@ -99,7 +104,7 @@ impl AnalyzableStatement for DfInsertStatement {
     }
 }
 
-impl DfInsertStatement {
+impl<'a> DfInsertStatement<'a> {
     fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String)> {
         match self.table_name.0.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
@@ -136,39 +141,22 @@ impl DfInsertStatement {
     async fn analyze_insert_values(
         &self,
         ctx: Arc<QueryContext>,
-        values: &Values,
+        values_str: &'a str,
         schema: &DataSchemaRef,
     ) -> Result<InsertInputSource> {
-        tracing::debug!("{:?}", values);
+        tracing::debug!("{:?}", values_str);
 
-        let expression_analyzer = ExpressionAnalyzer::create(ctx);
-        let mut value_exprs = Vec::with_capacity(values.0.len());
-        for value in &values.0 {
-            let mut exprs = Vec::with_capacity(value.len());
-            for (i, v) in value.iter().enumerate() {
-                let expr = expression_analyzer.analyze(v).await?;
-                let expr = if &expr.to_data_type(schema)? != schema.field(i).data_type() {
-                    Expression::Cast {
-                        expr: Box::new(expr),
-                        data_type: schema.field(i).data_type().clone(),
-                        is_nullable: schema.field(i).is_nullable(),
-                    }
-                } else {
-                    expr
-                };
-                exprs.push(Expression::Alias(
-                    schema.field(i).name().to_string(),
-                    Box::new(expr),
-                ));
+        let source = ValueSource::new(schema.clone());
+        let block = match source.stream_read(values_str) {
+            Ok(block) => Ok(block),
+            Err(_) => {
+                let bytes = values_str.as_bytes();
+                source
+                    .parser_read(bytes, ExpressionAnalyzer::create(ctx.clone()), ctx)
+                    .await
             }
-            value_exprs.push(exprs);
-        }
-
-        let values = format!("{}", values);
-        Ok(InsertInputSource::Expressions(
-            (values["VALUES ".len()..]).to_string(),
-            value_exprs,
-        ))
+        }?;
+        Ok(InsertInputSource::Values(InsertValueBlock { block }))
     }
 
     async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {

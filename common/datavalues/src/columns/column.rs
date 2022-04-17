@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -38,6 +37,8 @@ pub trait Column: Send + Sync {
         self.data_type().data_type_id()
     }
     fn data_type(&self) -> DataTypePtr;
+
+    fn column_type_name(&self) -> String;
 
     fn is_nullable(&self) -> bool {
         false
@@ -183,17 +184,9 @@ where A: AsRef<dyn Array>
     }
 
     fn into_nullable_column(self) -> ColumnRef {
-        let size = self.as_ref().len();
         let validity = self.as_ref().validity().cloned();
         let column = self.as_ref().into_column();
-        Arc::new(NullableColumn::new(
-            column,
-            validity.unwrap_or_else(|| {
-                let mut bm = MutableBitmap::with_capacity(size);
-                bm.extend_constant(size, true);
-                Bitmap::from(bm)
-            }),
-        ))
+        NullableColumn::wrap_inner(column, validity)
     }
 }
 
@@ -254,6 +247,9 @@ impl std::fmt::Debug for dyn Column + '_ {
                 Struct => {
                     fmt_dyn!(col, StructColumn, f)
                 },
+                Variant | VariantArray | VariantObject => {
+                    fmt_dyn!(col, JsonColumn, f)
+                }
                 _ => {
                     unimplemented!()
                 }

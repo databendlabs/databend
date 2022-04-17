@@ -72,7 +72,7 @@ pub struct MetaRaftStore {
 
     config: RaftConfig,
 
-    /// If the instance is opened from an existent state(e.g. load from disk) or created.
+    /// If the instance is opened from an existent state(e.g. load from fs) or created.
     is_opened: bool,
 
     /// The sled db for log and raft_state.
@@ -103,7 +103,7 @@ pub struct MetaRaftStore {
 }
 
 impl Opened for MetaRaftStore {
-    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
+    /// If the instance is opened(true) from an existent state(e.g. load from fs) or created(false).
     fn is_opened(&self) -> bool {
         self.is_opened
     }

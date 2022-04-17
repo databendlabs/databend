@@ -17,19 +17,11 @@ use std::hash::Hasher;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::Blake3HashFunction;
-use common_functions::scalars::City64WithSeedFunction;
-use common_functions::scalars::Md5HashFunction;
-use common_functions::scalars::Sha1HashFunction;
-use common_functions::scalars::Sha2HashFunction;
-use common_functions::scalars::SipHash64Function;
-use common_functions::scalars::XxHash32Function;
-use common_functions::scalars::XxHash64Function;
 use naive_cityhash::cityhash64_with_seed;
 use twox_hash::XxHash32;
 
-use super::scalar_function2_test::test_scalar_functions;
-use super::scalar_function2_test::ScalarFunctionTest;
+use super::scalar_function_test::test_scalar_functions;
+use super::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_siphash_function() -> Result<()> {
@@ -136,7 +128,7 @@ fn test_siphash_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(SipHash64Function::try_create("siphash")?, &tests, true)
+    test_scalar_functions("siphash64", &tests)
 }
 
 #[test]
@@ -148,7 +140,7 @@ fn test_md5hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Md5HashFunction::try_create("md5")?, &tests, true)
+    test_scalar_functions("md5", &tests)
 }
 
 #[test]
@@ -160,69 +152,69 @@ fn test_sha1hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Sha1HashFunction::try_create("sha1")?, &tests, true)
+    test_scalar_functions("sha1", &tests)
 }
 
 #[test]
 fn test_sha2hash_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
-            name: "Sha0 (256)",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([0_u32])],
-            expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
-            error: "",
-        },
+                name: "Sha0 (256)",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([0_u32])],
+                expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
+                error: "",
+            },
         ScalarFunctionTest {
-            name: "Sha224",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([224_u32])],
-            expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
-            error: "",
-        },
+                name: "Sha224",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([224_u32])],
+                expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
+                error: "",
+            },
         ScalarFunctionTest {
-            name: "Sha256",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([256_u32])],
-            expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
-            error: "",
-        },
+                name: "Sha256",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([256_u32])],
+                expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
+                error: "",
+            },
         ScalarFunctionTest {
-            name: "Sha384",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([384_u32])],
-            expect: Series::from_data(["cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"]),
-            error: "",
-        },
+                name: "Sha384",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([384_u32])],
+                expect: Series::from_data(["cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"]),
+                error: "",
+            },
         ScalarFunctionTest {
-            name: "Sha512",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([512_u32])],
-            expect: Series::from_data(["ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"]),
-            error: "",
-        },
+                name: "Sha512",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([512_u32])],
+                expect: Series::from_data(["ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"]),
+                error: "",
+            },
         ScalarFunctionTest {
-            name: "InvalidSha",
-            columns: vec![Series::from_data(["abc"]), Series::from_data([1_u32])],
-            expect: Series::from_data([Option::<&str>::None]),
-            error: "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got 1",
-        },
+                name: "InvalidSha",
+                columns: vec![Series::from_data(["abc"]), Series::from_data([1_u32])],
+                expect: Series::from_data([Option::<&str>::None]),
+                error: "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got 1",
+            },
         ScalarFunctionTest {
-            name: "Sha Length as Const Field",
-            columns: vec![
-                Series::from_data(["abc"]),
-                Series::from_data([224_u16]),
-            ],
-            expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
-            error: "",
-        },
+                name: "Sha Length as Const Field",
+                columns: vec![
+                    Series::from_data(["abc"]),
+                    Series::from_data([224_u16]),
+                ],
+                expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
+                error: "",
+            },
         ScalarFunctionTest {
-            name: "Sha Length with null value",
-            columns: vec![
-                Series::from_data([Option::<&str>::None]),
-                Series::from_data([Option::<u16>::None]),
-            ],
-            expect: Series::from_data([Option::<&str>::None]),
-            error: "",
-        },
+                name: "Sha Length with null value",
+                columns: vec![
+                    Series::from_data([Option::<&str>::None]),
+                    Series::from_data([Option::<u16>::None]),
+                ],
+                expect: Series::from_data([Option::<&str>::None]),
+                error: "",
+            },
     ];
 
-    test_scalar_functions(Sha2HashFunction::try_create("sha2")?, &tests, true)
+    test_scalar_functions("sha2", &tests)
 }
 
 #[test]
@@ -236,7 +228,7 @@ fn test_blake3hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Blake3HashFunction::try_create("blake3")?, &tests, true)
+    test_scalar_functions("blake3", &tests)
 }
 
 #[test]
@@ -248,7 +240,7 @@ fn test_xxhash32_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(XxHash32Function::try_create("xxhash32")?, &tests, true)
+    test_scalar_functions("xxhash32", &tests)
 }
 
 #[test]
@@ -260,7 +252,7 @@ fn test_xxhash64_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(XxHash64Function::try_create("xxhash64")?, &tests, true)
+    test_scalar_functions("xxhash64", &tests)
 }
 
 #[test]
@@ -313,11 +305,7 @@ fn test_cityhash64_with_seed_u8() -> Result<()> {
     };
 
     let tests = vec![test0, test1];
-    test_scalar_functions(
-        City64WithSeedFunction::try_create("city64WithSeed")?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("city64WithSeed", &tests)
 }
 
 #[test]
@@ -342,6 +330,8 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
         error: "",
     };
 
+    test_scalar_functions("city64WithSeed", &[test0])?;
+
     let to_hash = vec![Some("Superman"), None, None];
     let seed = 100u64; //constant seed
     let mut expected_result = Vec::with_capacity(to_hash.len());
@@ -364,10 +354,5 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
         error: "",
     };
 
-    let tests = vec![test0, test1];
-    test_scalar_functions(
-        City64WithSeedFunction::try_create("city64WithSeed")?,
-        &tests,
-        true,
-    )
+    test_scalar_functions("city64WithSeed", &[test1])
 }

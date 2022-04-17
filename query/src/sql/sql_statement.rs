@@ -63,6 +63,7 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowRoles;
 use crate::sql::statements::DfShowSettings;
+use crate::sql::statements::DfShowTabStat;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
@@ -70,10 +71,10 @@ use crate::sql::statements::DfUseDatabase;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DfStatement {
+pub enum DfStatement<'a> {
     // ANSI SQL AST node
     Query(Box<DfQueryStatement>),
-    Explain(DfExplain),
+    Explain(DfExplain<'a>),
 
     // Databases.
     ShowDatabases(DfShowDatabases),
@@ -85,6 +86,7 @@ pub enum DfStatement {
     // Tables.
     ShowTables(DfShowTables),
     ShowCreateTable(DfShowCreateTable),
+    ShowTabStat(DfShowTabStat),
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
@@ -118,7 +120,7 @@ pub enum DfStatement {
     SetVariable(DfSetVariable),
 
     // Insert
-    InsertQuery(DfInsertStatement),
+    InsertQuery(DfInsertStatement<'a>),
 
     // User
     CreateUser(DfCreateUser),

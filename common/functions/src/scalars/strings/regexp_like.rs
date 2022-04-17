@@ -26,6 +26,7 @@ use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -35,7 +36,11 @@ pub struct RegexpLikeFunction {
 }
 
 impl RegexpLikeFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
@@ -56,15 +61,16 @@ impl Function for RegexpLikeFunction {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-
-        Ok(BooleanType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        BooleanType::arc()
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
         if let Ok(col1) = col1 {
             let lhs = columns[0].column();

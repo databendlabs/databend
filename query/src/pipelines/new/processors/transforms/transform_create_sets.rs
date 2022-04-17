@@ -104,7 +104,7 @@ impl SubQueriesPuller {
         let async_runtime = subquery_ctx.get_storage_runtime();
 
         let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
-        let query_pipeline = interpreter.execute2()?;
+        let query_pipeline = interpreter.create_new_pipeline()?;
         let mut query_executor =
             PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;
 
@@ -142,7 +142,7 @@ impl SubQueriesPuller {
         let async_runtime = subquery_ctx.get_storage_runtime();
 
         let interpreter = SelectInterpreter::try_create(subquery_ctx, plan)?;
-        let query_pipeline = interpreter.execute2()?;
+        let query_pipeline = interpreter.create_new_pipeline()?;
 
         let mut query_executor =
             PipelinePullingExecutor::try_create(async_runtime, query_pipeline)?;

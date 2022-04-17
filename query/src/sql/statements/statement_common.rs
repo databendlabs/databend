@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::get_abs_path;
+use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageS3Storage;
@@ -61,8 +62,8 @@ pub async fn location_to_stage_path(
 // path_as_root set to false when we copy from external stage
 pub fn parse_stage_storage(
     location: &str,
-    credential_options: &HashMap<String, String>,
-    encryption_options: &HashMap<String, String>,
+    credential_options: &BTreeMap<String, String>,
+    encryption_options: &BTreeMap<String, String>,
 ) -> Result<(StageStorage, String)> {
     // Parse uri.
     // 's3://<bucket>[/<path>]'
@@ -123,7 +124,7 @@ pub fn parse_stage_storage(
 }
 
 pub fn parse_copy_file_format_options(
-    file_format_options: &HashMap<String, String>,
+    file_format_options: &BTreeMap<String, String>,
 ) -> Result<FileFormatOptions> {
     // File format type.
     let format = file_format_options
@@ -136,19 +137,23 @@ pub fn parse_copy_file_format_options(
     let skip_header = file_format_options
         .get("skip_header")
         .unwrap_or(&"0".to_string())
-        .parse::<i32>()?;
+        .parse::<u64>()?;
 
     // Field delimiter.
-    let field_delimiter = file_format_options
-        .get("field_delimiter")
-        .unwrap_or(&"".to_string())
-        .clone();
+    let field_delimiter = parse_escape_string(
+        file_format_options
+            .get("field_delimiter")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
 
     // Record delimiter.
-    let record_delimiter = file_format_options
-        .get("record_delimiter")
-        .unwrap_or(&"".to_string())
-        .clone();
+    let record_delimiter = parse_escape_string(
+        file_format_options
+            .get("record_delimiter")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
 
     Ok(FileFormatOptions {
         format: file_format,

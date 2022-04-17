@@ -55,11 +55,10 @@ impl TestFixture {
         let tmp_dir = TempDir::new().unwrap();
         let mut conf = crate::tests::ConfigBuilder::create().config();
 
-        // make sure we are suing `Disk` storage
-        conf.storage.storage_type = "Disk".to_string();
+        // make sure we are suing `fs` storage
+        conf.storage.storage_type = "fs".to_string();
         // use `TempDir` as root path (auto clean)
-        conf.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
-        conf.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.fs.data_path = tmp_dir.path().to_str().unwrap().to_string();
         let ctx = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
@@ -305,7 +304,7 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
 ) {
-    let data_path = fixture.ctx().get_config().storage.disk.data_path;
+    let data_path = fixture.ctx().get_config().storage.fs.data_path;
     let root = data_path.as_str();
     let mut ss_count = 0;
     let mut sg_count = 0;

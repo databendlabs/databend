@@ -57,8 +57,8 @@ impl RepoIssuesTable {
         let req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: options.owner.clone(),
-            table: format!("{}_{}", options.repo.clone(), "issues"),
+            db_name: options.owner.clone(),
+            table_name: format!("{}_{}", options.repo.clone(), "issues"),
             table_meta: TableMeta {
                 schema: RepoIssuesTable::schema(),
                 engine: "GITHUB".into(),

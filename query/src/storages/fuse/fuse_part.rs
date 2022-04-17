@@ -21,6 +21,8 @@ use common_exception::Result;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
+use crate::storages::fuse::meta::Compression;
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct ColumnMeta {
     pub offset: u64,
@@ -46,6 +48,7 @@ pub struct FusePartInfo {
     pub format_version: u64,
     pub nums_rows: usize,
     pub columns_meta: HashMap<usize, ColumnMeta>,
+    pub compression: Compression,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -68,12 +71,14 @@ impl FusePartInfo {
         format_version: u64,
         rows_count: u64,
         columns_meta: HashMap<usize, ColumnMeta>,
+        compression: Compression,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
             format_version,
             columns_meta,
             nums_rows: rows_count as usize,
+            compression,
         }))
     }
 

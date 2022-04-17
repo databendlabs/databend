@@ -137,6 +137,41 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Enable new processor framework if value != 0, default value: 1",
             },
+
+            SettingValue {
+                default_value: DataValue::String("\n".as_bytes().to_vec()),
+                user_setting: UserSetting::create("record_delimiter", DataValue::String("\n".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Format record_delimiter, default value: \n",
+            },
+
+            SettingValue {
+                default_value:DataValue::String(",".as_bytes().to_vec()),
+                user_setting: UserSetting::create("field_delimiter", DataValue::String(",".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Format field delimiter, default value: ,",
+            },
+
+            SettingValue {
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("empty_as_default", DataValue::UInt64(1)),
+                level: ScopeLevel::Session,
+                desc: "Format empty_as_default, default value: 1",
+            },
+
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("skip_header", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Whether to skip the input header, default value: 0",
+            },
+
+            SettingValue {
+                default_value:DataValue::String("UTC".as_bytes().to_vec()),
+                user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Timezone, default value: UTC,",
+            },
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -223,6 +258,39 @@ impl Settings {
         self.try_get_u64(key)
     }
 
+    pub fn get_field_delimiter(&self) -> Result<Vec<u8>> {
+        let key = "field_delimiter";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_record_delimiter(&self) -> Result<Vec<u8>> {
+        let key = "record_delimiter";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_empty_as_default(&self) -> Result<u64> {
+        let key = "empty_as_default";
+        self.try_get_u64(key)
+    }
+
+    pub fn get_skip_header(&self) -> Result<u64> {
+        let key = "skip_header";
+        self.try_get_u64(key)
+    }
+
+    pub fn get_timezone(&self) -> Result<Vec<u8>> {
+        let key = "timezone";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn has_setting(&self, key: &str) -> bool {
+        let settings = self.settings.read();
+        settings.get(key).is_some()
+    }
+
     fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
         let settings = self.settings.read();
         let setting = settings
@@ -246,15 +314,34 @@ impl Settings {
         setting.user_setting.value = DataValue::UInt64(val);
 
         if is_global {
-            let tenant = self.session_ctx.get_tenant();
-            let _ = futures::executor::block_on(
-                self.user_api
-                    .get_setting_api_client(&tenant)?
-                    .set_setting(setting.user_setting.clone()),
-            )?;
-            setting.level = ScopeLevel::Global;
+            self.set_to_global(setting)?;
         }
 
+        Ok(())
+    }
+
+    fn try_set_string(&self, key: &str, val: Vec<u8>, is_global: bool) -> Result<()> {
+        let mut settings = self.settings.write();
+        let mut setting = settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+        setting.user_setting.value = DataValue::String(val);
+
+        if is_global {
+            self.set_to_global(setting)?;
+        }
+
+        Ok(())
+    }
+
+    fn set_to_global(&self, setting: &mut SettingValue) -> Result<()> {
+        let tenant = self.session_ctx.get_tenant();
+        let _ = futures::executor::block_on(
+            self.user_api
+                .get_setting_api_client(&tenant)?
+                .set_setting(setting.user_setting.clone()),
+        )?;
+        setting.level = ScopeLevel::Global;
         Ok(())
     }
 
@@ -298,6 +385,10 @@ impl Settings {
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val, is_global)?;
             }
+            TypeID::String => {
+                self.try_set_string(&key, val.into_bytes(), is_global)?;
+            }
+
             v => {
                 return Err(ErrorCode::UnknownVariable(format!(
                     "Unsupported variable:{:?} type:{:?} when set_settings().",

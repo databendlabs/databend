@@ -30,7 +30,7 @@ use databend_query::servers::http::v1::make_final_uri;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
-use databend_query::servers::http::v1::ExecuteStateName;
+use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
@@ -79,10 +79,18 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10);
-    assert_eq!(result.state, ExecuteStateName::Succeeded, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
+    assert_eq!(result.schema.unwrap().fields().len(), 8);
+
+    let sql = "show databases";
+    let (status, result) = post_sql(sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert!(result.schema.is_some());
+    assert_eq!(result.schema.unwrap().fields().len(), 1);
     Ok(())
 }
 
@@ -93,7 +101,7 @@ async fn test_bad_sql() -> Result<()> {
     assert!(result.error.is_some());
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
-    assert_eq!(result.state, ExecuteStateName::Failed);
+    assert_eq!(result.state, ExecuteStateKind::Failed);
     assert!(result.stats.scan_progress.is_none());
     assert!(result.schema.is_none());
     Ok(())
@@ -114,7 +122,7 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.next_uri, Some(next_uri));
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
-    assert_eq!(result.state, ExecuteStateName::Running,);
+    assert_eq!(result.state, ExecuteStateKind::Running,);
     sleep(Duration::from_millis(100)).await;
 
     // get page, support retry
@@ -126,9 +134,9 @@ async fn test_async() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", result);
         assert_eq!(result.data.len(), 1, "{:?}", result);
         assert!(result.next_uri.is_none());
-        assert!(result.schema.is_none());
+        assert!(result.schema.is_some());
         assert!(result.stats.scan_progress.is_some());
-        assert_eq!(result.state, ExecuteStateName::Succeeded);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
     }
 
     // get state
@@ -138,9 +146,9 @@ async fn test_async() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
-    assert!(result.schema.is_none());
+    assert!(result.schema.is_some());
     assert!(result.stats.scan_progress.is_some());
-    assert_eq!(result.state, ExecuteStateName::Succeeded);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
 
     // get page not expected
     let uri = make_page_uri(query_id, 1);
@@ -197,7 +205,7 @@ async fn test_http_session() -> Result<()> {
     assert_eq!(result.next_uri, None, "{:?}", result);
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
-    assert_eq!(result.state, ExecuteStateName::Succeeded);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
     let session_id = &result.session_id.unwrap();
 
     let json = serde_json::json!({"sql": "select database()", "session": {"id": session_id}});
@@ -248,7 +256,7 @@ async fn test_system_tables() -> Result<()> {
 
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.data.len() > 0, "{:?}", result);
+    assert!(!result.data.is_empty(), "{:?}", result);
 
     let table_names = result
         .data
@@ -274,7 +282,7 @@ async fn test_system_tables() -> Result<()> {
         assert!(result.error.is_none(), "{}", error_message);
         assert_eq!(
             result.state,
-            ExecuteStateName::Succeeded,
+            ExecuteStateKind::Succeeded,
             "{}",
             error_message
         );
@@ -311,7 +319,7 @@ async fn test_multi_page() -> Result<()> {
         if p == num_parts {
             assert_eq!(result.data.len(), 0);
             assert_eq!(result.next_uri, None);
-            assert_eq!(result.state, ExecuteStateName::Succeeded);
+            assert_eq!(result.state, ExecuteStateKind::Succeeded);
         } else {
             next_uri = make_page_uri(&query_id, p + 1);
             assert_eq!(result.data.len(), max_block_size);
@@ -337,7 +345,7 @@ async fn test_insert() -> Result<()> {
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
-        assert_eq!(result.state, ExecuteStateName::Succeeded);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
     }
     Ok(())
 }
@@ -575,7 +583,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
     let res = resp.json::<QueryResponse>().await;
     assert!(res.is_ok());
     let res = res.unwrap();
-    assert!(res.data.len() > 0, "{:?}", res);
+    assert!(!res.data.is_empty(), "{:?}", res);
     Ok(())
 }
 
@@ -640,7 +648,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let res = resp.json::<QueryResponse>().await;
     assert!(res.is_ok());
     let res = res.unwrap();
-    assert!(res.data.len() > 0, "{:?}", res);
+    assert!(!res.data.is_empty(), "{:?}", res);
     Ok(())
 }
 

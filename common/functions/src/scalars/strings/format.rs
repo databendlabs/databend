@@ -27,6 +27,7 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -41,7 +42,12 @@ pub struct FormatFunction {
 // Formats the number X to a format like '#,###,###.##', rounded to D decimal places, and returns the result as a string.
 // If D is 0, the result has no decimal point or fractional part.
 impl FormatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
+        assert_numeric(args[1])?;
+        if args.len() >= 3 {
+            assert_string(args[2])?;
+        }
         Ok(Box::new(FormatFunction {
             _display_name: display_name.to_string(),
         }))
@@ -61,16 +67,16 @@ impl Function for FormatFunction {
         "format"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        assert_numeric(args[1])?;
-        if args.len() >= 3 {
-            assert_string(args[2])?;
-        }
-        Ok(Vu8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Vu8::to_data_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
                     let col = scalar_binary_op::<$F, $N, Vu8, _>(columns[0].column(), columns[1].column(), format_en_us,&mut EvalContext::default())?;

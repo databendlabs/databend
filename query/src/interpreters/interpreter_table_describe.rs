@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
+use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -54,6 +55,8 @@ impl Interpreter for DescribeTableInterpreter {
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         let mut nulls: Vec<String> = vec![];
+        let mut default_exprs: Vec<String> = vec![];
+
         for field in schema.fields().iter() {
             names.push(field.name().to_string());
             types.push(format!("{:?}", remove_nullable(field.data_type())));
@@ -62,10 +65,18 @@ impl Interpreter for DescribeTableInterpreter {
             } else {
                 "NO".to_string()
             });
+            match field.default_expr() {
+                Some(expr) => {
+                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                    default_exprs.push(format!("{:?}", expression));
+                }
+
+                None => {
+                    let value = field.data_type().default_value();
+                    default_exprs.push(format!("{}", value));
+                }
+            }
         }
-        let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
-        let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
-        let nulls: Vec<&[u8]> = nulls.iter().map(|x| x.as_bytes()).collect();
 
         let desc_schema = self.plan.schema();
 
@@ -73,6 +84,7 @@ impl Interpreter for DescribeTableInterpreter {
             Series::from_data(names),
             Series::from_data(types),
             Series::from_data(nulls),
+            Series::from_data(default_exprs),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![

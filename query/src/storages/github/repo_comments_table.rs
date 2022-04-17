@@ -49,8 +49,8 @@ impl RepoCommentsTable {
         let req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: options.owner.clone(),
-            table: format!("{}_{}", options.repo.clone(), "comments"),
+            db_name: options.owner.clone(),
+            table_name: format!("{}_{}", options.repo.clone(), "comments"),
             table_meta: TableMeta {
                 schema: RepoCommentsTable::schema(),
                 engine: "GITHUB".into(),

@@ -159,6 +159,7 @@ impl DataType for DateTime64Type {
         Box::new(DateTimeDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
+            precision: self.precision,
         })
     }
 

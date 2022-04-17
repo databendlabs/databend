@@ -50,9 +50,6 @@ impl AnalyzableStatement for DfShowDatabases {
             DfShowKind::Where(v) => {
                 kind = PlanShowKind::Where(format!("{v}"));
             }
-            DfShowKind::FromOrIn(v) => {
-                kind = PlanShowKind::FromOrIn(v.0[0].value.clone());
-            }
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(

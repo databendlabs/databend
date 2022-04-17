@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::Column;
 use common_datavalues::ConstColumn;
+use common_datavalues::DataTypePtr;
 use common_datavalues::NewColumn;
 use common_datavalues::StringColumn;
 use common_datavalues::StringType;
@@ -24,6 +25,7 @@ use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -39,7 +41,7 @@ pub struct UUIDCreatorFunction<T> {
 impl<T> UUIDCreatorFunction<T>
 where T: UUIDCreator + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDCreatorFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -87,15 +89,13 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {

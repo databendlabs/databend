@@ -5,7 +5,9 @@
  
 <h4 align="center">
   <a href="https://databend.rs/doc">Documentation</a>  |
+  <a href="https://perf.databend.rs">Benchmarking</a>  |
   <a href="https://github.com/datafuselabs/databend/issues/4591">Roadmap(v0.8)</a>
+
 </h4>
 
 <div>
@@ -33,11 +35,13 @@
    - [Compute Layer](#compute-layer)
    - [Storage Layer](#storage-layer)
 - [Getting Started](#getting-started)
+- [Use Case](#use-case)
+- [Community](#community)
 - [Roadmap](#roadmap)
 
 ## What is Databend?
 
-Databend is an open source **Elastic** and **Scalable** Modern Cloud Data Warehouse.
+Databend is an open source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse.
 
 Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
 
@@ -51,7 +55,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON and Parquet which located in cloud or your local file system; Databend also supports semi-structured data types:[VARIANT,OBJECT,ARRAY](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured data (JSON).
 
 - __MySQL/ClickHouse Compatible__
 
@@ -149,16 +153,25 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 - [Databend Develop](https://databend.rs/doc/develop)
 - [Databend Contributing](https://databend.rs/doc/contributing)
 - [Databend Performance](https://databend.rs/doc/performance)
-- [Databend Weekly](https://weekly.databend.rs/)
+- [Databend Continuous Benchmarking](https://perf.databend.rs)
+
+## Use Case
+
+- [Analyzing Github Repository with Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
+- [Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
+
+## Community
+
+For general help to use Databend, please refer to the official documentation. For additional help, you can use one of these channels to ask a question:
+
+- [Slack](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA) (For live discussion with the Community)
+- [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
+- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
+- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
 
 ## Roadmap
 - [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
 - [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
-
-## Community
-
-- [Slack Channel](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA)
-- [@Databend](https://twitter.com/Datafuse_Labs) on Twitter
 
 ## License
 

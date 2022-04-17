@@ -22,7 +22,7 @@ use arrow::io::parquet::write::to_parquet_schema;
 use arrow::io::parquet::write::RowGroupIterator;
 use parquet2::write::FileWriter;
 use parquet2::write::WriteOptions;
-use parquet_format_async_temp::FileMetaData;
+use parquet2::FileMetaData;
 
 // a simple wrapper for code reuse
 pub fn write_parquet_file<W: Write, A, I>(

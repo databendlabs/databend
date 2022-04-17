@@ -80,6 +80,13 @@ pub trait QueryASTIRVisitor<Data> {
                 Self::visit_recursive_expr(origin_expr, data)
             }
             Expression::Cast { expr, .. } => Self::visit_recursive_expr(expr, data),
+            Expression::MapAccess { args, .. } => {
+                for arg in args {
+                    Self::visit_recursive_expr(arg, data)?;
+                }
+
+                Ok(())
+            }
             _ => Self::visit_expr(expr, data),
         }
     }

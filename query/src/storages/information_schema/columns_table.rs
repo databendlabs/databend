@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_meta_types::TableIdent;
@@ -32,7 +32,7 @@ impl ColumnsTable {
             database AS table_schema,
             table AS table_name,
             name AS column_name,
-            NULL AS ordinal_position,
+            1 AS ordinal_position,
             NULL AS column_default,
             is_nullable AS is_nullable,
             data_type AS data_type,
@@ -55,7 +55,7 @@ impl ColumnsTable {
             database AS TABLE_SCHEMA,
             table AS TABLE_NAME,
             name AS COLUMN_NAME,
-            NULL AS ORDINAL_POSITION,
+            1 AS ORDINAL_POSITION,
             NULL AS COLUMN_DEFAULT,
             is_nullable AS IS_NULLABLE,
             data_type AS DATA_TYPE,
@@ -76,10 +76,10 @@ impl ColumnsTable {
             NULL AS DOMAIN_NAME
         FROM system.columns;";
 
-        let mut options = HashMap::new();
+        let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'COLUMNS'".to_string(),
+            desc: "'INFORMATION_SCHEMA'.'COLUMNS'".to_string(),
             name: "COLUMNS".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

@@ -51,10 +51,12 @@ impl UDFParser {
         let mut tokenizer = Tokenizer::new(dialect, definition);
 
         match tokenizer.tokenize() {
-            Ok(tokens) => match Parser::new(tokens, dialect).parse_expr() {
-                Ok(definition_expr) => Ok(definition_expr),
-                Err(parse_error) => Err(ErrorCode::from(parse_error)),
-            },
+            Ok((tokens, position_map)) => {
+                match Parser::new(tokens, position_map, dialect).parse_expr() {
+                    Ok(definition_expr) => Ok(definition_expr),
+                    Err(parse_error) => Err(ErrorCode::from(parse_error)),
+                }
+            }
             Err(tokenize_error) => Err(ErrorCode::SyntaxException(format!(
                 "Can not tokenize definition: {}, Error: {:?}",
                 definition, tokenize_error
