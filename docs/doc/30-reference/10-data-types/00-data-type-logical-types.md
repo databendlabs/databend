@@ -5,7 +5,7 @@ description: Basic logical data type.
 
 The BOOLEAN type represents a statement of truth (“true” or “false”).
 
-## Boolean
+## Boolean Data Types
 
 | Data Type        | Syntax   |
 | -----------------| -------- |
@@ -24,11 +24,17 @@ See [Conditional Functions](/doc/reference/functions/conditional-functions).
 ## Example
 
 ```sql title='mysql>'
-mysql> CREATE TABLE test_boolean(a BOOLEAN, s VARCHAR);
+CREATE TABLE test_boolean(a BOOLEAN, s VARCHAR);
+```
 
-mysql> INSERT INTO test_boolean VALUES(true, 'true'),(false, 'false'), (0, 'false'),(10, 'true');
+```sql title='mysql>'
+INSERT INTO test_boolean VALUES(true, 'true'),(false, 'false'), (0, 'false'),(10, 'true');
+```
 
-mysql> SELECT * FROM test_boolean;
+```sql title='mysql>'
+SELECT * FROM test_boolean;
+```
+```
 +------+-------+
 | a    | s     |
 +------+-------+

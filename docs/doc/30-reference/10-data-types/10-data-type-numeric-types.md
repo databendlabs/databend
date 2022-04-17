@@ -3,7 +3,7 @@ title: Numeric
 description: Basic Numeric data type.
 ---
 
-## Integer Types
+## Integer Data Types
 
 Basic Integer Numbers data types.
 
@@ -18,7 +18,7 @@ Basic Integer Numbers data types.
 | Int64     | BIGINT               | 8 |  -9223372036854775808  |  9223372036854775807
 | UInt64    | BIGINT UNSIGNED      | 8 |  0                     |  18446744073709551615
 
-## Floating-Point Types
+## Floating-Point Data Types
 
 Basic Float32/Float64 data types.
 

@@ -3,7 +3,7 @@ title: Date & Time
 description: Basic Date and Time data type.
 ---
 
-## Date and Time Types
+## Date and Time Data Types
 
 ---
 | Data Type   |  Syntax    | Size(Byte)    |  Resolution | Min Value             | Max Value                     | Format |

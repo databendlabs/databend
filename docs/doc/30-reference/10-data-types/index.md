@@ -34,8 +34,8 @@ Databend supports SQL data types in several categories:
 
 Databend supports three Semi-structured types: ARRAY, OBJECT and VARIANT.
 
-| Data Type | Syntax  | Build from values
-| ----------|---------|------------
-| Array     | ARRAY   | [1,2,3]
-| Object    | OBJECT  | {"a":1,"b":2}
-| Variant   | VARIANT | {"a":1,"b":{"c":2}}
+| Data Type | Syntax  | Build From Values    | Description
+| ----------|---------|----------------------|----------------
+| Array     | ARRAY   | [1,2,3]              | Zero-based indexed list, each value can have difference data type.
+| Object    | OBJECT  | {"a":1,"b":{"c":2}}  | Collection of key-value pairs, each key is a VARCHAR, and each value is a VARIANT.
+| Variant   | VARIANT | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types., including ARRAY and OBJECT.
