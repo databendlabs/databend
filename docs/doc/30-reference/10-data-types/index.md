@@ -5,12 +5,13 @@ slug: ./
 ---
 
 Databend supports SQL data types in several categories:
-* [NUMERIC DATA TYPE](10-data-type-numeric-types.md)
-* [DATE & TIME DATA TYPE](20-data-type-time-date-types.md)
-* [STRING DATA TYPE](30-data-type-string-types.md)
-* [LOGICAL DATA TYPE](31-data-type-logical-types.md)
-* [SEMI-STRUCTURED DATA TYPE](40-data-type-semi-structured-types.md)
+* [Numeric Types](10-data-type-numeric-types.md)
+* [Date & Time Types](20-data-type-time-date-types.md)
+* [String Types](30-data-type-string-types.md)
+* [Boolean Types](00-data-type-logical-types.md)
+* [Semi-structured Types](40-data-type-semi-structured-types.md)
 
+## General-Purpose Data Types
 
 | Data Type | Syntax               | Size(byte)      | Min Value              | Max Value   | Format |
 | ----------|----------------------| --------- | ---------------------- | ----------- | -------|
@@ -28,6 +29,13 @@ Databend supports SQL data types in several categories:
 | DateTime    |  DATETIME  | 4 |  1970-01-01 00:00:00   | 2105-12-31 23:59:59           | YYYY-MM-DD hh:mm:ss    |
 | DateTime64  |  TIMESTAMP | 8 |  1677-09-21 00:12:44.000 | 2262-04-11 23:47:16.854     | YYYY-MM-DD hh:mm:ss.ff |
 | String           | VARCHAR | | | | | 
-| Array     | ARRAY | | | | |
-| Object    | OBJECT | | | |
-| Variant   | VARIANT | | | |
+
+## Semi-structured Data Types
+
+Databend supports three Semi-structured types: ARRAY, OBJECT and VARIANT.
+
+| Data Type | Syntax  | Build from values
+| ----------|---------|------------
+| Array     | ARRAY   | [1,2,3]
+| Object    | OBJECT  | {"a":1,"b":2}
+| Variant   | VARIANT | {"a":1,"b":{"c":2}}
