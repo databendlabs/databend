@@ -243,7 +243,11 @@ impl TypeID {
 
 impl std::fmt::Display for TypeID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            TypeID::VariantArray => write!(f, "Array"),
+            TypeID::VariantObject => write!(f, "Object"),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 

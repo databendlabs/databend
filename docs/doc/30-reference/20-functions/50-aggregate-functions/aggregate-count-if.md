@@ -1,14 +1,14 @@
 ---
-title: countIf
+title: COUNT_IF
 ---
 
 
-## countIf 
+## COUNT_IF 
 
-The suffix -If can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
+The suffix `_IF` can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```
-countIf(column, cond)
+COUNT_IF(column, cond)
 ```
 
 ## Examples
@@ -25,10 +25,10 @@ mysql> SELECT count(number) FROM numbers(10);
 |            10 |
 +---------------+
 
-mysql> SELECT countIf(number, number > 7) FROM numbers(10);
-+-------------------------------+
-| countIf(number, (number > 7)) |
-+-------------------------------+
-|                             2 |
-+-------------------------------+
+mysql> SELECT count_if(number, number > 7) FROM numbers(10);
++--------------------------------+
+| count_if(number, (number > 7)) |
++--------------------------------+
+|                              2 |
++--------------------------------+
 ```

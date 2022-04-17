@@ -33,11 +33,11 @@ mysql> SELECT CAST(1 AS VARCHAR);
 +-------------------+
 
 mysql> select 1::varchar;
-+-------------------+
-| cast(1 as String) |
-+-------------------+
-| 1                 |
-+-------------------+
++-----------+
+| 1::String |
++-----------+
+| 1         |
++-----------+
 1 row in set (0.014 sec)
 
 mysql> SELECT CAST(1 AS UInt64);

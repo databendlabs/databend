@@ -678,10 +678,13 @@ impl TransformerSqlparser {
                 expr: Box::new(self.transform_expr(expr)?),
             }),
             SqlparserExpr::Cast {
-                expr, data_type, ..
+                expr,
+                data_type,
+                pg_style,
             } => Ok(Expr::Cast {
                 expr: Box::new(self.transform_expr(expr)?),
                 target_type: self.transform_data_type(data_type)?,
+                pg_style: *pg_style,
             }),
             SqlparserExpr::Value(literal) => {
                 let lit = match literal {
@@ -766,6 +769,10 @@ impl TransformerSqlparser {
             SqlparserExpr::Subquery(subquery) => {
                 Ok(Expr::Subquery(Box::new(self.transform_query(subquery)?)))
             }
+            SqlparserExpr::MapAccess { column, keys } => Ok(Expr::MapAccess {
+                expr: Box::new(self.transform_expr(column)?),
+                keys: keys.to_vec(),
+            }),
             _ => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt

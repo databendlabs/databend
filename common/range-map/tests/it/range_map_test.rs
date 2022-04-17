@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_range_set::RangeKey;
-use common_range_set::RangeSet;
+use common_range_map::RangeKey;
+use common_range_map::RangeMap;
 
 #[test]
 fn test_range_set() {
     // test get_by_point for i32
     {
-        let mut a = RangeSet::new();
+        let mut a = RangeMap::new();
 
-        let r11 = &RangeKey::new(1..1, 11);
-        let r15 = &RangeKey::new(1..5, 15);
-        let r24 = &RangeKey::new(2..4, 24);
-        let r26 = &RangeKey::new(2..6, 26);
+        let r11 = (&RangeKey::new(1..1, 11), &11);
+        let r15 = (&RangeKey::new(1..5, 15), &15);
+        let r24 = (&RangeKey::new(2..4, 24), &24);
+        let r26 = (&RangeKey::new(2..6, 26), &26);
 
-        a.insert(1..1, 11);
-        a.insert(1..5, 15);
-        a.insert(2..4, 24);
-        a.insert(2..6, 26);
+        a.insert(1..1, 11, 11);
+        a.insert(1..5, 15, 15);
+        a.insert(2..4, 24, 24);
+        a.insert(2..6, 26, 26);
 
         assert_eq!(a.get_by_point(&1), vec![r11, r15]);
         assert_eq!(a.get_by_point(&2), vec![r24, r15, r26]);
@@ -41,7 +41,7 @@ fn test_range_set() {
     }
     // test get_by_point for String
     {
-        let mut a = RangeSet::new();
+        let mut a = RangeMap::new();
 
         let a1 = "1".to_string();
         let a2 = "2".to_string();
@@ -49,15 +49,15 @@ fn test_range_set() {
         let a5 = "5".to_string();
         let a6 = "6".to_string();
 
-        let r11 = &RangeKey::new(a1.clone()..a1.clone(), 11);
-        let r15 = &RangeKey::new(a1.clone()..a5.clone(), 15);
-        let r24 = &RangeKey::new(a2.clone()..a4.clone(), 24);
-        let r26 = &RangeKey::new(a2.clone()..a6.clone(), 26);
+        let r11 = (&RangeKey::new(a1.clone()..a1.clone(), 11), &11);
+        let r15 = (&RangeKey::new(a1.clone()..a5.clone(), 15), &15);
+        let r24 = (&RangeKey::new(a2.clone()..a4.clone(), 24), &24);
+        let r26 = (&RangeKey::new(a2.clone()..a6.clone(), 26), &26);
 
-        a.insert(a1.clone()..a1.clone(), 11);
-        a.insert(a1.clone()..a5.clone(), 15);
-        a.insert(a2.clone()..a4, 24);
-        a.insert(a2.clone()..a6, 26);
+        a.insert(a1.clone()..a1.clone(), 11, 11);
+        a.insert(a1.clone()..a5.clone(), 15, 15);
+        a.insert(a2.clone()..a4, 24, 24);
+        a.insert(a2.clone()..a6, 26, 26);
 
         assert_eq!(a.get_by_point(&a1), vec![r11, r15]);
         assert_eq!(a.get_by_point(&a2), vec![r24, r15, r26]);

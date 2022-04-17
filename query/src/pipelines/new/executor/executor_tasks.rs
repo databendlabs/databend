@@ -49,33 +49,39 @@ impl ExecutorTasksQueue {
     /// Pull task from the global task queue
     /// Method is thread unsafe and require thread safe call
     pub fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
-        {
-            let mut workers_tasks = self.workers_tasks.lock();
+        let mut workers_tasks = self.workers_tasks.lock();
 
-            if !workers_tasks.is_empty() {
-                let task = workers_tasks.pop_task(context.get_worker_num());
-                context.set_task(task);
+        if !workers_tasks.is_empty() {
+            let task = workers_tasks.pop_task(context.get_worker_num());
+            let is_async_task = matches!(&task, ExecutorTask::Async(_));
+            context.set_task(task);
 
-                let workers_notify = context.get_workers_notify();
-                if !workers_tasks.is_empty() && !workers_notify.is_empty() {
-                    let worker_id = context.get_worker_num();
-                    let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
-                    drop(workers_tasks);
-                    workers_notify.wakeup(wakeup_worker_id);
-                }
+            let workers_notify = context.get_workers_notify();
+            let waiting_size = match is_async_task {
+                true => workers_notify.get_waiting_and_inc_active_async_worker(),
+                false => workers_notify.get_waiting(),
+            };
 
-                return;
+            if !workers_tasks.is_empty() && waiting_size != 0 {
+                let worker_id = context.get_worker_num();
+                let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+                drop(workers_tasks);
+                workers_notify.wakeup(wakeup_worker_id);
             }
+
+            return;
         }
 
         // When tasks queue is empty and all workers are waiting, no new tasks will be generated.
         let workers_notify = context.get_workers_notify();
         if workers_notify.active_workers() <= 1 {
+            drop(workers_tasks);
             self.finish();
             workers_notify.wakeup_all();
             return;
         }
 
+        drop(workers_tasks);
         context.get_workers_notify().wait(context.get_worker_num());
     }
 
@@ -219,6 +225,7 @@ impl ExecutorTasks {
                     }
                 }
                 other => {
+                    self.tasks_size -= 1;
                     return other;
                 }
             }

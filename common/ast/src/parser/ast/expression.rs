@@ -31,10 +31,7 @@ pub enum Expr {
         column: Identifier,
     },
     /// `IS [ NOT ] NULL` expression
-    IsNull {
-        expr: Box<Expr>,
-        not: bool,
-    },
+    IsNull { expr: Box<Expr>, not: bool },
     /// `[ NOT ] IN (expr, ...)`
     InList {
         expr: Box<Expr>,
@@ -61,14 +58,12 @@ pub enum Expr {
         right: Box<Expr>,
     },
     /// Unary operation
-    UnaryOp {
-        op: UnaryOperator,
-        expr: Box<Expr>,
-    },
+    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
         target_type: TypeName,
+        pg_style: bool,
     },
 
     /// `TRY_CAST` expression`
@@ -99,10 +94,8 @@ pub enum Expr {
     Exists(Box<Query>),
     /// Scalar subquery, which will only return a single row with a single column.
     Subquery(Box<Query>),
-    MapAccess {
-        column: Box<Expr>,
-        keys: Vec<Value>,
-    },
+    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
+    MapAccess { expr: Box<Expr>, keys: Vec<Value> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -427,8 +420,16 @@ impl Display for Expr {
             Expr::UnaryOp { op, expr } => {
                 write!(f, "{} {}", op, expr)?;
             }
-            Expr::Cast { expr, target_type } => {
-                write!(f, "CAST({} AS {})", expr, target_type)?;
+            Expr::Cast {
+                expr,
+                target_type,
+                pg_style,
+            } => {
+                if *pg_style {
+                    write!(f, "{}::{}", expr, target_type)?;
+                } else {
+                    write!(f, "CAST({} AS {})", expr, target_type)?;
+                }
             }
             Expr::TryCast { expr, target_type } => {
                 write!(f, "TRY_CAST({} AS {})", expr, target_type)?;
@@ -492,8 +493,8 @@ impl Display for Expr {
             Expr::Subquery(subquery) => {
                 write!(f, "({})", subquery)?;
             }
-            Expr::MapAccess { column, keys } => {
-                write!(f, "{}", column)?;
+            Expr::MapAccess { expr, keys } => {
+                write!(f, "{}", expr)?;
                 for k in keys {
                     match k {
                         k @ Value::Number(_, _) => write!(f, "[{}]", k)?,

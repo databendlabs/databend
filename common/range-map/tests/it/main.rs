@@ -13,4 +13,4 @@
 // limitations under the License.
 
 mod range_key_test;
-mod range_set_test;
+mod range_map_test;
