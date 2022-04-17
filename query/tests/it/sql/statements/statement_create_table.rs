@@ -27,7 +27,8 @@ async fn test_statement_create_table_reserved_opt_keys() -> Result<()> {
     let ctx = create_query_context().await?;
     for opt in &*RESERVED_TABLE_OPTION_KEYS {
         let query = format!("CREATE TABLE default.a( c int) {opt}= 1");
-        let (mut statements, _) = DfParser::parse_sql(query.as_str())?;
+        let (mut statements, _) =
+            DfParser::parse_sql(query.as_str(), ctx.get_current_session().get_type())?;
         match statements.remove(0) {
             DfStatement::CreateTable(query) => match query.analyze(ctx.clone()).await {
                 Err(e) => {

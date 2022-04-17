@@ -38,6 +38,7 @@ use sqlparser::ast::Value;
 
 use crate::procedures::ContextFunction;
 use crate::sessions::QueryContext;
+use crate::sessions::SessionType;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -61,7 +62,11 @@ impl ExpressionAnalyzer {
         // Build RPN for expr. Because async function unsupported recursion
         for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr).await? {
             match rpn_item {
-                ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
+                ExprRPNItem::Value(v) => Self::analyze_value(
+                    v,
+                    &mut stack,
+                    self.context.get_current_session().get_type(),
+                )?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
                 ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
                 ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
@@ -94,8 +99,8 @@ impl ExpressionAnalyzer {
         }
     }
 
-    fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
-        args.push(ValueExprAnalyzer::analyze(value)?);
+    fn analyze_value(value: &Value, args: &mut Vec<Expression>, typ: SessionType) -> Result<()> {
+        args.push(ValueExprAnalyzer::analyze(value, typ)?);
         Ok(())
     }
 
@@ -205,7 +210,10 @@ impl ExpressionAnalyzer {
         let mut parameters = Vec::with_capacity(info.parameters.len());
 
         for parameter in &info.parameters {
-            match ValueExprAnalyzer::analyze(parameter)? {
+            match ValueExprAnalyzer::analyze(
+                parameter,
+                self.context.get_current_session().get_type(),
+            )? {
                 Expression::Literal { value, .. } => {
                     parameters.push(value);
                 }

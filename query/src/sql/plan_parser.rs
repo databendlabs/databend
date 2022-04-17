@@ -35,7 +35,7 @@ pub struct PlanParser;
 
 impl PlanParser {
     pub async fn parse(ctx: Arc<QueryContext>, query: &str) -> Result<PlanNode> {
-        let (statements, _) = DfParser::parse_sql(query)?;
+        let (statements, _) = DfParser::parse_sql(query, ctx.get_current_session().get_type())?;
         PlanParser::build_plan(statements, ctx).await
     }
 
@@ -43,7 +43,7 @@ impl PlanParser {
         query: &str,
         ctx: Arc<QueryContext>,
     ) -> (Result<PlanNode>, Vec<DfHint>) {
-        match DfParser::parse_sql(query) {
+        match DfParser::parse_sql(query, ctx.get_current_session().get_type()) {
             Err(cause) => (Err(cause), vec![]),
             Ok((statements, hints)) => (PlanParser::build_plan(statements, ctx).await, hints),
         }
