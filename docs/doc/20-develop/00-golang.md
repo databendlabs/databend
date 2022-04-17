@@ -60,7 +60,10 @@ type Book struct {
 }
 
 func dsn() string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/", username, password, hostname)
+	// Note Databend do not support prepared statements.
+	// set interpolateParams to make placeholders (?) in calls to db.Query() and db.Exec() interpolated into a single query string with given parameters.
+	// ref https://github.com/go-sql-driver/mysql#interpolateparams
+	return fmt.Sprintf("%s:%s@tcp(%s)/?interpolateParams=true", username, password, hostname)
 }
 
 func main() {
@@ -100,8 +103,7 @@ func main() {
 	log.Println("Create table: books")
 
 	// Insert 1 row.
-	sql = "insert into books values('mybook', 'author', '2022')"
-	_, err = db.Exec(sql)
+	_, err = db.Exec("insert into books values(?, ?, ?)", "mybook", "author", "2022")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,6 +153,5 @@ go run main.go
 2022/04/13 12:20:07 Create database book_db success
 2022/04/13 12:20:07 Create table: books
 2022/04/13 12:20:07 Insert 1 row
-2022/04/13 12:20:08 Select:{mybook author 2022}
 2022/04/13 12:20:08 Select:{mybook author 2022}
 ```
