@@ -9,3 +9,6 @@ insert into t1 select number as id from numbers(10);
 select * from t1 order by id asc limit 3,3;
 select * from t1 order by id desc limit 3,3;
 drop table t1;
+
+-- sort with null
+SELECT number, null from numbers(3) order by number desc;

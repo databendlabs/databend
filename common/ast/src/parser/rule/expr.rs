@@ -161,7 +161,11 @@ pub enum ExprElement {
     /// Unary operation
     UnaryOp { op: UnaryOperator },
     /// `CAST` expression, like `CAST(expr AS target_type)`
-    Cast { expr: Expr, target_type: TypeName },
+    Cast {
+        expr: Expr,
+        target_type: TypeName,
+        pg_style: bool,
+    },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
     /// `Count(*)` expression
@@ -251,9 +255,14 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 table,
                 column,
             },
-            ExprElement::Cast { expr, target_type } => Expr::Cast {
+            ExprElement::Cast {
+                expr,
+                target_type,
+                pg_style,
+            } => Expr::Cast {
                 expr: Box::new(expr),
                 target_type,
+                pg_style,
             },
             ExprElement::Literal(lit) => Expr::Literal(lit),
             ExprElement::CountAll => Expr::CountAll,
@@ -403,7 +412,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         rule! {
             CAST ~ "(" ~ #cut(subexpr(0)) ~ AS ~ #cut(type_name) ~ ")"
         },
-        |(_, _, expr, _, target_type, _)| ExprElement::Cast { expr, target_type },
+        |(_, _, expr, _, target_type, _)| ExprElement::Cast {
+            expr,
+            target_type,
+            pg_style: false,
+        },
     );
     let count_all = value(ExprElement::CountAll, rule! {
         COUNT ~ "(" ~ "*" ~ ")"

@@ -192,12 +192,14 @@ impl PlanRewriter for ConstantFoldingImpl {
                 &mut self,
                 typ: &DataTypePtr,
                 expr: Expression,
+                pg_style: bool,
                 origin_expr: &Expression,
             ) -> Result<Expression> {
                 if matches!(&expr, Expression::Literal { .. }) {
                     let optimize_expr = Expression::Cast {
                         expr: Box::new(expr),
                         data_type: typ.clone(),
+                        pg_style,
                     };
                     let ctx = unsafe { (*self.0).ctx.clone() };
                     return ConstantFoldingImpl::execute_expression(
@@ -210,6 +212,7 @@ impl PlanRewriter for ConstantFoldingImpl {
                 Ok(Expression::Cast {
                     expr: Box::new(expr),
                     data_type: typ.clone(),
+                    pg_style,
                 })
             }
         }

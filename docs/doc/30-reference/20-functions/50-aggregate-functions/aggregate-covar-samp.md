@@ -1,19 +1,19 @@
 ---
-title: covar-samp
+title: COVAR_SAMP
 ---
 
 Aggregate function.
 
 The covar_samp() function returns the sample covariance (Σ((x - x̅)(y - y̅)) / (n - 1)) of two data columns.
 
-
-!!! warning
-    NULL values are not counted.
+:::caution
+NULL values are not counted.
+:::
 
 ## Syntax
 
 ```sql
-covar_samp(expression0, expression1)
+COVAR_SAMP(expr0, expr1)
 ```
 
 ## Arguments

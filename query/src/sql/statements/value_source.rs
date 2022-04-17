@@ -129,6 +129,7 @@ async fn exprs_to_datablock(
             Expression::Cast {
                 expr: Box::new(expr),
                 data_type: schema.field(i).data_type().clone(),
+                pg_style: false,
             }
         } else {
             expr
