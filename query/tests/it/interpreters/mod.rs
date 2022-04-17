@@ -16,6 +16,7 @@ mod interpreter_call;
 mod interpreter_database_create;
 mod interpreter_database_drop;
 mod interpreter_database_show_create;
+mod interpreter_empty;
 mod interpreter_explain;
 mod interpreter_factory_interceptor;
 mod interpreter_insert;
