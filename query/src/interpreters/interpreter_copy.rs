@@ -32,7 +32,9 @@ use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StageSource;
 
@@ -137,10 +139,11 @@ impl Interpreter for CopyInterpreter {
         "CopyInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute", skip(self, _input_stream, _source_pipe_builder), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let mut files = self.list_files().await?;
 

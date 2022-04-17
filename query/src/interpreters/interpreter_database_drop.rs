@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
 pub struct DropDatabaseInterpreter {
@@ -46,6 +47,7 @@ impl Interpreter for DropDatabaseInterpreter {
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()

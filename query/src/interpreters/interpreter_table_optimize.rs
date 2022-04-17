@@ -25,6 +25,7 @@ use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
@@ -48,6 +49,7 @@ impl Interpreter for OptimizeTableInterpreter {
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let mut table = self.ctx.get_table(&plan.database, &plan.table).await?;
@@ -64,7 +66,7 @@ impl Interpreter for OptimizeTableInterpreter {
             let rewritten_plan =
                 PlanParser::parse(self.ctx.clone(), rewritten_query.as_str()).await?;
             let interpreter = InterpreterFactory::get(self.ctx.clone(), rewritten_plan)?;
-            let mut stream = interpreter.execute(None).await?;
+            let mut stream = interpreter.execute(None, None).await?;
             while let Some(Ok(_)) = stream.next().await {}
             if do_purge {
                 // currently, context caches the table, we have to "refresh"

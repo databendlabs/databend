@@ -28,6 +28,7 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_streams::Source;
 use common_tracing::tracing;
 use futures::TryStreamExt;
 use poem::trace;
@@ -69,6 +70,7 @@ impl InsertInterpreter {
     async fn execute_new(
         &self,
         input_stream: Option<SendableDataBlockStream>,
+        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
@@ -93,7 +95,14 @@ impl InsertInterpreter {
                 }
                 pipeline.add_pipe(builder.finalize());
             }
-            InsertInputSource::StreamingWithFormat(_) => {}
+            InsertInputSource::StreamingWithFormat(_) => {
+                tracing::info!("come here");
+                pipeline.add_pipe(
+                    source_pipe_builder
+                        .ok_or_else(|| ErrorCode::EmptyData("empty"))?
+                        .finalize(),
+                );
+            }
             InsertInputSource::SelectPlan(plan) => {
                 let builder = QueryPipelineBuilder::create(self.ctx.clone());
                 need_cast_schema = self.check_schema_cast(plan)?;
@@ -128,7 +137,7 @@ impl InsertInterpreter {
             }
             let tz = self.ctx.get_settings().get_timezone()?;
             let tz = String::from_utf8(tz).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
             })?;
             let func_ctx = FunctionContext { tz };
             pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -194,6 +203,7 @@ impl Interpreter for InsertInterpreter {
     async fn execute(
         &self,
         mut input_stream: Option<SendableDataBlockStream>,
+        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let settings = self.ctx.get_settings();
 
@@ -201,7 +211,7 @@ impl Interpreter for InsertInterpreter {
             || (settings.get_enable_new_processor_framework()? == 2
                 && self.ctx.get_cluster().is_empty())
         {
-            return self.execute_new(input_stream).await;
+            return self.execute_new(input_stream, source_pipe_builder).await;
         }
 
         let plan = &self.plan;

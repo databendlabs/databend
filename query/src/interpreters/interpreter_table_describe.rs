@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
 pub struct DescribeTableInterpreter {
@@ -46,6 +47,7 @@ impl Interpreter for DescribeTableInterpreter {
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let database = self.plan.db.as_str();
         let table = self.plan.table.as_str();

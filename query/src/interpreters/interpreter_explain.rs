@@ -26,6 +26,7 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -43,6 +44,7 @@ impl Interpreter for ExplainInterpreter {
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let schema = self.schema();
 

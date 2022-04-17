@@ -28,6 +28,7 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
@@ -48,7 +49,11 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
-    async fn execute(&self, _: Option<SendableDataBlockStream>) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
+    ) -> Result<SendableDataBlockStream> {
         // check privilige
         self.ctx
             .get_current_session()

@@ -34,6 +34,7 @@ use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
 use futures::SinkExt;
 use futures::StreamExt;
+use futures::TryFutureExt;
 use metrics::histogram;
 use opensrv_clickhouse::types::Block as ClickHouseBlock;
 use opensrv_clickhouse::CHContext;
@@ -42,6 +43,10 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::SyncReceiverCkSource;
+use crate::pipelines::new::processors::SyncReceiverSource;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -92,11 +97,19 @@ impl InteractiveWorkerBase {
 
         let sc = sample_block.schema().clone();
         let stream = ReceiverStream::new(rec);
-        let stream = FromClickHouseBlockStream {
+        let ck_stream = FromClickHouseBlockStream {
             input: stream,
-            schema: sc,
+            schema: sc.clone(),
         };
-
+        let output_port = OutputPort::create();
+        let sync_receiver_ck_source = SyncReceiverCkSource::create(
+            ctx.clone(),
+            ck_stream.input.into_inner(),
+            output_port.clone(),
+            sc,
+        )?;
+        let mut source_pipe_builder = SourcePipeBuilder::create();
+        source_pipe_builder.add_source(output_port, sync_receiver_ck_source);
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::Insert(insert))?;
         let name = interpreter.name().to_string();
 
@@ -107,7 +120,10 @@ impl InteractiveWorkerBase {
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {
-            interpreter.execute(Some(Box::pin(stream))).await.unwrap();
+            interpreter
+                .execute(None, Some(source_pipe_builder))
+                .await
+                .unwrap();
             sent_all_data.notify_one();
         })?;
         histogram!(
@@ -165,7 +181,7 @@ impl InteractiveWorkerBase {
                 .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
-            let async_data_stream = interpreter.execute(None);
+            let async_data_stream = interpreter.execute(None, None);
             let mut data_stream = async_data_stream.await?;
             while let Some(block) = data_stream.next().await {
                 data_tx.send(BlockItem::Block(block)).await.ok();

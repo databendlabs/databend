@@ -15,6 +15,7 @@
 mod async_source;
 mod blocks_source;
 mod empty_source;
+mod sync_ck_source_receiver;
 mod sync_source;
 mod sync_source_receiver;
 
@@ -22,6 +23,7 @@ pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use blocks_source::BlocksSource;
 pub use empty_source::EmptySource;
+pub use sync_ck_source_receiver::SyncReceiverCkSource;
 pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;
 pub use sync_source_receiver::SyncReceiverSource;

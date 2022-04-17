@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
@@ -46,10 +47,11 @@ impl Interpreter for GrantPrivilegeInterpreter {
         "GrantPrivilegeInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _input_stream, _source_pipe_builder), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 

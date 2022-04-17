@@ -22,6 +22,7 @@ use common_tracing::tracing;
 
 use super::Interpreter;
 use super::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 
@@ -42,10 +43,11 @@ impl Interpreter for CallInterpreter {
         "CallInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "call_interpreter_execute", skip(self, _input_stream, _source_pipe_builder), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
 

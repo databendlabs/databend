@@ -24,6 +24,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
@@ -52,6 +53,7 @@ impl Interpreter for ShowMetricsInterpreter {
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
+        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let query = self.build_query()?;
         let plan = PlanParser::parse(self.ctx.clone(), &query).await?;
@@ -59,7 +61,7 @@ impl Interpreter for ShowMetricsInterpreter {
 
         if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
-            interpreter.execute(input_stream).await
+            interpreter.execute(input_stream, source_pipe_builder).await
         } else {
             return Err(ErrorCode::LogicalError("Show metrics build query error"));
         }

@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::is_internal_opt_key;
 
@@ -49,6 +50,7 @@ impl Interpreter for ShowCreateTableInterpreter {
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog();

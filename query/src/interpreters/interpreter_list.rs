@@ -29,6 +29,7 @@ use regex::Regex;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StageSource;
 
@@ -74,10 +75,11 @@ impl Interpreter for ListInterpreter {
         "ListInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self, _input_stream, _source_pipe_builder), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
+        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let files = self.list_files().await?;
         tracing::info!("list file list:{:?}, pattern:{}", &files, self.plan.pattern);

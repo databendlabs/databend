@@ -38,6 +38,7 @@ pub use sources::AsyncSource;
 pub use sources::AsyncSourcer;
 pub use sources::BlocksSource;
 pub use sources::EmptySource;
+pub use sources::SyncReceiverCkSource;
 pub use sources::SyncReceiverSource;
 pub use sources::SyncSource;
 pub use sources::SyncSourcer;

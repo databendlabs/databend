@@ -18,7 +18,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
@@ -36,6 +38,7 @@ pub trait Interpreter: Sync + Send {
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
+        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream>;
 
     /// Create the new pipeline for databend's new execution model
