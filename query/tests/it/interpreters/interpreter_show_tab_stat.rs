@@ -29,26 +29,26 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         {
             let plan = PlanParser::parse(ctx.clone(), "create database db1").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
 
         // Use database.
         {
             let plan = PlanParser::parse(ctx.clone(), "use db1").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
 
         // Create table.
         {
             let plan = PlanParser::parse(ctx.clone(), "create table data(a Int)").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
         {
             let plan = PlanParser::parse(ctx.clone(), "create table bend(a Int)").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
     }
 
@@ -57,7 +57,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show table status").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -75,7 +75,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show table status like '%da%'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -92,7 +92,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show table status where Name != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -109,7 +109,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show table status from db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             r"\+------\+--------\+---------\+------------\+------\+----------------\+-------------\+-----------------\+--------------\+-----------\+----------------\+-------------------------------\+-------------\+------------\+-----------\+----------\+---------\+",
@@ -127,7 +127,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show table status in db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTabStatInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
@@ -145,7 +145,7 @@ async fn test_show_tab_stat_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "drop database db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute(None, None).await?;
     }
 
     Ok(())

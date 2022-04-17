@@ -27,7 +27,7 @@ async fn test_use_interpreter() -> Result<()> {
     let interpreter = InterpreterFactory::get(ctx, plan)?;
     assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
 
-    let mut stream = interpreter.execute(None).await?;
+    let mut stream = interpreter.execute(None, None).await?;
     while let Some(_block) = stream.next().await {}
 
     Ok(())
@@ -40,7 +40,7 @@ async fn test_use_database_interpreter_error() -> Result<()> {
     let plan = PlanParser::parse(ctx.clone(), "USE xx").await?;
     let interpreter = InterpreterFactory::get(ctx, plan)?;
 
-    if let Err(e) = interpreter.execute(None).await {
+    if let Err(e) = interpreter.execute(None, None).await {
         let expect = "Code: 1003, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
         assert_eq!(expect, format!("{}", e));
     }

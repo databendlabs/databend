@@ -28,10 +28,10 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_streams::Source;
+
 use common_tracing::tracing;
 use futures::TryStreamExt;
-use poem::trace;
+
 
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
 use crate::interpreters::plan_schedulers;
@@ -45,7 +45,7 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::BlocksSource;
 use crate::pipelines::new::processors::TransformAddOn;
 use crate::pipelines::new::processors::TransformCastSchema;
-use crate::pipelines::new::processors::TransformDummy;
+
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
@@ -69,7 +69,7 @@ impl InsertInterpreter {
 
     async fn execute_new(
         &self,
-        input_stream: Option<SendableDataBlockStream>,
+        _input_stream: Option<SendableDataBlockStream>,
         source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;

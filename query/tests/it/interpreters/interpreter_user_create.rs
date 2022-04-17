@@ -29,7 +29,7 @@ async fn test_create_user_interpreter() -> Result<()> {
     let plan = PlanParser::parse(ctx.clone(), query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "CreateUserInterpreter");
-    let mut stream = executor.execute(None).await?;
+    let mut stream = executor.execute(None, None).await?;
     while let Some(_block) = stream.next().await {}
 
     Ok(())

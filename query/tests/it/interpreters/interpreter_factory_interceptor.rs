@@ -29,7 +29,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         interpreter.start().await?;
-        let stream = interpreter.execute(None).await?;
+        let stream = interpreter.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
@@ -59,7 +59,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
-        let stream = interpreter.execute(None).await?;
+        let stream = interpreter.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
@@ -87,7 +87,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         interpreter.start().await?;
-        let stream = interpreter.execute(None).await?;
+        let stream = interpreter.execute(None, None).await?;
         stream.try_collect::<Vec<_>>().await?;
         interpreter.finish().await?;
     }
@@ -98,7 +98,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
-        let stream = interpreter.execute(None).await?;
+        let stream = interpreter.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![

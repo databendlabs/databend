@@ -28,7 +28,7 @@ async fn test_show_engines_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show engines").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowEnginesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+--------+-----------------------------+",

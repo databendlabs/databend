@@ -27,7 +27,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
+
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::new::SourcePipeBuilder;

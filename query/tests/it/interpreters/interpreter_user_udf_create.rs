@@ -34,7 +34,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute(None, None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
             .get_user_manager()
@@ -51,7 +51,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         // IF NOT EXISTS.
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        executor.execute(None).await?;
+        executor.execute(None, None).await?;
 
         let udf = ctx
             .get_user_manager()
@@ -69,7 +69,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
             "CREATE FUNCTION isnotempty AS (p) -> not(is_null(p)) DESC = 'This is a description'";
         let plan = PlanParser::parse(ctx.clone(), query1).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let r = executor.execute(None).await;
+        let r = executor.execute(None, None).await;
         assert!(r.is_err());
         let e = r.err();
         assert_eq!(e.unwrap().code(), ErrorCode::udf_already_exists_code());

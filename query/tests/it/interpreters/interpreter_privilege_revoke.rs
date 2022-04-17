@@ -49,7 +49,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
-    let mut stream = executor.execute(None).await?;
+    let mut stream = executor.execute(None, None).await?;
     while let Some(_block) = stream.next().await {}
     let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
     assert_eq!(new_user.grants, UserGrantSet::empty());
@@ -78,7 +78,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     let plan = PlanParser::parse(ctx.clone(), query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
-    let mut stream = executor.execute(None).await?;
+    let mut stream = executor.execute(None, None).await?;
     while let Some(_block) = stream.next().await {}
 
     let role = user_mgr.get_role(&tenant, "role1".to_string()).await?;

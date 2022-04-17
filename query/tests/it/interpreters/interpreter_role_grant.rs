@@ -33,7 +33,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute(None, None).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
     }
@@ -48,7 +48,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute(None, None).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownUser("").code())
     }
@@ -63,7 +63,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let query = "GRANT ROLE 'test' TO 'test_user'";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute(None, None).await?;
 
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         let roles = user_info.grants.roles();
@@ -77,7 +77,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
-        let res = executor.execute(None).await;
+        let res = executor.execute(None, None).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
     }
@@ -93,7 +93,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let query = "GRANT ROLE 'test' TO ROLE 'test_role'";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute(None, None).await?;
 
         let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
         let roles = role_info.grants.roles();

@@ -32,7 +32,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute(None, None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
             .get_user_manager()
@@ -52,7 +52,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserUDFInterpreter");
 
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute(None, None).await?;
         while let Some(_block) = stream.next().await {}
 
         let udf = ctx

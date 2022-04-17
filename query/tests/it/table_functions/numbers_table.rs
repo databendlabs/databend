@@ -114,7 +114,7 @@ async fn test_limit_push_down() -> Result<()> {
 
         let executor = InterpreterFactory::get(ctx.clone(), plan)?;
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expect = test.result;
         let actual = result.as_slice();

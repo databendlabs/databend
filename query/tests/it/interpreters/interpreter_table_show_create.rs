@@ -76,13 +76,13 @@ async fn interpreter_show_create_table_test() -> Result<()> {
         for stmt in case.create_stmt {
             let plan = PlanParser::parse(ctx.clone(), stmt).await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
         let plan = PlanParser::parse(ctx.clone(), case.show_stmt).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateTableInterpreter");
         let result = executor
-            .execute(None)
+            .execute(None, None)
             .await?
             .try_collect::<Vec<_>>()
             .await?;

@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
-use crate::pipelines::new::processors::processor::ProcessorPtr;
+
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 

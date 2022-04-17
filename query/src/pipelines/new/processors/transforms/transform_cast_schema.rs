@@ -20,14 +20,14 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
-use common_streams::SendableDataBlockStream;
+
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::transforms::transform::Transform;
 use crate::pipelines::new::processors::transforms::transform::Transformer;
-use crate::pipelines::new::processors::ResizeProcessor;
+
 
 pub struct TransformCastSchema {
     output_schema: DataSchemaRef,

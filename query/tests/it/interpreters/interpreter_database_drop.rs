@@ -26,7 +26,7 @@ async fn test_drop_database_interpreter() -> Result<()> {
     let plan = PlanParser::parse(ctx.clone(), "drop database default").await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "DropDatabaseInterpreter");
-    let stream = executor.execute(None).await?;
+    let stream = executor.execute(None, None).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let expected = vec!["++", "++"];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

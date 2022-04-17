@@ -26,7 +26,7 @@ async fn test_show_users_interpreter() -> Result<()> {
         let query = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute(None, None).await?;
     }
 
     // show users.
@@ -35,7 +35,7 @@ async fn test_show_users_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowUsersInterpreter");
 
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
                 "+------+-----------+----------------------+------------------------------------------+",

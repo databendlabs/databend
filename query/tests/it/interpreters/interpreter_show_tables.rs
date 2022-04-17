@@ -29,26 +29,26 @@ async fn test_show_tables_interpreter() -> Result<()> {
         {
             let plan = PlanParser::parse(ctx.clone(), "create database db1").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
 
         // Use database.
         {
             let plan = PlanParser::parse(ctx.clone(), "use db1").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
 
         // Create table.
         {
             let plan = PlanParser::parse(ctx.clone(), "create table data(a Int)").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
         {
             let plan = PlanParser::parse(ctx.clone(), "create table bend(a Int)").await?;
             let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+            let _ = executor.execute(None, None).await?;
         }
     }
 
@@ -57,7 +57,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show tables").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
@@ -75,7 +75,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show full tables").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+------------+",
@@ -93,7 +93,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show tables like '%da%'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
@@ -110,7 +110,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show full tables like '%da%'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+------------+",
@@ -127,7 +127,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show tables where table_name != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
@@ -145,7 +145,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
             PlanParser::parse(ctx.clone(), "show full tables where table_name != 'data'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+------------+",
@@ -162,7 +162,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show tables from db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+",
@@ -180,7 +180,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show full tables from db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+---------------+------------+",
@@ -198,7 +198,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show tables in db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
@@ -217,7 +217,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show full tables in db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
+        let stream = executor.execute(None, None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
@@ -235,7 +235,7 @@ async fn test_show_tables_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "drop database db1").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None).await?;
+        let _ = executor.execute(None, None).await?;
     }
 
     Ok(())

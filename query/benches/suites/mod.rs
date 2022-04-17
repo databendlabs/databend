@@ -35,7 +35,7 @@ pub async fn select_executor(sql: &str) -> Result<()> {
 
     if let PlanNode::Select(plan) = PlanParser::parse(ctx.clone(), sql).await? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;
-        let mut stream = executor.execute(None).await?;
+        let mut stream = executor.execute(None, None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         unreachable!()

@@ -90,7 +90,7 @@ async fn test_block_pruner() -> Result<()> {
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute(None, None).await?;
 
     // get table
     let catalog = ctx.get_catalog();
@@ -231,7 +231,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     let catalog = ctx.get_catalog();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None).await?;
+    interpreter.execute(None, None).await?;
 
     // get table
     let table = catalog

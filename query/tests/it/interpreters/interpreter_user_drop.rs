@@ -33,7 +33,7 @@ async fn test_drop_user_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserInterpreter");
-        let ret = executor.execute(None).await;
+        let ret = executor.execute(None, None).await;
         assert!(ret.is_err())
     }
 
@@ -42,7 +42,7 @@ async fn test_drop_user_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserInterpreter");
-        let ret = executor.execute(None).await;
+        let ret = executor.execute(None, None).await;
         assert!(ret.is_ok())
     }
 
@@ -69,7 +69,7 @@ async fn test_drop_user_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx, plan.clone())?;
         assert_eq!(executor.name(), "DropUserInterpreter");
-        executor.execute(None).await?;
+        executor.execute(None, None).await?;
     }
 
     Ok(())
