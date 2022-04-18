@@ -25,13 +25,13 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct ToTypeNameFunction {
+pub struct TypeOfFunction {
     _display_name: String,
 }
 
-impl ToTypeNameFunction {
+impl TypeOfFunction {
     pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ToTypeNameFunction {
+        Ok(Box::new(TypeOfFunction {
             _display_name: display_name.to_string(),
         }))
     }
@@ -46,9 +46,9 @@ impl ToTypeNameFunction {
     }
 }
 
-impl Function for ToTypeNameFunction {
+impl Function for TypeOfFunction {
     fn name(&self) -> &str {
-        "ToTypeNameFunction"
+        "TypeOfFunction"
     }
 
     fn return_type(&self) -> DataTypePtr {
@@ -68,8 +68,8 @@ impl Function for ToTypeNameFunction {
     }
 }
 
-impl fmt::Display for ToTypeNameFunction {
+impl fmt::Display for TypeOfFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "toTypeName")
+        write!(f, "typeof")
     }
 }
