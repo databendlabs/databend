@@ -43,20 +43,20 @@ async fn test_expression_transform_optimizer() -> Result<()> {
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT ((number >= 5) OR ((number < 3) AND toBoolean(number))))]]",
             },
             Test {
-                name: "Like and isNotNull expression",
-                query: "select * from system.databases where not (isNotNull(name) and name LIKE '%sys%')",
+                name: "Like and is_not_null expression",
+                query: "select * from system.databases where not (is_not_null(name) and name LIKE '%sys%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isNull(name) or (name not like %sys%))\
-                \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (isNotNull(name) AND (name LIKE %sys%)))]]",
+                \n  Filter: (is_null(name) or (name not like %sys%))\
+                \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (is_not_null(name) AND (name LIKE %sys%)))]]",
             },
             Test {
-                name: "Not like and isNull expression",
+                name: "Not like and is_null expression",
                 query: "select * from system.databases where not (name is null or name not like 'a%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isNotNull(name) and (name like a%))\
-                \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (isnull(name) OR (name NOT LIKE a%)))]]",
+                \n  Filter: (is_not_null(name) and (name like a%))\
+                \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (is_null(name) OR (name NOT LIKE a%)))]]",
             },
             Test {
                 name: "Equal expression",
