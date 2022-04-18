@@ -1,14 +1,14 @@
-SELECT toTypeName(CAST(number AS float)) FROM numbers_mt(1);
-SELECT toTypeName(CAST(number AS float32)) FROM numbers_mt(1);
-SELECT toTypeName(CAST(number AS UInt64)) FROM numbers_mt(1);
-SELECT toTypeName(toint8('8')) FROM numbers_mt(1);
-SELECT toTypeName(toint16('16')) FROM numbers_mt(1);
-SELECT toTypeName(toint32('32')) FROM numbers_mt(1);
-SELECT toTypeName(toint64('64')) FROM numbers_mt(1);
-SELECT toTypeName(toUInt32('64')) FROM numbers_mt(1);
-SELECT toTypeName(number::float) FROM numbers_mt(1);
-SELECT toTypeName(number::float64) FROM numbers_mt(1);
-SELECT toTypeName(number::UInt64) FROM numbers_mt(1);
+SELECT typeof(CAST(number AS float)) FROM numbers_mt(1);
+SELECT typeof(CAST(number AS float32)) FROM numbers_mt(1);
+SELECT typeof(CAST(number AS UInt64)) FROM numbers_mt(1);
+SELECT typeof(toint8('8')) FROM numbers_mt(1);
+SELECT typeof(toint16('16')) FROM numbers_mt(1);
+SELECT typeof(toint32('32')) FROM numbers_mt(1);
+SELECT typeof(toint64('64')) FROM numbers_mt(1);
+SELECT typeof(toUInt32('64')) FROM numbers_mt(1);
+SELECT typeof(number::float) FROM numbers_mt(1);
+SELECT typeof(number::float64) FROM numbers_mt(1);
+SELECT typeof(number::UInt64) FROM numbers_mt(1);
 
 SELECT CAST(1 + 1, Float64);
 SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);

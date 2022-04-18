@@ -30,4 +30,4 @@ pub use inet_ntoa::TryInetNtoaFunction;
 pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;
 pub use sleep::SleepFunction;
-pub use to_type_name::ToTypeNameFunction;
+pub use to_type_name::TypeOfFunction;
