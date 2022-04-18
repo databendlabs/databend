@@ -23,90 +23,90 @@ use crate::sql::sql_parser::*;
 #[test]
 fn test_create_udf() -> Result<()> {
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS p -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS p -> not(is_not_null(p))",
         "Expected (, found: p".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (as) -> not(isnotnull(as))",
+        "CREATE FUNCTION test_udf AS (as) -> not(is_not_null(as))",
         "Keyword can not be parameter, got: as".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (\"p\") -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS (\"p\") -> not(is_not_null(p))",
         "Quote is not allowed in parameters, remove: \"".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p, p) -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS (p, p) -> not(is_not_null(p))",
         "Duplicate parameter is not allowed, keep only one: p".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p:) -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS (p:) -> not(is_not_null(p))",
         "Expect words or comma, but got: :".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p,) -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS (p,) -> not(is_not_null(p))",
         "Found a redundant `,` in the parameters".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p;) -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS (p;) -> not(is_not_null(p))",
         "Can not find complete parameters, `)` is missing".to_string(),
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p))",
+        "CREATE FUNCTION test_udf AS (p) -> not(is_not_null(p))",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string()],
-            definition: "not(isnotnull(p))".to_string(),
+            definition: "not(is_not_null(p))".to_string(),
             description: "".to_string(),
         }),
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d))",
+        "CREATE FUNCTION test_udf AS (p, d) -> not(is_not_null(p, d))",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string(), "d".to_string()],
-            definition: "not(isnotnull(p,d))".to_string(),
+            definition: "not(is_not_null(p,d))".to_string(),
             description: "".to_string(),
         }),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
+        "CREATE FUNCTION test_udf AS (p) -> not(is_not_null(p)) DESC",
         "Expected =, found: ".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC =",
+        "CREATE FUNCTION test_udf AS (p) -> not(is_not_null(p)) DESC =",
         "Expected literal string, found: EOF".to_string(),
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        "CREATE FUNCTION test_udf AS (p, d) -> not(is_not_null(p, d)) DESC = 'this is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string(), "d".to_string()],
-            definition: "not(isnotnull(p,d))".to_string(),
+            definition: "not(is_not_null(p,d))".to_string(),
             description: "this is a description".to_string(),
         }),
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf as (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        "CREATE FUNCTION test_udf as (p, d) -> not(is_not_null(p, d)) DESC = 'this is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string(), "d".to_string()],
-            definition: "not(isnotnull(p,d))".to_string(),
+            definition: "not(is_not_null(p,d))".to_string(),
             description: "this is a description".to_string(),
         }),
     )?;
@@ -138,76 +138,76 @@ fn test_drop_udf() -> Result<()> {
 #[test]
 fn test_alter_udf() -> Result<()> {
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS p -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS p -> not(is_not_null(p))",
         "Expected (, found: p".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (as) -> not(isnotnull(as))",
+        "ALTER FUNCTION test_udf AS (as) -> not(is_not_null(as))",
         "Keyword can not be parameter, got: as".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (\"p\") -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS (\"p\") -> not(is_not_null(p))",
         "Quote is not allowed in parameters, remove: \"".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p, p) -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS (p, p) -> not(is_not_null(p))",
         "Duplicate parameter is not allowed, keep only one: p".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p:) -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS (p:) -> not(is_not_null(p))",
         "Expect words or comma, but got: :".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p,) -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS (p,) -> not(is_not_null(p))",
         "Found a redundant `,` in the parameters".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p;) -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS (p;) -> not(is_not_null(p))",
         "Can not find complete parameters, `)` is missing".to_string(),
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p))",
+        "ALTER FUNCTION test_udf AS (p) -> not(is_not_null(p))",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string()],
-            definition: "not(isnotnull(p))".to_string(),
+            definition: "not(is_not_null(p))".to_string(),
             description: "".to_string(),
         }),
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d))",
+        "ALTER FUNCTION test_udf AS (p, d) -> not(is_not_null(p, d))",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string(), "d".to_string()],
-            definition: "not(isnotnull(p,d))".to_string(),
+            definition: "not(is_not_null(p,d))".to_string(),
             description: "".to_string(),
         }),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
+        "ALTER FUNCTION test_udf AS (p) -> not(is_not_null(p)) DESC",
         "Expected =, found: ".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC =",
+        "ALTER FUNCTION test_udf AS (p) -> not(is_not_null(p)) DESC =",
         "Expected literal string, found: EOF".to_string(),
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        "ALTER FUNCTION test_udf AS (p, d) -> not(is_not_null(p, d)) DESC = 'this is a description'",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string(), "d".to_string()],
-            definition: "not(isnotnull(p,d))".to_string(),
+            definition: "not(is_not_null(p,d))".to_string(),
             description: "this is a description".to_string(),
         }),
     )?;
