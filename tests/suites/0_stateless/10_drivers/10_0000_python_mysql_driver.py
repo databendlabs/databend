@@ -41,7 +41,8 @@ assert res == [('t1',)]
 mycursor.execute("SHOW FULL TABLES FROM db1")
 res = mycursor.fetchall()
 assert res == [('t1', 'BASE TABLE')]
-sql3 = "SELECT COUNT(*) FROM db1.t1 WHERE a = %s" % ("\"Test Some Inser\\\"'`ts\"")
+sql3 = "SELECT COUNT(*) FROM db1.t1 WHERE a = %s" % (
+    "\"Test Some Inser\\\"'`ts\"")
 mycursor.execute(sql3)
 res = mycursor.fetchall()
 for row in res:
