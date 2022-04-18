@@ -515,11 +515,11 @@ impl ExprRPNBuilder {
             }
             Expr::IsNull(_) => {
                 self.rpn
-                    .push(ExprRPNItem::function(String::from("isnull"), 1));
+                    .push(ExprRPNItem::function(String::from("is_null"), 1));
             }
             Expr::IsNotNull(_) => {
                 self.rpn
-                    .push(ExprRPNItem::function(String::from("isnotnull"), 1));
+                    .push(ExprRPNItem::function(String::from("is_not_null"), 1));
             }
             Expr::UnaryOp { op, .. } => {
                 match op {

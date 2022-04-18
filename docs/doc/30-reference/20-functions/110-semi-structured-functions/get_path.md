@@ -1,5 +1,5 @@
 ---
-title: Get Path
+title: GET_PATH
 ---
 
 Extracts value from an `ARRAY`, an `OBJECT`, or a `VARIANT` by `path_name`.
@@ -10,23 +10,23 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-get_path(array, path_name)
-get_path(object, path_name)
-get_path(variant, path_name)
+GET_PATH(<array>, <path_name>)
+GET_PATH(<object>, <path_name>)
+GET_PATH(<variant>, <path_name>)
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| array       | The ARRAY value
-| object      | The OBJECT value
-| variant     | The VARIANT value that contains either an ARRAY or an OBJECT
-| path_name   | The String value that consists of a concatenation of field names
+| `<array>`       | The ARRAY value
+| `<object>`      | The OBJECT value
+| `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
+| `<path_name>`   | The String value that consists of a concatenation of field names
 
 ## Return Type
 
-Variant
+VARIANT
 
 ## Examples
 

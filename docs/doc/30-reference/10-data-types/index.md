@@ -5,16 +5,17 @@ slug: ./
 ---
 
 Databend supports SQL data types in several categories:
+* [Boolean Types](00-data-type-logical-types.md)
 * [Numeric Types](10-data-type-numeric-types.md)
 * [Date & Time Types](20-data-type-time-date-types.md)
 * [String Types](30-data-type-string-types.md)
-* [Boolean Types](00-data-type-logical-types.md)
 * [Semi-structured Types](40-data-type-semi-structured-types.md)
 
 ## General-Purpose Data Types
 
-| Data Type | Syntax               | Size(byte)      | Min Value              | Max Value   | Format |
+| Data Type | Syntax               | Size(Bytes)      | Min Value              | Max Value   | Description |
 | ----------|----------------------| --------- | ---------------------- | ----------- | -------|
+| Boolean   | BOOLEAN              |  |                   | | Logical boolean (true/false)
 | Int8      | TINYINT              | 1 |  -128                  |  127 |
 | UInt8     | TINYINT UNSIGNED     | 1 |  0                     |  255 |
 | Int16     | SMALLINT             | 2 |  -32768                |  32767 |
@@ -34,8 +35,8 @@ Databend supports SQL data types in several categories:
 
 Databend supports three Semi-structured types: ARRAY, OBJECT and VARIANT.
 
-| Data Type | Syntax  | Build from values
-| ----------|---------|------------
-| Array     | ARRAY   | [1,2,3]
-| Object    | OBJECT  | {"a":1,"b":2}
-| Variant   | VARIANT | {"a":1,"b":{"c":2}}
+| Data Type | Syntax  | Build From Values    | Description
+| ----------|---------|----------------------|----------------
+| Array     | ARRAY   | [1,2,3]              | Zero-based indexed list, each value can have difference data type.
+| Object    | OBJECT  | {"a":1,"b":{"c":2}}  | Collection of key-value pairs, each key is a VARCHAR, and each value is a VARIANT.
+| Variant   | VARIANT | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types., including ARRAY and OBJECT.

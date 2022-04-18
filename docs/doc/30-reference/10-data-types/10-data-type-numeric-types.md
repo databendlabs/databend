@@ -3,11 +3,11 @@ title: Numeric
 description: Basic Numeric data type.
 ---
 
-## Integer Types
+## Integer Data Types
 
 Basic Integer Numbers data types.
 
-| Data Type | Syntax               | Size(Byte)      | Min Value              | Max Value   |
+| Data Type | Syntax               | Size(Bytes)      | Min Value              | Max Value   |
 | ----------|----------------------| --------- | ---------------------- | ----------- |
 | Int8      | TINYINT              | 1 |  -128                  |  127        
 | UInt8     | TINYINT UNSIGNED     | 1 |  0                     |  255
@@ -18,11 +18,11 @@ Basic Integer Numbers data types.
 | Int64     | BIGINT               | 8 |  -9223372036854775808  |  9223372036854775807
 | UInt64    | BIGINT UNSIGNED      | 8 |  0                     |  18446744073709551615
 
-## Floating-Point Types
+## Floating-Point Data Types
 
 Basic Float32/Float64 data types.
 
-| Data Type  | Syntax    | Size(Byte)    |  Min Value                |  Max Value |
+| Data Type  | Syntax    | Size(Bytes)    |  Min Value                |  Max Value |
 | -----------|-----------| ------- |  ------------------------ |------------
 | Float32    |  FLOAT    | 4 |  -3.40282347e+38          | 3.40282347e+38
 | Float64    |  DOUBLE   | 8 |  -1.7976931348623157E+308 | 1.7976931348623157E+308

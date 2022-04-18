@@ -97,7 +97,7 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
     type State = ShortFixedKeysAggregatorState<u8>;
     fn aggregate_state(&self) -> Self::State {
-        Self::State::create(u8::MAX as usize + 1)
+        Self::State::create((u8::MAX as usize) + 1)
     }
 
     type ColumnBuilder = FixedKeysColumnBuilder<u8>;
@@ -125,7 +125,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
 impl PolymorphicKeysHelper<HashMethodKeysU16> for HashMethodKeysU16 {
     type State = ShortFixedKeysAggregatorState<u16>;
     fn aggregate_state(&self) -> Self::State {
-        Self::State::create(u16::MAX as usize + 1)
+        Self::State::create((u16::MAX as usize) + 1)
     }
 
     type ColumnBuilder = FixedKeysColumnBuilder<u16>;

@@ -1,6 +1,6 @@
 ---
-title: isNull
-description: isNull(expr1) function
+title: IS_NULL
+description: 'IS_NULL( <expr> ) function'
 ---
 
 Checks whether a value is NULL.
@@ -8,33 +8,30 @@ Checks whether a value is NULL.
 ## Syntax
 
 ```sql
-isNull(x)
+IS_NULL( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| x | A value with non-compound data type. |
+| `<expr>` | Any general expression which will be evaluated as the value.
 
 ## Return Type
 
-If x is NULL, ISNULL() returns 1, otherwise it returns 0.
+If x is NULL, IS_NULL() returns 1, otherwise it returns 0.
 
 ## Examples
 
 ```sql
-mysql> CREATE TABLE nullable_test (a UInt32, b UInt32) engine=Memory;
-Query OK, 0 rows affected (3.19 sec)
+mysql> CREATE TABLE nullable_test (a INT NULL, b INT UNSIGNED NULL);
 
-mysql> INSERT INTO nullable_test VALUES(1, Null), (Null, 2), (3, 3);
-Query OK, 0 rows affected (0.02 sec)
+mysql> INSERT INTO nullable_test VALUES(1, NULL), (NULL, 2), (3, 3);
 
-mysql> SELECT a FROM nullable_test WHERE isNull(b);
+mysql> SELECT a FROM nullable_test WHERE is_null(b);
 +------+
 | a    |
 +------+
 |    1 |
 +------+
-1 row in set (0.17 sec)
 ```

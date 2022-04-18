@@ -3,16 +3,16 @@ title: Semi-structured
 description: Semi-structured Types can hold any other data types.
 ---
 
-| Data Type | Syntax   |
-| ----------| -------- |
-| Array     | ARRAY
-| Object    | OBJECT
-| Variant   | VARIANT
+## Semi-structured Data Types
+| Data Type | Syntax  | Build From Values    | Description
+| ----------|---------|----------------------|----------------
+| Array     | ARRAY   | [1,2,3]              | Zero-based indexed list, each value can have difference data type.
+| Object    | OBJECT  | {"a":1,"b":{"c":2}}  | Collection of key-value pairs, each key is a VARCHAR, and each value is a VARIANT.
+| Variant   | VARIANT | [1,{"a":1,"b":{"c":2}}] | Collection of elements of different data types., including ARRAY and OBJECT.
 
+## Array Data Types
 
-## Array Types
-
-Array in Databend is similar to an array in many other programming languages, but the value in an Array types can be different, each value in an Array is Variant type.
+ARRAY in Databend is similar to an array in many other programming languages, but the value in an ARRAY types can be different, each value in an Array is VARIANT type.
 
 ### Example
 
@@ -54,7 +54,7 @@ SELECT arr[3] FROM array_table;
 +---------------+
 ```
 
-`arr[3]` value is a Array type too, we can get the sub elements like:
+`arr[3]` value is a ARRAY type too, we can get the sub elements like:
 ```text title='mysql>'
 SELECT arr[3][0] FROM array_table;
 ```
@@ -67,14 +67,16 @@ SELECT arr[3][0] FROM array_table;
 +-----------+
 ```
 
-## Object Types
+## Object Data Types
 
-Databend Object is a data type likes a "dictionary”, “hash”, or “map” in other programming languages.
-An Object contains key-value pairs.
+Databend OBJECT is a data type likes a "dictionary”, “hash”, or “map” in other programming languages.
+An OBJECT contains key-value pairs.
+
+In a Databend OBJECT, each key is a VARCHAR, and each value is a VARIANT.
 
 ### Example
 
-Create a table with Object type:
+Create a table with OBJECT type:
 ```text title='mysql>'
 CREATE TABLE object_table(obj OBJECT NULL);
 ```
@@ -135,9 +137,9 @@ SELECT obj:b:c FROM object_table;
 | 2       |
 +---------+
 ```
-## Variant Types
+## Variant Data Types
 
-A Variant can store a value of any other type, including Array and Object.
+A VARIANT can store a value of any other type, including ARRAY and OBJECT, likes "Struct" in other languages.
 
 ### Example
 
@@ -169,7 +171,7 @@ SELECT * FROM variant_table;
 
 ## Data Type Conversion
 
-By default, elements retrieved from a Variant column are returned. To convert a returned element to a specific type, add the `::` operator and the target data type (e.g. expression::type).
+By default, elements retrieved from a VARIANT column are returned. To convert a returned element to a specific type, add the `::` operator and the target data type (e.g. expression::type).
 
 ```text
 SELECT Arr[0]::INT FROM array_table

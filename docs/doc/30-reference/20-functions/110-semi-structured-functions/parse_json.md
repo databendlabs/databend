@@ -1,5 +1,5 @@
 ---
-title: Parse Json
+title: PARSE_JSON
 description:
   Interprets input JSON string, producing a VARIANT value
 ---
@@ -11,19 +11,19 @@ description:
 ## Syntax
 
 ```sql
-parse_json(expression)
-try_parse_json(expression)
+PARSE_JSON(<expr>)
+TRY_PARSE_JSON(<expr>)
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expression  | An expression of string type (e.g. VARCHAR) that holds valid JSON information. |
+| `<expr>`| An expression of string type (e.g. VARCHAR) that holds valid JSON information. |
 
 ## Return Type
 
-Variant
+VARIANT
 
 ## Examples
 

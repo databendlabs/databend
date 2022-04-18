@@ -107,7 +107,7 @@ fn create_test_udf() -> UserDefinedFunction {
     UserDefinedFunction::new(
         "isnotempty",
         vec!["p".to_string()],
-        "not(isnull(p))",
+        "not(is_null(p))",
         "This is a description",
     )
 }

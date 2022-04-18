@@ -3,7 +3,7 @@ title: String
 description: Basic String data type.
 ---
 
-## String Types
+## String Data Types
 
 In Databend, strings can be stored in the VARCHAR field.
 
