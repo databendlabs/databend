@@ -191,25 +191,16 @@ impl<'de> Deserialize<'de> for Cmd {
                 table_name,
                 table_meta,
             } => {
-                if let Some(x) = if_not_exists {
-                    // latest
-                    Cmd::CreateTable(CreateTableReq {
-                        if_not_exists: x,
-                        tenant,
-                        db_name,
-                        table_name,
-                        table_meta,
-                    })
-                } else {
-                    // 20220413
-                    Cmd::CreateTable(CreateTableReq {
-                        if_not_exists: false,
-                        tenant,
-                        db_name,
-                        table_name,
-                        table_meta,
-                    })
-                }
+                // since 20220413 there is an `if_exists` field.
+                let if_not_exists = if_not_exists.unwrap_or_default();
+
+                Cmd::CreateTable(CreateTableReq {
+                    if_not_exists,
+                    tenant,
+                    db_name,
+                    table_name,
+                    table_meta,
+                })
             }
             cmd_00000000_20220413::Cmd::DropTable {
                 if_exists,
@@ -217,23 +208,15 @@ impl<'de> Deserialize<'de> for Cmd {
                 db_name,
                 table_name,
             } => {
-                if let Some(x) = if_exists {
-                    // latest
-                    Cmd::DropTable(DropTableReq {
-                        if_exists: x,
-                        tenant,
-                        db_name,
-                        table_name,
-                    })
-                } else {
-                    // 20220413
-                    Cmd::DropTable(DropTableReq {
-                        if_exists: false,
-                        tenant,
-                        db_name,
-                        table_name,
-                    })
-                }
+                // since 20220413 there is an `if_exists` field.
+                let if_exists = if_exists.unwrap_or_default();
+
+                Cmd::DropTable(DropTableReq {
+                    if_exists,
+                    tenant,
+                    db_name,
+                    table_name,
+                })
             }
             cmd_00000000_20220413::Cmd::RenameTable {
                 if_exists,
@@ -243,27 +226,17 @@ impl<'de> Deserialize<'de> for Cmd {
                 new_db_name,
                 new_table_name,
             } => {
-                if let Some(x) = if_exists {
-                    // latest
-                    Cmd::RenameTable(RenameTableReq {
-                        if_exists: x,
-                        tenant,
-                        db_name,
-                        table_name,
-                        new_db_name,
-                        new_table_name,
-                    })
-                } else {
-                    // 20220413
-                    Cmd::RenameTable(RenameTableReq {
-                        if_exists: false,
-                        tenant,
-                        db_name,
-                        table_name,
-                        new_db_name,
-                        new_table_name,
-                    })
-                }
+                // since 20220413 there is an `if_exists` field.
+                let if_exists = if_exists.unwrap_or_default();
+
+                Cmd::RenameTable(RenameTableReq {
+                    if_exists,
+                    tenant,
+                    db_name,
+                    table_name,
+                    new_db_name,
+                    new_table_name,
+                })
             }
             cmd_00000000_20220413::Cmd::CreateShare(x) => Cmd::CreateShare(x),
             cmd_00000000_20220413::Cmd::DropShare(x) => Cmd::DropShare(x),
