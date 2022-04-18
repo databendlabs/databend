@@ -19,8 +19,6 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
-use serde_json::json;
-use serde_json::Value;
 
 pub use crate::configs::Config;
 use crate::users::auth::jwt::JwtAuthenticator;
@@ -62,22 +60,18 @@ impl AuthMgr {
         match credential {
             Credential::Jwt { token: t } => {
                 let jwt = match &self.jwt {
-                    Some(j) => j.get_jwt(t.as_str())?,
+                    Some(j) => j.parse_jwt_claims(t.as_str())?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
                 let user_name = jwt.subject.unwrap();
-                let tenant = jwt
-                    .custom
-                    .get("tenant")
-                    .unwrap_or(&json!(self.tenant))
-                    .to_string();
-                let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-                if let Some(Value::Array(roles)) = jwt.custom.get("roles") {
-                    for role in roles {
-                        user_info.grants.grant_role(role.to_string());
+                if let Some(create_user) = jwt.custom.create_user {
+                    let tenant = create_user.tenant_id.unwrap_or_else(|| self.tenant.clone());
+                    let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                    for role in create_user.roles {
+                        user_info.grants.grant_role(role);
                     }
+                    self.user_mgr.add_user(&tenant, user_info, true).await?;
                 }
-                self.user_mgr.add_user(&tenant, user_info, true).await?;
                 self.user_mgr
                     .get_user(&self.tenant, UserIdentity::new(&user_name, "%"))
                     .await

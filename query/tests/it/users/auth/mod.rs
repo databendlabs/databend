@@ -12,10 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod authenticator;
-mod jwk;
-
-pub use authenticator::CreateUser;
-pub use authenticator::CustomClaims;
-pub use authenticator::JwtAuthenticator;
-pub use authenticator::PubKey;
+mod auth_mgr;
