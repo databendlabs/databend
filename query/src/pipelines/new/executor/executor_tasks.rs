@@ -53,14 +53,16 @@ impl ExecutorTasksQueue {
 
         if !workers_tasks.is_empty() {
             let task = workers_tasks.pop_task(context.get_worker_num());
-
-            if matches!(&task, ExecutorTask::Async(_)) {
-                workers_tasks.waiting_async_tasks += 1;
-            }
+            let is_async_task = matches!(&task, ExecutorTask::Async(_));
 
             context.set_task(task);
 
             let workers_notify = context.get_workers_notify();
+
+            if is_async_task {
+                workers_notify.inc_active_async_worker();
+            }
+
             if !workers_tasks.is_empty() && !workers_notify.is_empty() {
                 let worker_id = context.get_worker_num();
                 let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
@@ -73,10 +75,7 @@ impl ExecutorTasksQueue {
 
         // When tasks queue is empty and all workers are waiting, no new tasks will be generated.
         let workers_notify = context.get_workers_notify();
-        if workers_tasks.waiting_async_tasks != 0
-            && !workers_notify.has_waiting_async_task()
-            && workers_notify.active_workers() <= 1
-        {
+        if !workers_notify.has_waiting_async_task() && workers_notify.active_workers() <= 1 {
             drop(workers_tasks);
             self.finish();
             workers_notify.wakeup_all();
@@ -145,7 +144,6 @@ impl CompletedAsyncTask {
 
 struct ExecutorTasks {
     tasks_size: usize,
-    waiting_async_tasks: usize,
     workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_async_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
@@ -167,7 +165,6 @@ impl ExecutorTasks {
 
         ExecutorTasks {
             tasks_size: 0,
-            waiting_async_tasks: 0,
             workers_sync_tasks,
             workers_async_tasks,
             workers_completed_async_tasks,
