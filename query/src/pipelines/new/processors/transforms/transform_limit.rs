@@ -100,9 +100,20 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
             return None;
         }
 
-        let remaining = self.skip_remaining;
         self.skip_remaining = 0;
-        Some(data_block.slice(remaining, rows - remaining))
+
+        match MODE {
+            OFFSET_AND_LIMIT => {
+                let offset = self.skip_remaining;
+                let length = std::cmp::min(self.take_remaining, rows - offset);
+                self.take_remaining -= length;
+                Some(data_block.slice(offset, length))
+            }
+            _ => {
+                let offset = self.skip_remaining;
+                Some(data_block.slice(offset, rows - offset))
+            }
+        }
     }
 }
 
