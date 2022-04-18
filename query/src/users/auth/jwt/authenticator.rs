@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
+use jwt_simple::prelude::JWTClaims;
 
 use crate::configs::Config;
 use crate::users::auth::jwt::jwk;
@@ -44,7 +45,7 @@ impl JwtAuthenticator {
         Ok(Some(JwtAuthenticator { key_store }))
     }
 
-    pub fn get_user(&self, token: &str) -> Result<String> {
+    pub fn get_jwt(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let pub_key = self.key_store.get_key(None)?;
         match &pub_key {
             PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
@@ -52,7 +53,7 @@ impl JwtAuthenticator {
                     None => Err(ErrorCode::AuthenticateFailure(
                         "missing  field `subject` in jwt",
                     )),
-                    Some(subject) => Ok(subject),
+                    Some(_) => Ok(c),
                 },
                 Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
             },

@@ -19,6 +19,8 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
+use serde_json::json;
+use serde_json::Value;
 
 pub use crate::configs::Config;
 use crate::users::auth::jwt::JwtAuthenticator;
@@ -26,7 +28,7 @@ use crate::users::UserApiProvider;
 
 pub struct AuthMgr {
     tenant: String,
-    users: Arc<UserApiProvider>,
+    user_mgr: Arc<UserApiProvider>,
     jwt: Option<JwtAuthenticator>,
 }
 
@@ -42,16 +44,16 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub async fn create(cfg: Config, users: Arc<UserApiProvider>) -> Result<Self> {
+    pub async fn create(cfg: Config, user_mgr: Arc<UserApiProvider>) -> Result<Self> {
         Ok(AuthMgr {
-            users,
+            user_mgr,
             tenant: cfg.query.tenant_id.clone(),
             jwt: JwtAuthenticator::try_create(cfg).await?,
         })
     }
 
     pub async fn no_auth(&self) -> Result<UserInfo> {
-        self.users
+        self.user_mgr
             .get_user(&self.tenant, UserIdentity::new("root", "127.0.0.1"))
             .await
     }
@@ -59,11 +61,20 @@ impl AuthMgr {
     pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
         match credential {
             Credential::Jwt { token: t } => {
-                let user_name = match &self.jwt {
-                    Some(j) => j.get_user(t.as_str())?,
+                let jwt = match &self.jwt {
+                    Some(j) => j.get_jwt(t.as_str())?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
-                self.users
+                let user_name = jwt.subject.unwrap();
+                let tenant = jwt.custom.get("tenant").unwrap_or(&json!(self.tenant)).to_string();
+                let mut user_info = UserInfo::new(user_name.to_string(), "%".to_string(), AuthInfo::JWT);
+                if let Some(Value::Array(roles)) = jwt.custom.get("roles") {
+                    for role in roles {
+                        user_info.grants.grant_role(role.to_string());
+                    }
+                }
+                self.user_mgr.add_user(&tenant, user_info, true).await?;
+                self.user_mgr
                     .get_user(&self.tenant, UserIdentity::new(&user_name, "%"))
                     .await
             }
@@ -73,7 +84,7 @@ impl AuthMgr {
                 hostname: h,
             } => {
                 let user = self
-                    .users
+                    .user_mgr
                     .get_user_with_client_ip(
                         &self.tenant,
                         n,
