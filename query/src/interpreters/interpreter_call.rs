@@ -23,7 +23,6 @@ use common_tracing::tracing;
 
 use super::Interpreter;
 use super::InterpreterPtr;
-use crate::pipelines::new::SourcePipeBuilder;
 use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 

@@ -25,7 +25,6 @@ use common_tracing::tracing;
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]

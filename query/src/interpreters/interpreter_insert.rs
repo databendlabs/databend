@@ -29,7 +29,6 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 use futures::TryStreamExt;
 
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
@@ -40,7 +39,6 @@ use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::BlocksSource;
 use crate::pipelines::new::processors::TransformAddOn;
 use crate::pipelines::new::processors::TransformCastSchema;
@@ -219,7 +217,7 @@ impl Interpreter for InsertInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let settings = self.ctx.get_settings();
 
-        /// Use insert in new processor
+        // Use insert in new processor
         if settings.get_enable_new_processor_framework()? != 0 && self.ctx.get_cluster().is_empty()
         {
             return self.execute_new(input_stream).await;

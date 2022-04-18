@@ -27,7 +27,6 @@ use common_tracing::tracing;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::is_internal_opt_key;
 

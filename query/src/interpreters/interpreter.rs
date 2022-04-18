@@ -13,17 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::SourcePipeBuilder;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
