@@ -5,16 +5,17 @@ slug: ./
 ---
 
 Databend supports SQL data types in several categories:
+* [Boolean Types](00-data-type-logical-types.md)
 * [Numeric Types](10-data-type-numeric-types.md)
 * [Date & Time Types](20-data-type-time-date-types.md)
 * [String Types](30-data-type-string-types.md)
-* [Boolean Types](00-data-type-logical-types.md)
 * [Semi-structured Types](40-data-type-semi-structured-types.md)
 
 ## General-Purpose Data Types
 
-| Data Type | Syntax               | Size(byte)      | Min Value              | Max Value   | Format |
+| Data Type | Syntax               | Size(Bytes)      | Min Value              | Max Value   | Description |
 | ----------|----------------------| --------- | ---------------------- | ----------- | -------|
+| Boolean   | BOOLEAN              |  |                   | | Logical boolean (true/false)
 | Int8      | TINYINT              | 1 |  -128                  |  127 |
 | UInt8     | TINYINT UNSIGNED     | 1 |  0                     |  255 |
 | Int16     | SMALLINT             | 2 |  -32768                |  32767 |

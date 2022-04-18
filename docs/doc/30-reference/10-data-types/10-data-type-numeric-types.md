@@ -7,7 +7,7 @@ description: Basic Numeric data type.
 
 Basic Integer Numbers data types.
 
-| Data Type | Syntax               | Size(Byte)      | Min Value              | Max Value   |
+| Data Type | Syntax               | Size(Bytes)      | Min Value              | Max Value   |
 | ----------|----------------------| --------- | ---------------------- | ----------- |
 | Int8      | TINYINT              | 1 |  -128                  |  127        
 | UInt8     | TINYINT UNSIGNED     | 1 |  0                     |  255
@@ -22,7 +22,7 @@ Basic Integer Numbers data types.
 
 Basic Float32/Float64 data types.
 
-| Data Type  | Syntax    | Size(Byte)    |  Min Value                |  Max Value |
+| Data Type  | Syntax    | Size(Bytes)    |  Min Value                |  Max Value |
 | -----------|-----------| ------- |  ------------------------ |------------
 | Float32    |  FLOAT    | 4 |  -3.40282347e+38          | 3.40282347e+38
 | Float64    |  DOUBLE   | 8 |  -1.7976931348623157E+308 | 1.7976931348623157E+308
