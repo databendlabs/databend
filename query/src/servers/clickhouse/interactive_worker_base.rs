@@ -41,9 +41,8 @@ use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
-use crate::interpreters::InsertInterpreter;
-use crate::interpreters::InterceptorInterpreter;
-use crate::interpreters::Interpreter;
+
+
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;

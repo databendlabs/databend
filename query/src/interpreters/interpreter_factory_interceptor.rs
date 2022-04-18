@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
+
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -44,12 +44,6 @@ impl InterceptorInterpreter {
             source_pipe_builder: Mutex::new(None),
         }
     }
-
-    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
-        let mut guard = self.source_pipe_builder.lock();
-        *guard = builder;
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -63,7 +57,7 @@ impl Interpreter for InterceptorInterpreter {
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         self.inner
-            .set_source_pipe_builder(((*self.source_pipe_builder.lock()).clone()));
+            .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
         let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =
             ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
@@ -95,5 +89,11 @@ impl Interpreter for InterceptorInterpreter {
                 .query_finish(now)
         }
         self.query_log.log_finish(now).await
+    }
+
+    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
+        let mut guard = self.source_pipe_builder.lock();
+        *guard = builder;
+        Ok(())
     }
 }

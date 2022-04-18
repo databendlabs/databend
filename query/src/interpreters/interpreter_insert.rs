@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
+
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::thread::sleep;
+
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -62,12 +62,6 @@ impl InsertInterpreter {
             plan,
             source_pipe_builder: Mutex::new(None),
         }))
-    }
-
-    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
-        let mut guard = self.source_pipe_builder.lock();
-        *guard = builder;
-        Ok(())
     }
 
     async fn execute_new(
@@ -291,5 +285,11 @@ impl Interpreter for InsertInterpreter {
         let mut new_pipeline = NewPipeline::create();
         new_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         Ok(new_pipeline)
+    }
+
+    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
+        let mut guard = self.source_pipe_builder.lock();
+        *guard = builder;
+        Ok(())
     }
 }
