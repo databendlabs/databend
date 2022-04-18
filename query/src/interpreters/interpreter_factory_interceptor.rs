@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -56,7 +55,8 @@ impl Interpreter for InterceptorInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        self.inner
+        let _ = self
+            .inner
             .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
         let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =

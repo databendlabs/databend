@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::collections::VecDeque;
 use std::sync::Arc;
-
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,12 +31,10 @@ use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
-use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
-use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::BlocksSource;
@@ -163,11 +159,6 @@ impl InsertInterpreter {
             None,
             vec![],
         )))
-    }
-
-    /// Call this method to optimize the logical plan before executing
-    fn rewrite_plan(&self, select_plan: &PlanNode) -> Result<PlanNode> {
-        plan_schedulers::apply_plan_rewrite(Optimizers::create(self.ctx.clone()), select_plan)
     }
 
     fn check_schema_cast(&self, plan_node: &PlanNode) -> common_exception::Result<bool> {

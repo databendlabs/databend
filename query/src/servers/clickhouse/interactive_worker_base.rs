@@ -41,8 +41,6 @@ use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
-
-
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;
@@ -118,7 +116,9 @@ impl InteractiveWorkerBase {
             let mut source_pipe_builder = SourcePipeBuilder::create();
             source_pipe_builder.add_source(output_port, sync_receiver_ck_source);
 
-            interpreter.set_source_pipe_builder(Option::from(source_pipe_builder));
+            let _ = interpreter
+                .set_source_pipe_builder(Option::from(source_pipe_builder))
+                .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
 
             let (mut tx, rx) = mpsc::channel(20);
             tx.send(BlockItem::InsertSample(sample_block)).await.ok();
