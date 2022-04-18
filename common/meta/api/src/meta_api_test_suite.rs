@@ -682,6 +682,7 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                catalog: "default".to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db: db_name.to_string(),
@@ -745,6 +746,7 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                catalog: "default".to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db: db_name.to_string(),
@@ -777,6 +779,7 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                catalog: "default".to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db: db_name.to_string(),
@@ -813,6 +816,7 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                catalog: "default".to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db: db_name.to_string(),
@@ -833,6 +837,7 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                catalog: "default".to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db: new_db_name.to_string(),
@@ -871,6 +876,7 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
+                catalog: "default".to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db: new_db_name.to_string(),

@@ -107,7 +107,8 @@ pub enum Indirection {
 pub enum TableReference {
     // Table name
     Table {
-        // Could be `db.table` or `table`
+        // `[catalog.][db.]table`
+        catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
@@ -195,11 +196,15 @@ impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
             } => {
                 let mut idents = vec![];
+                if let Some(ident) = catalog {
+                    idents.push(ident.to_owned());
+                }
                 if let Some(ident) = database {
                     idents.push(ident.to_owned());
                 }

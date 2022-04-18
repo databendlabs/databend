@@ -27,7 +27,7 @@ use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
 use opendal::Operator;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::configs::Config;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
@@ -175,6 +175,10 @@ impl Session {
         self.session_ctx.get_current_database()
     }
 
+    pub fn get_current_catalog(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_catalog()
+    }
+
     pub fn get_tenant(self: &Arc<Self>) -> String {
         self.session_ctx.get_tenant()
     }
@@ -226,8 +230,8 @@ impl Session {
         self.session_mgr.clone()
     }
 
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.session_mgr.get_catalog()
+    pub fn get_catalogs(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.session_mgr.get_catalog_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

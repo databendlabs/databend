@@ -24,24 +24,25 @@ pub struct TableEntry {
     pub index: IndexType,
     pub name: String,
     pub database: String,
+    pub catalog: String,
 
     pub table: Arc<dyn Table>,
 }
 
 impl TableEntry {
-    pub fn create(
-        index: IndexType,
-        name: String,
-        database: String,
-        table_meta: Arc<dyn Table>,
-    ) -> Self {
-        TableEntry {
-            index,
-            name,
-            database,
-            table: table_meta,
-        }
-    }
+    //    pub fn create(
+    //        index: IndexType,
+    //        name: String,
+    //        database: String,
+    //        table_meta: Arc<dyn Table>,
+    //    ) -> Self {
+    //        TableEntry {
+    //            index,
+    //            name,
+    //            database,
+    //            table: table_meta,
+    //        }
+    //    }
 }
 
 #[derive(Clone)]
@@ -151,13 +152,19 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_base_table(&mut self, database: String, table_meta: Arc<dyn Table>) -> IndexType {
+    pub fn add_base_table(
+        &mut self,
+        catalog: String,
+        database: String,
+        table_meta: Arc<dyn Table>,
+    ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.next_table_index();
         let table_entry = TableEntry {
             index: table_index,
             name: table_name,
             database,
+            catalog,
             table: table_meta,
         };
         self.tables.push(table_entry);

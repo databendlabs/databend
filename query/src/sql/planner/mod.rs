@@ -54,7 +54,7 @@ impl Planner {
         }
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
-        let binder = Binder::new(self.context.get_catalog(), self.context.clone());
+        let binder = Binder::new(self.context.get_catalogs(), self.context.clone());
         let bind_result = binder.bind(&stmts[0]).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr

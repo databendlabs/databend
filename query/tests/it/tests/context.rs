@@ -22,15 +22,12 @@ use common_meta_types::NodeInfo;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
-use databend_query::catalogs::CatalogContext;
 use databend_query::clusters::Cluster;
 use databend_query::configs::Config;
-use databend_query::databases::DatabaseFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionType;
 use databend_query::storages::StorageContext;
-use databend_query::storages::StorageFactory;
 
 use crate::tests::SessionManagerBuilder;
 
@@ -94,21 +91,6 @@ pub async fn create_query_context_with_config(
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
-}
-
-#[allow(dead_code)]
-pub fn create_catalog_context() -> Result<CatalogContext> {
-    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
-    let meta = meta_embedded;
-    let storage_factory = StorageFactory::create(Config::default());
-    let database_factory = DatabaseFactory::create(Config::default());
-
-    Ok(CatalogContext {
-        meta: Arc::new(meta),
-        storage_factory: Arc::new(storage_factory),
-        database_factory: Arc::new(database_factory),
-        in_memory_data: Arc::new(Default::default()),
-    })
 }
 
 pub fn create_storage_context() -> Result<StorageContext> {

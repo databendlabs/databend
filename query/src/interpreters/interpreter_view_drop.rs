@@ -23,7 +23,6 @@ use common_planners::DropViewPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -50,18 +49,19 @@ impl Interpreter for DropViewInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.db.clone();
         let viewname = self.plan.viewname.clone();
         let tbl = self
             .ctx
-            .get_table(db_name.as_str(), viewname.as_str())
+            .get_table(&catalog_name, &db_name, &viewname)
             .await
             .ok();
 
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(db_name.clone()),
+                &GrantObject::Database(catalog_name.clone(), db_name.clone()),
                 UserPrivilegeType::Drop,
             )
             .await?;
@@ -75,7 +75,7 @@ impl Interpreter for DropViewInterpreter {
             }
         };
 
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let plan = DropTableReq {
             if_exists: self.plan.if_exists,
             tenant: self.plan.tenant.clone(),

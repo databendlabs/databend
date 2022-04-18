@@ -54,6 +54,8 @@ impl SourceInfo {
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ReadDataSourcePlan {
+    // TODO catalog id is better
+    pub catalog: String,
     pub source_info: SourceInfo,
 
     /// Required fields to scan.

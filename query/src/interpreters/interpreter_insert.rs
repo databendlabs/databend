@@ -57,14 +57,18 @@ impl Interpreter for InsertInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Table(plan.database_name.clone(), plan.table_name.clone()),
+                &GrantObject::Table(
+                    plan.catalog_name.clone(),
+                    plan.database_name.clone(),
+                    plan.table_name.clone(),
+                ),
                 UserPrivilegeType::Insert,
             )
             .await?;
 
         let table = self
             .ctx
-            .get_table(&plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
             .await?;
 
         let need_fill_missing_columns = table.schema() != self.plan.schema();

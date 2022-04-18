@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
@@ -41,7 +40,7 @@ impl AnalyzableStatement for DfCreateDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let db = self.database_name()?;
+        let (catalog, db) = super::resolve_database(&ctx, &self.name)?;
         let if_not_exists = self.if_not_exists;
         let meta = self.database_meta()?;
 
@@ -49,6 +48,7 @@ impl AnalyzableStatement for DfCreateDatabase {
             PlanNode::CreateDatabase(CreateDatabasePlan {
                 tenant,
                 if_not_exists,
+                catalog,
                 db,
                 meta,
             }),
@@ -57,14 +57,6 @@ impl AnalyzableStatement for DfCreateDatabase {
 }
 
 impl DfCreateDatabase {
-    fn database_name(&self) -> Result<String> {
-        if self.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
-        }
-
-        Ok(self.name.0[0].value.clone())
-    }
-
     fn database_meta(&self) -> Result<DatabaseMeta> {
         Ok(DatabaseMeta {
             engine: self.engine.clone(),

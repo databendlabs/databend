@@ -26,7 +26,6 @@ use common_planners::lit;
 use common_planners::sub;
 use common_planners::CreateTablePlan;
 use common_planners::Extras;
-use databend_query::catalogs::Catalog;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
@@ -69,6 +68,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // create test table
     let create_table_plan = CreateTablePlan {
+        catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -93,7 +93,7 @@ async fn test_block_pruner() -> Result<()> {
     interpreter.execute(None).await?;
 
     // get table
-    let catalog = ctx.get_catalog();
+    let catalog = ctx.get_catalog("default")?;
     let table = catalog
         .get_table(
             fixture.default_tenant().as_str(),
@@ -209,6 +209,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     // create test table
     let create_table_plan = CreateTablePlan {
+        catalog: "default".to_owned(),
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -229,7 +230,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         as_select: None,
     };
 
-    let catalog = ctx.get_catalog();
+    let catalog = ctx.get_catalog("default")?;
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(None).await?;
 

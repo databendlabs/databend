@@ -21,7 +21,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
@@ -94,7 +93,8 @@ impl ColumnsTable {
         ctx: Arc<QueryContext>,
     ) -> Result<Vec<(String, String, DataField)>> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog();
+        // TODO replace default with real cat
+        let catalog = ctx.get_catalog("default")?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let mut rows: Vec<(String, String, DataField)> = vec![];

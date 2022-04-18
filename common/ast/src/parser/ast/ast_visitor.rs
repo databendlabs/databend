@@ -238,10 +238,11 @@ pub trait AstVisitor {
     fn visit_table_reference(&mut self, table_reference: &TableReference) -> Result<()> {
         match table_reference {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
-            } => self.visit_table(database, table, alias),
+            } => self.visit_table(catalog, database, table, alias),
             TableReference::Subquery { subquery, alias } => {
                 self.visit_table_subquery(subquery, alias)
             }
@@ -252,8 +253,9 @@ pub trait AstVisitor {
 
     fn visit_table(
         &mut self,
-        _: &Option<Identifier>,
-        _: &Identifier,
+        _catalog: &Option<Identifier>,
+        _database: &Option<Identifier>,
+        _table: &Identifier,
         alias: &Option<TableAlias>,
     ) -> Result<()> {
         self.visit_table_alias(alias.as_ref().unwrap())

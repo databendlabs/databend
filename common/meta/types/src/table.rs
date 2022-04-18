@@ -217,6 +217,7 @@ pub struct DropTableReply {}
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
     pub table_name: String,
     pub new_db: String,

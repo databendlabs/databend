@@ -21,7 +21,6 @@ use common_planners::DropDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -52,7 +51,7 @@ impl Interpreter for DropDatabaseInterpreter {
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
             .await?;
 
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         catalog.drop_database(self.plan.clone().into()).await?;
 
         Ok(Box::pin(DataBlockStream::create(

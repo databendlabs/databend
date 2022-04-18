@@ -32,7 +32,6 @@ use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -104,7 +103,8 @@ impl FuseTable {
                             );
                             common_base::tokio::time::sleep(d).await;
 
-                            let catalog = ctx.get_catalog();
+                            // TODO catalog name
+                            let catalog = ctx.get_catalog("default")?;
                             let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                             let table_info: TableInfo = TableInfo {
                                 ident,
@@ -228,7 +228,8 @@ impl FuseTable {
         table_info: &TableInfo,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
-        let catalog = ctx.get_catalog();
+        // TODO catalog name
+        let catalog = ctx.get_catalog("default")?;
         let mut options = [(
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             Some(new_snapshot_location),

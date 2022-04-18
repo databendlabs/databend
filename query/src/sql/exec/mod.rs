@@ -105,9 +105,13 @@ impl Executor {
     }
 
     async fn build_table_scan(&self, scan: &PhysicalScan) -> Result<Pipeline> {
-        let table = self.metadata.table(scan.table_index).table.clone();
+        let table_entry = self.metadata.table(scan.table_index);
+        let table = table_entry.table.clone();
+        eprintln!(">>>>>>>> build table scan READ PARTITION");
         let (statistics, parts) = table.read_partitions(self.ctx.clone(), None).await?;
+
         let plan = ReadDataSourcePlan {
+            catalog: table_entry.catalog.clone(),
             source_info: SourceInfo::TableSource(table.get_table_info().clone()),
             scan_fields: None,
             parts,

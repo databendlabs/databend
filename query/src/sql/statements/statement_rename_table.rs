@@ -39,10 +39,19 @@ impl AnalyzableStatement for DfRenameTable {
         let tenant = ctx.get_tenant();
         let mut entities = Vec::new();
         for (k, v) in &self.name_map {
-            let (db, table_name) = self.resolve_table(ctx.clone(), k)?;
-            let (new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
+            let (catalog, db, table_name) = self.resolve_table(ctx.clone(), k)?;
+            let (new_catalog, new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
+
+            // TODO if catalog != new_catalog, then throws Error
+            if new_catalog != catalog {
+                return Err(ErrorCode::BadArguments(
+                    "alter catalog not allowed while reanme table",
+                ));
+            }
+
             entities.push(RenameTableEntity {
                 if_exists: false,
+                catalog,
                 db,
                 table_name,
                 new_db,
@@ -61,12 +70,25 @@ impl DfRenameTable {
         &self,
         ctx: Arc<QueryContext>,
         table_name: &ObjectName,
-    ) -> Result<(String, String)> {
+    ) -> Result<(String, String, String)> {
         let idents = &table_name.0;
         match idents.len() {
             0 => Err(ErrorCode::SyntaxException("Rename table name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
+            1 => Ok((
+                ctx.get_current_catalog(),
+                ctx.get_current_database(),
+                idents[0].value.clone(),
+            )),
+            2 => Ok((
+                ctx.get_current_catalog(),
+                idents[0].value.clone(),
+                idents[1].value.clone(),
+            )),
+            3 => Ok((
+                idents[0].value.clone(),
+                idents[1].value.clone(),
+                idents[2].value.clone(),
+            )),
             _ => Err(ErrorCode::SyntaxException(
                 "Rename table name must be [`db`].`table`",
             )),

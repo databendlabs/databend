@@ -1793,6 +1793,7 @@ dependencies = [
  "sqlparser",
  "tempfile",
  "threadpool",
+ "thrift",
  "time 0.3.9",
  "tokio-rustls 0.23.3",
  "tokio-stream",

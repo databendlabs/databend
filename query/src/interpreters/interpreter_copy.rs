@@ -124,7 +124,11 @@ impl CopyInterpreter {
         let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
 
         let table = ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .get_table(
+                &self.plan.catalog_name,
+                &self.plan.db_name,
+                &self.plan.tbl_name,
+            )
             .await?;
         let operations = table
             .append_data(ctx.clone(), source_stream)
@@ -177,7 +181,11 @@ impl Interpreter for CopyInterpreter {
 
         let table = self
             .ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .get_table(
+                &self.plan.catalog_name,
+                &self.plan.db_name,
+                &self.plan.tbl_name,
+            )
             .await?;
 
         // Commit.

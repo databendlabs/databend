@@ -23,7 +23,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -51,7 +50,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
 
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)

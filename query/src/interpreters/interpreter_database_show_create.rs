@@ -21,7 +21,6 @@ use common_planners::ShowCreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -51,7 +50,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
-        let calalog = self.ctx.get_catalog();
+        let calalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let db = calalog.get_database(tenant.as_str(), &self.plan.db).await?;
         let name = db.name();
         let mut info = format!("CREATE DATABASE `{}`", name);

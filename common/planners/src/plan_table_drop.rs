@@ -22,6 +22,7 @@ use common_meta_types::DropTableReq;
 pub struct DropTablePlan {
     pub if_exists: bool,
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
     /// The table name
     pub table: String,

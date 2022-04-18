@@ -32,7 +32,7 @@ async fn test_role_cache_mgr() -> Result<()> {
 
     let mut role1 = RoleInfo::new("role1".to_string());
     role1.grants.grant_privileges(
-        &GrantObject::Database("db1".to_string()),
+        &GrantObject::Database("default".to_string(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
     user_api.add_role("tenant1", role1, false).await?;
@@ -43,7 +43,7 @@ async fn test_role_cache_mgr() -> Result<()> {
             .verify_privilege(
                 "tenant1",
                 &["role1".to_string()],
-                &GrantObject::Database("db1".to_string()),
+                &GrantObject::Database("default".to_string(), "db1".to_string()),
                 UserPrivilegeType::Create,
             )
             .await?
@@ -63,7 +63,7 @@ async fn test_role_cache_mgr() -> Result<()> {
             .verify_privilege(
                 "tenant2",
                 &["role1".to_string()],
-                &GrantObject::Database("db1".to_string()),
+                &GrantObject::Database("default".to_string(), "db1".to_string()),
                 UserPrivilegeType::Create,
             )
             .await?

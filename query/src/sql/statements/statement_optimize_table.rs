@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Optimization;
 use common_planners::OptimizeTablePlan;
@@ -36,8 +35,9 @@ pub struct DfOptimizeTable {
 impl AnalyzableStatement for DfOptimizeTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (database, table) = self.resolve_table(ctx)?;
+        let (catalog, database, table) = super::resolve_table(&ctx, &self.name, "Optimize")?;
         let plan_node = OptimizeTablePlan {
+            catalog,
             database,
             table,
             operation: self.operation,
@@ -45,22 +45,5 @@ impl AnalyzableStatement for DfOptimizeTable {
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::OptimizeTable(plan_node),
         )))
-    }
-}
-
-impl DfOptimizeTable {
-    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
-        let DfOptimizeTable {
-            name: ObjectName(idents),
-            ..
-        } = self;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Compact table name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Compact table name must be [`db`].`table`",
-            )),
-        }
     }
 }

@@ -26,6 +26,7 @@ pub struct RenameTablePlan {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTableEntity {
     pub if_exists: bool,
+    pub catalog: String,
     pub db: String,
     pub table_name: String,
     pub new_db: String,

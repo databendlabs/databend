@@ -23,7 +23,6 @@ use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::AddOnStream;
@@ -81,7 +80,8 @@ impl Processor for SinkTransform {
         tracing::debug!("executing sinks transform");
         let tbl = self
             .ctx
-            .get_catalog()
+            //.get_catalog(&self.table_info.catalog_name)
+            .get_catalog("default")? // TODO pass this in
             .get_table_by_info(self.table_info())?;
         let mut input_stream = self.input.execute().await?;
 

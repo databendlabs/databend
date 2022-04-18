@@ -66,6 +66,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts)?;
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
+                catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
@@ -125,6 +126,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
+                catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
@@ -167,6 +169,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
+        catalog: fixture.default_catalog_name(),
         db: fixture.default_db_name(),
         table: fixture.default_table_name(),
         purge: false,

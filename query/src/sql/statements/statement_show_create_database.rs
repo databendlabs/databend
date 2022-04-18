@@ -32,10 +32,12 @@ pub struct DfShowCreateDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowCreateDatabase {
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let (catalog, db) = Self::resolve_database(&ctx, &self.name)?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::ShowCreateDatabase(ShowCreateDatabasePlan {
-                db: self.database_name()?,
+                catalog,
+                db,
                 schema: Self::schema(),
             }),
         )))
@@ -50,13 +52,15 @@ impl DfShowCreateDatabase {
         ])
     }
 
-    fn database_name(&self) -> Result<String> {
-        if self.name.0.is_empty() {
-            return Err(ErrorCode::SyntaxException(
-                "Show create database name is empty",
-            ));
+    pub fn resolve_database(ctx: &QueryContext, name: &ObjectName) -> Result<(String, String)> {
+        let idents = &name.0;
+        match idents.len() {
+            0 => Err(ErrorCode::SyntaxException("database name is empty")),
+            1 => Ok((ctx.get_current_catalog(), idents[0].value.clone())),
+            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
+            _ => Err(ErrorCode::SyntaxException(
+                "database name must be [`catalog`].db`",
+            )),
         }
-
-        Ok(self.name.0[0].value.clone())
     }
 }

@@ -26,6 +26,8 @@ pub type TableOptions = HashMap<String, String>;
 pub struct CreateTablePlan {
     pub if_not_exists: bool,
     pub tenant: String,
+    /// The catalog name
+    pub catalog: String,
     pub db: String,
     /// The table name
     pub table: String,

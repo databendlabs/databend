@@ -25,6 +25,7 @@ use common_tracing::tracing;
 use serde::Serialize;
 use serde_json;
 
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 
 #[derive(Clone, Copy, Serialize)]
@@ -109,7 +110,10 @@ impl InterpreterQueryLog {
     }
 
     async fn write_log(&self, event: &LogEvent) -> Result<()> {
-        let query_log = self.ctx.get_table("system", "query_log").await?;
+        let query_log = self
+            .ctx
+            .get_table(CATALOG_DEFAULT, "system", "query_log")
+            .await?;
         let schema = query_log.get_table_info().meta.schema.clone();
 
         let block = DataBlock::create(schema.clone(), vec![

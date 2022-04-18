@@ -22,6 +22,7 @@ use common_meta_types::DropDatabaseReq;
 pub struct DropDatabasePlan {
     pub if_exists: bool,
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
 }
 

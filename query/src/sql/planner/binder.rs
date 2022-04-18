@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::catalogs::Catalog;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::bind_context::BindContext;
@@ -50,15 +51,15 @@ use crate::storages::Table;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
-    catalog: Arc<dyn Catalog>,
+    catalog_manager: Arc<CatalogManager>,
     metadata: Metadata,
     context: Arc<QueryContext>,
 }
 
 impl Binder {
-    pub fn new(catalog: Arc<dyn Catalog>, context: Arc<QueryContext>) -> Self {
+    pub fn new(catalog_manager: Arc<CatalogManager>, context: Arc<QueryContext>) -> Self {
         Binder {
-            catalog,
+            catalog_manager,
             metadata: Metadata::create(),
             context,
         }
@@ -99,10 +100,15 @@ impl Binder {
     async fn bind_table_reference(&mut self, stmt: &TableReference) -> Result<BindContext> {
         match stmt {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
             } => {
+                let catalog_name = catalog
+                    .as_ref()
+                    .map(|ident| ident.name.clone())
+                    .unwrap_or_else(|| self.context.get_current_catalog());
                 let database = database
                     .as_ref()
                     .map(|ident| ident.name.clone())
@@ -113,14 +119,17 @@ impl Binder {
                 let tenant = self.context.get_tenant();
 
                 // Resolve table with catalog
+                let catalog = self.catalog_manager.get_catalog(&catalog_name)?;
                 let table_meta: Arc<dyn Table> = Self::resolve_data_source(
-                    self.catalog.as_ref(),
+                    catalog.as_ref(),
                     tenant.as_str(),
                     database.as_str(),
                     table.as_str(),
                 )
                 .await?;
-                let table_index = self.metadata.add_base_table(database, table_meta.clone());
+                let table_index =
+                    self.metadata
+                        .add_base_table(catalog_name, database, table_meta.clone());
 
                 for field in table_meta.schema().fields() {
                     self.metadata.add_column(

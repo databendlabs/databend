@@ -20,7 +20,6 @@ use common_planners::RenameTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -49,13 +48,14 @@ impl Interpreter for RenameTableInterpreter {
         // TODO check privileges
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
-        let catalog = self.ctx.get_catalog();
         for entity in &self.plan.entities {
             let tenant = self.plan.tenant.clone();
+            let catalog = self.ctx.get_catalog(&entity.catalog)?;
             catalog
                 .rename_table(RenameTableReq {
                     tenant,
                     if_exists: entity.if_exists,
+                    catalog: entity.catalog.clone(),
                     db: entity.db.clone(),
                     table_name: entity.table_name.clone(),
                     new_db: entity.new_db.clone(),

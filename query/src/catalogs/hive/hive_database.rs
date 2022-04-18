@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod database_catalog;
-mod immutable_catalog;
-mod mutable_catalog;
+use common_meta_types::DatabaseInfo;
 
-pub use database_catalog::DatabaseCatalog;
-pub use immutable_catalog::ImmutableCatalog;
-pub use mutable_catalog::MutableCatalog;
+use crate::databases::Database;
+
+pub const HIVE_DATABASE_ENGIE: &str = "hive";
+
+#[derive(Clone)]
+pub struct HiveDatabase {
+    pub database_info: DatabaseInfo,
+}
+
+#[async_trait::async_trait]
+impl Database for HiveDatabase {
+    fn name(&self) -> &str {
+        &self.database_info.db
+    }
+
+    fn get_db_info(&self) -> &DatabaseInfo {
+        &self.database_info
+    }
+}

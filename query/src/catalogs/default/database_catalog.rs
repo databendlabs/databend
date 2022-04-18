@@ -33,9 +33,9 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
+use super::immutable_catalog::ImmutableCatalog;
+use super::mutable_catalog::MutableCatalog;
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::ImmutableCatalog;
-use crate::catalogs::impls::MutableCatalog;
 use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::StorageDescription;

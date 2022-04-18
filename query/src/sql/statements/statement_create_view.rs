@@ -47,11 +47,13 @@ impl AnalyzableStatement for DfCreateView {
         let if_not_exists = self.if_not_exists;
         let subquery = self.subquery.clone();
         let tenant = ctx.get_tenant();
-        let (db, viewname) = DfCreateTable::resolve_table(ctx.clone(), &self.name, "View")?;
+        let (catalog, db, viewname) =
+            DfCreateTable::resolve_table(ctx.clone(), &self.name, "View")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateView(
             CreateViewPlan {
                 if_not_exists,
                 tenant,
+                catalog,
                 db,
                 viewname,
                 subquery,

@@ -550,14 +550,23 @@ impl TransformerSqlparser {
                 let idents = &name.0;
                 if idents.len() == 1 {
                     Ok(TableReference::Table {
+                        catalog: None,
                         database: None,
                         table: Identifier::from(&idents[0]),
                         alias: alias.as_ref().map(Self::transform_table_alias),
                     })
                 } else if idents.len() == 2 {
                     Ok(TableReference::Table {
+                        catalog: None,
                         database: Some(Identifier::from(&idents[0])),
                         table: Identifier::from(&idents[1]),
+                        alias: alias.as_ref().map(Self::transform_table_alias),
+                    })
+                } else if idents.len() == 3 {
+                    Ok(TableReference::Table {
+                        catalog: Some(Identifier::from(&idents[0])),
+                        database: Some(Identifier::from(&idents[1])),
+                        table: Identifier::from(&idents[2]),
                         alias: alias.as_ref().map(Self::transform_table_alias),
                     })
                 } else {

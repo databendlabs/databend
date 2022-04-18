@@ -31,7 +31,6 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
@@ -83,6 +82,11 @@ impl FuseHistoryTable {
             arg_table_name,
         }))
     }
+
+    fn get_catalog_name(&self) -> &str {
+        // TODO
+        "default"
+    }
 }
 
 #[async_trait::async_trait]
@@ -117,7 +121,7 @@ impl Table for FuseHistoryTable {
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog()
+            .get_catalog(self.get_catalog_name())?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),
@@ -200,7 +204,7 @@ impl AsyncSource for FuseHistorySource {
             let tenant_id = self.ctx.get_tenant();
             let tbl = self
                 .ctx
-                .get_catalog()
+                .get_catalog("default")? // TODO pass in this guy
                 .get_table(
                     tenant_id.as_str(),
                     self.arg_database_name.as_str(),

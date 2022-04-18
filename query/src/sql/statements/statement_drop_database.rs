@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DropDatabasePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
+use super::DfShowCreateDatabase;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -35,26 +35,17 @@ pub struct DfDropDatabase {
 impl AnalyzableStatement for DfDropDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let db = self.database_name()?;
+        let (catalog, db) = DfShowCreateDatabase::resolve_database(&ctx, &self.name)?;
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::DropDatabase(DropDatabasePlan {
                 tenant,
+                catalog,
                 db,
                 if_exists,
             }),
         )))
-    }
-}
-
-impl DfDropDatabase {
-    fn database_name(&self) -> Result<String> {
-        if self.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
-        }
-
-        Ok(self.name.0[0].value.clone())
     }
 }

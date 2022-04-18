@@ -85,6 +85,7 @@ fn test_display_query() {
             op: JoinOperator::Inner,
             condition: JoinCondition::Natural,
             left: Box::new(TableReference::Table {
+                catalog: None,
                 database: None,
                 table: Identifier {
                     name: "left_table".to_owned(),
@@ -93,6 +94,7 @@ fn test_display_query() {
                 alias: None,
             }),
             right: Box::new(TableReference::Table {
+                catalog: None,
                 database: None,
                 table: Identifier {
                     name: "right_table".to_owned(),
@@ -158,6 +160,7 @@ fn test_display_query() {
 #[test]
 fn test_display_table_reference() {
     let table_ref = TableReference::Table {
+        catalog: None,
         database: None,
         table: Identifier {
             name: "table".to_owned(),
