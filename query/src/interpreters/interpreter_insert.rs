@@ -95,12 +95,12 @@ impl InsertInterpreter {
                 );
             }
             InsertInputSource::SelectPlan(plan) => {
+                need_cast_schema = self.check_schema_cast(plan)?;
                 let select_interpreter =
                     SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                         input: Arc::new((**plan).clone()),
                     })?;
                 pipeline = select_interpreter.create_new_pipeline()?;
-                need_cast_schema = self.check_schema_cast(plan)?;
             }
         };
 
@@ -145,6 +145,7 @@ impl InsertInterpreter {
 
         let async_runtime = self.ctx.get_storage_runtime();
 
+        pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
         executor.execute()?;
         drop(executor);
@@ -273,8 +274,7 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let mut new_pipeline = NewPipeline::create();
-        new_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
+        let new_pipeline = NewPipeline::create();
         Ok(new_pipeline)
     }
 
