@@ -57,7 +57,8 @@ impl RoundFunction {
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
     fn execute(&self, time: i64) -> i64 {
-        time / (self.round * self.round) as i64
+        let round = self.round as i64;
+        time / round * round
     }
 }
 

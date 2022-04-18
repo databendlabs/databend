@@ -2,12 +2,12 @@ SELECT today() >= 18869;
 SELECT now() >= 1630295616;
 select  toDateTime(1630320462), toUInt32(toDateTime(1630320462))  = 1630320462;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
-select  toDateTime64(1640019661000), toInt64(toDateTime64(1640019661000))  = 1640019661000;
+select  toDateTime(1640019661), toInt64(toDateTime(1640019661))  = 1640019661;
 
-select toTypeName(today() + 3) = 'Date16';
-select toTypeName(today() - 3) = 'Date16';
-select toTypeName(now() - 3) = 'DateTime32';
-select toTypeName(toDateTime64(1640019661000)) = 'DateTime64(3)';
+select toTypeName(today() + 3) = 'Date';
+select toTypeName(today() - 3) = 'Date';
+select toTypeName(now() - 3) = 'DateTime(0)';
+select toTypeName(toDateTime(1640019661)) = 'DateTime(0)';
 select today() + 1 - today() = 1;
 
 select toTypeName(today() - today()) = 'Int32';
@@ -187,9 +187,9 @@ select '===EXTRACT===';
 
 select '===CMP===';
 
-select toDateTime64('2022-04-01 06:50:20.000')   = '2022-04-01 06:50:20.000';
-select toDateTime64('2022-04-01 06:50:20.000')   > '2022-04-01 04:50:20.000';
-select toDateTime64('2022-04-01 06:50:20.000')   < '2022-04-02 04:50:20.000';
+select toDateTime('2022-04-01 06:50:20')   = '2022-04-01 06:50:20';
+select toDateTime('2022-04-01 06:50:20')   > '2022-04-01 04:50:20';
+select toDateTime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
 select '===INSERT===';
 drop table if exists ts;

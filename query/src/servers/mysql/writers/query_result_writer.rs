@@ -130,6 +130,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     row_writer.write_col(v as i8)?
                                 }
                                 (TypeID::Date, DataValue::Int64(v)) => {
+                                    let v = v as i32;
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
                                 (TypeID::DateTime, DataValue::Int64(v)) => {
