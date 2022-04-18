@@ -1,5 +1,5 @@
 ---
-title: Get Ignore Case
+title: GET_IGNORE_CASE
 ---
 
 Extracts value from an `OBJECT` by `field_name`, or a `VARIANT` that contains `OBJECT`.
@@ -10,21 +10,21 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-get_ignore_case(object, field_name)
-get_ignore_case(variant, field_name)
+GET_IGNORE_CASE(<object>, <field_name>)
+GET_IGNORE_CASE(<variant>, <field_name>)
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| object      | The OBJECT value
-| variant     | The VARIANT value that contains either an ARRAY or an OBJECT
-| field_name  | The String value specifies the key in a key-value pair of OBJECT
+| `<object>`      | The OBJECT value
+| `<variant>`     | The VARIANT value that contains either an ARRAY or an OBJECT
+| `<field_name>`  | The String value specifies the key in a key-value pair of OBJECT
 
 ## Return Type
 
-Variant
+VARIANT
 
 ## Examples
 
