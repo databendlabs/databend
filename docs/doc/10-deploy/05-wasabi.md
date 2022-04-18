@@ -176,19 +176,16 @@ Check the response is `HTTP/1.1 200 OK`.
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```shell title="mysql>"
-create table t1(a int);
+```sql
+CREATE TABLE t1(A INT);
 ```
 
-```shell title="mysql>"
-insert into t1 values(1), (2);
+```sql
+INSERT INTO t1 VALUES(1), (2);
 ```
 
-```shell title="mysql>"
-select * from t1
-```
-
-```shell"
+```sql
+SELECT * FROM t1
 +------+
 | a    |
 +------+

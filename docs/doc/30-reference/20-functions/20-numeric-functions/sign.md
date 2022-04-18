@@ -23,29 +23,29 @@ A i8 data type value.
 
 ## Examples
 
-```text
-mysql> SELECT SIGN(NULL);
+```sql
+SELECT SIGN(NULL);
 +------------+
 | SIGN(NULL) |
 +------------+
 |       NULL |
 +------------+
 
-mysql> SELECT SIGN(0);
+SELECT SIGN(0);
 +---------+
 | SIGN(0) |
 +---------+
 |       0 |
 +---------+
 
-mysql> SELECT SIGN(10);
+SELECT SIGN(10);
 +----------+
 | SIGN(10) |
 +----------+
 |        1 |
 +----------+
 
-mysql> SELECT SIGN(-10);
+SELECT SIGN(-10);
 +--------------+
 | SIGN((- 10)) |
 +--------------+

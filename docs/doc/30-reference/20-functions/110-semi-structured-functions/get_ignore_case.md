@@ -29,7 +29,7 @@ VARIANT
 ## Examples
 
 ```sql
-mysql> select get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
+SELECT get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA');
 +---------------------------------------------------------------+
 | get_ignore_case(parse_json('{"aa":1, "aA":2, "Aa":3}'), 'AA') |
 +---------------------------------------------------------------+

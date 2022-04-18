@@ -27,7 +27,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT FIND_IN_SET('b','a,b,c,d');
 +-----------------------------+
 | FIND_IN_SET('b', 'a,b,c,d') |

@@ -33,7 +33,7 @@ Returns `1` if the string expr matches the regular expression specified by the p
 
 ## Examples
 
-```txt
+```sql
 SELECT REGEXP_LIKE('a', '^[a-d]');
 +----------------------------+
 | REGEXP_LIKE('a', '^[a-d]') |

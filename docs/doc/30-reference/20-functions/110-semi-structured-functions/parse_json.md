@@ -28,7 +28,7 @@ VARIANT
 ## Examples
 
 ```sql
-mysql> select parse_json('[-1, 12, 289, 2188, false]');
+SELECT parse_json('[-1, 12, 289, 2188, false]');
 +------------------------------------------+
 | parse_json('[-1, 12, 289, 2188, false]') |
 +------------------------------------------+
@@ -36,7 +36,7 @@ mysql> select parse_json('[-1, 12, 289, 2188, false]');
 +------------------------------------------+
 1 row in set (0.01 sec)
 
-mysql> select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
+SELECT try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 +---------------------------------------------------------+
 | try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ') |
 +---------------------------------------------------------+

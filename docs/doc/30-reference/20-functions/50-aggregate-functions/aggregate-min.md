@@ -29,21 +29,21 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT MIN(*) FROM numbers(3);
+SELECT MIN(*) FROM numbers(3);
 +--------+
 | min(*) |
 +--------+
 |      0 |
 +--------+
 
-mysql> SELECT MIN(number) FROM numbers(3);
+SELECT MIN(number) FROM numbers(3);
 +-------------+
 | min(number) |
 +-------------+
 |           0 |
 +-------------+
 
-mysql> SELECT MIN(number) AS min FROM numbers(3);
+SELECT MIN(number) AS min FROM numbers(3);
 +------+
 | min  |
 +------+

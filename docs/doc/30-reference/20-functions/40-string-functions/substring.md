@@ -33,7 +33,7 @@ A string data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT SUBSTRING('Quadratically',5)
 +-------------------------------+
 | substring('Quadratically', 5) |

@@ -25,20 +25,18 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT ACOS(1);
+SELECT ACOS(1);
 +---------+
 | ACOS(1) |
 +---------+
 |       0 |
 +---------+
-1 row in set (0.01 sec)
 
-mysql> SELECT ACOS(1.0001);
+SELECT ACOS(1.0001);
 +--------------+
 | ACOS(1.0001) |
 +--------------+
 |         NULL |
 +--------------+
-1 row in set (0.02 sec)
 ```
 

@@ -35,18 +35,15 @@ impl OtherFunction {
         factory.register("running_difference", RunningDifferenceFunction::desc());
         factory.register("ignore", IgnoreFunction::desc());
 
-        // ip
+        // INET string to number.
         factory.register("ipv4_string_to_num", InetAtonFunction::desc());
         factory.register("try_ipv4_string_to_num", TryInetAtonFunction::desc());
-
-        factory.register("ipv4_num_to_string", InetNtoaFunction::desc());
-        factory.register("try_ipv4_num_to_string", TryInetNtoaFunction::desc());
-
-        // inet_aton
         factory.register("inet_aton", InetAtonFunction::desc());
         factory.register("try_inet_aton", TryInetAtonFunction::desc());
 
-        // inet_ntoa
+        // INET number to string.
+        factory.register("ipv4_num_to_string", InetNtoaFunction::desc());
+        factory.register("try_ipv4_num_to_string", TryInetNtoaFunction::desc());
         factory.register("inet_ntoa", InetNtoaFunction::desc());
         factory.register("try_inet_ntoa", TryInetNtoaFunction::desc());
     }

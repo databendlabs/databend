@@ -24,25 +24,23 @@ Nullable datatype of the target data type
 ## Examples
 
 ```sql
-mysql> SELECT TRY_CAST(1 AS VARCHAR);
+SELECT TRY_CAST(1 AS VARCHAR);
 +-----------------------+
 | try_cast(1 as String) |
 +-----------------------+
 | 1                     |
 +-----------------------+
-1 row in set (0.020 sec)
 
-mysql> SELECT TRY_CAST('abc' AS UInt32);
+SELECT TRY_CAST('abc' AS INT UNSIGNED);
 +---------------------------+
 | try_cast('abc' as UInt32) |
 +---------------------------+
 |                      NULL |
 +---------------------------+
-1 row in set (0.023 sec)
 
-mysql> SELECT toTypeName(TRY_CAST('abc' AS UInt32));
+SELECT typeof(TRY_CAST('abc' AS INT UNSIGNED));
 +---------------------------------------+
-| toTypeName(try_cast('abc' as UInt32)) |
+| typeof(try_cast('abc' as UInt32))     |
 +---------------------------------------+
 | Nullable(UInt32)                      |
 +---------------------------------------+

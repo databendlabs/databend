@@ -34,9 +34,9 @@ See [Numeric Functions](/doc/reference/functions/numeric-functions).
 ## Examples
 
 ```sql
-mysql> CREATE TABLE test_numeric(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED);
+CREATE TABLE test_numeric(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED);
 
-mysql> DESC test_numeric;
+DESC test_numeric;
 +-------------------+--------+------+---------+
 | Field             | Type   | Null | Default |
 +-------------------+--------+------+---------+

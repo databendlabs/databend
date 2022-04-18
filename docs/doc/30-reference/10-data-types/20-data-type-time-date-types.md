@@ -18,14 +18,14 @@ See [Date & Time Functions](/doc/reference/functions/datetime-functions).
 
 ## Example
 ```sql
-mysql> CREATE TABLE test_dt
+CREATE TABLE test_dt
 (
     date DATE,
     datetime DATETIME,
     datetime64 TIMESTAMP 
 );
 
-mysql> DESC dt;
+DESC dt;
 +------------+---------------+------+---------+
 | Field      | Type          | Null | Default |
 +------------+---------------+------+---------+
@@ -34,9 +34,9 @@ mysql> DESC dt;
 | datetime64 | DateTime64(3) | NO   | 0       |
 +------------+---------------+------+---------+
 
-mysql> INSERT INTO dt VALUES ('2022-04-07', '2022-04-07 01:01:01', '2022-04-07 01:01:01.123');
+INSERT INTO dt VALUES ('2022-04-07', '2022-04-07 01:01:01', '2022-04-07 01:01:01.123');
 
-mysql> SELECT * FROM dt;
+SELECT * FROM dt;
 +------------+---------------------+-------------------------+
 | date       | datetime            | datetime64              |
 +------------+---------------------+-------------------------+
