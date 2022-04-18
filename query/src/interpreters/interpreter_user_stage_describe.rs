@@ -49,10 +49,6 @@ impl Interpreter for DescribeUserStageInterpreter {
         "DescribeUserStageInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,

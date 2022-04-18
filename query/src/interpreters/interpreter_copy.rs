@@ -138,10 +138,6 @@ impl Interpreter for CopyInterpreter {
         "CopyInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,

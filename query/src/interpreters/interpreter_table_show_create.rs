@@ -47,10 +47,6 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,

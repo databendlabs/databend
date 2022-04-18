@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::thread::sleep;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,6 +37,7 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -43,16 +45,14 @@ use crate::pipelines::new::processors::BlocksSource;
 use crate::pipelines::new::processors::TransformAddOn;
 use crate::pipelines::new::processors::TransformCastSchema;
 use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::AddOnStream;
 use crate::sessions::QueryContext;
 
-#[derive(Clone)]
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertPlan,
-    source_pipe_builder: Option<SourcePipeBuilder>,
+    source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
 }
 
 impl InsertInterpreter {
@@ -60,16 +60,14 @@ impl InsertInterpreter {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
-            source_pipe_builder: None,
+            source_pipe_builder: Mutex::new(None),
         }))
     }
 
-    pub fn set_source_pipe_builder(&mut self, builder: Option<SourcePipeBuilder>) {
-        self.source_pipe_builder = builder;
-    }
-
-    pub fn get_box(self) -> Box<InsertInterpreter> {
-        Box::new(self)
+    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
+        let mut guard = self.source_pipe_builder.lock();
+        *guard = builder;
+        Ok(())
     }
 
     async fn execute_new(
@@ -101,23 +99,18 @@ impl InsertInterpreter {
             }
             InsertInputSource::StreamingWithFormat(_) => {
                 pipeline.add_pipe(
-                    self.clone()
-                        .get_box()
-                        .as_mut()
-                        .source_pipe_builder
-                        .take()
+                    ((*self.source_pipe_builder.lock()).clone())
                         .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
                         .finalize(),
                 );
             }
             InsertInputSource::SelectPlan(plan) => {
-                let builder = QueryPipelineBuilder::create(self.ctx.clone());
+                let select_interpreter =
+                    SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
+                        input: Arc::new((**plan).clone()),
+                    })?;
+                pipeline = select_interpreter.create_new_pipeline()?;
                 need_cast_schema = self.check_schema_cast(plan)?;
-                let optimized_plan = self.rewrite_plan(plan)?;
-                let select_plan = SelectPlan {
-                    input: Arc::new(optimized_plan),
-                };
-                pipeline = builder.finalize(&select_plan)?;
             }
         };
 
@@ -162,7 +155,6 @@ impl InsertInterpreter {
 
         let async_runtime = self.ctx.get_storage_runtime();
 
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
         executor.execute()?;
         drop(executor);
@@ -205,10 +197,6 @@ impl InsertInterpreter {
 impl Interpreter for InsertInterpreter {
     fn name(&self) -> &str {
         "InsertIntoInterpreter"
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     async fn execute(
@@ -300,7 +288,8 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let new_pipeline = NewPipeline::create();
+        let mut new_pipeline = NewPipeline::create();
+        new_pipeline.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
         Ok(new_pipeline)
     }
 }

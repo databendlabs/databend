@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
@@ -28,8 +29,6 @@ use crate::pipelines::new::NewPipeline;
 pub trait Interpreter: Sync + Send {
     /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
-
-    fn as_any(&self) -> &dyn Any;
 
     /// Return the schema of Interpreter
     fn schema(&self) -> DataSchemaRef {
@@ -66,6 +65,13 @@ pub trait Interpreter: Sync + Send {
     async fn finish(&self) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement finish method for {:?}",
+            self.name()
+        )))
+    }
+
+    fn set_source_pipe_builder(&self, _builder: Option<SourcePipeBuilder>) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "UnImplement set_source_pipe_builder method for {:?}",
             self.name()
         )))
     }

@@ -75,10 +75,6 @@ impl Interpreter for ListInterpreter {
         "ListInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,

@@ -119,35 +119,7 @@ impl InteractiveWorkerBase {
             let mut source_pipe_builder = SourcePipeBuilder::create();
             source_pipe_builder.add_source(output_port, sync_receiver_ck_source);
 
-            // Get the specific `InterceptorInterpreter`, then the inner `InsertInterpreter`
-            let interceptor_interpreter = match interpreter
-                .as_any()
-                .downcast_ref::<InterceptorInterpreter>()
-            {
-                Some(interceptor) => interceptor,
-                None => panic!("Interpreter isn't a InterceptorInterpreter!"),
-            };
-            // In the context of this function, inner must be `InsertInterpreter`
-            let insert_interpreter = interceptor_interpreter.get_inner();
-            // Get the specific `InsertInterpreter`
-            let insert_interpreter = match insert_interpreter
-                .as_any()
-                .downcast_ref::<InsertInterpreter>()
-            {
-                Some(insert) => insert,
-                None => panic!("Interpreter isn't a InsertInterpreter!"),
-            };
-            let mut insert_interpreter_box = insert_interpreter.clone().get_box();
-            // Set `SourcePipeBuilder` to `InsertInterpreter`, used in insert source is `StreamingWithFormat`
-            insert_interpreter_box
-                .as_mut()
-                .set_source_pipe_builder(Some(source_pipe_builder));
-
-            // Set the newest `InsertInterpreter` to `InterceptorInterpreter`
-            let mut interceptor_interpreter_box = interceptor_interpreter.clone().get_box();
-            interceptor_interpreter_box
-                .as_mut()
-                .set_insert_inner(insert_interpreter_box as Box<dyn Interpreter>);
+            interpreter.set_source_pipe_builder(Option::from(source_pipe_builder));
 
             let (mut tx, rx) = mpsc::channel(20);
             tx.send(BlockItem::InsertSample(sample_block)).await.ok();
@@ -155,7 +127,7 @@ impl InteractiveWorkerBase {
             // the data is comming in async mode
             let sent_all_data = ch_ctx.state.sent_all_data.clone();
             ctx.try_spawn(async move {
-                interceptor_interpreter_box.execute(None).await.unwrap();
+                interpreter.execute(None).await.unwrap();
                 sent_all_data.notify_one();
             })?;
 

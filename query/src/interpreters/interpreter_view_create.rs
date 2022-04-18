@@ -49,10 +49,6 @@ impl Interpreter for CreateViewInterpreter {
         "CreateViewInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn execute(&self, _: Option<SendableDataBlockStream>) -> Result<SendableDataBlockStream> {
         // check privilige
         self.ctx

@@ -60,10 +60,6 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     /// Get the schema of SelectPlan
     fn schema(&self) -> DataSchemaRef {
         self.select.schema()

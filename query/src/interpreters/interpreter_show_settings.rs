@@ -50,10 +50,6 @@ impl Interpreter for ShowSettingsInterpreter {
         "ShowSettingsInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,

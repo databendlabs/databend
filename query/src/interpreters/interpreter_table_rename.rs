@@ -43,10 +43,6 @@ impl Interpreter for RenameTableInterpreter {
         "RenameTableInterpreter"
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,

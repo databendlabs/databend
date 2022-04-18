@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
@@ -24,13 +25,14 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
-#[derive(Clone)]
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
+    source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
 }
 
 impl InterceptorInterpreter {
@@ -39,18 +41,14 @@ impl InterceptorInterpreter {
             ctx: ctx.clone(),
             inner,
             query_log: InterpreterQueryLog::create(ctx, plan),
+            source_pipe_builder: Mutex::new(None),
         }
     }
 
-    pub fn get_inner(&self) -> &InterpreterPtr {
-        &self.inner
-    }
-
-    pub fn set_insert_inner(&mut self, interpreter: Box<dyn Interpreter>) {
-        self.inner = InterpreterPtr::from(interpreter);
-    }
-    pub fn get_box(self) -> Box<InterceptorInterpreter> {
-        Box::new(self)
+    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
+        let mut guard = self.source_pipe_builder.lock();
+        *guard = builder;
+        Ok(())
     }
 }
 
@@ -60,14 +58,12 @@ impl Interpreter for InterceptorInterpreter {
         self.inner.name()
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        self.inner
+            .set_source_pipe_builder(((*self.source_pipe_builder.lock()).clone()));
         let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =
             ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
