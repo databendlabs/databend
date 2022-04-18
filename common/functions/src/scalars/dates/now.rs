@@ -49,7 +49,7 @@ impl Function for NowFunction {
     }
 
     fn return_type(&self) -> DataTypePtr {
-        DateTime32Type::arc(None)
+        DateTimeType::arc(0, None)
     }
 
     fn eval(

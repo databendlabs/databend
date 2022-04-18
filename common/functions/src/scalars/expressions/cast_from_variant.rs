@@ -114,25 +114,7 @@ pub fn cast_from_variant(
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
-            TypeID::Date16 => {
-                let mut builder = ColumnBuilder::<u16>::with_capacity(size);
-
-                for (row, value) in json_column.iter().enumerate() {
-                    match value {
-                        JsonValue::Null => bitmap.set(row, false),
-                        JsonValue::String(v) => {
-                            if let Some(d) = string_to_date(v) {
-                                builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16);
-                            } else {
-                                bitmap.set(row, false);
-                            }
-                        },
-                        _ => bitmap.set(row, false),
-                    }
-                }
-                return Ok((builder.build(size), Some(bitmap.into())));
-            }
-            TypeID::Date32 => {
+            TypeID::Date => {
                 let mut builder = ColumnBuilder::<i32>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
@@ -150,27 +132,10 @@ pub fn cast_from_variant(
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
-            TypeID::DateTime32 => {
-                let mut builder = ColumnBuilder::<u32>::with_capacity(size);
-
-                for (row, value) in json_column.iter().enumerate() {
-                    match value {
-                        JsonValue::Null => bitmap.set(row, false),
-                        JsonValue::String(v) => {
-                            if let Some(t) = string_to_datetime(v) {
-                                builder.append(t.timestamp() as u32);
-                            } else {
-                                bitmap.set(row, false);
-                            }
-                        },
-                        _ => bitmap.set(row, false),
-                    }
-                }
-                return Ok((builder.build(size), Some(bitmap.into())));
-            }
-            TypeID::DateTime64 => {
+            TypeID::DateTime => {
+                // TODO(veeupup): support datetime with precision
                 let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-                let datetime = DateTime64Type::create(3, None);
+                let datetime = DateTimeType::create(0, None);
 
                 for (row, value) in json_column.iter().enumerate() {
                     match value {

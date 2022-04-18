@@ -21,7 +21,6 @@ use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
-use common_datavalues::Date16Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -104,70 +103,70 @@ impl NumberOperator<u64> for ToYYYYMMDDhhmmss {
 #[derive(Clone)]
 pub struct ToStartOfYear;
 
-impl NumberOperator<u16> for ToStartOfYear {
+impl NumberOperator<i32> for ToStartOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Utc>) -> i32 {
         let end: DateTime<Utc> = Utc.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
-        get_day(end) as u16
+        get_day(end) as i32
     }
 
     fn return_type() -> Option<DataTypePtr> {
-        Some(Date16Type::arc())
+        Some(DateType::arc())
     }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfISOYear;
 
-impl NumberOperator<u16> for ToStartOfISOYear {
+impl NumberOperator<i32> for ToStartOfISOYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Utc>) -> i32 {
         let week_day = value.weekday().num_days_from_monday();
         let iso_week = value.iso_week();
         let iso_week_num = iso_week.week();
         let sub_days = (iso_week_num - 1) * 7 + week_day;
         let result = value.timestamp_millis() - sub_days as i64 * 24 * 3600 * 1000;
         let end: DateTime<Utc> = Utc.timestamp_millis(result);
-        get_day(end) as u16
+        get_day(end) as i32
     }
 
     fn return_type() -> Option<DataTypePtr> {
-        Some(Date16Type::arc())
+        Some(DateType::arc())
     }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfQuarter;
 
-impl NumberOperator<u16> for ToStartOfQuarter {
+impl NumberOperator<i32> for ToStartOfQuarter {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Utc>) -> i32 {
         let new_month = value.month0() / 3 * 3 + 1;
         let date = Utc.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
-        get_day(date) as u16
+        get_day(date) as i32
     }
 
     fn return_type() -> Option<DataTypePtr> {
-        Some(Date16Type::arc())
+        Some(DateType::arc())
     }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfMonth;
 
-impl NumberOperator<u16> for ToStartOfMonth {
+impl NumberOperator<i32> for ToStartOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Utc>) -> i32 {
         let date = Utc.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
-        get_day(date) as u16
+        get_day(date) as i32
     }
 
     fn return_type() -> Option<DataTypePtr> {
-        Some(Date16Type::arc())
+        Some(DateType::arc())
     }
 }
 
@@ -250,7 +249,7 @@ impl NumberOperator<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(CastFunction::create("toDate", Date16Type::arc().name()).unwrap())
+        Some(CastFunction::create("toDate", DateType::arc().name()).unwrap())
     }
 }
 
@@ -267,7 +266,7 @@ impl NumberOperator<u8> for ToMinute {
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfHour", &[&DateTime32Type::arc(None)], 60 * 60)
+            RoundFunction::try_create("toStartOfHour", &[&DateTimeType::arc(0, None)], 60 * 60)
                 .unwrap(),
         )
     }
@@ -286,7 +285,7 @@ impl NumberOperator<u8> for ToSecond {
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfMinute", &[&DateTime32Type::arc(None)], 60)
+            RoundFunction::try_create("toStartOfMinute", &[&DateTimeType::arc(0, None)], 60)
                 .unwrap(),
         )
     }
@@ -300,7 +299,7 @@ impl NumberOperator<u16> for ToMonday {
 
     fn to_number(value: DateTime<Utc>) -> u16 {
         let weekday = value.weekday();
-        (get_day(value) - weekday.num_days_from_monday()) as u16
+        (get_day(value) as u32 - weekday.num_days_from_monday()) as u16
     }
 }
 
@@ -367,16 +366,7 @@ where
         let type_id = columns[0].field().data_type().data_type_id();
 
         let number_array= match type_id {
-            TypeID::Date16 => {
-                let func = |v: u16, _ctx: &mut EvalContext| {
-                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                    T::to_number(date_time)
-                };
-                let col = scalar_unary_op::<u16, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
-                Ok(col.arc())
-
-            },
-            TypeID::Date32 => {
+            TypeID::Date => {
                 let func = |v:i32, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
@@ -384,16 +374,16 @@ where
                 let col = scalar_unary_op::<i32, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
                 Ok(col.arc())
             },
-            TypeID::DateTime32 => {
-                let func = |v:u32, _ctx: &mut EvalContext| {
-                    let date_time = Utc.timestamp(v as i64 , 0_u32);
+            TypeID::DateTime => {
+                let func = |v:i64, _ctx: &mut EvalContext| {
+                    let date_time = Utc.timestamp(v, 0_u32);
                     T::to_number(date_time)
                 };
-                let col = scalar_unary_op::<u32, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
+                let col = scalar_unary_op::<i64, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
                 Ok(col.arc())
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                "Illegal type {:?} of argument of function {}.Should be a date/datetime",
                 other,
                 self.name()))),
         }?;
@@ -442,20 +432,20 @@ impl<T, R> fmt::Display for NumberFunction<T, R> {
     }
 }
 
-fn get_day(date: DateTime<Utc>) -> u32 {
+fn get_day(date: DateTime<Utc>) -> i64 {
     let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
     let duration = date.signed_duration_since(start);
-    duration.num_days() as u32
+    duration.num_days()
 }
 
 pub type ToYYYYMMFunction = NumberFunction<ToYYYYMM, u32>;
 pub type ToYYYYMMDDFunction = NumberFunction<ToYYYYMMDD, u32>;
 pub type ToYYYYMMDDhhmmssFunction = NumberFunction<ToYYYYMMDDhhmmss, u64>;
 
-pub type ToStartOfISOYearFunction = NumberFunction<ToStartOfISOYear, u16>;
-pub type ToStartOfYearFunction = NumberFunction<ToStartOfYear, u16>;
-pub type ToStartOfQuarterFunction = NumberFunction<ToStartOfQuarter, u16>;
-pub type ToStartOfMonthFunction = NumberFunction<ToStartOfMonth, u16>;
+pub type ToStartOfISOYearFunction = NumberFunction<ToStartOfISOYear, i32>;
+pub type ToStartOfYearFunction = NumberFunction<ToStartOfYear, i32>;
+pub type ToStartOfQuarterFunction = NumberFunction<ToStartOfQuarter, i32>;
+pub type ToStartOfMonthFunction = NumberFunction<ToStartOfMonth, i32>;
 
 pub type ToMonthFunction = NumberFunction<ToMonth, u8>;
 pub type ToDayOfYearFunction = NumberFunction<ToDayOfYear, u16>;

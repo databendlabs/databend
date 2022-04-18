@@ -31,5 +31,5 @@ select 'UInt64 OP UInt64', toTypeName(65536 * 65536 + 65536 * 65536), toTypeName
 
 select '=== TEST_datetimes';
 
-select toTypeName(now()) = 'DateTime32';
-select toTypeName(today()) = 'Date16';
+select toTypeName(now()) = 'DateTime(0)';
+select toTypeName(today()) = 'Date';

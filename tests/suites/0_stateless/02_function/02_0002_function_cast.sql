@@ -36,9 +36,9 @@ SELECT  toDate('2021-03-05') + 1 = toDate('2021-03-06');
 SELECT  toString(toDate('2021-03-05') + 1) = '2021-03-06';
 SELECT toDateTime(toDate('2021-03-05')) = toDateTime('2021-03-05 00:00:00');
 SELECT toDate(toDateTime('2021-03-05 01:00:00')) = toDate('2021-03-05');
-SELECT toString(toDateTime64(1640019661000)) = '2021-12-20 17:01:01.000';
-SELECT toDate(toDateTime64(1640019661000)) = toDate('2021-12-20');
-SELECT toDateTime(toDateTime64(1640019661000)) = toDateTime('2021-12-20 17:01:01');
+SELECT toString(toDateTime(1640019661)) = '2021-12-20 17:01:01';
+SELECT toDate(toDateTime(1640019661)) = toDate('2021-12-20');
+SELECT toDateTime(toDateTime(1640019661)) = toDateTime('2021-12-20 17:01:01');
 
 SELECT '===Variant===';
 SELECT parse_json(true)::boolean;
@@ -82,15 +82,11 @@ SELECT parse_json('"1234.5678"')::float64;
 SELECT parse_json('"test"')::float32; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::float64; -- {ErrorCode 1010}
 SELECT parse_json('null')::float64; -- {ErrorCode 1010}
-SELECT parse_json('"2022-01-01"')::date16;
-SELECT parse_json('"2022-01-01"')::date32;
-SELECT parse_json('"2022-01-01 01:01:01"')::datetime32;
-SELECT parse_json('"2022-01-01 01:01:01.123"')::datetime64;
-SELECT parse_json('"test"')::date16; -- {ErrorCode 1010}
-SELECT parse_json('"test"')::date32; -- {ErrorCode 1010}
-SELECT parse_json('"test"')::datetime32; -- {ErrorCode 1010}
-SELECT parse_json('"test"')::datetime64; -- {ErrorCode 1010}
-SELECT parse_json('null')::datetime64; -- {ErrorCode 1010}
+SELECT parse_json('"2022-01-01"')::date;
+SELECT parse_json('"2022-01-01 01:01:01"')::datetime;
+SELECT parse_json('"test"')::date; -- {ErrorCode 1010}
+SELECT parse_json('"test"')::datetime; -- {ErrorCode 1010}
+SELECT parse_json('null')::datetime; -- {ErrorCode 1010}
 SELECT parse_json('[1,2,3]')::array;
 SELECT parse_json(1)::array;
 SELECT parse_json('"ab"')::array;

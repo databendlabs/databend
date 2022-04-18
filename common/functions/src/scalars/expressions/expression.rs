@@ -32,8 +32,8 @@ impl ToCastFunction {
         // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
         features = match type_name {
             "Boolean" => features.num_arguments(1).bool_function(),
-            "DateTime" | "DateTime32" => features.variadic_arguments(1, 2),
-            "DateTime64" => features.variadic_arguments(1, 3),
+            // "DateTime" | "DateTime32" => features.variadic_arguments(1, 2),
+            "DateTime" => features.variadic_arguments(1, 3),
             _ => features.num_arguments(1),
         };
 
@@ -57,13 +57,10 @@ impl ToCastFunction {
             "Int64",
             "Float32",
             "Float64",
-            "Date16",
-            "Date32",
+            "Date",
             "String",
             "Date",
             "DateTime",
-            "DateTime32",
-            "DateTime64",
         ];
 
         for name in names {

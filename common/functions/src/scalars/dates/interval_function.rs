@@ -55,34 +55,20 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 
         with_match_primitive_types_error!(right_type, |$R| {
             match left_type {
-                TypeID::Date16 => IntervalFunction::<u16, $R, T::Date16Result, _>::try_create_func(
+                TypeID::Date => IntervalFunction::<i32, $R, i32, _>::try_create_func(
                     display_name,
-                    T::Date16Result::to_date_type(),
-                    T::eval_date16,
+                    i32::to_date_type(),
+                    T::eval_date,
                     factor,
                     0,
                 ),
-                TypeID::Date32 => IntervalFunction::<i32, $R, T::Date32Result, _>::try_create_func(
-                    display_name,
-                    T::Date32Result::to_date_type(),
-                    T::eval_date32,
-                    factor,
-                    0,
-                ),
-                TypeID::DateTime32 => IntervalFunction::<u32, $R, u32, _>::try_create_func(
-                    display_name,
-                    args[0].clone(),
-                    T::eval_datetime32,
-                    factor,
-                    0,
-                ),
-                TypeID::DateTime64 => {
-                    let datetime = args[0].as_any().downcast_ref::<DateTime64Type>().unwrap();
+                TypeID::DateTime => {
+                    let datetime = args[0].as_any().downcast_ref::<DateTimeType>().unwrap();
                     let precision = datetime.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,
                         args[0].clone(),
-                        T::eval_datetime64,
+                        T::eval_datetime,
                         factor,
                         precision,
                     )
@@ -105,7 +91,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 }
 
 #[derive(Clone)]
-pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
+pub struct IntervalFunction<L: LogicalDateType, R: PrimitiveType, O: LogicalDateType, F> {
     display_name: String,
     result_type: DataTypePtr,
     func: F,
@@ -116,9 +102,9 @@ pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
 
 impl<L, R, O, F> IntervalFunction<L, R, O, F>
 where
-    L: DateType + Send + Sync + Clone,
+    L: LogicalDateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
-    O: DateType + Send + Sync + Clone,
+    O: LogicalDateType + Send + Sync + Clone,
     F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
@@ -141,9 +127,9 @@ where
 
 impl<L, R, O, F> Function for IntervalFunction<L, R, O, F>
 where
-    L: DateType + Send + Sync + Clone,
+    L: LogicalDateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
-    O: DateType + Send + Sync + Clone,
+    O: LogicalDateType + Send + Sync + Clone,
     F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     fn name(&self) -> &str {
@@ -174,9 +160,9 @@ where
 
 impl<L, R, O, F> fmt::Display for IntervalFunction<L, R, O, F>
 where
-    L: DateType + Send + Sync + Clone,
+    L: LogicalDateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
-    O: DateType + Send + Sync + Clone,
+    O: LogicalDateType + Send + Sync + Clone,
     F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -185,16 +171,9 @@ where
 }
 
 pub trait IntervalArithmeticImpl {
-    type Date16Result: DateType + ToDateType;
-    type Date32Result: DateType + ToDateType;
+    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i32;
 
-    fn eval_date16(l: u16, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::Date16Result;
-
-    fn eval_date32(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::Date32Result;
-
-    fn eval_datetime32(l: u32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> u32;
-
-    fn eval_datetime64(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64;
+    fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64;
 }
 
 impl_interval_year_month!(AddYearsImpl, add_years_base);
@@ -204,23 +183,11 @@ impl_interval_year_month!(AddMonthsImpl, add_months_base);
 pub struct AddDaysImpl;
 
 impl IntervalArithmeticImpl for AddDaysImpl {
-    type Date16Result = u16;
-    type Date32Result = i32;
-
-    fn eval_date16(l: u16, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::Date16Result {
-        (l as i64 + r.as_() * ctx.factor) as Self::Date16Result
+    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i32 {
+        (l as i64 + r.as_() * ctx.factor) as i32
     }
 
-    fn eval_date32(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::Date32Result {
-        (l as i64 + r.as_() * ctx.factor) as Self::Date32Result
-    }
-
-    fn eval_datetime32(l: u32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> u32 {
-        let factor = ctx.factor * 24 * 3600;
-        (l as i64 + r.as_() * factor) as u32
-    }
-
-    fn eval_datetime64(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
+    fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * 24 * 3600 * base;
         l as i64 + r.as_() * factor
@@ -231,22 +198,11 @@ impl IntervalArithmeticImpl for AddDaysImpl {
 pub struct AddTimesImpl;
 
 impl IntervalArithmeticImpl for AddTimesImpl {
-    type Date16Result = u32;
-    type Date32Result = i64;
-
-    fn eval_date16(l: u16, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::Date16Result {
-        (l as i64 * 3600 * 24 + r.as_() * ctx.factor) as Self::Date16Result
+    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i32 {
+        (l as i64 * 3600 * 24 + r.as_() * ctx.factor) as i32
     }
 
-    fn eval_date32(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::Date32Result {
-        l as i64 * 3600 * 24 + r.as_() * ctx.factor
-    }
-
-    fn eval_datetime32(l: u32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> u32 {
-        (l as i64 + r.as_() * ctx.factor) as u32
-    }
-
-    fn eval_datetime64(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
+    fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * base;
         l as i64 + r.as_() * factor
