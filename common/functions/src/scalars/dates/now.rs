@@ -59,8 +59,8 @@ impl Function for NowFunction {
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
-        let value = utc.timestamp_micros();
-        let column = Series::from_data(&[value]);
+        let value = utc.timestamp();
+        let column = Series::from_data(&[value as i64]);
         Ok(Arc::new(ConstColumn::new(column, input_rows)))
     }
 }
