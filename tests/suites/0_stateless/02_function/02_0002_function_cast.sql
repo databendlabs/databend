@@ -17,7 +17,7 @@ SELECT CAST(Null as Int64); -- {ErrorCode 1010}
 SELECT CAST(Null as Varchar); -- {ErrorCode 1010}
 
 -- Null can only be cast successfully to type boolean(false)
-SELECT CAST(Null as Boolean);
+SELECT CAST(Null as Boolean); -- {ErrorCode 1010};
 SELECT CAST('33' as signed) = 33;
 SELECT CAST('33' as unsigned) = 33;
 SELECT CAST('-33aa' as signed) = 33; -- {ErrorCode 1010}
@@ -29,6 +29,7 @@ SELECT '33'::signed = 33;
 SELECT '33'::unsigned = 33;
 SELECT '-33aa'::signed = 33; -- {ErrorCode 1010}
 SELECT 33::string = '33';
+
 
 SELECT '===DATE/DATETIME===';
 SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');
