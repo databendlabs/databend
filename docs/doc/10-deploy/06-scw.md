@@ -178,7 +178,7 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 ```sql
-CREATE TABLE t1(A INT);
+CREATE TABLE t1(a INT);
 ```
 
 ```sql
