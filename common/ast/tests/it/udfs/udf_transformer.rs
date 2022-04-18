@@ -34,7 +34,7 @@ impl UDFFetcher for TestFetcher {
         if name == "test_transformer" {
             let mut parser = UDFParser::default();
             let expr = parser
-                .parse(name, &["p".to_string()], "not(isnull(p))")
+                .parse(name, &["p".to_string()], "not(is_null(p))")
                 .await?;
 
             Ok(UDFDefinition::new(vec!["p".to_string()], expr))
@@ -71,7 +71,7 @@ async fn test_udf_transformer() -> Result<()> {
         op: UnaryOperator::Not,
         expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
             name: ObjectName(vec![Ident {
-                value: "isnull".to_string(),
+                value: "is_null".to_string(),
                 quote_style: None,
             }]),
             params: vec![],

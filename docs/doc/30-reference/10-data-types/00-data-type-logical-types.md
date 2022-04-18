@@ -7,9 +7,9 @@ The BOOLEAN type represents a statement of truth (“true” or “false”).
 
 ## Boolean Data Types
 
-| Data Type        | Syntax   |
-| -----------------| -------- |
-| Boolean          | BOOLEAN
+| Data Type        | Syntax   | Description
+| -----------------| -------- | -----------
+| Boolean          | BOOLEAN  | Logical boolean (true/false)
 
 ## Implicit Conversion
 
