@@ -48,7 +48,7 @@ create role role1;
 
 Grant privileges to the role:
 ```sql title='mysql>'
-grant select on mydb.* to role role1;
+grant SELECT on mydb.* to role role1;
 ```
 
 Show the grants for the role:

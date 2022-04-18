@@ -23,18 +23,16 @@ See [Conditional Functions](/doc/reference/functions/conditional-functions).
 
 ## Example
 
-```sql title='mysql>'
+```sql
 CREATE TABLE test_boolean(a BOOLEAN, s VARCHAR);
 ```
 
-```sql title='mysql>'
+```sql
 INSERT INTO test_boolean VALUES(true, 'true'),(false, 'false'), (0, 'false'),(10, 'true');
 ```
 
-```sql title='mysql>'
+```sql
 SELECT * FROM test_boolean;
-```
-```
 +------+-------+
 | a    | s     |
 +------+-------+

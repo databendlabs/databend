@@ -31,28 +31,28 @@ double
 :::
 
 ```sql
-mysql> SELECT AVG(*) FROM numbers(3);
+SELECT AVG(*) FROM numbers(3);
 +--------+
 | avg(*) |
 +--------+
 |      1 |
 +--------+
 
-mysql> SELECT AVG(number) FROM numbers(3);
+SELECT AVG(number) FROM numbers(3);
 +-------------+
 | avg(number) |
 +-------------+
 |           1 |
 +-------------+
 
-mysql> SELECT AVG(number+1) FROM numbers(3);
+SELECT AVG(number+1) FROM numbers(3);
 +----------------------+
 | avg(plus(number, 1)) |
 +----------------------+
 |                    2 |
 +----------------------+
 
-mysql> SELECT AVG(number+1) AS a FROM numbers(3);
+SELECT AVG(number+1) AS a FROM numbers(3);
 +------+
 | a    |
 +------+

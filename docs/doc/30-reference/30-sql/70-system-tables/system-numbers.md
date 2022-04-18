@@ -11,7 +11,7 @@ Reads from this table are parallelized too.
 Used for tests.
 
 ```sql
-mysql> SELECT avg(number) FROM numbers(100000000);
+SELECT avg(number) FROM numbers(100000000);
 +-------------+
 | avg(number) |
 +-------------+

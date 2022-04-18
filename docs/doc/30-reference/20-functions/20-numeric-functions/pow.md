@@ -29,19 +29,17 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT POW(-2,2);
+SELECT POW(-2,2);
 +---------------+
 | POW((- 2), 2) |
 +---------------+
 |             4 |
 +---------------+
-1 row in set (0.03 sec)
 
-mysql> SELECT POW(2,-2);
+SELECT POW(2,-2);
 +---------------+
 | POW(2, (- 2)) |
 +---------------+
 |          0.25 |
 +---------------+
-1 row in set (0.03 sec)
 ```

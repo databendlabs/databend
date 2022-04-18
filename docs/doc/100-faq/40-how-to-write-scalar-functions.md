@@ -67,7 +67,7 @@ This is very common optimization and widely used in arrow's compute system.
 
 -  Constant column
 
-    Sometimes column is constant in the block, such as: `select 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
+    Sometimes column is constant in the block, such as: `SELECT 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
 
     So databend's DataColumn is represented by:
 
@@ -203,16 +203,15 @@ To be a good engineer, don't forget to test your codes, please add unit tests an
 
 ```sql
 
-MySQL [(none)]> select sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( toUInt64(3) ), sqrt(null) ;
+SELECT sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( toUInt64(3) ), sqrt(null) ;
 +----------+--------------------+---------+--------------------+--------------------+------------+
 | sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(toUInt64(3))  | sqrt(NULL) |
 +----------+--------------------+---------+--------------------+--------------------+------------+
 |      NaN | 1.7320508075688772 |       0 | 1.7320508075688772 | 1.7320508075688772 |       NULL |
 +----------+--------------------+---------+--------------------+--------------------+------------+
-1 row in set (0.012 sec)
 
-MySQL [(none)]> select sqrt('-3');
-ERROR 1105 (HY000): Code: 1007, displayText = Expected a numeric type, but got String (while in select before projection).
+SELECT sqrt('-3');
+ERROR 1105 (HY000): Code: 1007, displayText = Expected a numeric type, but got String (while in SELECT before projection).
 ```
 
 All is done!

@@ -25,13 +25,13 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
-```shell title='mysql>'
-create user user1 identified by 'abc123';
+```
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant insert privileges for the user:
-```shell title='mysql>'
-grant insert on nginx.* to user1;
+```sql
+GRANT INSERT ON nginx.* TO user1;
 ```
 
 See also [How To Create User](../../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).

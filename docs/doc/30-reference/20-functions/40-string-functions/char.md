@@ -23,7 +23,7 @@ A String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT CHAR(77,121,83,81,'76');
 +-------------------------+
 | CHAR(77,121,83,81,76) |

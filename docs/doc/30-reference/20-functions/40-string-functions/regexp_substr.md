@@ -26,7 +26,7 @@ A String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+');
 +----------------------------------------+
 | REGEXP_SUBSTR('abc def ghi', '[a-z]+') |

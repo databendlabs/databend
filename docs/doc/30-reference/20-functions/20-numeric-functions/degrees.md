@@ -25,19 +25,17 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT DEGREES(PI());
+SELECT DEGREES(PI());
 +---------------+
 | DEGREES(PI()) |
 +---------------+
 |           180 |
 +---------------+
-1 row in set (0.01 sec)
 
-mysql> SELECT DEGREES(PI() / 2);
+SELECT DEGREES(PI() / 2);
 +---------------------+
 | DEGREES((PI() / 2)) |
 +---------------------+
 |                  90 |
 +---------------------+
-1 row in set (0.00 sec)
 ```

@@ -77,7 +77,7 @@ con.connect((err) => {
       console.log("1 record inserted");
    });
 
-   con.query("select * from books", function (err, result, fields) {
+   con.query("SELECT * from books", function (err, result, fields) {
       if (err) throw err;
       console.log(result);
    });

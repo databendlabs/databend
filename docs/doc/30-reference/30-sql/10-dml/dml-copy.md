@@ -121,7 +121,7 @@ copy into mytable from '@my_external_s1' pattern = 'books.*parquet' file_format 
 
 Try to read 10 rows from csv and insert into the `mytable`.
 ```sql
-mysql> copy into mytable
+copy into mytable
   from s3://mybucket/data.csv
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
   FILE_FORMAT = (type = "CSV" field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;

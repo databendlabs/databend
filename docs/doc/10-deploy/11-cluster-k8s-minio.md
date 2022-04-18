@@ -79,11 +79,11 @@ nohup kubectl port-forward -n tenant1 svc/query-service 3308:3307 &
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```shell title='mysql>'
-select * from system.clusters
+```sql title='mysql>'
+SELECT * from system.clusters
 ```
 
-```text
+```sql
 +----------------------+------------+------+
 | name                 | host       | port |
 +----------------------+------------+------+
@@ -95,11 +95,8 @@ select * from system.clusters
 
 ## Step 4. Distributed query
 
-```shell title='mysql>'
-explain select max(number), sum(number) from numbers_mt(10000000000) group by number % 3, number % 4, number % 5 limit 10;
-```
-
-```shell
+```sql
+EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -121,18 +118,14 @@ The distributed query works, the cluster will efficiently transfer data through 
 CREATE TABLE t1(i int, j int);
 ```
 
-```shell title='mysql>'
-insert into t1 select number, number + 300 from numbers(10000000);
+```sql
+INSERT INTO t1 SELECT number, number + 300 from numbers(10000000);
 ```
-```shell title='mysql>'
+```sql
 SELECT count(*) FROM t1;
-```
-```shell
 +----------+
 | count()  |
 +----------+
 | 10000000 |
 +----------+
-1 row in set (0.02 sec)
-Read 1 rows, 1 B in 0.001 sec., 749.34 rows/sec., 749.34 B/sec.
 ```

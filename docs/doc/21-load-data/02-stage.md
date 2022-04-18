@@ -22,11 +22,11 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 ```sql title='mysql>'
-create stage my_int_stage;
+CREATE STAGE my_int_stage;
 ```
 
 ```sql title='mysql>'
-desc stage my_int_stage;
+DESC STAGE my_int_stage;
 ```
 
 ```sql
@@ -126,10 +126,10 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 ```sql title='mysql>'
-list @my_int_stage;
+LIST @my_int_stage;
 ```
 
-```text
+```sql
 +---------------+
 | file_name     |
 +---------------+
@@ -141,19 +141,19 @@ list @my_int_stage;
 ### Step 4. Creating Database and Table
 
 ```sql title='mysql>'
-create database book_db;
+CREATE DATABASE book_db;
 ```
 
 ```sql title='mysql>'
-use book_db;
+USE book_db;
 ```
 
 ```sql title='mysql>'
-create table books
+CREATE TABLE books
 (
-    title VARCHAR(255),
-    author VARCHAR(255),
-    date VARCHAR(255)
+    title VARCHAR,
+    author VARCHAR,
+    date VARCHAR
 );
 ```
 
@@ -166,7 +166,7 @@ Execute [COPY](/doc/reference/sql/dml/dml-copy) to load staged files to the targ
 <TabItem value="csv" label="CSV">
 
 ```sql title='mysql>'
-copy into books from '@my_int_stage' files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
+COPY INTO books FROM '@my_int_stage' files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
 ```
 
 
@@ -191,7 +191,7 @@ copy into books from '@my_int_stage' files=('books.csv') file_format = (type = '
 <TabItem value="parquet" label="Parquet">
 
 ```sql title='mysql>'
-copy into books from '@my_int_stage' files=('books.parquet') file_format = (type = 'Parquet');
+COPY INTO books FROM '@my_int_stage' files=('books.parquet') file_format = (type = 'Parquet');
 ```
 
 </TabItem>
@@ -201,11 +201,8 @@ copy into books from '@my_int_stage' files=('books.parquet') file_format = (type
 
 ### Step 6. Verify the Loaded Data
 
-```sql title='mysql>'
-select * from books;
-```
-
-```
+```sql
+SELECT * FROM Books;
 +------------------------------+----------------------+-------+
 | title                        | author               | date  |
 +------------------------------+----------------------+-------+

@@ -13,7 +13,7 @@ SHOW USERS
 ## Examples
 
 ```sql
-mysql> SHOW USERS;
+SHOW USERS;
 +------+-----------+----------+-----------+
 | name | hostname  | password | auth_type |
 +------+-----------+----------+-----------+

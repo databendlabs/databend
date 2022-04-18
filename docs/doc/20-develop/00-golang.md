@@ -20,14 +20,14 @@ mysql -h127.0.0.1 -uroot -P3307
 ### Create a User 
 
 ```sql title='mysql>'
-create user user1 identified by 'abc123';
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ### Grants Privileges
 
 Grants `ALL` privileges to the user `user1`:
 ```sql title='mysql>'
-grant all on *.* to 'user1';
+GRANT ALL on *.* TO 'user1';
 ```
 
 ## Golang
@@ -110,7 +110,7 @@ func main() {
 	log.Println("Insert 1 row")
 
 	// Select.
-	res, err := db.Query("select * from books")
+	res, err := db.Query("SELECT * from books")
 	if err != nil {
 		log.Fatal(err)
 	}

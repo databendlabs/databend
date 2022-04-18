@@ -25,7 +25,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT RPAD('hi',5,'?');
 +--------------------+
 | RPAD('hi', 5, '?') |

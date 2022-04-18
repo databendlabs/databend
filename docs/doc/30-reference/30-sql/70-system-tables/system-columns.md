@@ -5,7 +5,7 @@ title: system.columns
 Contains information about columns of tables.
 
 ```sql
-mysql> select * from  columns;
+SELECT * from  columns;
 +---------------------+----------+--------------+---------------+-------------+
 | name                | database | table        | data_type     | is_nullable |
 +---------------------+----------+--------------+---------------+-------------+

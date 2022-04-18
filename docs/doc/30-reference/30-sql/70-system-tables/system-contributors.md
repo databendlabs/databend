@@ -5,7 +5,7 @@ title: system.contributors
 Contains information about contributors.
 
 ```sql
-mysql> SELECT * FROM system.contributors LIMIT 20;
+SELECT * FROM system.contributors LIMIT 20;
 +-------------------------+
 | name                    |
 +-------------------------+

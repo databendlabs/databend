@@ -189,7 +189,7 @@ FROM a, b NATURAL JOIN c, d;
 Query { 
     with: None, 
     body: Select(
-        Select { 
+        SELECT { 
             projection: [Wildcard], 
             from: [
                 TableWithJoins { 
