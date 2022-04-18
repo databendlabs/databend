@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_query::sessions::Session;
 use databend_query::sessions::SessionType;
 use databend_query::sql::DfParser;
 use honggfuzz::fuzz;
