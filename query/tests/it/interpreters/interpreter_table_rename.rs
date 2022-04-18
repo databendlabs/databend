@@ -33,7 +33,7 @@ async fn test_rename_table_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None, None).await?;
+        let _ = executor.execute(None).await?;
     }
 
     // Rename table.
@@ -41,7 +41,7 @@ async fn test_rename_table_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "RENAME TABLE a TO b").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "RenameTableInterpreter");
-        let stream = executor.execute(None, None).await?;
+        let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -52,7 +52,7 @@ async fn test_rename_table_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "DROP TABLE b").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropTableInterpreter");
-        let stream = executor.execute(None, None).await?;
+        let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

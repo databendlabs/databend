@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_streams::SendableDataBlockStream;
-
 
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
@@ -29,6 +32,8 @@ pub trait Interpreter: Sync + Send {
     /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
 
+    fn as_any(&self) -> &dyn Any;
+
     /// Return the schema of Interpreter
     fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])
@@ -38,7 +43,6 @@ pub trait Interpreter: Sync + Send {
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
-        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream>;
 
     /// Create the new pipeline for databend's new execution model

@@ -118,7 +118,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
 
     let create_table_plan = fixture.default_crate_table_plan();
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    interpreter.execute(None, None).await?;
+    interpreter.execute(None).await?;
 
     let mut table = fixture.latest_default_table().await?;
 

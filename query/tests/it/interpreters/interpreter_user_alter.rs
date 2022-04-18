@@ -57,7 +57,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), &test_query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
-        let mut stream = executor.execute(None, None).await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(
@@ -75,7 +75,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), &test_query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
-        executor.execute(None, None).await?;
+        executor.execute(None).await?;
         let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert!(user_info.has_option_flag(UserOptionFlag::TenantSetting));
         assert_eq!(
@@ -89,7 +89,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), &test_query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
-        executor.execute(None, None).await?;
+        executor.execute(None).await?;
         let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert!(!user_info.has_option_flag(UserOptionFlag::TenantSetting));
     }

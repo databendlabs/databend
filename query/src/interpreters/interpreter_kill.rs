@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
@@ -45,10 +46,13 @@ impl Interpreter for KillInterpreter {
         "KillInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()

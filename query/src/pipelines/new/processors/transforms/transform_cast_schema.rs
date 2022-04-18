@@ -21,13 +21,11 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 
-
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::transforms::transform::Transform;
 use crate::pipelines::new::processors::transforms::transform::Transformer;
-
 
 pub struct TransformCastSchema {
     output_schema: DataSchemaRef,

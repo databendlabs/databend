@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -50,10 +51,13 @@ impl Interpreter for ShowSettingsInterpreter {
         "ShowSettingsInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
-        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let query = self.build_query()?;
         let plan = PlanParser::parse(self.ctx.clone(), &query).await?;
@@ -61,7 +65,7 @@ impl Interpreter for ShowSettingsInterpreter {
 
         if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
-            interpreter.execute(input_stream, source_pipe_builder).await
+            interpreter.execute(input_stream).await
         } else {
             return Err(ErrorCode::LogicalError("Show settings build query error"));
         }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -26,6 +27,7 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
+#[derive(Clone)]
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
     inner: InterpreterPtr,
@@ -40,6 +42,17 @@ impl InterceptorInterpreter {
             query_log: InterpreterQueryLog::create(ctx, plan),
         }
     }
+
+    pub fn get_inner(&self) -> &InterpreterPtr {
+        &self.inner
+    }
+
+    pub fn set_insert_inner(&mut self, interpreter: Box<dyn Interpreter>) {
+        self.inner = InterpreterPtr::from(interpreter);
+    }
+    pub fn get_box(self) -> Box<InterceptorInterpreter> {
+        Box::new(self)
+    }
 }
 
 #[async_trait::async_trait]
@@ -48,15 +61,15 @@ impl Interpreter for InterceptorInterpreter {
         self.inner.name()
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
-        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
-        let result_stream = self
-            .inner
-            .execute(input_stream, source_pipe_builder)
-            .await?;
+        let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =
             ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
         Ok(Box::pin(metric_stream))

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -46,10 +47,13 @@ impl Interpreter for OptimizeTableInterpreter {
         "OptimizeTableInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let mut table = self.ctx.get_table(&plan.database, &plan.table).await?;
@@ -66,7 +70,7 @@ impl Interpreter for OptimizeTableInterpreter {
             let rewritten_plan =
                 PlanParser::parse(self.ctx.clone(), rewritten_query.as_str()).await?;
             let interpreter = InterpreterFactory::get(self.ctx.clone(), rewritten_plan)?;
-            let mut stream = interpreter.execute(None, None).await?;
+            let mut stream = interpreter.execute(None).await?;
             while let Some(Ok(_)) = stream.next().await {}
             if do_purge {
                 // currently, context caches the table, we have to "refresh"

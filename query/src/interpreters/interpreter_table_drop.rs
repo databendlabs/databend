@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -46,10 +47,13 @@ impl Interpreter for DropTableInterpreter {
         "DropTableInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let db_name = self.plan.db.as_str();
         let tbl_name = self.plan.table.as_str();

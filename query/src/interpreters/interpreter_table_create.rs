@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -51,10 +52,13 @@ impl Interpreter for CreateTableInterpreter {
         "CreateTableInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
@@ -140,7 +144,7 @@ impl CreateTableInterpreter {
             source: InsertInputSource::SelectPlan(select_plan_node),
         };
         let insert_interpreter = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?;
-        insert_interpreter.execute(input_stream, None).await?;
+        insert_interpreter.execute(input_stream).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

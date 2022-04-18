@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -27,7 +28,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
-
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
@@ -61,19 +61,22 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     /// Get the schema of SelectPlan
     fn schema(&self) -> DataSchemaRef {
         self.select.schema()
     }
 
-    #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self, _input_stream, _source_pipe_builder), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     /// Currently, the method has two sets of logic, if `get_enable_new_processor_framework` is turned on in the settings,
     /// the execution will use the new processor, otherwise the old processing logic will be executed.
     /// Note: there is an issue to track the progress of the new processor:  https://github.com/datafuselabs/databend/issues/3379
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let settings = self.ctx.get_settings();
 

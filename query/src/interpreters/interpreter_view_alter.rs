@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -50,11 +51,11 @@ impl Interpreter for AlterViewInterpreter {
         "AlterViewInterpreter"
     }
 
-    async fn execute(
-        &self,
-        _: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
-    ) -> Result<SendableDataBlockStream> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    async fn execute(&self, _: Option<SendableDataBlockStream>) -> Result<SendableDataBlockStream> {
         // check privilige
         self.ctx
             .get_current_session()

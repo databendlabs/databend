@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -47,10 +48,13 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog();

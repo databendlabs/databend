@@ -28,7 +28,7 @@ async fn test_show_databases_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show databases").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowDatabasesInterpreter");
-        let stream = executor.execute(None, None).await?;
+        let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+--------------------+",
@@ -46,7 +46,7 @@ async fn test_show_databases_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "show databases like '%tem%'").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let stream = executor.execute(None, None).await?;
+        let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
             "+----------+",

@@ -318,7 +318,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     .start()
                     .await
                     .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-                let data_stream = interpreter.execute(None, None).await?;
+                let data_stream = interpreter.execute(None).await?;
                 histogram!(
                     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
                     instant.elapsed()

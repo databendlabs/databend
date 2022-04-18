@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::BorrowMut;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -41,6 +44,9 @@ use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
+use crate::interpreters::InsertInterpreter;
+use crate::interpreters::InterceptorInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;
@@ -108,7 +114,38 @@ impl InteractiveWorkerBase {
         )?;
         let mut source_pipe_builder = SourcePipeBuilder::create();
         source_pipe_builder.add_source(output_port, sync_receiver_ck_source);
+
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::Insert(insert))?;
+        // Get the specific `InterceptorInterpreter`, then the inner `InsertInterpreter`
+        let interceptor_interpreter = match interpreter
+            .as_any()
+            .downcast_ref::<InterceptorInterpreter>()
+        {
+            Some(interceptor) => interceptor,
+            None => panic!("Interpreter isn't a InterceptorInterpreter!"),
+        };
+        // In the context of this function, inner must be `InsertInterpreter`
+        let insert_interpreter = interceptor_interpreter.get_inner();
+        // Get the specific `InsertInterpreter`
+        let insert_interpreter = match insert_interpreter
+            .as_any()
+            .downcast_ref::<InsertInterpreter>()
+        {
+            Some(insert) => insert,
+            None => panic!("Interpreter isn't a InsertInterpreter!"),
+        };
+        let mut insert_interpreter_box = insert_interpreter.clone().get_box();
+        // Set `SourcePipeBuilder` to `InsertInterpreter`, used in insert source is `StreamingWithFormat`
+        insert_interpreter_box
+            .as_mut()
+            .set_source_pipe_builder(Some(source_pipe_builder));
+
+        // Set the newest `InsertInterpreter` to `InterceptorInterpreter`
+        let mut interceptor_interpreter_box = interceptor_interpreter.clone().get_box();
+        interceptor_interpreter_box
+            .as_mut()
+            .set_insert_inner(insert_interpreter_box as Box<dyn Interpreter>);
+
         let name = interpreter.name().to_string();
 
         let (mut tx, rx) = mpsc::channel(20);
@@ -118,10 +155,7 @@ impl InteractiveWorkerBase {
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {
-            interpreter
-                .execute(None, Some(source_pipe_builder))
-                .await
-                .unwrap();
+            interceptor_interpreter_box.execute(None).await.unwrap();
             sent_all_data.notify_one();
         })?;
         histogram!(
@@ -179,7 +213,7 @@ impl InteractiveWorkerBase {
                 .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
-            let async_data_stream = interpreter.execute(None, None);
+            let async_data_stream = interpreter.execute(None);
             let mut data_stream = async_data_stream.await?;
             while let Some(block) = data_stream.next().await {
                 data_tx.send(BlockItem::Block(block)).await.ok();

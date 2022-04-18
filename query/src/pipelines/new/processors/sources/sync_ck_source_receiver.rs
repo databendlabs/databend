@@ -35,14 +35,11 @@ pub struct SyncReceiverCkSource {
 impl SyncReceiverCkSource {
     pub fn create(
         ctx: Arc<QueryContext>,
-        rx: Receiver<Block>,
-        out: Arc<OutputPort>,
+        receiver: Receiver<Block>,
+        output_port: Arc<OutputPort>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, out, SyncReceiverCkSource {
-            schema,
-            receiver: rx,
-        })
+        SyncSourcer::create(ctx, output_port, SyncReceiverCkSource { schema, receiver })
     }
 }
 

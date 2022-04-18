@@ -35,7 +35,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), CREATE_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let mut stream = executor.execute(None, None).await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
             .get_user_manager()
@@ -52,7 +52,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), DROP_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert!(res.is_ok());
     }
 
@@ -60,7 +60,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), DROP_UDF_IF_EXISTS).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert!(res.is_ok());
     }
 
@@ -68,7 +68,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), DROP_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert!(res.is_err());
     }
 
@@ -76,7 +76,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), CREATE_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserUDFInterpreter");
-        let mut stream = executor.execute(None, None).await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
             .get_user_manager()
@@ -92,7 +92,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), DROP_UDF_IF_EXISTS).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserUDFInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert!(res.is_ok());
     }
 

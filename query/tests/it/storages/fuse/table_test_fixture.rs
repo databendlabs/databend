@@ -131,7 +131,7 @@ impl TestFixture {
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
-        interpreter.execute(None, None).await?;
+        interpreter.execute(None).await?;
         Ok(())
     }
 
@@ -269,7 +269,7 @@ pub async fn expects_ok(
 pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
     let plan = PlanParser::parse(ctx.clone(), query).await?;
     InterpreterFactory::get(ctx.clone(), plan)?
-        .execute(None, None)
+        .execute(None)
         .await
 }
 

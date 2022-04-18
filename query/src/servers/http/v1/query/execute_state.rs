@@ -191,7 +191,7 @@ async fn execute(
     block_tx: mpsc::Sender<DataBlock>,
     abort_rx: &mut mpsc::Receiver<()>,
 ) -> Result<()> {
-    let data_stream = interpreter.execute(None, None).await?;
+    let data_stream = interpreter.execute(None).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     while let Some(block_r) = data_stream.next().await {
         match block_r {

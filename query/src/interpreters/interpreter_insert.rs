@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -28,10 +29,8 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-
 use common_tracing::tracing;
 use futures::TryStreamExt;
-
 
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
 use crate::interpreters::plan_schedulers;
@@ -45,17 +44,17 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::BlocksSource;
 use crate::pipelines::new::processors::TransformAddOn;
 use crate::pipelines::new::processors::TransformCastSchema;
-
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::AddOnStream;
 use crate::sessions::QueryContext;
 
+#[derive(Clone)]
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
     plan: InsertPlan,
-    source_processor: Option<ProcessorPtr>,
+    source_pipe_builder: Option<SourcePipeBuilder>,
 }
 
 impl InsertInterpreter {
@@ -63,14 +62,21 @@ impl InsertInterpreter {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
-            source_processor: None,
+            source_pipe_builder: None,
         }))
+    }
+
+    pub fn set_source_pipe_builder(&mut self, builder: Option<SourcePipeBuilder>) {
+        self.source_pipe_builder = builder;
+    }
+
+    pub fn get_box(self) -> Box<InsertInterpreter> {
+        Box::new(self)
     }
 
     async fn execute_new(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
         let settings = self.ctx.get_settings();
@@ -96,10 +102,13 @@ impl InsertInterpreter {
                 pipeline.add_pipe(builder.finalize());
             }
             InsertInputSource::StreamingWithFormat(_) => {
-                tracing::info!("come here");
                 pipeline.add_pipe(
-                    source_pipe_builder
-                        .ok_or_else(|| ErrorCode::EmptyData("empty"))?
+                    self.clone()
+                        .get_box()
+                        .as_mut()
+                        .source_pipe_builder
+                        .take()
+                        .ok_or_else(|| ErrorCode::EmptyData("empty source pipe builder"))?
                         .finalize(),
                 );
             }
@@ -200,18 +209,20 @@ impl Interpreter for InsertInterpreter {
         "InsertIntoInterpreter"
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn execute(
         &self,
         mut input_stream: Option<SendableDataBlockStream>,
-        source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         let settings = self.ctx.get_settings();
 
-        if true
-            || (settings.get_enable_new_processor_framework()? == 2
-                && self.ctx.get_cluster().is_empty())
+        /// Use insert in new processor
+        if settings.get_enable_new_processor_framework()? != 0 && self.ctx.get_cluster().is_empty()
         {
-            return self.execute_new(input_stream, source_pipe_builder).await;
+            return self.execute_new(input_stream).await;
         }
 
         let plan = &self.plan;

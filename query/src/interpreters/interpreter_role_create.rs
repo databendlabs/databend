@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -44,11 +45,14 @@ impl Interpreter for CreateRoleInterpreter {
         "CreateRoleInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self, _input_stream, _source_pipe_builder), fields(ctx.id = self.ctx.get_id().as_str()))]
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
-        _source_pipe_builder: Option<SourcePipeBuilder>,
     ) -> Result<SendableDataBlockStream> {
         // TODO: add privilege check about CREATE ROLE
         let plan = self.plan.clone();

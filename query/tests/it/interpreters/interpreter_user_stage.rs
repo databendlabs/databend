@@ -32,7 +32,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreateUserStageInterpreter");
-        let mut stream = executor.execute(None, None).await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     }
 
@@ -43,7 +43,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DescribeUserStageInterpreter");
 
-        let mut stream = executor.execute(None, None).await?;
+        let mut stream = executor.execute(None).await?;
         let mut blocks = vec![];
 
         while let Some(block) = stream.next().await {
@@ -74,7 +74,7 @@ async fn test_user_stage_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserStageInterpreter");
 
-        let mut stream = executor.execute(None, None).await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     }
 

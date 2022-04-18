@@ -28,7 +28,7 @@ async fn test_show_metrics_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "show metrics").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowMetricsInterpreter");
-        let _ = executor.execute(None, None).await?;
+        let _ = executor.execute(None).await?;
     }
 
     Ok(())

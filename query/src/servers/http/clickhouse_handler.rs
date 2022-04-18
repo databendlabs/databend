@@ -71,7 +71,7 @@ async fn execute(
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
-    let data_stream = interpreter.execute(input_stream, None).await?;
+    let data_stream = interpreter.execute(input_stream).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
     let stream = stream! {

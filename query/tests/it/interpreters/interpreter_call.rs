@@ -32,7 +32,7 @@ async fn test_call_interpreter() -> Result<()> {
     let plan = PlanParser::parse(ctx.clone(), "call system$test()").await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "CallInterpreter");
-    let res = executor.execute(None, None).await;
+    let res = executor.execute(None).await;
     assert_eq!(res.is_err(), true);
     assert_eq!(
         res.err().unwrap().code(),
@@ -52,7 +52,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), "call system$fuse_history()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `FUSE_HISTORY` expect to have 2 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -64,7 +64,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
             PlanParser::parse(ctx.clone(), "call system$fuse_history(default, test)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         assert_eq!(
             res.err().unwrap().code(),
@@ -78,7 +78,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
             PlanParser::parse(ctx.clone(), "call system$fuse_history(system, tables)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
             "Code: 1006, displayText = expecting fuse table, but got table of engine type: SystemTables.";
@@ -93,14 +93,14 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None, None).await?;
+        let _ = executor.execute(None).await?;
     }
 
     // FuseHistory
     {
         let plan = PlanParser::parse(ctx.clone(), "call system$fuse_history(default, a)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None, None).await?;
+        let _ = executor.execute(None).await?;
     }
 
     Ok(())
@@ -115,7 +115,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1028, displayText = Function `BOOTSTRAP_TENANT` expect to have 5 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -129,7 +129,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1062, displayText = Access denied: 'BOOTSTRAP_TENANT' only used in management-mode.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -148,7 +148,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let res = executor.execute(None, None).await;
+        let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect = "Code: 1063, displayText = Access denied: 'BOOTSTRAP_TENANT' requires user TENANTSETTING option flag.";
         assert_eq!(expect, res.err().unwrap().to_string());
@@ -168,7 +168,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        executor.execute(None, None).await?;
+        executor.execute(None).await?;
 
         let user_mgr = ctx.get_user_manager();
         let user_info = user_mgr
@@ -193,7 +193,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        executor.execute(None, None).await?;
+        executor.execute(None).await?;
     }
 
     Ok(())

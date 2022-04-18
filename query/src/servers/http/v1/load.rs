@@ -154,7 +154,7 @@ pub async fn streaming_load(
 
     // this runs inside the runtime of poem, load is not cpu densive so it's ok
     let mut data_stream = interpreter
-        .execute(Some(source_stream), None)
+        .execute(Some(source_stream))
         .await
         .map_err(InternalServerError)?;
     while let Some(_block) = data_stream.next().await {}

@@ -31,7 +31,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let mut stream = interpreter.execute(None, None).await?;
+        let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
 
         let schema = plan.schema();
@@ -58,7 +58,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(ctx.clone(), TEST_CREATE_QUERY).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let _ = executor.execute(None, None).await?;
+        let _ = executor.execute(None).await?;
     }
 
     {
@@ -67,7 +67,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(ctx.clone(), TEST_CREATE_QUERY_SELECT).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let mut stream = interpreter.execute(None, None).await?;
+        let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
 
         let schema = plan.schema();
@@ -97,7 +97,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
 
-        assert!(interpreter.execute(None, None).await.is_err());
+        assert!(interpreter.execute(None).await.is_err());
     }
 
     Ok(())
