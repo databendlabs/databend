@@ -43,7 +43,7 @@ impl ProfilingQueryProcedure {
 #[async_trait::async_trait]
 impl Procedure for ProfilingQueryProcedure {
     fn name(&self) -> &str {
-        "RELOAD_CONFIG"
+        "PROFILING_QUERY"
     }
 
     fn features(&self) -> ProcedureFeatures {
