@@ -61,7 +61,7 @@ impl Interpreter for DescribeTableInterpreter {
             names.push(field.name().to_string());
 
             let non_null_type = remove_nullable(field.data_type());
-            types.push(format!("{}", format_data_type_sql(&non_null_type)));
+            types.push(format_data_type_sql(&non_null_type));
             nulls.push(if field.is_nullable() {
                 "YES".to_string()
             } else {

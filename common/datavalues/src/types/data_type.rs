@@ -256,6 +256,6 @@ pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
     let notnull_type = remove_nullable(data_type);
     match data_type.is_nullable() {
         true => format!("{} NULL", notnull_type.sql_name()),
-        false => format!("{}", notnull_type.sql_name()),
+        false => notnull_type.sql_name(),
     }
 }
