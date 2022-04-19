@@ -24,15 +24,12 @@ auth_type default is **double_sha1_password**.
 ## Examples
 
 
-```sql title='mysql>'
-create user user1 IDENTIFIED BY 'abc123';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ```sql
+SHOW USERS;
 +-----------+----------+----------------------+------------------------------------------+
 | name      | hostname | auth_type            | auth_string                              |
 +-----------+----------+----------------------+------------------------------------------+
@@ -41,15 +38,12 @@ show users;
 ```
 
 
-```sql title='mysql>'
-alter user user1 IDENTIFIED WITH sha256_password BY '123abc';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+ALTER USER user1 IDENTIFIED WITH sha256_password BY '123abc';
 ```
 
 ```sql
+SHOW USERS;
 +-------+----------+-----------------+------------------------------------------------------------------+
 | name  | hostname | auth_type       | auth_string                                                      |
 +-------+----------+-----------------+------------------------------------------------------------------+

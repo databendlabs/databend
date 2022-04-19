@@ -159,7 +159,7 @@ ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -
 
 Execute Queries:
 
-```shell title='mysql'
+```shell
 mysql -h127.0.0.1 -P3307 -uroot
 ```
 ```sql

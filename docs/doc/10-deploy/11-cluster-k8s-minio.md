@@ -79,11 +79,8 @@ nohup kubectl port-forward -n tenant1 svc/query-service 3308:3307 &
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```sql title='mysql>'
-SELECT * from system.clusters
-```
-
 ```sql
+SELECT * FROM system.clusters
 +----------------------+------------+------+
 | name                 | host       | port |
 +----------------------+------------+------+
@@ -114,8 +111,8 @@ EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY nu
 The distributed query works, the cluster will efficiently transfer data through `flight_api_address`.
 
 ## Step 4.1. Upload the data to the cluster
-```shell title='mysql>'
-CREATE TABLE t1(i int, j int);
+```shell
+CREATE TABLE t1(i INT, j INT);
 ```
 
 ```sql

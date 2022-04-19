@@ -22,7 +22,7 @@ Let's start with a simple example.
 In SQL, it allows duplicated names of fields in a tuple. In PostgreSQL, a result set can contain different columns with same name:
 
 ```
-postgres=# create table t(a int);
+postgres=# create table t(a INT);
 CREATE TABLE
 postgres=# insert into t values(1),(2);
 INSERT 0 2

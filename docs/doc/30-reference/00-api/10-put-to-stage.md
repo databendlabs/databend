@@ -32,8 +32,8 @@ import TabItem from '@theme/TabItem';
 This example show how we update a file to a named internal stage.
 
 1. Create a named internal stage from MySQL client:
-```sql title='mysql>'
-create stage my_internal_stage;
+```sql
+CREATE STAGE my_internal_stage;
 ```
 2. Download sample data and PUT to stage
 
@@ -48,11 +48,8 @@ curl  -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http:/
 ```
 
 Then check the stage files with:
-```sql title='mysql>'
-list @my_internal_stage;
-```
-
-```sql title='Result'
+```sql 
+LIST @my_internal_stage;
 +---------------+
 | file_name     |
 +---------------+
@@ -68,8 +65,8 @@ The file `books.parquet` has PUT to your named internal stage.
 This example show how we update a file to a named external stage.
 
 1. Create a named internal stage from MySQL client:
-```sql title='mysql>'
-create stage my_external_stage url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
+```sql
+CREATE STAGE my_external_stage url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
 ```
 2. Download sample data and PUT to stage
 
@@ -84,11 +81,8 @@ curl  -H "stage_name:my_external_stage" -F "upload=@books.parquet" -XPUT "http:/
 ```
 
 Then check the stage files with:
-```sql title='mysql>'
-list @my_external_stage;
-```
-
-```sql title='Result'
+```sql
+LIST @my_external_stage;
 +---------------+
 | file_name     |
 +---------------+

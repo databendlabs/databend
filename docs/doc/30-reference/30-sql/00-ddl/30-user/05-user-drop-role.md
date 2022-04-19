@@ -16,6 +16,6 @@ DROP ROLE [ IF EXISTS ] <role_name>
 
 ## Examples
 
-```sql title='mysql>'
-drop role role1;
+```sql
+DROP ROLE role1;
 ```

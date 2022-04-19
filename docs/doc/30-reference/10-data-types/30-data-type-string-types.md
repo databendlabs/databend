@@ -5,11 +5,11 @@ description: Basic String data type.
 
 ## String Data Types
 
-In Databend, strings can be stored in the VARCHAR field.
+In Databend, strings can be stored in the VARCHAR field, the storage size is variable.
 
-| Data Type        | Syntax   |
-| -----------------| -------- |
-| String           | VARCHAR
+| Name     | Storage Size
+| -------- | ------------
+| VARCHAR  | variable
 
 ## Functions
 
