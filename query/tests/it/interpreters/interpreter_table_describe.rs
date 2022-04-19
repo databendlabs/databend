@@ -48,11 +48,11 @@ async fn interpreter_describe_table_test() -> Result<()> {
             "+-------+----------+------+---------+",
             "| Field | Type     | Null | Default |",
             "+-------+----------+------+---------+",
-            "| a     | bigint   | NO   | 0       |",
-            "| b     | int      | NO   | 0       |",
-            "| c     | varchar  | NO   |         |",
-            "| d     | smallint | NO   | 0       |",
-            "| e     | date16   | NO   | 0       |",
+            "| a     | BIGINT   | NO   | 0       |",
+            "| b     | INT      | NO   | 0       |",
+            "| c     | VARCHAR  | NO   |         |",
+            "| d     | SMALLINT | NO   | 0       |",
+            "| e     | DATE16   | NO   | 0       |",
             "+-------+----------+------+---------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

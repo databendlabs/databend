@@ -45,7 +45,7 @@ impl DataType for StringType {
     }
 
     fn sql_name(&self) -> String {
-        "varchar".to_string()
+        "VARCHAR".to_string()
     }
 
     fn aliases(&self) -> &[&str] {

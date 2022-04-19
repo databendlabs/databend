@@ -1,2 +1,2 @@
-a	CREATE TABLE `a` (\n  `a` bigint,\n  `b` int DEFAULT 3,\n  `c` varchar DEFAULT 'x',\n  `d` smallint NULL,\n  `e` date16,\n) ENGINE=Null
-b	CREATE TABLE `b` (\n  `a` bigint,\n  `b` int NULL DEFAULT NULL,\n  `c` varchar,\n  `d` smallint unsigned NULL,\n  `e` date16 DEFAULT today(),\n) ENGINE=Null COMMENT='test b'
+a	CREATE TABLE `a` (\n  `a` BIGINT,\n  `b` INT DEFAULT 3,\n  `c` VARCHAR DEFAULT 'x',\n  `d` SMALLINT NULL,\n  `e` DATE16,\n) ENGINE=Null
+b	CREATE TABLE `b` (\n  `a` BIGINT,\n  `b` INT NULL DEFAULT NULL,\n  `c` VARCHAR,\n  `d` SMALLINT UNSIGNED NULL,\n  `e` DATE16 DEFAULT today(),\n) ENGINE=Null COMMENT='test b'

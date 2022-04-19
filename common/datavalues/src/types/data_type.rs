@@ -93,7 +93,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     /// Returns the name to display in the SQL describe
     fn sql_name(&self) -> String {
-        self.name().to_lowercase()
+        self.name().to_uppercase()
     }
 
     fn aliases(&self) -> &[&str] {

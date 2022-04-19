@@ -78,7 +78,7 @@ macro_rules! impl_numeric {
             }
 
             fn sql_name(&self) -> String {
-                $sql_name.to_string()
+                $sql_name.to_uppercase()
             }
 
 
