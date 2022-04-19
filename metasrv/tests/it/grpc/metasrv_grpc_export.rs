@@ -37,7 +37,7 @@ async fn test_export() -> anyhow::Result<()> {
     async {
         let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
         tracing::info!("--- upsert kv");
         {
@@ -53,7 +53,7 @@ async fn test_export() -> anyhow::Result<()> {
             }
         }
 
-        let mut grpc_client = client.make_client().await?;
+        let mut grpc_client = client.make_conn().await?;
 
         let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
 

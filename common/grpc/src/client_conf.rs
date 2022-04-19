@@ -49,6 +49,7 @@ impl From<&MetaConfig> for RpcClientTlsConfig {
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientConf {
     pub address: String,
+    pub endpoints: Vec<String>,
     pub username: String,
     pub password: String,
     pub tls_conf: Option<RpcClientTlsConfig>,
