@@ -127,6 +127,8 @@ fn test_expr() {
         "1 + a * c.d",
         "col1 not between 1 and 2",
         "sum(col1)",
+        "rand()",
+        "rand(distinct)",
         "G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)",
         "sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END",
         "p_partkey = l_partkey

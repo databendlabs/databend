@@ -369,7 +369,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #comma_separated_list1(cut(subexpr(0))) ~ ")"
+            NOT? ~ IN ~ "(" ~ #cut(comma_separated_list1(subexpr(0))) ~ ")"
         },
         |(not, _, _, list, _)| ExprElement::InList {
             list,
@@ -411,36 +411,26 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let function_call = map(
         rule! {
             #function_name
-            ~ "(" ~ ( DISTINCT? ~ #comma_separated_list1(subexpr(0)) )? ~ ")"
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list1(subexpr(0))? ~ ")"
         },
-        |(name, _, args, _)| {
-            let (distinct, args) = args
-                .map(|(distinct, args)| (distinct.is_some(), args))
-                .unwrap_or_default();
-            ExprElement::FunctionCall {
-                distinct,
-                name,
-                args,
-                params: vec![],
-            }
+        |(name, _, distinct, args, _)| ExprElement::FunctionCall {
+            distinct: distinct.is_some(),
+            name,
+            args: args.unwrap_or_default(),
+            params: vec![],
         },
     );
     let function_call_with_param = map(
         rule! {
             #function_name
-            ~ "(" ~ ( #comma_separated_list1(literal) )? ~ ")"
-            ~ "(" ~ ( DISTINCT? ~ #comma_separated_list1(subexpr(0)) )? ~ ")"
+            ~ "(" ~ #comma_separated_list1(literal) ~ ")"
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list1(subexpr(0))? ~ ")"
         },
-        |(name, _, params, _, _, args, _)| {
-            let (distinct, args) = args
-                .map(|(distinct, args)| (distinct.is_some(), args))
-                .unwrap_or_default();
-            ExprElement::FunctionCall {
-                distinct: distinct,
-                name,
-                args,
-                params: params.unwrap_or_default(),
-            }
+        |(name, _, params, _, _, distinct, args, _)| ExprElement::FunctionCall {
+            distinct: distinct.is_some(),
+            name,
+            args: args.unwrap_or_default(),
+            params,
         },
     );
     let case = map(
@@ -478,8 +468,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let literal = map(literal, ExprElement::Literal);
 
     let (rest, elem) = rule! (
-        #column_ref : "<column>"
-        | #is_null : "`... IS [NOT] NULL` expression"
+        #is_null : "`... IS [NOT] NULL` expression"
         | #in_list : "`[NOT] IN (<expr>, ...)` expression"
         | #in_subquery : "`[NOT] IN (SELECT ...)` expression"
         | #between : "`[NOT] BETWEEN ... AND ...` expression"
@@ -494,6 +483,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         | #exists : "`EXISTS (SELECT ...)` expression"
         | #subquery : "`(SELECT ...)` expression"
         | #group : "expression between `(...)`"
+        | #column_ref : "<column>"
     )(i)?;
 
     let input_ptr = i.as_ptr();
