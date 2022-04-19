@@ -55,6 +55,7 @@ impl Series {
     }
 
     pub fn check_get<T: 'static + Column>(column: &ColumnRef) -> Result<&T> {
+        dbg!("xxx: {}", column.clone());
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(
                 "downcast column error, column type: {:?}, expected column: {:?}",

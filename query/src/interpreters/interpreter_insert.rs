@@ -104,19 +104,6 @@ impl InsertInterpreter {
             }
         };
 
-        let need_fill_missing_columns = table.schema() != plan.schema();
-        if need_fill_missing_columns {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformAddOn::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    self.plan.schema(),
-                    self.plan.schema(),
-                    self.ctx.clone(),
-                )
-            })?;
-        }
-
         // cast schema
         if need_cast_schema {
             let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
@@ -137,6 +124,19 @@ impl InsertInterpreter {
                     self.plan.schema(),
                     functions.clone(),
                     func_ctx.clone(),
+                )
+            })?;
+        }
+
+        let need_fill_missing_columns = table.schema() != plan.schema();
+        if need_fill_missing_columns {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformAddOn::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    self.plan.schema(),
+                    table.schema(),
+                    self.ctx.clone(),
                 )
             })?;
         }
