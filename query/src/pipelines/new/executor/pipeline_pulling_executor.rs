@@ -84,11 +84,15 @@ impl PipelinePullingExecutor {
         })
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&self) {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
         let thread_function = Self::thread_function(state, threads_executor);
         std::thread::spawn(thread_function);
+    }
+
+    pub fn get_inner_executor(&self) -> Arc<PipelineExecutor> {
+        self.executor.clone()
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {

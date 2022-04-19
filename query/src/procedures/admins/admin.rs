@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::procedures::admins::bootstrap_tenant::BootstrapTenantProcedure;
+use crate::procedures::admins::profiling_query::ProfilingQueryProcedure;
 use crate::procedures::admins::reload_config::ReloadConfigProcedure;
 use crate::procedures::ProcedureFactory;
 
@@ -28,5 +29,9 @@ impl AdminProcedure {
             "admin$bootstrap_tenant",
             Box::new(BootstrapTenantProcedure::try_create),
         );
+        factory.register(
+            "admin$profiling_query",
+            Box::new(ProfilingQueryProcedure::try_create),
+        )
     }
 }

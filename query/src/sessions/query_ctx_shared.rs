@@ -34,6 +34,8 @@ use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
 use crate::configs::Config;
+use crate::pipelines::new::executor::PipelineExecutor;
+use crate::pipelines::new::ExecutorProfiling;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
@@ -75,6 +77,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
+    pub(in crate::sessions) query_executor: Arc<RwLock<Option<Arc<PipelineExecutor>>>>,
 }
 
 impl QueryContextShared {
@@ -103,6 +106,7 @@ impl QueryContextShared {
             user_manager: user_manager.clone(),
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
             role_cache_manager: Arc::new(RoleCacheMgr::new(user_manager)),
+            query_executor: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -253,6 +257,13 @@ impl QueryContextShared {
 
     pub async fn reload_config(&self) -> Result<()> {
         self.session.session_mgr.reload_config().await
+    }
+
+    pub fn profiling_query(&self) -> Result<ExecutorProfiling> {
+        match self.query_executor.read().as_ref() {
+            None => Err(ErrorCode::NotFoundSession("Not found session.")),
+            Some(executor) => executor.profiling_executor()
+        }
     }
 }
 

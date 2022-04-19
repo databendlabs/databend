@@ -25,8 +25,11 @@ mod pipeline;
 mod pipeline_builder;
 pub mod processors;
 mod unsafe_cell_wrap;
+mod profiling;
 
 pub use pipe::NewPipe;
 pub use pipe::SourcePipeBuilder;
 pub use pipeline::NewPipeline;
 pub use pipeline_builder::QueryPipelineBuilder;
+pub use profiling::ExecutorProfiling;
+pub use profiling::ProcessorProfiling;

@@ -26,6 +26,7 @@ use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::new::ExecutorProfiling;
 use crate::pipelines::new::pipeline::NewPipeline;
 
 pub struct PipelineExecutor {
@@ -104,6 +105,10 @@ impl PipelineExecutor {
         self.finish()?;
 
         return Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)));
+    }
+
+    pub fn profiling_executor(&self) -> Result<ExecutorProfiling> {
+        self.graph.profiling()
     }
 
     /// # Safety

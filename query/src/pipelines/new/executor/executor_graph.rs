@@ -41,6 +41,7 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::DirectedEdge;
 use crate::pipelines::new::processors::UpdateList;
 use crate::pipelines::new::processors::UpdateTrigger;
+use crate::pipelines::new::profiling::ExecutorProfiling;
 
 enum State {
     Idle,
@@ -349,6 +350,12 @@ impl RunningGraph {
         let mut schedule_queue = ScheduleQueue::create();
         ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index, &mut schedule_queue)?;
         Ok(schedule_queue)
+    }
+
+    pub fn profiling(&self) -> Result<ExecutorProfiling> {
+        let graph = self.0.read();
+        let graphviz = format!("{:?}", Dot::with_config(&graph.graph, &[Config::EdgeNoLabel]));
+        Ok(ExecutorProfiling::create(graphviz, vec![]))
     }
 }
 

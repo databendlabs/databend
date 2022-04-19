@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 

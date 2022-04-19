@@ -15,5 +15,6 @@
 mod admin;
 pub mod bootstrap_tenant;
 pub mod reload_config;
+pub mod profiling_query;
 
 pub use admin::AdminProcedure;
