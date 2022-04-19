@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::future::Future;
-use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
