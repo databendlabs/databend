@@ -27,16 +27,12 @@ use pratt::Precedence;
 use crate::parser::ast::*;
 use crate::parser::rule::error::Error;
 use crate::parser::rule::error::ErrorKind;
+use crate::parser::rule::statement::*;
 use crate::parser::rule::util::*;
 use crate::parser::token::*;
 use crate::rule;
 
 const BETWEEN_PREC: u32 = 20;
-
-pub fn query(i: Input) -> IResult<Query> {
-    // TODO: unimplemented
-    nom::combinator::fail(i)
-}
 
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)

@@ -573,7 +573,7 @@ impl TransformerSqlparser {
                 subquery, alias, ..
             } => Ok(TableReference::Subquery {
                 subquery: Box::from(self.transform_query(subquery.as_ref())?),
-                alias: alias.as_ref().map(Self::transform_table_alias),
+                alias: Self::transform_table_alias(alias.as_ref().unwrap()),
             }),
             TableFactor::TableFunction { expr, alias } => Ok(TableReference::TableFunction {
                 expr: self.transform_expr(expr)?,

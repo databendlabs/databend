@@ -50,7 +50,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     )(i)
 }
 
-pub fn select_statement(i: Input) -> IResult<Query> {
+pub fn query(i: Input) -> IResult<Query> {
     map(
         rule! {
             SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
@@ -60,7 +60,6 @@ pub fn select_statement(i: Input) -> IResult<Query> {
             ~ ( HAVING ~ #expr )?
             ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ #comma_separated_list1(expr) )?
-            ~ ";"
             : "SELECT statement"
         },
         |(
@@ -74,7 +73,6 @@ pub fn select_statement(i: Input) -> IResult<Query> {
             having_block,
             order_by_block,
             limit_block,
-            _,
         )| {
             let from = table_refs
                 .into_iter()
@@ -141,6 +139,15 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
     )(i)
 }
 
+pub fn table_reference(i: Input) -> IResult<TableReference> {
+    rule! (
+        #joined_tables
+        | #parenthesized_joined_tables
+        | #subquery
+        | #aliased_table
+    )(i)
+}
+
 pub fn aliased_table(i: Input) -> IResult<TableReference> {
     let table_alias = map(rule! { #ident }, |name| TableAlias {
         name,
@@ -166,28 +173,52 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
     )(i)
 }
 
-pub fn table_reference(i: Input) -> IResult<TableReference> {
-    rule! (
-        #parenthesized_joined_tables
-        | #aliased_table
+pub fn table_alias(i: Input) -> IResult<TableAlias> {
+    map(rule! { #ident }, |name| TableAlias {
+        name,
+        columns: vec![],
+    })(i)
+}
+
+pub fn subquery(i: Input) -> IResult<TableReference> {
+    map(
+        rule! {
+            ( #parenthesized_query | #query ) ~ AS? ~ #table_alias
+        },
+        |(subquery, _, alias)| TableReference::Subquery {
+            subquery: Box::new(subquery),
+            alias,
+        },
+    )(i)
+}
+
+pub fn parenthesized_query(i: Input) -> IResult<Query> {
+    map(
+        rule! {
+            "(" ~ ( #parenthesized_query | #query ) ~ ")"
+        },
+        |(_, query, _)| query,
     )(i)
 }
 
 pub fn parenthesized_joined_tables(i: Input) -> IResult<TableReference> {
-    let with_parenthesis = map(
+    map(
         rule! {
-            "(" ~ #parenthesized_joined_tables ~ ")"
+            "(" ~ ( #parenthesized_joined_tables | #joined_tables ) ~ ")"
         },
         |(_, joined_tables, _)| joined_tables,
-    );
-
-    rule! (
-        # joined_tables
-        | #with_parenthesis
     )(i)
 }
 
 pub fn joined_tables(i: Input) -> IResult<TableReference> {
+    struct JoinElement {
+        op: JoinOperator,
+        condition: JoinCondition,
+        right: Box<TableReference>,
+    }
+
+    let table_ref_without_join =
+        |i| rule! { #aliased_table | #subquery | #parenthesized_joined_tables }(i);
     let join_condition_on = map(
         rule! {
             ON ~ #expr
@@ -204,34 +235,44 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
 
     let join = map(
         rule! {
-            #aliased_table ~ #join_operator? ~ JOIN ~ #cut(table_reference) ~ #cut(join_condition)
+            #join_operator? ~ JOIN ~ #cut(table_ref_without_join) ~ #cut(join_condition)
         },
-        |(left, op, _, right, condition)| {
-            TableReference::Join(Join {
-                op: op.unwrap_or(JoinOperator::Inner),
-                condition,
-                left: Box::new(left),
-                right: Box::new(right),
-            })
+        |(op, _, right, condition)| JoinElement {
+            op: op.unwrap_or(JoinOperator::Inner),
+            condition,
+            right: Box::new(right),
         },
     );
     let natural_join = map(
         rule! {
-            #aliased_table ~ NATURAL ~ #cut(rule! { JOIN }) ~ #cut(table_reference)
+            NATURAL ~ #cut(rule! { JOIN }) ~ #cut(table_ref_without_join)
         },
-        |(left, _, _, right)| {
-            TableReference::Join(Join {
-                op: JoinOperator::Inner,
-                condition: JoinCondition::Natural,
-                left: Box::new(left),
-                right: Box::new(right),
-            })
+        |(_, _, right)| JoinElement {
+            op: JoinOperator::Inner,
+            condition: JoinCondition::Natural,
+            right: Box::new(right),
         },
     );
 
-    rule!(
-        #join
-        | #natural_join
+    map(
+        rule!(
+            #table_ref_without_join ~ ( #join | #natural_join )+
+        ),
+        |(fst, joins)| {
+            joins.into_iter().fold(fst, |acc, elem| {
+                let JoinElement {
+                    op,
+                    condition,
+                    right,
+                } = elem;
+                TableReference::Join(Join {
+                    op,
+                    condition,
+                    left: Box::new(acc),
+                    right,
+                })
+            })
+        },
     )(i)
 }
 

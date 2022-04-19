@@ -115,7 +115,7 @@ pub enum TableReference {
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
         subquery: Box<Query>,
-        alias: Option<TableAlias>,
+        alias: TableAlias,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -211,9 +211,7 @@ impl Display for TableReference {
             }
             TableReference::Subquery { subquery, alias } => {
                 write!(f, "({})", subquery)?;
-                if let Some(alias) = alias {
-                    write!(f, " {}", alias)?;
-                }
+                write!(f, " {}", alias)?;
             }
             TableReference::TableFunction { expr, alias } => {
                 write!(f, "{}", expr)?;

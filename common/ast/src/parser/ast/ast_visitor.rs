@@ -267,9 +267,9 @@ pub trait AstVisitor {
         self.visit_table_alias(alias.as_ref().unwrap())
     }
 
-    fn visit_table_subquery(&mut self, subquery: &Query, alias: &Option<TableAlias>) -> Result<()> {
+    fn visit_table_subquery(&mut self, subquery: &Query, alias: &TableAlias) -> Result<()> {
         self.visit_query(subquery)?;
-        self.visit_table_alias(alias.as_ref().unwrap())
+        self.visit_table_alias(alias)
     }
 
     fn visit_table_function(&mut self, expr: &Expr, alias: &Option<TableAlias>) -> Result<()> {
