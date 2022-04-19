@@ -49,7 +49,7 @@ impl AsyncSource for StreamSource {
         async move {
             match self
                 .stream
-                .take()
+                .as_mut()
                 .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?
                 .next()
                 .await
