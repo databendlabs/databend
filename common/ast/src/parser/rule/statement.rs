@@ -51,9 +51,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
 }
 
 pub fn select_statement(i: Input) -> IResult<Query> {
-    let (
-        i,
-        (
+    map(
+        rule! {
+            SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
+            ~ FROM ~ #comma_separated_list1(table_reference)
+            ~ ( WHERE ~ #expr )?
+            ~ ( GROUP ~ BY ~ #comma_separated_list1(expr) )?
+            ~ ( HAVING ~ #expr )?
+            ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
+            ~ ( LIMIT ~ #comma_separated_list1(expr) )?
+            ~ ";"
+            : "SELECT statement"
+        },
+        |(
             _select,
             distinct,
             select_list,
@@ -65,47 +75,37 @@ pub fn select_statement(i: Input) -> IResult<Query> {
             order_by_block,
             limit_block,
             _,
-        ),
-    ) = rule! {
-        SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
-        ~ FROM ~ #comma_separated_list1(table_reference)
-        ~ ( WHERE ~ #expr )?
-        ~ ( GROUP ~ BY ~ #comma_separated_list1(expr) )?
-        ~ ( HAVING ~ #expr )?
-        ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
-        ~ ( LIMIT ~ #comma_separated_list1(expr) )?
-        ~ ";"
-        : "SELECT statement"
-    }(i)?;
+        )| {
+            let from = table_refs
+                .into_iter()
+                .reduce(|left, right| {
+                    TableReference::Join(Join {
+                        op: JoinOperator::CrossJoin,
+                        condition: JoinCondition::None,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    })
+                })
+                .unwrap();
 
-    let from = table_refs
-        .into_iter()
-        .reduce(|left, right| {
-            TableReference::Join(Join {
-                op: JoinOperator::CrossJoin,
-                condition: JoinCondition::None,
-                left: Box::new(left),
-                right: Box::new(right),
-            })
-        })
-        .unwrap();
-
-    Ok((i, Query {
-        body: SetExpr::Select(SelectStmt {
-            distinct: distinct.is_some(),
-            select_list,
-            from,
-            selection: where_block.map(|(_, selection)| selection),
-            group_by: group_by_block
-                .map(|(_, _, group_by)| group_by)
-                .unwrap_or_default(),
-            having: having_block.map(|(_, having)| having),
-        }),
-        order_by: order_by_block
-            .map(|(_, _, order_by)| order_by)
-            .unwrap_or_default(),
-        limit: limit_block.map(|(_, limit)| limit).unwrap_or_default(),
-    }))
+            Query {
+                body: SetExpr::Select(SelectStmt {
+                    distinct: distinct.is_some(),
+                    select_list,
+                    from,
+                    selection: where_block.map(|(_, selection)| selection),
+                    group_by: group_by_block
+                        .map(|(_, _, group_by)| group_by)
+                        .unwrap_or_default(),
+                    having: having_block.map(|(_, having)| having),
+                }),
+                order_by: order_by_block
+                    .map(|(_, _, order_by)| order_by)
+                    .unwrap_or_default(),
+                limit: limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+            }
+        },
+    )(i)
 }
 
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
