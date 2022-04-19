@@ -52,7 +52,7 @@ pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn DataType> {
 }
 
 macro_rules! impl_numeric {
-    ($ty:ident, $tname:ident, $name: expr, $alias: expr) => {
+    ($ty:ident, $tname:ident, $name: expr, $sql_name:expr, $alias: expr) => {
         impl PrimitiveDataType<$ty> {
             pub fn arc() -> DataTypePtr {
                 Arc::new(Self { _t: PhantomData })
@@ -76,6 +76,11 @@ macro_rules! impl_numeric {
             fn name(&self) -> &str {
                 $name
             }
+
+            fn sql_name(&self) -> String {
+                $sql_name.to_string()
+            }
+
 
             fn aliases(&self) -> &[&str] {
                 $alias
@@ -143,15 +148,15 @@ macro_rules! impl_numeric {
     };
 }
 //
-impl_numeric!(u8, UInt8, "UInt8", &[]);
-impl_numeric!(u16, UInt16, "UInt16", &[]);
-impl_numeric!(u32, UInt32, "UInt32", &[]);
-impl_numeric!(u64, UInt64, "UInt64", &[]);
+impl_numeric!(u8, UInt8, "UInt8", "tinyint unsigned", &["u8"]);
+impl_numeric!(u16, UInt16, "UInt16", "smallint unsigned", &["u16"]);
+impl_numeric!(u32, UInt32, "UInt32", "int unsigned", &["u32"]);
+impl_numeric!(u64, UInt64, "UInt64", "bigint unsigned", &["u64"]);
 
-impl_numeric!(i8, Int8, "Int8", &["tinyint"]);
-impl_numeric!(i16, Int16, "Int16", &["smallint"]);
-impl_numeric!(i32, Int32, "Int32", &["int"]);
-impl_numeric!(i64, Int64, "Int64", &["bigint"]);
+impl_numeric!(i8, Int8, "Int8", "tinyint", &["tinyint", "i8"]);
+impl_numeric!(i16, Int16, "Int16", "smallint", &["smallint", "i16"]);
+impl_numeric!(i32, Int32, "Int32", "int", &["int", "i32"]);
+impl_numeric!(i64, Int64, "Int64", "bigint", &["bigint", "i64"]);
 
-impl_numeric!(f32, Float32, "Float32", &["float"]);
-impl_numeric!(f64, Float64, "Float64", &["double"]);
+impl_numeric!(f32, Float32, "Float32", "float", &["float", "f32"]);
+impl_numeric!(f64, Float64, "Float64", "double", &["double", "f64"]);

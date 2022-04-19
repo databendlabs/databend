@@ -3,19 +3,19 @@
 4
 ====BEGIN TEST CREATE TABLE LIKE STATEMENT====
 8
-a	Int32	NO	0
-b	Int32	YES	NULL
+a	int	NO	0
+b	int	YES	NULL
 ====END TEST CREATE TABLE LIKE STATEMENT====
 ====BEGIN TEST CREATE TABLE AS SELECT STATEMENT====
-a	String	YES	NULL
-y	String	YES	NULL
-b	Int32	YES	NULL
+a	varchar	YES	NULL
+y	varchar	YES	NULL
+b	int	YES	NULL
 1
 2
 3
-a	String	YES	NULL
-y	String	YES	NULL
-b	Int32	YES	NULL
+a	varchar	YES	NULL
+y	varchar	YES	NULL
+b	int	YES	NULL
 1
 2
 3
@@ -25,21 +25,21 @@ NULL
 ====END TEST CREATE TABLE AS SELECT STATEMENT====
 ====TIMESTAMP====
 ====CREATE ALL DATA TYPE TABLE====
-tiny	Int8	NO	0
-tiny_unsigned	UInt8	NO	0
-smallint	Int16	NO	0
-smallint_unsigned	UInt16	NO	0
-int	Int32	NO	0
-int_unsigned	UInt32	NO	0
-bigint	Int64	NO	0
-bigint_unsigned	UInt64	NO	0
-float	Float32	NO	0
-double	Float64	NO	0
-date	Date16	NO	0
-datetime	DateTime32	NO	0
-ts	DateTime64(3)	NO	0
-var	String	NO	
-bool	Boolean	NO	false
-array	Array	NO	[]
-obj	Object	NO	{}
-variant	Variant	NO	null
+tiny	tinyint	NO	0
+tiny_unsigned	tinyint unsigned	NO	0
+smallint	smallint	NO	0
+smallint_unsigned	smallint unsigned	NO	0
+int	int	NO	0
+int_unsigned	int unsigned	NO	0
+bigint	bigint	NO	0
+bigint_unsigned	bigint unsigned	NO	0
+float	float	NO	0
+double	double	NO	0
+date	date16	NO	0
+datetime	datetime32	NO	0
+ts	datetime64(3)	NO	0
+str	varchar	NO	3
+bool	boolean	NO	false
+array	array	NO	[]
+obj	object	NO	{}
+variant	variant	NO	null

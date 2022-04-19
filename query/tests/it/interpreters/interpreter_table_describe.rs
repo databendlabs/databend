@@ -45,15 +45,15 @@ async fn interpreter_describe_table_test() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+-------+--------+------+---------+",
-            "| Field | Type   | Null | Default |",
-            "+-------+--------+------+---------+",
-            "| a     | Int64  | NO   | 0       |",
-            "| b     | Int32  | NO   | 0       |",
-            "| c     | String | NO   |         |",
-            "| d     | Int16  | NO   | 0       |",
-            "| e     | Date16 | NO   | 0       |",
-            "+-------+--------+------+---------+",
+            "+-------+----------+------+---------+",
+            "| Field | Type     | Null | Default |",
+            "+-------+----------+------+---------+",
+            "| a     | bigint   | NO   | 0       |",
+            "| b     | int      | NO   | 0       |",
+            "| c     | varchar  | NO   |         |",
+            "| d     | smallint | NO   | 0       |",
+            "| e     | date16   | NO   | 0       |",
+            "+-------+----------+------+---------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

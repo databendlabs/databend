@@ -91,6 +91,11 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn name(&self) -> &str;
 
+    /// Returns the name to display in the SQL describe
+    fn sql_name(&self) -> String {
+        self.name().to_lowercase()
+    }
+
     fn aliases(&self) -> &[&str] {
         &[]
     }
@@ -250,7 +255,7 @@ pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
 pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
     let notnull_type = remove_nullable(data_type);
     match data_type.is_nullable() {
-        true => format!("{:?} NULL", notnull_type),
-        false => format!("{:?}", notnull_type),
+        true => format!("{} NULL", notnull_type.sql_name()),
+        false => format!("{}", notnull_type.sql_name()),
     }
 }
