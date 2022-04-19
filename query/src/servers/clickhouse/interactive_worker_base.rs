@@ -123,20 +123,25 @@ impl InteractiveWorkerBase {
             let (mut tx, rx) = mpsc::channel(20);
             tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
-            // the data is comming in async mode
+            // the data is coming in async mode
             let sent_all_data = ch_ctx.state.sent_all_data.clone();
+            let start = Instant::now();
             ctx.try_spawn(async move {
                 interpreter.execute(None).await.unwrap();
                 sent_all_data.notify_one();
             })?;
-
+            histogram!(
+                super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
+                start.elapsed(),
+                "interpreter" => name
+            );
             return Ok(rx);
         }
 
         let (mut tx, rx) = mpsc::channel(20);
         tx.send(BlockItem::InsertSample(sample_block)).await.ok();
 
-        // the data is comming in async mode
+        // the data is coming in async mode
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {

@@ -24,6 +24,7 @@ use common_streams::NDJsonSourceBuilder;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_tracing::tracing;
+use futures::FutureExt;
 use futures::StreamExt;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
@@ -38,6 +39,12 @@ use poem::Route;
 use serde::Deserialize;
 
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event::Async;
+use crate::pipelines::new::processors::AsyncSourcer;
+use crate::pipelines::new::processors::StreamSource;
+use crate::pipelines::new::processors::SyncReceiverCkSource;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::formats::tsv_output::block_to_tsv;
 use crate::servers::http::formats::Format;
 use crate::sessions::QueryContext;
@@ -70,8 +77,20 @@ async fn execute(
         .start()
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-
-    let data_stream = interpreter.execute(input_stream).await?;
+    let data_stream: SendableDataBlockStream;
+    if ctx.get_settings().get_enable_new_processor_framework()? != 0 && ctx.get_cluster().is_empty()
+    {
+        let output_port = OutputPort::create();
+        let stream_source = StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
+        let mut source_pipe_builder = SourcePipeBuilder::create();
+        source_pipe_builder.add_source(output_port, stream_source);
+        let _ = interpreter
+            .set_source_pipe_builder(Option::from(source_pipe_builder))
+            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+        data_stream = interpreter.execute(None).await?;
+    } else {
+        data_stream = interpreter.execute(input_stream).await?;
+    }
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
     let stream = stream! {
