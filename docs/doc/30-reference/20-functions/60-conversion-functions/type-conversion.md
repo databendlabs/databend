@@ -16,18 +16,17 @@ toInt64(expr) — Results in the Int64 data type.
 ## Examples
 
 ```sql
-mysql> SELECT toInt8(1);
+SELECT toInt8(1);
 +-----------+
 | toInt8(1) |
 +-----------+
 |         1 |
 +-----------+
 
-mysql> SELECT toTypeName(toInt8(1));
+SELECT typeof(toInt8(1));
 +-----------------------+
-| toTypeName(toInt8(1)) |
+| typeof(toInt8(1))     |
 +-----------------------+
 | Int8                  |
 +-----------------------+
-
 ```

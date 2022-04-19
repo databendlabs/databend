@@ -18,6 +18,6 @@ CREATE ROLE <role_name> [ COMMENT = '<string_literal>' ]
 ```
 ## Examples
 
-```sql title='mysql>'
-create role role1;
+```sql
+CREATE ROLE role1;
 ```

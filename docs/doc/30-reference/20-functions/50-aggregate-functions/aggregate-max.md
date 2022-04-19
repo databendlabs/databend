@@ -29,21 +29,21 @@ The maximum value, in the type of the value.
 :::
 
 ```sql
-mysql> SELECT MAX(*) FROM numbers(3);
+SELECT MAX(*) FROM numbers(3);
 +--------+
 | max(*) |
 +--------+
 |      2 |
 +--------+
 
-mysql> SELECT MAX(number) FROM numbers(3);
+SELECT MAX(number) FROM numbers(3);
 +-------------+
 | max(number) |
 +-------------+
 |           2 |
 +-------------+
 
-mysql> SELECT MAX(number) AS max FROM numbers(3);
+SELECT MAX(number) AS max FROM numbers(3);
 +------+
 | max  |
 +------+

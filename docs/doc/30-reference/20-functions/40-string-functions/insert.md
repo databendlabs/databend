@@ -25,7 +25,7 @@ A string data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT INSERT('Quadratic', 3, 4, 'What');
 +-----------------------------------+
 | INSERT('Quadratic', 3, 4, 'What') |

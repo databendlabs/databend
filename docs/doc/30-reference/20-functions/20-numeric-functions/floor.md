@@ -25,19 +25,17 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT FLOOR(1.23);
+SELECT FLOOR(1.23);
 +-------------+
 | FLOOR(1.23) |
 +-------------+
 |           1 |
 +-------------+
-1 row in set (0.01 sec)
 
-mysql> SELECT FLOOR(-1.23);
+SELECT FLOOR(-1.23);
 +-----------------+
 | FLOOR((- 1.23)) |
 +-----------------+
 |              -2 |
 +-----------------+
-1 row in set (0.01 sec)
 ```

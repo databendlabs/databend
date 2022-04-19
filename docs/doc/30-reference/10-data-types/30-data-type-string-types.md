@@ -5,11 +5,11 @@ description: Basic String data type.
 
 ## String Data Types
 
-In Databend, strings can be stored in the VARCHAR field.
+In Databend, strings can be stored in the VARCHAR field, the storage size is variable.
 
-| Data Type        | Syntax   |
-| -----------------| -------- |
-| String           | VARCHAR
+| Name     | Storage Size
+| -------- | ------------
+| VARCHAR  | variable
 
 ## Functions
 
@@ -19,20 +19,21 @@ See [String Functions](/doc/reference/functions/string-functions).
 ## Example
 
 ```sql
-mysql> CREATE TABLE string_table(text VARCHAR);
+CREATE TABLE string_table(text VARCHAR);
 
-mysql> DESC string_table;
+DESC string_table;
 +-------+--------+------+---------+
 | Field | Type   | Null | Default |
 +-------+--------+------+---------+
 | text  | String | NO   |         |
 +-------+--------+------+---------+
 
-mysql> INSERT INTO string_table VALUES('databend');
+INSERT INTO string_table VALUES('databend');
 
-mysql> SELECT * FROM string_table;
+SELECT * FROM string_table;
 +----------+
 | text     |
 +----------+
 | databend |
++----------+
 ```

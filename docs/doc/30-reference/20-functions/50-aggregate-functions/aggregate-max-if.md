@@ -17,14 +17,14 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT max(number) FROM numbers(10);
+SELECT max(number) FROM numbers(10);
 +-------------+
 | max(number) |
 +-------------+
 |           9 |
 +-------------+
 
-mysql> SELECT max_if(number, number < 7) FROM numbers(10);
+SELECT max_if(number, number < 7) FROM numbers(10);
 +------------------------------+
 | max_if(number, (number < 7)) |
 +------------------------------+

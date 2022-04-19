@@ -22,14 +22,14 @@ A `UInt16` number datatype.
 ## Examples
 
 ```sql
-mysql> select toDayOfYear(toDate(18869));
+SELECT toDayOfYear(toDate(18869));
 +----------------------------+
 | toDayOfYear(toDate(18869)) |
 +----------------------------+
 |                        242 |
 +----------------------------+
 
-mysql> select toDayOfYear(now());
+SELECT toDayOfYear(now());
 +--------------------+
 | toDayOfYear(now()) |
 +--------------------+

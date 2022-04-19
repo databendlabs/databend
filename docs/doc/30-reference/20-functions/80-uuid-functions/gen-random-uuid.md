@@ -1,5 +1,5 @@
 ---
-title: generateUUIDv4
+title: GEN_RANDOM_UUID
 ---
 
 Generate a random UUID based on v4.
@@ -7,7 +7,7 @@ Generate a random UUID based on v4.
 ## Syntax
 
 ```sql
-generateUUIDv4()
+GEN_RANDOM_UUID()
 ```
 
 ## Return Type
@@ -17,10 +17,10 @@ Random UUID.
 ## Examples
 
 ```sql
-mysql> select generateUUIDv4();
+SELECT gen_random_uuid();
 +--------------------------------------+
-| generateUUIDv4()                     |
+| gen_random_uuid()                    |
 +--------------------------------------+
-| 0ec1cbb8-3d6f-4e85-ac65-046c75721b76 |
+| ab1bce12-4508-4d11-bd96-c42e9e7eefdd |
 +--------------------------------------+
 ```

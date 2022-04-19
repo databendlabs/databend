@@ -4,14 +4,14 @@ select  toDateTime(1630320462), toUInt32(toDateTime(1630320462))  = 1630320462;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
 select  toDateTime(1640019661), toInt64(toDateTime(1640019661))  = 1640019661;
 
-select toTypeName(today() + 3) = 'Date';
-select toTypeName(today() - 3) = 'Date';
-select toTypeName(now() - 3) = 'DateTime_0';
-select toTypeName(toDateTime(1640019661)) = 'DateTime_0';
+select typeof(today() + 3) = 'Date';
+select typeof(today() - 3) = 'Date';
+select typeof(now() - 3) = 'DateTime_0';
+select typeof(toDateTime(1640019661)) = 'DateTime_0';
 select today() + 1 - today() = 1;
 
-select toTypeName(today() - today()) = 'Int32';
-select toTypeName(now() - now()) = 'Int32';
+select typeof(today() - today()) = 'Int32';
+select typeof(now() - now()) = 'Int32';
 select sum(today() + number - today()) = 45 from numbers(10);
 
 select today() - 1 = yesterday();

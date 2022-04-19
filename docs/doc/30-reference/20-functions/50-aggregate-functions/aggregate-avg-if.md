@@ -18,14 +18,14 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT avg(number) FROM numbers(10);
+SELECT avg(number) FROM numbers(10);
 +-------------+
 | avg(number) |
 +-------------+
 |         4.5 |
 +-------------+
 
-mysql> SELECT avgIf(number, number > 7) FROM numbers(10);
+SELECT avgIf(number, number > 7) FROM numbers(10);
 +-----------------------------+
 | avgIf(number, (number > 7)) |
 +-----------------------------+

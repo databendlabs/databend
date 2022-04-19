@@ -24,13 +24,13 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
-```shell title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant privileges for the user:
-```shell title='mysql>'
-grant all on *.* to user1;
+```shell
+GRANT ALL ON *.* TO user1;
 ```
 
 See also [How To Create User](../../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).

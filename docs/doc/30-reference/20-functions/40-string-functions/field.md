@@ -24,7 +24,7 @@ An numeric data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff');
 +-------------------------------------------+
 | FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff') |

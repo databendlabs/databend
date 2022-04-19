@@ -47,7 +47,7 @@ impl RunningDifferenceFunction {
             | TypeID::Interval => Ok(type_primitive::Int64Type::arc()),
             TypeID::Float32 | TypeID::Float64 => Ok(type_primitive::Float64Type::arc()),
             _ => Err(ErrorCode::IllegalDataType(
-                "Argument for function runningDifference must have numeric type",
+                "Argument for function running_difference must have numeric type",
             )),
         }?;
 
@@ -107,7 +107,7 @@ impl Function for RunningDifferenceFunction {
 
             _ => Result::Err(ErrorCode::IllegalDataType(
                 format!(
-                    "Argument for function runningDifference must have numeric type.: While processing runningDifference({})",
+                    "Argument for function running_difference must have numeric type.: While processing running_difference({})",
                     columns[0].field().name(),
                 )))
         }

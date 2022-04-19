@@ -71,6 +71,19 @@ pub fn cast_from_string(
             }
             Ok((builder.build(size), Some(bitmap.into())))
         }
+        TypeID::Boolean => {
+            let mut builder = ColumnBuilder::<bool>::with_capacity(size);
+            for (row, v) in str_column.iter().enumerate() {
+                if v.eq_ignore_ascii_case("true".as_bytes()) {
+                    builder.append(true);
+                } else if v.eq_ignore_ascii_case("false".as_bytes()) {
+                    builder.append(false);
+                } else {
+                    bitmap.set(row, false);
+                }
+            }
+            Ok((builder.build(size), Some(bitmap.into())))
+        }
         TypeID::Interval => todo!(),
         _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }

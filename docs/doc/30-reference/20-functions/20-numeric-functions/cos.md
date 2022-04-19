@@ -25,12 +25,10 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT COS(PI());
+SELECT COS(PI());
 +-----------+
 | COS(PI()) |
 +-----------+
 |        -1 |
 +-----------+
-1 row in set (0.00 sec)
-Read 1 rows, 1 B in 0.000 sec., 2.64 thousand rows/sec., 2.64 KB/sec.
 ```

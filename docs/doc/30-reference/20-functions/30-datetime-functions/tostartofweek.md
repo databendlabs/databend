@@ -21,14 +21,14 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-mysql> select toStartOfWeek(now());
+SELECT toStartOfWeek(now());
 +----------------------+
 | toStartOfWeek(now()) |
 +----------------------+
 | 2022-03-27           |
 +----------------------+
 
-mysql> select toStartOfWeek(toDateTime(1630812366));
+SELECT toStartOfWeek(toDateTime(1630812366));
 +---------------------------------------+
 | toStartOfWeek(toDateTime(1630812366)) |
 +---------------------------------------+

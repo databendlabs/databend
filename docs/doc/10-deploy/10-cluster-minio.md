@@ -107,11 +107,8 @@ Check the response is `HTTP/1.1 200 OK`.
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```shell title='mysql>'
-select * from system.clusters
-```
-
-```text
+```sql
+SELECT * FROM system.clusters
 +------------------------+-----------+------+
 | name                   | host      | port |
 +------------------------+-----------+------+
@@ -122,11 +119,8 @@ select * from system.clusters
 
 ## Step 3. Distributed query
 
-```shell title='mysql>'
-explain select max(number), sum(number) from numbers_mt(10000000000) group by number % 3, number % 4, number % 5 limit 10;
-```
-
-```shell
+```sql
+EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
