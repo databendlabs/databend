@@ -21,8 +21,8 @@ use serde_json::Value as JsonValue;
 use crate::DFTryFrom;
 use crate::DataTypePtr;
 use crate::DataValue;
-use crate::DateType;
 use crate::DateTimeType;
+use crate::DateType;
 use crate::Scalar;
 use crate::VariantType;
 

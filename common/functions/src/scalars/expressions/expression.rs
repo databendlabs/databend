@@ -45,22 +45,8 @@ impl ToCastFunction {
 
     pub fn register(factory: &mut FunctionFactory) {
         let names = vec![
-            "Null",
-            "Boolean",
-            "UInt8",
-            "UInt16",
-            "UInt32",
-            "UInt64",
-            "Int8",
-            "Int16",
-            "Int32",
-            "Int64",
-            "Float32",
-            "Float64",
-            "Date",
-            "String",
-            "Date",
-            "DateTime",
+            "Null", "Boolean", "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32",
+            "Int64", "Float32", "Float64", "Date", "String", "Date", "DateTime",
         ];
 
         for name in names {

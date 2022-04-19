@@ -27,7 +27,6 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::define_date_add_year_months;
-use crate::define_datetime32_add_year_months;
 use crate::define_datetime64_add_year_months;
 use crate::impl_interval_year_month;
 use crate::scalars::scalar_binary_op;
@@ -171,7 +170,7 @@ where
 }
 
 pub trait IntervalArithmeticImpl {
-    type DateResultType : LogicalDateType + ToDateType;
+    type DateResultType: LogicalDateType + ToDateType;
 
     /// when date type add year/month/day, output is date type
     /// when date type add hour/minute/second/... output is datetime type

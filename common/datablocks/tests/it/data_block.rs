@@ -44,10 +44,10 @@ fn test_data_block() -> Result<()> {
 #[test]
 fn test_data_block_convert() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", Date16Type::arc()),
-        DataField::new("b", Date32Type::arc()),
-        DataField::new("c", DateTime32Type::arc(None)),
-        DataField::new("c", DateTime64Type::arc(3, None)),
+        DataField::new("a", DateType::arc()),
+        DataField::new("b", DateType::arc()),
+        DataField::new("c", DateTimeType::arc(0, None)),
+        DataField::new("c", DateTimeType::arc(3, None)),
     ]);
 
     let block = DataBlock::create(schema.clone(), vec![

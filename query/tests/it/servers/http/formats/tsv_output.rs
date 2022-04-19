@@ -26,14 +26,14 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             DataField::new("c2", Vu8::to_data_type()),
             DataField::new("c3", bool::to_data_type()),
             DataField::new("c4", f64::to_data_type()),
-            DataField::new("c5", Date16Type::arc()),
+            DataField::new("c5", DateType::arc()),
         ]),
         true => DataSchemaRefExt::create(vec![
             DataField::new_nullable("c1", i32::to_data_type()),
             DataField::new_nullable("c2", Vu8::to_data_type()),
             DataField::new_nullable("c3", bool::to_data_type()),
             DataField::new_nullable("c4", f64::to_data_type()),
-            DataField::new_nullable("c5", Date16Type::arc()),
+            DataField::new_nullable("c5", DateType::arc()),
         ]),
     };
 

@@ -123,10 +123,7 @@ impl TypeID {
 
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
-        matches!(
-            self,
-            TypeID::Date | TypeID::DateTime,
-        )
+        matches!(self, TypeID::Date | TypeID::DateTime,)
     }
 
     /// Determine if a TypeID is signed numeric or not
@@ -166,12 +163,7 @@ impl TypeID {
 
     #[inline]
     pub fn is_quoted(&self) -> bool {
-        matches!(
-            self,
-            TypeID::String
-                | TypeID::Date
-                | TypeID::DateTime
-        )
+        matches!(self, TypeID::String | TypeID::Date | TypeID::DateTime)
     }
 
     #[inline]
@@ -219,8 +211,8 @@ impl TypeID {
             Int64 | Interval | DateTime => PhysicalTypeID::Int64,
 
             UInt8 => PhysicalTypeID::UInt8,
-             UInt16 => PhysicalTypeID::UInt16,
-             UInt32 => PhysicalTypeID::UInt32,
+            UInt16 => PhysicalTypeID::UInt16,
+            UInt32 => PhysicalTypeID::UInt32,
             UInt64 => PhysicalTypeID::UInt64,
             Float32 => PhysicalTypeID::Float32,
             Float64 => PhysicalTypeID::Float64,

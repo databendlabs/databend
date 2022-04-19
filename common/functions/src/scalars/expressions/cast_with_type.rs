@@ -127,9 +127,7 @@ pub fn cast_with_type(
         TypeID::String => {
             cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
-        TypeID::Date => {
-            cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
+        TypeID::Date => cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options),
         TypeID::DateTime => {
             cast_from_datetime(column, &nonull_from_type, &nonull_data_type, cast_options)
         }

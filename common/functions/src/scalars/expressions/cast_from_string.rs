@@ -78,6 +78,7 @@ pub fn cast_from_string(
 
 // currently use UTC by default
 // TODO support timezone
+#[allow(unused)]
 #[inline]
 pub fn string_to_datetime(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();

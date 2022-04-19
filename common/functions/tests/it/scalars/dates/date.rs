@@ -37,7 +37,7 @@ fn test_round_function() -> Result<()> {
             name: "test-timeSlot-now",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1630812366u32, 1630839682u32]),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", DateTimeType::arc(0, None)),
             )],
             expect: Series::from_data(vec![1630812366u32 / r * r, 1630839682u32 / r * r]),
             error: "",
@@ -53,7 +53,7 @@ fn test_to_start_of_function() -> Result<()> {
         name: "test-timeSlot-now",
         columns: vec![ColumnWithField::new(
             Series::from_data(vec![1631705259u32]),
-            DataField::new("dummy_1", DateTime32Type::arc(None)),
+            DataField::new("dummy_1", DateTimeType::arc(0, None)),
         )],
         expect: Series::from_data(vec![18809u16]),
         error: "",

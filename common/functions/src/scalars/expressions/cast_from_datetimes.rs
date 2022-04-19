@@ -25,7 +25,7 @@ use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::CastOptions;
 
 const DATE_FMT: &str = "%Y-%m-%d";
-const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+// const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 pub fn cast_from_date(
     column: &ColumnRef,
@@ -96,12 +96,15 @@ pub fn cast_from_datetime(
 
         TypeID::DateTime => {
             // TODO(veeupup): optimize convert different precisions, will be done in next pr
-            let to_precision = data_type.as_any().downcast_ref::<DateTimeType>().unwrap().precision();
+            let to_precision = data_type
+                .as_any()
+                .downcast_ref::<DateTimeType>()
+                .unwrap()
+                .precision();
             let x = 10_i64.pow(9 - to_precision as u32);
-            let it = c.iter().map(|v| {
-                let ts = date_time64.utc_timestamp(*v).timestamp_nanos() / x;
-                ts
-            });
+            let it = c
+                .iter()
+                .map(|v| date_time64.utc_timestamp(*v).timestamp_nanos() / x);
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }

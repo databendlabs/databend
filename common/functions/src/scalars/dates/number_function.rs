@@ -365,27 +365,36 @@ where
     ) -> Result<common_datavalues::ColumnRef> {
         let type_id = columns[0].field().data_type().data_type_id();
 
-        let number_array= match type_id {
+        let number_array = match type_id {
             TypeID::Date => {
-                let func = |v:i32, _ctx: &mut EvalContext| {
+                let func = |v: i32, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
                 };
-                let col = scalar_unary_op::<i32, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
+                let col = scalar_unary_op::<i32, R, _>(
+                    columns[0].column(),
+                    func,
+                    &mut EvalContext::default(),
+                )?;
                 Ok(col.arc())
-            },
+            }
             TypeID::DateTime => {
-                let func = |v:i64, _ctx: &mut EvalContext| {
+                let func = |v: i64, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v, 0_u32);
                     T::to_number(date_time)
                 };
-                let col = scalar_unary_op::<i64, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
+                let col = scalar_unary_op::<i64, R, _>(
+                    columns[0].column(),
+                    func,
+                    &mut EvalContext::default(),
+                )?;
                 Ok(col.arc())
-            },
+            }
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                 "Illegal type {:?} of argument of function {}.Should be a date/datetime",
                 other,
-                self.name()))),
+                self.name()
+            ))),
         }?;
         Ok(number_array)
     }

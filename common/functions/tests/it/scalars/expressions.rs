@@ -115,7 +115,7 @@ fn test_datetime_cast_function() -> Result<()> {
             name: "cast-date32-to-string-passed",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![18691i32, 18924]),
-                DataField::new("dummy_1", Date32Type::arc()),
+                DataField::new("dummy_1", DateType::arc()),
             )],
             expect: Series::from_data(vec!["2021-03-05", "2021-10-24"]),
             error: "",
@@ -124,7 +124,7 @@ fn test_datetime_cast_function() -> Result<()> {
             name: "cast-datetime-to-string-passed",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1614906061u32, 1635070210]),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", DateTimeType::arc(0, None)),
             )],
             expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
             error: "",
@@ -147,7 +147,7 @@ fn test_cast_variant_function() -> Result<()> {
                 name: "cast-date32-to-variant-error",
                 columns: vec![ColumnWithField::new(
                     Series::from_data(vec![18691i32, 18924]),
-                    DataField::new("dummy_1", Date32Type::arc()),
+                    DataField::new("dummy_1", DateType::arc()),
                 )],
                 expect: Arc::new(NullColumn::new(2)),
                 error: "Expression type does not match column data type, expecting VARIANT but got Date32",

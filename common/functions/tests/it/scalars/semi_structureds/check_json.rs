@@ -163,7 +163,7 @@ fn test_check_json_function() -> Result<()> {
                 ],
                 Arc::new(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
-                    vec![Date32Type::arc(), Int8Type::arc()],
+                    vec![DateType::arc(), Int8Type::arc()],
                 )),
             ))],
             expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),

@@ -22,7 +22,6 @@ use common_exception::Result;
 use serde_json::Value as JsonValue;
 
 use super::cast_from_string::string_to_date;
-use super::cast_from_string::string_to_datetime;
 use super::cast_from_string::string_to_datetime64;
 use super::cast_with_type::new_mutable_bitmap;
 
