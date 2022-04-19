@@ -38,11 +38,12 @@ impl RunningDifferenceFunction {
 
         let output_type = match dt.data_type_id() {
             TypeID::Int8 | TypeID::UInt8 => Ok(type_primitive::Int16Type::arc()),
-            TypeID::Int16 | TypeID::UInt16 | TypeID::Date => Ok(type_primitive::Int32Type::arc()),
+            TypeID::Int16 | TypeID::UInt16 => Ok(type_primitive::Int32Type::arc()),
             TypeID::Int32
             | TypeID::UInt32
             | TypeID::Int64
             | TypeID::UInt64
+            | TypeID::Date
             | TypeID::DateTime
             | TypeID::Interval => Ok(type_primitive::Int64Type::arc()),
             TypeID::Float32 | TypeID::Float64 => Ok(type_primitive::Float64Type::arc()),

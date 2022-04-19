@@ -48,7 +48,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             "|       |   `b` INT,                          |",
             "|       |   `c` VARCHAR,                      |",
             "|       |   `d` SMALLINT,                     |",
-            "|       |   `e` DATE16,                       |",
+            "|       |   `e` DATE,                         |",
             "|       | ) ENGINE=Null COMMENT='test create' |",
             "+-------+-------------------------------------+",
         ],

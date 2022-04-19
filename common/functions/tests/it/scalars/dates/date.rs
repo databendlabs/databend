@@ -36,10 +36,10 @@ fn test_round_function() -> Result<()> {
         test_scalar_functions_with_type(op, &[ScalarFunctionWithFieldTest {
             name: "test-timeSlot-now",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1630812366u32, 1630839682u32]),
+                Series::from_data(vec![1630812366i64, 1630839682i64]),
                 DataField::new("dummy_1", DateTimeType::arc(0, None)),
             )],
-            expect: Series::from_data(vec![1630812366u32 / r * r, 1630839682u32 / r * r]),
+            expect: Series::from_data(vec![1630812366i64 / r * r, 1630839682i64 / r * r]),
             error: "",
         }])?;
     }
@@ -52,10 +52,10 @@ fn test_to_start_of_function() -> Result<()> {
     let test = vec![ScalarFunctionWithFieldTest {
         name: "test-timeSlot-now",
         columns: vec![ColumnWithField::new(
-            Series::from_data(vec![1631705259u32]),
+            Series::from_data(vec![1631705259i64]),
             DataField::new("dummy_1", DateTimeType::arc(0, None)),
         )],
-        expect: Series::from_data(vec![18809u16]),
+        expect: Series::from_data(vec![18809i32]),
         error: "",
     }];
 

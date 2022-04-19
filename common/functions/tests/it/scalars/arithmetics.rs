@@ -98,21 +98,15 @@ fn test_arithmetic_function() -> Result<()> {
 
 #[test]
 fn test_arithmetic_date_interval() -> Result<()> {
-    let to_day16 = |y: i32, m: u32, d: u32| -> u16 {
-        let d = chrono::NaiveDate::from_ymd(y, m, d)
-            .signed_duration_since(chrono::NaiveDate::from_ymd(1970, 1, 1));
-        d.num_days() as u16
-    };
-
     let to_day32 = |y: i32, m: u32, d: u32| -> i32 {
         let d = chrono::NaiveDate::from_ymd(y, m, d)
             .signed_duration_since(chrono::NaiveDate::from_ymd(1970, 1, 1));
         d.num_days() as i32
     };
 
-    let to_seconds = |y: i32, m: u32, d: u32, h: u32, min: u32, s: u32| -> u32 {
+    let to_seconds = |y: i32, m: u32, d: u32, h: u32, min: u32, s: u32| -> i64 {
         let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms(h, min, s);
-        date_time.timestamp() as u32
+        date_time.timestamp()
     };
 
     let to_milliseconds = |y: i32, m: u32, d: u32, h: u32, min: u32, sec: u32, milli: u32| -> i64 {
@@ -126,8 +120,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day16(2020, 2, 29), /* 2020-2-29 */
-                        to_day16(2016, 2, 29), /* 2016-2-29 */
+                        to_day32(2020, 2, 29), /* 2020-2-29 */
+                        to_day32(2016, 2, 29), /* 2016-2-29 */
                     ]),
                     DataField::new("dummy_0", DateType::arc()),
                 ),
@@ -137,8 +131,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_day16(2019, 2, 28), /* 2019-2-28 */
-                to_day16(2020, 2, 29), /* 2020-2-29 */
+                to_day32(2019, 2, 28), /* 2019-2-28 */
+                to_day32(2020, 2, 29), /* 2020-2-29 */
             ]),
             error: "",
         }),
@@ -210,8 +204,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day16(2020, 3, 31), /* 2020-3-31 */
-                        to_day16(2000, 1, 31), /* 2000-1-31 */
+                        to_day32(2020, 3, 31), /* 2020-3-31 */
+                        to_day32(2000, 1, 31), /* 2000-1-31 */
                     ]),
                     DataField::new("dummy_0", DateType::arc()),
                 ),
@@ -221,8 +215,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_day16(2020, 2, 29), /* 2020-2-29 */
-                to_day16(2020, 2, 29), /* 2020-2-29 */
+                to_day32(2020, 2, 29), /* 2020-2-29 */
+                to_day32(2020, 2, 29), /* 2020-2-29 */
             ]),
             error: "",
         }),
@@ -294,8 +288,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day16(2020, 3, 1),  /* 2020-3-31 */
-                        to_day16(2000, 1, 31), /* 2000-1-31 */
+                        to_day32(2020, 3, 1),  /* 2020-3-31 */
+                        to_day32(2000, 1, 31), /* 2000-1-31 */
                     ]),
                     DataField::new("dummy_0", DateType::arc()),
                 ),

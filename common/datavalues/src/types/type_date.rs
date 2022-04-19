@@ -72,7 +72,7 @@ impl DataType for DateType {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date32".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date".to_string());
         Some(mp)
     }
 

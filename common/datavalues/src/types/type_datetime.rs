@@ -139,7 +139,7 @@ impl DataType for DateTimeType {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime64".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime".to_string());
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         mp.insert(
             ARROW_EXTENSION_META.to_string(),

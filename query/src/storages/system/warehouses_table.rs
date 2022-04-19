@@ -58,9 +58,9 @@ impl WarehousesTable {
             .map(|x| x.meta.warehouse_name.as_str())
             .collect();
         let warehouse_sizes: Vec<&str> = warehouses.iter().map(|x| x.meta.size.as_str()).collect();
-        let warehouse_creation_time: Vec<u32> = warehouses
+        let warehouse_creation_time: Vec<i64> = warehouses
             .iter()
-            .map(|x| (x.meta.created_on.timestamp_millis() / 1000) as u32)
+            .map(|x| x.meta.created_on.timestamp_millis() / 1000)
             .collect();
         Ok(DataBlock::create(Self::schema(), vec![
             Series::from_data(warehouse_names),
