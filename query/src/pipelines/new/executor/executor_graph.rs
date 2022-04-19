@@ -18,8 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_infallible::RwLock;
-use common_infallible::RwLockUpgradableReadGuard;
 use common_tracing::tracing;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
