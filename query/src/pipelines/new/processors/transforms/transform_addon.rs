@@ -60,6 +60,7 @@ where Self: Transform
                         Box::new(Expression::Cast {
                             expr: Box::new(expression),
                             data_type: f.data_type().clone(),
+                            pg_style: false,
                         }),
                     );
 
