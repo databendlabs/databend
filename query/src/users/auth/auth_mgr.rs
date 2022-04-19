@@ -64,10 +64,10 @@ impl AuthMgr {
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
                 let user_name = jwt.subject.unwrap();
-                if let Some(create_user) = jwt.custom.create_user {
-                    let tenant = create_user.tenant_id.unwrap_or_else(|| self.tenant.clone());
+                if let Some(ensure_user) = jwt.custom.ensure_user {
+                    let tenant = ensure_user.tenant_id.unwrap_or_else(|| self.tenant.clone());
                     let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-                    for role in create_user.roles {
+                    for role in ensure_user.roles {
                         user_info.grants.grant_role(role);
                     }
                     self.user_mgr.add_user(&tenant, user_info, true).await?;

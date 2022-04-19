@@ -34,8 +34,8 @@ use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
-use databend_query::users::auth::jwt::CreateUser;
 use databend_query::users::auth::jwt::CustomClaims;
+use databend_query::users::auth::jwt::EnsureUser;
 use headers::Header;
 use hyper::header;
 use jwt_simple::algorithms::RS256KeyPair;
@@ -596,7 +596,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         subject: Some(user_name.to_string()),
         nonce: None,
         custom: CustomClaims {
-            create_user: Some(CreateUser {
+            ensure_user: Some(EnsureUser {
                 ..Default::default()
             }),
         },
