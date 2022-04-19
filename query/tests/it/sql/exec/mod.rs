@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::optimizer::RuleID;
-use crate::sql::optimizer::RuleSet;
-
-pub fn get_implement_rule_set() -> RuleSet {
-    RuleSet::create_with_ids(vec![RuleID::ImplementGet]).unwrap()
-}
-
-#[cfg(test)]
-mod test {
-    use crate::sql::optimizer::cascades::implement_rules::get_implement_rule_set;
-
-    // Pass if don't panic
-    #[test]
-    fn test_get_implement_rule_set() {
-        get_implement_rule_set();
-    }
+#[test]
+pub fn test_format_field_name() {
+    use databend_query::sql::exec::decode_field_name;
+    use databend_query::sql::exec::format_field_name;
+    let display_name = "column_name123名字".to_string();
+    let index = 12321;
+    let field_name = format_field_name(display_name.as_str(), index);
+    let (decoded_name, decoded_index) = decode_field_name(field_name.as_str()).unwrap();
+    assert!(decoded_name == display_name && decoded_index == index);
 }

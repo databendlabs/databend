@@ -218,14 +218,10 @@ pub trait AstVisitor {
     }
 
     fn visit_select_target(&mut self, select_target: &SelectTarget) -> Result<()> {
-        match select_target {
-            SelectTarget::Projection { expr, alias } => self.visit_projection(expr, alias),
-            SelectTarget::Indirections(indirections) => self.visit_indirections(indirections),
+        if let SelectTarget::AliasedExpr { expr, .. } = select_target {
+            self.visit_expr(expr)?;
         }
-    }
-
-    fn visit_projection(&mut self, expr: &Expr, _: &Option<Identifier>) -> Result<()> {
-        self.visit_expr(expr)
+        Ok(())
     }
 
     fn visit_indirections(&mut self, _: &[Indirection]) -> Result<()> {
