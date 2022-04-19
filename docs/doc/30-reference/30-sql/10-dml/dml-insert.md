@@ -61,8 +61,6 @@ The data type of columns in the SELECT and INSERT table could be different, if n
 
 ### Examples
 
-#### Memory engine
-
 Example:
 ```sql
 CREATE TABLE select_table(a VARCHAR, b VARCHAR, c VARCHAR);
@@ -84,13 +82,6 @@ SELECT * from test;
 +------+------+------+
 |    1 |   11 | abc  |
 +------+------+------+
-
-SELECT typeof(c1), typeof(c2), typeof(c3) from test;
-+----------------+----------------+----------------+
-| typeof(c1)     | typeof(c2)     | typeof(c3)     |
-+----------------+----------------+----------------+
-| UInt8          | UInt64         | String         |
-+----------------+----------------+----------------+
 ```
 
 Aggregate Example:
@@ -99,7 +90,7 @@ Aggregate Example:
 CREATE TABLE base_table(a INT);
 CREATE TABLE aggregate_table(b INT);
 
--- insert some datas to base_table
+-- insert some data to base_table
 INSERT INTO base_table VALUES(1),(2),(3),(4),(5),(6);
 
 -- insert into aggregate_table from the aggregation

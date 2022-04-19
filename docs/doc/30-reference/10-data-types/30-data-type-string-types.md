@@ -22,11 +22,11 @@ See [String Functions](/doc/reference/functions/string-functions).
 CREATE TABLE string_table(text VARCHAR);
 
 DESC string_table;
-+-------+--------+------+---------+
-| Field | Type   | Null | Default |
-+-------+--------+------+---------+
-| text  | String | NO   |         |
-+-------+--------+------+---------+
++-------+---------+------+---------+
+| Field | Type    | Null | Default |
++-------+---------+------+---------+
+| text  | VARCHAR | NO   |         |
++-------+---------+------+---------+
 
 INSERT INTO string_table VALUES('databend');
 

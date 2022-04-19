@@ -81,6 +81,8 @@ mysql -h127.0.0.1 -uroot -P3308
 
 ```sql
 SELECT * FROM system.clusters
+```
+```
 +----------------------+------------+------+
 | name                 | host       | port |
 +----------------------+------------+------+
@@ -92,7 +94,7 @@ SELECT * FROM system.clusters
 
 ## Step 4. Distributed query
 
-```sql
+```text
 EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |
@@ -111,7 +113,7 @@ EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY nu
 The distributed query works, the cluster will efficiently transfer data through `flight_api_address`.
 
 ## Step 4.1. Upload the data to the cluster
-```shell
+```sql
 CREATE TABLE t1(i INT, j INT);
 ```
 
@@ -120,6 +122,8 @@ INSERT INTO t1 SELECT number, number + 300 from numbers(10000000);
 ```
 ```sql
 SELECT count(*) FROM t1;
+```
+```
 +----------+
 | count()  |
 +----------+

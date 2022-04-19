@@ -14,9 +14,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataTypePtr;
-use common_datavalues::DataValue;
-use common_datavalues::StringType;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
@@ -61,7 +59,8 @@ impl Function for TypeOfFunction {
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let type_name = format!("{:?}", columns[0].data_type());
+        let non_null_type = remove_nullable(columns[0].data_type());
+        let type_name = format_data_type_sql(&non_null_type);
         let value = DataValue::String(type_name.as_bytes().to_vec());
         let data_type = StringType::arc();
         value.as_const_column(&data_type, input_rows)

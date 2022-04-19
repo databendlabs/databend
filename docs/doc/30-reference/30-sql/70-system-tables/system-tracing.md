@@ -5,7 +5,7 @@ title: system.tracing
 Contains information about server log.
 
 ```sql
-SELECT * FROM system.tracing limit 1\G
+SELECT * FROM system.tracing LIMIT 1\G
 *************************** 1. row ***************************
        v: 0
     name: databend-query-test_cluster@0.0.0.0:3307

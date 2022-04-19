@@ -41,17 +41,17 @@ See [Numeric Functions](/doc/reference/functions/numeric-functions).
 CREATE TABLE test_numeric(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED);
 
 DESC test_numeric;
-+-------------------+--------+------+---------+
-| Field             | Type   | Null | Default |
-+-------------------+--------+------+---------+
-| tiny              | Int8   | NO   | 0       |
-| tiny_unsigned     | UInt8  | NO   | 0       |
-| smallint          | Int16  | NO   | 0       |
-| smallint_unsigned | UInt16 | NO   | 0       |
-| int               | Int32  | NO   | 0       |
-| int_unsigned      | UInt32 | NO   | 0       |
-| bigint            | Int64  | NO   | 0       |
-| bigint_unsigned   | UInt64 | NO   | 0       |
-+-------------------+--------+------+---------+
++-------------------+-------------------+------+---------+
+| Field             | Type              | Null | Default |
++-------------------+-------------------+------+---------+
+| tiny              | TINYINT           | NO   | 0       |
+| tiny_unsigned     | TINYINT UNSIGNED  | NO   | 0       |
+| smallint          | SMALLINT          | NO   | 0       |
+| smallint_unsigned | SMALLINT UNSIGNED | NO   | 0       |
+| int               | INT               | NO   | 0       |
+| int_unsigned      | INT UNSIGNED      | NO   | 0       |
+| bigint            | BIGINT            | NO   | 0       |
+| bigint_unsigned   | BIGINT UNSIGNED   | NO   | 0       |
++-------------------+-------------------+------+---------+
 ```
 

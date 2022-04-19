@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With Local Fs (for Test)
-sidebar_label: With Local Fs (Test)
+title: Deploy Databend With Local FS (for Test)
+sidebar_label: With Local FS (Test)
 description:
-  How to deploy Databend with Local Fs (for Test).
+  How to deploy Databend with Local FS (for Test).
 ---
 
 This guideline will deploy Databend(standalone) with local fs step by step.
@@ -196,7 +196,7 @@ INSERT INTO t1 VALUES(1), (2);
 SELECT * FROM t1
 ```
 
-```sql
+```text
 +------+
 | a    |
 +------+

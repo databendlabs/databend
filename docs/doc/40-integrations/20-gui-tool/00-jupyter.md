@@ -29,7 +29,7 @@ CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant privileges for the user:
-```shell
+```sql
 GRANT ALL ON *.* TO user1;
 ```
 
