@@ -24,24 +24,24 @@ Nullable datatype of the target data type
 ## Examples
 
 ```sql
-SELECT TRY_CAST(1 AS VARCHAR);
+SELECT try_cast(1 AS VARCHAR);
 +-----------------------+
 | try_cast(1 as String) |
 +-----------------------+
 | 1                     |
 +-----------------------+
 
-SELECT TRY_CAST('abc' AS INT UNSIGNED);
+SELECT try_cast('abc' AS INT UNSIGNED);
 +---------------------------+
 | try_cast('abc' as UInt32) |
 +---------------------------+
 |                      NULL |
 +---------------------------+
 
-SELECT typeof(TRY_CAST('abc' AS INT UNSIGNED));
-+---------------------------------------+
-| typeof(try_cast('abc' as UInt32))     |
-+---------------------------------------+
-| Nullable(UInt32)                      |
-+---------------------------------------+
+SELECT typeof(try_cast('abc' AS INT UNSIGNED));
++-----------------------------------+
+| typeof(try_cast('abc' as UInt32)) |
++-----------------------------------+
+| INT UNSIGNED                      |
++-----------------------------------+
 ```

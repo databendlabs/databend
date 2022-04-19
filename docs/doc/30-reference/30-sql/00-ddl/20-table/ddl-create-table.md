@@ -13,7 +13,7 @@ In Databend, you **don't need to specify any of these**, one of Databend's desig
 ## Syntax
 
 ### Create Table
-```text
+```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
@@ -22,26 +22,24 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 )
 
 <data_type>:
-  Int8
-| UInt8
-| Int16
-| UInt16
-| Int32
-| UInt32
-| Int64
-| UInt64
-| Float32
-| Float64
-| Date
-| Date32
-| DateTime
-| DateTime64
-| String
-| Variant
+  TINYINT
+| SMALLINT 
+| INT
+| BIGINT
+| FLOAT
+| DOUBLE
+| DATE
+| DATETIME
+| TIMESTAMP 
+| VARCHAR
+| ARRAY
+| OBJECT
+| VARIANT
 ```
 
 :::tip
 Data type reference:
+* [Boolean Data Types](../../../10-data-types/00-data-type-logical-types.md)
 * [Numeric Data Types](../../../10-data-types/10-data-type-numeric-types.md)
 * [Date & Time Data Types](../../../10-data-types/20-data-type-time-date-types.md)
 * [String Data Types](../../../10-data-types/30-data-type-string-types.md)

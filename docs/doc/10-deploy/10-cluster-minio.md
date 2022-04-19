@@ -109,6 +109,8 @@ mysql -h127.0.0.1 -uroot -P3308
 
 ```sql
 SELECT * FROM system.clusters
+```
+```
 +------------------------+-----------+------+
 | name                   | host      | port |
 +------------------------+-----------+------+
@@ -119,7 +121,7 @@ SELECT * FROM system.clusters
 
 ## Step 3. Distributed query
 
-```sql
+```text
 EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |
