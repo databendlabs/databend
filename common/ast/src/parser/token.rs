@@ -1043,6 +1043,16 @@ pub enum TokenKind {
     YEAR,
     #[token("ZONE", ignore(ascii_case))]
     ZONE,
+    #[token("DATABASES", ignore(ascii_case))]
+    DATABASES,
+    #[token("SETTINGS", ignore(ascii_case))]
+    SETTINGS,
+    #[token("PROCESSLIST", ignore(ascii_case))]
+    PROCESSLIST,
+    #[token("KILL", ignore(ascii_case))]
+    KILL,
+    #[token("USE", ignore(ascii_case))]
+    USE,
 }
 
 #[derive(Clone, Debug, PartialEq)]

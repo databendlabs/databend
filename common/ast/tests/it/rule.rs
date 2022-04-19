@@ -54,10 +54,19 @@ fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("statement.txt").unwrap();
     let cases = &[
+        "show tables;",
+        "show processlist;",
+        "show create table a.b;",
+        "explain analyze select a from b;",
+        "describe a;",
+        "create table if not exists a.b (c integer not null default 1, b varchar(10));",
+        "create table a.b like c.d;",
         "truncate table a;",
         r#"truncate table "a".b;"#,
         "drop table a;",
         r#"drop table if exists a."b";"#,
+        r#"use "a";"#,
+        "create database if not exists a;",
     ];
 
     for case in cases {
@@ -71,11 +80,13 @@ fn test_statement_error() {
     let mut file = mint.new_goldenfile("statement-error.txt").unwrap();
 
     let cases = &[
+        "create table a.b (c integer not null 1, b varchar(10));",
         "drop table if a.b;",
         "truncate table a",
         "truncate table a.b.c.d",
         "truncate a",
         "drop a",
+        "kill a",
     ];
 
     for case in cases {

@@ -464,20 +464,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let literal = map(literal, ExprElement::Literal);
 
     let (rest, elem) = rule! (
-        #is_null : "`... IS [NOT] NULL` expression"
-        | #in_list : "`[NOT] IN (<expr>, ...)` expression"
-        | #in_subquery : "`[NOT] IN (SELECT ...)` expression"
-        | #between : "`[NOT] BETWEEN ... AND ...` expression"
+        #is_null : "`... IS [NOT] NULL`"
+        | #in_list : "`[NOT] IN (<expr>, ...)`"
+        | #in_subquery : "`[NOT] IN (SELECT ...)`"
+        | #between : "`[NOT] BETWEEN ... AND ...`"
         | #binary_op : "<operator>"
         | #unary_op : "<operator>"
-        | #cast : "`CAST(... AS ...)` expression"
+        | #cast : "`CAST(... AS ...)`"
         | #count_all : "COUNT(*)"
         | #literal : "<literal>"
         | #function_call_with_param : "<function>"
         | #function_call : "<function>"
-        | #case : "`CASE ... END` expression"
-        | #exists : "`EXISTS (SELECT ...)` expression"
-        | #subquery : "`(SELECT ...)` expression"
+        | #case : "`CASE ... END`"
+        | #exists : "`EXISTS (SELECT ...)`"
+        | #subquery : "`(SELECT ...)`"
         | #group : "expression between `(...)`"
         | #column_ref : "<column>"
     )(i)?;

@@ -1,4 +1,16 @@
 ---------- Input ----------
+create table a.b (c integer not null 1, b varchar(10));
+---------- Output ---------
+error: 
+  --> SQL:1:38
+  |
+1 | create table a.b (c integer not null 1, b varchar(10));
+  | ------                               ^ expected token ")"
+  | |                                     
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
+
+
+---------- Input ----------
 drop table if a.b;
 ---------- Output ---------
 error: 
@@ -7,7 +19,7 @@ error:
 1 | drop table if a.b;
   | ----       ^^ expected token <Ident>
   | |           
-  | while parsing DROP TABLE statement
+  | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
 
 
 ---------- Input ----------
@@ -19,7 +31,7 @@ error:
 1 | truncate table a
   | --------        ^ expected token ";"
   | |               
-  | while parsing TRUNCATE TABLE statement
+  | while parsing `TRUNCATE TABLE [<database>.]<table>`
 
 
 ---------- Input ----------
@@ -31,7 +43,7 @@ error:
 1 | truncate table a.b.c.d
   | --------          ^ expected token ";"
   | |                  
-  | while parsing TRUNCATE TABLE statement
+  | while parsing `TRUNCATE TABLE [<database>.]<table>`
 
 
 ---------- Input ----------
@@ -43,7 +55,7 @@ error:
 1 | truncate a
   | -------- ^ expected token <TABLE>
   | |         
-  | while parsing TRUNCATE TABLE statement
+  | while parsing `TRUNCATE TABLE [<database>.]<table>`
 
 
 ---------- Input ----------
@@ -55,6 +67,18 @@ error:
 1 | drop a
   | ---- ^ expected token <TABLE>
   | |     
-  | while parsing DROP TABLE statement
+  | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
+
+
+---------- Input ----------
+kill a
+---------- Output ---------
+error: 
+  --> SQL:1:7
+  |
+1 | kill a
+  | ----  ^ expected token ";"
+  | |     
+  | while parsing `KILL <object id>`
 
 

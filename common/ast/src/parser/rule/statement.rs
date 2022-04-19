@@ -19,18 +19,82 @@ use nom::combinator::value;
 
 use crate::parser::ast::*;
 use crate::parser::rule::expr::expr;
+use crate::parser::rule::expr::literal;
+use crate::parser::rule::expr::type_name;
 use crate::parser::rule::util::*;
 use crate::parser::token::*;
 use crate::rule;
 
 pub fn statement(i: Input) -> IResult<Statement> {
-    let truncate_table = map(
+    let query = map(query, |query| Statement::Select(Box::new(query)));
+    let show_tables = value(Statement::ShowTables, rule! { SHOW ~ TABLES ~ ";" });
+    let show_databases = value(Statement::ShowDatabases, rule! { SHOW ~ DATABASES~ ";" });
+    let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS ~ ";" });
+    let show_process_list = value(
+        Statement::ShowProcessList,
+        rule! { SHOW ~ PROCESSLIST ~ ";" },
+    );
+    let show_create_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            SHOW ~ CREATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
         },
-        |(_, _, database, table, _)| Statement::TruncateTable {
+        |(_, _, _, database, table, _)| Statement::ShowCreateTable {
             database: database.map(|(name, _)| name),
             table,
+        },
+    );
+    let explain = map(
+        rule! {
+            EXPLAIN ~ ANALYZE? ~ #statement ~ ";"
+        },
+        |(_, analyze, statement, _)| Statement::Explain {
+            analyze: analyze.is_some(),
+            query: Box::new(statement),
+        },
+    );
+    let describe = map(
+        rule! {
+            DESCRIBE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, database, table, _)| Statement::Describe {
+            database: database.map(|(name, _)| name),
+            table,
+        },
+    );
+    let create_table = map(
+        rule! {
+            CREATE ~ TABLE~ ( IF ~ NOT ~ EXISTS )?
+            ~ ( #ident ~ "." )? ~ #ident
+            ~ "(" ~ #comma_separated_list1(column_def) ~ ")" ~ ";"
+        },
+        |(_, _, if_not_exists, database, table, _, columns, _, _)| Statement::CreateTable {
+            if_not_exists: if_not_exists.is_some(),
+            database: database.map(|(name, _)| name),
+            table,
+            columns,
+            engine: "".to_string(),
+            options: vec![],
+            like_db: None,
+            like_table: None,
+        },
+    );
+    let create_table_like = map(
+        rule! {
+            CREATE ~ TABLE~ ( IF ~ NOT ~ EXISTS )?
+            ~ ( #ident ~ "." )? ~ #ident
+            ~ LIKE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, _, if_not_exists, database, table, _, like_db, like_table, _)| {
+            Statement::CreateTable {
+                if_not_exists: if_not_exists.is_some(),
+                database: database.map(|(name, _)| name),
+                table,
+                columns: vec![],
+                engine: "".to_string(),
+                options: vec![],
+                like_db: like_db.map(|(like_db, _)| like_db),
+                like_table: Some(like_table),
+            }
         },
     );
     let drop_table = map(
@@ -43,10 +107,74 @@ pub fn statement(i: Input) -> IResult<Statement> {
             table,
         },
     );
+    let truncate_table = map(
+        rule! {
+            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, _, database, table, _)| Statement::TruncateTable {
+            database: database.map(|(name, _)| name),
+            table,
+        },
+    );
+    let create_database = map(
+        rule! {
+            CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ ";"
+        },
+        |(_, _, if_not_exists, name, _)| Statement::CreateDatabase {
+            if_not_exists: if_not_exists.is_some(),
+            name,
+            engine: "".to_string(),
+            options: vec![],
+        },
+    );
+    let use_database = map(
+        rule! {
+            USE ~ #ident ~ ";"
+        },
+        |(_, name, _)| Statement::UseDatabase { name },
+    );
+    let kill = map(
+        rule! {
+            KILL ~ #ident ~ ";"
+        },
+        |(_, object_id, _)| Statement::KillStmt { object_id },
+    );
 
     rule!(
-        #truncate_table : "TRUNCATE TABLE statement"
-        | #drop_table : "DROP TABLE statement"
+        #query
+        | #show_tables : "`SHOW TABLES`"
+        | #show_databases : "`SHOW DATABASES`"
+        | #show_settings : "`SHOW SETTINGS`"
+        | #show_process_list : "`SHOW PROCESSLIST`"
+        | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+        | #explain : "`EXPLAIN [ANALYZE] <statement>`"
+        | #describe : "`DESCRIBE [<database>.]<table>`"
+        | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`"
+        | #create_table_like : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> LIKE [<database>.]<table>`"
+        | #drop_table : "`DROP TABLE [IF EXIST] [<database>.]<table>`"
+        | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
+        | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database>`"
+        | #use_database : "`USE <database>`"
+        | #kill : "`KILL <object id>`"
+    )(i)
+}
+
+pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
+    let nullable = alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ NULL }),
+    ));
+
+    map(
+        rule! {
+            #ident ~ #type_name ~ #nullable? ~ ( DEFAULT ~ #literal )? : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
+        },
+        |(name, data_type, nullable, default_value)| ColumnDefinition {
+            name,
+            data_type,
+            nullable: nullable.unwrap_or(true),
+            default_value: default_value.map(|(_, value)| value),
+        },
     )(i)
 }
 
@@ -60,7 +188,7 @@ pub fn query(i: Input) -> IResult<Query> {
             ~ ( HAVING ~ #expr )?
             ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ #comma_separated_list1(expr) )?
-            : "SELECT statement"
+            : "`SELECT ...`"
         },
         |(
             _select,
