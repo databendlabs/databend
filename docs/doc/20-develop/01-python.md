@@ -19,15 +19,15 @@ mysql -h127.0.0.1 -uroot -P3307
 
 ### Create a User
 
-```sql title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ### Grants Privileges
 
 Grants `ALL` privileges to the user `user1`:
-```sql title='mysql>'
-grant all on *.* to 'user1';
+```sql
+GRANT ALL ON *.* TO user1;
 ```
 
 ## Python
@@ -53,19 +53,19 @@ cnx = mysql.connector.connect(user='user1', password='abc123',
 
 # Create database, table.
 cursor = cnx.cursor()
-cursor.execute("create database if not exists book_db")
-cursor.execute("use book_db")
-cursor.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
+cursor.execute("CREATE DATABASE IF NOT EXISTS book_db")
+cursor.execute("USE book_db")
+cursor.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
 
 # Insert new book. 
-add_book = ("insert into books "
+add_book = ("INSERT INTO books "
                "(title, author, date) "
-               "values (%s, %s, %s)")
+               "VALUES (%s, %s, %s)")
 data_book = ('mybook', 'author', '2022')
 cursor.execute(add_book, data_book)
 
 # Query.
-query = ("SELECT * from books")
+query = ("SELECT * FROM books")
 cursor.execute(query)
 for (title, author, date) in cursor:
   print("{} {} {}".format(title, author, date))
@@ -92,11 +92,11 @@ import sqlalchemy
 
 engine = sqlalchemy.create_engine("mysql+pymysql://user1:abc123@localhost:3307/")
 conn = engine.connect()
-conn.execute("create database if not exists book_db")
-conn.execute("use book_db")
-conn.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
-conn.execute("insert into books values('mybook', 'author', '2022')")
-results = conn.execute('SELECT * from books').fetchall()
+conn.execute("CREATE DATABASE IF NOT EXISTS book_db")
+conn.execute("USE book_db")
+conn.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
+conn.execute("INSERT INTO books VALUES('mybook', 'author', '2022')")
+results = conn.execute('SELECT * FROM books').fetchall()
 for result in results:
     print(result)
 conn.execute('drop database book_db')

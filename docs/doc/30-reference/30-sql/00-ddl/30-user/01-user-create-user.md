@@ -41,15 +41,12 @@ More of the MySQL authentication plugin, please see [A Tale of Two Password Auth
 
 ### Create Default auth_type User
 
-```sql title='mysql>'
-create user user1 identified by 'abc123';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ```sql
+SHOW USERS;
 +-----------+----------+----------------------+------------------------------------------+
 | name      | hostname | auth_type            | auth_string                              |
 +-----------+----------+----------------------+------------------------------------------+
@@ -60,15 +57,12 @@ show users;
 
 ### Create a `sha256_password` auth_type User
 
-```sql title='mysql>'
-create user user1 identified with sha256_password BY 'abc123';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+CREATE USER user1 IDENTIFIED WITH sha256_password BY 'abc123';
 ```
 
 ```sql
+SHOW USERS;
 +-----------+----------+----------------------+------------------------------------------------------------------+
 | name      | hostname | auth_type            | auth_string                                                      |
 +-----------+----------+----------------------+------------------------------------------------------------------+
@@ -78,15 +72,12 @@ show users;
 
 ### Grant Privileges to the User
 
-```text title='mysql>'
-grant all on *.* to user1;
+```sql
+GRANT ALL ON *.* TO user1;
 ```
 
-```text
+```sql
 show grants for user1;
-```
-
-```text
 +---------------------------------+
 | Grants                          |
 +---------------------------------+

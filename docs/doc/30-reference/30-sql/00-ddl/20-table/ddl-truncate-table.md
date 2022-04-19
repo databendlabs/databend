@@ -13,9 +13,9 @@ TRUNCATE TABLE [db.]name
 ## Examples
 
 ```sql
-CREATE TABLE test(a UInt64, b Varchar) Engine = Memory;
+CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR) Engine = Memory;
 
-INSERT INTO test(a,b) values(888, 'stars');
+INSERT INTO test(a,b) VALUES(888, 'stars');
 
 SELECT * FROM test;
 +------+---------+
@@ -27,5 +27,4 @@ SELECT * FROM test;
 TRUNCATE TABLE test;
 
 SELECT * FROM test;
-
 ```

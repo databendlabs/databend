@@ -13,26 +13,23 @@ Install Databend, see [How to deploy Databend with local fs](../10-deploy/00-loc
 
 ## Step 2
 
-```sql title='mysql>'
+```shell
 mysql -h 127.0.0.1 -P 3307 -uroot
 ```
 
-```sql title='mysql>'
-create database datafuselabs engine=github(token='<your-github-personal-access-token>');
+```sql
+CREATE DATABASE datafuselabs ENGINE=GITHUB(token='<your-github-personal-access-token>');
 ```
 :::tip
 * [Creating a personal github access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
 :::
 
-```sql title='mysql>'
-use datafuselabs;
-```
-
-```sql title='mysql>'
-show tables;
+```sql
+USE datafuselabs;
 ```
 
 ```sql
+SHOW TABLES;
 +-------------------------------+---------------------------------+
 | created_on                    | name                            |
 +-------------------------------+---------------------------------+

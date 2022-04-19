@@ -38,7 +38,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.22-nightly/databend-v0.7.22-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -48,7 +48,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.22-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>

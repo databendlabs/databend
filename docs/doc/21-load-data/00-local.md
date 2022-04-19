@@ -51,15 +51,15 @@ Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.co
 mysql -h127.0.0.1 -uroot -P3307
 ```
 
-```sql title='mysql>'
+```sql
 CREATE DATABASE book_db;
 ```
 
-```sql title='mysql>'
+```sql
 USE book_db;
 ```
 
-```sql title='mysql>'
+```sql
 CREATE TABLE books
 (
     title VARCHAR,

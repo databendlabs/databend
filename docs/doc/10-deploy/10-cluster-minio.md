@@ -107,11 +107,8 @@ Check the response is `HTTP/1.1 200 OK`.
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```shell title='mysql>'
-SELECT * from system.clusters
-```
-
 ```sql
+SELECT * FROM system.clusters
 +------------------------+-----------+------+
 | name                   | host      | port |
 +------------------------+-----------+------+
