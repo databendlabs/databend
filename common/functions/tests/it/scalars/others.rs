@@ -217,7 +217,7 @@ fn test_running_difference_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions("runningDifference", &tests)
+    test_scalar_functions("running_difference", &tests)
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type("runningDifference", &tests)
+    test_scalar_functions_with_type("running_difference", &tests)
 }
 
 #[test]
@@ -407,5 +407,5 @@ fn test_to_type_name_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions("totypename", &tests)
+    test_scalar_functions("typeof", &tests)
 }

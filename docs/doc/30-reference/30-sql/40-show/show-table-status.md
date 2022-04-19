@@ -15,8 +15,8 @@ SHOW TABLE STATUS
 ## Examples
 
 ```sql
-mysql> CREATE TABLE t(id int);
-mysql> SHOW TABLE STATUS\G
+CREATE TABLE t(id int);
+SHOW TABLE STATUS\G
 *************************** 1. row ***************************
            Name: t
          Engine: FUSE
@@ -39,7 +39,7 @@ Max_data_length: NULL
 
 Showing the tables with table name `"t"`:
 ```sql
-mysql> SHOW TABLE STATUS LIKE 't'\G
+SHOW TABLE STATUS LIKE 't'\G
 *************************** 1. row ***************************
            Name: t
          Engine: FUSE
@@ -62,7 +62,7 @@ Max_data_length: NULL
 
 Showing the tables begin with `"t"`:
 ```sql
-mysql> SHOW TABLE STATUS LIKE 't%'\G
+SHOW TABLE STATUS LIKE 't%'\G
 *************************** 1. row ***************************
            Name: t
          Engine: FUSE
@@ -85,7 +85,7 @@ Max_data_length: NULL
 
 Showing the tables begin with `"t"` with `WHERE`:
 ```sql
-mysql> SHOW TABLE STATUS WHERE table_name LIKE 't%'\G
+SHOW TABLE STATUS WHERE table_name LIKE 't%'\G
 *************************** 1. row ***************************
            Name: t
          Engine: FUSE
@@ -108,7 +108,7 @@ Max_data_length: NULL
 
 Showing the tables are inside `"default"`:
 ```sql
-mysql> SHOW TABLE STATUS FROM 'default'\G
+SHOW TABLE STATUS FROM 'default'\G
 *************************** 1. row ***************************
            Name: t
          Engine: FUSE

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use databend_query::sessions::SessionType;
 use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
@@ -23,7 +24,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Tokenizer;
 
 pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
-    let (statements, _) = DfParser::parse_sql(sql)?;
+    let (statements, _) = DfParser::parse_sql(sql, SessionType::Test)?;
     assert_eq!(
         statements.len(),
         1,
@@ -34,13 +35,13 @@ pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
 }
 
 pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
-    let (statements, _) = DfParser::parse_sql(sql)?;
+    let (statements, _) = DfParser::parse_sql(sql, SessionType::Test)?;
     assert_eq!(
         statements.len(),
         1,
         "Expected to parse exactly one statement"
     );
-    let (statements2, _) = DfParser::parse_sql(sql2)?;
+    let (statements2, _) = DfParser::parse_sql(sql2, SessionType::Test)?;
     assert_eq!(
         statements2.len(),
         1,
@@ -51,7 +52,7 @@ pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
 }
 
 pub fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
-    let result = DfParser::parse_sql(sql);
+    let result = DfParser::parse_sql(sql, SessionType::Test);
     assert!(result.is_err(), "'{}' SHOULD BE '{}'", sql, expected);
     assert_eq!(
         result.unwrap_err().message(),
@@ -64,7 +65,7 @@ pub fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
 }
 
 pub fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
-    let result = DfParser::parse_sql(sql);
+    let result = DfParser::parse_sql(sql, SessionType::Test);
     assert!(result.is_err(), "'{}' SHOULD CONTAINS '{}'", sql, expected);
     assert!(
         result.unwrap_err().message().contains(&expected),

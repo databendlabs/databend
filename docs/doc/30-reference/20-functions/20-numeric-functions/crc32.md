@@ -24,35 +24,31 @@ UInt32.
 ## Examples
 
 ```sql
-mysql> SELECT CRC32('MySQL');
+SELECT CRC32('MySQL');
 +----------------+
 | CRC32('MySQL') |
 +----------------+
 |     3259397556 |
 +----------------+
-1 row in set (0.09 sec)
 
-mysql> SELECT CRC32('mysql');
+SELECT CRC32('mysql');
 +----------------+
 | CRC32('mysql') |
 +----------------+
 |     2501908538 |
 +----------------+
-1 row in set (0.01 sec)
 
-mysql> SELECT CRC32(NULL);
+SELECT CRC32(NULL);
 +-------------+
 | CRC32(NULL) |
 +-------------+
 |        NULL |
 +-------------+
-1 row in set (0.00 sec)
 
-mysql> SELECT CRC32(12);
+SELECT CRC32(12);
 +------------+
 | CRC32(12)  |
 +------------+
 | 1330857165 |
 +------------+
-1 row in set (0.01 sec)
 ```

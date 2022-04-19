@@ -147,7 +147,7 @@ insert into t_default_value(a) values(1);
 
 Check the table values:
 ```text title='mysql>'
-select * from t_default_value;
+SELECT * from t_default_value;
 ```
 ```
 +------+------+------+
@@ -187,7 +187,7 @@ insert into test(a,b) values(888, 'stars');
 ```
 
 ```text title='mysql>'
-select * from test;
+SELECT * from test;
 ```
 ```text
 +------+-------+---------+
@@ -220,7 +220,7 @@ insert into test2(a,b) values(888, 'stars');
 ```
 
 ```text title='mysql>'
-select * from test2;
+SELECT * from test2;
 ```
 ```text
 +------+-------+---------+
@@ -230,10 +230,10 @@ select * from test2;
 +------+-------+---------+
 ```
 
-### Create Table As Select (CTAS) Statement
+### Create Table As SELECT (CTAS) Statement
 
 ```text title='mysql>'
-create table test3 as select * from test2;
+create table test3 as SELECT * from test2;
 ```
 ```text title='mysql>'
 desc test3;
@@ -249,7 +249,7 @@ desc test3;
 ```
 
 ```text title='mysql>'
-select * from test3;
+SELECT * from test3;
 ```
 ```text
 +------+-------+---------+

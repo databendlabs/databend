@@ -24,7 +24,7 @@ A String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT TO_BASE64('abc');
 +------------------+
 | TO_BASE64('abc') |

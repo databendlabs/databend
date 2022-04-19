@@ -1,5 +1,5 @@
 ---
-title: Check Json
+title: CHECK_JSON
 ---
 
 Checks the validity of a JSON document.
@@ -9,14 +9,14 @@ If the input cannot be translated to a valid JSON value, the output string conta
 ## Syntax
 
 ```sql
-check_json(expression)
+CHECK_JSON(<expr>)
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expression  | An expression of string type
+| `<expr>` | An expression of string type
 
 ## Return Type
 
@@ -25,7 +25,7 @@ String
 ## Examples
 
 ```sql
-mysql> select check_json('[1,2,3]');
+SELECT check_json('[1,2,3]');
 +-----------------------+
 | check_json('[1,2,3]') |
 +-----------------------+
@@ -33,7 +33,7 @@ mysql> select check_json('[1,2,3]');
 +-----------------------+
 1 row in set (0.01 sec)
 
-mysql> select check_json('{"key":"val"}');
+SELECT check_json('{"key":"val"}');
 +-----------------------------+
 | check_json('{"key":"val"}') |
 +-----------------------------+
@@ -41,7 +41,7 @@ mysql> select check_json('{"key":"val"}');
 +-----------------------------+
 1 row in set (0.01 sec)
 
-mysql> select check_json('{"key":');
+SELECT check_json('{"key":');
 +----------------------------------------------+
 | check_json('{"key":')                        |
 +----------------------------------------------+

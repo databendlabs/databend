@@ -1,4 +1,7 @@
 DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t4;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
 SELECT COUNT(1) from system.tables where name = 't' and database = 'default';

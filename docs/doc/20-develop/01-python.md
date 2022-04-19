@@ -65,7 +65,7 @@ data_book = ('mybook', 'author', '2022')
 cursor.execute(add_book, data_book)
 
 # Query.
-query = ("select * from books")
+query = ("SELECT * from books")
 cursor.execute(query)
 for (title, author, date) in cursor:
   print("{} {} {}".format(title, author, date))
@@ -96,7 +96,7 @@ conn.execute("create database if not exists book_db")
 conn.execute("use book_db")
 conn.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
 conn.execute("insert into books values('mybook', 'author', '2022')")
-results = conn.execute('select * from books').fetchall()
+results = conn.execute('SELECT * from books').fetchall()
 for result in results:
     print(result)
 conn.execute('drop database book_db')

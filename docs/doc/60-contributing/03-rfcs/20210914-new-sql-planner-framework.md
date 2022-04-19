@@ -26,7 +26,7 @@ postgres=# create table t(a int);
 CREATE TABLE
 postgres=# insert into t values(1),(2);
 INSERT 0 2
-postgres=# select * from t t1 cross join t t2;
+postgres=# SELECT * from t t1 cross join t t2;
  a | a
 ---+---
  1 | 1
@@ -41,9 +41,9 @@ We can see that there are two fields named with `a`, one of them comes from deri
 If you try to reference the column with duplicated name `a`, it will return an error:
 
 ```
-postgres=# select a from t t1, t t2;
+postgres=# SELECT a from t t1, t t2;
 ERROR:  column reference "a" is ambiguous
-LINE 1: select a from t t1, t t2;
+LINE 1: SELECT a from t t1, t t2;
 ```
 
 While you can reference the column with a canonical name like `t.a` since the table name is required to be unique in a query context.
@@ -157,7 +157,7 @@ Take this example:
 ```sql
 create table t (a int);
 
-select * from t -- table: context 1 [t.a]
+SELECT * from t -- table: context 1 [t.a]
 cross join t t1 -- table: context 2 [t1.a]
 -- join: context 3 [t.a, t1.a]
 where t.a = 1
@@ -182,9 +182,9 @@ Take this query as example:
 ```sql
 create table t (a int);
 
-select * from t -- table: context 1 [t.a]
+SELECT * from t -- table: context 1 [t.a]
 where exists (
-    select * from t t1 -- table: context 2 with parent 1 [t1.a]
+    SELECT * from t t1 -- table: context 2 with parent 1 [t1.a]
     where t1.a = t.a -- t.a is a correlated column since it comes from t that appears in outer query
 );
 ```

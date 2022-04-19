@@ -25,7 +25,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT POSITION('bar' IN 'foobarbar')
 +----------------------------+
 | POSITION('bar' IN 'foobarbar') |

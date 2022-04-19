@@ -24,8 +24,8 @@ pub struct ConditionalFunction;
 impl ConditionalFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("if", IfFunction::desc());
-        factory.register("isNull", IsNullFunction::desc());
-        factory.register("isNotNull", IsNotNullFunction::desc());
+        factory.register("is_null", IsNullFunction::desc());
+        factory.register("is_not_null", IsNotNullFunction::desc());
         factory.register("in", InFunction::<false>::desc());
         factory.register("not_in", InFunction::<true>::desc());
     }

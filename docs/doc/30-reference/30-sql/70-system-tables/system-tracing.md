@@ -5,7 +5,7 @@ title: system.tracing
 Contains information about server log.
 
 ```sql
-mysql> select * from system.tracing limit 1\G
+SELECT * FROM system.tracing limit 1\G
 *************************** 1. row ***************************
        v: 0
     name: databend-query-test_cluster@0.0.0.0:3307
@@ -14,6 +14,4 @@ mysql> select * from system.tracing limit 1\G
 hostname: localhost
      pid: 24640
     time: 2022-03-24T11:33:29.363161Z
-1 row in set (0.02 sec)
-Read 22 rows, 6.05 KB in 0.006 sec., 3.63 thousand rows/sec., 997.21 KB/sec.
 ```

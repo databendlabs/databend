@@ -22,7 +22,7 @@ String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT SPACE(20)
 +----------------------+
 | SPACE(20)            |

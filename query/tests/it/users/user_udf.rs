@@ -32,7 +32,7 @@ async fn test_user_udf() -> Result<()> {
     // add isempty.
     {
         let udf =
-            UserDefinedFunction::new(isempty, vec!["p".to_string()], "isnull(p)", description);
+            UserDefinedFunction::new(isempty, vec!["p".to_string()], "is_null(p)", description);
         user_mgr.add_udf(tenant, udf, if_not_exists).await?;
     }
 

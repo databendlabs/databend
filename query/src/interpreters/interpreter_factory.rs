@@ -43,6 +43,7 @@ use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::DropViewInterpreter;
+use crate::interpreters::EmptyInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::GrantRoleInterpreter;
@@ -172,6 +173,7 @@ impl InterpreterFactory {
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
+            PlanNode::Empty(v) => EmptyInterpreter::try_create(ctx_clone, v),
 
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",

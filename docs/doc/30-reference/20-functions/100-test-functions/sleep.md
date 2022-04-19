@@ -27,19 +27,17 @@ UInt8
 ## Examples
 
 ```sql
-mysql> SELECT sleep(2);
+SELECT sleep(2);
 +----------+
 | sleep(2) |
 +----------+
 |        0 |
 +----------+
-1 row in set (2.01 sec)
 
-mysql> SELECT sleep(2.7);
+SELECT sleep(2.7);
 +------------+
 | sleep(2.7) |
 +------------+
 |          0 |
 +------------+
-1 row in set (2.71 sec)
 ```

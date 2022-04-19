@@ -18,14 +18,14 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT sum(number) FROM numbers(10);
+SELECT sum(number) FROM numbers(10);
 +-------------+
 | sum(number) |
 +-------------+
 |          45 |
 +-------------+
 
-mysql> SELECT sum_if(number, number > 7) FROM numbers(10);
+SELECT sum_if(number, number > 7) FROM numbers(10);
 +------------------------------+
 | sum_if(number, (number > 7)) |
 +------------------------------+

@@ -28,7 +28,7 @@ runs:
     - name: Install python dependences
       shell: bash
       run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy clickhouse_driver
 
     - name: Set up file as executable
       shell: bash

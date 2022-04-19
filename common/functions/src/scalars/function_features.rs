@@ -29,7 +29,7 @@ pub struct FunctionFeatures {
     /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
     /// It has no idea of how to handle null, but just pass through.
     ///
-    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
+    /// While IS_NULL function  treats null input as a valid one. For example IS_NULL(NULL, 'test') will return 'test'.
     pub passthrough_null: bool,
 
     // The number of arguments the function accepts.

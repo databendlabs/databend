@@ -84,13 +84,13 @@ async fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "a is null",
-            expr: Expression::create_scalar_function("isNull", vec![col("a")]),
+            expr: Expression::create_scalar_function("is_null", vec![col("a")]),
             expect: true,
             error: "",
         },
         Test {
             name: "a is not null",
-            expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
+            expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
             expect: true,
             error: "",
         },
@@ -216,13 +216,13 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "a is null",
-            expr: Expression::create_scalar_function("isNull", vec![col("a")]),
+            expr: Expression::create_scalar_function("is_null", vec![col("a")]),
             expect: "(nulls_a > 0)",
         },
         Test {
             name: "a is not null",
-            expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
-            expect: "isNotNull(min_a)",
+            expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
+            expect: "is_not_null(min_a)",
         },
         Test {
             name: "b >= 0 and c like 0xffffff",

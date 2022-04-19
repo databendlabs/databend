@@ -125,7 +125,8 @@ async fn test_statement_select_analyze() -> Result<()> {
 
     for test_case in &tests {
         let ctx = create_query_context().await?;
-        let (mut statements, _) = DfParser::parse_sql(test_case.query)?;
+        let (mut statements, _) =
+            DfParser::parse_sql(test_case.query, ctx.get_current_session().get_type())?;
 
         match statements.remove(0) {
             DfStatement::Query(query) => {
