@@ -14,12 +14,13 @@
 
 use crate::sql::optimizer::s_expr::SExpr;
 
+#[derive(Clone, Default)]
 pub struct TransformState {
     results: Vec<SExpr>,
 }
 
 impl TransformState {
-    pub fn create() -> Self {
+    pub fn new() -> Self {
         TransformState { results: vec![] }
     }
 
@@ -27,7 +28,7 @@ impl TransformState {
         self.results.push(result);
     }
 
-    pub fn results(&self) -> &Vec<SExpr> {
+    pub fn results(&self) -> &[SExpr] {
         &self.results
     }
 }
