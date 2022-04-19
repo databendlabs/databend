@@ -29,13 +29,13 @@ pub struct Query {
     // `ORDER BY` clause
     pub order_by: Vec<OrderByExpr>,
     // `LIMIT` clause
-    pub limit: Option<Expr>,
+    pub limit: Vec<Expr>,
 }
 
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetExpr {
-    Select(Box<SelectStmt>),
+    Select(SelectStmt),
     Query(Box<Query>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation {
@@ -391,17 +391,23 @@ impl Display for Query {
         // ORDER BY clause
         if !self.order_by.is_empty() {
             write!(f, " ORDER BY ")?;
-            for i in 0..self.order_by.len() {
-                write!(f, "{}", self.order_by[i])?;
-                if i != self.order_by.len() - 1 {
+            for (i, expr) in self.order_by.iter().enumerate() {
+                if i != 0 {
                     write!(f, ", ")?;
                 }
+                write!(f, "{}", expr)?;
             }
         }
 
         // LIMIT clause
-        if let Some(limit) = &self.limit {
-            write!(f, " LIMIT {}", limit)?;
+        if !self.limit.is_empty() {
+            write!(f, " LIMIT ")?;
+            for (i, expr) in self.limit.iter().enumerate() {
+                if i != 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", expr)?;
+            }
         }
 
         Ok(())

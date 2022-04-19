@@ -16,6 +16,7 @@ use std::io::Write;
 
 use common_ast::parser::rule::error::pretty_print_error;
 use common_ast::parser::rule::expr::expr;
+use common_ast::parser::rule::statement::select_statement;
 use common_ast::parser::rule::statement::statement;
 use common_ast::parser::token::*;
 use goldenfile::Mint;
@@ -79,6 +80,40 @@ fn test_statement_error() {
 
     for case in cases {
         test_parse!(file, statement, case);
+    }
+}
+
+#[test]
+fn test_select_statment() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("select-statement.txt").unwrap();
+    let cases = &[
+        "select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
+            from customer, orders ODS
+            group by c_count
+            order by custdist desc, c_count asc, totacctbal
+            limit 10, totacctbal;",
+        "select * from customer inner join orders on a = b limit 1;",
+        "select * from customer natural join orders;",
+        "select * from customer natural join orders left outer join detail using (id);",
+    ];
+
+    for case in cases {
+        test_parse!(file, select_statement, case);
+    }
+}
+
+#[test]
+fn test_select_statment_error() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("select-statement-error.txt").unwrap();
+    let cases = &[
+        "select * from customer natural inner join orders on a = b;",
+        "select * from customer join where a = b;",
+    ];
+
+    for case in cases {
+        test_parse!(file, select_statement, case);
     }
 }
 

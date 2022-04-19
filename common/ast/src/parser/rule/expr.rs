@@ -24,19 +24,10 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use crate::parser::ast::BinaryOperator;
-use crate::parser::ast::Expr;
-use crate::parser::ast::Identifier;
-use crate::parser::ast::Literal;
-use crate::parser::ast::Query;
-use crate::parser::ast::TypeName;
-use crate::parser::ast::UnaryOperator;
+use crate::parser::ast::*;
 use crate::parser::rule::error::Error;
 use crate::parser::rule::error::ErrorKind;
-use crate::parser::rule::util::ident;
-use crate::parser::rule::util::literal_u64;
-use crate::parser::rule::util::IResult;
-use crate::parser::rule::util::Input;
+use crate::parser::rule::util::*;
 use crate::parser::token::*;
 use crate::rule;
 
@@ -378,15 +369,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*  ~ ")"
+            NOT? ~ IN ~ "(" ~ #comma_separated_list1(cut(subexpr(0))) ~ ")"
         },
-        |(not, _, _, head, tail, _)| {
-            let mut list = vec![head];
-            list.extend(tail.into_iter().map(|(_, expr)| expr));
-            ExprElement::InList {
-                list,
-                not: not.is_some(),
-            }
+        |(not, _, _, list, _)| ExprElement::InList {
+            list,
+            not: not.is_some(),
         },
     );
     let in_subquery = map(
@@ -423,17 +410,13 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     });
     let function_call = map(
         rule! {
-            #function_name ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
+            #function_name
+            ~ "(" ~ ( DISTINCT? ~ #comma_separated_list1(subexpr(0)) )? ~ ")"
         },
         |(name, _, args, _)| {
             let (distinct, args) = args
-                .map(|(distinct, head, tail)| {
-                    let mut args = vec![head];
-                    args.extend(tail.into_iter().map(|(_, arg)| arg));
-                    (distinct.is_some(), args)
-                })
+                .map(|(distinct, args)| (distinct.is_some(), args))
                 .unwrap_or_default();
-
             ExprElement::FunctionCall {
                 distinct,
                 name,
@@ -444,36 +427,27 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let function_call_with_param = map(
         rule! {
-            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
+            #function_name
+            ~ "(" ~ ( #comma_separated_list1(literal) )? ~ ")"
+            ~ "(" ~ ( DISTINCT? ~ #comma_separated_list1(subexpr(0)) )? ~ ")"
         },
         |(name, _, params, _, _, args, _)| {
-            let params = params
-                .map(|(head, tail)| {
-                    let mut params = vec![head];
-                    params.extend(tail.into_iter().map(|(_, param)| param));
-                    params
-                })
-                .unwrap_or_default();
-
             let (distinct, args) = args
-                .map(|(distinct, head, tail)| {
-                    let mut args = vec![head];
-                    args.extend(tail.into_iter().map(|(_, arg)| arg));
-                    (distinct.is_some(), args)
-                })
+                .map(|(distinct, args)| (distinct.is_some(), args))
                 .unwrap_or_default();
-
             ExprElement::FunctionCall {
-                distinct,
+                distinct: distinct,
                 name,
                 args,
-                params,
+                params: params.unwrap_or_default(),
             }
         },
     );
     let case = map(
         rule! {
-            CASE ~ #subexpr(0)? ~ (WHEN ~ #cut(subexpr(0)) ~ THEN ~ #cut(subexpr(0)))+ ~ (ELSE ~ #cut(subexpr(0)))? ~ END
+            CASE ~ #subexpr(0)?
+            ~ ( WHEN ~ #cut(subexpr(0)) ~ THEN ~ #cut(subexpr(0)) )+
+            ~ ( ELSE ~ #cut(subexpr(0)) )? ~ END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches

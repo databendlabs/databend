@@ -167,7 +167,11 @@ pub trait AstVisitor {
     fn visit_query(&mut self, query: &Query) -> Result<()> {
         self.visit_set_expr(&query.body)?;
         self.visit_order_by_exprs(&query.order_by)?;
-        self.visit_expr(query.limit.as_ref().unwrap())
+        query
+            .limit
+            .iter()
+            .try_for_each(|expr| self.visit_expr(expr))?;
+        Ok(())
     }
 
     fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
