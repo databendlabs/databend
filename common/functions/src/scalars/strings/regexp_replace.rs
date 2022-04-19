@@ -46,10 +46,7 @@ impl RegexpReplaceFunction {
             let arg = remove_nullable(arg);
             if i < 3 || i == 5 {
                 assert_string(&arg)?;
-            } else if !arg.data_type_id().is_integer()
-                && !arg.data_type_id().is_string()
-                && !arg.data_type_id().is_null()
-            {
+            } else if !arg.data_type_id().is_integer() && !arg.data_type_id().is_string() {
                 return Err(ErrorCode::IllegalDataType(format!(
                     "Expected integer or string or null, but got {}",
                     args[i].data_type_id()
