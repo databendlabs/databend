@@ -19,11 +19,13 @@ macro_rules! impl_interval_year_month {
         pub struct $name;
 
         impl IntervalArithmeticImpl for $name {
+            type DateResultType = i32;
+
             fn eval_date(
                 l: i32,
                 r: impl AsPrimitive<i64>,
                 ctx: &mut EvalContext,
-            ) -> i32 {
+            ) -> Self::DateResultType {
                 define_date_add_year_months!(l, r, ctx, $op)
             }
 

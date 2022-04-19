@@ -36,10 +36,10 @@ pub struct DateTimeType {
     /// tz indicates the timezone, if it's None, it's UTC.
     tz: Option<String>,
 }
-const DATETIME_0: &str = "DateTime(0)";
-const DATETIME_3: &str = "DateTime(3)";
-const DATETIME_6: &str = "DateTime(6)";
-const DATETIME_9: &str = "DateTime(9)";
+const DATETIME_0: &str = "DateTime_0";
+const DATETIME_3: &str = "DateTime_3";
+const DATETIME_6: &str = "DateTime_6";
+const DATETIME_9: &str = "DateTime_9";
 
 impl DateTimeType {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
@@ -172,6 +172,6 @@ impl DataType for DateTimeType {
 
 impl std::fmt::Debug for DateTimeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DateTime({})", self.precision())
+        write!(f, "DateTime_{}", self.precision())
     }
 }

@@ -95,7 +95,13 @@ pub fn cast_from_datetime(
         }
 
         TypeID::DateTime => {
-            let it = c.iter().map(|v| date_time64.to_seconds(*v) as i64);
+            // TODO(veeupup): optimize convert different precisions, will be done in next pr
+            let to_precision = data_type.as_any().downcast_ref::<DateTimeType>().unwrap().precision();
+            let x = 10_i64.pow(9 - to_precision as u32);
+            let it = c.iter().map(|v| {
+                let ts = date_time64.utc_timestamp(*v).timestamp_nanos() / x;
+                ts
+            });
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }

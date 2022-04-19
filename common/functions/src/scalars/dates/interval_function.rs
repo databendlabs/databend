@@ -55,9 +55,9 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 
         with_match_primitive_types_error!(right_type, |$R| {
             match left_type {
-                TypeID::Date => IntervalFunction::<i32, $R, i32, _>::try_create_func(
+                TypeID::Date => IntervalFunction::<i32, $R, T::DateResultType, _>::try_create_func(
                     display_name,
-                    i32::to_date_type(),
+                    T::DateResultType::to_date_type(),
                     T::eval_date,
                     factor,
                     0,
@@ -171,7 +171,11 @@ where
 }
 
 pub trait IntervalArithmeticImpl {
-    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i32;
+    type DateResultType : LogicalDateType + ToDateType;
+
+    /// when date type add year/month/day, output is date type
+    /// when date type add hour/minute/second/... output is datetime type
+    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType;
 
     fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64;
 }
@@ -183,8 +187,10 @@ impl_interval_year_month!(AddMonthsImpl, add_months_base);
 pub struct AddDaysImpl;
 
 impl IntervalArithmeticImpl for AddDaysImpl {
-    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i32 {
-        (l as i64 + r.as_() * ctx.factor) as i32
+    type DateResultType = i32;
+
+    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType {
+        (l as i64 + r.as_() * ctx.factor) as Self::DateResultType
     }
 
     fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
@@ -198,8 +204,10 @@ impl IntervalArithmeticImpl for AddDaysImpl {
 pub struct AddTimesImpl;
 
 impl IntervalArithmeticImpl for AddTimesImpl {
-    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i32 {
-        (l as i64 * 3600 * 24 + r.as_() * ctx.factor) as i32
+    type DateResultType = i64;
+
+    fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType {
+        (l as i64 * 3600 * 24 + r.as_() * ctx.factor) as Self::DateResultType
     }
 
     fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {

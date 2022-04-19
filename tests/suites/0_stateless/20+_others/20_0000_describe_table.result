@@ -2,9 +2,9 @@ a	Int64	YES	NULL
 b	Int32	YES	NULL
 c	String	YES	NULL
 d	Int16	NO	0
-e	Date16	NO	0
+e	Date	NO	0
 a	Int64	YES	NULL
 b	Int32	YES	NULL
 c	String	YES	NULL
 d	Int16	NO	0
-e	Date16	NO	0
+e	Date	NO	0

@@ -35,9 +35,9 @@ bigint	Int64	NO	0
 bigint_unsigned	UInt64	NO	0
 float	Float32	NO	0
 double	Float64	NO	0
-date	Date16	NO	0
-datetime	DateTime32	NO	0
-ts	DateTime64(3)	NO	0
+date	Date	NO	0
+datetime	DateTime_0	NO	0
+ts	DateTime_3	NO	0
 var	String	NO	
 bool	Boolean	NO	false
 array	Array	NO	[]
