@@ -317,7 +317,9 @@ impl TransformerSqlparser {
             SqlparserSetExpr::Query(query) => {
                 Ok(SetExpr::Query(Box::new(self.transform_query(query)?)))
             }
-            SqlparserSetExpr::Select(select) => Ok(SetExpr::Select(self.transform_select(select)?)),
+            SqlparserSetExpr::Select(select) => {
+                Ok(SetExpr::Select(Box::new(self.transform_select(select)?)))
+            }
             _ => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt

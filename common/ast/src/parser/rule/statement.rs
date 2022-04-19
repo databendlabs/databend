@@ -89,7 +89,7 @@ pub fn select_statement(i: Input) -> IResult<Query> {
                 .unwrap();
 
             Query {
-                body: SetExpr::Select(SelectStmt {
+                body: SetExpr::Select(Box::new(SelectStmt {
                     distinct: distinct.is_some(),
                     select_list,
                     from,
@@ -98,7 +98,7 @@ pub fn select_statement(i: Input) -> IResult<Query> {
                         .map(|(_, _, group_by)| group_by)
                         .unwrap_or_default(),
                     having: having_block.map(|(_, having)| having),
-                }),
+                })),
                 order_by: order_by_block
                     .map(|(_, _, order_by)| order_by)
                     .unwrap_or_default(),

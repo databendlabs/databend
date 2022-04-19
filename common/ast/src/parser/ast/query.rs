@@ -35,7 +35,7 @@ pub struct Query {
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetExpr {
-    Select(SelectStmt),
+    Select(Box<SelectStmt>),
     Query(Box<Query>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation {
