@@ -19,6 +19,7 @@ use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 
+use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowKind;
@@ -123,5 +124,17 @@ impl<'a> DfParser<'a> {
             },
             _ => self.expected("like or where", tok),
         }
+    }
+
+    // parse `show fields from` statement
+    // Convert it to the `desc <table>`
+    pub(crate) fn parse_show_fields(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        if !self.consume_token("FROM") {
+            self.expect_token("from")?;
+        }
+
+        let table_name = self.parser.parse_object_name()?;
+        let desc = DfDescribeTable { name: table_name };
+        Ok(DfStatement::DescribeTable(desc))
     }
 }
