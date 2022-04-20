@@ -13,7 +13,7 @@ SELECT DATABASE()
 ## Examples
 
 ```sql
-mysql> SELECT DATABASE();
+SELECT DATABASE();
 +------------+
 | DATABASE() |
 +------------+

@@ -165,6 +165,13 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Whether to skip the input header, default value: 0",
             },
+
+            SettingValue {
+                default_value:DataValue::String("UTC".as_bytes().to_vec()),
+                user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Timezone, default value: UTC,",
+            },
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -271,6 +278,12 @@ impl Settings {
     pub fn get_skip_header(&self) -> Result<u64> {
         let key = "skip_header";
         self.try_get_u64(key)
+    }
+
+    pub fn get_timezone(&self) -> Result<Vec<u8>> {
+        let key = "timezone";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

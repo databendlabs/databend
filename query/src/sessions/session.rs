@@ -126,27 +126,14 @@ impl Session {
     }
 
     pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
-        let query_ctx_shared = self.session_ctx.get_query_context_shared();
-        Ok(match query_ctx_shared.as_ref() {
-            Some(shared) => shared.clone(),
-            None => {
-                let discovery = self.session_mgr.get_cluster_discovery();
+        let discovery = self.session_mgr.get_cluster_discovery();
 
-                let session = self.clone();
-                let cluster = discovery.discover().await?;
-                let shared = QueryContextShared::try_create(session, cluster).await?;
-
-                let query_ctx = self.session_ctx.get_query_context_shared();
-                match query_ctx.as_ref() {
-                    Some(shared) => shared.clone(),
-                    None => {
-                        self.session_ctx
-                            .set_query_context_shared(Some(shared.clone()));
-                        shared
-                    }
-                }
-            }
-        })
+        let session = self.clone();
+        let cluster = discovery.discover().await?;
+        let shared = QueryContextShared::try_create(session, cluster).await?;
+        self.session_ctx
+            .set_query_context_shared(Some(shared.clone()));
+        Ok(shared)
     }
 
     pub fn query_context_shared_is_none(&self) -> bool {
@@ -206,15 +193,19 @@ impl Session {
             .await?
             .get_role_cache_manager();
         let role_verified = role_cache
-            .verify_privilege(&tenant, &current_user.grants.roles(), object, privilege)
-            .await?;
+            .find_related_roles(&tenant, &current_user.grants.roles())
+            .await?
+            .iter()
+            .any(|r| r.grants.verify_privilege(object, privilege));
         if role_verified {
             return Ok(());
         }
 
         Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, user '{}'@'{}' requires {} privilege on {}",
-            &current_user.name, &current_user.hostname, privilege, object
+            "Permission denied, user {} requires {} privilege on {}",
+            &current_user.identity(),
+            privilege,
+            object
         )))
     }
 

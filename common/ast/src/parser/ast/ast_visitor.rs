@@ -56,7 +56,11 @@ pub trait AstVisitor {
             Expr::BinaryOp { op, left, right } => self.visit_binary_op(op, left, right),
             Expr::UnaryOp { op, expr } => self.visit_unary_op(op, expr),
             Expr::TryCast { expr, target_type } => self.visit_try_cast(expr, target_type),
-            Expr::Cast { expr, target_type } => self.visit_cast(expr, target_type),
+            Expr::Cast {
+                expr,
+                target_type,
+                pg_style,
+            } => self.visit_cast(expr, target_type, pg_style),
             Expr::Literal(_) => self.visit_literal(),
             Expr::CountAll => self.visit_count_all(),
             Expr::FunctionCall {
@@ -73,7 +77,7 @@ pub trait AstVisitor {
             } => self.visit_case(operand, conditions, results, else_result),
             Expr::Exists(query) => self.visit_exists(query),
             Expr::Subquery(query) => self.visit_query(query),
-            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys),
+            Expr::MapAccess { expr, keys } => self.visit_map_access(expr, keys),
         }
     }
 
@@ -118,7 +122,7 @@ pub trait AstVisitor {
         self.visit_expr(expr)
     }
 
-    fn visit_cast(&mut self, expr: &Expr, _type_name: &TypeName) -> Result<()> {
+    fn visit_cast(&mut self, expr: &Expr, _type_name: &TypeName, _pg_style: &bool) -> Result<()> {
         self.visit_expr(expr)
     }
 
@@ -214,14 +218,10 @@ pub trait AstVisitor {
     }
 
     fn visit_select_target(&mut self, select_target: &SelectTarget) -> Result<()> {
-        match select_target {
-            SelectTarget::Projection { expr, alias } => self.visit_projection(expr, alias),
-            SelectTarget::Indirections(indirections) => self.visit_indirections(indirections),
+        if let SelectTarget::AliasedExpr { expr, .. } = select_target {
+            self.visit_expr(expr)?;
         }
-    }
-
-    fn visit_projection(&mut self, expr: &Expr, _: &Option<Identifier>) -> Result<()> {
-        self.visit_expr(expr)
+        Ok(())
     }
 
     fn visit_indirections(&mut self, _: &[Indirection]) -> Result<()> {

@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
@@ -41,7 +41,7 @@ impl<'a> DfParser<'a> {
             name,
             engine,
             engine_options,
-            options: HashMap::new(),
+            options: BTreeMap::new(),
         };
 
         Ok(DfStatement::CreateDatabase(create))
@@ -67,10 +67,10 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::ShowCreateDatabase(show_create_database))
     }
 
-    fn parse_database_engine(&mut self) -> Result<(String, HashMap<String, String>), ParserError> {
+    fn parse_database_engine(&mut self) -> Result<(String, BTreeMap<String, String>), ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok(("".to_string(), HashMap::new()));
+            return Ok(("".to_string(), BTreeMap::new()));
         }
 
         self.parser.expect_token(&Token::Eq)?;
@@ -80,7 +80,7 @@ impl<'a> DfParser<'a> {
             self.parser.expect_token(&Token::RParen)?;
             options
         } else {
-            HashMap::new()
+            BTreeMap::new()
         };
         Ok((engine, options))
     }

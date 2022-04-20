@@ -19,15 +19,15 @@ mysql -h127.0.0.1 -uroot -P3307
 
 ### Create a User 
 
-```sql title='mysql>'
-create user user1 identified by 'abc123';
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ### Grants Privileges
 
 Grants `ALL` privileges to the user `user1`:
-```sql title='mysql>'
-grant all on *.* to 'user1';
+```sql
+GRANT ALL on *.* TO user1;
 ```
 
 ## Golang
@@ -60,7 +60,10 @@ type Book struct {
 }
 
 func dsn() string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/", username, password, hostname)
+	// Note Databend do not support prepared statements.
+	// set interpolateParams to make placeholders (?) in calls to db.Query() and db.Exec() interpolated into a single query string with given parameters.
+	// ref https://github.com/go-sql-driver/mysql#interpolateparams
+	return fmt.Sprintf("%s:%s@tcp(%s)/?interpolateParams=true", username, password, hostname)
 }
 
 func main() {
@@ -78,7 +81,7 @@ func main() {
 	log.Println("Connected")
 
 	// Create db if do not exist
-	dbSql := "create database if not exists book_db"
+	dbSql := "CREATE DATABASE IF NOT EXISTS book_db"
 	_, err = db.Exec(dbSql)
 	if err != nil {
 		log.Fatal(err)
@@ -86,13 +89,13 @@ func main() {
 	log.Println("Create database book_db success")
 
 	// Use book_db database
-	_, err = db.Exec("use book_db")
+	_, err = db.Exec("USE book_db")
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Create table.
-	sql := "create table if not exists books(title varchar(255), author varchar(255), date varchar(255))"
+	sql := "create table if not exists books(title VARCHAR, author VARCHAR, date VARCHAR)"
 	_, err = db.Exec(sql)
 	if err != nil {
 		log.Fatal(err)
@@ -100,15 +103,14 @@ func main() {
 	log.Println("Create table: books")
 
 	// Insert 1 row.
-	sql = "insert into books values('mybook', 'author', '2022')"
-	_, err = db.Exec(sql)
+	_, err = db.Exec("INSERT INTO books VALUES(?, ?, ?)", "mybook", "author", "2022")
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Insert 1 row")
 
 	// Select.
-	res, err := db.Query("select * from books")
+	res, err := db.Query("SELECT * FROM books")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,6 +153,5 @@ go run main.go
 2022/04/13 12:20:07 Create database book_db success
 2022/04/13 12:20:07 Create table: books
 2022/04/13 12:20:07 Insert 1 row
-2022/04/13 12:20:08 Select:{mybook author 2022}
 2022/04/13 12:20:08 Select:{mybook author 2022}
 ```

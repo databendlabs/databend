@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::GetFunction;
-use common_functions::scalars::GetIgnoreCaseFunction;
-use common_functions::scalars::GetPathFunction;
 use serde_json::json;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_get_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "get_by_field_name",
@@ -70,13 +66,11 @@ fn test_get_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(GetFunction::try_create("get")?, &tests, false)
+    test_scalar_functions("get", &tests)
 }
 
 #[test]
 fn test_get_ignore_case_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "get_by_field_name",
@@ -101,17 +95,11 @@ fn test_get_ignore_case_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(
-        GetIgnoreCaseFunction::try_create("get_ignore_case")?,
-        &tests,
-        false,
-    )
+    test_scalar_functions("get_ignore_case", &tests)
 }
 
 #[test]
 fn test_get_path_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "get_by_path",
@@ -139,5 +127,5 @@ fn test_get_path_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(GetPathFunction::try_create("get_path")?, &tests, false)
+    test_scalar_functions("get_path", &tests)
 }

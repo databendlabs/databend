@@ -17,6 +17,9 @@ select parse_json(parse_json('123'));
 select parse_json(parse_json('"\\\"abc\\\""'));
 select parse_json(parse_json('"abc"')); -- {ErrorCode 1010}
 select parse_json(todate32('2022-01-01')); -- {ErrorCode 1010}
+select parse_json(); -- {ErrorCode 1028}
+select parse_json('a', 'aa'); -- {ErrorCode 1028}
+select get(parse_json('a', 'aa')); -- {ErrorCode 1028}
 
 select '==try_parse_json==';
 select try_parse_json(null);

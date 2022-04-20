@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_datavalues::chrono::Datelike;
@@ -91,6 +92,19 @@ pub fn cast_from_string(
             }
             Ok((builder.build(size), Some(bitmap.into())))
         }
+        TypeID::Boolean => {
+            let mut builder = ColumnBuilder::<bool>::with_capacity(size);
+            for (row, v) in str_column.iter().enumerate() {
+                if v.eq_ignore_ascii_case("true".as_bytes()) {
+                    builder.append(true);
+                } else if v.eq_ignore_ascii_case("false".as_bytes()) {
+                    builder.append(false);
+                } else {
+                    bitmap.set(row, false);
+                }
+            }
+            Ok((builder.build(size), Some(bitmap.into())))
+        }
         TypeID::Interval => todo!(),
         _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }
@@ -101,6 +115,7 @@ pub fn cast_from_string(
 #[inline]
 pub fn string_to_datetime(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
+    // let tz = "UTC".parse::<Tz>().unwrap();
     s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S").ok())
 }
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod common;
-mod exec;
+pub mod exec;
 mod metrics;
 pub mod optimizer;
 mod parsers;

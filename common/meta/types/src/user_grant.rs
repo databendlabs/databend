@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::ops;
 
 use enumflags2::BitFlags;
 
@@ -120,8 +121,8 @@ impl UserGrantSet {
         }
     }
 
-    pub fn entries(&self) -> &[GrantEntry] {
-        &self.entries
+    pub fn entries(&self) -> Vec<GrantEntry> {
+        self.entries.clone()
     }
 
     pub fn roles(&self) -> Vec<String> {
@@ -180,6 +181,26 @@ impl UserGrantSet {
             .filter(|e| e.privileges != BitFlags::empty())
             .collect::<Vec<_>>();
         self.entries = new_entries;
+    }
+}
+
+impl ops::BitOrAssign for UserGrantSet {
+    fn bitor_assign(&mut self, other: Self) {
+        for entry in other.entries() {
+            self.grant_privileges(&entry.object, entry.privileges.into());
+        }
+        for role in other.roles() {
+            self.grant_role(role);
+        }
+    }
+}
+
+impl ops::BitOr for UserGrantSet {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        let mut grants = self;
+        grants |= other;
+        grants
     }
 }
 

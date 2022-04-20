@@ -238,17 +238,23 @@ fn show_databases_test() -> Result<()> {
         "SHOW DATABASES",
         DfStatement::ShowDatabases(DfShowDatabases::create(DfShowKind::All)),
     )?;
+    expect_synonym_parse_eq("SHOW DATABASES", "SHOW SCHEMAS")?;
 
     expect_parse_ok(
         "SHOW DATABASES;",
         DfStatement::ShowDatabases(DfShowDatabases::create(DfShowKind::All)),
     )?;
+    expect_synonym_parse_eq("SHOW DATABASES;", "SHOW SCHEMAS;")?;
 
     expect_parse_ok(
         "SHOW DATABASES WHERE Database = 'ss'",
         DfStatement::ShowDatabases(DfShowDatabases::create(DfShowKind::Where(
             parse_sql_to_expr("Database = 'ss'"),
         ))),
+    )?;
+    expect_synonym_parse_eq(
+        "SHOW DATABASES WHERE Database = 'ss'",
+        "SHOW SCHEMAS WHERE Database = 'ss'",
     )?;
 
     expect_parse_ok(
@@ -257,6 +263,10 @@ fn show_databases_test() -> Result<()> {
             parse_sql_to_expr("Database Like 'ss%'"),
         ))),
     )?;
+    expect_synonym_parse_eq(
+        "SHOW DATABASES WHERE Database Like 'ss%'",
+        "SHOW SCHEMAS WHERE Database Like 'ss%'",
+    )?;
 
     expect_parse_ok(
         "SHOW DATABASES LIKE 'ss%'",
@@ -264,6 +274,7 @@ fn show_databases_test() -> Result<()> {
             Ident::with_quote('\'', "ss%"),
         ))),
     )?;
+    expect_synonym_parse_eq("SHOW DATABASES LIKE 'ss%'", "SHOW SCHEMAS LIKE 'ss%'")?;
 
     Ok(())
 }

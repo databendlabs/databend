@@ -21,14 +21,14 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```
-select toStartOfYear(toDate(18869));
+SELECT toStartOfYear(toDate(18869));
 +------------------------------+
 | toStartOfYear(toDate(18869)) |
 +------------------------------+
 | 2021-01-01                   |
 +------------------------------+
 
-mysql> select toStartOfYear(toDateTime(1630812366));
+SELECT toStartOfYear(toDateTime(1630812366));
 +---------------------------------------+
 | toStartOfYear(toDateTime(1630812366)) |
 +---------------------------------------+

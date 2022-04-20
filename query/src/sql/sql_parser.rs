@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
@@ -24,6 +24,7 @@ use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::MySqlDialect;
 use sqlparser::dialect::SnowflakeDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
@@ -32,6 +33,7 @@ use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfShowRoles;
+use crate::sessions::SessionType;
 use crate::sql::statements::DfShowEngines;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
@@ -55,12 +57,6 @@ pub struct DfParser<'a> {
 }
 
 impl<'a> DfParser<'a> {
-    /// Parse the specified tokens
-    pub fn new(sql: &'a str) -> Result<Self, ParserError> {
-        let dialect = &GenericDialect {};
-        DfParser::new_with_dialect(sql, dialect)
-    }
-
     /// Parse the specified tokens with dialect
     pub fn new_with_dialect(sql: &'a str, dialect: &'a dyn Dialect) -> Result<Self, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
@@ -73,12 +69,26 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parse a SQL statement and produce a set of statements with dialect
-    pub fn parse_sql(sql: &'a str) -> Result<(Vec<DfStatement<'a>>, Vec<DfHint>), ErrorCode> {
-        let dialect = &GenericDialect {};
-        let start = Instant::now();
-        let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
-        histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
-        Ok(result)
+    pub fn parse_sql(
+        sql: &'a str,
+        typ: SessionType,
+    ) -> Result<(Vec<DfStatement<'a>>, Vec<DfHint>), ErrorCode> {
+        match typ {
+            SessionType::MySQL => {
+                let dialect = &MySqlDialect {};
+                let start = Instant::now();
+                let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
+                histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
+                Ok(result)
+            }
+            _ => {
+                let dialect = &GenericDialect {};
+                let start = Instant::now();
+                let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
+                histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
+                Ok(result)
+            }
+        }
     }
 
     /// Parse a SQL statement and produce a set of statements
@@ -212,7 +222,7 @@ impl<'a> DfParser<'a> {
                 //TODO:make stage to sql parser keyword
                 match w.keyword {
                     Keyword::TABLE => self.parse_create_table(),
-                    Keyword::DATABASE => self.parse_create_database(),
+                    Keyword::DATABASE | Keyword::SCHEMA => self.parse_create_database(),
                     Keyword::USER => self.parse_create_user(),
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
@@ -311,7 +321,7 @@ impl<'a> DfParser<'a> {
     fn parse_drop(&mut self) -> Result<DfStatement<'a>, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::DATABASE => self.parse_drop_database(),
+                Keyword::DATABASE | Keyword::SCHEMA => self.parse_drop_database(),
                 Keyword::TABLE => self.parse_drop_table(),
                 Keyword::USER => self.parse_drop_user(),
                 Keyword::ROLE => self.parse_drop_role(),
@@ -330,7 +340,7 @@ impl<'a> DfParser<'a> {
             self.parse_show_tables(full)
         } else if self.consume_token("TABLE") && self.consume_token("STATUS") {
             self.parse_show_tab_stat()
-        } else if self.consume_token("DATABASES") {
+        } else if self.consume_token("DATABASES") || self.consume_token("SCHEMAS") {
             self.parse_show_databases()
         } else if self.consume_token("SETTINGS") {
             Ok(DfStatement::ShowSettings(DfShowSettings))
@@ -359,7 +369,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_show_create_table(),
-                Keyword::DATABASE => self.parse_show_create_database(),
+                Keyword::DATABASE | Keyword::SCHEMA => self.parse_show_create_database(),
                 _ => self.expected("show create statement", Token::Word(w)),
             },
             unexpected => self.expected("show create statement", unexpected),
@@ -377,8 +387,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    pub(crate) fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
-        let mut options = HashMap::new();
+    pub(crate) fn parse_options(&mut self) -> Result<BTreeMap<String, String>, ParserError> {
+        let mut options = BTreeMap::new();
         loop {
             let name = self.parser.parse_identifier();
             if name.is_err() {

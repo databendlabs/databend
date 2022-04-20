@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_infallible::Condvar;
@@ -38,6 +40,7 @@ struct WorkersNotifyMutable {
 
 pub struct WorkersNotify {
     workers: usize,
+    waiting_async_task: AtomicUsize,
     mutable_state: Mutex<WorkersNotifyMutable>,
     workers_notify: Vec<WorkerNotify>,
 }
@@ -55,11 +58,16 @@ impl WorkersNotify {
         Arc::new(WorkersNotify {
             workers,
             workers_notify,
+            waiting_async_task: AtomicUsize::new(0),
             mutable_state: Mutex::new(WorkersNotifyMutable {
                 waiting_size: 0,
                 workers_waiting,
             }),
         })
+    }
+
+    pub fn has_waiting_async_task(&self) -> bool {
+        self.waiting_async_task.load(Ordering::Relaxed) != 0
     }
 
     pub fn active_workers(&self) -> usize {
@@ -70,6 +78,14 @@ impl WorkersNotify {
     pub fn is_empty(&self) -> bool {
         let mutable_state = self.mutable_state.lock();
         mutable_state.waiting_size == 0
+    }
+
+    pub fn inc_active_async_worker(&self) {
+        self.waiting_async_task.fetch_add(1, Ordering::Release);
+    }
+
+    pub fn dec_active_async_worker(&self) {
+        self.waiting_async_task.fetch_sub(1, Ordering::Release);
     }
 
     pub fn wakeup(&self, worker_id: usize) {

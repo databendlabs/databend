@@ -25,6 +25,7 @@ use crate::scalars::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -34,7 +35,10 @@ pub struct RandomFunction {
 }
 
 impl RandomFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(RandomFunction {
             display_name: display_name.to_string(),
         }))
@@ -51,14 +55,16 @@ impl Function for RandomFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         match columns.len() {
             0 => {
                 let mut rng = rand::rngs::SmallRng::from_entropy();

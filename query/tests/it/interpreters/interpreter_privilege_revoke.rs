@@ -41,7 +41,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
         hash_value: Vec::from(password),
         hash_method: PasswordHashMethod::PlainText,
     };
-    let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
+    let user_info = UserInfo::new(name, hostname, auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(&tenant, user_info.clone(), false).await?;
@@ -64,7 +64,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant().to_string();
 
-    let mut role_info = RoleInfo::new("role1".to_string());
+    let mut role_info = RoleInfo::new("role1");
     role_info
         .grants
         .grant_privileges(&GrantObject::Global, UserPrivilegeSet::all_privileges());

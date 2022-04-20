@@ -1,11 +1,14 @@
-SELECT toTypeName(CAST(number AS float)) FROM numbers_mt(1);
-SELECT toTypeName(CAST(number AS float32)) FROM numbers_mt(1);
-SELECT toTypeName(CAST(number AS UInt64)) FROM numbers_mt(1);
-SELECT toTypeName(toint8('8')) FROM numbers_mt(1);
-SELECT toTypeName(toint16('16')) FROM numbers_mt(1);
-SELECT toTypeName(toint32('32')) FROM numbers_mt(1);
-SELECT toTypeName(toint64('64')) FROM numbers_mt(1);
-SELECT toTypeName(toUInt32('64')) FROM numbers_mt(1);
+SELECT typeof(CAST(number AS float)) FROM numbers_mt(1);
+SELECT typeof(CAST(number AS float32)) FROM numbers_mt(1);
+SELECT typeof(CAST(number AS UInt64)) FROM numbers_mt(1);
+SELECT typeof(toint8('8')) FROM numbers_mt(1);
+SELECT typeof(toint16('16')) FROM numbers_mt(1);
+SELECT typeof(toint32('32')) FROM numbers_mt(1);
+SELECT typeof(toint64('64')) FROM numbers_mt(1);
+SELECT typeof(toUInt32('64')) FROM numbers_mt(1);
+SELECT typeof(number::float) FROM numbers_mt(1);
+SELECT typeof(number::float64) FROM numbers_mt(1);
+SELECT typeof(number::UInt64) FROM numbers_mt(1);
 
 SELECT CAST(1 + 1, Float64);
 SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
@@ -14,7 +17,7 @@ SELECT CAST(Null as Int64); -- {ErrorCode 1010}
 SELECT CAST(Null as Varchar); -- {ErrorCode 1010}
 
 -- Null can only be cast successfully to type boolean(false)
-SELECT CAST(Null as Boolean);
+SELECT CAST(Null as Boolean); -- {ErrorCode 1010};
 SELECT CAST('33' as signed) = 33;
 SELECT CAST('33' as unsigned) = 33;
 SELECT CAST('-33aa' as signed) = 33; -- {ErrorCode 1010}
@@ -22,6 +25,16 @@ SELECT CAST('33 aa' as unsigned) = 33; -- {ErrorCode 1010}
 SELECT CAST('-33' as unsigned) = 0; -- {ErrorCode 1010}
 SELECT CAST('aa' as unsigned) = 0; -- {ErrorCode 1010}
 SELECT CAST('aa' as Float64) = 0; -- {ErrorCode 1010}
+SELECT '33'::signed = 33;
+SELECT '33'::unsigned = 33;
+SELECT '-33aa'::signed = 33; -- {ErrorCode 1010}
+SELECT 33::string = '33';
+
+select "truE"::boolean;
+select not "FalSe"::boolean;
+select "false"::boolean = not "true"::boolean;
+select "FalSex"::boolean; -- {ErrorCode 1010}
+
 
 SELECT '===DATE/DATETIME===';
 SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');
@@ -92,7 +105,3 @@ SELECT parse_json('{"a":1,"b":2}')::object;
 SELECT parse_json('"abc"')::object; -- {ErrorCode 1010}
 SELECT parse_json('[1,2,3]')::object; -- {ErrorCode 1010}
 SELECT parse_json('null')::object; -- {ErrorCode 1010}
-
-
-
-

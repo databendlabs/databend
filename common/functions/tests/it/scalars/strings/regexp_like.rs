@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::RegexpLikeFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_like_function() -> Result<()> {
@@ -82,7 +81,7 @@ fn test_regexp_like_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests, true)
+    test_scalar_functions("regexp_like", &tests)
 }
 
 #[test]
@@ -110,5 +109,5 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests, true)
+    test_scalar_functions("regexp_like", &tests)
 }

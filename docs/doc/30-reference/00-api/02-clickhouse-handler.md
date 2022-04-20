@@ -31,7 +31,7 @@ Databend ClickHouse HTTP handler is a simplified version of the implementation, 
 
 ### Health Check
 
-```sql title='query=select 1'
+```sql title='query=SELECT 1'
 curl '127.0.0.1:8000/clickhouse/?query=select%201'
 ```
 
@@ -51,7 +51,7 @@ ndjson is a newline delimited JSON format:
 
 For example, we have a table:
 ```sql title='table t1'
-CREATE TABLE t1(a UInt8);
+CREATE TABLE t1(a TINYINT UNSIGNED);
 ```
 
 Insert into `t1`:

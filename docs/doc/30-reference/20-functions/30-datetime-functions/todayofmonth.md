@@ -22,14 +22,14 @@ toDayOfMonth(expr)
 ## Examples
 
 ```sql
-mysql> select toDayOfMonth(toDate(18869));
+SELECT toDayOfMonth(toDate(18869));
 +-----------------------------+
 | toDayOfMonth(toDate(18869)) |
 +-----------------------------+
 |                          30 |
 +-----------------------------+
 
-mysql> select toDayOfMonth(toDateTime(1630812366));
+SELECT toDayOfMonth(toDateTime(1630812366));
 +--------------------------------------+
 | toDayOfMonth(toDateTime(1630812366)) |
 +--------------------------------------+

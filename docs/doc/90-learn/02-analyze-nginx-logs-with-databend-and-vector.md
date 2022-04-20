@@ -1,5 +1,5 @@
 ---
-title: Analyzing Nginx Logs with Databend and Vector
+title: Analyzing Nginx Access Logs with Databend
 sidebar_label: Analyzing Nginx Logs
 ---
 
@@ -9,7 +9,7 @@ sidebar_label: Analyzing Nginx Logs
 
 Systems are producing all kinds metrics and logs time by time, do you want to gather them and analyze the logs in real time? 
 
-Databend provides [integration with Vector](../40-integrations/00-vector.md), easy to do it now!
+Databend provides [integration with Vector](../40-integrations/10-data-tool/00-vector.md), easy to do it now!
 
 Lets ingesting Nginx access logs into Databend from Vector step by step.
 
@@ -34,29 +34,29 @@ Connect to Databend server with MySQL client:
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```shell title='mysql>'
-create database nginx;
+```sql
+CREATE DATABASE nginx;
 ```
 
-```sql title='mysql>'
-create table nginx.access_logs (
-  `timestamp` Datetime32,
-  `remote_addr` String,
-  `remote_port` Int32,
-  `request_method` String,
-  `request_uri` String,
-  `server_protocol` String,
-  `status` Int32,
-  `bytes_sent` Int32,
-  `http_referer` String,
-  `http_user_agent` String,
-  `upstream_addr` String,
-  `scheme` String,
-  `gzip_ratio` String,
-  `request_length` Int32,
-  `request_time` Float32,
-  `ssl_protocol` String,
-  `upstream_response_time` String
+```sql
+CREATE TABLE nginx.access_logs (
+  `timestamp` DATETIME,
+  `remote_addr` VARCHAR,
+  `remote_port` INT,
+  `request_method` VARCHAR,
+  `request_uri` VARCHAR,
+  `server_protocol` VARCHAR,
+  `status` INT,
+  `bytes_sent` INT,
+  `http_referer` VARCHAR,
+  `http_user_agent` VARCHAR,
+  `upstream_addr` VARCHAR,
+  `scheme` VARCHAR,
+  `gzip_ratio` VARCHAR,
+  `request_length` INT,
+  `request_time` FLOAT,
+  `ssl_protocol` VARCHAR,
+  `upstream_response_time` VARCHAR
 );
 ```
 
@@ -67,13 +67,14 @@ Connect to Databend server with MySQL client:
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```shell title='mysql>'
-create user 'vector' identified by 'vector123';
+Create a user:
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
-Please replace `vector`, `vector123` to your own username and password.
 
-```shell title='mysql>'
-grant insert on nginx.* TO 'vector'@'%';
+Grant privileges for the user:
+```sql
+GRANT INSERT ON nginx.* TO user1;
 ```
 
 ## Step 2. Nginx
@@ -219,9 +220,9 @@ source = """
 [sinks.nginx_access_log_to_databend.auth]
   strategy = "basic"
   // highlight-next-line
-  user = "vector" #Databend username
+  user = "user1" #Databend username
   // highlight-next-line
-  password = "vector123" #Databend password
+  password = "abc123" #Databend password
 
 [[tests]]
 name = "extract fields from access log"
@@ -308,11 +309,8 @@ mysql -h127.0.0.1 -uroot -P3307
 ```
 
 - __Top 10 Request Status__
-```shell title='mysql>'
-select count() as count, status from nginx.access_logs group by status limit 10;
-```
-
-```shell
+```sql
+SELECT count() AS count, status FROM nginx.access_logs GROUP BY status LIMIT 10;
 +-----------+--------+
 | count     | status |
 +-----------+--------+
@@ -321,11 +319,8 @@ select count() as count, status from nginx.access_logs group by status limit 10;
 ```
 
 - __Top 10 Request Method__ 
-```shell title='mysql>'
-select count() as count, request_method from nginx.access_logs group by request_method limit 10;
-```
-
-```shell
+```sql
+SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_method LIMIT 10;
 +-----------+----------------+
 | count     | request_method |
 +-----------+----------------+
@@ -334,11 +329,8 @@ select count() as count, request_method from nginx.access_logs group by request_
 ```
 
 - __Top 10 Request IPs__
-```shell title='mysql>'
-select count(*) as count, remote_addr as client from nginx.access_logs group by remote_addr order by count desc limit 10;
-```
-
-```shell
+```sql
+SELECT count(*) AS Count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
 +----------+-----------+
 | count    | client    |
 +----------+-----------+
@@ -348,11 +340,8 @@ select count(*) as count, remote_addr as client from nginx.access_logs group by 
 ```
 
 - __Top 10 Request Pages__
-```shell title='mysql>'
-select count(*) as count, request_uri as uri from nginx.access_logs group by request_uri order by count desc limit 10;
-```
-
-```shell
+```sql
+SELECT count(*) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
 +----------+--------------------+
 | count    | uri                |
 +----------+--------------------+
@@ -365,11 +354,8 @@ select count(*) as count, request_uri as uri from nginx.access_logs group by req
 
 
 - __Top 10 HTTP 404 Pages__
-```shell title='mysql>'
-select countif(status=404) as count, request_uri as uri from nginx.access_logs group by request_uri order by count desc limit 10;
-```
-
-```shell
+```sql
+SELECT count_if(status=404) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
 +----------+--------------------+
 | count    | uri                |
 +----------+--------------------+
@@ -381,11 +367,8 @@ select countif(status=404) as count, request_uri as uri from nginx.access_logs g
 ```
 
 - __Top 10 Requests__
-```shell title='mysql>'
-select count(*) as count, request_uri as request from nginx.access_logs group by request_uri order by count desc limit 10;
-```
-
-```shell
+```sql
+SELECT count(*) AS count, request_uri AS request FROM nginx.access_logs GROUP BY request ORDER BY count DESC LIMIT 10;
 +--------+-----------------------------------------------------------------------------------------------------+
 | count  | request                                                                                             |
 +--------+-----------------------------------------------------------------------------------------------------+

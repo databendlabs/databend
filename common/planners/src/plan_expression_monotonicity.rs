@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;
+use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
 
@@ -98,8 +99,8 @@ impl ExpressionMonotonicityVisitor {
                 .into_iter()
                 .map(|col_opt| col_opt.unwrap())
                 .collect::<Vec<_>>();
-
-            let col = func.eval(&input_columns, 1)?;
+            // TODO(veeupup): whether we need to pass function context here?
+            let col = func.eval(FunctionContext::default(), &input_columns, 1)?;
             let data_field = DataField::new("dummy", result_type.clone());
             let data_column_field = ColumnWithField::new(col, data_field);
             Ok(Some(data_column_field))
@@ -134,7 +135,7 @@ impl ExpressionMonotonicityVisitor {
         let arg_types: Vec<&DataTypePtr> = arg_types.iter().collect();
         let func = instance.get(op, &arg_types)?;
 
-        let return_type = func.return_type(&arg_types)?;
+        let return_type = func.return_type();
         let mut monotonic = match self.single_point {
             false => func.get_monotonicity(monotonicity_vec.as_ref())?,
             true => {

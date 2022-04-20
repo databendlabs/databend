@@ -17,7 +17,7 @@ description:
 
 ## Q1 (0.483 sec., 126.21 million rows/sec., 378.62 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     DayOfWeek,
     count(*) AS c
@@ -27,7 +27,7 @@ GROUP BY DayOfWeek
 ORDER BY c DESC
 ```
 
-```sql title='result'
+```text
 +-----------+---------+
 | DayOfWeek | c       |
 +-----------+---------+
@@ -43,7 +43,7 @@ ORDER BY c DESC
 Read 61000000 rows, 183 MB in 0.483 sec., 126.21 million rows/sec., 378.62 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: DayOfWeek:UInt8, count() as c:UInt64                                                                                                                                                                                                           │
 │   Sort: count():UInt64                                                                                                                                                                                                                                     │
@@ -56,7 +56,7 @@ Read 61000000 rows, 183 MB in 0.483 sec., 126.21 million rows/sec., 378.62 MB/se
 
 ## Q2 (0.624 sec., 97.74 million rows/sec., 684.16 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     DayOfWeek,
     count(*) AS c
@@ -66,7 +66,7 @@ GROUP BY DayOfWeek
 ORDER BY c DESC
 ```
 
-```sql title='result'
+```text
 +-----------+---------+
 | DayOfWeek | c       |
 +-----------+---------+
@@ -82,7 +82,7 @@ ORDER BY c DESC
 Read 61000000 rows, 427 MB in 0.624 sec., 97.74 million rows/sec., 684.16 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: DayOfWeek:UInt8, count() as c:UInt64                                                                                                                                                                                                           │
 │   Sort: count():UInt64                                                                                                                                                                                                                                     │
@@ -95,7 +95,7 @@ Read 61000000 rows, 427 MB in 0.624 sec., 97.74 million rows/sec., 684.16 MB/sec
 
 ## Q3 (0.934 sec., 65.29 million rows/sec., 1.11 GB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     Origin,
     count(*) AS c
@@ -106,7 +106,7 @@ ORDER BY c DESC
 LIMIT 10
 ```
 
-```sql title='result'
+```text
 +--------+--------+
 | Origin | c      |
 +--------+--------+
@@ -125,7 +125,7 @@ LIMIT 10
 Read 61000000 rows, 1.04 GB in 0.934 sec., 65.29 million rows/sec., 1.11 GB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Limit: 10                                                                                                                                                                                                                                                  │
 │   Projection: Origin:String, count() as c:UInt64                                                                                                                                                                                                           │
@@ -139,7 +139,7 @@ Read 61000000 rows, 1.04 GB in 0.934 sec., 65.29 million rows/sec., 1.11 GB/sec.
 
 ## Q4 (0.310 sec., 25.79 million rows/sec., 412.69 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     IATA_CODE_Reporting_Airline AS Carrier,
     count()
@@ -149,7 +149,7 @@ GROUP BY Carrier
 ORDER BY count() DESC
 ```
 
-```sql title='result'
+```text
 +---------+---------+
 | Carrier | count() |
 +---------+---------+
@@ -178,7 +178,7 @@ ORDER BY count() DESC
 Read 8000000 rows, 128 MB in 0.310 sec., 25.79 million rows/sec., 412.69 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: IATA_CODE_Reporting_Airline as Carrier:String, count():UInt64                                                                                                                                                                                  │
 │   Sort: count():UInt64                                                                                                                                                                                                                                     │
@@ -191,7 +191,7 @@ Read 8000000 rows, 128 MB in 0.310 sec., 25.79 million rows/sec., 412.69 MB/sec.
 
 ## Q5 (0.413 sec., 19.39 million rows/sec., 310.22 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     IATA_CODE_Reporting_Airline AS Carrier,
     avg(CAST(DepDelay > 10, Int8)) * 1000 AS c3
@@ -201,7 +201,7 @@ GROUP BY Carrier
 ORDER BY c3 DESC
 ```
 
-```sql title='result'
+```text
 +---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
@@ -230,7 +230,7 @@ ORDER BY c3 DESC
 Read 8000000 rows, 128 MB in 0.413 sec., 19.39 million rows/sec., 310.22 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: IATA_CODE_Reporting_Airline as Carrier:String, (avg(cast((DepDelay > 10) as Int8)) * 1000) as c3:Float64                                                                                                                                       │
 │   Sort: (avg(cast((DepDelay > 10) as Int8)) * 1000):Float64                                                                                                                                                                                                │
@@ -245,7 +245,7 @@ Read 8000000 rows, 128 MB in 0.413 sec., 19.39 million rows/sec., 310.22 MB/sec.
 
 ## Q6 (0.801 sec., 76.19 million rows/sec., 1.22 GB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     IATA_CODE_Reporting_Airline AS Carrier,
     avg(CAST(DepDelay > 10, Int8)) * 1000 AS c3
@@ -255,7 +255,7 @@ GROUP BY Carrier
 ORDER BY c3 DESC
 ```
 
-```sql title='result'
+```text
 +---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
@@ -289,7 +289,7 @@ ORDER BY c3 DESC
 Read 61000000 rows, 976 MB in 0.801 sec., 76.19 million rows/sec., 1.22 GB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: IATA_CODE_Reporting_Airline as Carrier:String, (avg(cast((DepDelay > 10) as Int8)) * 1000) as c3:Float64                                                                                                                                       │
 │   Sort: (avg(cast((DepDelay > 10) as Int8)) * 1000):Float64                                                                                                                                                                                                │
@@ -304,7 +304,7 @@ Read 61000000 rows, 976 MB in 0.801 sec., 76.19 million rows/sec., 1.22 GB/sec.
 
 ## Q7 (0.934 sec., 65.34 million rows/sec., 1.05 GB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     IATA_CODE_Reporting_Airline AS Carrier,
     avg(DepDelay) * 1000 AS c3
@@ -313,7 +313,7 @@ WHERE (Year >= 2000) AND (Year <= 2008)
 GROUP BY Carrier
 ```
 
-```sql title='result'
+```text
 +---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
@@ -347,7 +347,7 @@ GROUP BY Carrier
 Read 61000000 rows, 976 MB in 0.934 sec., 65.34 million rows/sec., 1.05 GB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: IATA_CODE_Reporting_Airline as Carrier:String, (avg(DepDelay) * 1000) as c3:Float64                                                                                                                                                            │
 │   Expression: IATA_CODE_Reporting_Airline:String, (avg(DepDelay) * 1000):Float64 (Before Projection)                                                                                                                                                       │
@@ -360,7 +360,7 @@ Read 61000000 rows, 976 MB in 0.934 sec., 65.34 million rows/sec., 1.05 GB/sec.
 
 ## Q8 (1.587 sec., 127.71 million rows/sec., 766.26 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     Year,
     avg(DepDelay)
@@ -368,7 +368,7 @@ FROM ontime
 GROUP BY Year
 ```
 
-```sql title='result'
+```text
 +------+--------------------+
 | Year | avg(DepDelay)      |
 +------+--------------------+
@@ -412,7 +412,7 @@ GROUP BY Year
 Read 202687654 rows, 1.22 GB in 1.587 sec., 127.71 million rows/sec., 766.26 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: Year:UInt16, avg(DepDelay):Float64                                                                                                                                                                   │
 │   AggregatorFinal: groupBy=[[Year]], aggr=[[avg(DepDelay)]]                                                                                                                                                      │
@@ -422,7 +422,7 @@ Read 202687654 rows, 1.22 GB in 1.587 sec., 127.71 million rows/sec., 766.26 MB/
 ```
 
 ## Q9 (0.943 sec., 214.92 million rows/sec., 429.85 MB/sec.)
-```sql title='mysql>'
+```sql
 SELECT
     Year,
     count(*) AS c1
@@ -430,7 +430,7 @@ FROM ontime
 GROUP BY Year
 ```
 
-```sql title='result'
+```text
 +------+---------+
 | Year | c1      |
 +------+---------+
@@ -474,7 +474,7 @@ GROUP BY Year
 Read 202687654 rows, 405.38 MB in 0.943 sec., 214.92 million rows/sec., 429.85 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: Year:UInt16, count() as c1:UInt64                                                                                                                                               │
 │   AggregatorFinal: groupBy=[[Year]], aggr=[[count()]]                                                                                                                                       │
@@ -485,7 +485,7 @@ Read 202687654 rows, 405.38 MB in 0.943 sec., 214.92 million rows/sec., 429.85 M
 
 ## Q10 (1.626 sec., 124.66 million rows/sec., 872.65 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT avg(cnt)
 FROM
 (
@@ -501,7 +501,7 @@ FROM
 ) AS a
 ```
 
-```sql title='result'
+```text
 +-------------------+
 | avg(cnt)          |
 +-------------------+
@@ -511,7 +511,7 @@ FROM
 Read 202687654 rows, 1.42 GB in 1.626 sec., 124.66 million rows/sec., 872.65 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: avg(cnt):Float64                                                                                                                                                                                                                               │
 │   AggregatorFinal: groupBy=[[]], aggr=[[avg(cnt)]]                                                                                                                                                                                                         │
@@ -526,7 +526,7 @@ Read 202687654 rows, 1.42 GB in 1.626 sec., 124.66 million rows/sec., 872.65 MB/
 
 ## Q11 (1.192 sec., 170.07 million rows/sec., 510.2 MB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT avg(c1)
 FROM
 (
@@ -541,7 +541,7 @@ FROM
 ) AS a
 ```
 
-```sql title='result'
+```text
 +-------------------+
 | avg(c1)           |
 +-------------------+
@@ -551,7 +551,7 @@ FROM
 Read 202687654 rows, 608.06 MB in 1.192 sec., 170.07 million rows/sec., 510.2 MB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: avg(c1):Float64                                                                                                                                                                                       │
 │   AggregatorFinal: groupBy=[[]], aggr=[[avg(c1)]]                                                                                                                                                                 │
@@ -565,7 +565,7 @@ Read 202687654 rows, 608.06 MB in 1.192 sec., 170.07 million rows/sec., 510.2 MB
 
 ## Q12 (3.127 sec., 64.82 million rows/sec., 2.74 GB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     OriginCityName,
     DestCityName,
@@ -578,7 +578,7 @@ ORDER BY c DESC
 LIMIT 10
 ```
 
-```sql title='result'
+```text
 +-------------------+-------------------+--------+
 | OriginCityName    | DestCityName      | c      |
 +-------------------+-------------------+--------+
@@ -597,7 +597,7 @@ LIMIT 10
 Read 202687654 rows, 8.58 GB in 3.127 sec., 64.82 million rows/sec., 2.74 GB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Limit: 10                                                                                                                                                                                                                            │
 │   Projection: OriginCityName:String, DestCityName:String, count() as c:UInt64                                                                                                                                                        │
@@ -611,7 +611,7 @@ Read 202687654 rows, 8.58 GB in 3.127 sec., 64.82 million rows/sec., 2.74 GB/sec
 
 ## Q13 (1.449 sec., 139.84 million rows/sec., 2.96 GB/sec.)
 
-```sql title='mysql>'
+```sql
 SELECT
     OriginCityName,
     count(*) AS c
@@ -620,7 +620,7 @@ GROUP BY OriginCityName
 ORDER BY c DESC
 LIMIT 10
 ```
-```sql title='result'
+```text
 +-----------------------+----------+
 | OriginCityName        | c        |
 +-----------------------+----------+
@@ -639,7 +639,7 @@ LIMIT 10
 Read 202687654 rows, 4.29 GB in 1.449 sec., 139.84 million rows/sec., 2.96 GB/sec.
 ```
 
-```sql title='explain'
+```text
 ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Limit: 10                                                                                                                                                                                                   │
 │   Projection: OriginCityName:String, count() as c:UInt64                                                                                                                                                    │
@@ -652,13 +652,13 @@ Read 202687654 rows, 4.29 GB in 1.449 sec., 139.84 million rows/sec., 2.96 GB/se
 
 ## Q14
 
-```sql title='mysql>'
+```sql
 SELECT
        count(*)
 FROM ontime;
 ```
 
-```sql title='result'
+```text
 +-----------+
 | count()   |
 +-----------+
@@ -667,7 +667,7 @@ FROM ontime;
 1 row in set (0.35 sec)
 ```
 
-```sql title='explain'
+```text
 ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: count():UInt64                                                                                                              │
 │   Projection: 202687654 as count():UInt64                                                                                               │

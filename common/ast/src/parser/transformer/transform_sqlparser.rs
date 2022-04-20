@@ -330,13 +330,13 @@ impl TransformerSqlparser {
         let select_list: Vec<SelectTarget> = orig_ast
             .projection
             .iter()
-            .map(|x| {
+            .map(|x: &SelectItem| {
                 match x {
-                    SelectItem::UnnamedExpr(expr) => Ok(SelectTarget::Projection {
+                    SelectItem::UnnamedExpr(expr) => Ok(SelectTarget::AliasedExpr {
                         expr: self.transform_expr(expr)?,
                         alias: None,
                     }),
-                    SelectItem::ExprWithAlias { expr, alias } => Ok(SelectTarget::Projection {
+                    SelectItem::ExprWithAlias { expr, alias } => Ok(SelectTarget::AliasedExpr {
                         expr: self.transform_expr(expr)?,
                         alias: Some(Identifier::from(alias)),
                     }),
@@ -348,9 +348,11 @@ impl TransformerSqlparser {
                             .collect();
                         // Push a wildcard star to the end
                         v.push(Indirection::Star);
-                        Ok(SelectTarget::Indirections(v))
+                        Ok(SelectTarget::QualifiedName(v))
                     }
-                    SelectItem::Wildcard => Ok(SelectTarget::Indirections(vec![Indirection::Star])),
+                    SelectItem::Wildcard => {
+                        Ok(SelectTarget::QualifiedName(vec![Indirection::Star]))
+                    }
                 }
             })
             .collect::<Result<Vec<SelectTarget>>>()?;
@@ -677,17 +679,22 @@ impl TransformerSqlparser {
                 op: self.transform_unary_operator(op)?,
                 expr: Box::new(self.transform_expr(expr)?),
             }),
-            SqlparserExpr::Cast { expr, data_type } => Ok(Expr::Cast {
+            SqlparserExpr::Cast {
+                expr,
+                data_type,
+                pg_style,
+            } => Ok(Expr::Cast {
                 expr: Box::new(self.transform_expr(expr)?),
                 target_type: self.transform_data_type(data_type)?,
+                pg_style: *pg_style,
             }),
             SqlparserExpr::Value(literal) => {
                 let lit = match literal {
-                    Value::Number(str, _) => Ok(Literal::Number(str.to_owned())),
-                    Value::SingleQuotedString(str) => Ok(Literal::String(str.to_owned())),
-                    Value::NationalStringLiteral(str) => Ok(Literal::String(str.to_owned())),
-                    Value::HexStringLiteral(str) => Ok(Literal::String(str.to_owned())),
-                    Value::DoubleQuotedString(str) => Ok(Literal::String(str.to_owned())),
+                    Value::Number(str, _) => Ok(Literal::Number(str.to_string())),
+                    Value::SingleQuotedString(str) => Ok(Literal::String(str.to_string())),
+                    Value::NationalStringLiteral(str) => Ok(Literal::String(str.to_string())),
+                    Value::HexStringLiteral(str) => Ok(Literal::String(str.to_string())),
+                    Value::DoubleQuotedString(str) => Ok(Literal::String(str.to_string())),
                     Value::Boolean(v) => Ok(Literal::Boolean(v.to_owned())),
                     Value::Null => Ok(Literal::Null),
                     _ => Err(ErrorCode::SyntaxException(std::format!(
@@ -722,7 +729,7 @@ impl TransformerSqlparser {
                 args: func
                     .args
                     .iter()
-                    .map(|arg| match arg {
+                    .map(|arg: &FunctionArg| match arg {
                         FunctionArg::Unnamed(expr) => self.transform_function_arg(expr),
                         FunctionArg::Named { .. } => Err(ErrorCode::SyntaxException(std::format!(
                             "Unsupported SQL statement: {}",
@@ -764,6 +771,10 @@ impl TransformerSqlparser {
             SqlparserExpr::Subquery(subquery) => {
                 Ok(Expr::Subquery(Box::new(self.transform_query(subquery)?)))
             }
+            SqlparserExpr::MapAccess { column, keys } => Ok(Expr::MapAccess {
+                expr: Box::new(self.transform_expr(column)?),
+                keys: keys.to_vec(),
+            }),
             _ => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt

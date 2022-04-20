@@ -19,6 +19,7 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -28,7 +29,10 @@ pub struct FieldFunction {
 }
 
 impl FieldFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
         Ok(Box::new(FieldFunction {
             display_name: display_name.to_string(),
         }))
@@ -48,14 +52,16 @@ impl Function for FieldFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-        Ok(u64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        u64::to_data_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         let basic_viewer = Vu8::try_create_viewer(columns[0].column())?;
 
         let viewers = columns

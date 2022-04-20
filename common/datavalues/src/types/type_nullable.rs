@@ -31,6 +31,10 @@ pub struct NullableType {
 }
 
 impl NullableType {
+    pub fn arc(inner: DataTypePtr) -> DataTypePtr {
+        Arc::new(Self::create(inner))
+    }
+
     pub fn create(inner: DataTypePtr) -> Self {
         debug_assert!(inner.can_inside_nullable());
         NullableType {

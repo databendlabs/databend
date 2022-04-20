@@ -107,8 +107,6 @@ pub fn cast_with_type(
         //all is null
         if data_type.is_nullable() {
             return data_type.create_constant_column(&DataValue::Null, column.len());
-        } else if data_type.data_type_id() == TypeID::Boolean {
-            return data_type.create_constant_column(&DataValue::Boolean(false), column.len());
         }
         return Err(ErrorCode::BadDataValueType(
             "Can't cast column from null into non-nullable type".to_string(),

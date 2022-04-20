@@ -69,7 +69,7 @@ fn test_display_query() {
     let stmt = SelectStmt {
         distinct: true,
         select_list: vec![
-            SelectTarget::Indirections(vec![
+            SelectTarget::QualifiedName(vec![
                 Indirection::Identifier(Identifier {
                     name: "table".to_owned(),
                     quote: None,
@@ -79,7 +79,7 @@ fn test_display_query() {
                     quote: None,
                 }),
             ]),
-            SelectTarget::Indirections(vec![Indirection::Star]),
+            SelectTarget::QualifiedName(vec![Indirection::Star]),
         ],
         from: TableReference::Join(Join {
             op: JoinOperator::Inner,
@@ -185,6 +185,7 @@ fn test_display_expr() {
                 Expr::Cast {
                     expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
                     target_type: TypeName::Int(None),
+                    pg_style: false,
                 },
                 Expr::Between {
                     expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
