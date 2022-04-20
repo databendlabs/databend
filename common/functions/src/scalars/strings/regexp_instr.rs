@@ -126,10 +126,6 @@ impl Function for RegexpInStrFunction {
         let columns = [source, pat, &pos, &occurrence, &return_option, &match_type];
         self.a_regexp_instr_binary(&columns, input_rows)
     }
-
-    fn passthrough_constant(&self) -> bool {
-        false
-    }
 }
 
 impl RegexpInStrFunction {

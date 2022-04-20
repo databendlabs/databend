@@ -128,10 +128,6 @@ impl Function for RegexpReplaceFunction {
         let columns = [source, pat, repl, &pos, &occurrence, &match_type];
         self.a_regexp_replace_binary(&columns[..], input_rows)
     }
-
-    fn passthrough_constant(&self) -> bool {
-        false
-    }
 }
 
 impl RegexpReplaceFunction {
