@@ -11,9 +11,11 @@ import uexpect
 prompt = ':\) '
 end_of_block = r'.*\r\n.*\r\n'
 
+
 class NativeClient(object):
+
     def __init__(self, command=None, name='', log=None):
-        self.client = uexpect.spawn(['/bin/bash','--noediting'])
+        self.client = uexpect.spawn(['/bin/bash', '--noediting'])
         if command is None:
             command = f'mysql --user default -N -s'
             tcp_host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
@@ -57,4 +59,3 @@ if __name__ == '__main__':
         client1.expect('')
         client1.send('SELECT 1 + 3;')
         client1.expect('4')
-
