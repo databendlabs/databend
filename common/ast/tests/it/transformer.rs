@@ -85,8 +85,8 @@ fn test_parse_with_ddl() {
         r#"TRUNCATE TABLE test_db.test"#,
         r#"DROP TABLE table1"#,
         r#"DROP TABLE IF EXISTS table1"#,
-        r#"CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR(255) NULL)"#,
-        r#"CREATE TABLE t (c1 INTEGER NOT NULL, c2 BIGINT NOT NULL, c3 VARCHAR(255) NOT NULL)"#,
+        r#"CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR NULL)"#,
+        r#"CREATE TABLE t (c1 INTEGER NOT NULL, c2 BIGINT NOT NULL, c3 VARCHAR NOT NULL)"#,
         r#"CREATE TABLE t (c1 INTEGER NOT NULL DEFAULT 1)"#,
     ];
     for (stmt, expect) in stmts.iter().zip(expected) {

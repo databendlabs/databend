@@ -167,7 +167,11 @@ pub trait AstVisitor {
     fn visit_query(&mut self, query: &Query) -> Result<()> {
         self.visit_set_expr(&query.body)?;
         self.visit_order_by_exprs(&query.order_by)?;
-        self.visit_expr(query.limit.as_ref().unwrap())
+        query
+            .limit
+            .iter()
+            .try_for_each(|expr| self.visit_expr(expr))?;
+        Ok(())
     }
 
     fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
@@ -259,9 +263,9 @@ pub trait AstVisitor {
         self.visit_table_alias(alias.as_ref().unwrap())
     }
 
-    fn visit_table_subquery(&mut self, subquery: &Query, alias: &Option<TableAlias>) -> Result<()> {
+    fn visit_table_subquery(&mut self, subquery: &Query, alias: &TableAlias) -> Result<()> {
         self.visit_query(subquery)?;
-        self.visit_table_alias(alias.as_ref().unwrap())
+        self.visit_table_alias(alias)
     }
 
     fn visit_table_function(&mut self, expr: &Expr, alias: &Option<TableAlias>) -> Result<()> {

@@ -1,4 +1,233 @@
 ---------- Input ----------
+show tables;
+---------- Output ---------
+SHOW TABLES
+---------- AST ------------
+ShowTables
+
+
+---------- Input ----------
+show processlist;
+---------- Output ---------
+SHOW PROCESSLIST
+---------- AST ------------
+ShowProcessList
+
+
+---------- Input ----------
+show create table a.b;
+---------- Output ---------
+SHOW CREATE TABLE a.b
+---------- AST ------------
+ShowCreateTable {
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+explain analyze select a from b;
+---------- Output ---------
+EXPLAIN ANALYZE SELECT a FROM b 
+---------- AST ------------
+Explain {
+    analyze: true,
+    query: Select(
+        Query {
+            body: Select(
+                SelectStmt {
+                    distinct: false,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: Table {
+                        database: None,
+                        table: Identifier {
+                            name: "b",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+        },
+    ),
+}
+
+
+---------- Input ----------
+describe a;
+---------- Output ---------
+DESCRIBE a
+---------- AST ------------
+Describe {
+    database: None,
+    table: Identifier {
+        name: "a",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+create table if not exists a.b (c integer not null default 1, b varchar);
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NULL)
+---------- AST ------------
+CreateTable {
+    if_not_exists: true,
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "c",
+                quote: None,
+            },
+            data_type: Int {
+                unsigned: false,
+            },
+            nullable: false,
+            default_value: Some(
+                Number(
+                    "1",
+                ),
+            ),
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "b",
+                quote: None,
+            },
+            data_type: Varchar,
+            nullable: true,
+            default_value: None,
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
+}
+
+
+---------- Input ----------
+create table if not exists a.b (c integer default 1 not null, b varchar);
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NULL)
+---------- AST ------------
+CreateTable {
+    if_not_exists: true,
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "c",
+                quote: None,
+            },
+            data_type: Int {
+                unsigned: false,
+            },
+            nullable: false,
+            default_value: Some(
+                Number(
+                    "1",
+                ),
+            ),
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "b",
+                quote: None,
+            },
+            data_type: Varchar,
+            nullable: true,
+            default_value: None,
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
+}
+
+
+---------- Input ----------
+create table a.b like c.d;
+---------- Output ---------
+CREATE TABLE a.b ()
+---------- AST ------------
+CreateTable {
+    if_not_exists: false,
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+    columns: [],
+    engine: "",
+    options: [],
+    like_db: Some(
+        Identifier {
+            name: "c",
+            quote: None,
+        },
+    ),
+    like_table: Some(
+        Identifier {
+            name: "d",
+            quote: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 truncate table a;
 ---------- Output ---------
 TRUNCATE TABLE a
@@ -67,6 +296,37 @@ DropTable {
             '"',
         ),
     },
+}
+
+
+---------- Input ----------
+use "a";
+---------- Output ---------
+USE "a"
+---------- AST ------------
+UseDatabase {
+    name: Identifier {
+        name: "a",
+        quote: Some(
+            '"',
+        ),
+    },
+}
+
+
+---------- Input ----------
+create database if not exists a;
+---------- Output ---------
+CREATE DATABASE IF NOT EXISTS a
+---------- AST ------------
+CreateDatabase {
+    if_not_exists: true,
+    name: Identifier {
+        name: "a",
+        quote: None,
+    },
+    engine: "",
+    options: [],
 }
 
 
