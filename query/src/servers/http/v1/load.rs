@@ -43,6 +43,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::StreamSource;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
@@ -152,11 +155,34 @@ pub async fn streaming_load(
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
-    // this runs inside the runtime of poem, load is not cpu densive so it's ok
-    let mut data_stream = interpreter
-        .execute(Some(source_stream))
-        .await
-        .map_err(InternalServerError)?;
+    // this runs inside the runtime of poem, load is not cpu defensive so it's ok
+    let mut data_stream = if context
+        .get_settings()
+        .get_enable_new_processor_framework()
+        .unwrap()
+        != 0
+        && context.get_cluster().is_empty()
+    {
+        let output_port = OutputPort::create();
+        let stream_source =
+            StreamSource::create(context.clone(), Some(source_stream), output_port.clone())
+                .unwrap();
+        let mut source_pipe_builder = SourcePipeBuilder::create();
+        source_pipe_builder.add_source(output_port, stream_source);
+        let _ = interpreter
+            .set_source_pipe_builder(Option::from(source_pipe_builder))
+            .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+        interpreter
+            .execute(None)
+            .await
+            .map_err(InternalServerError)?
+    } else {
+        interpreter
+            .execute(Some(source_stream))
+            .await
+            .map_err(InternalServerError)?
+    };
+
     while let Some(_block) = data_stream.next().await {}
 
     // Write Finish to query log table.
