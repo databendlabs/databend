@@ -87,7 +87,7 @@ impl MutableColumn for MutableStringColumn {
         self.append_value("");
     }
 
-    fn validity(&self) -> Option<&common_arrow::arrow::bitmap::MutableBitmap> {
+    fn validity(&self) -> Option<&common_arrow::bitmap::MutableBitmap> {
         None
     }
 
