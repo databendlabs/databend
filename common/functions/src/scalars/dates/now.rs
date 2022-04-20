@@ -49,7 +49,7 @@ impl Function for NowFunction {
     }
 
     fn return_type(&self) -> DataTypePtr {
-        DateTime32Type::arc(None)
+        DateTimeType::arc(0, None)
     }
 
     fn eval(
@@ -59,8 +59,8 @@ impl Function for NowFunction {
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
-        let value = (utc.timestamp_millis() / 1000) as u32;
-        let column = Series::from_data(&[value as u32]);
+        let value = utc.timestamp();
+        let column = Series::from_data(&[value as i64]);
         Ok(Arc::new(ConstColumn::new(column, input_rows)))
     }
 }

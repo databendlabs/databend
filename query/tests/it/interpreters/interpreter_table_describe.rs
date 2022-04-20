@@ -52,7 +52,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
             "| b     | INT      | NO   | 0       |       |",
             "| c     | VARCHAR  | NO   |         |       |",
             "| d     | SMALLINT | NO   | 0       |       |",
-            "| e     | DATE16   | NO   | 0       |       |",
+            "| e     | DATE     | NO   | 0       |       |",
             "+-------+----------+------+---------+-------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -74,7 +74,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
             "| b     | INT      | NO   | 0       |       |",
             "| c     | VARCHAR  | NO   |         |       |",
             "| d     | SMALLINT | NO   | 0       |       |",
-            "| e     | DATE16   | NO   | 0       |       |",
+            "| e     | DATE     | NO   | 0       |       |",
             "+-------+----------+------+---------+-------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

@@ -58,9 +58,9 @@ impl WarehousesTable {
             .map(|x| x.meta.warehouse_name.as_str())
             .collect();
         let warehouse_sizes: Vec<&str> = warehouses.iter().map(|x| x.meta.size.as_str()).collect();
-        let warehouse_creation_time: Vec<u32> = warehouses
+        let warehouse_creation_time: Vec<i64> = warehouses
             .iter()
-            .map(|x| (x.meta.created_on.timestamp_millis() / 1000) as u32)
+            .map(|x| x.meta.created_on.timestamp_millis() / 1000)
             .collect();
         Ok(DataBlock::create(Self::schema(), vec![
             Series::from_data(warehouse_names),
@@ -76,7 +76,7 @@ impl WarehousesTable {
             DataField::new("tenant_id", Vu8::to_data_type()),
             DataField::new("id", Vu8::to_data_type()),
             DataField::new("size", Vu8::to_data_type()),
-            DataField::new("creation_time", DateTime32Type::arc(None)),
+            DataField::new("creation_time", DateTimeType::arc(0, None)),
         ])
     }
     pub fn create(table_id: u64) -> Arc<dyn Table> {
