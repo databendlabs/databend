@@ -56,6 +56,7 @@ impl Interpreter for DescribeTableInterpreter {
         let mut types: Vec<String> = vec![];
         let mut nulls: Vec<String> = vec![];
         let mut default_exprs: Vec<String> = vec![];
+        let mut extras: Vec<String> = vec![];
 
         for field in schema.fields().iter() {
             names.push(field.name().to_string());
@@ -78,6 +79,7 @@ impl Interpreter for DescribeTableInterpreter {
                     default_exprs.push(format!("{}", value));
                 }
             }
+            extras.push("".to_string());
         }
 
         let desc_schema = self.plan.schema();
@@ -87,6 +89,7 @@ impl Interpreter for DescribeTableInterpreter {
             Series::from_data(types),
             Series::from_data(nulls),
             Series::from_data(default_exprs),
+            Series::from_data(extras),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![
