@@ -166,15 +166,15 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
-                                (TypeID::Variant, DataValue::Json(_)) => {
+                                (TypeID::Variant, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
-                                (TypeID::VariantArray, DataValue::Json(_)) => {
+                                (TypeID::VariantArray, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
-                                (TypeID::VariantObject, DataValue::Json(_)) => {
+                                (TypeID::VariantObject, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }

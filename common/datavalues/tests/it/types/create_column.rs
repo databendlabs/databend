@@ -90,56 +90,80 @@ fn test_create_constant() -> Result<()> {
             data_type: VariantType::arc(),
             value: DataValue::Null,
             size: 2,
-            column_expected: Series::from_data(vec![JsonValue::Null, JsonValue::Null]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(JsonValue::Null),
+                VariantValue::from(JsonValue::Null),
+            ]),
         },
         Test {
             name: "variant_boolean",
             data_type: VariantType::arc(),
             value: DataValue::Boolean(true),
             size: 2,
-            column_expected: Series::from_data(vec![json!(true), json!(true)]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!(true)),
+                VariantValue::from(json!(true)),
+            ]),
         },
         Test {
             name: "variant_int64",
             data_type: VariantType::arc(),
             value: DataValue::Int64(1234),
             size: 2,
-            column_expected: Series::from_data(vec![json!(1234i64), json!(1234i64)]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!(1234i64)),
+                VariantValue::from(json!(1234i64)),
+            ]),
         },
         Test {
             name: "variant_uint64",
             data_type: VariantType::arc(),
             value: DataValue::UInt64(1234),
             size: 2,
-            column_expected: Series::from_data(vec![json!(1234u64), json!(1234u64)]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!(1234u64)),
+                VariantValue::from(json!(1234u64)),
+            ]),
         },
         Test {
             name: "variant_float64",
             data_type: VariantType::arc(),
             value: DataValue::Float64(12.34),
             size: 2,
-            column_expected: Series::from_data(vec![json!(12.34f64), json!(12.34f64)]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!(12.34f64)),
+                VariantValue::from(json!(12.34f64)),
+            ]),
         },
         Test {
             name: "variant_string",
             data_type: VariantType::arc(),
             value: DataValue::String("hello".as_bytes().to_vec()),
             size: 2,
-            column_expected: Series::from_data(vec![json!("hello"), json!("hello")]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!("hello")),
+                VariantValue::from(json!("hello")),
+            ]),
         },
         Test {
             name: "variant_array",
             data_type: VariantArrayType::arc(),
-            value: DataValue::Json(json!([1, 2, 3])),
+            value: DataValue::Variant(VariantValue::from(json!([1, 2, 3]))),
             size: 2,
-            column_expected: Series::from_data(vec![json!([1, 2, 3]), json!([1, 2, 3])]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!([1, 2, 3])),
+                VariantValue::from(json!([1, 2, 3])),
+            ]),
         },
         Test {
             name: "variant_object",
             data_type: VariantObjectType::arc(),
-            value: DataValue::Json(json!({"a":1,"b":2})),
+            value: DataValue::Variant(VariantValue::from(json!({"a":1,"b":2}))),
             size: 2,
-            column_expected: Series::from_data(vec![json!({"a":1,"b":2}), json!({"a":1,"b":2})]),
+            column_expected: Series::from_data(vec![
+                VariantValue::from(json!({"a":1,"b":2})),
+                VariantValue::from(json!({"a":1,"b":2})),
+            ]),
         },
     ];
 

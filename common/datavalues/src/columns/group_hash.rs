@@ -294,5 +294,5 @@ impl GroupHash for StringColumn {
     }
 }
 
-// TODO(b41sh): implement GroupHash for JsonColumn
-impl GroupHash for JsonColumn {}
+// TODO(b41sh): implement GroupHash for VariantColumn
+impl GroupHash for VariantColumn {}

@@ -125,13 +125,13 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "variant",
             data_type: VariantType::arc(),
-            value: DataValue::Json(json!(true)),
-            column: Arc::new(JsonColumn::new_from_vec(vec![
-                json!(null),
-                json!(true),
-                json!(false),
-                json!(123),
-                json!(12.34),
+            value: DataValue::Variant(VariantValue::from(json!(true))),
+            column: Arc::new(VariantColumn::new_from_vec(vec![
+                VariantValue::from(json!(null)),
+                VariantValue::from(json!(true)),
+                VariantValue::from(json!(false)),
+                VariantValue::from(json!(123)),
+                VariantValue::from(json!(12.34)),
             ])),
             val_str: "true",
             col_str: vec![
