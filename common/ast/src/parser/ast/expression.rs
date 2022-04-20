@@ -111,7 +111,7 @@ pub enum TypeName {
     DateTime,
     Timestamp,
     Varchar,
-    Array,
+    Array { item_type: Box<TypeName> },
     Object,
     Variant,
 }
@@ -292,8 +292,10 @@ impl Display for TypeName {
             TypeName::Varchar => {
                 write!(f, "VARCHAR")?;
             }
-            TypeName::Array => {
-                write!(f, "ARRAY")?;
+            TypeName::Array { item_type } => {
+                write!(f, "ARRAY (")?;
+                write!(f, "{}", item_type)?;
+                write!(f, ")")?;
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;

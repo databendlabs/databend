@@ -23,7 +23,7 @@ Query {
         SelectStmt {
             distinct: false,
             select_list: [
-                Projection {
+                AliasedExpr {
                     expr: ColumnRef {
                         database: None,
                         table: None,
@@ -34,7 +34,7 @@ Query {
                     },
                     alias: None,
                 },
-                Projection {
+                AliasedExpr {
                     expr: CountAll,
                     alias: Some(
                         Identifier {
@@ -43,7 +43,7 @@ Query {
                         },
                     ),
                 },
-                Projection {
+                AliasedExpr {
                     expr: FunctionCall {
                         distinct: false,
                         name: "sum",
@@ -107,7 +107,7 @@ Query {
                                 SelectStmt {
                                     distinct: false,
                                     select_list: [
-                                        Projection {
+                                        AliasedExpr {
                                             expr: ColumnRef {
                                                 database: None,
                                                 table: None,
@@ -118,7 +118,7 @@ Query {
                                             },
                                             alias: None,
                                         },
-                                        Projection {
+                                        AliasedExpr {
                                             expr: FunctionCall {
                                                 distinct: false,
                                                 name: "count",
@@ -309,7 +309,7 @@ Query {
         SelectStmt {
             distinct: false,
             select_list: [
-                Indirections(
+                QualifiedName(
                     [
                         Star,
                     ],
@@ -383,7 +383,7 @@ Query {
         SelectStmt {
             distinct: false,
             select_list: [
-                Indirections(
+                QualifiedName(
                     [
                         Star,
                     ],
@@ -431,7 +431,7 @@ Query {
         SelectStmt {
             distinct: false,
             select_list: [
-                Indirections(
+                QualifiedName(
                     [
                         Star,
                     ],

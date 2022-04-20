@@ -32,7 +32,7 @@ Query {
         SelectStmt {
             distinct: false,
             select_list: [
-                Indirections(
+                QualifiedName(
                     [
                         Star,
                     ],

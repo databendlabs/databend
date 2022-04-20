@@ -572,13 +572,18 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             unsigned: unsigned.is_some(),
         }
     });
+    let ty_array = map(
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array {
+            item_type: Box::new(item_type),
+        },
+    );
     let ty_float = value(TypeName::Float, rule! { FLOAT });
     let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_date = value(TypeName::Date, rule! { DATE });
     let ty_datetime = value(TypeName::DateTime, rule! { DATETIME });
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
     let ty_varchar = value(TypeName::Varchar, rule! { VARCHAR });
-    let ty_array = value(TypeName::Array, rule! { ARRAY });
     let ty_object = value(TypeName::Object, rule! { OBJECT });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT });
 
@@ -588,13 +593,13 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         | #ty_small_int
         | #ty_int
         | #ty_big_int
+        | #ty_array
         | #ty_float
         | #ty_double
         | #ty_date
         | #ty_datetime
         | #ty_timestamp
         | #ty_varchar
-        | #ty_array
         | #ty_object
         | #ty_variant
     )(i)

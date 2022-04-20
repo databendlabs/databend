@@ -46,7 +46,7 @@ Explain {
                 SelectStmt {
                     distinct: false,
                     select_list: [
-                        Projection {
+                        AliasedExpr {
                             expr: ColumnRef {
                                 database: None,
                                 table: None,
