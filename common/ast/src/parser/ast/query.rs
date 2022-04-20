@@ -86,8 +86,8 @@ pub struct OrderByExpr {
 pub enum SelectTarget {
     // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
     AliasedExpr {
-        alias: Option<Identifier>,
         expr: Expr,
+        alias: Option<Identifier>,
     },
 
     // Qualified name, e.g. `SELECT t.a, t.* FROM t`.

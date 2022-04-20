@@ -260,22 +260,22 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
             ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*"
         },
         |(res, _)| match res {
-            Some((fst, _, Some((snd, _)))) => SelectTarget::Indirections(vec![
+            Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName(vec![
                 Indirection::Identifier(fst),
                 Indirection::Identifier(snd),
                 Indirection::Star,
             ]),
             Some((fst, _, None)) => {
-                SelectTarget::Indirections(vec![Indirection::Identifier(fst), Indirection::Star])
+                SelectTarget::QualifiedName(vec![Indirection::Identifier(fst), Indirection::Star])
             }
-            None => SelectTarget::Indirections(vec![Indirection::Star]),
+            None => SelectTarget::QualifiedName(vec![Indirection::Star]),
         },
     );
     let projection = map(
         rule! {
             #expr ~ ( AS ~ #ident )?
         },
-        |(expr, alias)| SelectTarget::Projection {
+        |(expr, alias)| SelectTarget::AliasedExpr {
             expr,
             alias: alias.map(|(_, name)| name),
         },
