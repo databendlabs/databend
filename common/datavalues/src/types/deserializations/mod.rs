@@ -65,6 +65,8 @@ pub trait TypeDeserializer: Send + Sync {
         self.de_text(reader)
     }
 
+    fn pop_data_value(&mut self) -> Result<DataValue>;
+
     fn append_data_value(&mut self, value: DataValue) -> Result<()>;
 
     fn finish_to_column(&mut self) -> ColumnRef;

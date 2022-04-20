@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BufferReadExt;
@@ -109,6 +110,16 @@ impl TypeDeserializer for NullableDeserializer {
             self.bitmap.push(true);
         }
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.bitmap
+            .pop()
+            .ok_or_else(|| ErrorCode::BadDataArrayLength(""))
+            .and_then(|v| {
+                v.then(|| self.inner.pop_data_value())
+                    .unwrap_or(Ok(DataValue::Null))
+            })
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

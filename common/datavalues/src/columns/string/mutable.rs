@@ -14,6 +14,10 @@
 
 use std::sync::Arc;
 
+use common_arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::prelude::*;
 
 pub struct MutableStringColumn {
@@ -36,6 +40,13 @@ impl MutableStringColumn {
         let bytes = v.as_ref();
         self.add_offset(bytes.len());
         self.values.extend_from_slice(bytes);
+    }
+
+    pub fn pop_value(&mut self) -> Option<Vec<u8>> {
+        let last_size = self.pop_offset()?;
+        self.last_size = last_size;
+
+        Some(self.values.split_off(last_size))
     }
 
     pub fn with_values_capacity(values_capacity: usize, capacity: usize) -> Self {
@@ -62,6 +73,10 @@ impl MutableStringColumn {
         self.last_size += offset;
         self.offsets.push(self.last_size as i64);
     }
+
+    pub fn pop_offset(&mut self) -> Option<usize> {
+        self.offsets.pop().map(|offset| offset as usize)
+    }
 }
 
 impl Default for MutableStringColumn {
@@ -87,7 +102,7 @@ impl MutableColumn for MutableStringColumn {
         self.append_value("");
     }
 
-    fn validity(&self) -> Option<&common_arrow::bitmap::MutableBitmap> {
+    fn validity(&self) -> Option<&MutableBitmap> {
         None
     }
 
@@ -104,9 +119,15 @@ impl MutableColumn for MutableStringColumn {
         Arc::new(self.finish())
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> common_exception::Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.append_value(value.as_string()?);
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.pop_value().map(DataValue::from).ok_or_else(|| {
+            ErrorCode::BadDataArrayLength("string column array is empty when pop data value")
+        })
     }
 }
 

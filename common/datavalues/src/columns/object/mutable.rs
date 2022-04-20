@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
@@ -65,10 +66,19 @@ where T: ObjectType
         })
     }
 
-    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let v: T = DFTryFrom::try_from(value)?;
         self.append_value(v);
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        let t = self.pop_value().ok_or_else(|| {
+            ErrorCode::BadDataArrayLength("object column array is empty when pop data value")
+        })?;
+
+        let data_value = DataValue::try_from(t)?;
+        Ok(data_value)
     }
 }
 
@@ -89,6 +99,10 @@ where T: ObjectType
 
     pub fn append_value(&mut self, val: T) {
         self.values.push(val);
+    }
+
+    pub fn pop_value(&mut self) -> Option<T> {
+        self.values.pop()
     }
 
     pub fn values(&self) -> &Vec<T> {
