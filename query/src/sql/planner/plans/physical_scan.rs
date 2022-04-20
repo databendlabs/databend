@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,39 +12,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
-use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::BasePlan;
+use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::PhysicalPlan;
+use crate::sql::plans::PlanType;
 use crate::sql::IndexType;
-use crate::sql::PhysicalPlan;
-use crate::sql::Plan;
 
-#[derive(Clone, Default, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PhysicalScan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
 }
 
-impl PhysicalScan {
-    pub fn create(table_index: IndexType, columns: ColumnSet) -> Self {
-        PhysicalScan {
-            table_index,
-            columns,
-        }
+impl BasePlan for PhysicalScan {
+    fn plan_type(&self) -> PlanType {
+        PlanType::PhysicalScan
+    }
+
+    fn is_physical(&self) -> bool {
+        true
+    }
+
+    fn is_logical(&self) -> bool {
+        false
+    }
+
+    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+        todo!()
+    }
+
+    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+        None
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
 impl PhysicalPlan for PhysicalScan {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
-        PhysicalProperty::default()
-    }
-
-    fn compute_required_prop(&self, input_prop: &RequiredProperty) -> RequiredProperty {
-        input_prop.clone()
-    }
-
-    fn as_plan(&self) -> Plan {
-        Plan::PhysicalScan(self.clone())
+        todo!()
     }
 }

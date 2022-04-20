@@ -29,7 +29,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
     let user_api = UserApiProvider::create_global(conf).await?;
 
-    let mut role1 = RoleInfo::new("role1".to_string());
+    let mut role1 = RoleInfo::new("role1");
     role1.grants.grant_privileges(
         &GrantObject::Database("db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
@@ -47,11 +47,11 @@ async fn test_role_cache_mgr() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_find_all_related_roles() -> Result<()> {
     let roles = vec![
-        RoleInfo::new("role1".to_string()),
-        RoleInfo::new("role2".to_string()),
-        RoleInfo::new("role3".to_string()),
-        RoleInfo::new("role4".to_string()),
-        RoleInfo::new("role5".to_string()),
+        RoleInfo::new("role1"),
+        RoleInfo::new("role2"),
+        RoleInfo::new("role3"),
+        RoleInfo::new("role4"),
+        RoleInfo::new("role5"),
     ];
     // role1 -> role2 -> role4 -> role5
     //    <- -> role3

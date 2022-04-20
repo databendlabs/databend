@@ -27,9 +27,9 @@ mysqldump Options: [--single-transaction](https://dev.mysql.com/doc/refman/8.0/e
 The `dumpbooks.sql` looks like:
 ```text title='dumpbooks.sql'
 CREATE TABLE `books` (
-  title varchar(255),
-  author varchar(255),
-  date varchar(255) 
+  title VARCHAR,
+  author VARCHAR,
+  date VARCHAR
 );
 INSERT INTO `books` VALUES ('Transaction Processing','Jim Gray','1992'),('Readings in Database Systems','Michael Stonebraker','2004');
 ... [snip] ...
@@ -46,11 +46,8 @@ All tables and data from users will now be loaded into Databend.
 
 ### Step 3. Verify the Loaded Data
 
-```sql title='mysql>'
-select * from books;
-```
-
-```
+```sql
+SELECT * FROM books;
 +------------------------------+----------------------+-------+
 | title                        | author               | date  |
 +------------------------------+----------------------+-------+

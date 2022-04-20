@@ -18,14 +18,14 @@ numbers_mt(N) – A table for test with the single `number` column (UInt64) that
 :::
 
 ```sql
-mysql> SELECT count(number) FROM numbers(10);
+SELECT count(number) FROM numbers(10);
 +---------------+
 | count(number) |
 +---------------+
 |            10 |
 +---------------+
 
-mysql> SELECT count_if(number, number > 7) FROM numbers(10);
+SELECT count_if(number, number > 7) FROM numbers(10);
 +--------------------------------+
 | count_if(number, (number > 7)) |
 +--------------------------------+

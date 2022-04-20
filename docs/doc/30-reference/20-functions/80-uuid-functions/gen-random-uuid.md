@@ -17,7 +17,7 @@ Random UUID.
 ## Examples
 
 ```sql
-mysql> SELECT gen_random_uuid();
+SELECT gen_random_uuid();
 +--------------------------------------+
 | gen_random_uuid()                    |
 +--------------------------------------+

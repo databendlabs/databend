@@ -13,11 +13,10 @@ DESC|DESCRIBE [database.]table_name
 ## Examples
 
 ```sql
-mysql> describe system.numbers;
-+--------+--------+------+
-| Field  | Type   | Null |
-+--------+--------+------+
-| number | UInt64 | NO   |
-+--------+--------+------+
-1 row in set (0.01 sec)
+DESC system.one;
++-------+------------------+------+---------+
+| Field | Type             | Null | Default |
++-------+------------------+------+---------+
+| dummy | TINYINT UNSIGNED | NO   | 0       |
++-------+------------------+------+---------+
 ```

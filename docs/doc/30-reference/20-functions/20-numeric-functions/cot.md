@@ -25,11 +25,10 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT COT(12);
+SELECT COT(12);
 +---------------------+
 | COT(12)             |
 +---------------------+
 | -1.5726734063976895 |
 +---------------------+
-1 row in set (0.00 sec)
 ```

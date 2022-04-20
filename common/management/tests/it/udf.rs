@@ -96,7 +96,7 @@ async fn test_unknown_udf_drop_udf() -> Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
     match udf_api.drop_udf("UNKNOWN_NAME", None).await {
-        Ok(_) => panic!("Unknown UDF drop must be return Err."),
+        Ok(_) => panic!("Unknown Function drop must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 2602),
     }
 

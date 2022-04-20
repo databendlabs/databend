@@ -27,7 +27,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT LOCATE('bar', 'foobarbar')
 +----------------------------+
 | LOCATE('bar', 'foobarbar') |

@@ -39,7 +39,7 @@ Type: `UInt8`.
 
 **Example**
 
-Determine if a set period of time is enough for the user to select a phone and purchase it twice in the online store.
+Determine if a set period of time is enough for the user to SELECT a phone and purchase it twice in the online store.
 
 Set the following chain of events:
 

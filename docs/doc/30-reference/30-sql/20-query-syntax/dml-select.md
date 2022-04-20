@@ -26,10 +26,10 @@ SELECT
 numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 
-## SELECT clause
+## SELECT Clause
 
 ```sql
-mysql> SELECT number FROM numbers(3);
+SELECT number FROM numbers(3);
 +--------+
 | number |
 +--------+
@@ -39,10 +39,10 @@ mysql> SELECT number FROM numbers(3);
 +--------+
 ```
 
-## FROM clause
+## FROM Clause
 
 ```sql
-mysql> SELECT number FROM numbers(3) AS a; 
+SELECT number FROM numbers(3) AS a; 
 +--------+
 | number |
 +--------+
@@ -52,22 +52,21 @@ mysql> SELECT number FROM numbers(3) AS a;
 +--------+
 ```
 
-## WHERE clause
+## WHERE Clause
 
 ```sql
-mysql> SELECT number FROM numbers(3) WHERE number > 1;
+SELECT number FROM numbers(3) WHERE number > 1;
 +--------+
 | number |
 +--------+
 |      2 |
 +--------+
-1 row in set (0.00 sec)
 ```
 
-## GROUP BY clause
+## GROUP BY Clause
 
 ```sql
-mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
+SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
 +------+------+-------------+
 | c1   | c2   | MAX(number) |
 +------+------+-------------+
@@ -78,13 +77,12 @@ mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GR
 |    0 |    0 |        9996 |
 |    1 |    0 |        9999 |
 +------+------+-------------+
-6 rows in set (0.00 sec)
 ```
 
-## HAVING clause
+## HAVING Clause
 
 ```sql
-mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GROUP BY c1, c2 HAVING max>9996;
+SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GROUP BY c1, c2 HAVING max>9996;
 +------+------+------+
 | c1   | c2   | max  |
 +------+------+------+
@@ -92,13 +90,12 @@ mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10
 |    1 |    1 | 9997 |
 |    0 |    2 | 9998 |
 +------+------+------+
-3 rows in set (0.00 sec)
 ```
 
-## ORDER By clause
+## ORDER By Clause
 
 ```sql
-mysql> SELECT number FROM numbers(5) ORDER BY number ASC;
+SELECT number FROM numbers(5) ORDER BY number ASC;
 +--------+
 | number |
 +--------+
@@ -108,9 +105,8 @@ mysql> SELECT number FROM numbers(5) ORDER BY number ASC;
 |      3 |
 |      4 |
 +--------+
-5 rows in set (0.00 sec)
 
-mysql> SELECT number FROM numbers(5) ORDER BY number DESC;
+SELECT number FROM numbers(5) ORDER BY number DESC;
 +--------+
 | number |
 +--------+
@@ -120,9 +116,8 @@ mysql> SELECT number FROM numbers(5) ORDER BY number DESC;
 |      1 |
 |      0 |
 +--------+
-5 rows in set (0.00 sec)
 
-mysql> SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
+SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c2 DESC;
 +------+------+
 | c1   | c2   |
 +------+------+
@@ -132,34 +127,31 @@ mysql> SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c
 |    1 |    1 |
 |    1 |    0 |
 +------+------+
-5 rows in set (0.00 sec)
 ```
 
-## LIMIT clause
+## LIMIT Clause
 
 ```sql
-mysql> SELECT number FROM numbers(1000000000) LIMIT 1;
+SELECT number FROM numbers(1000000000) LIMIT 1;
 +--------+
 | number |
 +--------+
 |      0 |
 +--------+
-1 row in set (0.00 sec)
 
-mysql> SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
+SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 +--------+
 | number |
 +--------+
 |     10 |
 |     11 |
 +--------+
-2 rows in set (0.02 sec)
 ```
 
-## OFFSET clause
+## OFFSET Clause
 
 ```sql
-mysql> SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
+SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
 +--------+
 | number |
 +--------+
@@ -167,7 +159,6 @@ mysql> SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
 |      3 |
 |      4 |
 +--------+
-3 rows in set (0.02 sec)
 ```
 
 ## Nested Sub-Selects
@@ -179,7 +170,7 @@ SELECT ... [SELECT ...[SELECT [...]]]
 ```
 
 ```sql
-mysql> SELECT MIN(number) FROM (SELECT number%3 AS number FROM numbers(10)) GROUP BY number%2;
+SELECT MIN(number) FROM (SELECT number%3 AS number FROM numbers(10)) GROUP BY number%2;
 +-------------+
 | min(number) |
 +-------------+

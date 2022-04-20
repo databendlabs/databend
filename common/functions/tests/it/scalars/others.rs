@@ -399,11 +399,11 @@ fn test_inet_ntoa_function() -> Result<()> {
 }
 
 #[test]
-fn test_to_type_name_function() -> Result<()> {
+fn test_type_of_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
-        name: "to_type_name-example-passed",
+        name: "type-of-example-passed",
         columns: vec![Series::from_data([true, true, true, false])],
-        expect: Series::from_data(["Boolean", "Boolean", "Boolean", "Boolean"]),
+        expect: Series::from_data(["BOOLEAN", "BOOLEAN", "BOOLEAN", "BOOLEAN"]),
         error: "",
     }];
 

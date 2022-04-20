@@ -13,7 +13,7 @@ SHOW CREATE DATABASE database_name
 ## Examples
 
 ```sql
-mysql> SHOW CREATE DATABASE default;
+SHOW CREATE DATABASE default;
 +----------+---------------------------+
 | Database | Create Database           |
 +----------+---------------------------+

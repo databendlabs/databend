@@ -84,13 +84,18 @@ pub struct OrderByExpr {
 // One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectTarget {
-    // Projection is an expression with an optional alias, like `SELECT expr AS ident FROM ...`
-    Projection {
-        expr: Expr,
+    // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
+    AliasedExpr {
         alias: Option<Identifier>,
+        expr: Expr,
     },
-    Indirections(Vec<Indirection>),
+
+    // Qualified name, e.g. `SELECT t.a, t.* FROM t`.
+    // For simplicity, wildcard is involved.
+    QualifiedName(QualifiedName),
 }
+
+pub type QualifiedName = Vec<Indirection>;
 
 // Indirection of a select result, like a part of `db.table.column`.
 // Can be a database name, table name, field name or wildcard star(`*`).
@@ -281,13 +286,13 @@ impl Display for Indirection {
 impl Display for SelectTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SelectTarget::Projection { expr, alias } => {
+            SelectTarget::AliasedExpr { expr, alias } => {
                 write!(f, "{}", expr)?;
                 if let Some(ident) = alias {
                     write!(f, " AS {}", ident)?;
                 }
             }
-            SelectTarget::Indirections(indirections) => {
+            SelectTarget::QualifiedName(indirections) => {
                 for i in 0..indirections.len() {
                     write!(f, "{}", indirections[i])?;
                     if i != indirections.len() - 1 {

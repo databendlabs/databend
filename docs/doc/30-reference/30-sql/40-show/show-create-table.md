@@ -17,7 +17,7 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SHOW CREATE TABLE system.numbers;
+SHOW CREATE TABLE system.numbers;
 +---------+--------------------------------------------------------------------+
 | Table   | Create Table                                                       |
 +---------+--------------------------------------------------------------------+
