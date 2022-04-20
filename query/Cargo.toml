@@ -106,6 +106,8 @@ tonic = "=0.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+serfig = {path="../../../xuanwo/serfig"}
+serde-bridge = {path="../../../xuanwo/serde-bridge"}
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }

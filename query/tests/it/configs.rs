@@ -177,7 +177,6 @@ fn test_env_config() -> Result<()> {
     assert_eq!("", configured.storage.s3.endpoint_url);
     assert_eq!("us.key.id", configured.storage.s3.access_key_id);
     assert_eq!("us.key", configured.storage.s3.secret_access_key);
-    assert!(configured.storage.s3.enable_pod_iam_policy);
     assert_eq!("us.bucket", configured.storage.s3.bucket);
 
     assert!(configured.query.table_engine_csv_enabled);

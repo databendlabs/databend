@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use clap::Parser;
 use common_base::RuntimeTracker;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
@@ -31,24 +32,28 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
+use serde::Deserialize;
+use serde::Serialize;
+use serfig::collectors::Environment;
+use serfig::collectors::File;
+use serfig::parsers::Toml;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
-    // First load configs from args.
-    let mut conf = Config::load_from_args();
+    let arg_conf = Config::parse();
 
-    // If config file is not empty: -c xx.toml
-    // Reload configs from the file.
-    if !conf.config_file.is_empty() {
-        tracing::info!("Config reload from {:?}", conf.config_file);
-        let config_file = conf.config_file;
-        conf = Config::load_from_file(config_file.as_str())?;
-        conf.config_file = config_file;
+    // Load from env first as default.
+    let mut builder = serfig::Builder::default().collect(Environment::create());
+    // Override by file if exist
+    if !arg_conf.config_file.is_empty() {
+        builder = builder.collect(File::create(&arg_conf.config_file, Toml));
     }
+    // Override by args.
+    builder = builder.collect(Box::new(
+        serde_bridge::into_value(arg_conf).expect("into value failed"),
+    ));
 
-    // Prefer to use env variable in cloud native deployment
-    // Override configs based on env variables
-    conf = Config::load_from_env(&conf)?;
+    let mut conf: Config = builder.build()?;
 
     if conf.meta.meta_address.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.meta_embedded_dir.clone()).await?;

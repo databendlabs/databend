@@ -28,16 +28,6 @@ pub const STORAGE_NUM_CPUS: &str = "STORAGE_NUM_CPUS";
 // Fs Storage env.
 pub const FS_STORAGE_DATA_PATH: &str = "FS_STORAGE_DATA_PATH";
 
-// S3 Storage env.
-const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
-const S3_STORAGE_ENDPOINT_URL: &str = "S3_STORAGE_ENDPOINT_URL";
-
-const S3_STORAGE_ACCESS_KEY_ID: &str = "S3_STORAGE_ACCESS_KEY_ID";
-const S3_STORAGE_SECRET_ACCESS_KEY: &str = "S3_STORAGE_SECRET_ACCESS_KEY";
-const S3_STORAGE_ENABLE_POD_IAM_POLICY: &str = "S3_STORAGE_ENABLE_POD_IAM_POLICY";
-const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
-const S3_STORAGE_ROOT: &str = "S3_STORAGE_ROOT";
-
 // Azure Storage Blob env.
 const AZURE_STORAGE_ACCOUNT: &str = "AZURE_STORAGE_ACCOUNT";
 const AZURE_BLOB_MASTER_KEY: &str = "AZURE_BLOB_MASTER_KEY";
@@ -84,31 +74,36 @@ impl Default for FsStorageConfig {
 #[serde(default)]
 pub struct S3StorageConfig {
     /// Region for S3 storage
-    #[clap(long, env = S3_STORAGE_REGION, default_value = "")]
+    #[clap(long = "storage-s3-region", default_value = "")]
+    #[serde(rename = "storage_s3_region")]
     pub region: String,
 
     /// Endpoint URL for S3 storage
-    #[clap(long, env = S3_STORAGE_ENDPOINT_URL, default_value = "https://s3.amazonaws.com")]
+    #[clap(
+        long = "storage-s3-endpoint-url",
+        default_value = "https://s3.amazonaws.com"
+    )]
+    #[serde(rename = "storage_s3_endpoint_url")]
     pub endpoint_url: String,
 
     // Access key for S3 storage
-    #[clap(long, env = S3_STORAGE_ACCESS_KEY_ID, default_value = "")]
+    #[clap(long = "storage-s3-access-key-id", default_value = "")]
+    #[serde(rename = "storage_s3_access_key_id")]
     pub access_key_id: String,
 
     /// Secret key for S3 storage
-    #[clap(long, env = S3_STORAGE_SECRET_ACCESS_KEY, default_value = "")]
+    #[clap(long = "storage-s3-secret-access-key", default_value = "")]
+    #[serde(rename = "storage-s3-secret-access-key")]
     pub secret_access_key: String,
 
-    /// Use iam role service account token to access S3 resource
-    #[clap(long, env = S3_STORAGE_ENABLE_POD_IAM_POLICY)]
-    pub enable_pod_iam_policy: bool,
-
     /// S3 Bucket to use for storage
-    #[clap(long, env = S3_STORAGE_BUCKET, default_value = "")]
+    #[clap(long = "storage-s3-bucket", default_value = "")]
+    #[serde(rename = "storage_s3_bucket")]
     pub bucket: String,
 
-    /// <bucket>/<root>
-    #[clap(long, env = S3_STORAGE_ROOT, default_value = "")]
+    /// <root>
+    #[clap(long = "storage-s3-root", default_value = "")]
+    #[serde(rename = "storage_s3_root")]
     pub root: String,
 }
 
@@ -119,7 +114,6 @@ impl Default for S3StorageConfig {
             endpoint_url: "https://s3.amazonaws.com".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
-            enable_pod_iam_policy: false,
             bucket: "".to_string(),
             root: "".to_string(),
         }
@@ -198,6 +192,7 @@ pub struct StorageConfig {
 
     // S3 storage backend config.
     #[clap(flatten)]
+    #[serde(flatten)]
     pub s3: S3StorageConfig,
 
     // azure storage blob config.
@@ -230,39 +225,6 @@ impl StorageConfig {
             String,
             FS_STORAGE_DATA_PATH
         );
-
-        // S3.
-        env_helper!(mut_config.storage, s3, region, String, S3_STORAGE_REGION);
-        env_helper!(
-            mut_config.storage,
-            s3,
-            endpoint_url,
-            String,
-            S3_STORAGE_ENDPOINT_URL
-        );
-        env_helper!(
-            mut_config.storage,
-            s3,
-            access_key_id,
-            String,
-            S3_STORAGE_ACCESS_KEY_ID
-        );
-        env_helper!(
-            mut_config.storage,
-            s3,
-            secret_access_key,
-            String,
-            S3_STORAGE_SECRET_ACCESS_KEY
-        );
-        env_helper!(
-            mut_config.storage,
-            s3,
-            enable_pod_iam_policy,
-            bool,
-            S3_STORAGE_ENABLE_POD_IAM_POLICY
-        );
-        env_helper!(mut_config.storage, s3, bucket, String, S3_STORAGE_BUCKET);
-        env_helper!(mut_config.storage, s3, root, String, S3_STORAGE_ROOT);
 
         // Azure Storage Blob.
         env_helper!(
