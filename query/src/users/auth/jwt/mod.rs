@@ -15,7 +15,7 @@
 mod authenticator;
 mod jwk;
 
-pub use authenticator::CreateUser;
 pub use authenticator::CustomClaims;
+pub use authenticator::EnsureUser;
 pub use authenticator::JwtAuthenticator;
 pub use authenticator::PubKey;

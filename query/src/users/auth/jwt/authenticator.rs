@@ -34,23 +34,23 @@ pub struct JwtAuthenticator {
 }
 
 #[derive(Default, Deserialize, Serialize)]
-pub struct CreateUser {
+pub struct EnsureUser {
     pub tenant_id: Option<String>,
     pub roles: Vec<String>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
 pub struct CustomClaims {
-    pub create_user: Option<CreateUser>,
+    pub ensure_user: Option<EnsureUser>,
 }
 
 impl CustomClaims {
     pub fn new() -> Self {
-        CustomClaims { create_user: None }
+        CustomClaims { ensure_user: None }
     }
 
-    pub fn with_create_user(mut self, create_user: CreateUser) -> Self {
-        self.create_user = Some(create_user);
+    pub fn with_ensure_user(mut self, ensure_user: EnsureUser) -> Self {
+        self.ensure_user = Some(ensure_user);
         self
     }
 }
