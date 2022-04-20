@@ -35,19 +35,19 @@ pub struct SimpleFunction<T> {
 }
 
 pub trait NoArgDateFunction {
-    fn execute() -> u16;
+    fn execute() -> i32;
 }
 
 #[derive(Clone)]
 pub struct Today;
 
 impl NoArgDateFunction for Today {
-    fn execute() -> u16 {
+    fn execute() -> i32 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 
         let duration = utc.naive_utc().sub(epoch);
-        duration.num_days() as u16
+        duration.num_days() as i32
     }
 }
 
@@ -55,12 +55,12 @@ impl NoArgDateFunction for Today {
 pub struct Yesterday;
 
 impl NoArgDateFunction for Yesterday {
-    fn execute() -> u16 {
+    fn execute() -> i32 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 
         let duration = utc.naive_utc().sub(epoch);
-        duration.num_days() as u16 - 1
+        duration.num_days() as i32 - 1
     }
 }
 
@@ -68,12 +68,12 @@ impl NoArgDateFunction for Yesterday {
 pub struct Tomorrow;
 
 impl NoArgDateFunction for Tomorrow {
-    fn execute() -> u16 {
+    fn execute() -> i32 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 
         let duration = utc.naive_utc().sub(epoch);
-        duration.num_days() as u16 + 1
+        duration.num_days() as i32 + 1
     }
 }
 
@@ -101,7 +101,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
     }
 
     fn return_type(&self) -> DataTypePtr {
-        Date16Type::arc()
+        DateType::arc()
     }
 
     fn eval(
@@ -111,7 +111,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
-        let column = Series::from_data(&[value as u16]);
+        let column = Series::from_data(&[value as i32]);
         Ok(Arc::new(ConstColumn::new(column, input_rows)))
     }
 }

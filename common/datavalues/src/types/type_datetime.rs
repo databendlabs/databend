@@ -29,24 +29,25 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateTime64Type {
+pub struct DateTimeType {
     /// The time resolution is determined by the precision parameter, range from 0 to 9
-    /// Typically are used - 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
+    /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
     precision: usize,
     /// tz indicates the timezone, if it's None, it's UTC.
     tz: Option<String>,
 }
-const DATETIME64_3: &str = "DateTime64(3)";
-const DATETIME64_6: &str = "DateTime64(6)";
-const DATETIME64_9: &str = "DateTime64(9)";
+const DATETIME_0: &str = "DateTime_0";
+const DATETIME_3: &str = "DateTime_3";
+const DATETIME_6: &str = "DateTime_6";
+const DATETIME_9: &str = "DateTime_9";
 
-impl DateTime64Type {
+impl DateTimeType {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
-        DateTime64Type { precision, tz }
+        DateTimeType { precision, tz }
     }
 
     pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTime64Type { precision, tz })
+        Arc::new(DateTimeType { precision, tz })
     }
 
     pub fn tz(&self) -> Option<&String> {
@@ -86,9 +87,9 @@ impl DateTime64Type {
 }
 
 #[typetag::serde]
-impl DataType for DateTime64Type {
+impl DataType for DateTimeType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::DateTime64
+        TypeID::DateTime
     }
 
     #[inline]
@@ -98,16 +99,17 @@ impl DataType for DateTime64Type {
 
     fn name(&self) -> &str {
         match self.precision {
-            3 => DATETIME64_3,
-            6 => DATETIME64_6,
-            9 => DATETIME64_9,
+            0 => DATETIME_0,
+            3 => DATETIME_3,
+            6 => DATETIME_6,
+            9 => DATETIME_9,
             _ => unreachable!(),
         }
     }
 
     fn aliases(&self) -> &[&str] {
         match self.precision {
-            3 => &["DateTime64"],
+            0 => &["DateTime"],
             _ => &[],
         }
     }
@@ -137,7 +139,7 @@ impl DataType for DateTime64Type {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime64".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime".to_string());
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         mp.insert(
             ARROW_EXTENSION_META.to_string(),
@@ -168,8 +170,8 @@ impl DataType for DateTime64Type {
     }
 }
 
-impl std::fmt::Debug for DateTime64Type {
+impl std::fmt::Debug for DateTimeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DateTime64({})", self.precision())
+        write!(f, "DateTime_{}", self.precision())
     }
 }
