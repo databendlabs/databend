@@ -25,7 +25,6 @@ NULL
 ====END TEST CREATE TABLE AS SELECT STATEMENT====
 ====TIMESTAMP====
 ====CREATE ALL DATA TYPE TABLE====
-<<<<<<< HEAD
 tiny	TINYINT	NO	0	
 tiny_unsigned	TINYINT UNSIGNED	NO	0	
 smallint	SMALLINT	NO	0	
@@ -36,31 +35,11 @@ bigint	BIGINT	NO	0
 bigint_unsigned	BIGINT UNSIGNED	NO	0	
 float	FLOAT	NO	0	
 double	DOUBLE	NO	0	
-date	DATE16	NO	0	
-datetime	DATETIME32	NO	0	
-ts	DATETIME64(3)	NO	0	
+date	DATE	NO	0	
+datetime	DATETIME_0	NO	0	
+ts	DATETIME_3	NO	0	
 str	VARCHAR	NO	3	
 bool	BOOLEAN	NO	false	
 array	ARRAY	NO	[]	
 obj	OBJECT	NO	{}	
 variant	VARIANT	NO	null	
-=======
-tiny	TINYINT	NO	0
-tiny_unsigned	TINYINT UNSIGNED	NO	0
-smallint	SMALLINT	NO	0
-smallint_unsigned	SMALLINT UNSIGNED	NO	0
-int	INT	NO	0
-int_unsigned	INT UNSIGNED	NO	0
-bigint	BIGINT	NO	0
-bigint_unsigned	BIGINT UNSIGNED	NO	0
-float	FLOAT	NO	0
-double	DOUBLE	NO	0
-date	DATE	NO	0
-datetime	DATETIME_0	NO	0
-ts	DATETIME_3	NO	0
-str	VARCHAR	NO	3
-bool	BOOLEAN	NO	false
-array	ARRAY	NO	[]
-obj	OBJECT	NO	{}
-variant	VARIANT	NO	null
->>>>>>> main
