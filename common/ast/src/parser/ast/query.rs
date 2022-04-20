@@ -29,7 +29,7 @@ pub struct Query {
     // `ORDER BY` clause
     pub order_by: Vec<OrderByExpr>,
     // `LIMIT` clause
-    pub limit: Option<Expr>,
+    pub limit: Vec<Expr>,
 }
 
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -86,8 +86,8 @@ pub struct OrderByExpr {
 pub enum SelectTarget {
     // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
     AliasedExpr {
-        alias: Option<Identifier>,
         expr: Expr,
+        alias: Option<Identifier>,
     },
 
     // Qualified name, e.g. `SELECT t.a, t.* FROM t`.
@@ -120,7 +120,7 @@ pub enum TableReference {
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
         subquery: Box<Query>,
-        alias: Option<TableAlias>,
+        alias: TableAlias,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -216,9 +216,7 @@ impl Display for TableReference {
             }
             TableReference::Subquery { subquery, alias } => {
                 write!(f, "({})", subquery)?;
-                if let Some(alias) = alias {
-                    write!(f, " {}", alias)?;
-                }
+                write!(f, " {}", alias)?;
             }
             TableReference::TableFunction { expr, alias } => {
                 write!(f, "{}", expr)?;
@@ -396,17 +394,23 @@ impl Display for Query {
         // ORDER BY clause
         if !self.order_by.is_empty() {
             write!(f, " ORDER BY ")?;
-            for i in 0..self.order_by.len() {
-                write!(f, "{}", self.order_by[i])?;
-                if i != self.order_by.len() - 1 {
+            for (i, expr) in self.order_by.iter().enumerate() {
+                if i != 0 {
                     write!(f, ", ")?;
                 }
+                write!(f, "{}", expr)?;
             }
         }
 
         // LIMIT clause
-        if let Some(limit) = &self.limit {
-            write!(f, " LIMIT {}", limit)?;
+        if !self.limit.is_empty() {
+            write!(f, " LIMIT ")?;
+            for (i, expr) in self.limit.iter().enumerate() {
+                if i != 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", expr)?;
+            }
         }
 
         Ok(())

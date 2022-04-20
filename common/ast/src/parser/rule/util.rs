@@ -14,6 +14,7 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom::multi::separated_list1;
 
 use crate::parser::ast::Identifier;
 use crate::parser::rule::error::Error;
@@ -75,4 +76,10 @@ macro_rules! rule {
         $crate::parser::rule::util::match_token,
         $($tt)*)
     }
+}
+
+pub fn comma_separated_list1<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    separated_list1(match_text(","), item)
 }
