@@ -10,7 +10,7 @@ insert into t values (5);
 insert into t values (6);
 insert into t values (7);
 
-optimize table t compact;
+-- optimize table t compact;
 
 -- optimize exact
 explain select count(1) from t;
