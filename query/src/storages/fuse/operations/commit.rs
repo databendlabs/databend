@@ -47,6 +47,10 @@ use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 
+const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
+const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
+const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
+
 impl FuseTable {
     pub async fn do_commit(
         &self,
@@ -61,18 +65,16 @@ impl FuseTable {
 
         let mut retry_times = 0;
 
-        let settings = ctx.get_settings();
-
         // The initial retry delay in millisecond. By default,  it is 5 ms.
-        let init_delay = Duration::from_millis(settings.get_storage_occ_backoff_init_delay_ms()?);
+        let init_delay = OCC_DEFAULT_BACKOFF_INIT_DELAY_MS;
 
         // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
         // By default, it is 20 seconds.
-        let max_delay = Duration::from_millis(settings.get_storage_occ_backoff_max_delay_ms()?);
+        let max_delay = OCC_DEFAULT_BACKOFF_MAX_DELAY_MS;
 
         // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
         // By default, it is 2 minutes
-        let max_elapsed = Duration::from_millis(settings.get_storage_occ_backoff_max_elapsed_ms()?);
+        let max_elapsed = OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS;
 
         // see https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/ for more
         // informations. (The strategy that crate backoff implements is “Equal Jitter”)

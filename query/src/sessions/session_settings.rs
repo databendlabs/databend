@@ -106,30 +106,6 @@ impl Settings {
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
-            // storage_backoff_init_delay_ms
-            SettingValue {
-                default_value: DataValue::UInt64(5),
-                user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(5)),
-                level: ScopeLevel::Session,
-                desc: "The initial retry delay in millisecond. By default, it is 5 ms.",
-            },
-
-            // storage_occ_backoff_max_delay_ms
-            SettingValue {
-                default_value: DataValue::UInt64(20 * 1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(20 * 1000)),
-                level: ScopeLevel::Session,
-                desc: "The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
-            },
-
-            // storage_occ_backoff_max_elapsed_ms
-            SettingValue {
-                default_value: DataValue::UInt64(120 * 1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(120 * 1000)),
-                level: ScopeLevel::Session,
-                desc: "The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
-            },
-
             // enable_new_processor_framework
             SettingValue {
                 default_value: DataValue::UInt64(1),
@@ -232,24 +208,6 @@ impl Settings {
     // Get storage read buffer size.
     pub fn get_storage_read_buffer_size(&self) -> Result<u64> {
         let key = "storage_read_buffer_size";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff init delay in ms.
-    pub fn get_storage_occ_backoff_init_delay_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_init_delay_ms";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff max delay in ms.
-    pub fn get_storage_occ_backoff_max_delay_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_max_delay_ms";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff max elapsed in ms.
-    pub fn get_storage_occ_backoff_max_elapsed_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_max_elapsed_ms";
         self.try_get_u64(key)
     }
 
