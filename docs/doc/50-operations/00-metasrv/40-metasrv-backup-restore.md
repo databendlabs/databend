@@ -1,5 +1,6 @@
 ---
 title: Backup and Restore Databend Meta Service
+sidebar_label: Backup and Restore Meta Service
 ---
 
 This guideline will introduce how to backup and restore the databend-meta datas.
