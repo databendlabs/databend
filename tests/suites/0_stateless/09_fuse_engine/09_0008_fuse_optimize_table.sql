@@ -1,3 +1,4 @@
+set max_threads = 16;
 DROP DATABASE IF EXISTS db_09_0008;
 CREATE DATABASE db_09_0008;
 USE db_09_0008;
