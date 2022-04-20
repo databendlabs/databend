@@ -120,7 +120,7 @@ impl Compactor for BlockCompactor {
                     ));
                 }
             } else {
-                blocks.push(block);
+                res.push(block);
             }
         }
 

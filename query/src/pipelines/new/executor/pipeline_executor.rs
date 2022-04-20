@@ -50,7 +50,6 @@ impl PipelineExecutor {
             while let Some(task) = init_schedule_queue.pop_task() {
                 tasks.push_back(task);
             }
-
             global_tasks_queue.init_tasks(tasks);
 
             Ok(Arc::new(PipelineExecutor {
