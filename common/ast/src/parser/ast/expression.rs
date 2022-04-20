@@ -108,7 +108,7 @@ pub enum TypeName {
     Float,
     Double,
     Date,
-    DateTime,
+    DateTime(Option<u64>),
     Timestamp,
     Varchar,
     Array { item_type: Box<TypeName> },
@@ -283,9 +283,10 @@ impl Display for TypeName {
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::DateTime => {
-                write!(f, "DATETIME")?;
-            }
+            TypeName::DateTime(n) => match n {
+                Some(n) => write!(f, "DATETIME({})", *n)?,
+                None => write!(f, "DATETIME")?,
+            },
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
             }
