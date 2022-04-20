@@ -43,10 +43,11 @@ impl MutableStringColumn {
     }
 
     pub fn pop_value(&mut self) -> Option<Vec<u8>> {
-        let last_size = self.pop_offset()?;
-        self.last_size = last_size;
-
-        Some(self.values.split_off(last_size))
+        (self.offsets.len() > 1).then(|| {
+            let _ = self.offsets.pop();
+            self.last_size = self.offsets.last().cloned().unwrap_or_default() as usize;
+            self.values.split_off(self.last_size)
+        })
     }
 
     pub fn with_values_capacity(values_capacity: usize, capacity: usize) -> Self {
@@ -126,7 +127,7 @@ impl MutableColumn for MutableStringColumn {
 
     fn pop_data_value(&mut self) -> Result<DataValue> {
         self.pop_value().map(DataValue::from).ok_or_else(|| {
-            ErrorCode::BadDataArrayLength("string column array is empty when pop data value")
+            ErrorCode::BadDataArrayLength("String column array is empty when pop data value")
         })
     }
 }

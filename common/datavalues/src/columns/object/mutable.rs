@@ -74,7 +74,7 @@ where T: ObjectType
 
     fn pop_data_value(&mut self) -> Result<DataValue> {
         let t = self.pop_value().ok_or_else(|| {
-            ErrorCode::BadDataArrayLength("object column array is empty when pop data value")
+            ErrorCode::BadDataArrayLength("Object column array is empty when pop data value")
         })?;
 
         let data_value = DataValue::try_from(t)?;

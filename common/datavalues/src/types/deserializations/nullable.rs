@@ -115,10 +115,12 @@ impl TypeDeserializer for NullableDeserializer {
     fn pop_data_value(&mut self) -> Result<DataValue> {
         self.bitmap
             .pop()
-            .ok_or_else(|| ErrorCode::BadDataArrayLength(""))
+            .ok_or_else(|| {
+                ErrorCode::BadDataArrayLength("Nullable deserializer is empty when pop data value")
+            })
             .and_then(|v| {
-                v.then(|| self.inner.pop_data_value())
-                    .unwrap_or(Ok(DataValue::Null))
+                let inner_value = self.inner.pop_data_value();
+                v.then(|| inner_value).unwrap_or(Ok(DataValue::Null))
             })
     }
 

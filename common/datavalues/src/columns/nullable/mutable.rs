@@ -65,16 +65,16 @@ impl MutableColumn for MutableNullableColumn {
         self.inner.append_data_value(value)
     }
 
-    /// Note when the last value is null, this method will return DataValue::Null.
-    fn pop_data_value(&mut self) -> Result<DataValue> {
+     /// Note when the last value is null, this method will return DataValue::Null.
+     fn pop_data_value(&mut self) -> Result<DataValue> {
         self.values
             .pop()
             .ok_or_else(|| {
-                ErrorCode::BadDataArrayLength("nullable column array is empty when pop data value")
+                ErrorCode::BadDataArrayLength("Nullable column array is empty when pop data value")
             })
             .and_then(|v| {
-                v.then(|| self.inner.pop_data_value())
-                    .unwrap_or(Ok(DataValue::Null))
+                let value = self.inner.pop_data_value();
+                v.then_some(value).unwrap_or(Ok(DataValue::Null))
             })
     }
 }
