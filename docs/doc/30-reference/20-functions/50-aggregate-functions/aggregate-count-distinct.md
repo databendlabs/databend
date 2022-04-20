@@ -44,7 +44,6 @@ SELECT count(distinct number % 3) FROM numbers(1000);
 +----------------------------+
 |                       1000 |
 +----------------------------+
-1 row in set (0.02 sec)
 
 
  SELECT uniq(number % 3, number) = count(distinct number %3, number)  FROM numbers(1000);
@@ -53,6 +52,5 @@ SELECT count(distinct number % 3) FROM numbers(1000);
 +---------------------------------------------------------------------+
 |                                                                true |
 +---------------------------------------------------------------------+
-1 row in set (0.03 sec
 ```
 

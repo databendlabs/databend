@@ -26,7 +26,6 @@ SHOW DATABASES;
 | system   |
 | test     |
 +----------+
-9 rows in set (0.00 sec)
 ```
 
 Showing the databases with database `"ss"`:
@@ -37,7 +36,6 @@ SHOW DATABASES WHERE Database = 'ss';
 +----------+
 | ss       |
 +----------+
-1 row in set (0.01 sec)
 ```
 
 Showing the databases begin with `"ss"`:
@@ -51,7 +49,6 @@ SHOW DATABASES Like 'ss%';
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```
 
 Showing the databases begin with `"ss"` with where:
@@ -65,7 +62,6 @@ SHOW DATABASES WHERE Database Like 'ss%';
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```
 
 Showing the databases like substring expr:
@@ -79,7 +75,6 @@ SHOW DATABASES Like SUBSTRING('ss%' FROM 1 FOR 3);
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```
 
 Showing the databases like substring expr with where:
@@ -93,5 +88,4 @@ SHOW DATABASES WHERE Database Like SUBSTRING('ss%' FROM 1 FOR 3);
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```

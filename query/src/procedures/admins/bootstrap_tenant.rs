@@ -73,7 +73,7 @@ impl Procedure for BootstrapTenantProcedure {
         );
 
         // Create account admin role.
-        let mut account_admin_role = RoleInfo::new("account_admin".to_string());
+        let mut account_admin_role = RoleInfo::new("account_admin");
         account_admin_role.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
@@ -84,7 +84,7 @@ impl Procedure for BootstrapTenantProcedure {
 
         // Create user.
         let auth_info = AuthInfo::create(&Some(auth_type), &Some(password))?;
-        let mut user_info = UserInfo::new(user_name.clone(), host_name.clone(), auth_info);
+        let mut user_info = UserInfo::new(&user_name, &host_name, auth_info);
         user_info.grants.grant_role(account_admin_role.identity());
         user_mgr.add_user(&tenant, user_info, true).await?;
 

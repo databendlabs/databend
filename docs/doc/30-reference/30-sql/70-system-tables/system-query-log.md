@@ -5,7 +5,7 @@ title: system.query_log
 A read-only in-memory table stores all the query logs;
 
 ```sql
-SELECT * from system.query_log order by event_time desc limit 1\G
+SELECT * FROM system.query_log ORDER BY event_time DESC LIMIT 1\G
 *************************** 1. row ***************************
                 log_type: 1
             handler_type: MySQL

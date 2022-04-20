@@ -103,7 +103,7 @@ async fn test_constant_folding_optimizer() -> Result<()> {
                 query: "SELECT typeof('1234567890')",
                 expect: "\
                 Projection: typeof('1234567890'):String\
-                \n  Expression: String:String (Before Projection)\
+                \n  Expression: VARCHAR:String (Before Projection)\
                 \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             },
         ];

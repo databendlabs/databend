@@ -77,11 +77,7 @@ mod add {
     async fn test_add_user() -> common_exception::Result<()> {
         let test_user_name = "test_user";
         let test_hostname = "localhost";
-        let user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            default_test_auth_info(),
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let v = serde_json::to_vec(&user_info)?;
         let value = Operation::Update(serde_json::to_vec(&user_info)?);
 
@@ -133,11 +129,7 @@ mod add {
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, "tenant1")?;
 
-            let user_info = UserInfo::new(
-                test_user_name.to_string(),
-                test_hostname.to_string(),
-                default_test_auth_info(),
-            );
+            let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
             let res = user_mgr.add_user(user_info).await;
 
@@ -163,11 +155,7 @@ mod add {
             let kv = Arc::new(api);
 
             let user_mgr = UserMgr::create(kv, "tenant1")?;
-            let user_info = UserInfo::new(
-                test_user_name.to_string(),
-                test_hostname.to_string(),
-                default_test_auth_info(),
-            );
+            let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
             let res = user_mgr.add_user(user_info).await;
 
@@ -194,11 +182,7 @@ mod get {
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
-        let user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            default_test_auth_info(),
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let value = serde_json::to_vec(&user_info)?;
 
         let mut kv = MockKV::new();
@@ -224,11 +208,7 @@ mod get {
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
-        let user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            default_test_auth_info(),
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let value = serde_json::to_vec(&user_info)?;
 
         let mut kv = MockKV::new();
@@ -345,7 +325,7 @@ mod get_users {
             let key = format!("tenant1/{}", format_user_key(&name, &hostname));
             keys.push(key);
 
-            let user_info = UserInfo::new(name, hostname, default_test_auth_info());
+            let user_info = UserInfo::new(&name, &hostname, default_test_auth_info());
             res.push((
                 "fake_key".to_string(),
                 SeqV::new(i, serde_json::to_vec(&user_info)?),
@@ -503,11 +483,7 @@ mod update {
         );
         let test_seq = None;
 
-        let user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            default_test_auth_info(),
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serde_json::to_vec(&user_info)?;
 
         // get_kv should be called
@@ -521,11 +497,7 @@ mod update {
         }
 
         // and then, update_kv should be called
-        let new_user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            new_test_auth_info(full),
-        );
+        let new_user_info = UserInfo::new(test_user_name, test_hostname, new_test_auth_info(full));
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
 
         kv.expect_upsert_kv()
@@ -596,11 +568,7 @@ mod update {
         );
         let test_seq = None;
 
-        let user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            default_test_auth_info(),
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serde_json::to_vec(&user_info)?;
 
         // - get_kv should be called
@@ -656,11 +624,7 @@ mod set_user_privileges {
         );
         let test_seq = None;
 
-        let mut user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            default_test_auth_info(),
-        );
+        let mut user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
         let prev_value = serde_json::to_vec(&user_info)?;
 
         // - get_kv should be called

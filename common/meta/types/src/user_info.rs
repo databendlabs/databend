@@ -44,15 +44,15 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(name: String, hostname: String, auth_info: AuthInfo) -> Self {
+    pub fn new(name: &str, hostname: &str, auth_info: AuthInfo) -> Self {
         // Default is no privileges.
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
         let option = UserOption::default();
 
         UserInfo {
-            name,
-            hostname,
+            name: name.to_string(),
+            hostname: hostname.to_string(),
             auth_info,
             grants,
             quota,
@@ -60,7 +60,7 @@ impl UserInfo {
         }
     }
 
-    pub fn new_no_auth(name: String, hostname: String) -> Self {
+    pub fn new_no_auth(name: &str, hostname: &str) -> Self {
         UserInfo::new(name, hostname, AuthInfo::None)
     }
 

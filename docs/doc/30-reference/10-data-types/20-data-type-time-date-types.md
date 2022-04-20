@@ -25,7 +25,7 @@ CREATE TABLE test_dt
     datetime64 TIMESTAMP 
 );
 
-DESC dt;
+DESC test_dt;
 +------------+---------------+------+---------+
 | Field      | Type          | Null | Default |
 +------------+---------------+------+---------+

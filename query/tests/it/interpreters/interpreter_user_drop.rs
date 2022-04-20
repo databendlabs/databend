@@ -55,7 +55,7 @@ async fn test_drop_user_interpreter() -> Result<()> {
             hash_method: PasswordHashMethod::PlainText,
         };
 
-        let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
+        let user_info = UserInfo::new(name, hostname, auth_info);
         let user_mgr = ctx.get_user_manager();
         user_mgr.add_user(&tenant, user_info.clone(), false).await?;
 

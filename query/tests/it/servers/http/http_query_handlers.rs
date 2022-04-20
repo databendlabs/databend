@@ -34,6 +34,8 @@ use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
+use databend_query::users::auth::jwt::CustomClaims;
+use databend_query::users::auth::jwt::EnsureUser;
 use headers::Header;
 use hyper::header;
 use jwt_simple::algorithms::RS256KeyPair;
@@ -546,6 +548,63 @@ async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header)
         v[0][0],
         serde_json::Value::String(format!("'{}'@'%'", user_name))
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_jwt_with_create_user() -> Result<()> {
+    let user_name = "user1";
+
+    let kid = "test_kid";
+    let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
+    let rsa_components = key_pair.public_key().to_components();
+    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
+    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    // Create a mock on the server.
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server)
+        .await;
+    let jwks_url = format!("http://{}{}", server.address(), json_path);
+
+    let session_manager = SessionManagerBuilder::create()
+        .jwt_key_file(jwks_url)
+        .build()
+        .unwrap();
+
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let now = Some(Clock::now_since_epoch());
+    let claims = JWTClaims {
+        issued_at: now,
+        expires_at: Some(now.unwrap() + jwt_simple::prelude::Duration::from_secs(10)),
+        invalid_before: now,
+        audiences: None,
+        issuer: None,
+        jwt_id: None,
+        subject: Some(user_name.to_string()),
+        nonce: None,
+        custom: CustomClaims {
+            ensure_user: Some(EnsureUser {
+                ..Default::default()
+            }),
+        },
+    };
+
+    let token = key_pair.sign(claims)?;
+    let bear = headers::Authorization::bearer(&token).unwrap();
+    test_auth_post(&ep, user_name, bear).await?;
     Ok(())
 }
 
