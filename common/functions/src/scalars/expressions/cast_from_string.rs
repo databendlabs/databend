@@ -56,13 +56,7 @@ pub fn cast_from_string(
             let datetime = data_type.as_any().downcast_ref::<DateTimeType>().unwrap();
 
             for (row, v) in str_column.iter().enumerate() {
-                // match string_to_datetime(v) {
-                //     Some(t) => {
-                //         builder.append(t.timestamp() as u32);
-                //     }
-                //     None => _,
-                // }
-                match string_to_datetime64(v) {
+                match string_to_datetime(v) {
                     Some(d) => {
                         builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
                     }
@@ -89,19 +83,9 @@ pub fn cast_from_string(
     }
 }
 
-// currently use UTC by default
 // TODO support timezone
-#[allow(unused)]
 #[inline]
 pub fn string_to_datetime(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
-    let s = std::str::from_utf8(date_str.as_ref()).ok();
-    // let tz = "UTC".parse::<Tz>().unwrap();
-    s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S").ok())
-}
-
-// TODO support timezone
-#[inline]
-pub fn string_to_datetime64(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S%.9f").ok())
 }

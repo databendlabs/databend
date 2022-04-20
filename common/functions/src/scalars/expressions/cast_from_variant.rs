@@ -22,7 +22,7 @@ use common_exception::Result;
 use serde_json::Value as JsonValue;
 
 use super::cast_from_string::string_to_date;
-use super::cast_from_string::string_to_datetime64;
+use super::cast_from_string::string_to_datetime;
 use super::cast_with_type::new_mutable_bitmap;
 
 pub fn cast_from_variant(
@@ -140,7 +140,7 @@ pub fn cast_from_variant(
                     match value {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
-                            if let Some(d) = string_to_datetime64(v) {
+                            if let Some(d) = string_to_datetime(v) {
                                 builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
                             } else {
                                 bitmap.set(row, false);
