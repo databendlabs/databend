@@ -39,16 +39,3 @@ error:
   |         ^^^ unexpected end of expression
 
 
----------- Input ----------
-CAST(col1 AS VARCHAR(0.1))
----------- Output ---------
-error: 
-  --> SQL:1:22
-  |
-1 | CAST(col1 AS VARCHAR(0.1))
-  | ----                 ^^^ unable to parse int because it contains invalid characters
-  | |                     
-  | while parsing `CAST(... AS ...)`
-  | while parsing expression
-
-

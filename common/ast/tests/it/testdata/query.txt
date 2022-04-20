@@ -374,9 +374,9 @@ Query {
 
 
 ---------- Input ----------
-select * from customer natural join orders
+select * from customer natural full join orders
 ---------- Output ---------
-SELECT * FROM customer NATURAL INNER JOIN orders
+SELECT * FROM customer NATURAL FULL OUTER JOIN orders
 ---------- AST ------------
 Query {
     body: Select(
@@ -391,7 +391,7 @@ Query {
             ],
             from: Join(
                 Join {
-                    op: Inner,
+                    op: FullOuter,
                     condition: Natural,
                     left: Table {
                         database: None,

@@ -160,20 +160,40 @@ pub fn statement(i: Input) -> IResult<Statement> {
 }
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
+    #[derive(Clone)]
+    enum ColumnConstraint {
+        Nullable(bool),
+        DefaultValue(Literal),
+    }
+
     let nullable = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ NULL }),
+        value(ColumnConstraint::Nullable(true), rule! { NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ NULL }),
     ));
+    let default_value = map(rule! { DEFAULT ~ #literal }, |(_, default_value)| {
+        ColumnConstraint::DefaultValue(default_value)
+    });
 
     map(
         rule! {
-            #ident ~ #type_name ~ #nullable? ~ ( DEFAULT ~ #literal )? : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
+            #ident ~ #type_name ~ ( #nullable | #default_value )* : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
         },
-        |(name, data_type, nullable, default_value)| ColumnDefinition {
-            name,
-            data_type,
-            nullable: nullable.unwrap_or(true),
-            default_value: default_value.map(|(_, value)| value),
+        |(name, data_type, constraints)| {
+            let mut def = ColumnDefinition {
+                name,
+                data_type,
+                nullable: true,
+                default_value: None,
+            };
+            for constraint in constraints {
+                match constraint {
+                    ColumnConstraint::Nullable(nullable) => def.nullable = nullable,
+                    ColumnConstraint::DefaultValue(default_value) => {
+                        def.default_value = Some(default_value)
+                    }
+                }
+            }
+            def
         },
     )(i)
 }
@@ -373,10 +393,10 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
     );
     let natural_join = map(
         rule! {
-            NATURAL ~ #cut(rule! { JOIN }) ~ #cut(table_ref_without_join)
+            NATURAL ~ #join_operator? ~ #cut(rule! { JOIN }) ~ #cut(table_ref_without_join)
         },
-        |(_, _, right)| JoinElement {
-            op: JoinOperator::Inner,
+        |(_, op, _, right)| JoinElement {
+            op: op.unwrap_or(JoinOperator::Inner),
             condition: JoinCondition::Natural,
             right: Box::new(right),
         },
@@ -407,9 +427,9 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
         value(JoinOperator::Inner, rule! { INNER }),
-        value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER }),
-        value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER }),
-        value(JoinOperator::FullOuter, rule! { FULL ~ OUTER }),
+        value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
+        value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
+        value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
     ))(i)
 }
 

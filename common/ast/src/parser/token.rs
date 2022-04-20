@@ -1053,6 +1053,12 @@ pub enum TokenKind {
     KILL,
     #[token("USE", ignore(ascii_case))]
     USE,
+    #[token("UNSIGNED", ignore(ascii_case))]
+    UNSIGNED,
+    #[token("DATETIME", ignore(ascii_case))]
+    DATETIME,
+    #[token("VARIANT", ignore(ascii_case))]
+    VARIANT,
 }
 
 #[derive(Clone, Debug, PartialEq)]

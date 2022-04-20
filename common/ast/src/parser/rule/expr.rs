@@ -551,57 +551,52 @@ pub fn literal(i: Input) -> IResult<Literal> {
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
-    let ty_char = map(
-        rule! { CHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Char(opt_args.map(|(_, length, _)| length)),
-    );
-    let ty_varchar = map(
-        rule! { VARCHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Varchar(opt_args.map(|(_, length, _)| length)),
-    );
-    let ty_float = map(
-        rule! { FLOAT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Float(opt_args.map(|(_, prec, _)| prec)),
-    );
-    let ty_int = map(
-        rule! { INTEGER ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Int(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_tiny_int = map(
-        rule! { TINYINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::TinyInt(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_small_int = map(
-        rule! { SMALLINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::SmallInt(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_big_int = map(
-        rule! { BIGINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::BigInt(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_real = value(TypeName::Real, rule! { REAL });
-    let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN });
+    let ty_tiny_int = map(rule! { TINYINT ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::TinyInt {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_small_int = map(rule! { SMALLINT ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::SmallInt {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_int = map(rule! { INTEGER ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::Int {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_big_int = map(rule! { BIGINT ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::BigInt {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_float = value(TypeName::Float, rule! { FLOAT });
+    let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_date = value(TypeName::Date, rule! { DATE });
-    let ty_time = value(TypeName::Time, rule! { TIME });
+    let ty_datetime = value(TypeName::DateTime, rule! { DATETIME });
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
-    let ty_text = value(TypeName::Text, rule! { TEXT });
+    let ty_varchar = value(TypeName::Varchar, rule! { VARCHAR });
+    let ty_array = value(TypeName::Array, rule! { ARRAY });
+    let ty_object = value(TypeName::Object, rule! { OBJECT });
+    let ty_variant = value(TypeName::Variant, rule! { VARIANT });
 
     rule!(
-        #ty_char
-        | #ty_varchar
-        | #ty_float
-        | #ty_int
+        #ty_boolean
         | #ty_tiny_int
         | #ty_small_int
+        | #ty_int
         | #ty_big_int
-        | #ty_real
+        | #ty_float
         | #ty_double
-        | #ty_boolean
         | #ty_date
-        | #ty_time
+        | #ty_datetime
         | #ty_timestamp
-        | #ty_text
+        | #ty_varchar
+        | #ty_array
+        | #ty_object
+        | #ty_variant
     )(i)
 }
 

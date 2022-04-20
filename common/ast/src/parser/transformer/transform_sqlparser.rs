@@ -825,24 +825,20 @@ impl TransformerSqlparser {
 
     fn transform_data_type(&self, data_type: &SqlparserDataType) -> Result<TypeName> {
         match data_type {
-            SqlparserDataType::Char(length) => Ok(TypeName::Char(length.to_owned())),
-            SqlparserDataType::Varchar(length) => Ok(TypeName::Varchar(length.to_owned())),
-            SqlparserDataType::Decimal(prec, scale) => {
-                Ok(TypeName::Decimal(prec.to_owned(), scale.to_owned()))
-            }
-            SqlparserDataType::Float(length) => Ok(TypeName::Float(length.to_owned())),
-            SqlparserDataType::Int(zerofill) => Ok(TypeName::Int(zerofill.to_owned())),
-            SqlparserDataType::TinyInt(zerofill) => Ok(TypeName::TinyInt(zerofill.to_owned())),
-            SqlparserDataType::SmallInt(zerofill) => Ok(TypeName::SmallInt(zerofill.to_owned())),
-            SqlparserDataType::BigInt(zerofill) => Ok(TypeName::BigInt(zerofill.to_owned())),
-            SqlparserDataType::Real => Ok(TypeName::Real),
-            SqlparserDataType::Double => Ok(TypeName::Double),
             SqlparserDataType::Boolean => Ok(TypeName::Boolean),
+            SqlparserDataType::TinyInt(_) => Ok(TypeName::TinyInt { unsigned: false }),
+            SqlparserDataType::SmallInt(_) => Ok(TypeName::SmallInt { unsigned: false }),
+            SqlparserDataType::Int(_) => Ok(TypeName::Int { unsigned: false }),
+            SqlparserDataType::BigInt(_) => Ok(TypeName::BigInt { unsigned: false }),
+            SqlparserDataType::UnsignedTinyInt(_) => Ok(TypeName::TinyInt { unsigned: true }),
+            SqlparserDataType::UnsignedSmallInt(_) => Ok(TypeName::SmallInt { unsigned: true }),
+            SqlparserDataType::UnsignedInt(_) => Ok(TypeName::Int { unsigned: true }),
+            SqlparserDataType::UnsignedBigInt(_) => Ok(TypeName::BigInt { unsigned: true }),
+            SqlparserDataType::Float(_) => Ok(TypeName::Float),
+            SqlparserDataType::Double => Ok(TypeName::Double),
             SqlparserDataType::Date => Ok(TypeName::Date),
-            SqlparserDataType::Time => Ok(TypeName::Time),
             SqlparserDataType::Timestamp => Ok(TypeName::Timestamp),
-            SqlparserDataType::Interval => Ok(TypeName::Interval),
-            SqlparserDataType::Text => Ok(TypeName::Text),
+            SqlparserDataType::Varchar(_) => Ok(TypeName::Varchar),
             _ => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt

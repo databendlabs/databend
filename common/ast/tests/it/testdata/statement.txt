@@ -93,9 +93,9 @@ Describe {
 
 
 ---------- Input ----------
-create table if not exists a.b (c integer not null default 1, b varchar(10));
+create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR(10) NULL)
+CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -115,9 +115,9 @@ CreateTable {
                 name: "c",
                 quote: None,
             },
-            data_type: Int(
-                None,
-            ),
+            data_type: Int {
+                unsigned: false,
+            },
             nullable: false,
             default_value: Some(
                 Number(
@@ -130,11 +130,57 @@ CreateTable {
                 name: "b",
                 quote: None,
             },
-            data_type: Varchar(
-                Some(
-                    10,
+            data_type: Varchar,
+            nullable: true,
+            default_value: None,
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
+}
+
+
+---------- Input ----------
+create table if not exists a.b (c integer default 1 not null, b varchar);
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NULL)
+---------- AST ------------
+CreateTable {
+    if_not_exists: true,
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "c",
+                quote: None,
+            },
+            data_type: Int {
+                unsigned: false,
+            },
+            nullable: false,
+            default_value: Some(
+                Number(
+                    "1",
                 ),
             ),
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "b",
+                quote: None,
+            },
+            data_type: Varchar,
             nullable: true,
             default_value: None,
         },
