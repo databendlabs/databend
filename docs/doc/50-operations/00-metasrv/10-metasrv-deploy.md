@@ -1,5 +1,6 @@
 ---
 title: Deploy Databend Meta Service
+sidebar_label: Deploy Meta Service
 description:
   How to deploy Databend Meta Service Cluster.
 ---
@@ -43,7 +44,7 @@ or a cluster of 3 or 5 nodes for production use.
 
 ## 1. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../60-contributing/00-building-from-source.md).
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../../60-contributing/00-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend
@@ -83,7 +84,7 @@ ls
 :::tip
 
 Standalone mode should **NEVER** be used in production.
-But do not worry. Anytime when needed, a standalone `databand-meta` can be extended to a cluster of 3 or 5 nodes with [Cluster management API](./metasrv-add-remove-node.md).
+But do not worry. Anytime when needed, a standalone `databand-meta` can be extended to a cluster of 3 or 5 nodes with [Cluster management API](./20-metasrv-add-remove-node.md).
 
 :::
 
