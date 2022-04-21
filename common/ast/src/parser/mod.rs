@@ -35,7 +35,7 @@ pub fn parse_sql(sql: &str) -> Result<Vec<Statement>> {
     let tokens = Tokenizer::new(sql).collect::<Result<Vec<_>>>()?;
     let stmt = map(rule! { #statement ~ ";" }, |(stmt, _)| stmt);
     let mut stmts = rule! { #stmt+ };
-    
+
     match stmts(tokens.as_slice()) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(sql, vec![(
