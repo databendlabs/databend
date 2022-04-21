@@ -32,6 +32,8 @@ use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
@@ -111,6 +113,14 @@ impl SchemaApi for MetaBackend {
         req: ListDatabaseReq,
     ) -> std::result::Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         self.query_backend(move |cli| async move { cli.list_databases(req).await })
+            .await
+    }
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError> {
+        self.query_backend(move |cli| async move { cli.rename_database(req).await })
             .await
     }
 

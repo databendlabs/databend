@@ -34,6 +34,7 @@ use crate::LimitPlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -76,6 +77,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::ReadSource(plan) => Self::format_read_source(f, plan),
             PlanNode::CreateDatabase(plan) => Self::format_create_database(f, plan),
             PlanNode::DropDatabase(plan) => Self::format_drop_database(f, plan),
+            PlanNode::RenameDatabase(plan) => Self::format_rename_database(f, plan),
             PlanNode::CreateTable(plan) => Self::format_create_table(f, plan),
             PlanNode::DropTable(plan) => Self::format_drop_table(f, plan),
             PlanNode::RenameTable(plan) => Self::format_rename_table(f, plan),
@@ -325,6 +327,19 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
                 entity.new_database_name,
                 entity.new_table_name
             )?;
+
+            if i + 1 != plan.entities.len() {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, "]")
+    }
+
+    fn format_rename_database(f: &mut Formatter, plan: &RenameDatabasePlan) -> fmt::Result {
+        write!(f, "Rename database,")?;
+        write!(f, " [")?;
+        for (i, entity) in plan.entities.iter().enumerate() {
+            write!(f, "{:} to {:}", entity.db, entity.new_db,)?;
 
             if i + 1 != plan.entities.len() {
                 write!(f, ", ")?;

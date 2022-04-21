@@ -53,6 +53,11 @@ pub enum Statement<'a> {
         if_exists: bool,
         database: Identifier<'a>,
     },
+    AlterDatabase {
+        if_exists: bool,
+        database: Identifier<'a>,
+        action: AlterDatabaseAction<'a>,
+    },
     UseDatabase {
         database: Identifier<'a>,
     },
@@ -250,6 +255,11 @@ pub struct ColumnDefinition<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum AlterDatabaseAction<'a> {
+    RenameDatabase { new_db: Identifier<'a> },
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction<'a> {
     RenameTable { new_table: Identifier<'a> },
     // TODO(wuzhiguo): AddColumn etc
@@ -387,6 +397,22 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " IF EXISTS")?;
                 }
                 write!(f, " {database}")?;
+            }
+            Statement::AlterDatabase {
+                if_exists,
+                database,
+                action,
+            } => {
+                write!(f, "ALTER DATABASE")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {database}")?;
+                match action {
+                    AlterDatabaseAction::RenameDatabase { new_db } => {
+                        write!(f, " RENAME TO {new_db}")?;
+                    }
+                }
             }
             Statement::UseDatabase { database } => {
                 write!(f, "USE {database}")?;

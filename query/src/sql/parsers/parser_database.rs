@@ -21,6 +21,8 @@ use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 
+use crate::sql::statements::AlterDatabaseAction;
+use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfShowCreateDatabase;
@@ -83,5 +85,27 @@ impl<'a> DfParser<'a> {
             BTreeMap::new()
         };
         Ok((engine, options))
+    }
+
+    //ALTER DATABASE [ IF EXISTS ] <name> RENAME TO <new_db_name>
+    pub(crate) fn parse_alter_database(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let database_name = self.parser.parse_object_name()?;
+
+        if self.parser.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_database_name = self.parser.parse_object_name()?;
+
+            let rename = DfAlterDatabase {
+                if_exists,
+                database_name,
+                action: AlterDatabaseAction::RenameDatabase(new_database_name),
+            };
+
+            Ok(DfStatement::AlterDatabase(rename))
+        } else {
+            Err(ParserError::ParserError(String::from(
+                "Alter database only support rename for now!",
+            )))
+        }
     }
 }

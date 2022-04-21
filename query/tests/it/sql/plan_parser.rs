@@ -64,6 +64,24 @@ async fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name:  "rename-database-passed",
+            sql: "ALTER DATABASE IF EXISTS db1 RENAME TO db2",
+            expect: "Rename database, [db1 to db2]",
+            error: ""
+        },
+        Test {
+            name:  "rename-database-if-exists-passed",
+            sql: "ALTER DATABASE IF EXISTS db1 RENAME TO db2",
+            expect: "Rename database, [db1 to db2]",
+            error: ""
+        },
+        Test {
+            name:  "rename-database-to-immutable-passed",
+            sql: "ALTER DATABASE IF EXISTS db1 RENAME TO system",
+            expect: "Rename database, [db1 to system]",
+            error: ""
+        },
+        Test {
             name: "create-table-passed",
             sql: "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
             expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: false }, DataField { name: \"c2\", data_type: Int64, nullable: false }, DataField { name: \"c3\", data_type: String, nullable: false }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}, as_select: None",
@@ -175,16 +193,16 @@ async fn test_plan_parser() -> Result<()> {
         },
         Test {
             name: "interval-unsupported",
-             sql: "SELECT INTERVAL '1 year 1 day'",
-             expect: "",
-             error: "Code: 1002, displayText = invalid digit found in string (while in analyze select projection).",
-         },
-         Test {
-             name: "interval-out-of-range",
-             sql: "SELECT INTERVAL '100000000000000000 day'",
-             expect: "",
-             error: "Code: 1002, displayText = number too large to fit in target type (while in analyze select projection).",
-         },
+            sql: "SELECT INTERVAL '1 year 1 day'",
+            expect: "",
+            error: "Code: 1002, displayText = invalid digit found in string (while in analyze select projection).",
+        },
+        Test {
+            name: "interval-out-of-range",
+            sql: "SELECT INTERVAL '100000000000000000 day'",
+            expect: "",
+            error: "Code: 1002, displayText = number too large to fit in target type (while in analyze select projection).",
+        },
         Test {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",

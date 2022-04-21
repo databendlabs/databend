@@ -77,7 +77,6 @@ impl fmt::Display for Cmd {
             Cmd::RemoveNode { node_id } => {
                 write!(f, "remove_node:{}", node_id)
             }
-
             Cmd::UpsertKV {
                 key,
                 seq,
