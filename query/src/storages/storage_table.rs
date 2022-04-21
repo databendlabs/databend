@@ -147,7 +147,7 @@ pub trait Table: Sync + Send {
 
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
-    pub data_length: Option<u64>,
-    pub data_length_compressed: Option<u64>,
+    pub data_size: Option<u64>,
+    pub data_size_compressed: Option<u64>,
     pub index_length: Option<u64>,
 }

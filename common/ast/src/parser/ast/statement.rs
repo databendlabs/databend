@@ -126,7 +126,7 @@ impl Display for Statement {
                 if *analyze {
                     write!(f, "ANALYZE ")?;
                 }
-                write!(f, "{} ", &query)?;
+                write!(f, "{}", &query)?;
             }
             Statement::Select(query) => {
                 write!(f, "{}", &query)?;

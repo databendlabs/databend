@@ -1,6 +1,6 @@
 ---------- Input ----------
 select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
-            from customer, orders ODS, 
+            from customer, orders ODS,
                 (
                     select
                         c_custkey,
