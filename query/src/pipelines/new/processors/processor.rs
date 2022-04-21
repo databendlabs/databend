@@ -21,6 +21,7 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
+use crate::pipelines::new::{ProcessInfo, ProcessorProfiling};
 
 pub enum Event {
     NeedData,
@@ -45,6 +46,15 @@ pub trait Processor: Send {
     // Asynchronous work.
     async fn async_process(&mut self) -> Result<()> {
         Err(ErrorCode::UnImplement("Unimplemented async_process."))
+    }
+
+    fn support_profiling(&self) -> bool {
+        false
+    }
+
+    // Profiling processor
+    fn profiling(&self, id: usize) -> Result<Box<dyn ProcessInfo>> {
+        Err(ErrorCode::UnImplement("Unimplemented profiling."))
     }
 }
 
@@ -94,6 +104,17 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
         (*self.inner.get()).async_process().boxed()
+    }
+
+    /// # Safety
+    pub unsafe fn support_profiling(&self) -> bool {
+        (*self.inner.get()).support_profiling()
+    }
+
+    // Profiling processor
+    /// # Safety
+    pub unsafe fn profiling(&self) -> Result<Box<dyn ProcessInfo>> {
+        (*self.inner.get()).profiling((*self.id.get()).index())
     }
 }
 

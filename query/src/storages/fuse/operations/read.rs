@@ -31,7 +31,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::{FuseSourceTracker, NewPipeline, ProcessInfo, ProcessorProfiling, ProcessorTracker};
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
@@ -52,7 +52,7 @@ impl FuseTable {
             Ok(parts) if parts.is_empty() => None,
             Ok(parts) => Some(parts),
         })
-        .flatten();
+            .flatten();
 
         let part_stream = futures::stream::iter(iter);
 
@@ -72,9 +72,9 @@ impl FuseTable {
         push_downs: &Option<Extras>,
     ) -> Result<Arc<BlockReader>> {
         let projection = if let Some(Extras {
-            projection: Some(prj),
-            ..
-        }) = push_downs
+                                         projection: Some(prj),
+                                         ..
+                                     }) = push_downs
         {
             prj.clone()
         } else {
@@ -129,6 +129,7 @@ struct FuseTableSource {
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
+    tracker: FuseSourceTracker,
 }
 
 impl FuseTableSource {
@@ -146,6 +147,7 @@ impl FuseTableSource {
                 block_reader,
                 scan_progress,
                 state: State::Finish,
+                tracker: FuseSourceTracker::create(),
             }))),
             false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
                 ctx,
@@ -153,8 +155,15 @@ impl FuseTableSource {
                 block_reader,
                 scan_progress,
                 state: State::ReadData(partitions.remove(0)),
+                tracker: FuseSourceTracker::create(),
             }))),
         }
+    }
+
+    fn calculate_compressed_size(chunks: &Vec<Vec<u8>>) -> usize {
+        chunks.iter()
+            .map(|x| x.len())
+            .sum()
     }
 }
 
@@ -221,13 +230,23 @@ impl Processor for FuseTableSource {
     }
 
     async fn async_process(&mut self) -> Result<()> {
+        self.tracker.restart_s3_download();
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(part) => {
                 let chunks = self.block_reader.read_columns_data(part.clone()).await?;
+                self.tracker.s3_download(Self::calculate_compressed_size(&chunks));
                 self.state = State::Deserialize(part, chunks);
                 Ok(())
             }
             _ => Err(ErrorCode::LogicalError("It's a bug.")),
         }
+    }
+
+    fn support_profiling(&self) -> bool {
+        true
+    }
+
+    fn profiling(&self, id: usize) -> Result<Box<dyn ProcessInfo>> {
+        self.tracker.fetch_increment(id)
     }
 }

@@ -33,6 +33,7 @@ use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipe::NewPipe;
 use crate::pipelines::new::pipeline::NewPipeline;
+use crate::pipelines::new::{ProcessInfo, ProcessorProfiling};
 use crate::pipelines::new::processors::connect;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -354,8 +355,22 @@ impl RunningGraph {
 
     pub fn profiling(&self) -> Result<ExecutorProfiling> {
         let graph = self.0.read();
+        let processors = self.profiling_processors(&graph)?;
         let graphviz = format!("{:?}", Dot::with_config(&graph.graph, &[Config::EdgeNoLabel]));
-        Ok(ExecutorProfiling::create(graphviz, vec![]))
+        Ok(ExecutorProfiling::create(graphviz, processors))
+    }
+
+    fn profiling_processors(&self, graph: &ExecutingGraph) -> Result<Vec<Box<dyn ProcessInfo>>> {
+        let mut processors = Vec::with_capacity(graph.graph.node_count());
+        unsafe {
+            for node_weight in graph.graph.node_weights() {
+                if node_weight.processor.support_profiling() {
+                    processors.push(node_weight.processor.profiling()?);
+                }
+            }
+        }
+
+        Ok(processors)
     }
 }
 

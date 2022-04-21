@@ -22,6 +22,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
+use crate::pipelines::new::{ProcessorProfiling, ProcessorTracker};
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
@@ -38,6 +39,8 @@ pub struct Transformer<T: Transform + 'static> {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
+
+    // tracker: ProcessorTracker,
 }
 
 impl<T: Transform + 'static> Transformer<T> {
@@ -48,6 +51,7 @@ impl<T: Transform + 'static> Transformer<T> {
             transform: inner,
             input_data: None,
             output_data: None,
+            // tracker: ProcessorTracker::create(),
         }))
     }
 }
@@ -74,8 +78,16 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
     }
 
     fn process(&mut self) -> Result<()> {
+        // self.tracker.restart_sync();
         if let Some(data_block) = self.input_data.take() {
+            let before_rows = data_block.num_rows();
+            let before_bytes = data_block.memory_size();
+
             let data_block = self.transform.transform(data_block)?;
+
+            // let after_rows = data_block.num_rows();
+            // let after_bytes = data_block.memory_size();
+            // self.tracker.sync_process(before_rows, after_rows, before_bytes, after_bytes);
 
             if !T::SKIP_EMPTY_DATA_BLOCK || !data_block.is_empty() {
                 self.output_data = Some(data_block);
@@ -84,6 +96,10 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
 
         Ok(())
     }
+
+    // fn profiling(&self, id: usize) -> Result<ProcessorProfiling> {
+    //     self.tracker.increment(id)
+    // }
 }
 
 impl<T: Transform> Transformer<T> {

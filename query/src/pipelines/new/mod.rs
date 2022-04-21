@@ -33,3 +33,7 @@ pub use pipeline::NewPipeline;
 pub use pipeline_builder::QueryPipelineBuilder;
 pub use profiling::ExecutorProfiling;
 pub use profiling::ProcessorProfiling;
+pub use profiling::ProcessorTracker;
+pub use profiling::FuseSourceTracker;
+pub use profiling::ProcessInfo;
+pub use profiling::FuseTableProcessInfo;
