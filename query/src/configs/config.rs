@@ -67,7 +67,6 @@ pub struct Config {
 
     // Storage backend config.
     #[clap(flatten)]
-    #[serde(flatten)]
     pub storage: StorageConfig,
 }
 

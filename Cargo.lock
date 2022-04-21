@@ -2066,15 +2066,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "envy"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f47e0157f2cb54f5ae1bd371b30a2ae4311e1c028f575cd4e81de7353215965"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "erased-serde"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5364,9 +5355,20 @@ dependencies = [
 [[package]]
 name = "serde-bridge"
 version = "0.0.2"
+source = "git+https://github.com/Xuanwo/serde-bridge?rev=4879af8#4879af8c234ecf1608c2a4bf25d0b458fc828626"
 dependencies = [
  "anyhow",
  "indexmap",
+ "serde",
+]
+
+[[package]]
+name = "serde-env"
+version = "0.0.0"
+source = "git+https://github.com/Xuanwo/serde-env?rev=ead9be2#ead9be2f0d51b99c89e4a2d2375b5e1a34301bc2"
+dependencies = [
+ "anyhow",
+ "log",
  "serde",
 ]
 
@@ -5450,13 +5452,14 @@ dependencies = [
 [[package]]
 name = "serfig"
 version = "0.0.0"
+source = "git+https://github.com/Xuanwo/serfig?rev=b1cedad#b1cedad038352e203eb9a073e584824c0c1b6df0"
 dependencies = [
  "anyhow",
- "envy",
  "indexmap",
  "log",
  "serde",
  "serde-bridge",
+ "serde-env",
  "toml",
 ]
 

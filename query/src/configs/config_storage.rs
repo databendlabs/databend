@@ -75,7 +75,6 @@ impl Default for FsStorageConfig {
 pub struct S3StorageConfig {
     /// Region for S3 storage
     #[clap(long = "storage-s3-region", default_value = "")]
-    #[serde(rename = "storage_s3_region")]
     pub region: String,
 
     /// Endpoint URL for S3 storage
@@ -83,27 +82,22 @@ pub struct S3StorageConfig {
         long = "storage-s3-endpoint-url",
         default_value = "https://s3.amazonaws.com"
     )]
-    #[serde(rename = "storage_s3_endpoint_url")]
     pub endpoint_url: String,
 
     // Access key for S3 storage
     #[clap(long = "storage-s3-access-key-id", default_value = "")]
-    #[serde(rename = "storage_s3_access_key_id")]
     pub access_key_id: String,
 
     /// Secret key for S3 storage
     #[clap(long = "storage-s3-secret-access-key", default_value = "")]
-    #[serde(rename = "storage-s3-secret-access-key")]
     pub secret_access_key: String,
 
     /// S3 Bucket to use for storage
     #[clap(long = "storage-s3-bucket", default_value = "")]
-    #[serde(rename = "storage_s3_bucket")]
     pub bucket: String,
 
     /// <root>
     #[clap(long = "storage-s3-root", default_value = "")]
-    #[serde(rename = "storage_s3_root")]
     pub root: String,
 }
 
@@ -192,7 +186,6 @@ pub struct StorageConfig {
 
     // S3 storage backend config.
     #[clap(flatten)]
-    #[serde(flatten)]
     pub s3: S3StorageConfig,
 
     // azure storage blob config.
