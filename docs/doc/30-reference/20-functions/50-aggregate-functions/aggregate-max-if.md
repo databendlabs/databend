@@ -1,13 +1,13 @@
 ---
-title: maxIf
+title: MAX_IF
 ---
 
-## maxIf
+## MAX_IF
 
-The suffix -If can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
+The suffix `_IF` can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```
-maxIf(column, cond)
+MAX_IF(column, cond)
 ```
 
 ## Examples
@@ -17,17 +17,17 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT max(number) FROM numbers(10);
+SELECT max(number) FROM numbers(10);
 +-------------+
 | max(number) |
 +-------------+
 |           9 |
 +-------------+
 
-mysql> SELECT maxIf(number, number < 7) FROM numbers(10);
-+-----------------------------+
-| maxIf(number, (number < 7)) |
-+-----------------------------+
-|                           6 |
-+-----------------------------+
+SELECT max_if(number, number < 7) FROM numbers(10);
++------------------------------+
+| max_if(number, (number < 7)) |
++------------------------------+
+|                            6 |
++------------------------------+
 ```

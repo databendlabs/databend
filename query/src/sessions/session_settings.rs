@@ -106,30 +106,6 @@ impl Settings {
                 desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
-            // storage_backoff_init_delay_ms
-            SettingValue {
-                default_value: DataValue::UInt64(5),
-                user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(5)),
-                level: ScopeLevel::Session,
-                desc: "The initial retry delay in millisecond. By default, it is 5 ms.",
-            },
-
-            // storage_occ_backoff_max_delay_ms
-            SettingValue {
-                default_value: DataValue::UInt64(20 * 1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(20 * 1000)),
-                level: ScopeLevel::Session,
-                desc: "The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
-            },
-
-            // storage_occ_backoff_max_elapsed_ms
-            SettingValue {
-                default_value: DataValue::UInt64(120 * 1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(120 * 1000)),
-                level: ScopeLevel::Session,
-                desc: "The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
-            },
-
             // enable_new_processor_framework
             SettingValue {
                 default_value: DataValue::UInt64(1),
@@ -164,6 +140,13 @@ impl Settings {
                 user_setting: UserSetting::create("skip_header", DataValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "Whether to skip the input header, default value: 0",
+            },
+
+            SettingValue {
+                default_value:DataValue::String("UTC".as_bytes().to_vec()),
+                user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
+                level: ScopeLevel::Session,
+                desc: "Timezone, default value: UTC,",
             },
         ];
 
@@ -228,24 +211,6 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    // Get storage occ backoff init delay in ms.
-    pub fn get_storage_occ_backoff_init_delay_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_init_delay_ms";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff max delay in ms.
-    pub fn get_storage_occ_backoff_max_delay_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_max_delay_ms";
-        self.try_get_u64(key)
-    }
-
-    // Get storage occ backoff max elapsed in ms.
-    pub fn get_storage_occ_backoff_max_elapsed_ms(&self) -> Result<u64> {
-        let key = "storage_occ_backoff_max_elapsed_ms";
-        self.try_get_u64(key)
-    }
-
     pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
         let key = "enable_new_processor_framework";
         self.try_get_u64(key)
@@ -271,6 +236,12 @@ impl Settings {
     pub fn get_skip_header(&self) -> Result<u64> {
         let key = "skip_header";
         self.try_get_u64(key)
+    }
+
+    pub fn get_timezone(&self) -> Result<Vec<u8>> {
+        let key = "timezone";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

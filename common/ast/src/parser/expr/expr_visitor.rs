@@ -49,14 +49,19 @@ pub trait ExprVisitor: Sized + Send {
             Expr::Value(value) => self.visit_value(value),
             Expr::Identifier(ident) => self.visit_identifier(ident),
             Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
-            Expr::IsNull(expr) => self.visit_simple_function(expr, "isnull").await,
-            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull").await,
+            Expr::IsNull(expr) => self.visit_simple_function(expr, "is_null").await,
+            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "is_not_null").await,
             Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr).await,
             Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right).await,
             Expr::Exists(subquery) => self.visit_exists(subquery),
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
             Expr::Function(function) => self.visit_function(function).await,
-            Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type).await,
+            Expr::TryCast { expr, data_type } => self.visit_try_cast(expr, data_type).await,
+            Expr::Cast {
+                expr,
+                data_type,
+                pg_style,
+            } => self.visit_cast(expr, data_type, pg_style).await,
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
             Expr::Position {
                 substr_expr,
@@ -161,7 +166,16 @@ pub trait ExprVisitor: Sized + Send {
         Ok(())
     }
 
-    async fn visit_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
+    async fn visit_cast(
+        &mut self,
+        expr: &Expr,
+        _data_type: &DataType,
+        _pg_style: &bool,
+    ) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
+    }
+
+    async fn visit_try_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
         ExprTraverser::accept(expr, self).await
     }
 

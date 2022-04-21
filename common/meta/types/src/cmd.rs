@@ -15,61 +15,60 @@
 use std::fmt;
 
 use openraft::NodeId;
+use serde::de;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 
-use crate::DatabaseMeta;
+use crate::compatibility::cmd_00000000_20220413;
+use crate::CreateDatabaseReq;
+use crate::CreateShareReq;
+use crate::CreateTableReq;
+use crate::DropDatabaseReq;
+use crate::DropShareReq;
+use crate::DropTableReq;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
-use crate::TableMeta;
+use crate::RenameTableReq;
 use crate::UpsertTableOptionReq;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Cmd {
     /// Increment the sequence number generator specified by `key` and returns the new value.
-    IncrSeq { key: String },
+    IncrSeq {
+        key: String,
+    },
 
     /// Add node if absent
-    AddNode { node_id: NodeId, node: Node },
+    AddNode {
+        node_id: NodeId,
+        node: Node,
+    },
 
     /// Add a database if absent
-    CreateDatabase {
-        tenant: String,
-        name: String,
-        meta: DatabaseMeta,
-    },
+    CreateDatabase(CreateDatabaseReq),
 
     /// Drop a database if absent
-    DropDatabase { tenant: String, name: String },
+    DropDatabase(DropDatabaseReq),
 
     /// Create a table if absent
-    CreateTable {
-        tenant: String,
-        db_name: String,
-        table_name: String,
-        table_meta: TableMeta,
-    },
+    CreateTable(CreateTableReq),
 
     /// Drop a table if absent
-    DropTable {
-        tenant: String,
-        db_name: String,
-        table_name: String,
-    },
+    DropTable(DropTableReq),
 
     /// Rename a table
-    RenameTable {
-        tenant: String,
-        db_name: String,
-        table_name: String,
-        new_db_name: String,
-        new_table_name: String,
-    },
+    RenameTable(RenameTableReq),
+
+    /// Create a share if absent
+    CreateShare(CreateShareReq),
+
+    DropShare(DropShareReq),
 
     /// Update, remove or insert table options.
     ///
@@ -107,44 +106,14 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::CreateDatabase { tenant, name, meta } => {
-                write!(f, "create_db:{}/{}={}", tenant, name, meta)
-            }
-            Cmd::DropDatabase { tenant, name } => {
-                write!(f, "drop_db:{}/{}", tenant, name)
-            }
-            Cmd::CreateTable {
-                tenant,
-                db_name,
-                table_name,
-                table_meta,
-            } => {
-                write!(
-                    f,
-                    "create_table:{}/{}-{}={}",
-                    tenant, db_name, table_name, table_meta
-                )
-            }
-            Cmd::DropTable {
-                tenant,
-                db_name,
-                table_name,
-            } => {
-                write!(f, "delete_table:{}/{}-{}", tenant, db_name, table_name)
-            }
-            Cmd::RenameTable {
-                tenant,
-                db_name,
-                table_name,
-                new_db_name,
-                new_table_name,
-            } => {
-                write!(
-                    f,
-                    "rename_table:{}/{}-{}=>{}-{}",
-                    tenant, db_name, table_name, new_db_name, new_table_name
-                )
-            }
+            Cmd::CreateDatabase(req) => req.fmt(f),
+            Cmd::DropDatabase(req) => req.fmt(f),
+            Cmd::CreateTable(req) => req.fmt(f),
+            Cmd::DropTable(req) => req.fmt(f),
+            Cmd::RenameTable(req) => req.fmt(f),
+            Cmd::UpsertTableOptions(req) => req.fmt(f),
+            Cmd::CreateShare(req) => req.fmt(f),
+            Cmd::DropShare(req) => req.fmt(f),
             Cmd::UpsertKV {
                 key,
                 seq,
@@ -157,13 +126,134 @@ impl fmt::Display for Cmd {
                     key, seq, value, value_meta
                 )
             }
-            Cmd::UpsertTableOptions(req) => {
-                write!(
-                    f,
-                    "upsert-table-options: table-id:{}({:?}) = {:?}",
-                    req.table_id, req.seq, req.options
-                )
-            }
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for Cmd {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        let c: cmd_00000000_20220413::Cmd = de::Deserialize::deserialize(deserializer)?;
+        let latest = match c {
+            cmd_00000000_20220413::Cmd::IncrSeq { key } => Cmd::IncrSeq { key },
+            cmd_00000000_20220413::Cmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
+            cmd_00000000_20220413::Cmd::CreateDatabase {
+                if_not_exists,
+                tenant,
+                name,
+                db_name,
+                meta,
+            } => {
+                if let Some(x) = if_not_exists {
+                    // latest
+                    Cmd::CreateDatabase(CreateDatabaseReq {
+                        if_not_exists: x,
+                        tenant,
+                        db_name: db_name.unwrap(),
+                        meta,
+                    })
+                } else {
+                    // 20220413
+                    Cmd::CreateDatabase(CreateDatabaseReq {
+                        if_not_exists: false,
+                        tenant,
+                        db_name: name.unwrap(),
+                        meta,
+                    })
+                }
+            }
+            cmd_00000000_20220413::Cmd::DropDatabase {
+                if_exists,
+                tenant,
+                name,
+                db_name,
+            } => {
+                if let Some(x) = if_exists {
+                    // latest
+                    Cmd::DropDatabase(DropDatabaseReq {
+                        if_exists: x,
+                        tenant,
+                        db_name: db_name.unwrap(),
+                    })
+                } else {
+                    // 20220413
+                    Cmd::DropDatabase(DropDatabaseReq {
+                        if_exists: false,
+                        tenant,
+                        db_name: name.unwrap(),
+                    })
+                }
+            }
+            cmd_00000000_20220413::Cmd::CreateTable {
+                if_not_exists,
+                tenant,
+                db_name,
+                table_name,
+                table_meta,
+            } => {
+                // since 20220413 there is an `if_exists` field.
+                let if_not_exists = if_not_exists.unwrap_or_default();
+
+                Cmd::CreateTable(CreateTableReq {
+                    if_not_exists,
+                    tenant,
+                    db_name,
+                    table_name,
+                    table_meta,
+                })
+            }
+            cmd_00000000_20220413::Cmd::DropTable {
+                if_exists,
+                tenant,
+                db_name,
+                table_name,
+            } => {
+                // since 20220413 there is an `if_exists` field.
+                let if_exists = if_exists.unwrap_or_default();
+
+                Cmd::DropTable(DropTableReq {
+                    if_exists,
+                    tenant,
+                    db_name,
+                    table_name,
+                })
+            }
+            cmd_00000000_20220413::Cmd::RenameTable {
+                if_exists,
+                tenant,
+                db_name,
+                table_name,
+                new_db_name,
+                new_table_name,
+            } => {
+                // since 20220413 there is an `if_exists` field.
+                let if_exists = if_exists.unwrap_or_default();
+
+                Cmd::RenameTable(RenameTableReq {
+                    if_exists,
+                    tenant,
+                    db_name,
+                    table_name,
+                    new_db_name,
+                    new_table_name,
+                })
+            }
+            cmd_00000000_20220413::Cmd::CreateShare(x) => Cmd::CreateShare(x),
+            cmd_00000000_20220413::Cmd::DropShare(x) => Cmd::DropShare(x),
+            cmd_00000000_20220413::Cmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
+            cmd_00000000_20220413::Cmd::UpsertKV {
+                key,
+                seq,
+                value,
+                value_meta,
+            } => Cmd::UpsertKV {
+                key,
+                seq,
+                value,
+                value_meta,
+            },
+        };
+
+        Ok(latest)
     }
 }

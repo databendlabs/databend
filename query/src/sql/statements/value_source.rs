@@ -13,6 +13,9 @@
 //  limitations under the License.
 //
 
+use std::io::Cursor;
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -21,12 +24,15 @@ use common_io::prelude::*;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionType;
 use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
@@ -77,117 +83,29 @@ impl ValueSource {
         Ok(DataBlock::create(self.schema.clone(), columns))
     }
 
+<<<<<<< HEAD
     /// Parse single row value, like ('111', '222', 333)
     async fn parse_single_row<'a>(
-        &self,
-        reader: &mut CpBufferReader<'a>,
-        col_size: usize,
-        desers: &mut [Box<dyn TypeDeserializer>],
-    ) -> Result<()> {
-        let mut expr_path = false;
-        let mut datavalues: Option<Vec<DataValue>> = None;
+        analyzer: ExpressionAnalyzer,
+        ctx: Arc<QueryContext>,
+    ) -> Result<DataBlock> {
+        let values = parse_exprs(bytes, ctx.get_current_session().get_type())?;
 
-        let _ = reader.ignore_white_spaces()?;
-        reader.checkpoint();
-
-        // Start of the row --- '('
-        if !reader.ignore_byte(b'(')? {
-            return Err(ErrorCode::BadDataValueType(
-                "Must start with parentheses".to_string(),
-            ));
-        }
-
-        for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
-            if let Some(values) = &datavalues {
-                deser.append_data_value(values[col].clone())?;
-                continue;
-            }
-
-            let _ = reader.ignore_white_spaces()?;
-            if col > 0 {
-                reader.must_ignore_byte(b',')?;
-                let _ = reader.ignore_white_spaces()?;
-            }
-
-            if deser.de_text_quoted(reader).is_err() {
-                expr_path = true;
-                skip_to_next_row(reader, 1)?;
-                // parse from expression
-                // set datavalues
-                let buf = reader.get_checkpoint_buffer();
-                let exprs = parse_exprs(buf)?;
-                reader.reset_checkpoint();
-
-                let values = exprs_to_datavalue(exprs, &self.analyzer, &self.schema).await?;
-                deser.append_data_value(values[col].clone())?;
-                datavalues = Some(values);
-            }
-        }
-
-        // Since parsing row-value via expr will eat ')', so we only check the ')' in deserialize way.
-        if !expr_path {
-            let _ = reader.ignore_white_spaces()?;
-            reader.must_ignore_byte(b')')?;
-        }
-
-        Ok(())
-    }
-}
-
-// Values |(xxx), (yyy), (zzz)
-pub fn skip_to_next_row(reader: &mut CpBufferReader, mut balance: i32) -> Result<()> {
-    let _ = reader.ignore_white_spaces()?;
-
-    let mut quoted = false;
-
-    while balance > 0 {
-        let buffer = reader.fill_buf()?;
-        if buffer.is_empty() {
-            break;
-        }
-
-        let size = buffer.len();
-
-        let it = buffer
-            .iter()
-            .position(|&c| c == b'(' || c == b')' || c == b'\\' || c == b'\'');
-
-        if let Some(it) = it {
-            let c = buffer[it];
-            reader.consume(it + 1);
-
-            match c {
-                b'\\' => {
-                    continue;
-                }
-                b'\'' => {
-                    quoted ^= true;
-                    continue;
-                }
-                b')' => {
-                    if !quoted {
-                        balance -= 1;
-                    }
-                }
-                b'(' => {
-                    if !quoted {
-                        balance += 1;
-                    }
-                }
-                _ => {}
-            }
-        } else {
-            reader.consume(size);
+        let mut blocks = vec![];
+        for value in values {
+            let block = exprs_to_datablock(value, &analyzer, &self.schema, ctx.clone()).await?;
+            blocks.push(block);
+>>>>>>> upstream/main
         }
     }
-    Ok(())
 }
 
 async fn exprs_to_datavalue(
     exprs: Vec<Expr>,
     analyzer: &ExpressionAnalyzer,
     schema: &DataSchemaRef,
-) -> Result<Vec<DataValue>> {
+    ctx: Arc<QueryContext>,
+) -> Result<DataBlock> {
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
         let expr = analyzer.analyze(expr).await?;
@@ -195,7 +113,7 @@ async fn exprs_to_datavalue(
             Expression::Cast {
                 expr: Box::new(expr),
                 data_type: schema.field(i).data_type().clone(),
-                is_nullable: schema.field(i).is_nullable(),
+                pg_style: false,
             }
         } else {
             expr
@@ -214,6 +132,7 @@ async fn exprs_to_datavalue(
         schema.clone(),
         expressions,
         true,
+        ctx,
     )?;
     let res = executor.execute(&one_row_block)?;
 
@@ -221,15 +140,23 @@ async fn exprs_to_datavalue(
     Ok(datavalues)
 }
 
-fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Expr>, ParserError> {
-    let dialect = GenericDialect {};
-    let sql = std::str::from_utf8(buf).unwrap();
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let (tokens, pos_map) = tokenizer.tokenize()?;
-    let mut parser = Parser::new(tokens, pos_map, &dialect);
-
-    parser.expect_token(&Token::LParen)?;
-    let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-    parser.expect_token(&Token::RParen)?;
-    Ok(exprs)
+fn parse_exprs(buf: &[u8], typ: SessionType) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
+    match typ {
+        SessionType::MySQL => {
+            let dialect = MySqlDialect {};
+            let sql = std::str::from_utf8(buf).unwrap();
+            let mut tokenizer = Tokenizer::new(&dialect, sql);
+            let (tokens, position_map) = tokenizer.tokenize()?;
+            let mut parser = Parser::new(tokens, position_map, &dialect);
+            parser.parse_values()
+        }
+        _ => {
+            let dialect = GenericDialect {};
+            let sql = std::str::from_utf8(buf).unwrap();
+            let mut tokenizer = Tokenizer::new(&dialect, sql);
+            let (tokens, position_map) = tokenizer.tokenize()?;
+            let mut parser = Parser::new(tokens, position_map, &dialect);
+            parser.parse_values()
+        }
+    }
 }

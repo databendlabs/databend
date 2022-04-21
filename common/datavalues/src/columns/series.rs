@@ -15,11 +15,10 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::concatenate;
+use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 use crate::Column;
@@ -146,7 +145,7 @@ impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Serie
 
         let iter = v.as_ref().iter().map(|v| v.unwrap_or(""));
         let column = StringColumn::new_from_iter(iter);
-        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
     }
 }
 
@@ -191,15 +190,15 @@ impl SeriesFrom<Vec<String>, Vec<String>> for Series {
     }
 }
 
-impl SeriesFrom<Vec<JsonValue>, Vec<JsonValue>> for Series {
-    fn from_data(v: Vec<JsonValue>) -> ColumnRef {
-        JsonColumn::new_from_vec(v).arc()
+impl SeriesFrom<Vec<VariantValue>, Vec<VariantValue>> for Series {
+    fn from_data(v: Vec<VariantValue>) -> ColumnRef {
+        VariantColumn::new_from_vec(v).arc()
     }
 }
 
-impl SeriesFrom<Vec<Option<JsonValue>>, Vec<Option<JsonValue>>> for Series {
-    fn from_data(v: Vec<Option<JsonValue>>) -> ColumnRef {
-        type Builder = <<JsonValue as Scalar>::ColumnType as ScalarColumn>::Builder;
+impl SeriesFrom<Vec<Option<VariantValue>>, Vec<Option<VariantValue>>> for Series {
+    fn from_data(v: Vec<Option<VariantValue>>) -> ColumnRef {
+        type Builder = <<VariantValue as Scalar>::ColumnType as ScalarColumn>::Builder;
         let mut builder = Builder::with_capacity(v.len());
         let mut bitmap = MutableBitmap::with_capacity(v.len());
 
@@ -211,12 +210,12 @@ impl SeriesFrom<Vec<Option<JsonValue>>, Vec<Option<JsonValue>>> for Series {
                 }
                 None => {
                     bitmap.push(false);
-                    builder.push(&JsonValue::default());
+                    builder.push(&VariantValue::default());
                 }
             }
         }
         let column = builder.finish();
-        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
     }
 }
 
@@ -243,7 +242,7 @@ macro_rules! impl_from_option_iterator {
                             }
                         }
                         let column = builder.finish();
-                        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+                        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
                     }
                 }
          )*
@@ -274,7 +273,7 @@ macro_rules! impl_from_option_slices {
                             }
                         }
                         let column = builder.finish();
-                        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+                        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
                     }
                 }
          )*
@@ -304,6 +303,6 @@ impl<'a, T: AsRef<[Option<Vu8>]>> SeriesFrom<T, [Option<Vu8>; 2]> for Series {
             }
         }
         let column = builder.finish();
-        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+        NullableColumn::wrap_inner(column.arc(), Some(bitmap.into()))
     }
 }

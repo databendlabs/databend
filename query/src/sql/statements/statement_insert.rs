@@ -147,14 +147,18 @@ impl<'a> DfInsertStatement<'a> {
         values_str: &'a str,
         schema: &DataSchemaRef,
     ) -> Result<InsertInputSource> {
-        // tracing::debug!("{:?}", values_str);
-        println!("{:?}", values_str);
+        tracing::debug!("{:?}", values_str);
 
-        let bytes = values_str.as_bytes();
-        let cursor = Cursor::new(bytes);
-        let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
-        let source = ValueSource::new(schema.clone(), ExpressionAnalyzer::create(ctx.clone()));
-        let block = source.read(&mut reader).await?;
+        let source = ValueSource::new(schema.clone());
+        let block = match source.stream_read(values_str) {
+            Ok(block) => Ok(block),
+            Err(_) => {
+                let bytes = values_str.as_bytes();
+                source
+                    .parser_read(bytes, ExpressionAnalyzer::create(ctx.clone()), ctx)
+                    .await
+            }
+        }?;
         Ok(InsertInputSource::Values(InsertValueBlock { block }))
     }
 

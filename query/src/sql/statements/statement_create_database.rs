@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -32,8 +32,8 @@ pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
     pub engine: String,
-    pub engine_options: HashMap<String, String>,
-    pub options: HashMap<String, String>,
+    pub engine_options: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
 }
 
 #[async_trait::async_trait]
@@ -58,11 +58,12 @@ impl AnalyzableStatement for DfCreateDatabase {
 
 impl DfCreateDatabase {
     fn database_name(&self) -> Result<String> {
-        if self.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
+        match self.name.0.len() {
+            1 => Ok(self.name.0[0].value.clone()),
+            _ => Err(ErrorCode::SyntaxException(
+                "Compact database name must be [`db`]",
+            )),
         }
-
-        Ok(self.name.0[0].value.clone())
     }
 
     fn database_meta(&self) -> Result<DatabaseMeta> {

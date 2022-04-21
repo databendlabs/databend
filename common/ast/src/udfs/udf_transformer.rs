@@ -127,9 +127,14 @@ impl UDFTransformer {
                     op: op.clone(),
                     expr: Box::new(Self::clone_expr_with_replacement(&**expr, replacement_fn)?),
                 }),
-                Expr::Cast { expr, data_type } => Ok(Expr::Cast {
+                Expr::Cast {
+                    expr,
+                    data_type,
+                    pg_style,
+                } => Ok(Expr::Cast {
                     expr: Box::new(Self::clone_expr_with_replacement(&**expr, replacement_fn)?),
                     data_type: data_type.clone(),
+                    pg_style: *pg_style,
                 }),
                 Expr::TryCast { expr, data_type } => Ok(Expr::TryCast {
                     expr: Box::new(Self::clone_expr_with_replacement(&**expr, replacement_fn)?),

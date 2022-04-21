@@ -1,5 +1,5 @@
 ---
-title: argMin
+title: ARG_MIN
 ---
 
 Calculates the `arg` value for a minimum `val` value. If there are several different values of `arg` for minimum values of `val`, returns the first of these values encountered.
@@ -7,7 +7,7 @@ Calculates the `arg` value for a minimum `val` value. If there are several diffe
 ## Syntax
 
 ```
-argMin(arg, val)
+ARG_MIN(arg, val)
 ```
 
 ## Arguments
@@ -32,7 +32,7 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 Input table:
 
 ```sql
-mysql> SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC;
+SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC;
 +----------+------+
 | salary   | user |
 +----------+------+
@@ -43,12 +43,11 @@ mysql> SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GRO
 ```
 
 ```sql
-mysql> SELECT argMin(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
-+----------------------+
-| argMin(user, salary) |
-+----------------------+
-|                    1 |
-+----------------------+
+SELECT arg_min(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
++-----------------------+
+| arg_min(user, salary) |
++-----------------------+
+|                     1 |
++-----------------------+
 
 ```
-

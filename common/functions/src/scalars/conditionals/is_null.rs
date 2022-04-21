@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -27,9 +28,12 @@ pub struct IsNullFunction {
 }
 
 impl IsNullFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        _args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNullFunction {
-            _display_name: "isNull".to_string(),
+            _display_name: "is_null".to_string(),
         }))
     }
 
@@ -37,7 +41,7 @@ impl IsNullFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("isNotNull")
+                .negative_function("is_not_null")
                 .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
@@ -50,15 +54,13 @@ impl Function for IsNullFunction {
         "IsNullFunction"
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(bool::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        bool::to_data_type()
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -79,6 +81,6 @@ impl Function for IsNullFunction {
 
 impl std::fmt::Display for IsNullFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "isNull")
+        write!(f, "is_null")
     }
 }

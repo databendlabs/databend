@@ -44,15 +44,15 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(name: String, hostname: String, auth_info: AuthInfo) -> Self {
+    pub fn new(name: &str, hostname: &str, auth_info: AuthInfo) -> Self {
         // Default is no privileges.
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
         let option = UserOption::default();
 
         UserInfo {
-            name,
-            hostname,
+            name: name.to_string(),
+            hostname: hostname.to_string(),
             auth_info,
             grants,
             quota,
@@ -60,7 +60,7 @@ impl UserInfo {
         }
     }
 
-    pub fn new_no_auth(name: String, hostname: String) -> Self {
+    pub fn new_no_auth(name: &str, hostname: &str) -> Self {
         UserInfo::new(name, hostname, AuthInfo::None)
     }
 
@@ -73,14 +73,6 @@ impl UserInfo {
 
     pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {
         self.option.has_option_flag(flag)
-    }
-
-    pub fn format_grants(&self) -> Vec<Vec<u8>> {
-        self.grants
-            .entries()
-            .iter()
-            .map(|e| format!("{} TO {}", e, self.identity()).into_bytes())
-            .collect::<Vec<_>>()
     }
 }
 

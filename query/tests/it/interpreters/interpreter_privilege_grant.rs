@@ -44,14 +44,10 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
 
     let user_mgr = ctx.get_user_manager();
     user_mgr
-        .add_user(
-            &tenant,
-            UserInfo::new(name.to_string(), hostname.to_string(), auth_info),
-            false,
-        )
+        .add_user(&tenant, UserInfo::new(name, hostname, auth_info), false)
         .await?;
     user_mgr
-        .add_role(&tenant, RoleInfo::new("role1".to_string()), false)
+        .add_role(&tenant, RoleInfo::new("role1"), false)
         .await?;
 
     #[allow(dead_code)]

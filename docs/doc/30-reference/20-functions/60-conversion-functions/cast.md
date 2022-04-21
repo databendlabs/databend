@@ -8,6 +8,7 @@ Convert a value from one data type to another data type.
 
 ```sql
 CAST(x AS t)
+x::t
 ```
 
 ## Arguments
@@ -24,25 +25,31 @@ Converted value.
 ## Examples
 
 ```sql
-mysql> SELECT CAST(1 AS VARCHAR);
+SELECT CAST(1 AS VARCHAR);
 +-------------------+
 | cast(1 as String) |
 +-------------------+
 | 1                 |
 +-------------------+
 
-mysql> SELECT CAST(1 AS UInt64);
+SELECT 1::VARCHAR;
++-----------+
+| 1::String |
++-----------+
+| 1         |
++-----------+
+
+SELECT CAST(1 AS BIGINT UNSIGNED);
 +-------------------+
 | cast(1 as UInt64) |
 +-------------------+
 |                 1 |
 +-------------------+
 
-mysql> SELECT toTypeName(CAST(1 AS UInt64));
+SELECT typeof(CAST(1 AS BIGINT UNSIGNED));
 +-------------------------------+
-| toTypeName(cast(1 as UInt64)) |
+| typeof(cast(1 as UInt64))     |
 +-------------------------------+
 | UInt64                        |
 +-------------------------------+
-
 ```

@@ -17,7 +17,7 @@ Datetime object, returns date and time in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-mysql> select NOW();
+SELECT NOW();
 +---------------------+
 | NOW()               |
 +---------------------+

@@ -22,6 +22,8 @@ use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
+use crate::tests::create_query_context;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_filter() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
@@ -36,10 +38,12 @@ async fn test_transform_filter() -> Result<()> {
         .filter(col("number").eq(lit(2021)))?
         .build()?
     {
+        let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(WhereTransform::try_create(
                 plan.input.schema(),
                 plan.predicate.clone(),
+                ctx.clone(),
             )?))
         })?;
     }
@@ -74,13 +78,13 @@ async fn test_transform_filter_error() -> Result<()> {
 
     let plan = PlanBuilder::create(test_source.number_schema_for_test()?)
         .filter(col("not_found_filed").eq(lit(2021)))
-        .and_then(|x| x.build())?;
+        .and_then(|x| x.build());
 
-    if let PlanNode::Filter(plan) = plan {
-        let result = WhereTransform::try_create(plan.schema(), plan.predicate);
-        let actual = format!("{}", result.err().unwrap());
-        let expect = "Code: 1006, displayText = Unable to get field named \"not_found_filed\". Valid fields: [\"number\"].";
-        assert_eq!(expect, actual);
-    }
+    assert!(plan.is_err());
+
+    let err = plan.unwrap_err();
+
+    assert!(err.message().contains("Unable to get field named"));
+    assert_eq!(err.code(), 1006);
     Ok(())
 }

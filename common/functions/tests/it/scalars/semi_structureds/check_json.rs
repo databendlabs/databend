@@ -14,17 +14,15 @@
 
 use std::sync::Arc;
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::CheckJsonFunction;
 use serde_json::json;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_check_json_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "check_json_bool",
@@ -165,7 +163,7 @@ fn test_check_json_function() -> Result<()> {
                 ],
                 Arc::new(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
-                    vec![Date32Type::arc(), Int8Type::arc()],
+                    vec![DateType::arc(), Int8Type::arc()],
                 )),
             ))],
             expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
@@ -173,15 +171,15 @@ fn test_check_json_function() -> Result<()> {
         },
         ScalarFunctionTest {
             name: "check_json_variant",
-            columns: vec![Arc::new(JsonColumn::new_from_vec(vec![
-                json!(null),
-                json!(true),
-                json!(false),
-                json!(123),
-                json!(12.34),
-                json!("{\"k\": 1}"),
-                json!("\"abcd\""),
-                json!("[1,2"),
+            columns: vec![Arc::new(VariantColumn::new_from_vec(vec![
+                VariantValue::from(json!(null)),
+                VariantValue::from(json!(true)),
+                VariantValue::from(json!(false)),
+                VariantValue::from(json!(123)),
+                VariantValue::from(json!(12.34)),
+                VariantValue::from(json!("{\"k\": 1}")),
+                VariantValue::from(json!("\"abcd\"")),
+                VariantValue::from(json!("[1,2")),
             ]))],
             expect: Series::from_data(vec![
                 None::<&str>,
@@ -203,5 +201,5 @@ fn test_check_json_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(CheckJsonFunction::try_create("check_json")?, &tests, false)
+    test_scalar_functions("check_json", &tests)
 }

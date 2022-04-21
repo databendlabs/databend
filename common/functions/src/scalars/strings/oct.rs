@@ -16,11 +16,12 @@ use std::cmp::Ordering;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::assert_numeric;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -56,7 +57,8 @@ pub struct OctFunction {
 }
 
 impl OctFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(OctFunction {
             _display_name: display_name.to_string(),
         }))
@@ -73,18 +75,16 @@ impl Function for OctFunction {
         "oct"
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_numeric() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer but got {}",
-                args[0].data_type_id()
-            )));
-        }
-
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
         match columns[0].data_type().data_type_id() {

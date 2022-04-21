@@ -22,9 +22,10 @@ pub struct UUIDFunction;
 
 impl UUIDFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("generateUUIDv4", UUIDv4Function::desc());
-        factory.register("zeroUUID", UUIDZeroFunction::desc());
-        factory.register("isemptyUUID", UUIDIsEmptyFunction::desc());
-        factory.register("isnotemptyUUID", UUIDIsNotEmptyFunction::desc());
+        factory.register("uuid", UUIDv4Function::desc());
+        factory.register("gen_random_uuid", UUIDv4Function::desc());
+        factory.register("gen_zero_uuid", UUIDZeroFunction::desc());
+        factory.register("is_empty_uuid", UUIDIsEmptyFunction::desc());
+        factory.register("is_not_empty_uuid", UUIDIsNotEmptyFunction::desc());
     }
 }

@@ -1,5 +1,6 @@
 ---
 title: DROP USER
+description: Drop the specified user from the system.
 ---
 
 Drop the specified user from the system.
@@ -12,6 +13,6 @@ DROP USER [ IF EXISTS ] <name>
 
 ## Examples
 
-```sql title='mysql>'
-drop user 'user-a';
+```sql
+DROP USER user1;
 ```

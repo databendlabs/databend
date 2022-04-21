@@ -23,9 +23,9 @@ use num_traits::WrappingNeg;
 
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
-use crate::scalars::TypedFunctionDescription;
 use crate::scalars::UnaryArithmeticFunction;
 
 fn neg<O>(l: impl AsPrimitive<O>, _ctx: &mut EvalContext) -> O
@@ -79,8 +79,8 @@ impl ArithmeticNegateFunction {
         })
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

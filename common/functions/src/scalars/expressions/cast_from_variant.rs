@@ -23,7 +23,6 @@ use serde_json::Value as JsonValue;
 
 use super::cast_from_string::string_to_date;
 use super::cast_from_string::string_to_datetime;
-use super::cast_from_string::string_to_datetime64;
 use super::cast_with_type::new_mutable_bitmap;
 
 pub fn cast_from_variant(
@@ -31,7 +30,7 @@ pub fn cast_from_variant(
     data_type: &DataTypePtr,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
-    let json_column: &JsonColumn = if column.is_const() {
+    let json_column: &VariantColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(&column)?;
         Series::check_get(const_column.inner())?
     } else {
@@ -44,7 +43,7 @@ pub fn cast_from_variant(
         let mut builder = ColumnBuilder::<$T>::with_capacity(size);
 
         for (row, value) in json_column.iter().enumerate() {
-            match value {
+            match value.as_ref() {
                 JsonValue::Null => bitmap.set(row, false),
                 JsonValue::Bool(v) => {
                     if *v {
@@ -68,18 +67,10 @@ pub fn cast_from_variant(
                 JsonValue::String(v) => {
                     match v.parse::<$T>() {
                         Ok(num) => builder.append(num as $T),
-                        Err(_) => {
-                            return Err(ErrorCode::BadDataValueType(format!(
-                                "Failed to cast variant value {} to {}",
-                                v, data_type.data_type_id()
-                            )));
-                        }
+                        Err(_) => bitmap.set(row, false),
                     }
                 }
-                _ => return Err(ErrorCode::BadDataValueType(format!(
-                    "Failed to cast variant value {} to {}",
-                    value.to_string(), data_type.data_type_id()
-                ))),
+                _ => bitmap.set(row, false),
             }
         }
         return Ok((builder.build(size), Some(bitmap.into())));
@@ -89,7 +80,7 @@ pub fn cast_from_variant(
                 let mut builder = ColumnBuilder::<bool>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::Bool(v) => builder.append(*v),
                         JsonValue::String(v) => {
@@ -98,16 +89,10 @@ pub fn cast_from_variant(
                             } else if v.to_lowercase() == *"false".to_string() {
                                 builder.append(false)
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    v, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false)
                             }
                         }
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
@@ -116,7 +101,7 @@ pub fn cast_from_variant(
                 let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             builder.append(v.as_bytes());
@@ -128,99 +113,40 @@ pub fn cast_from_variant(
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
-            TypeID::Date16 => {
-                let mut builder = ColumnBuilder::<u16>::with_capacity(size);
-
-                for (row, value) in json_column.iter().enumerate() {
-                    match value {
-                        JsonValue::Null => bitmap.set(row, false),
-                        JsonValue::String(v) => {
-                            if let Some(d) = string_to_date(v) {
-                                builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16);
-                            } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
-                            }
-                        },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
-                    }
-                }
-                return Ok((builder.build(size), Some(bitmap.into())));
-            }
-            TypeID::Date32 => {
+            TypeID::Date => {
                 let mut builder = ColumnBuilder::<i32>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             if let Some(d) = string_to_date(v) {
                                 builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false);
                             }
                         },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
-            TypeID::DateTime32 => {
-                let mut builder = ColumnBuilder::<u32>::with_capacity(size);
-
-                for (row, value) in json_column.iter().enumerate() {
-                    match value {
-                        JsonValue::Null => bitmap.set(row, false),
-                        JsonValue::String(v) => {
-                            if let Some(t) = string_to_datetime(v) {
-                                builder.append(t.timestamp() as u32);
-                            } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
-                            }
-                        },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
-                    }
-                }
-                return Ok((builder.build(size), Some(bitmap.into())));
-            }
-            TypeID::DateTime64 => {
+            TypeID::DateTime => {
+                // TODO(veeupup): support datetime with precision
                 let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-                let datetime = DateTime64Type::create(3, None);
+                let datetime = DateTimeType::create(0, None);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
-                            if let Some(d) = string_to_datetime64(v) {
+                            if let Some(d) = string_to_datetime(v) {
                                 builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
                             } else {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Failed to cast variant value {} to {}",
-                                    value, data_type.data_type_id()
-                                )));
+                                bitmap.set(row, false);
                             }
                         },
-                        _ => return Err(ErrorCode::BadDataValueType(format!(
-                            "Failed to cast variant value {} to {}",
-                            value, data_type.data_type_id()
-                        ))),
+                        _ => bitmap.set(row, false),
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
@@ -229,27 +155,27 @@ pub fn cast_from_variant(
                 return Ok((json_column.arc(), None));
             }
             TypeID::VariantArray => {
-                let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+                let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::Array(_) => {
                             builder.append(value);
                         },
                         _ => {
-                            let arr = JsonValue::Array(vec![value.clone()]);
-                            builder.append(&arr);
+                            let arr = JsonValue::Array(vec![value.as_ref().clone()]);
+                            builder.append(&VariantValue::from(arr));
                         }
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
             TypeID::VariantObject => {
-                let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+                let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::Object(_) => {
                             builder.append(value);

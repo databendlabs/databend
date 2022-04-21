@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -26,14 +26,14 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             DataField::new("c2", Vu8::to_data_type()),
             DataField::new("c3", bool::to_data_type()),
             DataField::new("c4", f64::to_data_type()),
-            DataField::new("c5", Date16Type::arc()),
+            DataField::new("c5", DateType::arc()),
         ]),
         true => DataSchemaRefExt::create(vec![
             DataField::new_nullable("c1", i32::to_data_type()),
             DataField::new_nullable("c2", Vu8::to_data_type()),
             DataField::new_nullable("c3", bool::to_data_type()),
             DataField::new_nullable("c4", f64::to_data_type()),
-            DataField::new_nullable("c5", Date16Type::arc()),
+            DataField::new_nullable("c5", DateType::arc()),
         ]),
     };
 
@@ -42,7 +42,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         Series::from_data(vec!["a", "b", "c"]),
         Series::from_data(vec![true, true, false]),
         Series::from_data(vec![1.1, 2.2, 3.3]),
-        Series::from_data(vec![1_u16, 2_u16, 3_u16]),
+        Series::from_data(vec![1_i32, 2_i32, 3_i32]),
     ]);
 
     let block = if is_nullable {
@@ -52,7 +52,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .map(|c| {
                 let mut validity = MutableBitmap::new();
                 validity.extend_constant(c.len(), true);
-                NullableColumn::new(c.clone(), validity.into()).arc()
+                NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
             })
             .collect();
         DataBlock::create(schema, columns)

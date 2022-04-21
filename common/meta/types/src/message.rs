@@ -30,6 +30,7 @@ use crate::Endpoint;
 use crate::GetDatabaseReq;
 use crate::GetKVActionReply;
 use crate::GetKVReq;
+use crate::GetShareReq;
 use crate::GetTableReq;
 use crate::ListDatabaseReq;
 use crate::ListKVReq;
@@ -39,6 +40,7 @@ use crate::MGetKVActionReply;
 use crate::MGetKVReq;
 use crate::NodeId;
 use crate::PrefixListReply;
+use crate::ShareInfo;
 use crate::TableInfo;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -70,6 +72,8 @@ pub enum ForwardRequestBody {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
     ListKV(ListKVReq),
+
+    GetShare(GetShareReq),
 }
 
 /// A request that is forwarded from one raft node to another
@@ -96,6 +100,8 @@ pub enum ForwardResponse {
     DatabaseInfo(Arc<DatabaseInfo>),
     ListTable(Vec<Arc<TableInfo>>),
     TableInfo(Arc<TableInfo>),
+
+    ShareInfo(Arc<ShareInfo>),
 
     GetKV(GetKVActionReply),
     MGetKV(MGetKVActionReply),

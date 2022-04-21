@@ -15,7 +15,7 @@
 use std::iter::TrustedLen;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -279,10 +279,16 @@ where T: Scalar<Viewer<'a> = Self> + ObjectType
 
 #[inline]
 fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
+    let (all_is_null, validity) = column.validity();
+    let first_flag = if all_is_null {
+        false
+    } else {
+        validity.map(|c| c.get_bit(0)).unwrap_or(true)
+    };
+
     let (column, validity) = if column.is_const() {
         let mut bitmap = MutableBitmap::with_capacity(1);
-        bitmap.push(true);
-
+        bitmap.push(first_flag);
         let c: &ConstColumn = unsafe { Series::static_cast(column) };
         (c.inner(), bitmap.into())
     } else if column.is_nullable() {
@@ -290,11 +296,11 @@ fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
         (c.inner(), c.ensure_validity().clone())
     } else {
         let mut bitmap = MutableBitmap::with_capacity(1);
-        bitmap.push(true);
+        bitmap.push(first_flag);
         (column, bitmap.into())
     };
 
-    // apply these twice to cover the cases: nullable(const) or const(nullable)
+    // apply these twice to cover the cases: const(nullable)
     let column: &ColumnRef = if column.is_const() {
         let column: &ConstColumn = unsafe { Series::static_cast(column) };
         column.inner()
@@ -304,7 +310,6 @@ fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
     } else {
         column
     };
-
     Ok((column, validity))
 }
 

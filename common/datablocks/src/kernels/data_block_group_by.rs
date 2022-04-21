@@ -45,7 +45,7 @@ impl DataBlock {
             let column = block.try_column_by_name(col)?;
             let typ = remove_nullable(&column.data_type());
 
-            if typ.data_type_id().is_numeric() {
+            if typ.data_type_id().is_numeric() || typ.data_type_id().is_date_or_date_time() {
                 group_key_len += typ.data_type_id().numeric_byte_size()?;
 
                 //extra one byte for null flag

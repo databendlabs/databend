@@ -27,7 +27,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT REGEXP_INSTR('dog cat dog', 'dog');
 +------------------------------------+
 | REGEXP_INSTR('dog cat dog', 'dog') |

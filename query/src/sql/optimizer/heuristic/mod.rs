@@ -12,23 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod implement;
 mod rule_list;
 
 use common_exception::Result;
 
+use crate::sql::optimizer::heuristic::implement::HeuristicImplementor;
 use crate::sql::optimizer::heuristic::rule_list::RuleList;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
 
-/// A heuristic
+/// A heuristic query optimizer. It will apply specific transformation rules in order and
+/// implement the logical plans with default implementation rules.
 pub struct HeuristicOptimizer {
     rules: RuleList,
+    implementor: HeuristicImplementor,
 }
 
 impl HeuristicOptimizer {
     pub fn create() -> Result<Self> {
         Ok(HeuristicOptimizer {
             rules: RuleList::create(vec![])?,
+            implementor: HeuristicImplementor::new(),
         })
     }
 
@@ -37,24 +42,31 @@ impl HeuristicOptimizer {
         Ok(result)
     }
 
-    fn optimize_expression(&self, expression: &SExpr) -> Result<SExpr> {
-        let mut result = expression.clone();
-        for expr in expression.children() {
+    fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
+        let mut result = s_expr.clone();
+        for expr in s_expr.children() {
             result = self.apply_transform_rules(expr, &self.rules)?;
         }
 
         Ok(result)
     }
 
-    fn apply_transform_rules(&self, expression: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
-        let mut result = expression.clone();
+    fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
+        let mut result = s_expr.clone();
 
         for rule in rule_list.iter() {
-            let mut state = TransformState::create();
+            let mut state = TransformState::new();
             rule.apply(&result, &mut state)?;
             if !state.results().is_empty() {
                 result = state.results()[0].clone();
             }
+        }
+
+        // Implement expression with Implementor
+        let mut state = TransformState::new();
+        self.implementor.implement(s_expr, &mut state)?;
+        if !state.results().is_empty() {
+            result = state.results()[0].clone();
         }
 
         Ok(result)

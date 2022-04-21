@@ -119,6 +119,7 @@ build_exceptions! {
     UnmarshalError(1064),
     SemanticError(1065),
     InvalidAuthInfo(1066),
+    InvalidTimezone(1067),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -182,6 +183,11 @@ build_exceptions! {
     // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
+
+    // Share error codes.
+    ShareAlreadyExists(2705),
+    UnknownShare(2706),
+    UnknownShareId(2707),
 
     // Variable error codes.
     UnknownVariable(2801),

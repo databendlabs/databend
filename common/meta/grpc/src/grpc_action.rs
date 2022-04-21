@@ -19,15 +19,20 @@ use std::sync::Arc;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReply;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReply;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -36,6 +41,7 @@ use common_meta_types::MetaId;
 use common_meta_types::PrefixListReply;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -58,6 +64,9 @@ pub enum MetaGrpcWriteReq {
     RenameTable(RenameTableReq),
     CommitTable(UpsertTableOptionReq),
 
+    CreateShare(CreateShareReq),
+    DropShare(DropShareReq),
+
     UpsertKV(UpsertKVAction),
 }
 
@@ -69,6 +78,8 @@ pub enum MetaGrpcReadReq {
     GetTable(GetTableReq),
     GetTableExt(GetTableExtReq),
     ListTables(ListTableReq),
+
+    GetShare(GetShareReq),
 
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
@@ -222,4 +233,16 @@ impl RequestFor for ListTableReq {
 
 impl RequestFor for ListDatabaseReq {
     type Reply = Vec<Arc<DatabaseInfo>>;
+}
+
+impl RequestFor for CreateShareReq {
+    type Reply = CreateShareReply;
+}
+
+impl RequestFor for DropShareReq {
+    type Reply = DropShareReply;
+}
+
+impl RequestFor for GetShareReq {
+    type Reply = Arc<ShareInfo>;
 }

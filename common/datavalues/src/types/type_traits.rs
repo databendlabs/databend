@@ -16,17 +16,15 @@ use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
 use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use crate::DFTryFrom;
 use crate::DataTypePtr;
 use crate::DataValue;
-use crate::Date16Type;
-use crate::Date32Type;
-use crate::DateTime32Type;
-use crate::DateTime64Type;
+use crate::DateTimeType;
+use crate::DateType;
 use crate::Scalar;
 use crate::VariantType;
+use crate::VariantValue;
 
 pub trait PrimitiveType:
     NativeArithmetics
@@ -88,37 +86,23 @@ pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
 
-pub trait DateType: PrimitiveType {}
-impl DateType for u16 {}
-impl DateType for i32 {}
-impl DateType for u32 {}
-impl DateType for i64 {}
+pub trait LogicalDateType: PrimitiveType {}
+impl LogicalDateType for i32 {}
+impl LogicalDateType for i64 {}
 
 pub trait ToDateType {
     fn to_date_type() -> DataTypePtr;
 }
 
-impl ToDateType for u16 {
-    fn to_date_type() -> DataTypePtr {
-        Date16Type::arc()
-    }
-}
-
 impl ToDateType for i32 {
     fn to_date_type() -> DataTypePtr {
-        Date32Type::arc()
-    }
-}
-
-impl ToDateType for u32 {
-    fn to_date_type() -> DataTypePtr {
-        DateTime32Type::arc(None)
+        DateType::arc()
     }
 }
 
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypePtr {
-        DateTime64Type::arc(0, None)
+        DateTimeType::arc(0, None)
     }
 }
 
@@ -138,7 +122,7 @@ pub trait ObjectType:
     fn data_type() -> DataTypePtr;
 }
 
-impl ObjectType for JsonValue {
+impl ObjectType for VariantValue {
     fn data_type() -> DataTypePtr {
         VariantType::arc()
     }

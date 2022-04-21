@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use super::scalar_function2_test::test_scalar_functions;
-use super::scalar_function2_test::ScalarFunctionTest;
+use super::scalar_function_test::test_scalar_functions;
+use super::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_is_null_function() -> Result<()> {
@@ -28,7 +27,7 @@ fn test_is_null_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(IsNullFunction::try_create_func("")?, &tests, false)
+    test_scalar_functions("is_null", &tests)
 }
 
 #[test]
@@ -40,5 +39,5 @@ fn test_is_not_null_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(IsNotNullFunction::try_create_func("")?, &tests, false)
+    test_scalar_functions("is_not_null", &tests)
 }

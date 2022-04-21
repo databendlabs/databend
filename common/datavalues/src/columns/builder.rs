@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 /// A builder for a column.
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 
 use crate::prelude::MutableColumn;
 use crate::prelude::Scalar;
@@ -70,7 +70,7 @@ where T: Scalar
     pub fn build(&mut self, length: usize) -> ColumnRef {
         let validity = std::mem::take(&mut self.validity).into();
         let column = self.build_nonull(length);
-        Arc::new(NullableColumn::new(column, validity))
+        NullableColumn::wrap_inner(column, Some(validity))
     }
 
     #[inline]

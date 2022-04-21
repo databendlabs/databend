@@ -22,7 +22,7 @@ A String data type value Or Null data type.
 
 ## Examples
 
-```txt
+```sql
 SELECT CONCAT('data', 'bend');
 +------------------------+
 | concat('data', 'bend') |

@@ -29,7 +29,7 @@ pub struct Query {
     // `ORDER BY` clause
     pub order_by: Vec<OrderByExpr>,
     // `LIMIT` clause
-    pub limit: Option<Expr>,
+    pub limit: Vec<Expr>,
 }
 
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -84,13 +84,18 @@ pub struct OrderByExpr {
 // One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectTarget {
-    // Projection is an expression with an optional alias, like `SELECT expr AS ident FROM ...`
-    Projection {
+    // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
+    AliasedExpr {
         expr: Expr,
         alias: Option<Identifier>,
     },
-    Indirections(Vec<Indirection>),
+
+    // Qualified name, e.g. `SELECT t.a, t.* FROM t`.
+    // For simplicity, wildcard is involved.
+    QualifiedName(QualifiedName),
 }
+
+pub type QualifiedName = Vec<Indirection>;
 
 // Indirection of a select result, like a part of `db.table.column`.
 // Can be a database name, table name, field name or wildcard star(`*`).
@@ -115,7 +120,7 @@ pub enum TableReference {
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
         subquery: Box<Query>,
-        alias: Option<TableAlias>,
+        alias: TableAlias,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -211,9 +216,7 @@ impl Display for TableReference {
             }
             TableReference::Subquery { subquery, alias } => {
                 write!(f, "({})", subquery)?;
-                if let Some(alias) = alias {
-                    write!(f, " {}", alias)?;
-                }
+                write!(f, " {}", alias)?;
             }
             TableReference::TableFunction { expr, alias } => {
                 write!(f, "{}", expr)?;
@@ -283,13 +286,13 @@ impl Display for Indirection {
 impl Display for SelectTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SelectTarget::Projection { expr, alias } => {
+            SelectTarget::AliasedExpr { expr, alias } => {
                 write!(f, "{}", expr)?;
                 if let Some(ident) = alias {
                     write!(f, " AS {}", ident)?;
                 }
             }
-            SelectTarget::Indirections(indirections) => {
+            SelectTarget::QualifiedName(indirections) => {
                 for i in 0..indirections.len() {
                     write!(f, "{}", indirections[i])?;
                     if i != indirections.len() - 1 {
@@ -391,17 +394,23 @@ impl Display for Query {
         // ORDER BY clause
         if !self.order_by.is_empty() {
             write!(f, " ORDER BY ")?;
-            for i in 0..self.order_by.len() {
-                write!(f, "{}", self.order_by[i])?;
-                if i != self.order_by.len() - 1 {
+            for (i, expr) in self.order_by.iter().enumerate() {
+                if i != 0 {
                     write!(f, ", ")?;
                 }
+                write!(f, "{}", expr)?;
             }
         }
 
         // LIMIT clause
-        if let Some(limit) = &self.limit {
-            write!(f, " LIMIT {}", limit)?;
+        if !self.limit.is_empty() {
+            write!(f, " LIMIT ")?;
+            for (i, expr) in self.limit.iter().enumerate() {
+                if i != 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", expr)?;
+            }
         }
 
         Ok(())

@@ -21,6 +21,7 @@ use common_exception::Result;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -30,7 +31,19 @@ pub struct RoundFunction {
 }
 
 impl RoundFunction {
-    pub fn try_create(display_name: &str, round: u32) -> Result<Box<dyn Function>> {
+    pub fn try_create(
+        display_name: &str,
+        args: &[&DataTypePtr],
+        round: u32,
+    ) -> Result<Box<dyn Function>> {
+        if args[0].data_type_id() != TypeID::DateTime {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Function {} must have a DateTime type as argument, but got {}",
+                display_name,
+                args[0].name(),
+            )));
+        }
+
         let s = Self {
             display_name: display_name.to_owned(),
             round,
@@ -43,8 +56,9 @@ impl RoundFunction {
     // Consider about the timezones/offsets
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
-    fn execute(&self, time: u32) -> u32 {
-        time / self.round * self.round
+    fn execute(&self, time: i64) -> i64 {
+        let round = self.round as i64;
+        time / round * round
     }
 }
 
@@ -53,29 +67,19 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if args[0].data_type_id() == TypeID::DateTime32 {
-            return Ok(DateTime32Type::arc(None));
-        } else {
-            return Err(ErrorCode::BadDataValueType(format!(
-                "Function {} must have a DateTime type as argument, but got {}",
-                self.display_name,
-                args[0].name(),
-            )));
-        }
+    fn return_type(&self) -> DataTypePtr {
+        DateTimeType::arc(0, None)
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let func = |val: u32, _ctx: &mut EvalContext| self.execute(val);
+        let func = |val: i64, _ctx: &mut EvalContext| self.execute(val);
         let col =
-            scalar_unary_op::<u32, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+            scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
         Ok(col.arc())
     }
 

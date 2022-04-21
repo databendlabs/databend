@@ -27,6 +27,7 @@ use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -69,11 +70,16 @@ where
         "BinaryArithmeticFunction"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(self.result_type.clone())
+    fn return_type(&self) -> DataTypePtr {
+        self.result_type.clone()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),

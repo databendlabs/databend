@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
@@ -25,8 +26,10 @@ use databend_query::storages::index::range_filter::StatColumns;
 use databend_query::storages::index::ColumnStatistics;
 use databend_query::storages::index::RangeFilter;
 
-#[test]
-fn test_range_filter() -> Result<()> {
+use crate::tests::create_query_context;
+
+#[tokio::test]
+async fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", i64::to_data_type()),
         DataField::new("b", i32::to_data_type()),
@@ -81,13 +84,13 @@ fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "a is null",
-            expr: Expression::create_scalar_function("isNull", vec![col("a")]),
+            expr: Expression::create_scalar_function("is_null", vec![col("a")]),
             expect: true,
             error: "",
         },
         Test {
             name: "a is not null",
-            expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
+            expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
             expect: true,
             error: "",
         },
@@ -168,8 +171,9 @@ fn test_range_filter() -> Result<()> {
         },
     ];
 
+    let ctx = create_query_context().await?;
     for test in tests {
-        let prune = RangeFilter::try_create(&test.expr, schema.clone())?;
+        let prune = RangeFilter::try_create(&test.expr, schema.clone(), ctx.clone())?;
 
         match prune.eval(&stats) {
             Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),
@@ -212,13 +216,13 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "a is null",
-            expr: Expression::create_scalar_function("isNull", vec![col("a")]),
+            expr: Expression::create_scalar_function("is_null", vec![col("a")]),
             expect: "(nulls_a > 0)",
         },
         Test {
             name: "a is not null",
-            expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
-            expect: "isNotNull(min_a)",
+            expr: Expression::create_scalar_function("is_not_null", vec![col("a")]),
+            expect: "is_not_null(min_a)",
         },
         Test {
             name: "b >= 0 and c like 0xffffff",

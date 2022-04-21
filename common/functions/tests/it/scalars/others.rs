@@ -12,24 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::InetAtonFunction;
-use common_functions::scalars::InetNtoaFunction;
-use common_functions::scalars::RunningDifferenceFunction;
-use common_functions::scalars::TryInetAtonFunction;
-use common_functions::scalars::TryInetNtoaFunction;
 
-use super::scalar_function2_test::test_scalar_functions;
-use super::scalar_function2_test::ScalarFunctionTest;
-use crate::scalars::scalar_function2_test::test_scalar_functions_with_type;
-use crate::scalars::scalar_function2_test::ScalarFunctionWithFieldTest;
+use super::scalar_function_test::test_scalar_functions;
+use super::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
+use crate::scalars::scalar_function_test::ScalarFunctionWithFieldTest;
 
 #[test]
 fn test_running_difference_first_null() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "i8_first_null",
@@ -225,23 +217,17 @@ fn test_running_difference_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RunningDifferenceFunction::try_create("a")?, &tests, false)
+    test_scalar_functions("running_difference", &tests)
 }
 
 #[test]
 fn test_running_difference_datetime32_first_null() -> Result<()> {
-    use common_datavalues::prelude::*;
-    use common_datavalues::type_datetime32::DateTime32Type;
-
     let tests = vec![
         ScalarFunctionWithFieldTest {
             name: "datetime32_first_null",
             columns: vec![ColumnWithField::new(
-                Series::from_data([None, Some(3_u32), None, Some(4), Some(10)]),
-                DataField::new(
-                    "dummy_1",
-                    Arc::new(NullableType::create(DateTime32Type::arc(None))),
-                ),
+                Series::from_data([None, Some(3_i64), None, Some(4), Some(10)]),
+                DataField::new("dummy_1", NullableType::arc(DateTimeType::arc(0, None))),
             )],
             expect: Series::from_data([None, None, None, None, Some(6_i64)]),
             error: "",
@@ -249,24 +235,19 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "datetime32_first_not_null",
             columns: vec![ColumnWithField::new(
-                Series::from_data([Some(2_u32), Some(3), None, Some(4), Some(10)]),
-                DataField::new(
-                    "dummy_1",
-                    Arc::new(NullableType::create(DateTime32Type::arc(None))),
-                ),
+                Series::from_data([Some(2_i64), Some(3), None, Some(4), Some(10)]),
+                DataField::new("dummy_1", NullableType::arc(DateTimeType::arc(0, None))),
             )],
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
     ];
 
-    test_scalar_functions_with_type(RunningDifferenceFunction::try_create("a")?, &tests, false)
+    test_scalar_functions_with_type("running_difference", &tests)
 }
 
 #[test]
 fn test_try_inet_aton_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "valid input",
@@ -288,14 +269,11 @@ fn test_try_inet_aton_function() -> Result<()> {
         },
     ];
 
-    let test_func = TryInetAtonFunction::try_create("try_inet_aton")?;
-    test_scalar_functions(test_func, &tests, true)
+    test_scalar_functions("try_inet_aton", &tests)
 }
 
 #[test]
 fn test_inet_aton_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         ScalarFunctionTest {
             name: "valid input",
@@ -323,14 +301,11 @@ fn test_inet_aton_function() -> Result<()> {
         },
     ];
 
-    let test_func = InetAtonFunction::try_create("inet_aton")?;
-    test_scalar_functions(test_func, &tests, false)
+    test_scalar_functions("inet_aton", &tests)
 }
 
 #[test]
 fn test_try_inet_ntoa_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         // integer input test cases
         ScalarFunctionTest {
@@ -369,18 +344,15 @@ fn test_try_inet_ntoa_function() -> Result<()> {
             name: "string_input_u32",
             columns: vec![Series::from_data(vec!["3232235777"])],
             expect: Series::from_data(vec![Some("192.168.1.1")]),
-            error: "Expected numeric or null type, but got String",
+            error: "Expected a numeric type, but got String",
         },
     ];
 
-    let test_func = TryInetNtoaFunction::try_create("try_inet_ntoa")?;
-    test_scalar_functions(test_func, &tests, true)
+    test_scalar_functions("try_inet_ntoa", &tests)
 }
 
 #[test]
 fn test_inet_ntoa_function() -> Result<()> {
-    use common_datavalues::prelude::*;
-
     let tests = vec![
         // integer input test cases
         ScalarFunctionTest {
@@ -419,10 +391,21 @@ fn test_inet_ntoa_function() -> Result<()> {
             name: "string_input_empty",
             columns: vec![Series::from_data([""])],
             expect: Series::from_data([""]),
-            error: "Expected numeric or null type, but got String",
+            error: "Expected a numeric type, but got String",
         },
     ];
 
-    let test_func = InetNtoaFunction::try_create("inet_ntoa")?;
-    test_scalar_functions(test_func, &tests, true)
+    test_scalar_functions("inet_ntoa", &tests)
+}
+
+#[test]
+fn test_type_of_function() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "type-of-example-passed",
+        columns: vec![Series::from_data([true, true, true, false])],
+        expect: Series::from_data(["BOOLEAN", "BOOLEAN", "BOOLEAN", "BOOLEAN"]),
+        error: "",
+    }];
+
+    test_scalar_functions("typeof", &tests)
 }

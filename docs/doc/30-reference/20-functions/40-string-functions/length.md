@@ -23,7 +23,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT LENGTH('Word');
 +----------------+
 | LENGTH('Word') |

@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
@@ -38,8 +38,8 @@ pub struct DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
-    pub engine_options: HashMap<String, String>,
-    pub options: HashMap<String, String>,
+    pub engine_options: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
     pub created_on: DateTime<Utc>,
 }
 
@@ -47,8 +47,8 @@ impl Default for DatabaseMeta {
     fn default() -> Self {
         DatabaseMeta {
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
             created_on: Utc::now(),
         }
     }
@@ -74,8 +74,18 @@ impl DatabaseInfo {
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub db: String,
+    pub db_name: String,
     pub meta: DatabaseMeta,
+}
+
+impl Display for CreateDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "create_db(if_not_exists={}):{}/{}={:?}",
+            self.if_not_exists, self.tenant, self.db_name, self.meta
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -87,7 +97,17 @@ pub struct CreateDatabaseReply {
 pub struct DropDatabaseReq {
     pub if_exists: bool,
     pub tenant: String,
-    pub db: String,
+    pub db_name: String,
+}
+
+impl Display for DropDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "drop_db(if_exists={}):{}/{}",
+            self.if_exists, self.tenant, self.db_name
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

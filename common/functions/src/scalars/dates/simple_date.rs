@@ -25,6 +25,7 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone, Debug)]
@@ -34,19 +35,19 @@ pub struct SimpleFunction<T> {
 }
 
 pub trait NoArgDateFunction {
-    fn execute() -> u16;
+    fn execute() -> i32;
 }
 
 #[derive(Clone)]
 pub struct Today;
 
 impl NoArgDateFunction for Today {
-    fn execute() -> u16 {
+    fn execute() -> i32 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 
         let duration = utc.naive_utc().sub(epoch);
-        duration.num_days() as u16
+        duration.num_days() as i32
     }
 }
 
@@ -54,12 +55,12 @@ impl NoArgDateFunction for Today {
 pub struct Yesterday;
 
 impl NoArgDateFunction for Yesterday {
-    fn execute() -> u16 {
+    fn execute() -> i32 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 
         let duration = utc.naive_utc().sub(epoch);
-        duration.num_days() as u16 - 1
+        duration.num_days() as i32 - 1
     }
 }
 
@@ -67,19 +68,19 @@ impl NoArgDateFunction for Yesterday {
 pub struct Tomorrow;
 
 impl NoArgDateFunction for Tomorrow {
-    fn execute() -> u16 {
+    fn execute() -> i32 {
         let utc: Date<Utc> = Utc::now().date();
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
 
         let duration = utc.naive_utc().sub(epoch);
-        duration.num_days() as u16 + 1
+        duration.num_days() as i32 + 1
     }
 }
 
 impl<T> SimpleFunction<T>
 where T: NoArgDateFunction + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(SimpleFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -99,20 +100,18 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(
-        &self,
-        _args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(Date16Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        DateType::arc()
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let value = T::execute();
-        let column = Series::from_data(&[value as u16]);
+        let column = Series::from_data(&[value as i32]);
         Ok(Arc::new(ConstColumn::new(column, input_rows)))
     }
 }

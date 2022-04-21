@@ -659,14 +659,28 @@ impl RewriteHelper {
             Expression::Cast {
                 expr,
                 data_type,
-                is_nullable,
+                pg_style,
             } => {
                 let new_expr = RewriteHelper::expr_rewrite_alias(expr, data)?;
                 Ok(Expression::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone(),
-                    is_nullable: *is_nullable,
+                    pg_style: *pg_style,
                 })
+            }
+            Expression::MapAccess { name, args } => {
+                let new_args: Result<Vec<Expression>> = args
+                    .iter()
+                    .map(|v| RewriteHelper::expr_rewrite_alias(v, data))
+                    .collect();
+
+                match new_args {
+                    Ok(v) => Ok(Expression::MapAccess {
+                        name: name.clone(),
+                        args: v,
+                    }),
+                    Err(v) => Err(v),
+                }
             }
             Expression::Wildcard
             | Expression::QualifiedColumn(_)
@@ -738,6 +752,7 @@ impl RewriteHelper {
             Expression::Wildcard => vec![],
             Expression::Sort { expr, .. } => vec![expr.as_ref().clone()],
             Expression::Cast { expr, .. } => vec![expr.as_ref().clone()],
+            Expression::MapAccess { args, .. } => args.clone(),
         })
     }
 
@@ -776,6 +791,14 @@ impl RewriteHelper {
             Expression::Wildcard => vec![],
             Expression::Sort { expr, .. } => Self::expression_plan_columns(expr)?,
             Expression::Cast { expr, .. } => Self::expression_plan_columns(expr)?,
+            Expression::MapAccess { args, .. } => {
+                let mut v = vec![];
+                for arg in args {
+                    let mut col = Self::expression_plan_columns(arg)?;
+                    v.append(&mut col);
+                }
+                v
+            }
         })
     }
 
@@ -843,6 +866,10 @@ impl RewriteHelper {
                 op: op.clone(),
                 distinct: *distinct,
                 params: params.clone(),
+                args: expressions.to_vec(),
+            },
+            Expression::MapAccess { name, .. } => Expression::MapAccess {
+                name: name.clone(),
                 args: expressions.to_vec(),
             },
             other => other.clone(),

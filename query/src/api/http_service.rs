@@ -61,7 +61,6 @@ impl HttpService {
                 get(super::http::debug::pprof::debug_pprof_handler),
             )
             .data(self.sessions.clone())
-            .data(self.sessions.get_conf())
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {

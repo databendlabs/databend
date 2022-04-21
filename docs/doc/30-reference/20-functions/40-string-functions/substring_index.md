@@ -26,7 +26,7 @@ String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT SUBSTRING_INDEX('www.mysql.com', '.', 2);
 +------------------------------------------+
 | SUBSTRING_INDEX('www.mysql.com', '.', 2) |

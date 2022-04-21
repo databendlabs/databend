@@ -26,14 +26,14 @@ async fn test_roles_table() -> Result<()> {
     ctx.get_settings().set_max_threads(2)?;
 
     {
-        let role_info = RoleInfo::new("test".to_string());
+        let role_info = RoleInfo::new("test");
         ctx.get_user_manager()
             .add_role(&tenant, role_info, false)
             .await?;
     }
 
     {
-        let mut role_info = RoleInfo::new("test1".to_string());
+        let mut role_info = RoleInfo::new("test1");
         role_info.grants.grant_role("test".to_string());
         ctx.get_user_manager()
             .add_role(&tenant, role_info, false)

@@ -22,7 +22,7 @@ Tests whether the argument is or is not one of the members of an explicit list.
 ## Examples
 
 ```sql
-mysql> select * from numbers(10) where number in (0, 1, 2, 3);
+SELECT * FROM numbers(10) WHERE number in (0, 1, 2, 3);
 +--------+
 | number |
 +--------+
@@ -32,7 +32,7 @@ mysql> select * from numbers(10) where number in (0, 1, 2, 3);
 |      3 |
 +--------+
 
-mysql> select * from numbers(10) where number not in (0, 1, 2, 3);
+SELECT * FROM numbers(10) WHERE number not in (0, 1, 2, 3);
 +--------+
 | number |
 +--------+

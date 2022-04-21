@@ -24,7 +24,7 @@ Numeric data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT CHAR_LENGTH('hello');
 +----------------------+
 | CHAR_LENGTH('hello') |

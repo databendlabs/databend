@@ -1,14 +1,14 @@
 ---
-title: sumIf
+title: SUM_IF
 ---
 
 
-## sumIf 
+## SUM_IF 
 
 The suffix -If can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```
-sumIf(column, cond)
+SUM_IF(column, cond)
 ```
 
 ## Examples
@@ -18,18 +18,17 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT sum(number) FROM numbers(10);
+SELECT sum(number) FROM numbers(10);
 +-------------+
 | sum(number) |
 +-------------+
 |          45 |
 +-------------+
 
-mysql> SELECT sumIf(number, number > 7) FROM numbers(10);
-+-----------------------------+
-| sumIf(number, (number > 7)) |
-+-----------------------------+
-|                          17 |
-+-----------------------------+
-
+SELECT sum_if(number, number > 7) FROM numbers(10);
++------------------------------+
+| sum_if(number, (number > 7)) |
++------------------------------+
+|                           17 |
++------------------------------+
 ```

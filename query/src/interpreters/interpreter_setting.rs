@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
@@ -50,6 +52,16 @@ impl Interpreter for SettingInterpreter {
             match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => {}
+                "timezone" => {
+                    // check if the timezone is valid
+                    let tz = var.value.trim_matches(|c| c == '\'' || c == '\"');
+                    let _ = tz.parse::<Tz>().map_err(|_| {
+                        ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
+                    })?;
+                    self.ctx
+                        .get_settings()
+                        .set_settings(var.variable, tz.to_string(), false)?;
+                }
                 _ => {
                     self.ctx
                         .get_settings()

@@ -1,5 +1,6 @@
 ---
 title: ALTER USER
+description: Modifies the properties for an existing user.
 ---
 
 Modifies the properties for an existing user.
@@ -14,46 +15,38 @@ ALTER USER <name> IDENTIFIED [WITH auth_type ] BY 'auth_string'
 
 ```
 auth_type: {
-    plaintext_password
-  | double_sha1_password
+    double_sha1_password
   | sha256_password
 }
-
-auth_type default is double_sha1_password
 ```
+auth_type default is **double_sha1_password**.
 
 ## Examples
 
 
-```sql title='mysql>'
-create user 'user-a'@'%' IDENTIFIED BY 'password';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 ```sql
-+--------+----------+----------------------+------------------------------------------+
-| name   | hostname | auth_type            | auth_string                              |
-+--------+----------+----------------------+------------------------------------------+
-| user-a | %        | double_sha1_password | 2470c0c06dee42fd1618bb99005adca2ec9d1e19 |
-+--------+----------+----------------------+------------------------------------------+
+SHOW USERS;
++-----------+----------+----------------------+------------------------------------------+
+| name      | hostname | auth_type            | auth_string                              |
++-----------+----------+----------------------+------------------------------------------+
+| user1     | %        | double_sha1_password | 6691484ea6b50ddde1926a220da01fa9e575c18a |
++-----------+----------+----------------------+------------------------------------------+
 ```
 
 
-```sql title='mysql>'
-alter user 'user-a' IDENTIFIED WITH sha256_password BY 'password';
-```
-
-```sql title='mysql>'
-show users;
+```sql
+ALTER USER user1 IDENTIFIED WITH sha256_password BY '123abc';
 ```
 
 ```sql
-+--------+----------+-----------------+------------------------------------------------------------------+
-| name   | hostname | auth_type       | auth_string                                                      |
-+--------+----------+-----------------+------------------------------------------------------------------+
-| user-a | %        | sha256_password | 5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8 |
-+--------+----------+-----------------+------------------------------------------------------------------+
+SHOW USERS;
++-------+----------+-----------------+------------------------------------------------------------------+
+| name  | hostname | auth_type       | auth_string                                                      |
++-------+----------+-----------------+------------------------------------------------------------------+
+| user1 | %        | sha256_password | dd130a849d7b29e5541b05d2f7f86a4acd4f1ec598c1c9438783f56bc4f0ff80 |
++-------+----------+-----------------+------------------------------------------------------------------+
 ```

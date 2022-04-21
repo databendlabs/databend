@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::DataTypePtr;
 use crate::ColumnRef;
+use crate::DataValue;
 use crate::NullableColumn;
 
 pub struct MutableNullableColumn {
@@ -57,12 +57,25 @@ impl MutableColumn for MutableNullableColumn {
     fn to_column(&mut self) -> ColumnRef {
         let col = self.inner.to_column();
         let validity = std::mem::take(&mut self.values);
-        Arc::new(NullableColumn::new(col, validity.into()))
+        NullableColumn::wrap_inner(col, Some(validity.into()))
     }
 
-    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.values.push(true);
         self.inner.append_data_value(value)
+    }
+
+    /// Note when the last value is null, this method will return DataValue::Null.
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.values
+            .pop()
+            .ok_or_else(|| {
+                ErrorCode::BadDataArrayLength("Nullable column array is empty when pop data value")
+            })
+            .and_then(|v| {
+                let value = self.inner.pop_data_value();
+                v.then_some(value).unwrap_or(Ok(DataValue::Null))
+            })
     }
 }
 

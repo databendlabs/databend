@@ -862,6 +862,9 @@ dependencies = [
 name = "common-building"
 version = "0.1.0"
 dependencies = [
+ "cargo-license",
+ "cargo_metadata",
+ "common-tracing",
  "run_script",
  "vergen",
 ]
@@ -926,6 +929,7 @@ dependencies = [
  "common-mem-allocator",
  "criterion",
  "dyn-clone",
+ "enum_dispatch",
  "itertools",
  "lexical-core",
  "num",
@@ -1229,6 +1233,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "common-meta-types",
  "once_cell",
  "pretty_assertions",
@@ -1238,7 +1243,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-range-set"
+name = "common-range-map"
 version = "0.1.0"
 
 [[package]]
@@ -1670,6 +1675,7 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
+ "common-range-map",
  "common-tracing",
  "futures",
  "maplit",
@@ -1724,8 +1730,6 @@ dependencies = [
  "bumpalo",
  "byteorder",
  "bytes 1.1.0",
- "cargo-license",
- "cargo_metadata",
  "chrono",
  "chrono-tz",
  "clap 3.1.8",
@@ -2035,6 +2039,18 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c134c37760b27a871ba422106eedbb8247da973a09e82558bf26d619c882b159"
 dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "enum_dispatch"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
+dependencies = [
+ "once_cell",
  "proc-macro2",
  "quote",
  "syn",
@@ -5675,7 +5691,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=1c8d3f1#1c8d3f1b77039649b4a9fc798ed319d413182d3b"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=818c0f9#818c0f96a2dcc81537fbfe6c6ee9584600ebcb44"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

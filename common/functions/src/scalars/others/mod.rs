@@ -19,7 +19,7 @@ mod inet_ntoa;
 mod other;
 mod running_difference_function;
 mod sleep;
-mod to_type_name;
+mod type_of;
 
 pub use exists::ExistsFunction;
 pub use ignore::IgnoreFunction;
@@ -30,4 +30,4 @@ pub use inet_ntoa::TryInetNtoaFunction;
 pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;
 pub use sleep::SleepFunction;
-pub use to_type_name::ToTypeNameFunction;
+pub use type_of::TypeOfFunction;

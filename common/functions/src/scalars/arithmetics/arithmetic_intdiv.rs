@@ -22,8 +22,8 @@ use num_traits::AsPrimitive;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 #[inline]
 fn intdiv_scalar<O>(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, ctx: &mut EvalContext) -> O
@@ -58,8 +58,8 @@ impl ArithmeticIntDivFunction {
         })
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

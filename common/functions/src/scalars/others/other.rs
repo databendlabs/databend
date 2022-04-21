@@ -20,7 +20,7 @@ use super::running_difference_function::RunningDifferenceFunction;
 use super::ExistsFunction;
 use super::IgnoreFunction;
 use super::SleepFunction;
-use super::ToTypeNameFunction;
+use super::TypeOfFunction;
 use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
@@ -29,26 +29,22 @@ pub struct OtherFunction {}
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("exists", ExistsFunction::desc());
-        factory.register("totypename", ToTypeNameFunction::desc());
+        factory.register("typeof", TypeOfFunction::desc());
         factory.register("sleep", SleepFunction::desc());
 
-        factory.register("runningDifference", RunningDifferenceFunction::desc());
+        factory.register("running_difference", RunningDifferenceFunction::desc());
         factory.register("ignore", IgnoreFunction::desc());
 
-        // inet_aton
+        // INET string to number.
+        factory.register("ipv4_string_to_num", InetAtonFunction::desc());
+        factory.register("try_ipv4_string_to_num", TryInetAtonFunction::desc());
         factory.register("inet_aton", InetAtonFunction::desc());
-        factory.register("IPv4StringToNum", InetAtonFunction::desc());
-
-        // try_inet_aton
         factory.register("try_inet_aton", TryInetAtonFunction::desc());
-        factory.register("TryIPv4StringToNum", TryInetAtonFunction::desc());
 
-        // inet_ntoa
+        // INET number to string.
+        factory.register("ipv4_num_to_string", InetNtoaFunction::desc());
+        factory.register("try_ipv4_num_to_string", TryInetNtoaFunction::desc());
         factory.register("inet_ntoa", InetNtoaFunction::desc());
-        factory.register("IPv4NumToString", InetNtoaFunction::desc());
-
-        // try_inet_ntoa
         factory.register("try_inet_ntoa", TryInetNtoaFunction::desc());
-        factory.register("TryIPv4NumToString", TryInetNtoaFunction::desc());
     }
 }

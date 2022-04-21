@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_scalar_types_error;
 use common_exception::Result;
+use serde_json::json;
+use serde_json::Value as JsonValue;
 
 #[test]
 fn test_builder() -> Result<()> {
@@ -106,7 +106,7 @@ fn test_builder() -> Result<()> {
             for i in 0..size {
                 bm.push(i % 3 == 1);
             }
-            column = Arc::new(NullableColumn::new(column, bm.into()));
+            column = NullableColumn::wrap_inner(column, Some(bm.into()));
         }
 
         let ty = remove_nullable(&column.data_type());
@@ -117,5 +117,169 @@ fn test_builder() -> Result<()> {
             assert!(result == column, "test {}", t.name);
         });
     }
+    Ok(())
+}
+
+#[test]
+fn test_pop_data_value() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        data_type: DataTypePtr,
+        column: ColumnRef,
+        expected_err: &'static str,
+    }
+
+    let tests = vec![
+        Test {
+            name: "test bool column",
+            data_type: BooleanType::arc(),
+            column: Series::from_data(&[true, true, false]),
+            expected_err: "Code: 1018, displayText = Bool column is empty when pop data value.",
+        },
+        Test {
+            name: "test primitive(u64) column",
+            data_type: UInt64Type::arc(),
+            column: Series::from_data(&[1u64, 2, 3]),
+            expected_err:
+                "Code: 1018, displayText = Primitive column array is empty when pop data value.",
+        },
+        Test {
+            name: "test string column",
+            data_type: StringType::arc(),
+            column: Series::from_data(&["1", "22", "333"]),
+            expected_err:
+                "Code: 1018, displayText = String column array is empty when pop data value.",
+        },
+        Test {
+            name: "test object column",
+            data_type: VariantType::arc(),
+            column: Series::from_data(vec![
+                VariantValue::from(json!(10u64)),
+                VariantValue::from(JsonValue::Bool(true)),
+                VariantValue::from(JsonValue::Null),
+            ]),
+            expected_err:
+                "Code: 1018, displayText = Object column array is empty when pop data value.",
+        },
+        Test {
+            name: "test null column",
+            data_type: NullType::arc(),
+            column: NullColumn::new(3).arc(),
+            expected_err: "Code: 1018, displayText = Null column is empty when pop data value.",
+        },
+    ];
+
+    for test in tests {
+        let name = test.name;
+        let data_type = test.data_type.clone();
+        let column = test.column;
+        let expected_err = test.expected_err;
+
+        // Build MutableColumn
+        let mut builder = data_type.create_mutable(column.len());
+        for idx in 0..column.len() {
+            let value = column.get(idx);
+            builder.append_data_value(value)?;
+        }
+
+        // Pop when not empty
+        for idx in (0..column.len()).rev() {
+            let value = builder.pop_data_value()?;
+            assert_eq!(value, column.get(idx), "{} pop data value", name);
+        }
+        assert!(builder.is_empty());
+
+        // Pop when builder is empty.
+        let result = builder.pop_data_value();
+        assert!(result.is_err());
+        let error = &result.unwrap_err().to_string();
+        assert_eq!(error, expected_err, "{} pop when empty", name);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_nullable_pop() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        data_type: DataTypePtr,
+        values_vec: Vec<DataValue>,
+    }
+
+    let tests = vec![
+        Test {
+            name: "test nullable(bool)",
+            data_type: NullableType::arc(BooleanType::arc()),
+            values_vec: vec![
+                DataValue::Boolean(true),
+                DataValue::Null,
+                DataValue::Boolean(false),
+                DataValue::Null,
+            ],
+        },
+        Test {
+            name: "test nullable(u64)",
+            data_type: NullableType::arc(UInt64Type::arc()),
+            values_vec: vec![
+                DataValue::UInt64(1),
+                DataValue::Null,
+                DataValue::UInt64(2),
+                DataValue::Null,
+            ],
+        },
+        Test {
+            name: "test nullable(string)",
+            data_type: NullableType::arc(StringType::arc()),
+            values_vec: vec![
+                DataValue::String("1".as_bytes().to_vec()),
+                DataValue::Null,
+                DataValue::String("22".as_bytes().to_vec()),
+                DataValue::Null,
+            ],
+        },
+        Test {
+            name: "test nullable(object)",
+            data_type: NullableType::arc(VariantType::arc()),
+            values_vec: vec![
+                DataValue::Variant(VariantValue::from(json!(10u64))),
+                DataValue::Null,
+                DataValue::Variant(VariantValue::from(JsonValue::Bool(true))),
+                DataValue::Null,
+            ],
+        },
+    ];
+    let expected_err_msg =
+        "Code: 1018, displayText = Nullable column array is empty when pop data value.";
+
+    for test in tests {
+        let name = test.name;
+        let data_type = test.data_type.clone();
+        let values_vec = test.values_vec;
+
+        // Build MutableColumn
+        let mut builder = data_type.create_mutable(values_vec.len());
+        for value in values_vec.iter() {
+            if value.is_null() {
+                builder.append_default();
+            } else {
+                builder.append_data_value(value.clone())?;
+            }
+        }
+
+        // Pop when not empty
+        for expected_value in values_vec.iter().rev() {
+            let value = builder.pop_data_value()?;
+            assert_eq!(&value, expected_value, "{} pop data value", name);
+        }
+        assert!(builder.is_empty());
+
+        // Pop when builder is empty.
+        let result = builder.pop_data_value();
+        assert!(result.is_err());
+        let error = &result.unwrap_err().to_string();
+        assert_eq!(error, expected_err_msg, "{} pop when empty", name);
+    }
+
     Ok(())
 }

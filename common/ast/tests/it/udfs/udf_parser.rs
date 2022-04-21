@@ -28,14 +28,14 @@ use sqlparser::ast::UnaryOperator;
 async fn test_udf_parser() -> Result<()> {
     let mut parser = UDFParser::default();
     let result = parser
-        .parse("test", &["p".to_string()], "not(isnull(p))")
+        .parse("test", &["p".to_string()], "not(is_null(p))")
         .await?;
 
     assert_eq!(result, Expr::UnaryOp {
         op: UnaryOperator::Not,
         expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
             name: ObjectName(vec![Ident {
-                value: "isnull".to_string(),
+                value: "is_null".to_string(),
                 quote_style: None,
             }]),
             params: vec![],
@@ -51,11 +51,11 @@ async fn test_udf_parser() -> Result<()> {
     });
 
     assert!(parser
-        .parse("test", &["p".to_string()], "not(isnull(p, d))")
+        .parse("test", &["p".to_string()], "not(is_null(p, d))")
         .await
         .is_err());
     assert!(parser
-        .parse("test", &["d".to_string()], "not(isnull(p))")
+        .parse("test", &["d".to_string()], "not(is_null(p))")
         .await
         .is_err());
     assert!(parser
@@ -70,7 +70,7 @@ async fn test_udf_parser() -> Result<()> {
         .parse(
             "test",
             &["d".to_string(), "p".to_string()],
-            "not(isnull(p, d))"
+            "not(is_null(p, d))"
         )
         .await
         .is_ok());

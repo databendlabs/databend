@@ -32,6 +32,7 @@ use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::protobuf::RaftReply;
+use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ConnectionError;
@@ -66,6 +67,8 @@ use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
+use crate::watcher::WatcherManager;
+use crate::watcher::WatcherStreamSender;
 use crate::Opened;
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
@@ -74,6 +77,7 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<MetaRaftStore>,
+    pub watcher: WatcherManager,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -117,8 +121,15 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
+        let watcher = WatcherManager::create();
+
+        sto.get_state_machine()
+            .await
+            .set_subscriber(Box::new(watcher.subscriber.clone()));
+
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
+            watcher,
             raft,
             running_tx: tx,
             running_rx: rx,
@@ -808,5 +819,9 @@ impl MetaNode {
 
         let res: Result<ForwardResponse, MetaError> = raft_mes.into();
         res
+    }
+
+    pub fn create_watcher_stream(&self, request: WatchRequest, tx: WatcherStreamSender) {
+        self.watcher.create_watcher_stream(request, tx)
     }
 }

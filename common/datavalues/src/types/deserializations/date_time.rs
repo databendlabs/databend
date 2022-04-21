@@ -121,6 +121,10 @@ where
         Ok(())
     }
 
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.builder.pop_data_value()
+    }
+
     fn finish_to_column(&mut self) -> ColumnRef {
         self.builder.to_column()
     }

@@ -20,6 +20,7 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
@@ -28,7 +29,7 @@ pub struct PiFunction {
 }
 
 impl PiFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         Ok(Box::new(PiFunction {
             display_name: display_name.to_string(),
         }))
@@ -45,11 +46,16 @@ impl Function for PiFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Float64Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
-    fn eval(&self, _columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        _columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
         Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())
     }
 }

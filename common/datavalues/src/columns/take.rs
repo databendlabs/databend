@@ -33,7 +33,10 @@ impl Series {
             let values = indices.iter().map(|index| values.get_bit(index.to_usize()));
             let validity_result = Bitmap::from_trusted_len_iter(values);
 
-            Ok(Arc::new(NullableColumn::new(inner_result, validity_result)))
+            Ok(NullableColumn::wrap_inner(
+                inner_result,
+                Some(validity_result),
+            ))
         } else {
             let type_id = column.data_type_id().to_physical_type();
 
