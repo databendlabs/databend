@@ -107,20 +107,21 @@ impl Compactor for BlockCompactor {
             blocks.remove(size - 1);
         } else {
             let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
+            let merged = DataBlock::concat_blocks(blocks)?;
             blocks.clear();
 
             if accumulated_rows >= self.max_row_per_block {
-                let cut = block.slice(0, self.max_row_per_block);
+                let cut = merged.slice(0, self.max_row_per_block);
                 res.push(cut);
 
                 if accumulated_rows != self.max_row_per_block {
-                    blocks.push(block.slice(
+                    blocks.push(merged.slice(
                         self.max_row_per_block,
                         accumulated_rows - self.max_row_per_block,
                     ));
                 }
             } else {
-                res.push(block);
+                blocks.push(merged);
             }
         }
 
