@@ -20,11 +20,6 @@ use common_base::mask_string;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
-
-pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
-pub const STORAGE_NUM_CPUS: &str = "STORAGE_NUM_CPUS";
-
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum StorageType {
     Fs,
@@ -168,10 +163,11 @@ pub struct StorageConfig {
     /// Current storage type: fs|s3
     #[clap(long, default_value = "fs")]
     #[serde(rename = "type")]
-    pub typ: String,
+    pub storage_type: String,
 
     #[clap(long, default_value = "0")]
-    pub num_cpus: u64,
+    #[serde(rename = "num_cpus")]
+    pub storage_num_cpus: u64,
 
     // Fs storage backend config.
     #[clap(flatten)]
@@ -189,11 +185,11 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            typ: "fs".to_string(),
+            storage_type: "fs".to_string(),
             fs: FsStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azure_storage_blob: AzureStorageBlobConfig::default(),
-            num_cpus: 0,
+            storage_num_cpus: num_cpus::get() as u64,
         }
     }
 }
