@@ -1,0 +1,35 @@
+ERROR 1105 (HY000) at line 14: Code: 1005, displayText = sql parser error: Alter database only support rename for now!.
+ERROR 1105 (HY000) at line 15: Code: 1005, displayText = sql parser error: Alter database only support rename for now!.
+ERROR 1105 (HY000) at line 16: Code: 1005, displayText = sql parser error: Alter database only support rename for now!.
+system
+INFORMATION_SCHEMA
+a
+b
+default
+system
+INFORMATION_SCHEMA
+a
+b
+default
+system
+INFORMATION_SCHEMA
+a
+b
+default
+system
+INFORMATION_SCHEMA
+a
+b
+default
+system
+INFORMATION_SCHEMA
+A
+b
+default
+1
+10
+system
+INFORMATION_SCHEMA
+A
+b
+default

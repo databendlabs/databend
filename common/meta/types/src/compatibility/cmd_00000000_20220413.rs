@@ -71,6 +71,17 @@ pub enum Cmd {
         db_name: Option<String>,
     },
 
+    RenameDatabase {
+        // latest add
+        if_exists: Option<bool>,
+        tenant: String,
+        // 20220413
+        name: Option<String>,
+        // latest add
+        db_name: Option<String>,
+        new_db_name: Option<String>,
+    },
+
     CreateTable {
         // latest add
         if_not_exists: Option<bool>,

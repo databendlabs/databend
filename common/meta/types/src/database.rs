@@ -94,6 +94,29 @@ pub struct CreateDatabaseReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameDatabaseReq {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub db_name: String,
+    pub new_db_name: String,
+}
+
+impl Display for RenameDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "rename_database:{}/{}=>{}",
+            self.tenant, self.db_name, self.new_db_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameDatabaseReply {
+    pub database_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
     pub tenant: String,

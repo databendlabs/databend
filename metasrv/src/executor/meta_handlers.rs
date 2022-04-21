@@ -25,6 +25,7 @@ use common_meta_types::Cmd::CreateTable;
 use common_meta_types::Cmd::DropDatabase;
 use common_meta_types::Cmd::DropShare;
 use common_meta_types::Cmd::DropTable;
+use common_meta_types::Cmd::RenameDatabase;
 use common_meta_types::Cmd::RenameTable;
 use common_meta_types::Cmd::UpsertTableOptions;
 use common_meta_types::CreateDatabaseReply;
@@ -50,6 +51,8 @@ use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::OkOrExist;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareAlreadyExists;
@@ -139,6 +142,34 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
             ));
 
             Err(MetaError::from(ae))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<RenameDatabaseReq> for ActionHandler {
+    async fn handle(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply, MetaError> {
+        let if_exists = req.if_exists;
+
+        let cr = LogEntry {
+            txid: None,
+            cmd: RenameDatabase(req),
+        };
+
+        let res = self.meta_node.write(cr).await;
+
+        if let Err(MetaError::AppError(AppError::UnknownDatabase(e))) = res {
+            if if_exists {
+                Ok(RenameDatabaseReply { database_id: 0 })
+            } else {
+                Err(MetaError::AppError(AppError::UnknownDatabase(e)))
+            }
+        } else {
+            let mut ch: Change<DatabaseMeta> = res?
+                .try_into()
+                .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
+            let database_id = ch.ident.take().unwrap();
+            Ok(RenameDatabaseReply { database_id })
         }
     }
 }

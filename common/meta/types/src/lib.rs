@@ -83,6 +83,8 @@ pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
 pub use database::ListDatabaseReq;
+pub use database::RenameDatabaseReply;
+pub use database::RenameDatabaseReq;
 pub use endpoint::Endpoint;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;

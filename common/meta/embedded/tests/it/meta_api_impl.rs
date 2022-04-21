@@ -43,6 +43,12 @@ async fn test_meta_embedded_database_list_in_diff_tenant() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_database_rename() -> anyhow::Result<()> {
+    let mt = MetaEmbedded::new_temp().await?;
+    MetaApiTestSuite {}.database_rename(&mt).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_create_get_drop() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     MetaApiTestSuite {}.table_create_get_drop(&mt).await
@@ -61,7 +67,7 @@ async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_share_create_get_dro() -> anyhow::Result<()> {
+async fn test_meta_embedded_share_create_get_drop() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     MetaApiTestSuite {}.share_create_get_drop(&mt).await
 }

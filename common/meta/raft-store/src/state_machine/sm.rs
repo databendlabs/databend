@@ -35,6 +35,7 @@ use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DatabaseAlreadyExists;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReq;
@@ -50,6 +51,7 @@ use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReq;
 use common_meta_types::SeqV;
 use common_meta_types::ShareInfo;
@@ -451,6 +453,110 @@ impl StateMachine {
         Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
     }
 
+    fn apply_rename_database_cmd(
+        &self,
+        req: &RenameDatabaseReq,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let tenant = &req.tenant;
+        let name = &req.db_name;
+        let new_name = &req.new_db_name;
+        let database_lookup = txn_tree.key_space::<DatabaseLookup>();
+        let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
+        let (prev, result) = self.txn_sub_tree_upsert(
+            &database_lookup,
+            &db_key,
+            &MatchSeq::Any,
+            Operation::Delete,
+            None,
+        )?;
+
+        assert!(
+            result.is_none(),
+            "rename with MatchSeq::Any always succeeds"
+        );
+
+        // db_name exists
+        if let Some(seq_db_id) = prev {
+            let db_id = seq_db_id.data;
+
+            let dbs = txn_tree.key_space::<Databases>();
+            let (prev_meta, result_meta) =
+                self.txn_sub_tree_upsert(&dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)?;
+            if prev_meta.is_none() {
+                return Err(MetaStorageError::AppError(AppError::UnknownDatabase(
+                    UnknownDatabase::new(&req.db_name, "apply_rename_database_cmd"),
+                )));
+            }
+            assert!(result_meta.is_none());
+            let meta = &prev_meta.as_ref().unwrap().data;
+
+            let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
+            let db_key = DatabaseLookupKey::new(tenant.to_string(), new_name.to_string());
+            let (prev, result) = self.txn_sub_tree_upsert(
+                &db_lookup_tree,
+                &db_key,
+                &MatchSeq::Exact(0),
+                Operation::Update(db_id),
+                None,
+            )?;
+
+            // if it is just created
+            if prev.is_none() && result.is_some() {
+                // TODO(xp): reconsider this impl. it may not be required.
+                self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
+            } else {
+                // exist
+                return Err(MetaStorageError::AppError(AppError::DatabaseAlreadyExists(
+                    DatabaseAlreadyExists::new(&req.new_db_name, "apply_rename_database_cmd"),
+                )));
+            }
+
+            let dbs = txn_tree.key_space::<Databases>();
+            let (prev_meta, result_meta) = self.txn_sub_tree_upsert(
+                &dbs,
+                &db_id,
+                &MatchSeq::Exact(0),
+                Operation::Update(meta.clone()),
+                None,
+            )?;
+            if prev_meta.is_some() {
+                return Err(MetaStorageError::AppError(AppError::DatabaseAlreadyExists(
+                    DatabaseAlreadyExists::new(&req.new_db_name, "apply_rename_database_cmd"),
+                )));
+            }
+            assert!(result_meta.is_some());
+            if prev_meta.is_none() && result_meta.is_some() {
+                self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
+            }
+
+            tracing::debug!(
+                "applied rename Database: from {} to {}, db_id: {}, meta: {:?}",
+                name,
+                new_name,
+                db_id,
+                result_meta
+            );
+
+            return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                db_id,
+                prev_meta,
+                result_meta,
+            )));
+        }
+
+        // db_name not exist
+        tracing::debug!(
+            "applied rename Database: from {} to {}, {:?}",
+            name,
+            new_name,
+            result
+        );
+        Err(MetaStorageError::AppError(AppError::UnknownDatabase(
+            UnknownDatabase::new(&req.db_name, "apply_rename_database_cmd"),
+        )))
+    }
+
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_table_cmd(
         &self,
@@ -636,6 +742,8 @@ impl StateMachine {
             Cmd::CreateDatabase(req) => self.apply_create_database_cmd(req, txn_tree),
 
             Cmd::DropDatabase(req) => self.apply_drop_database_cmd(req, txn_tree),
+
+            Cmd::RenameDatabase(req) => self.apply_rename_database_cmd(req, txn_tree),
 
             Cmd::CreateTable(req) => self.apply_create_table_cmd(req, txn_tree),
 

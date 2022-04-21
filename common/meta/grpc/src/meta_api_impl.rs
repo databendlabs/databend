@@ -35,6 +35,8 @@ use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareInfo;
@@ -69,6 +71,13 @@ impl MetaApi for MetaGrpcClient {
         req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         self.do_read(req).await
+    }
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError> {
+        self.do_write(req).await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {

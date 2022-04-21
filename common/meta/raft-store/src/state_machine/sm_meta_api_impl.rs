@@ -43,6 +43,8 @@ use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaStorageError;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareAlreadyExists;
@@ -140,6 +142,26 @@ impl MetaApi for StateMachine {
         }
 
         Ok(res)
+    }
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError> {
+        let res = self.sm_tree.txn(true, |t| {
+            self.apply_cmd(&Cmd::RenameDatabase(req.clone()), &t)
+        });
+        if let Err(MetaStorageError::AppError(AppError::UnknownDatabase(e))) = res {
+            if req.if_exists {
+                Ok(RenameDatabaseReply { database_id: 0 })
+            } else {
+                Err(MetaError::AppError(AppError::UnknownDatabase(e)))
+            }
+        } else {
+            let mut ch: Change<DatabaseMeta, u64> = res?.try_into().unwrap();
+            let database_id = ch.ident.take().unwrap();
+            Ok(RenameDatabaseReply { database_id })
+        }
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {

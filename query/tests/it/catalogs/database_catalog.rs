@@ -23,6 +23,7 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::TableMeta;
 use databend_query::catalogs::Catalog;
 
@@ -86,12 +87,43 @@ async fn test_catalogs_database() -> Result<()> {
         assert!(res.is_err());
     }
 
-    // Drop.
+    // Rename.
+    {
+        let mut req = RenameDatabaseReq {
+            if_exists: false,
+            tenant: tenant.to_string(),
+            db_name: "db1".to_string(),
+            new_db_name: "db2".to_string(),
+        };
+        let res = catalog.rename_database(req.clone()).await;
+        assert!(res.is_ok());
+
+        let db_list_1 = catalog.list_databases(tenant).await?;
+        assert_eq!(db_list_1.len(), db_count + 1);
+
+        // Tenant empty.
+        req.tenant = "".to_string();
+        let res = catalog.rename_database(req).await;
+        assert!(res.is_err());
+    }
+
+    // Drop old db.
+    {
+        let req = DropDatabaseReq {
+            if_exists: false,
+            tenant: tenant.to_string(),
+            db_name: "db1".to_string(),
+        };
+        let res = catalog.drop_database(req.clone()).await;
+        assert!(res.is_err());
+    }
+
+    // Drop renamed db.
     {
         let mut req = DropDatabaseReq {
             if_exists: false,
             tenant: tenant.to_string(),
-            db_name: "db1".to_string(),
+            db_name: "db2".to_string(),
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
