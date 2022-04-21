@@ -14,6 +14,8 @@ chmod +x ./target/debug/databend-metactl
 cat $meta_json \
     | ./target/debug/databend-metactl --import --raft-dir "$meta_dir"
 
+sleep 1
+
 ./target/debug/databend-metactl --export --raft-dir "$meta_dir" > $exported
 
 diff $meta_json $exported
@@ -25,7 +27,7 @@ METASRV_PID=$!
 echo $METASRV_PID
 sleep 0.5
 
-./target/debug/databend-metactl --export > $grpc_exported
+./target/debug/databend-metactl --export --grpc-api-address "127.0.0.1:9191"  > $grpc_exported
 grep -Fxq '["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]' $grpc_exported
 
 kill $METASRV_PID
