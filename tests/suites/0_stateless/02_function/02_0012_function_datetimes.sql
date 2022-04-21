@@ -6,8 +6,8 @@ select  toDateTime(1640019661), toInt64(toDateTime(1640019661))  = 1640019661;
 
 select typeof(today() + 3) = 'DATE';
 select typeof(today() - 3) = 'DATE';
-select typeof(now() - 3) = 'DATETIME_0';
-select typeof(toDateTime(1640019661)) = 'DATETIME_0';
+select typeof(now() - 3) = 'DATETIME';
+select typeof(toDateTime(1640019661)) = 'DATETIME';
 select today() + 1 - today() = 1;
 
 select typeof(today() - today()) = 'INT';
@@ -193,13 +193,13 @@ select toDateTime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
 select '===INSERT===';
 drop table if exists ts;
-create table ts(a DateTime_3, b DateTime, c Date);
+create table ts(a DateTime(3), b DateTime, c Date);
 insert into ts values(now(), now(), today());
 select toDateTime(a) = toDateTime(b) from ts;
 drop table if exists ts;
 
 
-create table t(d32 datetime, d64 datetime_3);
+create table t(d32 datetime, d64 DateTime(3));
 
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28');
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');
