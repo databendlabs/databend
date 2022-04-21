@@ -36,7 +36,7 @@ ShowCreateTable {
 ---------- Input ----------
 explain analyze select a from b;
 ---------- Output ---------
-EXPLAIN ANALYZE SELECT a FROM b 
+EXPLAIN ANALYZE SELECT a FROM b
 ---------- AST ------------
 Explain {
     analyze: true,
@@ -327,6 +327,51 @@ CreateDatabase {
     },
     engine: "",
     options: [],
+}
+
+
+---------- Input ----------
+create table c(a DateTime null, b DateTime(3));
+---------- Output ---------
+CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NULL)
+---------- AST ------------
+CreateTable {
+    if_not_exists: false,
+    database: None,
+    table: Identifier {
+        name: "c",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "a",
+                quote: None,
+            },
+            data_type: DateTime {
+                precision: None,
+            },
+            nullable: true,
+            default_value: None,
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "b",
+                quote: None,
+            },
+            data_type: DateTime {
+                precision: Some(
+                    3,
+                ),
+            },
+            nullable: true,
+            default_value: None,
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
 }
 
 

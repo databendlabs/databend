@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 /// A builder for a column.
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 
 use crate::prelude::MutableColumn;
 use crate::prelude::Scalar;

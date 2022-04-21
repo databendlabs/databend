@@ -11,8 +11,8 @@ RedistributeStage[expr: 0]
     Expression: 2:UInt16 (Before Projection)
       ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
 RedistributeStage[expr: 0]
-  Projection: now():DateTime32
-    Expression: now():DateTime32 (Before Projection)
+  Projection: now():DateTime_0
+    Expression: now():DateTime_0 (Before Projection)
       ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
 Projection: sum(a):Nullable(Int64)
   AggregatorFinal: groupBy=[[]], aggr=[[sum(a)]]

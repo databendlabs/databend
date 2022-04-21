@@ -79,9 +79,9 @@ impl RepoIssuesTable {
             DataField::new(LABELS, Vu8::to_data_type()),
             DataField::new(ASSIGNESS, Vu8::to_data_type()),
             DataField::new(COMMENTS, u32::to_data_type()),
-            DataField::new(CREATED_AT, DateTime32Type::arc(None)),
-            DataField::new(UPDATED_AT, DateTime32Type::arc(None)),
-            DataField::new_nullable(CLOSED_AT, DateTime32Type::arc(None)),
+            DataField::new(CREATED_AT, DateTimeType::arc(0, None)),
+            DataField::new(UPDATED_AT, DateTimeType::arc(0, None)),
+            DataField::new_nullable(CLOSED_AT, DateTimeType::arc(0, None)),
         ];
 
         Arc::new(DataSchema::new(fields))

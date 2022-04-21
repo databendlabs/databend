@@ -23,18 +23,18 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct Date16Type {}
+pub struct DateType {}
 
-impl Date16Type {
+impl DateType {
     pub fn arc() -> DataTypePtr {
-        Arc::new(Date16Type {})
+        Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl DataType for Date16Type {
+impl DataType for DateType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Date16
+        TypeID::Date
     }
 
     #[inline]
@@ -43,59 +43,55 @@ impl DataType for Date16Type {
     }
 
     fn name(&self) -> &str {
-        "Date16"
-    }
-
-    fn aliases(&self) -> &[&str] {
-        &["Date"]
+        "Date"
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::UInt64(0)
+        DataValue::Int64(0)
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value = data.as_u64()?;
-
-        let column = Series::from_data(&[value as u16]);
+        let value = data.as_i64()?;
+        let column = Series::from_data(&[value as i32]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
         let value = data
             .iter()
-            .map(|v| v.as_u64())
+            .map(|v| v.as_i64())
             .collect::<Result<Vec<_>>>()?;
-        let value = value.iter().map(|v| *v as u16).collect::<Vec<_>>();
-        Ok(Series::from_data(value))
+
+        let value = value.iter().map(|v| *v as i32).collect::<Vec<_>>();
+        Ok(Series::from_data(&value))
     }
 
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::UInt16
+        ArrowType::Int32
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date16".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date".to_string());
         Some(mp)
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateSerializer::<u16>::default())
+        Box::new(DateSerializer::<i32>::default())
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(DateDeserializer::<u16> {
-            builder: MutablePrimitiveColumn::<u16>::with_capacity(capacity),
+        Box::new(DateDeserializer::<i32> {
+            builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
         })
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutablePrimitiveColumn::<u16>::with_capacity(capacity))
+        Box::new(MutablePrimitiveColumn::<i32>::with_capacity(capacity))
     }
 }
 
-impl std::fmt::Debug for Date16Type {
+impl std::fmt::Debug for DateType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }

@@ -581,7 +581,13 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_float = value(TypeName::Float, rule! { FLOAT });
     let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_date = value(TypeName::Date, rule! { DATE });
-    let ty_datetime = value(TypeName::DateTime, rule! { DATETIME });
+    let ty_datetime = map(
+        rule! { DATETIME ~ ( "(" ~ #literal_u64 ~ ")" )? },
+        |(_, opt_precision)| {
+            let precision = opt_precision.map(|(_, p, _)| p);
+            TypeName::DateTime { precision }
+        },
+    );
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
     let ty_varchar = value(TypeName::Varchar, rule! { VARCHAR });
     let ty_object = value(TypeName::Object, rule! { OBJECT });
