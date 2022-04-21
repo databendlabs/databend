@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod ast_visitor;
-mod expression;
+mod expr;
 mod query;
 mod statement;
 
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-pub use expression::*;
+pub use expr::*;
 pub use query::*;
 pub use statement::*;
 

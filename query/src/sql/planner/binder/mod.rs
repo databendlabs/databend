@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
-use common_ast::parser::ast::Statement;
+use common_ast::ast::Statement;
 use common_exception::Result;
 pub use scalar::ScalarExpr;
 pub use scalar::ScalarExprRef;

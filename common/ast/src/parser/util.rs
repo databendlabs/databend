@@ -16,9 +16,9 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom::multi::separated_list1;
 
-use crate::parser::ast::Identifier;
-use crate::parser::rule::error::Error;
-use crate::parser::rule::error::ErrorKind;
+use crate::ast::Identifier;
+use crate::parser::error::Error;
+use crate::parser::error::ErrorKind;
 use crate::parser::token::*;
 
 pub type Input<'a> = &'a [Token<'a>];
@@ -72,8 +72,8 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
 #[macro_export]
 macro_rules! rule {
     ($($tt:tt)*) => { nom_rule::rule!(
-        $crate::parser::rule::util::match_text,
-        $crate::parser::rule::util::match_token,
+        $crate::parser::util::match_text,
+        $crate::parser::util::match_token,
         $($tt)*)
     }
 }

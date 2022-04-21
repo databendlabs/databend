@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::parser::ast::TableAlias;
+use common_ast::ast::TableAlias;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;

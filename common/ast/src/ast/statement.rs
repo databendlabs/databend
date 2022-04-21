@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use super::expression::Literal;
-use super::expression::TypeName;
-use super::Identifier;
-use crate::parser::ast::display_identifier_vec;
-use crate::parser::ast::query::Query;
+use crate::ast::display_identifier_vec;
+use crate::ast::expr::Literal;
+use crate::ast::expr::TypeName;
+use crate::ast::Identifier;
+use crate::ast::Query;
 
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]

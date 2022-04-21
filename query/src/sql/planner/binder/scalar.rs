@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_ast::parser::ast::Expr;
+use common_ast::ast::Expr;
 use common_datavalues::DataTypePtr;
 use common_exception::Result;
 
