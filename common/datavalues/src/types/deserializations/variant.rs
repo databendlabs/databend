@@ -18,20 +18,19 @@ use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::CpBufferReader;
-use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 
 pub struct VariantDeserializer {
     pub buffer: Vec<u8>,
-    pub builder: MutableObjectColumn<JsonValue>,
+    pub builder: MutableObjectColumn<VariantValue>,
 }
 
 impl VariantDeserializer {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             buffer: Vec::new(),
-            builder: MutableObjectColumn::<JsonValue>::with_capacity(capacity),
+            builder: MutableObjectColumn::<VariantValue>::with_capacity(capacity),
         }
     }
 }
@@ -54,7 +53,8 @@ impl TypeDeserializer for VariantDeserializer {
     }
 
     fn de_default(&mut self) {
-        self.builder.append_value(JsonValue::Null);
+        self.builder
+            .append_value(VariantValue::from(serde_json::Value::Null));
     }
 
     fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
@@ -67,7 +67,7 @@ impl TypeDeserializer for VariantDeserializer {
     }
 
     fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
-        self.builder.append_value(value.clone());
+        self.builder.append_value(VariantValue::from(value));
         Ok(())
     }
 

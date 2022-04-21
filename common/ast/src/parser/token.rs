@@ -12,12 +12,68 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+use logos::Lexer;
 use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
-use crate::error::Error;
-use crate::error::Result;
+use super::pretty_print_error;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Token<'a> {
+    pub kind: TokenKind,
+    pub text: &'a str,
+    pub span: Span,
+}
+
+pub struct Tokenizer<'a> {
+    source: &'a str,
+    lexer: Lexer<'a, TokenKind>,
+    eoi: bool,
+}
+
+impl<'a> Tokenizer<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Tokenizer {
+            source,
+            lexer: TokenKind::lexer(source),
+            eoi: false,
+        }
+    }
+}
+
+impl<'a> Iterator for Tokenizer<'a> {
+    type Item = Result<Token<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.lexer.next() {
+            Some(kind) if kind == TokenKind::Error => {
+                let rest_span = self.lexer.span().start..self.source.len();
+                let lables = vec![(rest_span, "unable to recognize the rest tokens".to_owned())];
+                Some(Err(ErrorCode::SyntaxException(pretty_print_error(
+                    self.source,
+                    lables,
+                ))))
+            }
+            Some(kind) => Some(Ok(Token {
+                kind,
+                text: self.lexer.slice(),
+                span: self.lexer.span(),
+            })),
+            None if !self.eoi => {
+                self.eoi = true;
+                Some(Ok(Token {
+                    kind: TokenKind::EOI,
+                    text: "",
+                    span: (self.lexer.span().end)..(self.lexer.span().end),
+                }))
+            }
+            None => None,
+        }
+    }
+}
 
 #[allow(non_camel_case_types)]
 #[derive(Logos, Clone, Copy, Debug, PartialEq)]
@@ -1059,38 +1115,4 @@ pub enum TokenKind {
     DATETIME,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Token<'a> {
-    pub kind: TokenKind,
-    pub text: &'a str,
-    pub span: Span,
-}
-
-pub fn tokenise(input: &str) -> Result<Vec<Token>> {
-    let mut lex = TokenKind::lexer(input);
-    let mut tokens = Vec::new();
-
-    while let Some(kind) = lex.next() {
-        if kind == TokenKind::Error {
-            let position = lex.span().start;
-            let rest = input[position..].to_string();
-            return Err(Error::UnrecognisedToken { rest, position });
-        } else {
-            tokens.push(Token {
-                kind,
-                text: lex.slice(),
-                span: lex.span(),
-            })
-        }
-    }
-
-    tokens.push(Token {
-        kind: TokenKind::EOI,
-        text: "",
-        span: (lex.span().end)..(lex.span().end),
-    });
-
-    Ok(tokens)
 }

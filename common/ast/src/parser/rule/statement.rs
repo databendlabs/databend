@@ -27,47 +27,44 @@ use crate::rule;
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let query = map(query, |query| Statement::Select(Box::new(query)));
-    let show_tables = value(Statement::ShowTables, rule! { SHOW ~ TABLES ~ ";" });
-    let show_databases = value(Statement::ShowDatabases, rule! { SHOW ~ DATABASES~ ";" });
-    let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS ~ ";" });
-    let show_process_list = value(
-        Statement::ShowProcessList,
-        rule! { SHOW ~ PROCESSLIST ~ ";" },
-    );
+    let show_tables = value(Statement::ShowTables, rule! { SHOW ~ TABLES });
+    let show_databases = value(Statement::ShowDatabases, rule! { SHOW ~ DATABASES });
+    let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
+    let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            SHOW ~ CREATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, _, database, table, _)| Statement::ShowCreateTable {
+        |(_, _, _, database, table)| Statement::ShowCreateTable {
             database: database.map(|(name, _)| name),
             table,
         },
     );
     let explain = map(
         rule! {
-            EXPLAIN ~ ANALYZE? ~ #statement ~ ";"
+            EXPLAIN ~ ANALYZE? ~ #statement
         },
-        |(_, analyze, statement, _)| Statement::Explain {
+        |(_, analyze, statement)| Statement::Explain {
             analyze: analyze.is_some(),
             query: Box::new(statement),
         },
     );
     let describe = map(
         rule! {
-            DESCRIBE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            DESCRIBE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, database, table, _)| Statement::Describe {
+        |(_, database, table)| Statement::Describe {
             database: database.map(|(name, _)| name),
             table,
         },
     );
     let create_table = map(
         rule! {
-            CREATE ~ TABLE~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
-            ~ "(" ~ #comma_separated_list1(column_def) ~ ")" ~ ";"
+            ~ "(" ~ #comma_separated_list1(column_def) ~ ")"
         },
-        |(_, _, if_not_exists, database, table, _, columns, _, _)| Statement::CreateTable {
+        |(_, _, if_not_exists, database, table, _, columns, _)| Statement::CreateTable {
             if_not_exists: if_not_exists.is_some(),
             database: database.map(|(name, _)| name),
             table,
@@ -80,28 +77,26 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let create_table_like = map(
         rule! {
-            CREATE ~ TABLE~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
-            ~ LIKE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            ~ LIKE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, if_not_exists, database, table, _, like_db, like_table, _)| {
-            Statement::CreateTable {
-                if_not_exists: if_not_exists.is_some(),
-                database: database.map(|(name, _)| name),
-                table,
-                columns: vec![],
-                engine: "".to_string(),
-                options: vec![],
-                like_db: like_db.map(|(like_db, _)| like_db),
-                like_table: Some(like_table),
-            }
+        |(_, _, if_not_exists, database, table, _, like_db, like_table)| Statement::CreateTable {
+            if_not_exists: if_not_exists.is_some(),
+            database: database.map(|(name, _)| name),
+            table,
+            columns: vec![],
+            engine: "".to_string(),
+            options: vec![],
+            like_db: like_db.map(|(like_db, _)| like_db),
+            like_table: Some(like_table),
         },
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, if_exists, database, table, _)| Statement::DropTable {
+        |(_, _, if_exists, database, table)| Statement::DropTable {
             if_exists: if_exists.is_some(),
             database: database.map(|(name, _)| name),
             table,
@@ -109,18 +104,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let truncate_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, database, table, _)| Statement::TruncateTable {
+        |(_, _, database, table)| Statement::TruncateTable {
             database: database.map(|(name, _)| name),
             table,
         },
     );
     let create_database = map(
         rule! {
-            CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ ";"
+            CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
         },
-        |(_, _, if_not_exists, name, _)| Statement::CreateDatabase {
+        |(_, _, if_not_exists, name)| Statement::CreateDatabase {
             if_not_exists: if_not_exists.is_some(),
             name,
             engine: "".to_string(),
@@ -129,15 +124,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let use_database = map(
         rule! {
-            USE ~ #ident ~ ";"
+            USE ~ #ident
         },
-        |(_, name, _)| Statement::UseDatabase { name },
+        |(_, name)| Statement::UseDatabase { name },
     );
     let kill = map(
         rule! {
-            KILL ~ #ident ~ ";"
+            KILL ~ #ident
         },
-        |(_, object_id, _)| Statement::KillStmt { object_id },
+        |(_, object_id)| Statement::KillStmt { object_id },
     );
 
     rule!(

@@ -177,9 +177,9 @@ where A: AsRef<dyn Array>
             Array => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
             Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
-            Variant => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
-            VariantArray => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
-            VariantObject => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
+            Variant => Arc::new(VariantColumn::from_arrow_array(self.as_ref())),
+            VariantArray => Arc::new(VariantColumn::from_arrow_array(self.as_ref())),
+            VariantObject => Arc::new(VariantColumn::from_arrow_array(self.as_ref())),
         }
     }
 
@@ -248,7 +248,7 @@ impl std::fmt::Debug for dyn Column + '_ {
                     fmt_dyn!(col, StructColumn, f)
                 },
                 Variant | VariantArray | VariantObject => {
-                    fmt_dyn!(col, JsonColumn, f)
+                    fmt_dyn!(col, VariantColumn, f)
                 }
                 _ => {
                     unimplemented!()

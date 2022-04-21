@@ -171,15 +171,15 @@ fn test_check_json_function() -> Result<()> {
         },
         ScalarFunctionTest {
             name: "check_json_variant",
-            columns: vec![Arc::new(JsonColumn::new_from_vec(vec![
-                json!(null),
-                json!(true),
-                json!(false),
-                json!(123),
-                json!(12.34),
-                json!("{\"k\": 1}"),
-                json!("\"abcd\""),
-                json!("[1,2"),
+            columns: vec![Arc::new(VariantColumn::new_from_vec(vec![
+                VariantValue::from(json!(null)),
+                VariantValue::from(json!(true)),
+                VariantValue::from(json!(false)),
+                VariantValue::from(json!(123)),
+                VariantValue::from(json!(12.34)),
+                VariantValue::from(json!("{\"k\": 1}")),
+                VariantValue::from(json!("\"abcd\"")),
+                VariantValue::from(json!("[1,2")),
             ]))],
             expect: Series::from_data(vec![
                 None::<&str>,

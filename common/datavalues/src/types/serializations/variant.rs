@@ -26,7 +26,7 @@ pub struct VariantSerializer {}
 
 impl TypeSerializer for VariantSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
-        if let DataValue::Json(v) = value {
+        if let DataValue::Variant(v) = value {
             Ok(v.to_string())
         } else {
             Err(ErrorCode::BadBytes("Incorrect Variant value"))
@@ -34,14 +34,14 @@ impl TypeSerializer for VariantSerializer {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<String> = column.iter().map(|v| v.to_string()).collect();
         Ok(result)
     }
 
     fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
-        let column: &JsonColumn = Series::check_get(column)?;
-        let result: Vec<Value> = column.iter().map(|v| v.to_owned()).collect();
+        let column: &VariantColumn = Series::check_get(column)?;
+        let result: Vec<Value> = column.iter().map(|v| v.as_ref().to_owned()).collect();
         Ok(result)
     }
 
@@ -49,7 +49,7 @@ impl TypeSerializer for VariantSerializer {
         &self,
         column: &ColumnRef,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let values: Vec<String> = column.iter().map(|v| v.to_string()).collect();
 
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
@@ -60,7 +60,7 @@ impl TypeSerializer for VariantSerializer {
         column: &ColumnRef,
         valids: Option<&Bitmap>,
     ) -> Result<Vec<Value>> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let mut result: Vec<Value> = Vec::new();
         for (i, v) in column.iter().enumerate() {
             if let Some(valids) = valids {
@@ -69,8 +69,8 @@ impl TypeSerializer for VariantSerializer {
                     continue;
                 }
             }
-            match v {
-                Value::String(v) => match serde_json::from_str::<Value>(v) {
+            match v.as_ref() {
+                Value::String(v) => match serde_json::from_str::<Value>(v.as_str()) {
                     Ok(v) => result.push(v),
                     Err(e) => {
                         return Err(ErrorCode::BadDataValueType(format!(
@@ -79,7 +79,7 @@ impl TypeSerializer for VariantSerializer {
                         )))
                     }
                 },
-                _ => result.push(v.clone()),
+                _ => result.push(v.as_ref().to_owned()),
             }
         }
         Ok(result)
@@ -89,15 +89,15 @@ impl TypeSerializer for VariantSerializer {
         &self,
         column: &ColumnRef,
     ) -> Result<Vec<Option<Value>>> {
-        let column: &JsonColumn = Series::check_get(column)?;
+        let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<Option<Value>> = column
             .iter()
-            .map(|v| match v {
+            .map(|v| match v.as_ref() {
                 Value::String(v) => match serde_json::from_str::<Value>(v.as_str()) {
                     Ok(v) => Some(v),
                     Err(_) => None,
                 },
-                _ => Some(v.clone()),
+                _ => Some(v.as_ref().to_owned()),
             })
             .collect();
         Ok(result)

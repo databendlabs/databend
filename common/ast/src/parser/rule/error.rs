@@ -12,13 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codespan_reporting::diagnostic::Diagnostic;
-use codespan_reporting::diagnostic::Label;
-use codespan_reporting::files::SimpleFile;
-use codespan_reporting::term;
-use codespan_reporting::term::termcolor::Buffer;
-use codespan_reporting::term::Chars;
-use codespan_reporting::term::Config;
+use std::ops::Range;
 
 use crate::parser::rule::util::Input;
 use crate::parser::token::TokenKind;
@@ -98,55 +92,32 @@ impl<'a> Error<'a> {
             errors: vec![(input, kind)],
         }
     }
-}
 
-pub fn pretty_print_error<'a>(source: &'a str, error: nom::Err<Error<'a>>) -> String {
-    let mut writer = Buffer::no_color();
-    let file = SimpleFile::new("SQL", source);
-    let config = Config {
-        chars: Chars::ascii(),
-        before_label_lines: 3,
-        ..Default::default()
-    };
-
-    let error = match error {
-        nom::Err::Error(error) | nom::Err::Failure(error) => error,
-        nom::Err::Incomplete(_) => unreachable!(),
-    };
-
-    let mut lables = Vec::new();
-    for (i, (input, kind)) in error.errors.iter().enumerate() {
-        let msg = match kind {
-            ErrorKind::Context(msg) => format!("while parsing {}", msg),
-            ErrorKind::ExpectToken(token) => format!("expected token <{:?}>", token),
-            ErrorKind::ExpectText(text) => format!("expected token {:?}", text),
-            ErrorKind::ParseIntError(err) => {
-                format!("unable to parse int because it {}", match err.kind() {
-                    std::num::IntErrorKind::InvalidDigit =>
-                        "contains invalid characters".to_string(),
-                    std::num::IntErrorKind::PosOverflow => "positive overflowed".to_string(),
-                    std::num::IntErrorKind::NegOverflow => "negative overflowed".to_string(),
-                    err => format!("{:?}", err),
-                })
-            }
-            ErrorKind::Other(msg) => msg.to_string(),
-            ErrorKind::Nom(_) => continue,
-        };
-
-        let span = input[0].span.clone();
-
-        if i == 0 {
-            lables.push(Label::primary((), span).with_message(msg));
-        } else {
-            lables.push(Label::secondary((), span).with_message(msg));
-        }
+    pub fn to_labels(&self) -> Vec<(Range<usize>, String)> {
+        self.errors
+            .iter()
+            .filter_map(|(input, kind)| {
+                let span = input[0].span.clone();
+                let msg = match kind {
+                    ErrorKind::Context(msg) => format!("while parsing {}", msg),
+                    ErrorKind::ExpectToken(token) => format!("expected token <{:?}>", token),
+                    ErrorKind::ExpectText(text) => format!("expected token {:?}", text),
+                    ErrorKind::ParseIntError(err) => {
+                        format!("unable to parse int because it {}", match err.kind() {
+                            std::num::IntErrorKind::InvalidDigit =>
+                                "contains invalid characters".to_string(),
+                            std::num::IntErrorKind::PosOverflow =>
+                                "positive overflowed".to_string(),
+                            std::num::IntErrorKind::NegOverflow =>
+                                "negative overflowed".to_string(),
+                            err => format!("{:?}", err),
+                        })
+                    }
+                    ErrorKind::Other(msg) => msg.to_string(),
+                    ErrorKind::Nom(_) => return None,
+                };
+                Some((span, msg))
+            })
+            .collect()
     }
-
-    let diagnostic = Diagnostic::error().with_labels(lables);
-
-    term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
-
-    std::str::from_utf8(&writer.into_inner())
-        .unwrap()
-        .to_string()
 }
