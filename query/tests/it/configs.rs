@@ -138,21 +138,21 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_TABLE_DISK_CACHE_ROOT", "_cache_env");
     std::env::set_var("QUERY_TABLE_DISK_CACHE_MB_SIZE", "512");
     std::env::set_var("STORAGE_TYPE", "s3");
-    std::env::set_var("FS_STORAGE_DATA_PATH", "/tmp/test");
-    std::env::set_var("S3_STORAGE_REGION", "us.region");
-    std::env::set_var("S3_STORAGE_ENDPOINT_URL", "");
-    std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
-    std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
-    std::env::set_var("S3_STORAGE_ENABLE_POD_IAM_POLICY", "true");
-    std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
+    std::env::set_var("STORAGE_NUM_CPUS", "16");
+    std::env::set_var("STORAGE_FS_DATA_PATH", "/tmp/test");
+    std::env::set_var("STORAGE_S3_REGION", "us.region");
+    std::env::set_var("STORAGE_S3_ENDPOINT_URL", "");
+    std::env::set_var("STORAGE_S3_ACCESS_KEY_ID", "us.key.id");
+    std::env::set_var("STORAGE_S3_SECRET_ACCESS_KEY", "us.key");
+    std::env::set_var("STORAGE_S3_ENABLE_POD_IAM_POLICY", "true");
+    std::env::set_var("STORAGE_S3_BUCKET", "us.bucket");
     std::env::set_var("QUERY_TABLE_ENGINE_CSV_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED", "true");
     std::env::set_var("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", "false");
     std::env::remove_var("CONFIG_FILE");
 
-    let default = Config::default();
-    let configured = Config::load_from_env(&default)?;
+    let configured = Config::load()?;
     assert_eq!("DEBUG", configured.log.log_level);
 
     assert_eq!("tenant-1", configured.query.tenant_id);
@@ -169,7 +169,8 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
-    assert_eq!("s3", configured.storage.typ);
+    assert_eq!("s3", configured.storage.storage_type);
+    assert_eq!(15, configured.storage.storage_num_cpus);
 
     assert_eq!("/tmp/test", configured.storage.fs.data_path);
 
@@ -207,12 +208,11 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_TABLE_DISK_CACHE_ROOT");
     std::env::remove_var("QUERY_TABLE_DISK_CACHE_MB_SIZE");
     std::env::remove_var("STORAGE_TYPE");
-    std::env::remove_var("FS_STORAGE_DATA_PATH");
-    std::env::remove_var("S3_STORAGE_REGION");
-    std::env::remove_var("S3_STORAGE_ACCESS_KEY_ID");
-    std::env::remove_var("S3_STORAGE_SECRET_ACCESS_KEY");
-    std::env::remove_var("S3_STORAGE_BUCKET");
-    std::env::remove_var("S3_STORAGE_ENABLE_POD_IAM_POLICY");
+    std::env::remove_var("STORAGE_FS_DATA_PATH");
+    std::env::remove_var("STORAGE_S3_REGION");
+    std::env::remove_var("STORAGE_S3_ACCESS_KEY_ID");
+    std::env::remove_var("STORAGE_S3_SECRET_ACCESS_KEY");
+    std::env::remove_var("STORAGE_S3_BUCKET");
     std::env::remove_var("QUERY_TABLE_ENGINE_CSV_ENABLED");
     std::env::remove_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED");
     std::env::remove_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED");
