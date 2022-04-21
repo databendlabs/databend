@@ -283,10 +283,12 @@ impl Display for TypeName {
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::DateTime { precision } => match precision {
-                Some(precision) => write!(f, "DATETIME({})", *precision)?,
-                None => write!(f, "DATETIME")?,
-            },
+            TypeName::DateTime { precision } => {
+                write!(f, "DATETIME")?;
+                if let Some(precision) = precision {
+                    write!(f, "({})", *precision)?;
+                }
+            }
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
             }
@@ -294,9 +296,7 @@ impl Display for TypeName {
                 write!(f, "VARCHAR")?;
             }
             TypeName::Array { item_type } => {
-                write!(f, "ARRAY (")?;
-                write!(f, "{}", item_type)?;
-                write!(f, ")")?;
+                write!(f, "ARRAY({})", item_type)?;
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;

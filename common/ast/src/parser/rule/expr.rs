@@ -40,7 +40,7 @@ pub fn expr(i: Input) -> IResult<Expr> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
-        let expr_element_limited =
+        let higher_prec_expr_element =
             verify(
                 expr_element,
                 |elem| match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, elem)
@@ -55,7 +55,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 },
             );
 
-        let (i, expr_elements) = rule! { #expr_element_limited* }(i)?;
+        let (i, expr_elements) = rule! { #higher_prec_expr_element* }(i)?;
 
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
@@ -562,7 +562,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             unsigned: unsigned.is_some(),
         }
     });
-    let ty_int = map(rule! { INTEGER ~ UNSIGNED? }, |(_, unsigned)| {
+    let ty_int = map(rule! { ( INT | INTEGER ) ~ UNSIGNED? }, |(_, unsigned)| {
         TypeName::Int {
             unsigned: unsigned.is_some(),
         }

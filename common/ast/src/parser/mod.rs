@@ -16,33 +16,71 @@ pub mod ast;
 pub mod expr;
 pub mod rule;
 pub mod token;
-pub mod transformer;
 
+use std::ops::Range;
+
+use common_exception::ErrorCode;
 use common_exception::Result;
+use nom::combinator::map;
 
+use self::rule::statement::statement;
+use self::token::TokenKind;
+use self::token::Tokenizer;
 use crate::parser::ast::Statement;
-use crate::parser::transformer::AstTransformer;
-use crate::parser::transformer::AstTransformerFactory;
+use crate::rule;
 
-pub struct Parser;
-
-impl Parser {
-    // Parse a SQL string into `Statement`s.
-    #[allow(unused)]
-    pub fn parse_sql(&self, _: &str) -> Result<Vec<Statement>> {
-        todo!()
+/// Parse a SQL string into `Statement`s.
+pub fn parse_sql(sql: &str) -> Result<Vec<Statement>> {
+    let tokens = Tokenizer::new(sql).collect::<Result<Vec<_>>>()?;
+    let stmt = map(rule! { #statement ~ ";" }, |(stmt, _)| stmt);
+    let mut stmts = rule! { #stmt+ };
+    match stmts(tokens.as_slice()) {
+        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
+        Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(sql, vec![(
+            rest[0].span.clone(),
+            "unable to parse rest of the sql".to_owned(),
+        )]))),
+        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => Err(ErrorCode::SyntaxException(
+            pretty_print_error(sql, err.to_labels()),
+        )),
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
+}
 
-    #[allow(unused)]
-    pub fn parse_with_sqlparser(&self, sql: &str) -> Result<Vec<Statement>> {
-        let stmts =
-            sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)?;
-        stmts
-            .into_iter()
-            .map(|stmt| {
-                let transformer = AstTransformerFactory::new_sqlparser_transformer(stmt);
-                transformer.transform()
-            })
-            .collect::<Result<_>>()
-    }
+pub fn pretty_print_error(source: &str, lables: Vec<(Range<usize>, String)>) -> String {
+    use codespan_reporting::diagnostic::Diagnostic;
+    use codespan_reporting::diagnostic::Label;
+    use codespan_reporting::files::SimpleFile;
+    use codespan_reporting::term;
+    use codespan_reporting::term::termcolor::Buffer;
+    use codespan_reporting::term::Chars;
+    use codespan_reporting::term::Config;
+
+    let mut writer = Buffer::no_color();
+    let file = SimpleFile::new("SQL", source);
+    let config = Config {
+        chars: Chars::ascii(),
+        before_label_lines: 3,
+        ..Default::default()
+    };
+
+    let lables = lables
+        .into_iter()
+        .enumerate()
+        .map(|(i, (span, msg))| {
+            if i == 0 {
+                Label::primary((), span).with_message(msg)
+            } else {
+                Label::secondary((), span).with_message(msg)
+            }
+        })
+        .collect();
+
+    let diagnostic = Diagnostic::error().with_labels(lables);
+
+    term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
+
+    std::str::from_utf8(&writer.into_inner())
+        .unwrap()
+        .to_string()
 }
