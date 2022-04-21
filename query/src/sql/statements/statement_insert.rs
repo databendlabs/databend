@@ -34,7 +34,6 @@ use sqlparser::ast::Query;
 use sqlparser::ast::SqliteOnConflict;
 
 use crate::sessions::QueryContext;
-use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -149,16 +148,11 @@ impl<'a> DfInsertStatement<'a> {
     ) -> Result<InsertInputSource> {
         tracing::debug!("{:?}", values_str);
 
-        let source = ValueSource::new(schema.clone());
-        let block = match source.stream_read(values_str) {
-            Ok(block) => Ok(block),
-            Err(_) => {
-                let bytes = values_str.as_bytes();
-                source
-                    .parser_read(bytes, ExpressionAnalyzer::create(ctx.clone()), ctx)
-                    .await
-            }
-        }?;
+        let bytes = values_str.as_bytes();
+        let cursor = Cursor::new(bytes);
+        let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
+        let source = ValueSource::new(schema.clone(), ctx.clone());
+        let block = source.read(&mut reader).await?;
         Ok(InsertInputSource::Values(InsertValueBlock { block }))
     }
 
