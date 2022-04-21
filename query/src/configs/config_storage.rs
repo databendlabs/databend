@@ -25,14 +25,6 @@ use crate::configs::Config;
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
 pub const STORAGE_NUM_CPUS: &str = "STORAGE_NUM_CPUS";
 
-// Fs Storage env.
-pub const FS_STORAGE_DATA_PATH: &str = "FS_STORAGE_DATA_PATH";
-
-// Azure Storage Blob env.
-const AZURE_STORAGE_ACCOUNT: &str = "AZURE_STORAGE_ACCOUNT";
-const AZURE_BLOB_MASTER_KEY: &str = "AZURE_BLOB_MASTER_KEY";
-const AZURE_BLOB_CONTAINER: &str = "AZURE_BLOB_CONTAINER";
-
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum StorageType {
     Fs,
@@ -58,7 +50,7 @@ impl FromStr for StorageType {
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
-    #[clap(long, env = FS_STORAGE_DATA_PATH, default_value = "_data")]
+    #[clap(long, default_value = "_data")]
     pub data_path: String,
 }
 
@@ -138,15 +130,15 @@ impl fmt::Debug for S3StorageConfig {
 #[serde(default)]
 pub struct AzureStorageBlobConfig {
     /// Account for Azure storage
-    #[clap(long, env = AZURE_STORAGE_ACCOUNT, default_value = "")]
+    #[clap(long, default_value = "")]
     pub account: String,
 
     /// Master key for Azure storage
-    #[clap(long, env = AZURE_BLOB_MASTER_KEY, default_value = "")]
+    #[clap(long, default_value = "")]
     pub master_key: String,
 
     /// Container for Azure storage
-    #[clap(long, env = AZURE_BLOB_CONTAINER, default_value = "")]
+    #[clap(long, default_value = "")]
     pub container: String,
 }
 
@@ -174,11 +166,12 @@ impl fmt::Debug for AzureStorageBlobConfig {
 #[serde(default)]
 pub struct StorageConfig {
     /// Current storage type: fs|s3
-    #[clap(long, env = STORAGE_TYPE, default_value = "fs")]
-    pub storage_type: String,
+    #[clap(long, default_value = "fs")]
+    #[serde(rename = "type")]
+    pub typ: String,
 
-    #[clap(long, env = STORAGE_NUM_CPUS, default_value = "0")]
-    pub storage_num_cpus: u64,
+    #[clap(long, default_value = "0")]
+    pub num_cpus: u64,
 
     // Fs storage backend config.
     #[clap(flatten)]
@@ -196,36 +189,11 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            storage_type: "fs".to_string(),
+            typ: "fs".to_string(),
             fs: FsStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azure_storage_blob: AzureStorageBlobConfig::default(),
-            storage_num_cpus: 0,
+            num_cpus: 0,
         }
-    }
-}
-
-impl StorageConfig {
-    pub fn load_from_env(mut_config: &mut Config) {
-        env_helper!(mut_config, storage, storage_type, String, STORAGE_TYPE);
-        env_helper!(mut_config, storage, storage_num_cpus, u64, STORAGE_NUM_CPUS);
-
-        // DISK.
-        env_helper!(
-            mut_config.storage,
-            fs,
-            data_path,
-            String,
-            FS_STORAGE_DATA_PATH
-        );
-
-        // Azure Storage Blob.
-        env_helper!(
-            mut_config.storage,
-            azure_storage_blob,
-            account,
-            String,
-            AZURE_BLOB_MASTER_KEY
-        );
     }
 }

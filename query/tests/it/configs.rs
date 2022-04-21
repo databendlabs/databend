@@ -169,7 +169,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
-    assert_eq!("s3", configured.storage.storage_type);
+    assert_eq!("s3", configured.storage.typ);
 
     assert_eq!("/tmp/test", configured.storage.fs.data_path);
 

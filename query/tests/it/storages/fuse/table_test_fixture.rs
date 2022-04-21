@@ -56,7 +56,7 @@ impl TestFixture {
         let mut conf = crate::tests::ConfigBuilder::create().config();
 
         // make sure we are suing `fs` storage
-        conf.storage.storage_type = "fs".to_string();
+        conf.storage.typ = "fs".to_string();
         // use `TempDir` as root path (auto clean)
         conf.storage.fs.data_path = tmp_dir.path().to_str().unwrap().to_string();
         let ctx = crate::tests::create_query_context_with_config(conf, None)

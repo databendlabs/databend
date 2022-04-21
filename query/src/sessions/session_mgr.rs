@@ -80,7 +80,7 @@ impl SessionManager {
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
         let storage_runtime = {
-            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            let mut storage_num_cpus = conf.storage.num_cpus as usize;
             if storage_num_cpus == 0 {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }
@@ -327,7 +327,7 @@ impl SessionManager {
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
         let storage_conf = &conf.storage;
-        let schema_name = &storage_conf.storage_type;
+        let schema_name = &storage_conf.typ;
         let schema = DalSchema::from_str(schema_name)?;
 
         let accessor: Arc<dyn Accessor> = match schema {

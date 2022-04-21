@@ -121,9 +121,6 @@ impl Config {
         // Meta.
         MetaConfig::load_from_env(&mut mut_config);
 
-        // Storage.
-        StorageConfig::load_from_env(&mut mut_config);
-
         // Query.
         QueryConfig::load_from_env(&mut mut_config);
 

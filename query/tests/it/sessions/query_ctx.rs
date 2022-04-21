@@ -22,7 +22,7 @@ use databend_query::configs::S3StorageConfig;
 async fn test_get_storage_accessor_s3() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
-    conf.storage.storage_type = "s3".to_string();
+    conf.storage.typ = "s3".to_string();
     conf.storage.s3 = S3StorageConfig {
         region: "us-east-2".to_string(),
         endpoint_url: "http://s3.amazonaws.com".to_string(),
@@ -43,7 +43,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 async fn test_get_storage_accessor_fs() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
-    conf.storage.storage_type = "fs".to_string();
+    conf.storage.typ = "fs".to_string();
     conf.storage.fs = FsStorageConfig {
         data_path: "/tmp".to_string(),
     };
