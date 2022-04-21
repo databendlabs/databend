@@ -22,6 +22,7 @@ use common_exception::Result;
 use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::ProjectPlan;
+use crate::sql::IndexType;
 use crate::sql::Metadata;
 
 pub struct DataSchemaBuilder<'a> {
@@ -69,5 +70,22 @@ impl<'a> DataSchemaBuilder<'a> {
         }
 
         Ok(Arc::new(DataSchema::new(fields)))
+    }
+
+    pub fn build_canonical_schema(&self, columns: &[IndexType]) -> DataSchemaRef {
+        let mut fields: Vec<DataField> = vec![];
+        for index in columns {
+            let column_entry = self.metadata.column(*index);
+            let field_name = column_entry.name.clone();
+            let field = if column_entry.nullable {
+                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
+            } else {
+                DataField::new(field_name.as_str(), column_entry.data_type.clone())
+            };
+
+            fields.push(field);
+        }
+
+        Arc::new(DataSchema::new(fields))
     }
 }

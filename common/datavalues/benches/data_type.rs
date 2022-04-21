@@ -62,11 +62,11 @@ fn add_benchmark(c: &mut Criterion) {
     });
 }
 
-fn data_type_ptr_create(ty: &DataTypePtr, values: &Vec<DataValue>) -> Result<ColumnRef> {
+fn data_type_ptr_create(ty: &DataTypePtr, values: &[DataValue]) -> Result<ColumnRef> {
     ty.create_column(values)
 }
 
-fn data_type_enum_create(ty: &DataTypeImpl, values: &Vec<DataValue>) -> Result<ColumnRef> {
+fn data_type_enum_create(ty: &DataTypeImpl, values: &[DataValue]) -> Result<ColumnRef> {
     ty.create_column(values)
 }
 

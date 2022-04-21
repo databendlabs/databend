@@ -113,37 +113,39 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Enable new processor framework if value != 0, default value: 1",
             },
-
+            // enable_planner_v2
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("enable_planner_v2", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Enable planner v2 by setting this variable to 1, default value: 0",
+            },
             SettingValue {
                 default_value: DataValue::String("\n".as_bytes().to_vec()),
                 user_setting: UserSetting::create("record_delimiter", DataValue::String("\n".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
                 desc: "Format record_delimiter, default value: \n",
             },
-
             SettingValue {
-                default_value:DataValue::String(",".as_bytes().to_vec()),
+                default_value: DataValue::String(",".as_bytes().to_vec()),
                 user_setting: UserSetting::create("field_delimiter", DataValue::String(",".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
                 desc: "Format field delimiter, default value: ,",
             },
-
             SettingValue {
                 default_value: DataValue::UInt64(1),
                 user_setting: UserSetting::create("empty_as_default", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc: "Format empty_as_default, default value: 1",
             },
-
             SettingValue {
                 default_value: DataValue::UInt64(0),
                 user_setting: UserSetting::create("skip_header", DataValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "Whether to skip the input header, default value: 0",
             },
-
             SettingValue {
-                default_value:DataValue::String("UTC".as_bytes().to_vec()),
+                default_value: DataValue::String("UTC".as_bytes().to_vec()),
                 user_setting: UserSetting::create("timezone", DataValue::String("UTC".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: UTC,",
@@ -214,6 +216,11 @@ impl Settings {
     pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
         let key = "enable_new_processor_framework";
         self.try_get_u64(key)
+    }
+
+    pub fn get_enable_planner_v2(&self) -> Result<u64> {
+        static KEY: &str = "enable_planner_v2";
+        self.try_get_u64(KEY)
     }
 
     pub fn get_field_delimiter(&self) -> Result<Vec<u8>> {

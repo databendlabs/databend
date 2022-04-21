@@ -112,7 +112,7 @@ impl Binder {
             let column_binding = ColumnBinding {
                 table_name: Some(table.name.clone()),
                 column_name: column.name.clone(),
-                index: Some(column.column_index),
+                index: column.column_index,
                 data_type: column.data_type.clone(),
                 nullable: column.nullable,
                 scalar: None,
