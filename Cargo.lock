@@ -1075,6 +1075,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-managementv1-proto"
+version = "0.1.0"
+dependencies = [
+ "common-datavalues",
+ "common-exception",
+ "goldenfile",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "common-mem-allocator"
 version = "0.1.0"
 dependencies = [

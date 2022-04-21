@@ -16,6 +16,7 @@ members = [
     "common/io",
     "common/macros",
     "common/management",
+    "common/managementv1/proto",
     "common/mem-allocator",
     "common/planners",
     "common/meta/api",
