@@ -100,22 +100,20 @@ pub enum Expr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeName {
-    Char(Option<u64>),
-    Varchar(Option<u64>),
-    Decimal(Option<u64>, Option<u64>),
-    Float(Option<u64>),
-    Int(Option<u64>),
-    TinyInt(Option<u64>),
-    SmallInt(Option<u64>),
-    BigInt(Option<u64>),
-    Real,
-    Double,
     Boolean,
+    TinyInt { unsigned: bool },
+    SmallInt { unsigned: bool },
+    Int { unsigned: bool },
+    BigInt { unsigned: bool },
+    Float,
+    Double,
     Date,
-    Time,
+    DateTime { precision: Option<u64> },
     Timestamp,
-    Interval,
-    Text,
+    Varchar,
+    Array { item_type: Box<TypeName> },
+    Object,
+    Variant,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -249,77 +247,62 @@ impl Display for BinaryOperator {
 impl Display for TypeName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeName::Char(length) => {
-                write!(f, "CHAR")?;
-                if let Some(len) = length {
-                    write!(f, "({})", len)?;
-                }
+            TypeName::Boolean => {
+                write!(f, "BOOLEAN")?;
             }
-            TypeName::Varchar(length) => {
-                write!(f, "VARCHAR")?;
-                if let Some(len) = length {
-                    write!(f, "({})", len)?;
-                }
-            }
-            TypeName::Decimal(prec, scale) => {
-                write!(f, "DECIMAL")?;
-                if let (Some(p), Some(s)) = (prec, scale) {
-                    write!(f, "({}, {})", p, s)?;
-                }
-            }
-            TypeName::Float(prec) => {
-                write!(f, "FLOAT")?;
-                if let Some(p) = prec {
-                    write!(f, "({})", p)?;
-                }
-            }
-            TypeName::Int(display) => {
-                write!(f, "INTEGER")?;
-                if let Some(d) = display {
-                    write!(f, "({})", d)?;
-                }
-            }
-            TypeName::TinyInt(display) => {
+            TypeName::TinyInt { unsigned } => {
                 write!(f, "TINYINT")?;
-                if let Some(d) = display {
-                    write!(f, "({})", d)?;
+                if *unsigned {
+                    write!(f, " UNSIGNED")?;
                 }
             }
-            TypeName::SmallInt(display) => {
+            TypeName::SmallInt { unsigned } => {
                 write!(f, "SMALLINT")?;
-                if let Some(d) = display {
-                    write!(f, "({})", d)?;
+                if *unsigned {
+                    write!(f, " UNSIGNED")?;
                 }
             }
-            TypeName::BigInt(display) => {
+            TypeName::Int { unsigned } => {
+                write!(f, "INTEGER")?;
+                if *unsigned {
+                    write!(f, " UNSIGNED")?;
+                }
+            }
+            TypeName::BigInt { unsigned } => {
                 write!(f, "BIGINT")?;
-                if let Some(d) = display {
-                    write!(f, "({})", d)?;
+                if *unsigned {
+                    write!(f, " UNSIGNED")?;
                 }
             }
-            TypeName::Real => {
-                write!(f, "REAL")?;
+            TypeName::Float => {
+                write!(f, "FLOAT")?;
             }
             TypeName::Double => {
                 write!(f, "DOUBLE")?;
             }
-            TypeName::Boolean => {
-                write!(f, "BOOLEAN")?;
-            }
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::Time => {
-                write!(f, "TIME")?;
+            TypeName::DateTime { precision } => {
+                write!(f, "DATETIME")?;
+                if let Some(precision) = precision {
+                    write!(f, "({})", *precision)?;
+                }
             }
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
             }
-            TypeName::Interval => {
-                todo!()
+            TypeName::Varchar => {
+                write!(f, "VARCHAR")?;
             }
-            TypeName::Text => {
-                write!(f, "TEXT")?;
+            TypeName::Array { item_type } => {
+                write!(f, "ARRAY({})", item_type)?;
+            }
+            TypeName::Object => {
+                write!(f, "OBJECT")?;
+            }
+            TypeName::Variant => {
+                write!(f, "VARIANT")?;
             }
         }
         Ok(())

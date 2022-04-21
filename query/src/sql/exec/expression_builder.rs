@@ -15,9 +15,10 @@
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::sql::BoundVariable;
+use crate::sql::exec::util::format_field_name;
+use crate::sql::plans::Scalar;
+use crate::sql::IndexType;
 use crate::sql::Metadata;
-use crate::sql::ScalarExpr;
 
 pub struct ExpressionBuilder<'a> {
     metadata: &'a Metadata,
@@ -28,15 +29,17 @@ impl<'a> ExpressionBuilder<'a> {
         ExpressionBuilder { metadata }
     }
 
-    pub fn build(&self, scalar: &ScalarExpr) -> Result<Expression> {
+    pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
         match scalar {
-            ScalarExpr::BoundVariable(expr) => self.build_bound_variable(expr),
+            Scalar::ColumnRef { index, .. } => self.build_column_ref(*index),
         }
     }
 
-    fn build_bound_variable(&self, bound_variable: &BoundVariable) -> Result<Expression> {
-        let column_entry = self.metadata.column(bound_variable.index);
-        let result = Expression::Column(column_entry.name.clone());
-        Ok(result)
+    pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
+        let column = self.metadata.column(index);
+        Ok(Expression::Column(format_field_name(
+            column.name.as_str(),
+            index,
+        )))
     }
 }

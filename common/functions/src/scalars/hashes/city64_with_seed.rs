@@ -74,10 +74,8 @@ impl City64WithSeedFunction {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::DateTime
                 | TypeID::Interval
                 | TypeID::String
         ) {

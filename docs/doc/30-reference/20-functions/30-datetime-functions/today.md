@@ -17,7 +17,7 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-mysql> select TODAY();
+SELECT TODAY();
 +------------+
 | TODAY()    |
 +------------+

@@ -23,14 +23,14 @@ If uuid is empty, IS_EMPTY_UUID() returns 1, otherwise it returns 0.
 ## Examples
 
 ```sql
-mysql> SELECT is_empty_uuid(gen_random_uuid());
+SELECT is_empty_uuid(gen_random_uuid());
 +----------------------------------+
 | is_empty_uuid(gen_random_uuid()) |
 +----------------------------------+
 |                                0 |
 +----------------------------------+
 
-mysql> SELECT is_empty_uuid(gen_zero_uuid());
+SELECT is_empty_uuid(gen_zero_uuid());
 +--------------------------------+
 | is_empty_uuid(gen_zero_uuid()) |
 +--------------------------------+

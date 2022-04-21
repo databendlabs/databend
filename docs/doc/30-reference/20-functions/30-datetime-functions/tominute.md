@@ -22,14 +22,14 @@ toMinute(expr)
 ## Examples
 
 ```sql
-mysql> select toMinute(now());
+SELECT toMinute(now());
 +-----------------+
 | toMinute(now()) |
 +-----------------+
 |              17 |
 +-----------------+
 
-mysql> select toMinute(toDateTime(1630812366));
+SELECT toMinute(toDateTime(1630812366));
 +----------------------------------+
 | toMinute(toDateTime(1630812366)) |
 +----------------------------------+

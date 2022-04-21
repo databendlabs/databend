@@ -44,32 +44,30 @@ fn test_data_block() -> Result<()> {
 #[test]
 fn test_data_block_convert() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", Date16Type::arc()),
-        DataField::new("b", Date32Type::arc()),
-        DataField::new("c", DateTime32Type::arc(None)),
-        DataField::new("c", DateTime64Type::arc(3, None)),
+        DataField::new("a", DateType::arc()),
+        DataField::new("b", DateTimeType::arc(0, None)),
+        DataField::new("b", DateTimeType::arc(3, None)),
     ]);
 
     let block = DataBlock::create(schema.clone(), vec![
-        Series::from_data(vec![1u16, 2, 3]),
         Series::from_data(vec![1i32, 2, 3]),
-        Series::from_data(vec![1u32, 2, 3]),
+        Series::from_data(vec![1i64, 2, 3]),
         Series::from_data(vec![1i64, 2, 3]),
     ]);
     assert_eq!(&schema, block.schema());
 
     assert_eq!(3, block.num_rows());
-    assert_eq!(4, block.num_columns());
+    assert_eq!(3, block.num_columns());
 
     let chunk: Chunk<ArrayRef> = block.try_into().unwrap();
 
     // first and last test.
     assert_eq!(3, chunk.len());
-    assert_eq!(4, chunk.columns().len());
+    assert_eq!(3, chunk.columns().len());
 
     let new_block: DataBlock = DataBlock::from_chunk(&schema, &chunk).unwrap();
     assert_eq!(3, new_block.num_rows());
-    assert_eq!(4, new_block.num_columns());
+    assert_eq!(3, new_block.num_columns());
 
     Ok(())
 }

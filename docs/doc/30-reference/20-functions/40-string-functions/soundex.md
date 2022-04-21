@@ -22,7 +22,7 @@ A string data type value or null.
 
 ## Examples
 
-```txt
+```sql
 SELECT SOUNDEX('hello');
 +-----------------------------------+
 | `SOUNDEX('hello')`                |

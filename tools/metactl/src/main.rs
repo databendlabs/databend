@@ -177,7 +177,8 @@ fn import_from_stdin() -> anyhow::Result<()> {
 fn print_meta() -> anyhow::Result<()> {
     let db = get_sled_db();
 
-    let tree_names = db.tree_names();
+    let mut tree_names = db.tree_names();
+    tree_names.sort();
     for n in tree_names.iter() {
         let name = String::from_utf8(n.to_vec())?;
 

@@ -346,6 +346,8 @@ impl<'a> DfParser<'a> {
             Ok(DfStatement::ShowSettings(DfShowSettings))
         } else if self.consume_token("CREATE") {
             self.parse_show_create()
+        } else if self.consume_token("FIELDS") {
+            self.parse_show_fields()
         } else if self.consume_token("PROCESSLIST") {
             Ok(DfStatement::ShowProcessList(DfShowProcessList))
         } else if self.consume_token("METRICS") {

@@ -17,6 +17,7 @@
 //!
 
 #![feature(generic_associated_types)]
+#![feature(bool_to_option)]
 #![feature(trusted_len)]
 
 #[macro_use]
@@ -32,6 +33,7 @@ mod data_value;
 mod data_value_operator;
 mod scalars;
 mod types;
+mod variant_value;
 
 /// third partry
 pub use chrono;
@@ -46,5 +48,6 @@ pub use prelude::*;
 pub use scalars::*;
 pub use types::*;
 pub use utils::*;
+pub use variant_value::*;
 
 pub mod prelude;

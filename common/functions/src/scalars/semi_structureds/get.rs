@@ -17,7 +17,6 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 use sqlparser::ast::Value;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -184,14 +183,14 @@ fn extract_value_by_path(
     input_rows: usize,
     ignore_case: bool,
 ) -> Result<ColumnRef> {
-    let column: &JsonColumn = if column.is_const() {
+    let column: &VariantColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         Series::check_get(const_column.inner())?
     } else {
         Series::check_get(column)?
     };
 
-    let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
+    let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
     for path_key in path_keys.iter() {
         if path_key.is_empty() {
             for _ in 0..column.len() {
@@ -201,7 +200,7 @@ fn extract_value_by_path(
         }
         for v in column.iter() {
             let mut found_value = true;
-            let mut value = v;
+            let mut value = v.as_ref();
             for key in path_key.iter() {
                 match key {
                     DataValue::UInt64(k) => match value.get(*k as usize) {
@@ -246,7 +245,7 @@ fn extract_value_by_path(
                 }
             }
             if found_value {
-                builder.append(value, true);
+                builder.append(&VariantValue::from(value), true);
             } else {
                 builder.append_null();
             }

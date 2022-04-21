@@ -25,7 +25,7 @@ A string data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT ELT(1, 'Aa', 'Bb', 'Cc', 'Dd');
 +--------------------------------+
 | ELT(1, 'Aa', 'Bb', 'Cc', 'Dd') |

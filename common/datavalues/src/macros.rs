@@ -29,7 +29,7 @@ macro_rules! for_all_scalar_types {
             { f64 },
             { bool },
             { Vu8 },
-            { JsonValue }
+            { VariantValue }
         }
     };
 }
@@ -76,7 +76,6 @@ macro_rules! for_all_primitive_boolean_types{
 #[macro_export]
 macro_rules! for_all_scalar_varints{
     ($macro:tt $(, $x:tt)*) => {
-        use serde_json::Value as JsonValue;
         $macro! {
             [$($x),*],
             { i8, Int8 },
@@ -91,7 +90,7 @@ macro_rules! for_all_scalar_varints{
             { f64, Float64 },
             { bool, Boolean },
             { Vu8, String },
-            { JsonValue, Variant }
+            { VariantValue, Variant }
         }
     };
 }
@@ -177,6 +176,7 @@ macro_rules! with_match_scalar_type {
         match $key_type {
             PhysicalTypeID::Boolean => __with_ty__! { bool },
             PhysicalTypeID::String => __with_ty__! { C },
+            PhysicalTypeID::Variant => __with_ty__! { VariantValue },
 
             PhysicalTypeID::Int8 => __with_ty__! { i8 },
             PhysicalTypeID::Int16 => __with_ty__! { i16 },
@@ -204,6 +204,7 @@ macro_rules! with_match_scalar_types_error {(
     match $key_type {
         PhysicalTypeID::Boolean => __with_ty__! { bool },
         PhysicalTypeID::String => __with_ty__! { C },
+        PhysicalTypeID::Variant => __with_ty__! { VariantValue },
 
         PhysicalTypeID::Int8 => __with_ty__! { i8 },
         PhysicalTypeID::Int16 => __with_ty__! { i16 },
@@ -285,10 +286,8 @@ macro_rules! with_match_date_type_error {
         }
 
         match $key_type {
-            TypeID::Date16 => __with_ty__! { u16},
-            TypeID::Date32 => __with_ty__! { i32},
-            TypeID::DateTime32 => __with_ty__! { u32},
-            TypeID::DateTime64 => __with_ty__! { i64},
+            TypeID::Date => __with_ty__! { i32},
+            TypeID::DateTime => __with_ty__! { i64},
             v => Err(ErrorCode::BadDataValueType(format!(
                 "Ops is not support on datatype: {:?}",
                 v

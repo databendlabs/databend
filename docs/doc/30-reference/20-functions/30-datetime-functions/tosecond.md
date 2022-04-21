@@ -22,14 +22,14 @@ toSecond(expr)
 ## Examples
 
 ```sql
-mysql> select toSecond(now());
+SELECT toSecond(now());
 +-----------------+
 | toSecond(now()) |
 +-----------------+
 |              14 |
 +-----------------+
 
-mysql> select toSecond(toDateTime(1630812366));
+SELECT toSecond(toDateTime(1630812366));
 +----------------------------------+
 | toSecond(toDateTime(1630812366)) |
 +----------------------------------+

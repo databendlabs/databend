@@ -24,12 +24,12 @@ Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
 
 Example:
 ```sql
-mysql> CREATE TABLE test(a UInt64, b Varchar) Engine = Memory;
+CREATE TABLE test(a INT UNSIGNED, b Varchar) Engine = Memory;
 
-mysql> INSERT INTO test(a,b) values(888, 'stars');
-mysql> INSERT INTO test values(1024, 'stars');
+INSERT INTO test(a,b) values(888, 'stars');
+INSERT INTO test values(1024, 'stars');
 
-mysql> SELECT * FROM test;
+SELECT * FROM test;
 +------+-------+
 | a    | b     |
 +------+-------+
@@ -37,8 +37,8 @@ mysql> SELECT * FROM test;
 | 1024 | stars |
 +------+-------+
 
-mysql> INSERT OVERWRITE test values(2048, 'stars');
-mysql> SELECT * FROM test;
+INSERT OVERWRITE test values(2048, 'stars');
+SELECT * FROM test;
 +------+-------+
 | a    | b     |
 +------+-------+
@@ -61,49 +61,42 @@ The data type of columns in the SELECT and INSERT table could be different, if n
 
 ### Examples
 
-#### Memory engine
-
 Example:
 ```sql
-mysql> CREATE TABLE select_table(a Varchar, b Varchar, c Varchar) Engine = Memory;
-mysql> INSERT INTO select_table values('1','11','abc');
-mysql> SELECT * FROM select_table;
+CREATE TABLE select_table(a VARCHAR, b VARCHAR, c VARCHAR);
+INSERT INTO select_table values('1','11','abc');
+
+SELECT * FROM select_table;
 +------+------+------+
 | a    | b    | c    |
 +------+------+------+
 | 1    | 11   | abc  |
 +------+------+------+
 
-mysql> CREATE TABLE test(c1 UInt8, c2 UInt64, c3 String) Engine = Memory;
-mysql> INSERT INTO test SELECT * FROM select_table;
-mysql> SELECT * from test;
+CREATE TABLE test(c1 TINTINT UNSIGNED, c2 BIGINT UNSIGNED, c3 VARCHAR) ;
+INSERT INTO test SELECT * FROM select_table;
+
+SELECT * from test;
 +------+------+------+
 | c1   | c2   | c3   |
 +------+------+------+
 |    1 |   11 | abc  |
 +------+------+------+
-
-mysql> SELECT toTypeName(c1), toTypeName(c2), toTypeName(c3) from test;
-+----------------+----------------+----------------+
-| toTypeName(c1) | toTypeName(c2) | toTypeName(c3) |
-+----------------+----------------+----------------+
-| UInt8          | UInt64         | String         |
-+----------------+----------------+----------------+
 ```
 
 Aggregate Example:
 ```sql
-# create table
-mysql> CREATE TABLE base_table(a Int32);
-mysql> CREATE TABLE aggregate_table(b Int32);
+-- create table
+CREATE TABLE base_table(a INT);
+CREATE TABLE aggregate_table(b INT);
 
-# insert some datas to base_table
-mysql> INSERT INTO base_table VALUES(1),(2),(3),(4),(5),(6);
+-- insert some data to base_table
+INSERT INTO base_table VALUES(1),(2),(3),(4),(5),(6);
 
-# insert into aggregate_table from the aggregation
-mysql> INSERT INTO aggregate_table SELECT SUM(a) FROM base_table GROUP BY a%3;
+-- insert into aggregate_table from the aggregation
+INSERT INTO aggregate_table SELECT SUM(a) FROM base_table GROUP BY a%3;
 
-mysql> SELECT * FROM aggregate_table ORDER BY b;
+SELECT * FROM aggregate_table ORDER BY b;
 +------+
 | b    |
 +------+

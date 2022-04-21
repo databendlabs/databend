@@ -120,13 +120,12 @@ To be a good engineer, don't forget to test your codes, please add unit tests an
 - Stateless tests:
 
 ```sql
-MySQL [(none)]> select sum(number), sum(-1), sum(2.3)  from numbers(3);
+SELECT sum(number), sum(-1), sum(2.3)  from numbers(3);
 +-------------+---------+--------------------+
 | sum(number) | sum(-1) | sum(2.3)           |
 +-------------+---------+--------------------+
 |           3 |      -3 | 6.8999999999999995 |
 +-------------+---------+--------------------+
-1 row in set (0.013 sec)
 ```
 
 ## Refer to other examples
