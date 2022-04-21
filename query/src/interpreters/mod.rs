@@ -35,6 +35,7 @@ mod interpreter_role_drop;
 mod interpreter_role_grant;
 mod interpreter_role_revoke;
 mod interpreter_select;
+mod interpreter_select_v2;
 mod interpreter_setting;
 mod interpreter_show_databases;
 mod interpreter_show_engines;

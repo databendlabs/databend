@@ -2,7 +2,7 @@
 title: COUNT
 ---
 
-The COUNT() function returns the number of records returned by a select query.
+The COUNT() function returns the number of records returned by a SELECT query.
 
 :::caution
 NULL values are not counted.
@@ -31,21 +31,21 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT count(*) FROM numbers(3);
+SELECT count(*) FROM numbers(3);
 +----------+
 | count(*) |
 +----------+
 |        3 |
 +----------+
 
-mysql> SELECT count(number) FROM numbers(3);
+SELECT count(number) FROM numbers(3);
 +---------------+
 | count(number) |
 +---------------+
 |             3 |
 +---------------+
 
-mysql> SELECT count(number) AS c FROM numbers(3);
+SELECT count(number) AS c FROM numbers(3);
 +------+
 | c    |
 +------+

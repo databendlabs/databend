@@ -12,6 +12,6 @@ DROP STAGE [ IF EXISTS ] <stage_name>;
 
 ## Examples
 
-```sql title='mysql>'
-drop stage if exists test_stage;
+```sql
+DROP STAGE IF EXISTS test_stage;
 ```

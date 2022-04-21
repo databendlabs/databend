@@ -24,7 +24,7 @@ A String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT REPLACE('www.mysql.com', 'w', 'Ww');
 +-------------------------------------+
 | REPLACE('www.mysql.com', 'w', 'Ww') |

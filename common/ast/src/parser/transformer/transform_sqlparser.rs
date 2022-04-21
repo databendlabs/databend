@@ -286,7 +286,9 @@ impl TransformerSqlparser {
             .limit
             .as_ref()
             .map(|expr| self.transform_expr(expr))
-            .transpose()?;
+            .transpose()?
+            .into_iter()
+            .collect();
         Ok(Query {
             body,
             order_by,
@@ -330,13 +332,13 @@ impl TransformerSqlparser {
         let select_list: Vec<SelectTarget> = orig_ast
             .projection
             .iter()
-            .map(|x| {
+            .map(|x: &SelectItem| {
                 match x {
-                    SelectItem::UnnamedExpr(expr) => Ok(SelectTarget::Projection {
+                    SelectItem::UnnamedExpr(expr) => Ok(SelectTarget::AliasedExpr {
                         expr: self.transform_expr(expr)?,
                         alias: None,
                     }),
-                    SelectItem::ExprWithAlias { expr, alias } => Ok(SelectTarget::Projection {
+                    SelectItem::ExprWithAlias { expr, alias } => Ok(SelectTarget::AliasedExpr {
                         expr: self.transform_expr(expr)?,
                         alias: Some(Identifier::from(alias)),
                     }),
@@ -348,9 +350,11 @@ impl TransformerSqlparser {
                             .collect();
                         // Push a wildcard star to the end
                         v.push(Indirection::Star);
-                        Ok(SelectTarget::Indirections(v))
+                        Ok(SelectTarget::QualifiedName(v))
                     }
-                    SelectItem::Wildcard => Ok(SelectTarget::Indirections(vec![Indirection::Star])),
+                    SelectItem::Wildcard => {
+                        Ok(SelectTarget::QualifiedName(vec![Indirection::Star]))
+                    }
                 }
             })
             .collect::<Result<Vec<SelectTarget>>>()?;
@@ -571,7 +575,7 @@ impl TransformerSqlparser {
                 subquery, alias, ..
             } => Ok(TableReference::Subquery {
                 subquery: Box::from(self.transform_query(subquery.as_ref())?),
-                alias: alias.as_ref().map(Self::transform_table_alias),
+                alias: Self::transform_table_alias(alias.as_ref().unwrap()),
             }),
             TableFactor::TableFunction { expr, alias } => Ok(TableReference::TableFunction {
                 expr: self.transform_expr(expr)?,
@@ -688,11 +692,11 @@ impl TransformerSqlparser {
             }),
             SqlparserExpr::Value(literal) => {
                 let lit = match literal {
-                    Value::Number(str, _) => Ok(Literal::Number(str.to_owned())),
-                    Value::SingleQuotedString(str) => Ok(Literal::String(str.to_owned())),
-                    Value::NationalStringLiteral(str) => Ok(Literal::String(str.to_owned())),
-                    Value::HexStringLiteral(str) => Ok(Literal::String(str.to_owned())),
-                    Value::DoubleQuotedString(str) => Ok(Literal::String(str.to_owned())),
+                    Value::Number(str, _) => Ok(Literal::Number(str.to_string())),
+                    Value::SingleQuotedString(str) => Ok(Literal::String(str.to_string())),
+                    Value::NationalStringLiteral(str) => Ok(Literal::String(str.to_string())),
+                    Value::HexStringLiteral(str) => Ok(Literal::String(str.to_string())),
+                    Value::DoubleQuotedString(str) => Ok(Literal::String(str.to_string())),
                     Value::Boolean(v) => Ok(Literal::Boolean(v.to_owned())),
                     Value::Null => Ok(Literal::Null),
                     _ => Err(ErrorCode::SyntaxException(std::format!(
@@ -727,7 +731,7 @@ impl TransformerSqlparser {
                 args: func
                     .args
                     .iter()
-                    .map(|arg| match arg {
+                    .map(|arg: &FunctionArg| match arg {
                         FunctionArg::Unnamed(expr) => self.transform_function_arg(expr),
                         FunctionArg::Named { .. } => Err(ErrorCode::SyntaxException(std::format!(
                             "Unsupported SQL statement: {}",
@@ -823,24 +827,20 @@ impl TransformerSqlparser {
 
     fn transform_data_type(&self, data_type: &SqlparserDataType) -> Result<TypeName> {
         match data_type {
-            SqlparserDataType::Char(length) => Ok(TypeName::Char(length.to_owned())),
-            SqlparserDataType::Varchar(length) => Ok(TypeName::Varchar(length.to_owned())),
-            SqlparserDataType::Decimal(prec, scale) => {
-                Ok(TypeName::Decimal(prec.to_owned(), scale.to_owned()))
-            }
-            SqlparserDataType::Float(length) => Ok(TypeName::Float(length.to_owned())),
-            SqlparserDataType::Int(zerofill) => Ok(TypeName::Int(zerofill.to_owned())),
-            SqlparserDataType::TinyInt(zerofill) => Ok(TypeName::TinyInt(zerofill.to_owned())),
-            SqlparserDataType::SmallInt(zerofill) => Ok(TypeName::SmallInt(zerofill.to_owned())),
-            SqlparserDataType::BigInt(zerofill) => Ok(TypeName::BigInt(zerofill.to_owned())),
-            SqlparserDataType::Real => Ok(TypeName::Real),
-            SqlparserDataType::Double => Ok(TypeName::Double),
             SqlparserDataType::Boolean => Ok(TypeName::Boolean),
+            SqlparserDataType::TinyInt(_) => Ok(TypeName::TinyInt { unsigned: false }),
+            SqlparserDataType::SmallInt(_) => Ok(TypeName::SmallInt { unsigned: false }),
+            SqlparserDataType::Int(_) => Ok(TypeName::Int { unsigned: false }),
+            SqlparserDataType::BigInt(_) => Ok(TypeName::BigInt { unsigned: false }),
+            SqlparserDataType::UnsignedTinyInt(_) => Ok(TypeName::TinyInt { unsigned: true }),
+            SqlparserDataType::UnsignedSmallInt(_) => Ok(TypeName::SmallInt { unsigned: true }),
+            SqlparserDataType::UnsignedInt(_) => Ok(TypeName::Int { unsigned: true }),
+            SqlparserDataType::UnsignedBigInt(_) => Ok(TypeName::BigInt { unsigned: true }),
+            SqlparserDataType::Float(_) => Ok(TypeName::Float),
+            SqlparserDataType::Double => Ok(TypeName::Double),
             SqlparserDataType::Date => Ok(TypeName::Date),
-            SqlparserDataType::Time => Ok(TypeName::Time),
             SqlparserDataType::Timestamp => Ok(TypeName::Timestamp),
-            SqlparserDataType::Interval => Ok(TypeName::Interval),
-            SqlparserDataType::Text => Ok(TypeName::Text),
+            SqlparserDataType::Varchar(_) => Ok(TypeName::Varchar),
             _ => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt

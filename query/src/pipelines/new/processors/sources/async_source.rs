@@ -96,12 +96,14 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
             Some(data_block) => {
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
-                };
-                self.scan_progress.incr(&progress_values);
-                self.generated_data = Some(data_block)
+                if !data_block.is_empty() {
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+                    self.generated_data = Some(data_block)
+                }
             }
         };
 

@@ -29,86 +29,56 @@ impl Unmarshal<u8> for u8 {
 
 impl Unmarshal<u16> for u16 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        Self::from(scratch[0]) | Self::from(scratch[1]) << 8
+        u16::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<u32> for u32 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        Self::from(scratch[0])
-            | Self::from(scratch[1]) << 8
-            | Self::from(scratch[2]) << 16
-            | Self::from(scratch[3]) << 24
+        u32::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<u64> for u64 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        Self::from(scratch[0])
-            | Self::from(scratch[1]) << 8
-            | Self::from(scratch[2]) << 16
-            | Self::from(scratch[3]) << 24
-            | Self::from(scratch[4]) << 32
-            | Self::from(scratch[5]) << 40
-            | Self::from(scratch[6]) << 48
-            | Self::from(scratch[7]) << 56
+        u64::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<i8> for i8 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        scratch[0] as Self
+        i8::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<i16> for i16 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        Self::from(scratch[0]) | Self::from(scratch[1]) << 8
+        i16::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<i32> for i32 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        Self::from(scratch[0])
-            | Self::from(scratch[1]) << 8
-            | Self::from(scratch[2]) << 16
-            | Self::from(scratch[3]) << 24
+        i32::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<i64> for i64 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        Self::from(scratch[0])
-            | Self::from(scratch[1]) << 8
-            | Self::from(scratch[2]) << 16
-            | Self::from(scratch[3]) << 24
-            | Self::from(scratch[4]) << 32
-            | Self::from(scratch[5]) << 40
-            | Self::from(scratch[6]) << 48
-            | Self::from(scratch[7]) << 56
+        i64::from_le_bytes(scratch.try_into().unwrap())
     }
 }
 
 impl Unmarshal<f32> for f32 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        let bits = u32::from(scratch[0])
-            | u32::from(scratch[1]) << 8
-            | u32::from(scratch[2]) << 16
-            | u32::from(scratch[3]) << 24;
+        let bits = u32::from_le_bytes(scratch.try_into().unwrap());
         Self::from_bits(bits)
     }
 }
 
 impl Unmarshal<f64> for f64 {
     fn unmarshal(scratch: &[u8]) -> Self {
-        let bits = u64::from(scratch[0])
-            | u64::from(scratch[1]) << 8
-            | u64::from(scratch[2]) << 16
-            | u64::from(scratch[3]) << 24
-            | u64::from(scratch[4]) << 32
-            | u64::from(scratch[5]) << 40
-            | u64::from(scratch[6]) << 48
-            | u64::from(scratch[7]) << 56;
+        let bits = u64::from_le_bytes(scratch.try_into().unwrap());
         Self::from_bits(bits)
     }
 }
@@ -125,10 +95,7 @@ impl Unmarshal<char> for char {
     }
 
     fn try_unmarshal(scratch: &[u8]) -> Result<char> {
-        let bits = u32::from(scratch[3])
-            | u32::from(scratch[2]) << 8
-            | u32::from(scratch[1]) << 16
-            | u32::from(scratch[0]) << 24;
+        let bits = u32::from_le_bytes(scratch.try_into().unwrap());
         match char::from_u32(bits) {
             Some(c) => Ok(c),
             None => Err(ErrorCode::UnmarshalError(format!(

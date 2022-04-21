@@ -90,7 +90,7 @@ copyOptions ::=
 
 First, create a named internal stage:
 ```sql
-create stage my_internal_s1;
+CREATE STAGE my_internal_s1;
 ```
 
 Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/10-put-to-stage.md) API:
@@ -100,19 +100,19 @@ curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://lo
 
 Final, copy the file into `mytable` from the `my_internal_s1` named internal stage:
 ```sql
-list @my_internal_s1;
-copy into mytable from '@my_internal_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+LIST @my_internal_s1;
+COPY INTO mytable FROM '@my_internal_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Files from External Stage
 
 First, create a named external stage:
 ```sql
-create stage my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
+CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
 ```
 Then, copy the file into `mytable` from the `my_external_s1` named external stage:
 ```sql
-copy into mytable from '@my_external_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
+COPY INTO mytable FROM '@my_external_s1' pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Files Directly from External Location
@@ -121,8 +121,8 @@ copy into mytable from '@my_external_s1' pattern = 'books.*parquet' file_format 
 
 Try to read 10 rows from csv and insert into the `mytable`.
 ```sql
-mysql> copy into mytable
-  from s3://mybucket/data.csv
+COPY INTO mytable
+  FROM s3://mybucket/data.csv
   credentials=(aws_key_id='<AWS_ACCESS_KEY_ID>' aws_secret_key='<AWS_SECRET_ACCESS_KEY>')
   FILE_FORMAT = (type = "CSV" field_delimiter = ','  record_delimiter = '\n' skip_header = 1) size_limit=10;
 ```

@@ -30,7 +30,7 @@ fn test_uuid_is_empty_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions("isemptyUUID", &tests)
+    test_scalar_functions("is_empty_uuid", &tests)
 }
 
 #[test]
@@ -45,5 +45,5 @@ fn test_uuid_is_not_empty_functions() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions("isnotemptyUUID", &tests)
+    test_scalar_functions("is_not_empty_uuid", &tests)
 }

@@ -31,15 +31,11 @@ async fn test_show_grant_interpreter() -> Result<()> {
     let user_mgr = ctx.get_user_manager();
     let role_cache_mgr = ctx.get_role_cache_manager();
     user_mgr
-        .add_user(
-            &tenant,
-            UserInfo::new_no_auth("test".to_string(), "localhost".to_string()),
-            false,
-        )
+        .add_user(&tenant, UserInfo::new_no_auth("test", "localhost"), false)
         .await?;
 
     user_mgr
-        .add_role(&tenant, RoleInfo::new("role1".to_string()), false)
+        .add_role(&tenant, RoleInfo::new("role1"), false)
         .await?;
 
     {
@@ -64,7 +60,7 @@ async fn test_show_grant_interpreter() -> Result<()> {
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
-    let mut role_info = RoleInfo::new("role2".to_string());
+    let mut role_info = RoleInfo::new("role2");
     let mut privileges = UserPrivilegeSet::empty();
     privileges.set_privilege(UserPrivilegeType::Select);
     role_info

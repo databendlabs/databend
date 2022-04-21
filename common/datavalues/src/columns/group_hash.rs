@@ -159,11 +159,9 @@ where
                 for (value, valid) in self.iter().zip(bitmap.iter()) {
                     unsafe {
                         if valid {
-                            std::ptr::copy_nonoverlapping(
-                                value as *const T as *const u8,
-                                ptr,
-                                std::mem::size_of::<T>(),
-                            );
+                            let slice =
+                                std::slice::from_raw_parts_mut(ptr, std::mem::size_of::<T>());
+                            value.marshal(slice);
                         } else {
                             ptr.add(offsize).write(1u8);
                         }
@@ -175,11 +173,8 @@ where
             _ => {
                 for value in self.iter() {
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            value as *const T as *const u8,
-                            ptr,
-                            std::mem::size_of::<T>(),
-                        );
+                        let slice = std::slice::from_raw_parts_mut(ptr, std::mem::size_of::<T>());
+                        value.marshal(slice);
                         ptr = ptr.add(step);
                     }
                 }

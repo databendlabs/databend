@@ -33,7 +33,7 @@ impl IsNullFunction {
         _args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNullFunction {
-            _display_name: "isNull".to_string(),
+            _display_name: "is_null".to_string(),
         }))
     }
 
@@ -41,7 +41,7 @@ impl IsNullFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("isNotNull")
+                .negative_function("is_not_null")
                 .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
@@ -81,6 +81,6 @@ impl Function for IsNullFunction {
 
 impl std::fmt::Display for IsNullFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "isNull")
+        write!(f, "is_null")
     }
 }

@@ -37,12 +37,12 @@ pub fn cast_from_string(
     let mut bitmap = new_mutable_bitmap(size, true);
 
     match data_type.data_type_id() {
-        TypeID::Date16 => {
-            let mut builder = ColumnBuilder::<u16>::with_capacity(size);
+        TypeID::Date => {
+            let mut builder = ColumnBuilder::<i32>::with_capacity(size);
 
             for (row, v) in str_column.iter().enumerate() {
                 if let Some(d) = string_to_date(v) {
-                    builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16);
+                    builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
                 } else {
                     bitmap.set(row, false)
                 }
@@ -51,43 +51,29 @@ pub fn cast_from_string(
             Ok((builder.build(size), Some(bitmap.into())))
         }
 
-        TypeID::Date32 => {
-            let mut builder = ColumnBuilder::<i32>::with_capacity(size);
-
-            for (row, v) in str_column.iter().enumerate() {
-                match string_to_date(v) {
-                    Some(d) => {
-                        builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
-                    }
-                    None => bitmap.set(row, false),
-                }
-            }
-            Ok((builder.build(size), Some(bitmap.into())))
-        }
-
-        TypeID::DateTime32 => {
-            let mut builder = ColumnBuilder::<u32>::with_capacity(size);
+        TypeID::DateTime => {
+            let mut builder = ColumnBuilder::<i64>::with_capacity(size);
+            let datetime = data_type.as_any().downcast_ref::<DateTimeType>().unwrap();
 
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_datetime(v) {
-                    Some(t) => {
-                        builder.append(t.timestamp() as u32);
-                    }
-                    None => bitmap.set(row, false),
-                }
-            }
-            Ok((builder.build(size), Some(bitmap.into())))
-        }
-        TypeID::DateTime64 => {
-            let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
-
-            for (row, v) in str_column.iter().enumerate() {
-                match string_to_datetime64(v) {
                     Some(d) => {
                         builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
                     }
                     None => bitmap.set(row, false),
+                }
+            }
+            Ok((builder.build(size), Some(bitmap.into())))
+        }
+        TypeID::Boolean => {
+            let mut builder = ColumnBuilder::<bool>::with_capacity(size);
+            for (row, v) in str_column.iter().enumerate() {
+                if v.eq_ignore_ascii_case("true".as_bytes()) {
+                    builder.append(true);
+                } else if v.eq_ignore_ascii_case("false".as_bytes()) {
+                    builder.append(false);
+                } else {
+                    bitmap.set(row, false);
                 }
             }
             Ok((builder.build(size), Some(bitmap.into())))
@@ -97,18 +83,9 @@ pub fn cast_from_string(
     }
 }
 
-// currently use UTC by default
 // TODO support timezone
 #[inline]
 pub fn string_to_datetime(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
-    let s = std::str::from_utf8(date_str.as_ref()).ok();
-    // let tz = "UTC".parse::<Tz>().unwrap();
-    s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S").ok())
-}
-
-// TODO support timezone
-#[inline]
-pub fn string_to_datetime64(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
     s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S%.9f").ok())
 }

@@ -23,14 +23,14 @@ A `UInt16` date type value
 ## Examples
 
 ```sql
-mysql> select toyear(now());
+SELECT toyear(now());
 +---------------+
 | toyear(now()) |
 +---------------+
 |          2022 |
 +---------------+
 
-mysql> select toyear(todatetime(1));
+SELECT toyear(todatetime(1));
 +-----------------------+
 | toyear(todatetime(1)) |
 +-----------------------+

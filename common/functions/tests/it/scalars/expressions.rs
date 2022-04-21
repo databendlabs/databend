@@ -69,34 +69,19 @@ fn test_cast_function() -> Result<()> {
             expect: Series::from_data(vec![4i64, 3, 2, 4]),
             error: "",
         }),
-        ("toDate16", ScalarFunctionTest {
-            name: "cast-string-to-date16-passed",
-            columns: vec![Series::from_data(vec!["2021-03-05", "2021-10-24"])],
-            expect: Series::from_data(vec![18691u16, 18924]),
-            error: "",
-        }),
-        ("toDate32", ScalarFunctionTest {
+        ("toDate", ScalarFunctionTest {
             name: "cast-string-to-date32-passed",
             columns: vec![Series::from_data(vec!["2021-03-05", "2021-10-24"])],
             expect: Series::from_data(vec![18691i32, 18924]),
             error: "",
         }),
-        ("toDateTime32", ScalarFunctionTest {
-            name: "cast-string-to-datetime32-passed",
+        ("toDateTime", ScalarFunctionTest {
+            name: "cast-string-to-datetime-passed",
             columns: vec![Series::from_data(vec![
                 "2021-03-05 01:01:01",
                 "2021-10-24 10:10:10",
             ])],
-            expect: Series::from_data(vec![1614906061u32, 1635070210]),
-            error: "",
-        }),
-        ("toDateTime64", ScalarFunctionTest {
-            name: "cast-string-to-datetime64-passed",
-            columns: vec![Series::from_data(vec![
-                "2021-03-05 01:01:01.123",
-                "2021-10-24 10:10:10.123",
-            ])],
-            expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
+            expect: Series::from_data(vec![1614906061i64, 1635070210]),
             error: "",
         }),
     ];
@@ -115,7 +100,7 @@ fn test_datetime_cast_function() -> Result<()> {
             name: "cast-date32-to-string-passed",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![18691i32, 18924]),
-                DataField::new("dummy_1", Date32Type::arc()),
+                DataField::new("dummy_1", DateType::arc()),
             )],
             expect: Series::from_data(vec!["2021-03-05", "2021-10-24"]),
             error: "",
@@ -123,8 +108,8 @@ fn test_datetime_cast_function() -> Result<()> {
         ("toString", ScalarFunctionWithFieldTest {
             name: "cast-datetime-to-string-passed",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1614906061u32, 1635070210]),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                Series::from_data(vec![1614906061i64, 1635070210]),
+                DataField::new("dummy_1", DateTimeType::arc(0, None)),
             )],
             expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
             error: "",
@@ -147,10 +132,10 @@ fn test_cast_variant_function() -> Result<()> {
                 name: "cast-date32-to-variant-error",
                 columns: vec![ColumnWithField::new(
                     Series::from_data(vec![18691i32, 18924]),
-                    DataField::new("dummy_1", Date32Type::arc()),
+                    DataField::new("dummy_1", DateType::arc()),
                 )],
                 expect: Arc::new(NullColumn::new(2)),
-                error: "Expression type does not match column data type, expecting VARIANT but got Date32",
+                error: "Expression type does not match column data type, expecting VARIANT but got Date",
             },
         ),
         (
@@ -511,26 +496,8 @@ fn test_variant_cast_function() -> Result<()> {
             expect: Series::from_data(vec![true, false, true, false]),
             error: "Cast error happens in casting from Variant to Boolean",
         }),
-        ("toDate16", ScalarFunctionTest {
-            name: "cast-variant-to-date16-passed",
-            columns: vec![Series::from_data(vec![
-                VariantValue::from(json!("2021-03-05")),
-                VariantValue::from(json!("2021-10-24")),
-            ])],
-            expect: Series::from_data(vec![18691u16, 18924]),
-            error: "",
-        }),
-        ("toDate16", ScalarFunctionTest {
-            name: "cast-variant-to-date16-error",
-            columns: vec![Series::from_data(vec![
-                VariantValue::from(json!("a2021-03-05")),
-                VariantValue::from(json!("2021-10-24")),
-            ])],
-            expect: Series::from_data(vec![18691u16, 18924]),
-            error: "Cast error happens in casting from Variant to Date16",
-        }),
-        ("toDate32", ScalarFunctionTest {
-            name: "cast-variant-to-date32-passed",
+        ("toDate", ScalarFunctionTest {
+            name: "cast-variant-to-date-passed",
             columns: vec![Series::from_data(vec![
                 VariantValue::from(json!("2021-03-05")),
                 VariantValue::from(json!("2021-10-24")),
@@ -538,50 +505,32 @@ fn test_variant_cast_function() -> Result<()> {
             expect: Series::from_data(vec![18691i32, 18924]),
             error: "",
         }),
-        ("toDate32", ScalarFunctionTest {
-            name: "cast-variant-to-date32-error",
+        ("toDate", ScalarFunctionTest {
+            name: "cast-variant-to-date-error",
             columns: vec![Series::from_data(vec![
                 VariantValue::from(json!("a2021-03-05")),
                 VariantValue::from(json!("2021-10-24")),
             ])],
             expect: Series::from_data(vec![18691i32, 18924]),
-            error: "Cast error happens in casting from Variant to Date32",
+            error: "Cast error happens in casting from Variant to Date",
         }),
-        ("toDateTime32", ScalarFunctionTest {
-            name: "cast-variant-to-datetime32-passed",
+        ("toDateTime", ScalarFunctionTest {
+            name: "cast-variant-to-datetime-passed",
             columns: vec![Series::from_data(vec![
                 VariantValue::from(json!("2021-03-05 01:01:01")),
                 VariantValue::from(json!("2021-10-24 10:10:10")),
             ])],
-            expect: Series::from_data(vec![1614906061u32, 1635070210]),
+            expect: Series::from_data(vec![1614906061i64, 1635070210]),
             error: "",
         }),
-        ("toDateTime32", ScalarFunctionTest {
-            name: "cast-variant-to-datetime32-error",
+        ("toDateTime", ScalarFunctionTest {
+            name: "cast-variant-to-datetime-error",
             columns: vec![Series::from_data(vec![
                 VariantValue::from(json!("a2021-03-05 01:01:01")),
                 VariantValue::from(json!("2021-10-24 10:10:10")),
             ])],
-            expect: Series::from_data(vec![1614906061u32, 1635070210]),
-            error: "Cast error happens in casting from Variant to DateTime32",
-        }),
-        ("toDateTime64", ScalarFunctionTest {
-            name: "cast-variant-to-datetime64-passed",
-            columns: vec![Series::from_data(vec![
-                VariantValue::from(json!("2021-03-05 01:01:01.123")),
-                VariantValue::from(json!("2021-10-24 10:10:10.123")),
-            ])],
-            expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
-            error: "",
-        }),
-        ("toDateTime64", ScalarFunctionTest {
-            name: "cast-variant-to-datetime64-error",
-            columns: vec![Series::from_data(vec![
-                VariantValue::from(json!("a2021-03-05 01:01:01.123")),
-                VariantValue::from(json!("2021-10-24 10:10:10.123456789")),
-            ])],
-            expect: Series::from_data(vec![1614906061123i64, 1635070210123]),
-            error: "Cast error happens in casting from Variant to DateTime64(3)",
+            expect: Series::from_data(vec![1614906061i64, 1635070210]),
+            error: "Cast error happens in casting from Variant to DateTime_0",
         }),
     ];
 

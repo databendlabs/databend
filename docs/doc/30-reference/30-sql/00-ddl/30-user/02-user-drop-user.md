@@ -13,6 +13,6 @@ DROP USER [ IF EXISTS ] <name>
 
 ## Examples
 
-```sql title='mysql>'
-drop user user1;
+```sql
+DROP USER user1;
 ```

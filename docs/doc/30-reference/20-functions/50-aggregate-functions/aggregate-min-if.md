@@ -18,14 +18,14 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT min(number) FROM numbers(10);
+SELECT min(number) FROM numbers(10);
 +-------------+
 | min(number) |
 +-------------+
 |           0 |
 +-------------+
 
-mysql> SELECT min_if(number, number > 7) FROM numbers(10);
+SELECT min_if(number, number > 7) FROM numbers(10);
 +------------------------------+
 | min_if(number, (number > 7)) |
 +------------------------------+

@@ -41,14 +41,10 @@ fn test_user_info() -> Result<()> {
     let ser_old = serde_json::to_string(&old)?;
     let new = UserInfo::try_from(ser_old.into_bytes())?;
 
-    let expect = UserInfo::new(
-        "old-name".to_string(),
-        "old-host".to_string(),
-        AuthInfo::Password {
-            hash_value: Vec::from("pwd"),
-            hash_method: PasswordHashMethod::Sha256,
-        },
-    );
+    let expect = UserInfo::new("old-name", "old-host", AuthInfo::Password {
+        hash_value: Vec::from("pwd"),
+        hash_method: PasswordHashMethod::Sha256,
+    });
     assert_eq!(new, expect);
 
     Ok(())

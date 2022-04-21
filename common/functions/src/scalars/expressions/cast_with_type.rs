@@ -23,12 +23,10 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::cast_from_datetimes::cast_from_date16;
-use super::cast_from_datetimes::cast_from_date32;
+use super::cast_from_datetimes::cast_from_date;
 use super::cast_from_string::cast_from_string;
 use super::cast_from_variant::cast_from_variant;
-use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime32;
-use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime64;
+use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CastOptions {
@@ -106,8 +104,6 @@ pub fn cast_with_type(
         //all is null
         if data_type.is_nullable() {
             return data_type.create_constant_column(&DataValue::Null, column.len());
-        } else if data_type.data_type_id() == TypeID::Boolean {
-            return data_type.create_constant_column(&DataValue::Boolean(false), column.len());
         }
         return Err(ErrorCode::BadDataValueType(
             "Can't cast column from null into non-nullable type".to_string(),
@@ -128,17 +124,9 @@ pub fn cast_with_type(
         TypeID::String => {
             cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
-        TypeID::Date16 => {
-            cast_from_date16(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::Date32 => {
-            cast_from_date32(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::DateTime32 => {
-            cast_from_datetime32(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::DateTime64 => {
-            cast_from_datetime64(column, &nonull_from_type, &nonull_data_type, cast_options)
+        TypeID::Date => cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options),
+        TypeID::DateTime => {
+            cast_from_datetime(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
             cast_from_variant(column, &nonull_data_type)

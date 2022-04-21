@@ -26,6 +26,8 @@ fn test_write_and_read() -> Result<()> {
     buff.write_scalar(&8u8)?;
     buff.write_scalar(&16u16)?;
     buff.write_scalar(&32u32)?;
+    buff.write_scalar(&-1i8)?;
+    buff.write_scalar(&-32i16)?;
     buff.write_scalar(&'🐳')?;
     buff.write_string("33")?;
     buff.write_opt_scalar(&Some(64i64))?;
@@ -41,6 +43,12 @@ fn test_write_and_read() -> Result<()> {
 
     let res: u32 = read.read_scalar().unwrap();
     assert_eq!(res, 32);
+
+    let res: i8 = read.read_scalar().unwrap();
+    assert_eq!(res, -1);
+
+    let res: i16 = read.read_scalar().unwrap();
+    assert_eq!(res, -32);
 
     let res: char = read.read_scalar().unwrap();
     assert_eq!(res, '🐳');

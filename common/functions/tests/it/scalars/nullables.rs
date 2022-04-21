@@ -27,7 +27,7 @@ fn test_is_null_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions("isNull", &tests)
+    test_scalar_functions("is_null", &tests)
 }
 
 #[test]
@@ -39,5 +39,5 @@ fn test_is_not_null_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions("isNotNull", &tests)
+    test_scalar_functions("is_not_null", &tests)
 }

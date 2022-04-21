@@ -5,7 +5,7 @@ title: system.cluster
 Contains information about cluster nodes.
 
 ```sql
-mysql> select * from  clusters;
+SELECT * FROM system.clusters;
 +------------------------+---------+------+
 | name                   | host    | port |
 +------------------------+---------+------+

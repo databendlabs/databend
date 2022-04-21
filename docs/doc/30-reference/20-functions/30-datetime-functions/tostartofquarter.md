@@ -24,14 +24,14 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-mysql> select toStartOfQuarter(toDate(18869));
+SELECT toStartOfQuarter(toDate(18869));
 +---------------------------------+
 | toStartOfQuarter(toDate(18869)) |
 +---------------------------------+
 | 2021-07-01                      |
 +---------------------------------+
 
-mysql> select toStartOfQuarter(toDateTime(1630812366));
+SELECT toStartOfQuarter(toDateTime(1630812366));
 +------------------------------------------+
 | toStartOfQuarter(toDateTime(1630812366)) |
 +------------------------------------------+

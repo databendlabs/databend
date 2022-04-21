@@ -13,10 +13,8 @@ NULL
 NULL
 EOF while parsing a value at line 1 column 3
 EOF while parsing a string at line 1 column 3
-Date16 is not a valid JSON
-Date32 is not a valid JSON
-DateTime32 is not a valid JSON
-DateTime64 is not a valid JSON
+Date is not a valid JSON
+DateTime is not a valid JSON
 ==check_json from table==
 NULL	NULL
 NULL	null

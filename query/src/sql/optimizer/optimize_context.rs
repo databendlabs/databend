@@ -39,7 +39,7 @@ impl OptimizeContext {
             .all_column_bindings()
             .iter()
             .map(|col| NamedColumn {
-                index: col.index,
+                index: col.index.unwrap(),
                 name: col.column_name.clone(),
             })
             .collect();

@@ -12,7 +12,7 @@ SHOW DATABASES [LIKE expr | WHERE expr]
 
 ## Examples
 ```sql
-mysql> SHOW DATABASES;
+SHOW DATABASES;
 +----------+
 | Database |
 +----------+
@@ -26,23 +26,21 @@ mysql> SHOW DATABASES;
 | system   |
 | test     |
 +----------+
-9 rows in set (0.00 sec)
 ```
 
 Showing the databases with database `"ss"`:
 ```sql
-mysql> SHOW DATABASES WHERE Database = 'ss';
+SHOW DATABASES WHERE Database = 'ss';
 +----------+
 | Database |
 +----------+
 | ss       |
 +----------+
-1 row in set (0.01 sec)
 ```
 
 Showing the databases begin with `"ss"`:
 ```sql
-mysql> SHOW DATABASES Like 'ss%';
+SHOW DATABASES Like 'ss%';
 +----------+
 | Database |
 +----------+
@@ -51,12 +49,11 @@ mysql> SHOW DATABASES Like 'ss%';
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```
 
 Showing the databases begin with `"ss"` with where:
 ```sql
-mysql> SHOW DATABASES WHERE Database Like 'ss%';
+SHOW DATABASES WHERE Database Like 'ss%';
 +----------+
 | Database |
 +----------+
@@ -65,12 +62,11 @@ mysql> SHOW DATABASES WHERE Database Like 'ss%';
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```
 
 Showing the databases like substring expr:
 ```sql
-mysql> SHOW DATABASES Like SUBSTRING('ss%' FROM 1 FOR 3);
+SHOW DATABASES Like SUBSTRING('ss%' FROM 1 FOR 3);
 +----------+
 | Database |
 +----------+
@@ -79,12 +75,11 @@ mysql> SHOW DATABASES Like SUBSTRING('ss%' FROM 1 FOR 3);
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```
 
 Showing the databases like substring expr with where:
 ```sql
-mysql> SHOW DATABASES WHERE Database Like SUBSTRING('ss%' FROM 1 FOR 3);
+SHOW DATABASES WHERE Database Like SUBSTRING('ss%' FROM 1 FOR 3);
 +----------+
 | Database |
 +----------+
@@ -93,5 +88,4 @@ mysql> SHOW DATABASES WHERE Database Like SUBSTRING('ss%' FROM 1 FOR 3);
 | ss2      |
 | ss3      |
 +----------+
-4 rows in set (0.01 sec)
 ```

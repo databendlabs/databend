@@ -25,7 +25,7 @@ A String data type value Or Null data type.
 
 ## Examples
 
-```txt
+```sql
 SELECT CONCAT_WS(',', 'data', 'fuse', 'labs', 2021);
 +----------------------------------------------+
 | CONCAT_WS(',', 'data', 'fuse', 'labs', 2021) |

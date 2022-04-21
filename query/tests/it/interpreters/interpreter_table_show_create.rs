@@ -44,11 +44,11 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             "| Table | Create Table                        |",
             "+-------+-------------------------------------+",
             "| a     | CREATE TABLE `a` (                  |",
-            "|       |   `a` Int64,                        |",
-            "|       |   `b` Int32,                        |",
-            "|       |   `c` String,                       |",
-            "|       |   `d` Int16,                        |",
-            "|       |   `e` Date16,                       |",
+            "|       |   `a` BIGINT,                       |",
+            "|       |   `b` INT,                          |",
+            "|       |   `c` VARCHAR,                      |",
+            "|       |   `d` SMALLINT,                     |",
+            "|       |   `e` DATE,                         |",
             "|       | ) ENGINE=Null COMMENT='test create' |",
             "+-------+-------------------------------------+",
         ],
@@ -63,7 +63,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             "| Table | Create Table                        |",
             "+-------+-------------------------------------+",
             "| t     | CREATE TABLE `t` (                  |",
-            "|       |   `a` Int32,                        |",
+            "|       |   `a` INT,                          |",
             "|       | ) ENGINE=fuse COMMENT='test create' |",
             "+-------+-------------------------------------+",
         ],
@@ -83,7 +83,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             "| Table | Create Table                        |",
             "+-------+-------------------------------------+",
             "| s     | CREATE TABLE `s` (                  |",
-            "|       |   `a` Int32,                        |",
+            "|       |   `a` INT,                          |",
             "|       | ) ENGINE=fuse COMMENT='test create' |",
             "+-------+-------------------------------------+",
         ],
@@ -106,11 +106,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             .await?
             .try_collect::<Vec<_>>()
             .await?;
-        common_datablocks::assert_blocks_sorted_eq_with_name(
-            case.name,
-            case.expects,
-            result.as_slice(),
-        );
+        common_datablocks::assert_blocks_eq_with_name(case.name, case.expects, result.as_slice());
     }
 
     Ok(())

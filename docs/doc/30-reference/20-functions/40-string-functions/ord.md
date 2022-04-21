@@ -7,7 +7,7 @@ If the leftmost character is not a multibyte character, ORD() returns the same v
 If the leftmost character of the string str is a multibyte character, returns the code for that character,
 calculated from the numeric values of its constituent bytes using this formula:
 
-```txt
+```sql
   (1st byte code)
 + (2nd byte code * 256)
 + (3rd byte code * 256^2) ...
@@ -31,7 +31,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT ORD('2')
 +--------+
 | ORD(2) |

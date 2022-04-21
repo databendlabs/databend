@@ -33,21 +33,21 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT SUM(number) FROM numbers(3);
+SELECT SUM(number) FROM numbers(3);
 +-------------+
 | sum(number) |
 +-------------+
 |           3 |
 +-------------+
 
-mysql> SELECT SUM(number) AS sum FROM numbers(3);
+SELECT SUM(number) AS sum FROM numbers(3);
 +------+
 | sum  |
 +------+
 |    3 |
 +------+
 
-mysql> SELECT SUM(number+2) AS sum FROM numbers(3);
+SELECT SUM(number+2) AS sum FROM numbers(3);
 +------+
 | sum  |
 +------+

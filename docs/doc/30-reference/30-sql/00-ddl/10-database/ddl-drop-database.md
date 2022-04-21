@@ -14,6 +14,6 @@ DROP { DATABASE | SCHEMA } [IF EXISTS] <database_name>
 
 ## Examples
 
-```sql title='mysql>'
+```sql
 DROP DATABASE test;
 ```
