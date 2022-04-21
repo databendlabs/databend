@@ -32,6 +32,6 @@ impl AdminProcedure {
         factory.register(
             "admin$profiling_query",
             Box::new(ProfilingQueryProcedure::try_create),
-        )
+        );
     }
 }

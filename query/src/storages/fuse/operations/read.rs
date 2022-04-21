@@ -208,9 +208,11 @@ impl Processor for FuseTableSource {
     }
 
     fn process(&mut self) -> Result<()> {
+        self.tracker.restart_deserialize();
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks) => {
                 let data_block = self.block_reader.deserialize(part, chunks)?;
+                self.tracker.deserialize(data_block.num_rows(), data_block.memory_size());
                 let mut partitions = self.ctx.try_get_partitions(1)?;
 
                 let progress_values = ProgressValues {
