@@ -57,6 +57,7 @@ pub struct Config {
     pub query: QueryConfig,
 
     #[clap(flatten)]
+    #[serde(flatten)]
     pub log: LogConfig,
 
     // Meta Service config.
