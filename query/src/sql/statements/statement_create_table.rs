@@ -29,6 +29,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
+use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
@@ -50,6 +51,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
+    pub order_keys: Vec<Expr>,
     pub options: BTreeMap<String, String>,
 
     // The table name after "create .. like" statement.
