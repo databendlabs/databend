@@ -153,7 +153,11 @@ fn test_pop_data_value() -> Result<()> {
         Test {
             name: "test object column",
             data_type: VariantType::arc(),
-            column: Series::from_data(vec![json!(10u64), JsonValue::Bool(true), JsonValue::Null]),
+            column: Series::from_data(vec![
+                VariantValue::from(json!(10u64)),
+                VariantValue::from(JsonValue::Bool(true)),
+                VariantValue::from(JsonValue::Null),
+            ]),
             expected_err:
                 "Code: 1018, displayText = Object column array is empty when pop data value.",
         },
@@ -238,9 +242,9 @@ fn test_nullable_pop() -> Result<()> {
             name: "test nullable(object)",
             data_type: NullableType::arc(VariantType::arc()),
             values_vec: vec![
-                DataValue::Json(json!(10u64)),
+                DataValue::Variant(VariantValue::from(json!(10u64))),
                 DataValue::Null,
-                DataValue::Json(JsonValue::Bool(true)),
+                DataValue::Variant(VariantValue::from(JsonValue::Bool(true))),
                 DataValue::Null,
             ],
         },

@@ -18,8 +18,8 @@ use serde_json::Value as JsonValue;
 
 #[test]
 fn test_empty_object_column() {
-    let mut builder = MutableObjectColumn::<JsonValue>::with_capacity(16);
-    let data_column: ObjectColumn<JsonValue> = builder.finish();
+    let mut builder = MutableObjectColumn::<VariantValue>::with_capacity(16);
+    let data_column: ObjectColumn<VariantValue> = builder.finish();
     let mut iter = data_column.iter();
     assert_eq!(None, iter.next());
     assert!(data_column.is_empty());
@@ -27,27 +27,29 @@ fn test_empty_object_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let v = vec![&JsonValue::Bool(true), &JsonValue::Bool(false)];
-    let data_column: ObjectColumn<JsonValue> = JsonColumn::from_slice(v.as_slice());
+    let a = VariantValue::from(JsonValue::Bool(true));
+    let b = VariantValue::from(JsonValue::Bool(false));
+    let v = vec![&a, &b];
+    let data_column: ObjectColumn<VariantValue> = VariantColumn::from_slice(v.as_slice());
     let mut iter = data_column.iter();
-    assert_eq!(Some(&JsonValue::Bool(true)), iter.next());
-    assert_eq!(Some(&JsonValue::Bool(false)), iter.next());
+    assert_eq!(Some(&a), iter.next());
+    assert_eq!(Some(&b), iter.next());
     assert_eq!(None, iter.next());
 }
 
 #[test]
 fn test_object_column() {
     const N: usize = 1024;
-    let a = json!(true);
-    let b = json!(false);
+    let a = VariantValue::from(json!(true));
+    let b = VariantValue::from(json!(false));
     let it = (0..N).map(|i| if i % 2 == 0 { &a } else { &b });
-    let data_column: ObjectColumn<JsonValue> = JsonColumn::from_iterator(it);
+    let data_column: ObjectColumn<VariantValue> = VariantColumn::from_iterator(it);
     assert!(!data_column.is_empty());
     assert!(data_column.len() == N);
     assert!(!data_column.null_at(1));
 
-    assert!(data_column.get(512) == DataValue::Json(json!(true)));
-    assert!(data_column.get(513) == DataValue::Json(json!(false)));
+    assert!(data_column.get(512) == DataValue::Variant(VariantValue::from(json!(true))));
+    assert!(data_column.get(513) == DataValue::Variant(VariantValue::from(json!(false))));
 
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);
