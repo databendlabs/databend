@@ -119,17 +119,18 @@ impl ValueSource {
             let col_end = if col + 1 == col_size { b')' } else { b',' };
             let res = deser.de_text_quoted(reader).and_then(|_| {
                 let _ = reader.ignore_white_spaces()?;
-                reader
-                    .ignore_byte(col_end)?
-                    .then_some(())
-                    .ok_or_else(|| ErrorCode::BadBytes(""))
+                reader.ignore_byte(col_end)?.then_some(()).ok_or_else(|| {
+                    // Ignore the pop-result is safe here,
+                    // because pop-err(empty builder) only happens when `de_text_quoted` return error.
+                    let _ = deser.pop_data_value();
+                    ErrorCode::BadBytes("")
+                })
             });
 
             // Deserializer and expr both will eat the end ')' of the row.
             if res.is_err() {
                 skip_to_next_row(reader, 1)?;
-                // parse from expression
-                // set datavalues
+                // Parse from expression and set datavalues
                 let buf = reader.get_checkpoint_buffer();
                 let exprs = parse_exprs(buf, session_type)?;
                 reader.reset_checkpoint();

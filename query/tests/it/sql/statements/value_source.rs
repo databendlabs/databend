@@ -33,7 +33,7 @@ async fn test_parse_value_source() -> Result<()> {
     ]);
 
     let parser = ValueSource::new(schema, ctx);
-    let s = "('ABC', 30 , 'China', '1992-03-15 00:00:00'), ('XYZ', 31 , 'Japen', '1991-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00')".to_string();
+    let s = "('ABC', 30 , 'China', '1992-03-15 00:00:00'), ('XYZ', 11 + 20 , 'Japen', '1991-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00'), ('UVW', 32 , 'American', '1990-03-15 00:00:00')".to_string();
     let bytes = s.as_bytes();
     let cursor = Cursor::new(bytes);
     let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
