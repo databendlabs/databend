@@ -65,8 +65,8 @@ impl MutableColumn for MutableNullableColumn {
         self.inner.append_data_value(value)
     }
 
-     /// Note when the last value is null, this method will return DataValue::Null.
-     fn pop_data_value(&mut self) -> Result<DataValue> {
+    /// Note when the last value is null, this method will return DataValue::Null.
+    fn pop_data_value(&mut self) -> Result<DataValue> {
         self.values
             .pop()
             .ok_or_else(|| {
