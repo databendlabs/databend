@@ -21,31 +21,25 @@ use common_meta_grpc::MetaGrpcClientConf;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
-
-// Meta env.
-pub const META_ADDRESS: &str = "META_ADDRESS";
-pub const META_USERNAME: &str = "META_USERNAME";
-pub const META_PASSWORD: &str = "META_PASSWORD";
-pub const META_EMBEDDED_DIR: &str = "META_EMBEDDED_DIR";
-pub const META_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "META_RPC_TLS_SERVER_ROOT_CA_CERT";
-pub const META_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "META_RPC_TLS_SERVICE_DOMAIN_NAME";
-
 /// Meta config group.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(long, env = META_EMBEDDED_DIR, default_value = "./_meta_embedded")]
+    #[clap(long, default_value = "./_meta_embedded")]
+    #[serde(rename = "embedded_dir")]
     pub meta_embedded_dir: String,
 
-    #[clap(long, env = META_ADDRESS, default_value = "", help = "MetaStore backend address")]
+    #[clap(long, default_value = "", help = "MetaStore backend address")]
+    #[serde(rename = "address")]
     pub meta_address: String,
 
-    #[clap(long, env = META_USERNAME, default_value = "", help = "MetaStore backend user name")]
+    #[clap(long, default_value = "", help = "MetaStore backend user name")]
+    #[serde(rename = "username")]
     pub meta_username: String,
 
-    #[clap(long, env = META_PASSWORD, default_value = "", help = "MetaStore backend user password")]
+    #[clap(long, default_value = "", help = "MetaStore backend user password")]
+    #[serde(rename = "password")]
     pub meta_password: String,
 
     #[clap(
@@ -53,19 +47,18 @@ pub struct MetaConfig {
         default_value = "10",
         help = "Timeout for each client request, in seconds"
     )]
+    #[serde(rename = "client_timeout_in_second")]
     pub meta_client_timeout_in_second: u64,
 
     #[clap(
-        long,
-        env = "META_RPC_TLS_SERVER_ROOT_CA_CERT",
+        long = "meta-rpc-tls-meta-server-root-ca-cert",
         default_value = "",
         help = "Certificate for client to identify meta rpc server"
     )]
     pub rpc_tls_meta_server_root_ca_cert: String,
 
     #[clap(
-        long,
-        env = "META_RPC_TLS_SERVICE_DOMAIN_NAME",
+        long = "meta-rpc-tls-meta-service-domain-name",
         default_value = "localhost"
     )]
     pub rpc_tls_meta_service_domain_name: String,
@@ -86,26 +79,6 @@ impl Default for MetaConfig {
 }
 
 impl MetaConfig {
-    pub fn load_from_env(mut_config: &mut Config) {
-        env_helper!(mut_config, meta, meta_address, String, META_ADDRESS);
-        env_helper!(mut_config, meta, meta_username, String, META_USERNAME);
-        env_helper!(mut_config, meta, meta_password, String, META_PASSWORD);
-        env_helper!(
-            mut_config,
-            meta,
-            rpc_tls_meta_server_root_ca_cert,
-            String,
-            META_RPC_TLS_SERVER_ROOT_CA_CERT
-        );
-        env_helper!(
-            mut_config,
-            meta,
-            rpc_tls_meta_service_domain_name,
-            String,
-            META_RPC_TLS_SERVICE_DOMAIN_NAME
-        );
-    }
-
     pub fn is_tls_enabled(&self) -> bool {
         !self.rpc_tls_meta_server_root_ca_cert.is_empty()
             && !self.rpc_tls_meta_service_domain_name.is_empty()
