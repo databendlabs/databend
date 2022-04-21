@@ -330,3 +330,1017 @@ CreateDatabase {
 }
 
 
+---------- Input ----------
+truncate table test;
+---------- Output ---------
+TRUNCATE TABLE test
+---------- AST ------------
+TruncateTable {
+    database: None,
+    table: Identifier {
+        name: "test",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+truncate table test_db.test;
+---------- Output ---------
+TRUNCATE TABLE test_db.test
+---------- AST ------------
+TruncateTable {
+    database: Some(
+        Identifier {
+            name: "test_db",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "test",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+DROP table table1;
+---------- Output ---------
+DROP TABLE table1
+---------- AST ------------
+DropTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "table1",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+DROP table IF EXISTS table1;
+---------- Output ---------
+DROP TABLE IF EXISTS table1
+---------- AST ------------
+DropTable {
+    if_exists: true,
+    database: None,
+    table: Identifier {
+        name: "table1",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
+---------- Output ---------
+CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR NULL)
+---------- AST ------------
+CreateTable {
+    if_not_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "c1",
+                quote: None,
+            },
+            data_type: Int {
+                unsigned: false,
+            },
+            nullable: true,
+            default_value: None,
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "c2",
+                quote: None,
+            },
+            data_type: BigInt {
+                unsigned: false,
+            },
+            nullable: true,
+            default_value: None,
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "c3",
+                quote: None,
+            },
+            data_type: Varchar,
+            nullable: true,
+            default_value: None,
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
+}
+
+
+---------- Input ----------
+CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
+---------- Output ---------
+CREATE TABLE t (c1 INTEGER NOT NULL, c2 BIGINT NOT NULL, c3 VARCHAR NOT NULL)
+---------- AST ------------
+CreateTable {
+    if_not_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "c1",
+                quote: None,
+            },
+            data_type: Int {
+                unsigned: false,
+            },
+            nullable: false,
+            default_value: None,
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "c2",
+                quote: None,
+            },
+            data_type: BigInt {
+                unsigned: false,
+            },
+            nullable: false,
+            default_value: None,
+        },
+        ColumnDefinition {
+            name: Identifier {
+                name: "c3",
+                quote: None,
+            },
+            data_type: Varchar,
+            nullable: false,
+            default_value: None,
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
+}
+
+
+---------- Input ----------
+CREATE TABLE t(c1 int default 1);
+---------- Output ---------
+CREATE TABLE t (c1 INTEGER NULL DEFAULT 1)
+---------- AST ------------
+CreateTable {
+    if_not_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [
+        ColumnDefinition {
+            name: Identifier {
+                name: "c1",
+                quote: None,
+            },
+            data_type: Int {
+                unsigned: false,
+            },
+            nullable: true,
+            default_value: Some(
+                Number(
+                    "1",
+                ),
+            ),
+        },
+    ],
+    engine: "",
+    options: [],
+    like_db: None,
+    like_table: None,
+}
+
+
+---------- Input ----------
+select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
+---------- Output ---------
+SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: true,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: CountAll,
+                        alias: None,
+                    },
+                ],
+                from: Table {
+                    database: None,
+                    table: Identifier {
+                        name: "t",
+                        quote: None,
+                    },
+                    alias: None,
+                },
+                selection: Some(
+                    BinaryOp {
+                        op: And,
+                        left: BinaryOp {
+                            op: Eq,
+                            left: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            },
+                            right: Literal(
+                                Number(
+                                    "1",
+                                ),
+                            ),
+                        },
+                        right: BinaryOp {
+                            op: Lt,
+                            left: BinaryOp {
+                                op: Minus,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                    },
+                                },
+                                right: Literal(
+                                    Number(
+                                        "1",
+                                    ),
+                                ),
+                            },
+                            right: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            },
+                        },
+                    },
+                ),
+                group_by: [
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                        },
+                    },
+                ],
+                having: Some(
+                    BinaryOp {
+                        op: Eq,
+                        left: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                        },
+                        right: Literal(
+                            Number(
+                                "1",
+                            ),
+                        ),
+                    },
+                ),
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a, b, c;
+---------- Output ---------
+SELECT * FROM a CROSS JOIN b CROSS JOIN c
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: CrossJoin,
+                        condition: None,
+                        left: Join(
+                            Join {
+                                op: CrossJoin,
+                                condition: None,
+                                left: Table {
+                                    database: None,
+                                    table: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                    alias: None,
+                                },
+                                right: Table {
+                                    database: None,
+                                    table: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                    },
+                                    alias: None,
+                                },
+                            },
+                        ),
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "c",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a INNER JOIN b ON a.a = b.a
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: Inner,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a left outer join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: LeftOuter,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a right outer join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: RightOuter,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a full outer join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: FullOuter,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a inner join b on a.a = b.a;
+---------- Output ---------
+SELECT * FROM a INNER JOIN b ON a.a = b.a
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: Inner,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                        },
+                                    ),
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a left outer join b using(a);
+---------- Output ---------
+SELECT * FROM a LEFT OUTER JOIN b USING(a)
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: LeftOuter,
+                        condition: Using(
+                            [
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            ],
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a right outer join b using(a);
+---------- Output ---------
+SELECT * FROM a RIGHT OUTER JOIN b USING(a)
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: RightOuter,
+                        condition: Using(
+                            [
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            ],
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a full outer join b using(a);
+---------- Output ---------
+SELECT * FROM a FULL OUTER JOIN b USING(a)
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: FullOuter,
+                        condition: Using(
+                            [
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            ],
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+
+---------- Input ----------
+select * from a inner join b using(a);
+---------- Output ---------
+SELECT * FROM a INNER JOIN b USING(a)
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Join(
+                    Join {
+                        op: Inner,
+                        condition: Using(
+                            [
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            ],
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "a",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+    },
+)
+
+

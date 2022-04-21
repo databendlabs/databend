@@ -293,9 +293,7 @@ impl Display for TypeName {
                 write!(f, "VARCHAR")?;
             }
             TypeName::Array { item_type } => {
-                write!(f, "ARRAY (")?;
-                write!(f, "{}", item_type)?;
-                write!(f, ")")?;
+                write!(f, "ARRAY ({})", item_type)?;
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;
