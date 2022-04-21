@@ -97,6 +97,10 @@ impl TypeDeserializer for VariantDeserializer {
         self.builder.append_data_value(value)
     }
 
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.builder.pop_data_value()
+    }
+
     fn finish_to_column(&mut self) -> ColumnRef {
         self.builder.to_column()
     }

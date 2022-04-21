@@ -17,6 +17,7 @@
 //!
 
 #![feature(generic_associated_types)]
+#![feature(bool_to_option)]
 #![feature(trusted_len)]
 
 #[macro_use]
