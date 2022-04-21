@@ -60,7 +60,13 @@ impl Planner {
         let optimized_expr = optimize(bind_result.s_expr().clone(), optimize_context)?;
 
         // Step 4: build executable Pipeline with SExpr
-        let pb = PipelineBuilder::new(self.context.clone(), bind_result.metadata, optimized_expr);
+        let result_columns = bind_result.bind_context.result_columns();
+        let pb = PipelineBuilder::new(
+            self.context.clone(),
+            result_columns,
+            bind_result.metadata,
+            optimized_expr,
+        );
         let pipeline = pb.spawn()?;
 
         Ok(pipeline)
