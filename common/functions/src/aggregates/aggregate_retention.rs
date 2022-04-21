@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde_json::json;
-use serde_json::Value as JsonValue;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
@@ -67,7 +66,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     fn return_type(&self) -> Result<DataTypePtr> {
-        Ok(JsonValue::to_data_type())
+        Ok(VariantValue::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -143,7 +142,8 @@ impl AggregateFunction for AggregateRetentionFunction {
         array: &mut dyn common_datavalues::MutableColumn,
     ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let builder: &mut MutableObjectColumn<JsonValue> = Series::check_get_mutable_column(array)?;
+        let builder: &mut MutableObjectColumn<VariantValue> =
+            Series::check_get_mutable_column(array)?;
         let mut vec: Vec<u8> = vec![0; self.events_size as usize];
         if state.events & 1 == 1 {
             vec[0] = 1;
@@ -153,7 +153,7 @@ impl AggregateFunction for AggregateRetentionFunction {
                 }
             }
         }
-        builder.append_value(json!(vec));
+        builder.append_value(VariantValue::from(json!(vec)));
         Ok(())
     }
 

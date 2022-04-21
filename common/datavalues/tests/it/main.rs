@@ -14,3 +14,4 @@
 
 mod columns;
 mod types;
+mod variant_value;

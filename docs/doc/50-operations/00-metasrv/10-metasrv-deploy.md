@@ -169,6 +169,8 @@ raft_advertise_host = "localhost"
 - `single` tells the node to initialize a single node cluster if it is not
     initialized. Otherwise, this arg is just ignored.
 
+For more information about config, see [Configuration](15-metasrv-config.md)
+
 #### 2.2.2 Start the databend-meta node-1
 
 ```shell
@@ -201,7 +203,7 @@ raft_dir            = "metadata/datas2"
 raft_api_port       = 28203
 raft_listen_host    = "127.0.0.1"
 raft_advertise_host = "localhost"
-join                = ["127.0.0.1:28103"]
+join                = ["localhost:28103"]
 ```
 
 ```shell title="databend-meta-3.toml"
@@ -216,10 +218,10 @@ raft_dir            = "metadata/datas3"
 raft_api_port       = 28303
 raft_listen_host    = "127.0.0.1"
 raft_advertise_host = "localhost"
-join                = ["127.0.0.1:28103"]
+join                = ["localhost:28103"]
 ```
 
-The arg `join` specifies a list of addresses of nodes in the existing cluster it wants to
+The arg `join` specifies a list of raft addresses(`<raft_advertise_host>:<raft_api_port>`) of nodes in the existing cluster it wants to
 be joined to.
 
 
