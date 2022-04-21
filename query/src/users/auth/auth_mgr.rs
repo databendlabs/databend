@@ -56,7 +56,7 @@ impl AuthMgr {
             .await
     }
 
-    pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
+    pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {
         match credential {
             Credential::Jwt { token: t } => {
                 let jwt = match &self.jwt {
@@ -64,17 +64,20 @@ impl AuthMgr {
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
                 let user_name = jwt.subject.unwrap();
+                let tenant = jwt.custom.tenant_id.unwrap_or_else(|| self.tenant.clone());
                 if let Some(ensure_user) = jwt.custom.ensure_user {
-                    let tenant = ensure_user.tenant_id.unwrap_or_else(|| self.tenant.clone());
                     let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                     for role in ensure_user.roles {
                         user_info.grants.grant_role(role);
                     }
                     self.user_mgr.add_user(&tenant, user_info, true).await?;
                 }
-                self.user_mgr
-                    .get_user(&self.tenant, UserIdentity::new(&user_name, "%"))
-                    .await
+                Ok((
+                    Some(tenant.clone()),
+                    self.user_mgr
+                        .get_user(&tenant, UserIdentity::new(&user_name, "%"))
+                        .await?,
+                ))
             }
             Credential::Password {
                 name: n,
@@ -89,7 +92,7 @@ impl AuthMgr {
                         h.as_ref().unwrap_or(&"%".to_string()),
                     )
                     .await?;
-                match &user.auth_info {
+                let user_info = match &user.auth_info {
                     AuthInfo::None => Ok(user),
                     AuthInfo::Password {
                         hash_value: h,
@@ -105,7 +108,8 @@ impl AuthMgr {
                         }
                     },
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
-                }
+                }?;
+                Ok((None, user_info))
             }
         }
     }

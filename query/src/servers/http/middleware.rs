@@ -30,6 +30,7 @@ use poem::Endpoint;
 use poem::Middleware;
 use poem::Request;
 
+use super::v1::HttpQueryContext;
 use crate::sessions::SessionManager;
 use crate::users::auth::auth_mgr::Credential;
 
@@ -90,11 +91,11 @@ pub struct HTTPSessionEndpoint<E> {
 }
 
 impl<E> HTTPSessionEndpoint<E> {
-    async fn auth(&self, req: &Request) -> Result<UserInfo> {
+    async fn auth(&self, req: &Request) -> Result<(Option<String>, UserInfo)> {
         let credential = get_credential(req.headers())?;
         match credential {
             Some(c) => self.manager.get_auth_manager().auth(&c).await,
-            None => self.manager.get_auth_manager().no_auth().await,
+            None => Ok((None, self.manager.get_auth_manager().no_auth().await?)),
         }
     }
 }
@@ -106,9 +107,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         tracing::debug!("receive http request: {:?},", req);
         let res = match self.auth(&req).await {
-            Ok(user_info) => {
-                req.extensions_mut().insert(self.manager.clone());
-                req.extensions_mut().insert(user_info);
+            Ok((tenant_id, user_info)) => {
+                let ctx = HttpQueryContext {
+                    session_mgr: self.manager.clone(),
+                    user_info,
+                    tenant_id,
+                };
+                req.extensions_mut().insert(ctx);
                 self.ep.call(req).await
             }
             Err(err) => Err(PoemError::from_string(
