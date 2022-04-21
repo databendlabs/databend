@@ -17,7 +17,7 @@ Zero UUID.
 ## Examples
 
 ```sql
-mysql> SELECT gen_zero_uuid();
+SELECT gen_zero_uuid();
 `+--------------------------------------+
 | gen_zero_uuid()                      |
 +--------------------------------------+

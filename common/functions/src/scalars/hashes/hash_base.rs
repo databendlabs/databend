@@ -151,3 +151,12 @@ impl<'a> DFHash for &'a [u8] {
         Hash::hash_slice(self, state);
     }
 }
+
+impl<'a> DFHash for &'a VariantValue {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let v = self.as_ref().to_string();
+        let u = v.as_bytes();
+        Hash::hash(&u, state);
+    }
+}

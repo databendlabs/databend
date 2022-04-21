@@ -12,6 +12,6 @@ CREATE DATABASE [IF NOT EXISTS] <database_name>
 
 ## Examples
 
-```sql title='msyql>'
+```sql
 CREATE DATABASE test;
 ```

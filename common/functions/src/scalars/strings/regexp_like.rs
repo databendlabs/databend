@@ -69,36 +69,27 @@ impl Function for RegexpLikeFunction {
         &self,
         _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
-        _input_rows: usize,
+        input_rows: usize,
     ) -> Result<ColumnRef> {
-        let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
-        if let Ok(col1) = col1 {
-            let lhs = columns[0].column();
-            let rhs = col1.get_string(0)?;
-
-            if columns.len() == 3 {
-                if columns[2].column().is_const() {
-                    let mt = columns[2].column().get_string(0)?;
-                    return Ok(Arc::new(self.a_regexp_binary_scalar(
-                        lhs,
-                        &rhs,
-                        Some(&mt),
-                    )?));
-                }
-            } else {
-                return Ok(Arc::new(self.a_regexp_binary_scalar(lhs, &rhs, None)?));
-            }
-        }
-
-        let mut mt: Option<&ColumnRef> = None;
+        let lhs = columns[0].column();
+        let rhs = columns[1].column();
+        let mut match_type = &ConstColumn::new(Series::from_data(vec![""]), input_rows).arc();
         if columns.len() == 3 {
-            mt = Some(columns[2].column())
+            match_type = columns[2].column();
         }
-        Ok(Arc::new(self.a_regexp_binary(
-            columns[0].column(),
-            columns[1].column(),
-            mt,
-        )?))
+
+        if rhs.is_const() && match_type.is_const() {
+            let pat = rhs.get_string(0)?;
+            let mt = match_type.get_string(0)?;
+
+            return Ok(Arc::new(self.a_regexp_binary_scalar(
+                lhs,
+                &pat,
+                Some(&mt),
+            )?));
+        }
+
+        Ok(Arc::new(self.a_regexp_binary(lhs, rhs, match_type)?))
     }
 }
 
@@ -131,7 +122,7 @@ impl RegexpLikeFunction {
         &self,
         lhs: &ColumnRef,
         rhs: &ColumnRef,
-        mt: Option<&ColumnRef>,
+        mt: &ColumnRef,
     ) -> Result<BooleanColumn> {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
@@ -141,46 +132,30 @@ impl RegexpLikeFunction {
         let lhs = Vu8::try_create_viewer(lhs)?;
         let rhs = Vu8::try_create_viewer(rhs)?;
 
-        if let Some(mt) = mt {
-            let mt = Vu8::try_create_viewer(mt)?;
-            let iter = izip!(lhs, rhs, mt);
-            for (lhs_value, rhs_value, mt_value) in iter {
-                if mt_value.starts_with_str("-") {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Incorrect arguments to {} match type: {}",
-                        self.name(),
-                        mt_value.to_str_lossy(),
-                    )));
-                }
-                key.extend_from_slice(rhs_value);
-                key.extend_from_slice("-".as_bytes());
-                key.extend_from_slice(mt_value);
-
-                let pattern = if let Some(pattern) = map.get(&key) {
-                    pattern
-                } else {
-                    let re = build_regexp_from_pattern(self.name(), rhs_value, Some(mt_value))?;
-                    map.insert(key.clone(), re);
-                    map.get(&key).unwrap()
-                };
-                key.clear();
-
-                builder.append(pattern.is_match(lhs_value));
+        let mt = Vu8::try_create_viewer(mt)?;
+        let iter = izip!(lhs, rhs, mt);
+        for (lhs_value, rhs_value, mt_value) in iter {
+            if mt_value.starts_with_str("-") {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Incorrect arguments to {} match type: {}",
+                    self.name(),
+                    mt_value.to_str_lossy(),
+                )));
             }
-        } else {
-            for (lhs_value, rhs_value) in lhs.zip(rhs) {
-                key.extend_from_slice(rhs_value);
-                let pattern = if let Some(pattern) = map.get(&key) {
-                    pattern
-                } else {
-                    let re = build_regexp_from_pattern(self.name(), rhs_value, None)?;
-                    map.insert(key.clone(), re);
-                    map.get(&key).unwrap()
-                };
-                key.clear();
+            key.extend_from_slice(rhs_value);
+            key.extend_from_slice("-".as_bytes());
+            key.extend_from_slice(mt_value);
 
-                builder.append(pattern.is_match(lhs_value));
-            }
+            let pattern = if let Some(pattern) = map.get(&key) {
+                pattern
+            } else {
+                let re = build_regexp_from_pattern(self.name(), rhs_value, Some(mt_value))?;
+                map.insert(key.clone(), re);
+                map.get(&key).unwrap()
+            };
+            key.clear();
+
+            builder.append(pattern.is_match(lhs_value));
         }
 
         Ok(builder.build_column())

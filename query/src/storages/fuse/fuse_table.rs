@@ -179,8 +179,8 @@ impl Table for FuseTable {
             let summary = &s.summary;
             TableStatistics {
                 num_rows: Some(summary.row_count),
-                data_length: Some(summary.uncompressed_byte_size),
-                data_length_compressed: Some(summary.compressed_byte_size),
+                data_size: Some(summary.uncompressed_byte_size),
+                data_size_compressed: Some(summary.compressed_byte_size),
                 index_length: None,
             }
         }))

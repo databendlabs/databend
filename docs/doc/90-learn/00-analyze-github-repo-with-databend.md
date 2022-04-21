@@ -13,26 +13,23 @@ Install Databend, see [How to deploy Databend with local fs](../10-deploy/00-loc
 
 ## Step 2
 
-```sql title='mysql>'
+```shell
 mysql -h 127.0.0.1 -P 3307 -uroot
 ```
 
-```sql title='mysql>'
-create database datafuselabs engine=github(token='<your-github-personal-access-token>');
+```sql
+CREATE DATABASE datafuselabs ENGINE=GITHUB(token='<your-github-personal-access-token>');
 ```
 :::tip
 * [Creating a personal github access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
 :::
 
-```sql title='mysql>'
-use datafuselabs;
-```
-
-```sql title='mysql>'
-show tables;
+```sql
+USE datafuselabs;
 ```
 
 ```sql
+SHOW TABLES;
 +-------------------------------+---------------------------------+
 | created_on                    | name                            |
 +-------------------------------+---------------------------------+
@@ -75,11 +72,8 @@ show tables;
 +-------------------------------+---------------------------------+
 ```
 
-```sql title='mysql>'
-show create table databend_issues;
-```
-
 ```sql
+SHOW CREATE TABLE databend_issues;
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Table           | Create Table                                                                                                                                                                                                                                                          |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -100,26 +94,19 @@ show create table databend_issues;
 
 Q1: Query the total number of issues
 
-```sql title='mysql>'
-select count(*) from databend_issues;
-```
-
 ```sql
+SELECT count(*) FROM databend_issues;
 +----------+
 | count(0) |
 +----------+
 |     3910 |
 +----------+
-1 row in set (47.00 sec)
 ```
 
 Q2: Get the top 10 users who submitted issues
 
-```sql title='mysql>'
-select user, count(*) as c from databend_issues group by user order by c desc limit 10;
-```
-
 ```sql
+SELECT user, count(*) as c FROM databend_issues GROUP BY user ORDER BY c DESC LIMIT 10;
 +-----------------+------+
 | user            | c    |
 +-----------------+------+
@@ -134,16 +121,12 @@ select user, count(*) as c from databend_issues group by user order by c desc li
 | zhyass          |   85 |
 | Xuanwo          |   62 |
 +-----------------+------+
-10 rows in set (44.04 sec)
 ```
 
 Q3:  Get the number of issue per month in 2021
 
-```sql title='mysql>'
-select tomonth(created_at) as m ,count(*) as c from databend_issues where  created_at>='2021-01-01 00:00:00' and created_at<'2022-01-01 00:00:00' group by m order by m;
-```
-
 ```sql
+SELECT tomonth(created_at) AS m ,count(*) AS c FROM databend_issues WHERE created_at>='2021-01-01 00:00:00' AND created_at<'2022-01-01 00:00:00' GROUP BY m ORDER BY m;
 +------+------+
 | m    | c    |
 +------+------+
@@ -160,16 +143,12 @@ select tomonth(created_at) as m ,count(*) as c from databend_issues where  creat
 |   11 |  618 |
 |   12 |  508 |
 +------+------+
-12 rows in set (46.18 sec)
 ``` 
 
 Q4: Finding Comments in all Issue/Pull Request using regular expressions:
 
-```sql title='mysql>'
-select * from databend_comments where body like '%expression%';
-```
-
 ```sql
+SELECT * FROM databend_comments WHERE body LIKE '%expression%';
 +------------+-----------+--------------------------------------------------------------------------------------------------------------------+
 | comment_id | user      | body                                                                                                               |
 +------------+-----------+--------------------------------------------------------------------------------------------------------------------+

@@ -22,14 +22,14 @@ toMonth(expr)
 ## Examples
 
 ```sql
-mysql> select toMonth(toDate(18869));
+SELECT toMonth(toDate(18869));
 +------------------------+
 | toMonth(toDate(18869)) |
 +------------------------+
 |                      8 |
 +------------------------+
 
-mysql>  select toMonth(toDateTime(1630812366));
+ SELECT toMonth(toDateTime(1630812366));
 +---------------------------------+
 | toMonth(toDateTime(1630812366)) |
 +---------------------------------+

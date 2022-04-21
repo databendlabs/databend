@@ -31,7 +31,7 @@ A string data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT EXPORT_SET(5,'Y','N',',',4);
 +---------------------------------+
 | EXPORT_SET(5, 'Y', 'N', ',', 4) |

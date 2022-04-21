@@ -39,21 +39,21 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT STDDEV_POP(number) FROM numbers(10000);
+SELECT STDDEV_POP(number) FROM numbers(10000);
 +--------------------+
 | STDDEV_POP(number) |
 +--------------------+
 |  2886.751331514372 |
 +--------------------+
 
-mysql> SELECT STDDEV(number) FROM numbers(1000);
+SELECT STDDEV(number) FROM numbers(1000);
 +--------------------+
 | STDDEV(number)     |
 +--------------------+
 | 288.67499025720946 |
 +--------------------+
 
-mysql> SELECT STD(number) FROM numbers(100);
+SELECT STD(number) FROM numbers(100);
 +-------------------+
 | STD(number)       |
 +-------------------+

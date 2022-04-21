@@ -44,6 +44,10 @@ impl DataType for StringType {
         "String"
     }
 
+    fn sql_name(&self) -> String {
+        "VARCHAR".to_string()
+    }
+
     fn aliases(&self) -> &[&str] {
         &["Binary", "Varchar", "Char", "Text", "Blob"]
     }

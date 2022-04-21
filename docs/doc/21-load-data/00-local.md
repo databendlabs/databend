@@ -51,20 +51,20 @@ Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.co
 mysql -h127.0.0.1 -uroot -P3307
 ```
 
-```sql title='mysql>'
-create database book_db;
+```sql
+CREATE DATABASE book_db;
 ```
 
-```sql title='mysql>'
-use book_db;
+```sql
+USE book_db;
 ```
 
-```sql title='mysql>'
-create table books
+```sql
+CREATE TABLE books
 (
-    title VARCHAR(255),
-    author VARCHAR(255),
-    date VARCHAR(255)
+    title VARCHAR,
+    author VARCHAR,
+    date VARCHAR
 );
 ```
 
@@ -138,11 +138,8 @@ curl -XPUT 'http://127.0.0.1:8081/v1/streaming_load' -H 'insert_sql: insert into
 
 ### Step 4. Verify the Loaded Data
 
-```sql title='mysql>'
-select * from books;
-```
-
-```
+```sql
+SELECT * FROM books;
 +------------------------------+----------------------+-------+
 | title                        | author               | date  |
 +------------------------------+----------------------+-------+

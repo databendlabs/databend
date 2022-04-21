@@ -25,27 +25,24 @@ String
 ## Examples
 
 ```sql
-mysql> select check_json('[1,2,3]');
+SELECT check_json('[1,2,3]');
 +-----------------------+
 | check_json('[1,2,3]') |
 +-----------------------+
 | NULL                  |
 +-----------------------+
-1 row in set (0.01 sec)
 
-mysql> select check_json('{"key":"val"}');
+SELECT check_json('{"key":"val"}');
 +-----------------------------+
 | check_json('{"key":"val"}') |
 +-----------------------------+
 | NULL                        |
 +-----------------------------+
-1 row in set (0.01 sec)
 
-mysql> select check_json('{"key":');
+SELECT check_json('{"key":');
 +----------------------------------------------+
 | check_json('{"key":')                        |
 +----------------------------------------------+
 | EOF while parsing a value at line 1 column 7 |
 +----------------------------------------------+
-1 row in set (0.01 sec)
 ```

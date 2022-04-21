@@ -92,14 +92,11 @@ macro_rules! with_match_primitive_type_ids {
 macro_rules! with_match_date_date_time_types {
     ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
         match $data_type {
-            TypeID::Date16 => {
-                $dispatch! { u16,  $($args),* }
-            },
-            TypeID::Date32 => {
+            TypeID::Date => {
                 $dispatch! { i32,  $($args),* }
             }
-            TypeID::DateTime32 => {
-                $dispatch! { u32,  $($args),* }
+            TypeID::DateTime => {
+                $dispatch! { i64,  $($args),* }
             },
             _ => {},
         }

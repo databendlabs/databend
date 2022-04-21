@@ -40,8 +40,8 @@ impl SQLCommon {
             SQLDataType::Decimal(_, _) => Ok(f64::to_data_type()),
             SQLDataType::Real | SQLDataType::Double => Ok(f64::to_data_type()),
             SQLDataType::Boolean => Ok(bool::to_data_type()),
-            SQLDataType::Date => Ok(Date16Type::arc()),
-            SQLDataType::Timestamp => Ok(DateTime64Type::arc(3, None)),
+            SQLDataType::Date => Ok(DateType::arc()),
+            SQLDataType::Timestamp => Ok(DateTimeType::arc(3, None)),
 
             // Custom types for databend:
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])

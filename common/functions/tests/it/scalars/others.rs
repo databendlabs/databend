@@ -226,8 +226,8 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "datetime32_first_null",
             columns: vec![ColumnWithField::new(
-                Series::from_data([None, Some(3_u32), None, Some(4), Some(10)]),
-                DataField::new("dummy_1", NullableType::arc(DateTime32Type::arc(None))),
+                Series::from_data([None, Some(3_i64), None, Some(4), Some(10)]),
+                DataField::new("dummy_1", NullableType::arc(DateTimeType::arc(0, None))),
             )],
             expect: Series::from_data([None, None, None, None, Some(6_i64)]),
             error: "",
@@ -235,8 +235,8 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "datetime32_first_not_null",
             columns: vec![ColumnWithField::new(
-                Series::from_data([Some(2_u32), Some(3), None, Some(4), Some(10)]),
-                DataField::new("dummy_1", NullableType::arc(DateTime32Type::arc(None))),
+                Series::from_data([Some(2_i64), Some(3), None, Some(4), Some(10)]),
+                DataField::new("dummy_1", NullableType::arc(DateTimeType::arc(0, None))),
             )],
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
@@ -399,11 +399,11 @@ fn test_inet_ntoa_function() -> Result<()> {
 }
 
 #[test]
-fn test_to_type_name_function() -> Result<()> {
+fn test_type_of_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
-        name: "to_type_name-example-passed",
+        name: "type-of-example-passed",
         columns: vec![Series::from_data([true, true, true, false])],
-        expect: Series::from_data(["Boolean", "Boolean", "Boolean", "Boolean"]),
+        expect: Series::from_data(["BOOLEAN", "BOOLEAN", "BOOLEAN", "BOOLEAN"]),
         error: "",
     }];
 

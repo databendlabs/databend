@@ -29,8 +29,7 @@ impl UserApiProvider {
         match user.username.as_str() {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let mut user_info =
-                    UserInfo::new_no_auth(user.username.clone(), user.hostname.clone());
+                let mut user_info = UserInfo::new_no_auth(&user.username, &user.hostname);
                 if user.is_localhost() {
                     user_info.grants.grant_privileges(
                         &GrantObject::Global,

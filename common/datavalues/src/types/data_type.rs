@@ -24,10 +24,8 @@ use enum_dispatch::enum_dispatch;
 
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
-use super::type_date16::Date16Type;
-use super::type_date32::Date32Type;
-use super::type_datetime32::DateTime32Type;
-use super::type_datetime64::DateTime64Type;
+use super::type_date::DateType;
+use super::type_datetime::DateTimeType;
 use super::type_id::TypeID;
 use super::type_nullable::NullableType;
 use super::type_primitive::Float32Type;
@@ -66,10 +64,8 @@ pub enum DataTypeImpl {
     UInt64(UInt64Type),
     Float32(Float32Type),
     Float64(Float64Type),
-    Date16(Date16Type),
-    Date32(Date32Type),
-    DateTime32(DateTime32Type),
-    DateTime64(DateTime64Type),
+    Date(DateType),
+    DateTime(DateTimeType),
     String(StringType),
     Struct(StructType),
     Array(ArrayType),
@@ -90,6 +86,11 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     }
 
     fn name(&self) -> &str;
+
+    /// Returns the name to display in the SQL describe
+    fn sql_name(&self) -> String {
+        self.name().to_uppercase()
+    }
 
     fn aliases(&self) -> &[&str] {
         &[]
@@ -153,9 +154,8 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
             Arc::new(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(DateTime32Type::create(tz.clone())),
-        ArrowType::Date32 => Arc::new(Date16Type::default()),
-        ArrowType::Date64 => Arc::new(Date32Type::default()),
+        ArrowType::Timestamp(_, tz) => Arc::new(DateTimeType::create(0, tz.clone())),
+        ArrowType::Date32 | ArrowType::Date64 => Arc::new(DateType::default()),
 
         ArrowType::Struct(fields) => {
             let names = fields.iter().map(|f| f.name.clone()).collect();
@@ -181,17 +181,15 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     if let Some(custom_name) = f.metadata.get(ARROW_EXTENSION_NAME) {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
-            "Date" | "Date16" => return Date16Type::arc(),
-            "Date32" => return Date32Type::arc(),
-            "DateTime" | "DateTime32" => return DateTime32Type::arc(metadata),
-            "DateTime64" => match metadata {
+            "Date" => return DateType::arc(),
+            "DateTime" => match metadata {
                 Some(meta) => {
                     let mut chars = meta.chars();
                     let precision = chars.next().unwrap().to_digit(10).unwrap();
                     let tz = chars.collect::<String>();
-                    return DateTime64Type::arc(precision as usize, Some(tz));
+                    return DateTimeType::arc(precision as usize, Some(tz));
                 }
-                None => return DateTime64Type::arc(3, None),
+                None => return DateTimeType::arc(0, None),
             },
             "Interval" => return IntervalType::arc(metadata.unwrap().into()),
             "Variant" => return VariantType::arc(),
@@ -250,7 +248,7 @@ pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
 pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
     let notnull_type = remove_nullable(data_type);
     match data_type.is_nullable() {
-        true => format!("{:?} NULL", notnull_type),
-        false => format!("{:?}", notnull_type),
+        true => format!("{} NULL", notnull_type.sql_name()),
+        false => notnull_type.sql_name(),
     }
 }

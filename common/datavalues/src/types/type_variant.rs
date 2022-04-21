@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
 use super::data_type::DataType;
 use super::data_type::ARROW_EXTENSION_NAME;
@@ -49,17 +48,17 @@ impl DataType for VariantType {
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::Json(JsonValue::Null)
+        DataValue::Variant(VariantValue::from(serde_json::Value::Null))
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value: JsonValue = DFTryFrom::try_from(data)?;
+        let value: VariantValue = DFTryFrom::try_from(data)?;
         let column = Series::from_data(vec![value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
-        let values: Vec<JsonValue> = data
+        let values: Vec<VariantValue> = data
             .iter()
             .map(DFTryFrom::try_from)
             .collect::<Result<Vec<_>>>()?;
@@ -86,7 +85,7 @@ impl DataType for VariantType {
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutableObjectColumn::<JsonValue>::with_capacity(capacity))
+        Box::new(MutableObjectColumn::<VariantValue>::with_capacity(capacity))
     }
 }
 

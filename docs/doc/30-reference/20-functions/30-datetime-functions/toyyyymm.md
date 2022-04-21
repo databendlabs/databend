@@ -17,24 +17,17 @@ UInt32, returns in `YYYYMM` format.
 ## Examples
 
 ```sql
-mysql> select toDate(18875);
+SELECT toDate(18875);
 +---------------+
 | toDate(18875) |
 +---------------+
 | 2021-09-05    |
 +---------------+
 
-mysql> select toYYYYMM(toDate(18875));
+SELECT toYYYYMM(toDate(18875));
 +-------------------------+
 | toYYYYMM(toDate(18875)) |
 +-------------------------+
 |                  202109 |
 +-------------------------+
-
-mysql> select toTypeName(toYYYYMM(toDate(18875)));
-+-------------------------------------+
-| toTypeName(toYYYYMM(toDate(18875))) |
-+-------------------------------------+
-| UInt32                              |
-+-------------------------------------+
 ```

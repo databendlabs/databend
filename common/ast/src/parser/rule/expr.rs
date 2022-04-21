@@ -24,28 +24,15 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use crate::parser::ast::BinaryOperator;
-use crate::parser::ast::Expr;
-use crate::parser::ast::Identifier;
-use crate::parser::ast::Literal;
-use crate::parser::ast::Query;
-use crate::parser::ast::TypeName;
-use crate::parser::ast::UnaryOperator;
+use crate::parser::ast::*;
 use crate::parser::rule::error::Error;
 use crate::parser::rule::error::ErrorKind;
-use crate::parser::rule::util::ident;
-use crate::parser::rule::util::literal_u64;
-use crate::parser::rule::util::IResult;
-use crate::parser::rule::util::Input;
+use crate::parser::rule::statement::*;
+use crate::parser::rule::util::*;
 use crate::parser::token::*;
 use crate::rule;
 
 const BETWEEN_PREC: u32 = 20;
-
-pub fn query(i: Input) -> IResult<Query> {
-    // TODO: unimplemented
-    nom::combinator::fail(i)
-}
 
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
@@ -53,7 +40,7 @@ pub fn expr(i: Input) -> IResult<Expr> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
-        let expr_element_limited =
+        let higher_prec_expr_element =
             verify(
                 expr_element,
                 |elem| match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, elem)
@@ -68,7 +55,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 },
             );
 
-        let (i, expr_elements) = rule! { #expr_element_limited* }(i)?;
+        let (i, expr_elements) = rule! { #higher_prec_expr_element* }(i)?;
 
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
@@ -378,15 +365,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*  ~ ")"
+            NOT? ~ IN ~ "(" ~ #cut(comma_separated_list1(subexpr(0))) ~ ")"
         },
-        |(not, _, _, head, tail, _)| {
-            let mut list = vec![head];
-            list.extend(tail.into_iter().map(|(_, expr)| expr));
-            ExprElement::InList {
-                list,
-                not: not.is_some(),
-            }
+        |(not, _, _, list, _)| ExprElement::InList {
+            list,
+            not: not.is_some(),
         },
     );
     let in_subquery = map(
@@ -423,57 +406,34 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     });
     let function_call = map(
         rule! {
-            #function_name ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
+            #function_name
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list1(subexpr(0))? ~ ")"
         },
-        |(name, _, args, _)| {
-            let (distinct, args) = args
-                .map(|(distinct, head, tail)| {
-                    let mut args = vec![head];
-                    args.extend(tail.into_iter().map(|(_, arg)| arg));
-                    (distinct.is_some(), args)
-                })
-                .unwrap_or_default();
-
-            ExprElement::FunctionCall {
-                distinct,
-                name,
-                args,
-                params: vec![],
-            }
+        |(name, _, distinct, args, _)| ExprElement::FunctionCall {
+            distinct: distinct.is_some(),
+            name,
+            args: args.unwrap_or_default(),
+            params: vec![],
         },
     );
     let function_call_with_param = map(
         rule! {
-            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
+            #function_name
+            ~ "(" ~ #comma_separated_list1(literal) ~ ")"
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list1(subexpr(0))? ~ ")"
         },
-        |(name, _, params, _, _, args, _)| {
-            let params = params
-                .map(|(head, tail)| {
-                    let mut params = vec![head];
-                    params.extend(tail.into_iter().map(|(_, param)| param));
-                    params
-                })
-                .unwrap_or_default();
-
-            let (distinct, args) = args
-                .map(|(distinct, head, tail)| {
-                    let mut args = vec![head];
-                    args.extend(tail.into_iter().map(|(_, arg)| arg));
-                    (distinct.is_some(), args)
-                })
-                .unwrap_or_default();
-
-            ExprElement::FunctionCall {
-                distinct,
-                name,
-                args,
-                params,
-            }
+        |(name, _, params, _, _, distinct, args, _)| ExprElement::FunctionCall {
+            distinct: distinct.is_some(),
+            name,
+            args: args.unwrap_or_default(),
+            params,
         },
     );
     let case = map(
         rule! {
-            CASE ~ #subexpr(0)? ~ (WHEN ~ #cut(subexpr(0)) ~ THEN ~ #cut(subexpr(0)))+ ~ (ELSE ~ #cut(subexpr(0)))? ~ END
+            CASE ~ #subexpr(0)?
+            ~ ( WHEN ~ #cut(subexpr(0)) ~ THEN ~ #cut(subexpr(0)) )+
+            ~ ( ELSE ~ #cut(subexpr(0)) )? ~ END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches
@@ -504,22 +464,22 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let literal = map(literal, ExprElement::Literal);
 
     let (rest, elem) = rule! (
-        #column_ref : "<column>"
-        | #is_null : "`... IS [NOT] NULL` expression"
-        | #in_list : "`[NOT] IN (<expr>, ...)` expression"
-        | #in_subquery : "`[NOT] IN (SELECT ...)` expression"
-        | #between : "`[NOT] BETWEEN ... AND ...` expression"
+        #is_null : "`... IS [NOT] NULL`"
+        | #in_list : "`[NOT] IN (<expr>, ...)`"
+        | #in_subquery : "`[NOT] IN (SELECT ...)`"
+        | #between : "`[NOT] BETWEEN ... AND ...`"
         | #binary_op : "<operator>"
         | #unary_op : "<operator>"
-        | #cast : "`CAST(... AS ...)` expression"
+        | #cast : "`CAST(... AS ...)`"
         | #count_all : "COUNT(*)"
         | #literal : "<literal>"
         | #function_call_with_param : "<function>"
         | #function_call : "<function>"
-        | #case : "`CASE ... END` expression"
-        | #exists : "`EXISTS (SELECT ...)` expression"
-        | #subquery : "`(SELECT ...)` expression"
+        | #case : "`CASE ... END`"
+        | #exists : "`EXISTS (SELECT ...)`"
+        | #subquery : "`(SELECT ...)`"
         | #group : "expression between `(...)`"
+        | #column_ref : "<column>"
     )(i)?;
 
     let input_ptr = i.as_ptr();
@@ -591,57 +551,63 @@ pub fn literal(i: Input) -> IResult<Literal> {
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
-    let ty_char = map(
-        rule! { CHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Char(opt_args.map(|(_, length, _)| length)),
-    );
-    let ty_varchar = map(
-        rule! { VARCHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Varchar(opt_args.map(|(_, length, _)| length)),
-    );
-    let ty_float = map(
-        rule! { FLOAT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Float(opt_args.map(|(_, prec, _)| prec)),
-    );
-    let ty_int = map(
-        rule! { INTEGER ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::Int(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_tiny_int = map(
-        rule! { TINYINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::TinyInt(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_small_int = map(
-        rule! { SMALLINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::SmallInt(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_big_int = map(
-        rule! { BIGINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
-        |(_, opt_args)| TypeName::BigInt(opt_args.map(|(_, display, _)| display)),
-    );
-    let ty_real = value(TypeName::Real, rule! { REAL });
-    let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN });
+    let ty_tiny_int = map(rule! { TINYINT ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::TinyInt {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_small_int = map(rule! { SMALLINT ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::SmallInt {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_int = map(rule! { ( INT | INTEGER ) ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::Int {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_big_int = map(rule! { BIGINT ~ UNSIGNED? }, |(_, unsigned)| {
+        TypeName::BigInt {
+            unsigned: unsigned.is_some(),
+        }
+    });
+    let ty_array = map(
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array {
+            item_type: Box::new(item_type),
+        },
+    );
+    let ty_float = value(TypeName::Float, rule! { FLOAT });
+    let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_date = value(TypeName::Date, rule! { DATE });
-    let ty_time = value(TypeName::Time, rule! { TIME });
+    let ty_datetime = map(
+        rule! { DATETIME ~ ( "(" ~ #literal_u64 ~ ")" )? },
+        |(_, opt_precision)| {
+            let precision = opt_precision.map(|(_, p, _)| p);
+            TypeName::DateTime { precision }
+        },
+    );
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
-    let ty_text = value(TypeName::Text, rule! { TEXT });
+    let ty_varchar = value(TypeName::Varchar, rule! { VARCHAR });
+    let ty_object = value(TypeName::Object, rule! { OBJECT });
+    let ty_variant = value(TypeName::Variant, rule! { VARIANT });
 
     rule!(
-        #ty_char
-        | #ty_varchar
-        | #ty_float
-        | #ty_int
+        #ty_boolean
         | #ty_tiny_int
         | #ty_small_int
+        | #ty_int
         | #ty_big_int
-        | #ty_real
+        | #ty_array
+        | #ty_float
         | #ty_double
-        | #ty_boolean
         | #ty_date
-        | #ty_time
+        | #ty_datetime
         | #ty_timestamp
-        | #ty_text
+        | #ty_varchar
+        | #ty_object
+        | #ty_variant
     )(i)
 }
 

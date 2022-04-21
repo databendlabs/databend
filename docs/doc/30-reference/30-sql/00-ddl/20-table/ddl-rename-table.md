@@ -12,15 +12,12 @@ ALTER TABLE [ IF EXISTS ] <name> RENAME TO <new_table_name>
 
 ## Examples
 
-```sql title='mysql>'
-create table test(a int);
-```
-
-```sql title='mysql>'
-show tables;
+```sql
+CREATE TABLE test(a INT);
 ```
 
 ```sql
+SHOW TABLES;
 +------+
 | name |
 +------+
@@ -28,15 +25,12 @@ show tables;
 +------+
 ```
 
-```sql title='mysql>'
-alter table `test` rename to `new_test`;
-```
-
-```sql title='mysql>'
-show tables;
+```sql
+ALTER TABLE `test` RENAME TO `new_test`;
 ```
 
 ```sql
+SHOW TABLES;
 +----------+
 | name     |
 +----------+

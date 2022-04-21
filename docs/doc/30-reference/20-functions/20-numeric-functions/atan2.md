@@ -28,12 +28,11 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT ATAN2(-2, 2);
+SELECT ATAN2(-2, 2);
 +---------------------+
 | ATAN2((- 2), 2)     |
 +---------------------+
 | -0.7853981633974483 |
 +---------------------+
-1 row in set (0.01 sec)
 ```
 
