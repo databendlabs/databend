@@ -14,5 +14,4 @@
 
 mod create_column;
 mod serializations;
-mod variant_value;
 mod viewer;

@@ -71,6 +71,19 @@ impl FromStr for VariantValue {
     }
 }
 
+impl VariantValue {
+    fn level(&self) -> u8 {
+        match self.as_ref() {
+            Value::Null => 0,
+            Value::Array(_) => 1,
+            Value::Object(_) => 2,
+            Value::String(_) => 3,
+            Value::Number(_) => 4,
+            Value::Bool(_) => 5,
+        }
+    }
+}
+
 // VariantValue compares as the following rule:
 // Null > Array > Object > String > Number > Boolean
 // The Array compares each element in turn.
@@ -79,10 +92,13 @@ impl FromStr for VariantValue {
 // The Greater the key, the Less the Object, the Greater the value, the Greater the Object
 impl Ord for VariantValue {
     fn cmp(&self, other: &Self) -> Ordering {
+        let l1 = self.level();
+        let l2 = other.level();
+        if l1 != l2 {
+            return l1.cmp(&l2).reverse();
+        }
         match (self.as_ref(), other.as_ref()) {
             (Value::Null, Value::Null) => Ordering::Equal,
-            (Value::Null, _) => Ordering::Greater,
-            (Value::Array(_), Value::Null) => Ordering::Less,
             (Value::Array(a1), Value::Array(a2)) => {
                 for (v1, v2) in a1.iter().zip(a2) {
                     if !v1.eq(v2) {
@@ -91,9 +107,6 @@ impl Ord for VariantValue {
                 }
                 a1.len().cmp(&a2.len())
             }
-            (Value::Array(_), _) => Ordering::Greater,
-            (Value::Object(_), Value::Null) => Ordering::Less,
-            (Value::Object(_), Value::Array(_)) => Ordering::Less,
             (Value::Object(o1), Value::Object(o2)) => {
                 for (k1, k2) in o1.keys().zip(o2.keys()) {
                     if k1.eq(k2) {
@@ -110,16 +123,7 @@ impl Ord for VariantValue {
                 }
                 o1.len().cmp(&o2.len())
             }
-            (Value::Object(_), _) => Ordering::Greater,
-            (Value::String(_), Value::Null) => Ordering::Less,
-            (Value::String(_), Value::Array(_)) => Ordering::Less,
-            (Value::String(_), Value::Object(_)) => Ordering::Less,
             (Value::String(v1), Value::String(v2)) => v1.cmp(v2),
-            (Value::String(_), _) => Ordering::Greater,
-            (Value::Number(_), Value::Null) => Ordering::Less,
-            (Value::Number(_), Value::Array(_)) => Ordering::Less,
-            (Value::Number(_), Value::Object(_)) => Ordering::Less,
-            (Value::Number(_), Value::String(_)) => Ordering::Less,
             (Value::Number(v1), Value::Number(v2)) => {
                 if v1.is_f64() || v2.is_f64() {
                     let n1 = if v1.is_u64() {
@@ -175,7 +179,6 @@ impl Ord for VariantValue {
                     Ordering::Equal
                 }
             }
-            (Value::Number(_), _) => Ordering::Greater,
             (Value::Bool(v1), Value::Bool(v2)) => {
                 if *v1 && !*v2 {
                     return Ordering::Greater;
@@ -184,7 +187,7 @@ impl Ord for VariantValue {
                 }
                 Ordering::Equal
             }
-            (Value::Bool(_), _) => Ordering::Less,
+            (_, _) => Ordering::Equal,
         }
     }
 }

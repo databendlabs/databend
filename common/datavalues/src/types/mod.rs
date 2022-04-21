@@ -37,7 +37,6 @@ mod date_converter;
 pub mod deserializations;
 pub mod serializations;
 mod type_factory;
-pub mod variant_value;
 
 pub use arithmetics_type::*;
 pub use data_type::*;
@@ -62,4 +61,3 @@ pub use type_traits::*;
 pub use type_variant::*;
 pub use type_variant_array::*;
 pub use type_variant_object::*;
-pub use variant_value::*;
