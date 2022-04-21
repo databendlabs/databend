@@ -77,6 +77,7 @@ fn test_statement() {
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         "create database if not exists a;",
+        "create table c(a DateTime null, b DateTime(3));",
     ];
 
     for case in cases {
@@ -112,7 +113,7 @@ fn test_query() {
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
         "select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
-            from customer, orders ODS, 
+            from customer, orders ODS,
                 (
                     select
                         c_custkey,
