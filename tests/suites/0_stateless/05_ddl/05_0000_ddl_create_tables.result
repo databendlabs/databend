@@ -36,8 +36,8 @@ bigint_unsigned	BIGINT UNSIGNED	NO	0
 float	FLOAT	NO	0	
 double	DOUBLE	NO	0	
 date	DATE	NO	0	
-datetime	DATETIME(0)	NO	0	
-ts	DATETIME(0)	NO	0	
+datetime	DATETIME	NO	0	
+ts	DATETIME	NO	0	
 str	VARCHAR	NO	3	
 bool	BOOLEAN	NO	false	
 array	ARRAY	NO	[]	

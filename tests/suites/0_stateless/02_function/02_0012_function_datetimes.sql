@@ -6,8 +6,8 @@ select  toDateTime(1640019661), toInt64(toDateTime(1640019661))  = 1640019661;
 
 select typeof(today() + 3) = 'DATE';
 select typeof(today() - 3) = 'DATE';
-select typeof(now() - 3) = 'DATETIME(0)';
-select typeof(toDateTime(1640019661)) = 'DATETIME(0)';
+select typeof(now() - 3) = 'DATETIME';
+select typeof(toDateTime(1640019661)) = 'DATETIME';
 select today() + 1 - today() = 1;
 
 select typeof(today() - today()) = 'INT';
