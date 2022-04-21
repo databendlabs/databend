@@ -348,9 +348,9 @@ CreateTable {
                 name: "a",
                 quote: None,
             },
-            data_type: DateTime(
-                None,
-            ),
+            data_type: DateTime {
+                precision: None,
+            },
             nullable: true,
             default_value: None,
         },
@@ -359,11 +359,11 @@ CreateTable {
                 name: "b",
                 quote: None,
             },
-            data_type: DateTime(
-                Some(
+            data_type: DateTime {
+                precision: Some(
                     3,
                 ),
-            ),
+            },
             nullable: true,
             default_value: None,
         },
