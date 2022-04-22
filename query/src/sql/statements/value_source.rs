@@ -72,7 +72,7 @@ impl ValueSource {
                 let _ = reader.must_ignore_byte(b',')?;
             }
 
-            self.parse_single_row(reader, col_size, &mut desers, &session_type)
+            self.parse_next_row(reader, col_size, &mut desers, &session_type)
                 .await?;
             rows += 1;
         }
@@ -90,7 +90,7 @@ impl ValueSource {
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
-    async fn parse_single_row<'a>(
+    async fn parse_next_row<'a>(
         &self,
         reader: &mut CpBufferReader<'a>,
         col_size: usize,
@@ -117,18 +117,10 @@ impl ValueSource {
 
             let _ = reader.ignore_white_spaces()?;
             let col_end = if col + 1 == col_size { b')' } else { b',' };
-            let res = deser.de_text_quoted(reader).and_then(|_| {
-                let _ = reader.ignore_white_spaces()?;
-                reader.ignore_byte(col_end)?.then_some(()).ok_or_else(|| {
-                    // Ignore the pop-result is safe here,
-                    // because pop-err(empty builder) only happens when `de_text_quoted` return error.
-                    let _ = deser.pop_data_value();
-                    ErrorCode::NoneBtBadBytes("Invalid column data when deserialize")
-                })
-            });
+            let result = self.try_deserialize_next_column(reader, deser, col_end);
 
             // Deserializer and expr-parser both will eat the end ')' of the row.
-            if res.is_err() {
+            if result.is_err() {
                 skip_to_next_row(reader, 1)?;
                 // Parse from expression and set datavalues
                 let buf = reader.get_checkpoint_buffer();
@@ -144,6 +136,23 @@ impl ValueSource {
         }
 
         Ok(())
+    }
+
+    fn try_deserialize_next_column(
+        &self,
+        reader: &mut CpBufferReader,
+        deserializer: &mut Box<dyn TypeDeserializer>,
+        col_end: u8,
+    ) -> Result<()> {
+        deserializer.de_text_quoted(reader).and_then(|_| {
+            let _ = reader.ignore_white_spaces()?;
+            reader.ignore_byte(col_end)?.then_some(()).ok_or_else(|| {
+                // Ignore the pop-result is safe here,
+                // because pop-err(empty builder) only happens when `de_text_quoted` return error.
+                let _ = deserializer.pop_data_value();
+                ErrorCode::NoneBtBadBytes("Invalid column data when deserialize")
+            })
+        })
     }
 }
 
