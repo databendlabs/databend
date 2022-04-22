@@ -89,7 +89,7 @@ SELECT parse_json('"test"')::float32; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::float64; -- {ErrorCode 1010}
 SELECT parse_json('null')::float64; -- {ErrorCode 1010}
 SELECT parse_json('"2022-01-01"')::date;
-SELECT parse_json('"2022-01-01 01:01:01"')::datetime;
+SELECT parse_json('"2022-01-01 01:01:01"')::datetime(0);
 SELECT parse_json('"test"')::date; -- {ErrorCode 1010}
 SELECT parse_json('"test"')::datetime; -- {ErrorCode 1010}
 SELECT parse_json('null')::datetime; -- {ErrorCode 1010}
