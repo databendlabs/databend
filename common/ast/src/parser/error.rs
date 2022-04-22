@@ -14,8 +14,8 @@
 
 use std::ops::Range;
 
-use crate::parser::rule::util::Input;
 use crate::parser::token::TokenKind;
+use crate::parser::util::Input;
 
 /// This error type accumulates errors and their position when backtracking
 /// through a parse tree. This take a deepest error at `alt` combinator.
@@ -120,4 +120,42 @@ impl<'a> Error<'a> {
             })
             .collect()
     }
+}
+
+pub fn pretty_print_error(source: &str, lables: Vec<(Range<usize>, String)>) -> String {
+    use codespan_reporting::diagnostic::Diagnostic;
+    use codespan_reporting::diagnostic::Label;
+    use codespan_reporting::files::SimpleFile;
+    use codespan_reporting::term;
+    use codespan_reporting::term::termcolor::Buffer;
+    use codespan_reporting::term::Chars;
+    use codespan_reporting::term::Config;
+
+    let mut writer = Buffer::no_color();
+    let file = SimpleFile::new("SQL", source);
+    let config = Config {
+        chars: Chars::ascii(),
+        before_label_lines: 3,
+        ..Default::default()
+    };
+
+    let lables = lables
+        .into_iter()
+        .enumerate()
+        .map(|(i, (span, msg))| {
+            if i == 0 {
+                Label::primary((), span).with_message(msg)
+            } else {
+                Label::secondary((), span).with_message(msg)
+            }
+        })
+        .collect();
+
+    let diagnostic = Diagnostic::error().with_labels(lables);
+
+    term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
+
+    std::str::from_utf8(&writer.into_inner())
+        .unwrap()
+        .to_string()
 }

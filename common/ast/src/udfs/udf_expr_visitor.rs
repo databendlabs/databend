@@ -27,10 +27,10 @@ use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
-pub struct ExprTraverser;
+pub struct UDFExprTraverser;
 
-impl ExprTraverser {
-    pub async fn accept<V: ExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
+impl UDFExprTraverser {
+    pub async fn accept<V: UDFExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
         let expr = visitor.pre_visit(expr).await?;
         visitor.visit(&expr).await?;
         visitor.post_visit(&expr).await
@@ -38,14 +38,14 @@ impl ExprTraverser {
 }
 
 #[async_trait]
-pub trait ExprVisitor: Sized + Send {
+pub trait UDFExprVisitor: Sized + Send {
     async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         Ok(expr.clone())
     }
 
     async fn visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Nested(expr) => ExprTraverser::accept(expr, self).await,
+            Expr::Nested(expr) => UDFExprTraverser::accept(expr, self).await,
             Expr::Value(value) => self.visit_value(value),
             Expr::Identifier(ident) => self.visit_identifier(ident),
             Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
@@ -97,9 +97,9 @@ pub trait ExprVisitor: Sized + Send {
     }
 
     async fn visit_inlist(&mut self, expr: &Expr, list: &[Expr]) -> Result<()> {
-        ExprTraverser::accept(expr, self).await?;
+        UDFExprTraverser::accept(expr, self).await?;
         for expr in list {
-            ExprTraverser::accept(expr, self).await?;
+            UDFExprTraverser::accept(expr, self).await?;
         }
         Ok(())
     }
@@ -109,10 +109,10 @@ pub trait ExprVisitor: Sized + Send {
             0 => Err(ErrorCode::SyntaxException(
                 "Tuple must have at least one element.",
             )),
-            1 => ExprTraverser::accept(&exprs[0], self).await,
+            1 => UDFExprTraverser::accept(&exprs[0], self).await,
             _ => {
                 for expr in exprs {
-                    ExprTraverser::accept(expr, self).await?;
+                    UDFExprTraverser::accept(expr, self).await?;
                 }
 
                 Ok(())
@@ -146,7 +146,7 @@ pub trait ExprVisitor: Sized + Send {
 
     async fn visit_function_arg(&mut self, arg_expr: &FunctionArgExpr) -> Result<()> {
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => ExprTraverser::accept(expr, self).await,
+            FunctionArgExpr::Expr(expr) => UDFExprTraverser::accept(expr, self).await,
             FunctionArgExpr::Wildcard => self.visit_wildcard(),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported QualifiedWildcard: {}",
@@ -172,11 +172,11 @@ pub trait ExprVisitor: Sized + Send {
         _data_type: &DataType,
         _pg_style: &bool,
     ) -> Result<()> {
-        ExprTraverser::accept(expr, self).await
+        UDFExprTraverser::accept(expr, self).await
     }
 
     async fn visit_try_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
-        ExprTraverser::accept(expr, self).await
+        UDFExprTraverser::accept(expr, self).await
     }
 
     fn visit_typed_string(&mut self, _data_type: &DataType, _value: &str) -> Result<()> {
@@ -184,11 +184,11 @@ pub trait ExprVisitor: Sized + Send {
     }
 
     async fn visit_simple_function(&mut self, expr: &Expr, _name: &str) -> Result<()> {
-        ExprTraverser::accept(expr, self).await
+        UDFExprTraverser::accept(expr, self).await
     }
 
     async fn visit_unary_expr(&mut self, _op: &UnaryOperator, expr: &Expr) -> Result<()> {
-        ExprTraverser::accept(expr, self).await
+        UDFExprTraverser::accept(expr, self).await
     }
 
     async fn visit_binary_expr(
@@ -197,8 +197,8 @@ pub trait ExprVisitor: Sized + Send {
         _op: &BinaryOperator,
         right: &Expr,
     ) -> Result<()> {
-        ExprTraverser::accept(left, self).await?;
-        ExprTraverser::accept(right, self).await
+        UDFExprTraverser::accept(left, self).await?;
+        UDFExprTraverser::accept(right, self).await
     }
 
     async fn visit_between(
@@ -208,14 +208,14 @@ pub trait ExprVisitor: Sized + Send {
         low: &Expr,
         high: &Expr,
     ) -> Result<()> {
-        ExprTraverser::accept(expr, self).await?;
-        ExprTraverser::accept(low, self).await?;
-        ExprTraverser::accept(high, self).await
+        UDFExprTraverser::accept(expr, self).await?;
+        UDFExprTraverser::accept(low, self).await?;
+        UDFExprTraverser::accept(high, self).await
     }
 
     async fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
-        ExprTraverser::accept(substr_expr, self).await?;
-        ExprTraverser::accept(str_expr, self).await
+        UDFExprTraverser::accept(substr_expr, self).await?;
+        UDFExprTraverser::accept(str_expr, self).await
     }
 
     async fn visit_substring(
@@ -224,24 +224,24 @@ pub trait ExprVisitor: Sized + Send {
         from: &Option<Box<Expr>>,
         length: &Option<Box<Expr>>,
     ) -> Result<()> {
-        ExprTraverser::accept(expr, self).await?;
+        UDFExprTraverser::accept(expr, self).await?;
 
         if let Some(from) = from {
-            ExprTraverser::accept(from, self).await?;
+            UDFExprTraverser::accept(from, self).await?;
         }
 
         if let Some(length) = length {
-            ExprTraverser::accept(length, self).await?;
+            UDFExprTraverser::accept(length, self).await?;
         }
 
         Ok(())
     }
 
     async fn visit_extract(&mut self, _field: &DateTimeField, expr: &Expr) -> Result<()> {
-        ExprTraverser::accept(expr, self).await
+        UDFExprTraverser::accept(expr, self).await
     }
 
     async fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
-        ExprTraverser::accept(expr, self).await
+        UDFExprTraverser::accept(expr, self).await
     }
 }

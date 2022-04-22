@@ -24,12 +24,12 @@ use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use crate::parser::ast::*;
-use crate::parser::rule::error::Error;
-use crate::parser::rule::error::ErrorKind;
-use crate::parser::rule::statement::*;
-use crate::parser::rule::util::*;
+use crate::ast::*;
+use crate::parser::error::Error;
+use crate::parser::error::ErrorKind;
+use crate::parser::query::*;
 use crate::parser::token::*;
+use crate::parser::util::*;
 use crate::rule;
 
 const BETWEEN_PREC: u32 = 20;

@@ -14,11 +14,11 @@
 
 use std::io::Write;
 
+use common_ast::parser::error::pretty_print_error;
+use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
-use common_ast::parser::pretty_print_error;
-use common_ast::parser::rule::expr::expr;
-use common_ast::parser::rule::statement::query;
-use common_ast::parser::rule::statement::statement;
+use common_ast::parser::query::*;
+use common_ast::parser::statement::*;
 use common_ast::parser::token::*;
 use common_exception::Result;
 use goldenfile::Mint;
