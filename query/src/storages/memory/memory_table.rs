@@ -73,6 +73,7 @@ impl MemoryTable {
         StorageDescription {
             engine_name: "MEMORY".to_string(),
             comment: "MEMORY Storage Engine".to_string(),
+            ..Default::default()
         }
     }
 

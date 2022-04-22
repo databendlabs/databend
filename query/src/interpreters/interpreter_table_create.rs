@@ -32,6 +32,7 @@ use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::StorageDescription;
 
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -63,27 +64,41 @@ impl Interpreter for CreateTableInterpreter {
             .await?;
 
         let engine = self.plan.engine();
-
-        if self
+        let name_not_duplicate = self
             .ctx
             .get_catalog()
             .list_tables(&*self.plan.tenant, &*self.plan.db)
             .await?
             .iter()
-            .all(|table| table.name() != self.plan.table.as_str())
-            && self
-                .ctx
-                .get_catalog()
-                .get_table_engines()
-                .iter()
-                .all(|desc| {
-                    desc.engine_name.to_string().to_lowercase() != engine.to_string().to_lowercase()
-                })
-        {
-            return Err(ErrorCode::UnknownTableEngine(format!(
-                "Unknown table engine {}",
-                engine
-            )));
+            .all(|table| table.name() != self.plan.table.as_str());
+
+        let engine_desc: Option<StorageDescription> = self
+            .ctx
+            .get_catalog()
+            .get_table_engines()
+            .iter()
+            .find(|desc| {
+                desc.engine_name.to_string().to_lowercase() == engine.to_string().to_lowercase()
+            })
+            .cloned();
+
+        match engine_desc {
+            Some(engine) => {
+                if self.plan.order_keys.is_empty() && !engine.support_order_key {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "Unsupported order key for engine: {}",
+                        engine.engine_name
+                    )));
+                }
+            }
+            None => {
+                if name_not_duplicate {
+                    return Err(ErrorCode::UnknownTableEngine(format!(
+                        "Unknown table engine {}",
+                        engine
+                    )));
+                }
+            }
         }
 
         match &self.plan.as_select {

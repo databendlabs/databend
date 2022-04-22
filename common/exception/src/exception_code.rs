@@ -183,6 +183,7 @@ build_exceptions! {
     // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
+    UnsupportedEngineParams(2703),
 
     // Share error codes.
     ShareAlreadyExists(2705),

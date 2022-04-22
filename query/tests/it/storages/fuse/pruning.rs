@@ -78,15 +78,13 @@ async fn test_block_pruner() -> Result<()> {
             engine: "FUSE".to_string(),
             options: [
                 (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-                // for the convenience of testing, let one segment contains one block
                 (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
-                // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
         },
-        as_select: None,
+        ..Default::default()
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
@@ -226,7 +224,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
             .into(),
             ..Default::default()
         },
-        as_select: None,
+        ..Default::default()
     };
 
     let catalog = ctx.get_catalog();

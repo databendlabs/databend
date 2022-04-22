@@ -124,7 +124,7 @@ impl TestFixture {
                 .into(),
                 ..Default::default()
             },
-            as_select: None,
+            ..Default::default()
         }
     }
 
