@@ -132,6 +132,10 @@ impl Table for FuseTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
+    fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        self.do_append2(ctx, pipeline)
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]
     async fn append_data(
         &self,

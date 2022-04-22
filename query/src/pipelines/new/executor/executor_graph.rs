@@ -291,7 +291,6 @@ impl ScheduleQueue {
         while let Some(processor) = self.async_queue.pop_front() {
             tasks.push_back(ExecutorTask::Async(processor));
         }
-
         global.push_tasks(ctx, tasks)
     }
 

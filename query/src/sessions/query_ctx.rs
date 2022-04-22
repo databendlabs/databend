@@ -26,6 +26,7 @@ use common_base::Runtime;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -68,6 +69,7 @@ pub struct QueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
+    precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl QueryContext {
@@ -85,6 +87,7 @@ impl QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
             shared,
+            precommit_blocks: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -380,6 +383,18 @@ impl QueryContext {
 
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.shared.session.session_mgr.get_query_logger()
+    }
+
+    pub fn push_precommit_block(&self, block: DataBlock) {
+        let mut blocks = self.precommit_blocks.write();
+        blocks.push(block);
+    }
+
+    pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        let mut blocks = self.precommit_blocks.write();
+        let result = blocks.clone();
+        blocks.clear();
+        result
     }
 }
 

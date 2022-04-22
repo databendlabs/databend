@@ -12,14 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod async_sink;
-mod empty_sink;
-mod sync_sink;
-mod sync_sink_sender;
+use std::sync::Arc;
 
-pub use async_sink::AsyncSink;
-pub use async_sink::AsyncSinker;
-pub use empty_sink::EmptySink;
-pub use sync_sink::Sink;
-pub use sync_sink::Sinker;
-pub use sync_sink_sender::SyncSenderSink;
+use common_datablocks::DataBlock;
+use common_exception::Result;
+
+use super::Sink;
+use super::Sinker;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+
+pub struct EmptySink;
+
+impl EmptySink {
+    pub fn create(input: Arc<InputPort>) -> ProcessorPtr {
+        Sinker::create(input, EmptySink {})
+    }
+}
+
+impl Sink for EmptySink {
+    const NAME: &'static str = "EmptySink";
+
+    fn consume(&mut self, _: DataBlock) -> Result<()> {
+        Ok(())
+    }
+}
