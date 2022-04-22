@@ -168,7 +168,7 @@ impl Table for NumbersTable {
             worker_num = fake_partitions;
         }
 
-        let parts = generate_numbers_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
+        let parts = generate_numbers_parts(0, worker_num, total);
         Ok((statistics, parts))
     }
 
