@@ -42,10 +42,8 @@ async fn test_local_pipeline_builds() -> Result<()> {
             pipeline: "\
             ProjectionTransform × 1 processor\
             \n  SortMergeTransform × 1 processor\
-            \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n      SortMergeTransform × 8 processors\
-            \n        SortPartialTransform × 8 processors\
-            \n          SourceTransform × 8 processors",
+            \n    SortPartialTransform × 1 processor\
+            \n      SourceTransform × 1 processor",
 
 
             block: vec![
@@ -78,10 +76,8 @@ async fn test_local_pipeline_builds() -> Result<()> {
             pipeline: "\
             ProjectionTransform × 1 processor\
             \n  SortMergeTransform × 1 processor\
-            \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n      SortMergeTransform × 8 processors\
-            \n        SortPartialTransform × 8 processors\
-            \n          SourceTransform × 8 processors",
+            \n    SortPartialTransform × 1 processor\
+            \n      SourceTransform × 1 processor",
 
             block: vec![
                 "+----+----+",
@@ -114,11 +110,9 @@ async fn test_local_pipeline_builds() -> Result<()> {
             pipeline: "\
             ProjectionTransform × 1 processor\
             \n  SortMergeTransform × 1 processor\
-            \n    Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n      SortMergeTransform × 8 processors\
-            \n        SortPartialTransform × 8 processors\
-            \n          ExpressionTransform × 8 processors\
-            \n            SourceTransform × 8 processors",
+            \n    SortPartialTransform × 1 processor\
+            \n      ExpressionTransform × 1 processor\
+            \n        SourceTransform × 1 processor",
 
             block: vec![
                 "+----+----+",
@@ -152,10 +146,8 @@ async fn test_local_pipeline_builds() -> Result<()> {
             LimitTransform × 1 processor\
             \n  ProjectionTransform × 1 processor\
             \n    SortMergeTransform × 1 processor\
-            \n      Merge (SortMergeTransform × 8 processors) to (SortMergeTransform × 1)\
-            \n        SortMergeTransform × 8 processors\
-            \n          SortPartialTransform × 8 processors\
-            \n            SourceTransform × 8 processors",
+            \n      SortPartialTransform × 1 processor\
+            \n        SourceTransform × 1 processor",
 
             block: vec![
                 "+--------+",

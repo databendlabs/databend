@@ -125,6 +125,7 @@ impl TestFixture {
                 ..Default::default()
             },
             as_select: None,
+            order_keys: vec![],
         }
     }
 
