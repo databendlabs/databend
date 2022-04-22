@@ -16,11 +16,8 @@ use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::SendableDataBlockStream;
 use common_streams::Source;
-use futures::StreamExt;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;

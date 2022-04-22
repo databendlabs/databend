@@ -39,6 +39,7 @@ pub use sources::AsyncSourcer;
 pub use sources::BlocksSource;
 pub use sources::EmptySource;
 pub use sources::StreamSource;
+pub use sources::StreamSourceV2;
 pub use sources::SyncReceiverCkSource;
 pub use sources::SyncReceiverSource;
 pub use sources::SyncSource;
