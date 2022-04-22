@@ -36,7 +36,7 @@ impl CatalogManager {
     pub async fn new(conf: &Config) -> Result<CatalogManager> {
         let mut catalogs = HashMap::new();
 
-        // register default catalog
+        // register the build-in "default" catalog
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         catalogs.insert(CATALOG_DEFAULT.to_owned(), default_catalog);
