@@ -16,6 +16,7 @@ SELECT * FROM t2;
 DROP TABLE t1;
 DROP TABLE t2;
 
+set max_threads = 1;
 select '==sort1==';
 CREATE TABLE IF NOT EXISTS t_sort(a INT) Engine = fuse ORDER KEY(a % 3, a);
 INSERT INTO t_sort (a) select number from numbers(10);
