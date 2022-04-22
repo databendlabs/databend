@@ -40,7 +40,7 @@ pub fn expr(i: Input) -> IResult<Expr> {
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
-        let expr_element_limited =
+        let higher_prec_expr_element =
             verify(
                 expr_element,
                 |elem| match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, elem)
@@ -55,7 +55,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 },
             );
 
-        let (i, expr_elements) = rule! { #expr_element_limited* }(i)?;
+        let (i, expr_elements) = rule! { #higher_prec_expr_element* }(i)?;
 
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
@@ -562,7 +562,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             unsigned: unsigned.is_some(),
         }
     });
-    let ty_int = map(rule! { INTEGER ~ UNSIGNED? }, |(_, unsigned)| {
+    let ty_int = map(rule! { ( INT | INTEGER ) ~ UNSIGNED? }, |(_, unsigned)| {
         TypeName::Int {
             unsigned: unsigned.is_some(),
         }
@@ -581,7 +581,13 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_float = value(TypeName::Float, rule! { FLOAT });
     let ty_double = value(TypeName::Double, rule! { DOUBLE });
     let ty_date = value(TypeName::Date, rule! { DATE });
-    let ty_datetime = value(TypeName::DateTime, rule! { DATETIME });
+    let ty_datetime = map(
+        rule! { DATETIME ~ ( "(" ~ #literal_u64 ~ ")" )? },
+        |(_, opt_precision)| {
+            let precision = opt_precision.map(|(_, p, _)| p);
+            TypeName::DateTime { precision }
+        },
+    );
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
     let ty_varchar = value(TypeName::Varchar, rule! { VARCHAR });
     let ty_object = value(TypeName::Object, rule! { OBJECT });

@@ -108,7 +108,7 @@ pub enum TypeName {
     Float,
     Double,
     Date,
-    DateTime,
+    DateTime { precision: Option<u64> },
     Timestamp,
     Varchar,
     Array { item_type: Box<TypeName> },
@@ -283,8 +283,11 @@ impl Display for TypeName {
             TypeName::Date => {
                 write!(f, "DATE")?;
             }
-            TypeName::DateTime => {
+            TypeName::DateTime { precision } => {
                 write!(f, "DATETIME")?;
+                if let Some(precision) = precision {
+                    write!(f, "({})", *precision)?;
+                }
             }
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
@@ -293,9 +296,7 @@ impl Display for TypeName {
                 write!(f, "VARCHAR")?;
             }
             TypeName::Array { item_type } => {
-                write!(f, "ARRAY (")?;
-                write!(f, "{}", item_type)?;
-                write!(f, ")")?;
+                write!(f, "ARRAY({})", item_type)?;
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;

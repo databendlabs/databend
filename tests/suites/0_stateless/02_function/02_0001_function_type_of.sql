@@ -31,5 +31,5 @@ select 'UInt64 OP UInt64', typeof(65536 * 65536 + 65536 * 65536), typeof(65536 *
 
 select '=== TEST_datetimes';
 
-select typeof(now()) = 'DateTime_0';
+select typeof(now()) = 'DateTime';
 select typeof(today()) = 'Date';

@@ -12,14 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use thiserror::Error;
+use std::sync::Arc;
 
-// TODO: implement From<Result> for `common_exception::Result`.s
-pub type Result<T> = std::result::Result<T, Error>;
+use common_datablocks::DataBlock;
+use common_exception::Result;
 
-/// Error is the error type for the common-ast crate.
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum Error {
-    #[error("unable to recognise the token from SQL: (rest {rest}, position {position})")]
-    UnrecognisedToken { rest: String, position: usize },
+use super::Sink;
+use super::Sinker;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+
+pub struct EmptySink;
+
+impl EmptySink {
+    pub fn create(input: Arc<InputPort>) -> ProcessorPtr {
+        Sinker::create(input, EmptySink {})
+    }
+}
+
+impl Sink for EmptySink {
+    const NAME: &'static str = "EmptySink";
+
+    fn consume(&mut self, _: DataBlock) -> Result<()> {
+        Ok(())
+    }
 }

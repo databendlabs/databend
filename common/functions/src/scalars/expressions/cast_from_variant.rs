@@ -30,7 +30,7 @@ pub fn cast_from_variant(
     data_type: &DataTypePtr,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
-    let json_column: &JsonColumn = if column.is_const() {
+    let json_column: &VariantColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(&column)?;
         Series::check_get(const_column.inner())?
     } else {
@@ -43,7 +43,7 @@ pub fn cast_from_variant(
         let mut builder = ColumnBuilder::<$T>::with_capacity(size);
 
         for (row, value) in json_column.iter().enumerate() {
-            match value {
+            match value.as_ref() {
                 JsonValue::Null => bitmap.set(row, false),
                 JsonValue::Bool(v) => {
                     if *v {
@@ -80,7 +80,7 @@ pub fn cast_from_variant(
                 let mut builder = ColumnBuilder::<bool>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::Bool(v) => builder.append(*v),
                         JsonValue::String(v) => {
@@ -101,7 +101,7 @@ pub fn cast_from_variant(
                 let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             builder.append(v.as_bytes());
@@ -117,7 +117,7 @@ pub fn cast_from_variant(
                 let mut builder = ColumnBuilder::<i32>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             if let Some(d) = string_to_date(v) {
@@ -137,7 +137,7 @@ pub fn cast_from_variant(
                 let datetime = DateTimeType::create(0, None);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             if let Some(d) = string_to_datetime(v) {
@@ -155,27 +155,27 @@ pub fn cast_from_variant(
                 return Ok((json_column.arc(), None));
             }
             TypeID::VariantArray => {
-                let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+                let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::Array(_) => {
                             builder.append(value);
                         },
                         _ => {
-                            let arr = JsonValue::Array(vec![value.clone()]);
-                            builder.append(&arr);
+                            let arr = JsonValue::Array(vec![value.as_ref().clone()]);
+                            builder.append(&VariantValue::from(arr));
                         }
                     }
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
             TypeID::VariantObject => {
-                let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+                let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
 
                 for (row, value) in json_column.iter().enumerate() {
-                    match value {
+                    match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::Object(_) => {
                             builder.append(value);

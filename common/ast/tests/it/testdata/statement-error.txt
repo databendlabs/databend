@@ -1,34 +1,34 @@
 ---------- Input ----------
-create table a.b (c integer not null 1, b varchar(10));
+create table a.b (c integer not null 1, b varchar(10))
 ---------- Output ---------
 error: 
   --> SQL:1:38
   |
-1 | create table a.b (c integer not null 1, b varchar(10));
+1 | create table a.b (c integer not null 1, b varchar(10))
   | ------                               ^ expected token ")"
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
 
 
 ---------- Input ----------
-create table a (c varchar(10));
+create table a (c varchar(10))
 ---------- Output ---------
 error: 
   --> SQL:1:26
   |
-1 | create table a (c varchar(10));
+1 | create table a (c varchar(10))
   | ------                   ^ expected token ")"
   | |                         
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
 
 
 ---------- Input ----------
-create table a (c varch);
+create table a (c varch)
 ---------- Output ---------
 error: 
   --> SQL:1:19
   |
-1 | create table a (c varch);
+1 | create table a (c varch)
   | ------          - ^^^^^ expected token <BOOLEAN>
   | |               |  
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
@@ -36,39 +36,36 @@ error:
 
 
 ---------- Input ----------
-drop table if a.b;
+drop table if a.b
 ---------- Output ---------
 error: 
   --> SQL:1:12
   |
-1 | drop table if a.b;
+1 | drop table if a.b
   | ----       ^^ expected token <Ident>
   | |           
   | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
 
 
 ---------- Input ----------
-truncate table a
----------- Output ---------
-error: 
-  --> SQL:1:17
-  |
-1 | truncate table a
-  | --------        ^ expected token ";"
-  | |               
-  | while parsing `TRUNCATE TABLE [<database>.]<table>`
-
-
----------- Input ----------
 truncate table a.b.c.d
 ---------- Output ---------
-error: 
-  --> SQL:1:19
-  |
-1 | truncate table a.b.c.d
-  | --------          ^ expected token ";"
-  | |                  
-  | while parsing `TRUNCATE TABLE [<database>.]<table>`
+TRUNCATE TABLE a.b
+---------- AST ------------
+TruncateTable {
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+}
+---------- REST -----------
+[Token { kind: Period, text: ".", span: 18..19 }, Token { kind: Ident, text: "c", span: 19..20 }, Token { kind: Period, text: ".", span: 20..21 }, Token { kind: Ident, text: "d", span: 21..22 }, Token { kind: EOI, text: "", span: 22..22 }]
 
 
 ---------- Input ----------
@@ -93,17 +90,5 @@ error:
   | ---- ^ expected token <TABLE>
   | |     
   | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
-
-
----------- Input ----------
-kill a
----------- Output ---------
-error: 
-  --> SQL:1:7
-  |
-1 | kill a
-  | ----  ^ expected token ";"
-  | |     
-  | while parsing `KILL <object id>`
 
 

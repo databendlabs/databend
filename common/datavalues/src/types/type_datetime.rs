@@ -36,10 +36,6 @@ pub struct DateTimeType {
     /// tz indicates the timezone, if it's None, it's UTC.
     tz: Option<String>,
 }
-const DATETIME_0: &str = "DateTime_0";
-const DATETIME_3: &str = "DateTime_3";
-const DATETIME_6: &str = "DateTime_6";
-const DATETIME_9: &str = "DateTime_9";
 
 impl DateTimeType {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
@@ -99,19 +95,22 @@ impl DataType for DateTimeType {
 
     fn name(&self) -> &str {
         match self.precision {
-            0 => DATETIME_0,
-            3 => DATETIME_3,
-            6 => DATETIME_6,
-            9 => DATETIME_9,
+            0 => "DateTime",
+            1 => "DateTime(1)",
+            2 => "DateTime(2)",
+            3 => "DateTime(3)",
+            4 => "DateTime(4)",
+            5 => "DateTime(5)",
+            6 => "DateTime(6)",
+            7 => "DateTime(7)",
+            8 => "DateTime(8)",
+            9 => "DateTime(9)",
             _ => unreachable!(),
         }
     }
 
     fn aliases(&self) -> &[&str] {
-        match self.precision {
-            0 => &["DateTime"],
-            _ => &[],
-        }
+        &[]
     }
 
     fn default_value(&self) -> DataValue {
@@ -172,6 +171,10 @@ impl DataType for DateTimeType {
 
 impl std::fmt::Debug for DateTimeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DateTime_{}", self.precision())
+        if self.precision() == 0 {
+            write!(f, "DateTime")
+        } else {
+            write!(f, "DateTime({})", self.precision())
+        }
     }
 }

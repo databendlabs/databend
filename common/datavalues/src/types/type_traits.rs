@@ -16,7 +16,6 @@ use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
 use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use crate::DFTryFrom;
 use crate::DataTypePtr;
@@ -25,6 +24,7 @@ use crate::DateTimeType;
 use crate::DateType;
 use crate::Scalar;
 use crate::VariantType;
+use crate::VariantValue;
 
 pub trait PrimitiveType:
     NativeArithmetics
@@ -122,7 +122,7 @@ pub trait ObjectType:
     fn data_type() -> DataTypePtr;
 }
 
-impl ObjectType for JsonValue {
+impl ObjectType for VariantValue {
     fn data_type() -> DataTypePtr {
         VariantType::arc()
     }

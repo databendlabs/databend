@@ -55,6 +55,7 @@ impl NewPipe {
     }
 }
 
+#[derive(Clone)]
 pub struct SourcePipeBuilder {
     processors: Vec<ProcessorPtr>,
     outputs_port: Vec<Arc<OutputPort>>,
