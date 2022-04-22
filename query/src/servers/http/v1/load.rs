@@ -21,7 +21,6 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
-use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSourceBuilder;
@@ -35,19 +34,18 @@ use futures::StreamExt;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
-use poem::web::Data;
 use poem::web::Json;
 use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
@@ -61,20 +59,14 @@ pub struct LoadResponse {
 
 #[poem::handler]
 pub async fn streaming_load(
+    ctx: &HttpQueryContext,
     req: &Request,
     mut multipart: Multipart,
-    user_info: Data<&UserInfo>,
-    sessions_extension: Data<&Arc<SessionManager>>,
 ) -> PoemResult<Json<LoadResponse>> {
-    let session_manager = sessions_extension.0;
-    let session = session_manager
+    let session = ctx
         .create_session(SessionType::HTTPStreamingLoad)
         .await
         .map_err(InternalServerError)?;
-
-    // TODO: list user's grant list and check client address
-    session.set_current_user(user_info.0.clone());
-
     let context = session
         .create_query_context()
         .await
