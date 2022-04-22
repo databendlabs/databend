@@ -102,7 +102,7 @@ impl AnalyzableStatement for DfCreateTable {
             order_keys.push(expr);
         }
 
-        if order_keys.len() > 0 {
+        if !order_keys.is_empty() {
             let order_keys_v = serde_json::to_vec(&order_keys)?;
             table_meta.order_keys = Some(order_keys_v);
         }

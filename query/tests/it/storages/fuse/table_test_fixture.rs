@@ -124,7 +124,8 @@ impl TestFixture {
                 .into(),
                 ..Default::default()
             },
-            ..Default::default()
+            as_select: None,
+            order_keys: vec![],
         }
     }
 

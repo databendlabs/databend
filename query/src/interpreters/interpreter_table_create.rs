@@ -84,7 +84,7 @@ impl Interpreter for CreateTableInterpreter {
 
         match engine_desc {
             Some(engine) => {
-                if self.plan.order_keys.is_empty() && !engine.support_order_key {
+                if !self.plan.order_keys.is_empty() && !engine.support_order_key {
                     return Err(ErrorCode::UnsupportedEngineParams(format!(
                         "Unsupported order key for engine: {}",
                         engine.engine_name
