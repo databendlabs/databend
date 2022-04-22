@@ -73,9 +73,13 @@ where
     }
 
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
-        reader.must_ignore_byte(b'\'')?;
+        reader
+            .must_ignore_byte(b'\'')
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || "Invalid start of date string")?;
         let date = reader.read_date_text()?;
-        reader.must_ignore_byte(b'\'')?;
+        reader
+            .must_ignore_byte(b'\'')
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || "Invalid end of date string")?;
 
         self.builder.append_value(uniform(date));
         Ok(())

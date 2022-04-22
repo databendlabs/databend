@@ -16,6 +16,7 @@ use std::io::Read;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::CpBufferReader;
@@ -77,7 +78,11 @@ impl TypeDeserializer for StringDeserializer {
 
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         self.buffer.clear();
-        reader.read_quoted_text(&mut self.buffer, b'\'')?;
+        reader
+            .read_quoted_text(&mut self.buffer, b'\'')
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
+                "Invalid string format when deserialize string text"
+            })?;
         self.builder.append_value(self.buffer.as_slice());
         Ok(())
     }

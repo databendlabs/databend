@@ -41,9 +41,13 @@ where R: BufferRead
         self.read_exact(buf.as_mut_slice())?;
 
         let v = std::str::from_utf8(buf.as_slice())
-            .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
+                "Cannot convert value to utf8 when read date text"
+            })?;
         v.parse::<NaiveDate>()
-            .map_err_to_code(ErrorCode::BadBytes, || "Cannot parse value to Date type")
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
+                "Cannot parse value to Date type"
+            })
     }
 
     fn read_datetime_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
@@ -51,10 +55,12 @@ where R: BufferRead
         self.read_exact(buf.as_mut_slice())?;
 
         let v = std::str::from_utf8(buf.as_slice())
-            .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
+                "Cannot convert value to utf8 when read datetime text"
+            })?;
         let res = tz
             .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
-            .map_err_to_code(ErrorCode::BadBytes, || {
+            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
                 format!("Cannot parse value:{:?} to DateTime type", v)
             })?;
 

@@ -66,7 +66,7 @@ where R: BufferRead
             let _ = self.ignores(|f| (b'0'..=b'9').contains(&f))?;
         }
 
-        FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
+        FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::NoneBtBadBytes, || {
             format!("Cannot parse value:{:?} to number type", buf)
         })
     }
@@ -109,7 +109,7 @@ where R: BufferRead
             let _ = self.keep_read(&mut buf, |f| (b'0'..=b'9').contains(&f))?;
         }
 
-        FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
+        FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::NoneBtBadBytes, || {
             format!("Cannot parse value:{:?} to number type", buf)
         })
     }

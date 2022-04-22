@@ -37,6 +37,15 @@ macro_rules! build_exceptions {
                     )
                 }
                 paste::item! {
+                    /// Create ErrorCode with None backtrace.
+                    pub fn [< NoneBt $body >] (display_text: impl Into<String>) -> ErrorCode {
+                        ErrorCode::create(
+                            $code,
+                            display_text.into(),
+                            None,
+                            None
+                        )
+                    }
                     pub fn [< $body:snake _ code >] ()  -> u16{
                         $code
                     }

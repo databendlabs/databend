@@ -123,11 +123,11 @@ impl ValueSource {
                     // Ignore the pop-result is safe here,
                     // because pop-err(empty builder) only happens when `de_text_quoted` return error.
                     let _ = deser.pop_data_value();
-                    ErrorCode::BadBytes("")
+                    ErrorCode::NoneBtBadBytes("Invalid column data when deserialize")
                 })
             });
 
-            // Deserializer and expr both will eat the end ')' of the row.
+            // Deserializer and expr-parser both will eat the end ')' of the row.
             if res.is_err() {
                 skip_to_next_row(reader, 1)?;
                 // Parse from expression and set datavalues

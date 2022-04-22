@@ -60,7 +60,7 @@ impl TypeDeserializer for BooleanDeserializer {
         } else if BufferReadExt::ignore_insensitive_bytes(reader, b"false")? {
             Ok(false)
         } else {
-            Err(ErrorCode::BadBytes("Incorrect boolean value"))
+            Err(ErrorCode::NoneBtBadBytes("Incorrect boolean value when deserialize bool text"))
         }?;
 
         self.builder.append_value(v);
