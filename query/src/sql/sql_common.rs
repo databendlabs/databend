@@ -41,13 +41,24 @@ impl SQLCommon {
             SQLDataType::Real | SQLDataType::Double => Ok(f64::to_data_type()),
             SQLDataType::Boolean => Ok(bool::to_data_type()),
             SQLDataType::Date => Ok(DateType::arc()),
-            SQLDataType::Timestamp | SQLDataType::DateTime(None) => Ok(DateTimeType::arc(0, None)),
+            // default precision is 6, microseconds
+            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => Ok(DateTimeType::arc(6, None)),
+            SQLDataType::Timestamp(Some(precision)) => {
+                if *precision <= 9 {
+                    Ok(DateTimeType::arc(*precision as usize, None))
+                } else {
+                    Err(ErrorCode::IllegalDataType(format!(
+                        "The SQL data type TIMESTAMP(n), n only ranges from 0~9, {} is invalid",
+                        precision
+                    )))
+                }
+            }
             SQLDataType::DateTime(Some(precision)) => {
                 if *precision <= 9 {
                     Ok(DateTimeType::arc(*precision as usize, None))
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type DateTime(n), n only ranges from 0~9, {} is invalid",
+                        "The SQL data type DATETIME(n), n only ranges from 0~9, {} is invalid",
                         precision
                     )))
                 }
