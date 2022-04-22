@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod bloom_filter;
+mod cluster_key;
 mod index_min_max;
 mod index_sparse;
 pub mod range_filter;
