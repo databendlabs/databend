@@ -166,8 +166,12 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
-    pub fn get_tenant(self: &Arc<Self>) -> String {
-        self.session_ctx.get_tenant()
+    pub fn get_current_tenant(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_tenant()
+    }
+
+    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
+        self.session_ctx.set_current_tenant(tenant);
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
@@ -191,7 +195,7 @@ impl Session {
             return Ok(());
         }
 
-        let tenant = self.get_tenant();
+        let tenant = self.get_current_tenant();
         let role_cache = self
             .get_shared_query_context()
             .await?

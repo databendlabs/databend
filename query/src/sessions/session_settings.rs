@@ -300,7 +300,7 @@ impl Settings {
     }
 
     fn set_to_global(&self, setting: &mut SettingValue) -> Result<()> {
-        let tenant = self.session_ctx.get_tenant();
+        let tenant = self.session_ctx.get_current_tenant();
         let _ = futures::executor::block_on(
             self.user_api
                 .get_setting_api_client(&tenant)?
