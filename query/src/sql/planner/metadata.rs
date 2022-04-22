@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
+use common_planners::ReadDataSourcePlan;
 
 use crate::sql::common::IndexType;
 use crate::storages::Table;
@@ -27,22 +28,26 @@ pub struct TableEntry {
     pub catalog: String,
 
     pub table: Arc<dyn Table>,
+
+    pub source: ReadDataSourcePlan,
 }
 
 impl TableEntry {
-    //    pub fn create(
-    //        index: IndexType,
-    //        name: String,
-    //        database: String,
-    //        table_meta: Arc<dyn Table>,
-    //    ) -> Self {
-    //        TableEntry {
-    //            index,
-    //            name,
-    //            database,
-    //            table: table_meta,
-    //        }
-    //    }
+    pub fn new(
+        index: IndexType,
+        name: String,
+        database: String,
+        table: Arc<dyn Table>,
+        source: ReadDataSourcePlan,
+    ) -> Self {
+        TableEntry {
+            index,
+            name,
+            database,
+            table,
+            source,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -57,7 +62,7 @@ pub struct ColumnEntry {
 }
 
 impl ColumnEntry {
-    pub fn create(
+    pub fn new(
         name: String,
         data_type: DataTypePtr,
         nullable: bool,
@@ -85,15 +90,10 @@ pub struct Metadata {
 
 impl Metadata {
     pub fn create() -> Self {
-        Self::default()
-    }
-
-    fn next_table_index(&self) -> IndexType {
-        self.tables.len()
-    }
-
-    fn next_column_index(&self) -> IndexType {
-        self.columns.len()
+        Self {
+            tables: vec![],
+            columns: vec![],
+        }
     }
 
     pub fn table(&self, index: IndexType) -> &TableEntry {
@@ -104,20 +104,12 @@ impl Metadata {
         self.columns.get(index).unwrap()
     }
 
-    pub fn table_mut(&mut self, index: IndexType) -> &mut TableEntry {
-        self.tables.get_mut(index).unwrap()
-    }
-
-    pub fn column_mut(&mut self, index: IndexType) -> &mut ColumnEntry {
-        self.columns.get_mut(index).unwrap()
-    }
-
-    pub fn columns_by_table_index(&self, index: IndexType) -> Vec<&ColumnEntry> {
+    pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         let mut result = vec![];
         for col in self.columns.iter() {
             match col.table_index {
                 Some(col_index) if col_index == index => {
-                    result.push(col);
+                    result.push(col.clone());
                 }
                 _ => {}
             }
@@ -131,43 +123,40 @@ impl Metadata {
         name: String,
         data_type: DataTypePtr,
         nullable: bool,
-        table_index: IndexType,
+        table_index: Option<IndexType>,
     ) -> IndexType {
-        let column_index = self.next_column_index();
-        let column_entry =
-            ColumnEntry::create(name, data_type, nullable, column_index, Some(table_index));
+        let column_index = self.columns.len();
+        let column_entry = ColumnEntry::new(name, data_type, nullable, column_index, table_index);
         self.columns.push(column_entry);
         column_index
     }
 
-    pub fn add_derived_column(
-        &mut self,
-        name: String,
-        data_type: DataTypePtr,
-        nullable: bool,
-    ) -> IndexType {
-        let column_index = self.next_column_index();
-        let column_entry = ColumnEntry::create(name, data_type, nullable, column_index, None);
-        self.columns.push(column_entry);
-        column_index
-    }
-
-    pub fn add_base_table(
+    pub fn add_table(
         &mut self,
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
+        source: ReadDataSourcePlan,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
-        let table_index = self.next_table_index();
+        let table_index = self.tables.len();
         let table_entry = TableEntry {
             index: table_index,
             name: table_name,
             database,
             catalog,
-            table: table_meta,
+            table: table_meta.clone(),
+            source,
         };
         self.tables.push(table_entry);
+        for field in table_meta.schema().fields() {
+            self.add_column(
+                field.name().clone(),
+                field.data_type().clone(),
+                field.is_nullable(),
+                Some(table_index),
+            );
+        }
         table_index
     }
 }

@@ -49,8 +49,10 @@ impl AsyncSystemTable for ColumnsTable {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
-            let type_str = format!("{:?}", field.data_type());
-            data_types.push(type_str.into_bytes());
+
+            let non_null_type = remove_nullable(field.data_type());
+            let data_type = format_data_type_sql(&non_null_type);
+            data_types.push(data_type.into_bytes());
             is_nullables.push(field.is_nullable());
         }
 

@@ -32,24 +32,32 @@ use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReq;
+use common_meta_types::DropTableReq;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
 use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
+use common_meta_types::RenameTableReq;
 use common_meta_types::SeqV;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableMeta;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownDatabaseId;
+use common_meta_types::UnknownShare;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_tracing::tracing;
@@ -65,9 +73,13 @@ use crate::sled_key_spaces::Databases;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
+use crate::sled_key_spaces::ShareLookup;
+use crate::sled_key_spaces::Shares;
 use crate::sled_key_spaces::StateMachineMeta;
 use crate::sled_key_spaces::TableLookup;
 use crate::sled_key_spaces::Tables;
+use crate::state_machine::share_lookup::ShareLookupKey;
+use crate::state_machine::share_lookup::ShareLookupValue;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::DatabaseLookupKey;
 use crate::state_machine::StateMachineMetaKey;
@@ -84,6 +96,8 @@ const SEQ_DATABASE_ID: &str = "database_id";
 const SEQ_TABLE_ID: &str = "table_id";
 /// seq number key to database meta version
 const SEQ_DATABASE_META_ID: &str = "database_meta_id";
+/// seq number key to generate share id
+const SEQ_SHARE_ID: &str = "share_id";
 
 /// sled db tree name for nodes
 // const TREE_NODES: &str = "nodes";
@@ -91,9 +105,8 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
 /// StateMachine subscriber trait
-#[async_trait::async_trait]
 pub trait StateMachineSubscriber: Debug + Sync + Send {
-    async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, meta: &Option<SeqV>);
+    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>);
 }
 
 /// The state machine of the `MemStore`.
@@ -221,25 +234,6 @@ impl StateMachine {
         Ok((snap, last_applied, snapshot_id))
     }
 
-    /// Internal func to get an auto-incr seq number.
-    /// It is just what Cmd::IncrSeq does and is also used by Cmd that requires
-    /// a unique id such as Cmd::AddDatabase which needs make a new database id.
-    ///
-    /// Note: this can only be called inside apply().
-    async fn incr_seq(&self, key: &str) -> MetaResult<u64> {
-        let sequences = self.sequences();
-
-        let curr = sequences
-            .update_and_fetch(&key.to_string(), |old| Some(old.unwrap_or_default() + 1))
-            .await?;
-
-        let curr = curr.unwrap();
-
-        tracing::debug!("applied IncrSeq: {}={}", key, curr);
-
-        Ok(curr.0)
-    }
-
     /// Apply an log entry to state machine.
     ///
     /// If a duplicated log entry is detected by checking data.txid, no update
@@ -320,7 +314,6 @@ impl StateMachine {
     fn apply_incr_seq_cmd(
         &self,
         key: &str,
-
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let r = self.txn_incr_seq(key, txn_tree)?;
@@ -333,7 +326,6 @@ impl StateMachine {
         &self,
         node_id: &u64,
         node: &Node,
-
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
@@ -352,11 +344,13 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_database_cmd(
         &self,
-        tenant: &str,
-        name: &str,
-        meta: &DatabaseMeta,
+        req: &CreateDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
+        let tenant = &req.tenant;
+        let name = &req.db_name;
+        let meta = &req.meta;
+
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
 
         let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
@@ -415,10 +409,11 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_drop_database_cmd(
         &self,
-        tenant: &str,
-        name: &str,
+        req: &DropDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
+        let tenant = &req.tenant;
+        let name = &req.db_name;
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
@@ -459,20 +454,18 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_table_cmd(
         &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
-        table_meta: &TableMeta,
+        req: &CreateTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
 
         let (table_id, prev, result) =
-            self.txn_create_table(txn_tree, db_id, table_name, table_meta)?;
+            self.txn_create_table(txn_tree, db_id, None, &req.table_name, &req.table_meta)?;
+        let table_id = table_id.unwrap();
+
         if prev.is_some() {
             return Ok(AppliedState::TableMeta(Change::nochange_with_id(
-                table_id.unwrap(),
-                prev,
+                table_id, prev,
             )));
         }
         if result.is_some() {
@@ -480,23 +473,19 @@ impl StateMachine {
         }
 
         Ok(AppliedState::TableMeta(Change::new_with_id(
-            table_id.unwrap(),
-            prev,
-            result,
+            table_id, prev, result,
         )))
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_drop_table_cmd(
         &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
+        req: &DropTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
 
-        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, table_name)?;
+        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
         if prev.is_none() {
             return Ok(Change::<TableMeta>::new(None, None).into());
         }
@@ -509,41 +498,31 @@ impl StateMachine {
 
     fn apply_rename_table_cmd(
         &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
-        new_db_name: &str,
-        new_table_name: &str,
+        req: &RenameTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
-        let (_, prev, result) = self.txn_drop_table(txn_tree, db_id, table_name)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
+        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
         if prev.is_none() {
             return Err(MetaStorageError::AppError(AppError::UnknownTable(
-                UnknownTable::new(table_name, "apply_rename_table_cmd"),
+                UnknownTable::new(&req.table_name, "apply_rename_table_cmd"),
             )));
         }
         assert!(result.is_none());
 
         let table_meta = &prev.as_ref().unwrap().data;
-        let db_id = self.txn_get_database_id(tenant, new_db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(&req.tenant, &req.new_db_name, txn_tree)?;
         let (new_table_id, new_prev, new_result) =
-            self.txn_create_table(txn_tree, db_id, new_table_name, table_meta)?;
+            self.txn_create_table(txn_tree, db_id, table_id, &req.new_table_name, table_meta)?;
         if new_prev.is_some() {
             return Err(MetaStorageError::AppError(AppError::TableAlreadyExists(
-                TableAlreadyExists::new(new_table_name, "apply_rename_table_cmd"),
+                TableAlreadyExists::new(&req.new_table_name, "apply_rename_table_cmd"),
             )));
         }
         assert!(new_result.is_some());
 
         self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
-        tracing::debug!(
-            "applied rename Table: {}:{} -> {}:{}",
-            db_name,
-            table_name,
-            new_db_name,
-            new_table_name
-        );
+        tracing::debug!("applied {}", req);
 
         Ok(AppliedState::TableMeta(Change::new_with_id(
             new_table_id.unwrap(),
@@ -574,7 +553,7 @@ impl StateMachine {
         tracing::debug!("applied UpsertKV: {} {:?}", key, result);
 
         if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.kv_changed(&key_str, &prev, &result);
+            subscriber.kv_changed(&key_str, prev.clone(), result.clone());
         }
 
         Ok(Change::new(prev, result).into())
@@ -654,44 +633,19 @@ impl StateMachine {
                 ref node,
             } => self.apply_add_node_cmd(node_id, node, txn_tree),
 
-            Cmd::CreateDatabase {
-                ref tenant,
-                ref name,
-                ref meta,
-            } => self.apply_create_database_cmd(tenant, name, meta, txn_tree),
+            Cmd::CreateDatabase(req) => self.apply_create_database_cmd(req, txn_tree),
 
-            Cmd::DropDatabase {
-                ref tenant,
-                ref name,
-            } => self.apply_drop_database_cmd(tenant, name, txn_tree),
+            Cmd::DropDatabase(req) => self.apply_drop_database_cmd(req, txn_tree),
 
-            Cmd::CreateTable {
-                ref tenant,
-                ref db_name,
-                ref table_name,
-                ref table_meta,
-            } => self.apply_create_table_cmd(tenant, db_name, table_name, table_meta, txn_tree),
+            Cmd::CreateTable(req) => self.apply_create_table_cmd(req, txn_tree),
 
-            Cmd::DropTable {
-                tenant,
-                ref db_name,
-                ref table_name,
-            } => self.apply_drop_table_cmd(tenant, db_name, table_name, txn_tree),
+            Cmd::DropTable(req) => self.apply_drop_table_cmd(req, txn_tree),
 
-            Cmd::RenameTable {
-                tenant,
-                ref db_name,
-                ref table_name,
-                ref new_db_name,
-                ref new_table_name,
-            } => self.apply_rename_table_cmd(
-                tenant,
-                db_name,
-                table_name,
-                new_db_name,
-                new_table_name,
-                txn_tree,
-            ),
+            Cmd::RenameTable(req) => self.apply_rename_table_cmd(req, txn_tree),
+
+            Cmd::CreateShare(req) => self.apply_create_share_cmd(req, txn_tree),
+
+            Cmd::DropShare(req) => self.apply_drop_share_cmd(req, txn_tree),
 
             Cmd::UpsertKV {
                 key,
@@ -702,71 +656,6 @@ impl StateMachine {
 
             Cmd::UpsertTableOptions(ref req) => self.apply_upsert_table_options_cmd(req, txn_tree),
         }
-    }
-
-    async fn sub_tree_upsert<'s, V, KS>(
-        &'s self,
-        sub_tree: AsKeySpace<'s, KS>,
-        key: &KS::K,
-        seq: &MatchSeq,
-        value_op: Operation<V>,
-        value_meta: Option<KVMeta>,
-    ) -> MetaResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
-    where
-        V: Clone + Debug,
-        KS: SledKeySpace<V = SeqV<V>>,
-    {
-        // TODO(xp): need to be done all in a tx
-
-        let prev = sub_tree.get(key)?;
-
-        // If prev is timed out, treat it as a None.
-        let prev = Self::unexpired_opt(prev);
-
-        if seq.match_seq(&prev).is_err() {
-            return Ok((prev.clone(), prev));
-        }
-
-        // result is the state after applying an operation.
-        let result = self
-            .sub_tree_do_update(&sub_tree, key, prev.clone(), value_meta, value_op)
-            .await?;
-
-        tracing::debug!("applied upsert: {} {:?}", key, result);
-        Ok((prev, result))
-    }
-
-    async fn sub_tree_do_update<'s, V, KS>(
-        &'s self,
-        sub_tree: &AsKeySpace<'s, KS>,
-        key: &KS::K,
-        prev: Option<SeqV<V>>,
-        value_meta: Option<KVMeta>,
-        value_op: Operation<V>,
-    ) -> MetaResult<Option<SeqV<V>>>
-    where
-        V: Clone + Debug,
-        KS: SledKeySpace<V = SeqV<V>>,
-    {
-        let mut seq_kv_value = match value_op {
-            Operation::Update(v) => SeqV::with_meta(0, value_meta.clone(), v),
-            Operation::Delete => {
-                sub_tree.remove(key, true).await?;
-                return Ok(None);
-            }
-            Operation::AsIs => match prev {
-                None => return Ok(None),
-                Some(ref prev_kv_value) => prev_kv_value.clone().set_meta(value_meta),
-            },
-        };
-
-        // insert the updated record.
-
-        seq_kv_value.seq = self.incr_seq(KS::NAME).await?;
-
-        sub_tree.insert(key, &seq_kv_value).await?;
-
-        Ok(Some(seq_kv_value))
     }
 
     fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> MetaStorageResult<u64> {
@@ -878,6 +767,7 @@ impl StateMachine {
         &self,
         txn_tree: &TransactionSledTree,
         db_id: u64,
+        table_id: Option<u64>,
         table_name: &str,
         table_meta: &TableMeta,
     ) -> MetaStorageResult<(
@@ -902,7 +792,11 @@ impl StateMachine {
         }
 
         let table_meta = table_meta.clone();
-        let table_id = self.txn_incr_seq(SEQ_TABLE_ID, txn_tree)?;
+        let table_id = if let Some(table_id) = table_id {
+            table_id
+        } else {
+            self.txn_incr_seq(SEQ_TABLE_ID, txn_tree)?
+        };
 
         self.txn_sub_tree_upsert(
             &table_lookup_tree,
@@ -1090,20 +984,6 @@ impl StateMachine {
         Ok(x)
     }
 
-    pub async fn upsert_table(
-        &self,
-        table_id: u64,
-        tbl: TableMeta,
-        seq: &MatchSeq,
-    ) -> Result<Option<SeqV<TableMeta>>, MetaError> {
-        let tables = self.tables();
-        let (_prev, result) = self
-            .sub_tree_upsert(tables, &table_id, seq, Operation::Update(tbl), None)
-            .await?;
-        self.incr_seq(SEQ_DATABASE_META_ID).await?; // need this?
-        Ok(result)
-    }
-
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
         seq_value.and_then(Self::unexpired)
     }
@@ -1140,21 +1020,140 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn lookup_table_id(
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_create_share_cmd(
         &self,
-        db_id: u64,
-        name: &str,
-    ) -> Result<Option<SeqV<TableLookupValue>>, MetaError> {
-        match self.table_lookup().get(
-            &(TableLookupKey {
-                database_id: db_id,
-                table_name: name.to_string(),
-            }),
-        ) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
+        req: &CreateShareReq,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let tenant = &req.tenant;
+        let share_name = &req.share_name;
+        let share_lookup_tree = txn_tree.key_space::<ShareLookup>();
+        let share_tree = txn_tree.key_space::<Shares>();
+
+        let share_lookup_key = ShareLookupKey::new(tenant.to_string(), share_name.to_string());
+
+        let seq_share_id = share_lookup_tree.get(&share_lookup_key)?;
+
+        if let Some(u) = seq_share_id {
+            let share_id = u.data.0;
+            let prev = share_tree.get(&share_id)?;
+            return Ok(AppliedState::ShareInfo(Change::nochange_with_id(
+                share_id, prev,
+            )));
         }
+
+        let share_id = self.txn_incr_seq(SEQ_SHARE_ID, txn_tree)?;
+
+        let (prev, _) = self.txn_sub_tree_upsert(
+            &share_lookup_tree,
+            &share_lookup_key,
+            &MatchSeq::Exact(0),
+            Operation::Update(ShareLookupValue(share_id)),
+            None,
+        )?;
+
+        // if it is just created
+        if let Some(prev) = prev {
+            let share_id = prev.data;
+            let prev = share_tree.get(&share_id.0)?;
+            if let Some(prev) = prev {
+                return Ok(AppliedState::ShareInfo(Change::nochange_with_id(
+                    share_id.0,
+                    Some(prev),
+                )));
+            }
+        }
+
+        let share_info = ShareInfo::new(share_id, share_name);
+
+        let (prev, result) = self.txn_sub_tree_upsert(
+            &share_tree,
+            &share_id,
+            &MatchSeq::Exact(0),
+            Operation::Update(share_info),
+            None,
+        )?;
+
+        tracing::debug!(
+            "applied create Share: {}, share_id: {}",
+            share_name,
+            share_id,
+        );
+
+        Ok(AppliedState::ShareInfo(Change::new_with_id(
+            share_id, prev, result,
+        )))
+    }
+
+    fn apply_drop_share_cmd(
+        &self,
+        req: &DropShareReq,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let share_lookup_tree = txn_tree.key_space::<ShareLookup>();
+
+        let share_lookup_key =
+            ShareLookupKey::new(req.tenant.to_string(), req.share_name.to_string());
+
+        let (prev, result) = self.txn_sub_tree_upsert(
+            &share_lookup_tree,
+            &share_lookup_key,
+            &MatchSeq::Any,
+            Operation::Delete,
+            None,
+        )?;
+
+        assert!(
+            result.is_none(),
+            "delete with MatchSeq::Any always succeeds"
+        );
+
+        // if it is just deleted
+        if let Some(seq_share_id) = prev {
+            let share_id = seq_share_id.data;
+            let share_tree = txn_tree.key_space::<Shares>();
+
+            let (prev_meta, result_meta) = self.txn_sub_tree_upsert(
+                &share_tree,
+                &share_id.0,
+                &MatchSeq::Any,
+                Operation::Delete,
+                None,
+            )?;
+
+            tracing::debug!("applied {}, result = {:?}", &req, result);
+
+            return Ok(AppliedState::ShareInfo(Change::new_with_id(
+                share_id.0,
+                prev_meta,
+                result_meta,
+            )));
+        }
+
+        // not exist
+
+        tracing::debug!("applied drop Share: {} {:?}", req.share_name, result);
+        Ok(AppliedState::ShareInfo(Change::new(None, None)))
+    }
+
+    pub fn get_share_id(&self, tenant: &str, share_name: &str) -> MetaStorageResult<u64> {
+        let seq_share_id = self
+            .share_lookup()
+            .get(&(ShareLookupKey::new(tenant.to_string(), share_name.to_string())))?
+            .ok_or_else(|| AppError::from(UnknownShare::new(share_name, "get_share_id")))?;
+
+        Ok(seq_share_id.data.0)
+    }
+
+    pub fn get_share_info_by_id(&self, share_id: &u64) -> MetaStorageResult<SeqV<ShareInfo>> {
+        let x = self.shares().get(share_id)?.ok_or_else(|| {
+            MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                *share_id,
+                "get_share_info_by_id".to_string(),
+            )))
+        })?;
+        Ok(x)
     }
 }
 
@@ -1198,6 +1197,14 @@ impl StateMachine {
     }
 
     pub fn table_lookup(&self) -> AsKeySpace<TableLookup> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn shares(&self) -> AsKeySpace<Shares> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn share_lookup(&self) -> AsKeySpace<ShareLookup> {
         self.sm_tree.key_space()
     }
 }

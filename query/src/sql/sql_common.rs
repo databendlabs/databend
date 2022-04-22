@@ -23,23 +23,37 @@ impl SQLCommon {
     /// Maps the SQL type to the corresponding Arrow `DataType`
     pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypePtr> {
         match sql_type {
-            SQLDataType::BigInt(_) => Ok(i64::to_data_type()),
-            SQLDataType::Int(_) => Ok(i32::to_data_type()),
-            SQLDataType::SmallInt(_) => Ok(i16::to_data_type()),
             SQLDataType::TinyInt(_) => Ok(i8::to_data_type()),
+            SQLDataType::UnsignedTinyInt(_) => Ok(u8::to_data_type()),
+            SQLDataType::SmallInt(_) => Ok(i16::to_data_type()),
+            SQLDataType::UnsignedSmallInt(_) => Ok(u16::to_data_type()),
+            SQLDataType::Int(_) => Ok(i32::to_data_type()),
+            SQLDataType::UnsignedInt(_) => Ok(u32::to_data_type()),
+            SQLDataType::BigInt(_) => Ok(i64::to_data_type()),
+            SQLDataType::UnsignedBigInt(_) => Ok(u64::to_data_type()),
             SQLDataType::Char(_)
             | SQLDataType::Varchar(_)
             | SQLDataType::String
             | SQLDataType::Text => Ok(Vu8::to_data_type()),
 
-            SQLDataType::Decimal(_, _) => Ok(f64::to_data_type()),
             SQLDataType::Float(_) => Ok(f32::to_data_type()),
+            SQLDataType::Decimal(_, _) => Ok(f64::to_data_type()),
             SQLDataType::Real | SQLDataType::Double => Ok(f64::to_data_type()),
             SQLDataType::Boolean => Ok(bool::to_data_type()),
-            SQLDataType::Date => Ok(Date16Type::arc()),
-            SQLDataType::Timestamp => Ok(DateTime32Type::arc(None)),
+            SQLDataType::Date => Ok(DateType::arc()),
+            SQLDataType::Timestamp | SQLDataType::DateTime(None) => Ok(DateTimeType::arc(0, None)),
+            SQLDataType::DateTime(Some(precision)) => {
+                if *precision <= 9 {
+                    Ok(DateTimeType::arc(*precision as usize, None))
+                } else {
+                    Err(ErrorCode::IllegalDataType(format!(
+                        "The SQL data type DateTime(n), n only ranges from 0~9, {} is invalid",
+                        precision
+                    )))
+                }
+            }
 
-            //custom types for databend
+            // Custom types for databend:
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
             SQLDataType::Custom(obj) if !obj.0.is_empty() => {
                 match obj.0[0].value.to_uppercase().as_str() {

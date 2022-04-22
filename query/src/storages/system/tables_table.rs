@@ -60,8 +60,8 @@ impl AsyncSystemTable for TablesTable {
         for (_, tbl) in &database_tables {
             let stats = tbl.statistics(ctx.clone()).await?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
-            data_size.push(stats.and_then(|v| v.data_length));
-            data_compressed_size.push(None);
+            data_size.push(stats.as_ref().and_then(|v| v.data_size));
+            data_compressed_size.push(stats.and_then(|v| v.data_size_compressed));
             index_size.push(None);
         }
 

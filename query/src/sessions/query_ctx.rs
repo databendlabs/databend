@@ -62,6 +62,7 @@ use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 
+#[derive(Clone)]
 pub struct QueryContext {
     version: String,
     statistics: Arc<RwLock<Statistics>>,

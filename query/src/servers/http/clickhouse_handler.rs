@@ -127,8 +127,11 @@ pub async fn clickhouse_handler_get(
         .map_err(InternalServerError)
 }
 
-fn try_parse_insert_formatted(sql: &str) -> Result<Option<(Format, Vec<DfStatement>)>> {
-    if let Ok((statements, _)) = DfParser::parse_sql(sql) {
+fn try_parse_insert_formatted(
+    sql: &str,
+    typ: SessionType,
+) -> Result<Option<(Format, Vec<DfStatement>)>> {
+    if let Ok((statements, _)) = DfParser::parse_sql(sql, typ) {
         if statements.is_empty() {
             return Ok(None);
         }
@@ -178,30 +181,33 @@ pub async fn clickhouse_handler_post(
     let mut sql = params.query;
 
     // Insert into format sql
-    let (plan, input_stream) =
-        if let Some((format, statements)) = try_parse_insert_formatted(&sql).map_err(BadRequest)? {
-            let plan = PlanParser::build_plan(statements, ctx.clone())
-                .await
-                .map_err(InternalServerError)?;
-            ctx.attach_query_str(&sql);
+    let (plan, input_stream) = if let Some((format, statements)) =
+        try_parse_insert_formatted(&sql, ctx.get_current_session().get_type())
+            .map_err(BadRequest)?
+    {
+        let plan = PlanParser::build_plan(statements, ctx.clone())
+            .await
+            .map_err(InternalServerError)?;
+        ctx.attach_query_str(&sql);
 
-            let input_stream = match format {
-                Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
-            };
-            (plan, Some(input_stream))
-        } else {
-            // Other sql
-            let body = body.into_string().await.map_err(BadRequest)?;
-            let sql = format!("{}\n{}", sql, body);
-            let (statements, _) = DfParser::parse_sql(&sql).map_err(BadRequest)?;
-
-            let plan = PlanParser::build_plan(statements, ctx.clone())
-                .await
-                .map_err(InternalServerError)?;
-            ctx.attach_query_str(&sql);
-
-            (plan, None)
+        let input_stream = match format {
+            Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
         };
+        (plan, Some(input_stream))
+    } else {
+        // Other sql
+        let body = body.into_string().await.map_err(BadRequest)?;
+        let sql = format!("{}\n{}", sql, body);
+        let (statements, _) =
+            DfParser::parse_sql(&sql, ctx.get_current_session().get_type()).map_err(BadRequest)?;
+
+        let plan = PlanParser::build_plan(statements, ctx.clone())
+            .await
+            .map_err(InternalServerError)?;
+        ctx.attach_query_str(&sql);
+
+        (plan, None)
+    };
 
     execute(ctx, plan, input_stream)
         .await
@@ -210,7 +216,7 @@ pub async fn clickhouse_handler_post(
 
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
     let builder = NDJsonSourceBuilder::create(plan.schema());
-    let cursor = std::io::Cursor::new(
+    let cursor = futures::io::Cursor::new(
         body.into_vec()
             .await
             .map_err_to_code(ErrorCode::BadBytes, || "fail to read body")?,

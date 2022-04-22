@@ -127,7 +127,7 @@ impl ExpressionChain {
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let return_type = func.return_type(&arg_types2)?;
+                let return_type = func.return_type();
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -149,7 +149,7 @@ impl ExpressionChain {
 
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let return_type = func.return_type(&arg_types2)?;
+                let return_type = func.return_type();
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -172,7 +172,7 @@ impl ExpressionChain {
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
 
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let return_type = func.return_type(&arg_types2)?;
+                let return_type = func.return_type();
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -195,6 +195,7 @@ impl ExpressionChain {
             Expression::Cast {
                 expr: sub_expr,
                 data_type,
+                ..
             } => {
                 let func_name = "cast".to_string();
                 let return_type = data_type.clone();
@@ -212,6 +213,29 @@ impl ExpressionChain {
                     func,
                     arg_names: vec![sub_expr.column_name()],
                     arg_types: vec![sub_expr.to_data_type(&self.schema)?],
+                    return_type,
+                };
+
+                self.actions.push(ExpressionAction::Function(function));
+            }
+            Expression::MapAccess { args, .. } => {
+                let arg_types = args
+                    .iter()
+                    .map(|action| action.to_data_type(&self.schema))
+                    .collect::<Result<Vec<_>>>()?;
+
+                let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
+
+                let func_name = "get_path";
+                let func = FunctionFactory::instance().get(func_name, &arg_types2)?;
+                let return_type = func.return_type();
+
+                let function = ActionFunction {
+                    name: expr.column_name(),
+                    func_name: func_name.to_string(),
+                    func,
+                    arg_names: args.iter().map(|action| action.column_name()).collect(),
+                    arg_types,
                     return_type,
                 };
 

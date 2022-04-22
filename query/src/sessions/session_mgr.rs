@@ -166,7 +166,7 @@ impl SessionManager {
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
         // TODO: maybe deadlock
-        let config = self.get_config();
+        let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
             if sessions.len() == self.max_sessions {
@@ -207,7 +207,7 @@ impl SessionManager {
         aborted: bool,
     ) -> Result<SessionRef> {
         // TODO: maybe deadlock?
-        let config = self.get_config();
+        let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
             let v = sessions.get(&id);
@@ -254,7 +254,7 @@ impl SessionManager {
 
     #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
-        let config = self.get_config();
+        let config = self.get_conf();
         label_counter(
             super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
             &config.query.tenant_id,
@@ -382,10 +382,6 @@ impl SessionManager {
         };
 
         Ok(Operator::new(accessor))
-    }
-
-    pub fn get_config(&self) -> Config {
-        self.conf.read().clone()
     }
 
     pub async fn reload_config(&self) -> Result<()> {

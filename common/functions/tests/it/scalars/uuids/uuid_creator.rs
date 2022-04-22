@@ -14,16 +14,15 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_uuid_creator_functions() -> Result<()> {
     // TODO: move it to stateless test.
     // Test {
-    //     name: "generateUUIDv4-passed",
+    //     name: "gen-random-uuid-passed",
     //     display: "()",
     //     nullable: false,
     //     func: UUIDv4Function::try_create("")?,
@@ -34,11 +33,11 @@ fn test_uuid_creator_functions() -> Result<()> {
     // },
 
     let tests = vec![ScalarFunctionTest {
-        name: "zeroUUID-passed",
+        name: "gen-zero-uuid-passed",
         columns: vec![Series::from_data(vec![""])],
         expect: Series::from_data(vec!["00000000-0000-0000-0000-000000000000"]),
         error: "",
     }];
 
-    test_scalar_functions(UUIDZeroFunction::try_create("")?, &tests, true)
+    test_scalar_functions("gen_zero_uuid", &tests)
 }

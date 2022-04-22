@@ -5,7 +5,7 @@ title: system.credits
 Contains information about credits.
 
 ```sql
-mysql> SELECT * FROM system.credits LIMIT 20;
+SELECT * FROM system.credits LIMIT 20;
 +-------------------+---------+---------------------------+
 | name              | version | license                   |
 +-------------------+---------+---------------------------+

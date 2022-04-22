@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 pub use mutable::*;
 
 use crate::prelude::*;
@@ -87,7 +87,7 @@ impl Column for NullableColumn {
 
     fn data_type(&self) -> DataTypePtr {
         let nest = self.column.data_type();
-        Arc::new(NullableType::create(nest))
+        NullableType::arc(nest)
     }
 
     fn column_type_name(&self) -> String {
@@ -111,7 +111,7 @@ impl Column for NullableColumn {
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {
-        (false, Some(&self.validity))
+        (self.only_null(), Some(&self.validity))
     }
 
     fn memory_size(&self) -> usize {

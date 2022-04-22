@@ -23,14 +23,14 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-mysql> select toStartOfMonth(toDate(18869));
+SELECT toStartOfMonth(toDate(18869));
 +-------------------------------+
 | toStartOfMonth(toDate(18869)) |
 +-------------------------------+
 | 2021-08-01                    |
 +-------------------------------+
 
-mysql> select toStartOfMonth(toDateTime(1630812366));
+SELECT toStartOfMonth(toDateTime(1630812366));
 +----------------------------------------+
 | toStartOfMonth(toDateTime(1630812366)) |
 +----------------------------------------+

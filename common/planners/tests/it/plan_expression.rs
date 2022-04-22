@@ -78,20 +78,20 @@ fn test_expression_validate() -> Result<()> {
 
     let cases = vec![
         Test {
-            desc: "toTypeName-not-pass",
+            desc: "typeof-not-pass",
             expression: Expression::ScalarFunction {
-                op: "toTypeName".to_string(),
+                op: "typeof".to_string(),
                 args: vec![],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
-                "Function `toTypeName` expect to have 1 arguments, but got 0",
+                "Function `typeof` expect to have 1 arguments, but got 0",
             )),
         },
         Test {
             desc: "today-not-pass",
             expression: Expression::ScalarFunction {
                 op: "today".to_string(),
-                args: vec![col("33")],
+                args: vec![col("a")],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
                 "Function `today` expect to have 0 arguments, but got 1",
@@ -107,8 +107,12 @@ fn test_expression_validate() -> Result<()> {
         },
     ];
 
+    let schema = Arc::new(DataSchema::new(vec![DataField::new(
+        "a",
+        u64::to_data_type(),
+    )]));
     for t in cases.iter() {
-        let result = validate_expression(&t.expression);
+        let result = validate_expression(&t.expression, &schema);
         match t.error {
             Some(_) => {
                 assert_eq!(

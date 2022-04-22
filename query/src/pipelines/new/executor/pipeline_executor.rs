@@ -69,9 +69,9 @@ impl PipelineExecutor {
     }
 
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        let mut threads = self.execute_threads(self.threads_num);
+        let mut thread_join_handles = self.execute_threads(self.threads_num);
 
-        while let Some(join_handle) = threads.pop() {
+        while let Some(join_handle) = thread_join_handles.pop() {
             // flatten error.
             match join_handle.join() {
                 Ok(Ok(_)) => Ok(()),
@@ -84,20 +84,19 @@ impl PipelineExecutor {
     }
 
     fn execute_threads(self: &Arc<Self>, threads_size: usize) -> Vec<JoinHandle<Result<()>>> {
-        let mut threads = Vec::with_capacity(threads_size);
+        let mut thread_join_handles = Vec::with_capacity(threads_size);
 
         for thread_num in 0..threads_size {
             let this = self.clone();
             let name = format!("PipelineExecutor-{}", thread_num);
-            threads.push(Thread::named_spawn(Some(name), move || unsafe {
+            thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 match this.execute_single_thread(thread_num) {
                     Ok(_) => Ok(()),
                     Err(cause) => this.throw_error(thread_num, cause),
                 }
             }));
         }
-
-        threads
+        thread_join_handles
     }
 
     fn throw_error(self: &Arc<Self>, thread_num: usize, cause: ErrorCode) -> Result<()> {

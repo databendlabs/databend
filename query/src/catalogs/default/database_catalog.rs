@@ -139,12 +139,12 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db)
+            .exists_database(&req.tenant, &req.db_name)
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                req.db
+                req.db_name
             )));
         }
         // create db in BOTTOM layer only
@@ -162,7 +162,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db)
+            .exists_database(&req.tenant, &req.db_name)
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -266,7 +266,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db)
+            .exists_database(&req.tenant, &req.db_name)
             .await?
         {
             return self.immutable_catalog.create_table(req).await;
@@ -284,7 +284,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db)
+            .exists_database(&req.tenant, &req.db_name)
             .await?
         {
             return self.immutable_catalog.drop_table(req).await;
@@ -302,11 +302,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db)
+            .exists_database(&req.tenant, &req.db_name)
             .await?
             || self
                 .immutable_catalog
-                .exists_database(&req.tenant, &req.new_db)
+                .exists_database(&req.tenant, &req.new_db_name)
                 .await?
         {
             return Err(ErrorCode::UnImplement(

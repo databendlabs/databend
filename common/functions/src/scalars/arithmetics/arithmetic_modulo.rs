@@ -25,8 +25,9 @@ use num_traits::AsPrimitive;
 
 use super::utils::rem_scalar;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
-use crate::scalars::TypedFunctionDescription;
 
 pub struct ArithmeticModuloFunction;
 
@@ -44,8 +45,8 @@ impl ArithmeticModuloFunction {
         })
     }
 
-    pub fn desc() -> TypedFunctionDescription {
-        TypedFunctionDescription::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
@@ -73,11 +74,16 @@ where
         "ModuloFunctionImpl"
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(O::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        O::to_data_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let lhs = columns[0].column();
         let rhs = columns[1].column();
         match (lhs.is_const(), rhs.is_const()) {

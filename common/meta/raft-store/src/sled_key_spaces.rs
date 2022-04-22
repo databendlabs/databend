@@ -21,6 +21,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableMeta;
 use openraft::raft::Entry;
 use serde::Deserialize;
@@ -28,6 +29,12 @@ use serde::Serialize;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
+use crate::state_machine::share_inbound::ShareInboundKey;
+use crate::state_machine::share_inbound::ShareInboundValue;
+use crate::state_machine::share_lookup::ShareLookupKey;
+use crate::state_machine::share_lookup::ShareLookupValue;
+use crate::state_machine::share_outbound::ShareOutboundKey;
+use crate::state_machine::share_outbound::ShareOutboundValue;
 use crate::state_machine::table_lookup::TableLookupValue;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::DatabaseLookupKey;
@@ -147,6 +154,38 @@ impl SledKeySpace for TableLookup {
     type V = SeqV<TableLookupValue>;
 }
 
+pub struct Shares {}
+impl SledKeySpace for Shares {
+    const PREFIX: u8 = 20;
+    const NAME: &'static str = "shares";
+    type K = u64;
+    type V = SeqV<ShareInfo>;
+}
+
+pub struct ShareLookup {}
+impl SledKeySpace for ShareLookup {
+    const PREFIX: u8 = 21;
+    const NAME: &'static str = "share-look-up";
+    type K = ShareLookupKey;
+    type V = SeqV<ShareLookupValue>;
+}
+
+pub struct ShareOutbounds {}
+impl SledKeySpace for ShareOutbounds {
+    const PREFIX: u8 = 22;
+    const NAME: &'static str = "share-outbounds";
+    type K = ShareOutboundKey;
+    type V = SeqV<ShareOutboundValue>;
+}
+
+pub struct ShareInbounds {}
+impl SledKeySpace for ShareInbounds {
+    const PREFIX: u8 = 23;
+    const NAME: &'static str = "share-inbounds";
+    type K = ShareInboundKey;
+    type V = SeqV<ShareInboundValue>;
+}
+
 /// Enum of key-value pair types of all key spaces.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KeySpaceKV {
@@ -197,5 +236,21 @@ pub enum KeySpaceKV {
     LogMeta {
         key: <LogMeta as SledKeySpace>::K,
         value: <LogMeta as SledKeySpace>::V,
+    },
+    Share {
+        key: <Shares as SledKeySpace>::K,
+        value: <Shares as SledKeySpace>::V,
+    },
+    ShareLookup {
+        key: <ShareLookup as SledKeySpace>::K,
+        value: <ShareLookup as SledKeySpace>::V,
+    },
+    ShareOutbound {
+        key: <ShareOutbounds as SledKeySpace>::K,
+        value: <ShareOutbounds as SledKeySpace>::V,
+    },
+    ShareInbound {
+        key: <ShareInbounds as SledKeySpace>::K,
+        value: <ShareInbounds as SledKeySpace>::V,
     },
 }

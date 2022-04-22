@@ -23,6 +23,7 @@ use crate::scalars::assert_string;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -32,7 +33,10 @@ pub struct StrcmpFunction {
 }
 
 impl StrcmpFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
         Ok(Box::new(StrcmpFunction {
             display_name: display_name.to_string(),
         }))
@@ -49,14 +53,16 @@ impl Function for StrcmpFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-        Ok(i8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        i8::to_data_type()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, i8, _>(
             columns[0].column(),
             columns[1].column(),

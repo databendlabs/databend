@@ -68,7 +68,7 @@ async fn test_catalogs_database() -> Result<()> {
         let mut req = CreateDatabaseReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: "db1".to_string(),
+            db_name: "db1".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -91,7 +91,7 @@ async fn test_catalogs_database() -> Result<()> {
         let mut req = DropDatabaseReq {
             if_exists: false,
             tenant: tenant.to_string(),
-            db: "db1".to_string(),
+            db_name: "db1".to_string(),
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
@@ -130,14 +130,14 @@ async fn test_catalogs_table() -> Result<()> {
             u64::to_data_type(),
         )]));
 
-        let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+        let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
         let created_on = Utc::now();
 
         let mut req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: "default".to_string(),
-            table: "test_table".to_string(),
+            db_name: "default".to_string(),
+            table_name: "test_table".to_string(),
             table_meta: TableMeta {
                 schema: schema.clone(),
                 engine: "MEMORY".to_string(),
@@ -168,8 +168,8 @@ async fn test_catalogs_table() -> Result<()> {
         let mut req = DropTableReq {
             if_exists: false,
             tenant: tenant.to_string(),
-            db: "default".to_string(),
-            table: "test_table".to_string(),
+            db_name: "default".to_string(),
+            table_name: "test_table".to_string(),
         };
         let res = catalog.drop_table(req.clone()).await;
         assert!(res.is_ok());

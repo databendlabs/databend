@@ -36,14 +36,10 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let dummy_session = sessions.create_session(SessionType::Test).await?;
 
     // Set user with all privileges
-    let mut user_info = UserInfo::new(
-        "root".to_string(),
-        "127.0.0.1".to_string(),
-        AuthInfo::Password {
-            hash_method: PasswordHashMethod::Sha256,
-            hash_value: Vec::from("pass"),
-        },
-    );
+    let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        hash_method: PasswordHashMethod::Sha256,
+        hash_value: Vec::from("pass"),
+    });
     user_info.grants.grant_privileges(
         &GrantObject::Global,
         UserPrivilegeSet::available_privileges_on_global(),
@@ -67,14 +63,10 @@ pub async fn create_query_context_with_config(
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
     let dummy_session = sessions.create_session(SessionType::Test).await?;
 
-    let mut user_info = UserInfo::new(
-        "root".to_string(),
-        "127.0.0.1".to_string(),
-        AuthInfo::Password {
-            hash_method: PasswordHashMethod::Sha256,
-            hash_value: Vec::from("pass"),
-        },
-    );
+    let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        hash_method: PasswordHashMethod::Sha256,
+        hash_value: Vec::from("pass"),
+    });
     user_info.grants.grant_privileges(
         &GrantObject::Global,
         UserPrivilegeSet::available_privileges_on_global(),

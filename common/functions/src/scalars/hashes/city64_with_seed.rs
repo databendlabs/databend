@@ -26,6 +26,7 @@ use naive_cityhash::cityhash64_with_seed;
 use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -60,7 +61,37 @@ pub struct City64WithSeedFunction {
 
 // CityHash64WithSeed(value, seed)
 impl City64WithSeedFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if !matches!(
+            args[0].data_type_id(),
+            TypeID::UInt8
+                | TypeID::UInt16
+                | TypeID::UInt32
+                | TypeID::UInt64
+                | TypeID::Int8
+                | TypeID::Int16
+                | TypeID::Int32
+                | TypeID::Int64
+                | TypeID::Float32
+                | TypeID::Float64
+                | TypeID::Date
+                | TypeID::DateTime
+                | TypeID::Interval
+                | TypeID::String
+        ) {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Unsupported data type: {:?}",
+                args[0]
+            )));
+        }
+
+        if !args[1].data_type_id().is_numeric() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Unsupported data type of hash seed: {:?}",
+                args[1]
+            )));
+        }
+
         Ok(Box::new(City64WithSeedFunction {
             display_name: display_name.to_string(),
         }))
@@ -77,46 +108,13 @@ impl Function for City64WithSeedFunction {
         &*self.display_name
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if !matches!(
-            args[0].data_type_id(),
-            TypeID::UInt8
-                | TypeID::UInt16
-                | TypeID::UInt32
-                | TypeID::UInt64
-                | TypeID::Int8
-                | TypeID::Int16
-                | TypeID::Int32
-                | TypeID::Int64
-                | TypeID::Float32
-                | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
-                | TypeID::Interval
-                | TypeID::String
-        ) {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Unsupported data type: {:?}",
-                args[0]
-            )));
-        }
-
-        if !args[1].data_type_id().is_numeric() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Unsupported data type of hash seed: {:?}",
-                args[1]
-            )));
-        }
-        Ok(UInt64Type::arc())
+    fn return_type(&self) -> DataTypePtr {
+        UInt64Type::arc()
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {

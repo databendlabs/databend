@@ -5,7 +5,7 @@ CREATE TABLE `test`.`a` (
 ) Engine = Null;
 SHOW CREATE TABLE `test`.`a`;
 CREATE TABLE `test`.`b` (
-    a bigint, b int null default null, c varchar(255), d smallint, e Date default today()
+    a bigint, b int null default null, c varchar(255), d smallint unsigned null, e Date default today()
 ) Engine = Null COMMENT = 'test b';
 SHOW CREATE TABLE `test`.`b`;
 DROP TABLE `test`.`a`;

@@ -26,6 +26,7 @@ use crate::scalars::scalar_binary_op;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -84,14 +85,16 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        for arg in args {
-            assert_numeric(*arg)?;
-        }
-        Ok(f64::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Float64Type::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         match IS_TRUNC {
             false => eval_round(columns),
             true => eval_trunc(columns),
@@ -169,7 +172,10 @@ pub struct RoundingFunction<const IS_TRUNC: bool> {
 }
 
 impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))

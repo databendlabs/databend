@@ -13,4 +13,4 @@
 // limitations under the License.
 
 pub(crate) mod auth_mgr;
-mod jwt;
+pub mod jwt;

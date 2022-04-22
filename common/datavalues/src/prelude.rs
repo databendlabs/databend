@@ -36,6 +36,7 @@ pub use crate::DataValueBinaryOperator;
 pub use crate::DataValueComparisonOperator;
 pub use crate::DataValueLogicOperator;
 pub use crate::DataValueUnaryOperator;
+pub use crate::VariantValue;
 
 pub type MutableLargeBinaryArray = MutableBinaryArray<i64>;
 pub type LargeBinaryArray = BinaryArray<i64>;

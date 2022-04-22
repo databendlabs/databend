@@ -38,6 +38,7 @@ use sqlparser::ast::Value;
 
 use crate::procedures::ContextFunction;
 use crate::sessions::QueryContext;
+use crate::sessions::SessionType;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -61,14 +62,18 @@ impl ExpressionAnalyzer {
         // Build RPN for expr. Because async function unsupported recursion
         for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr).await? {
             match rpn_item {
-                ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
+                ExprRPNItem::Value(v) => Self::analyze_value(
+                    v,
+                    &mut stack,
+                    self.context.get_current_session().get_type(),
+                )?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
                 ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
                 ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
                 ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
                 ExprRPNItem::Exists(v) => self.analyze_exists(v, &mut stack).await?,
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
-                ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
+                ExprRPNItem::Cast(v, pg_style) => self.analyze_cast(v, *pg_style, &mut stack)?,
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
                 ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
                 ExprRPNItem::MapAccess(v) => self.analyze_map_access(v, &mut stack)?,
@@ -94,8 +99,8 @@ impl ExpressionAnalyzer {
         }
     }
 
-    fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
-        args.push(ValueExprAnalyzer::analyze(value)?);
+    fn analyze_value(value: &Value, args: &mut Vec<Expression>, typ: SessionType) -> Result<()> {
+        args.push(ValueExprAnalyzer::analyze(value, typ)?);
         Ok(())
     }
 
@@ -205,7 +210,10 @@ impl ExpressionAnalyzer {
         let mut parameters = Vec::with_capacity(info.parameters.len());
 
         for parameter in &info.parameters {
-            match ValueExprAnalyzer::analyze(parameter)? {
+            match ValueExprAnalyzer::analyze(
+                parameter,
+                self.context.get_current_session().get_type(),
+            )? {
                 Expression::Literal { value, .. } => {
                     parameters.push(value);
                 }
@@ -321,7 +329,12 @@ impl ExpressionAnalyzer {
         Ok(())
     }
 
-    fn analyze_cast(&self, data_type: &DataTypePtr, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_cast(
+        &self,
+        data_type: &DataTypePtr,
+        pg_style: bool,
+        args: &mut Vec<Expression>,
+    ) -> Result<()> {
         match args.pop() {
             None => Err(ErrorCode::LogicalError(
                 "Cast operator must be one children.",
@@ -330,6 +343,7 @@ impl ExpressionAnalyzer {
                 args.push(Expression::Cast {
                     expr: Box::new(inner_expr),
                     data_type: data_type.clone(),
+                    pg_style,
                 });
                 Ok(())
             }
@@ -370,8 +384,6 @@ impl ExpressionAnalyzer {
                 "MapAccess operator must be one children.",
             )),
             Some(inner_expr) => {
-                let mut arguments = Vec::with_capacity(2);
-                arguments.push(inner_expr);
                 let path_name: String = keys
                     .iter()
                     .enumerate()
@@ -391,13 +403,16 @@ impl ExpressionAnalyzer {
                     })
                     .collect();
 
+                let name = match keys[0] {
+                    Value::ColonString(_) => format!("{}:{}", inner_expr.column_name(), path_name),
+                    _ => format!("{}{}", inner_expr.column_name(), path_name),
+                };
                 let path =
                     Expression::create_literal(DataValue::String(path_name.as_bytes().to_vec()));
-                arguments.push(path);
+                let arguments = vec![inner_expr, path];
 
-                let op = "get_path".to_string();
-                args.push(Expression::ScalarFunction {
-                    op,
+                args.push(Expression::MapAccess {
+                    name,
                     args: arguments,
                 });
                 Ok(())
@@ -433,7 +448,7 @@ enum ExprRPNItem {
     Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
-    Cast(DataTypePtr),
+    Cast(DataTypePtr, bool),
     Between(bool),
     InList(InListInfo),
     MapAccess(Vec<Value>),
@@ -500,11 +515,11 @@ impl ExprRPNBuilder {
             }
             Expr::IsNull(_) => {
                 self.rpn
-                    .push(ExprRPNItem::function(String::from("isnull"), 1));
+                    .push(ExprRPNItem::function(String::from("is_null"), 1));
             }
             Expr::IsNotNull(_) => {
                 self.rpn
-                    .push(ExprRPNItem::function(String::from("isnotnull"), 1));
+                    .push(ExprRPNItem::function(String::from("is_not_null"), 1));
             }
             Expr::UnaryOp { op, .. } => {
                 match op {
@@ -534,23 +549,31 @@ impl ExprRPNBuilder {
                     parameters: function.params.to_owned(),
                 }));
             }
-            Expr::Cast { data_type, .. } => {
-                self.rpn
-                    .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+            Expr::Cast {
+                data_type,
+                pg_style,
+                ..
+            } => {
+                self.rpn.push(ExprRPNItem::Cast(
+                    SQLCommon::make_data_type(data_type)?,
+                    *pg_style,
+                ));
             }
             Expr::TryCast { data_type, .. } => {
                 let mut ty = SQLCommon::make_data_type(data_type)?;
                 if ty.can_inside_nullable() {
-                    ty = Arc::new(NullableType::create(ty))
+                    ty = NullableType::arc(ty)
                 }
-                self.rpn.push(ExprRPNItem::Cast(ty));
+                self.rpn.push(ExprRPNItem::Cast(ty, false));
             }
             Expr::TypedString { data_type, value } => {
                 self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
                     value.to_string(),
                 )));
-                self.rpn
-                    .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+                self.rpn.push(ExprRPNItem::Cast(
+                    SQLCommon::make_data_type(data_type)?,
+                    false,
+                ));
             }
             Expr::Position { .. } => {
                 let name = String::from("position");

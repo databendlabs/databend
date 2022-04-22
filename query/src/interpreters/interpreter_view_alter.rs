@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -87,19 +87,19 @@ impl AlterViewInterpreter {
         let plan = DropTableReq {
             if_exists: true,
             tenant: self.plan.tenant.clone(),
-            db: self.plan.db.clone(),
-            table: self.plan.viewname.clone(),
+            db_name: self.plan.db.clone(),
+            table_name: self.plan.viewname.clone(),
         };
         catalog.drop_table(plan).await?;
 
         // create new view
-        let mut options = HashMap::new();
+        let mut options = BTreeMap::new();
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
             if_not_exists: true,
             tenant: self.plan.tenant.clone(),
-            db: self.plan.db.clone(),
-            table: self.plan.viewname.clone(),
+            db_name: self.plan.db.clone(),
+            table_name: self.plan.viewname.clone(),
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
                 options,

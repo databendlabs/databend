@@ -210,7 +210,7 @@ fn build_ndjson_stream(
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
-            let cursor = std::io::Cursor::new(bytes);
+            let cursor = futures::io::Cursor::new(bytes);
             let mut source = builder.build(cursor)?;
 
             loop {

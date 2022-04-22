@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 mod cluster;
+mod compatible;
 mod match_seq;
 mod user_defined_function;
 mod user_grant;

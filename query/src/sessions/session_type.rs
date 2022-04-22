@@ -24,11 +24,15 @@ pub enum SessionType {
     FlightRPC,
     HTTPAPI(String),
     Test,
+    Fuzz,
 }
 
 impl SessionType {
     pub fn is_user_session(&self) -> bool {
-        !matches!(self, SessionType::HTTPAPI(_) | SessionType::Test)
+        !matches!(
+            self,
+            SessionType::HTTPAPI(_) | SessionType::Test | SessionType::Fuzz
+        )
     }
 }
 
@@ -43,6 +47,7 @@ impl fmt::Display for SessionType {
             SessionType::Test => "Test".to_string(),
             SessionType::FlightRPC => "FlightRPC".to_string(),
             SessionType::HTTPAPI(usage) => format!("HTTPAPI({})", usage),
+            SessionType::Fuzz => "Fuzz".to_string(),
         };
         write!(f, "{}", name)
     }

@@ -16,13 +16,9 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::LogicAndFunction;
-use common_functions::scalars::LogicNotFunction;
-use common_functions::scalars::LogicOrFunction;
-use common_functions::scalars::LogicXorFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions;
-use crate::scalars::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_logic_not_function() -> Result<()> {
@@ -34,7 +30,7 @@ fn test_logic_not_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionTest {
-            name: "not-null",
+            name: "not-nullable",
             columns: vec![Series::from_data(vec![None, Some(true), Some(false)])],
             expect: Series::from_data(vec![None, Some(false), Some(true)]),
             error: "",
@@ -46,7 +42,7 @@ fn test_logic_not_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicNotFunction::try_create("not")?, &tests, true)
+    test_scalar_functions("not", &tests)
 }
 
 #[test]
@@ -73,14 +69,14 @@ fn test_logic_and_function() -> Result<()> {
         ScalarFunctionTest {
             name: "and-null",
             columns: vec![
-                Series::from_data(vec![None, Some(true), Some(true), Some(false)]),
-                Arc::new(NullColumn::new(4)),
+                Series::from_data(vec![None, Some(true), Some(false)]),
+                Arc::new(NullColumn::new(3)),
             ],
-            expect: Arc::new(NullColumn::new(4)),
+            expect: Series::from_data(vec![None, None, Some(false)]),
             error: "",
         },
     ];
-    test_scalar_functions(LogicAndFunction::try_create("and")?, &tests, true)
+    test_scalar_functions("and", &tests)
 }
 
 #[test]
@@ -98,19 +94,10 @@ fn test_logic_or_function() -> Result<()> {
         ScalarFunctionTest {
             name: "or-null",
             columns: vec![
-                Series::from_data(vec![None, None, None, Some(false)]),
-                Series::from_data(vec![Some(true), Some(false), None, Some(true)]),
+                Series::from_data(vec![None, None, None, Some(false), Some(false)]),
+                Series::from_data(vec![Some(true), Some(false), None, Some(true), Some(false)]),
             ],
-            expect: Series::from_data(vec![Some(true), None, None, Some(true)]),
-            error: "",
-        },
-        ScalarFunctionTest {
-            name: "or-null",
-            columns: vec![
-                Series::from_data(vec![None, None, None, Some(false)]),
-                Series::from_data(vec![Some(true), Some(false), None, Some(true)]),
-            ],
-            expect: Series::from_data(vec![Some(true), None, None, Some(true)]),
+            expect: Series::from_data(vec![Some(true), None, None, Some(true), Some(false)]),
             error: "",
         },
         ScalarFunctionTest {
@@ -123,7 +110,8 @@ fn test_logic_or_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicOrFunction::try_create("or")?, &tests, false)
+
+    test_scalar_functions("or", &tests)
 }
 
 #[test]
@@ -157,5 +145,5 @@ fn test_logic_xor_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicXorFunction::try_create("or")?, &tests, true)
+    test_scalar_functions("xor", &tests)
 }

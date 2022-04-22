@@ -105,7 +105,8 @@ impl JoinedSchemaAnalyzer {
 
         if tbl_info.engine() == VIEW_ENGINE {
             if let Some(query) = tbl_info.options().get(QUERY) {
-                let (statements, _) = DfParser::parse_sql(query.as_str())?;
+                let (statements, _) =
+                    DfParser::parse_sql(query.as_str(), self.ctx.get_current_session().get_type())?;
                 if statements.len() == 1 {
                     if let DfStatement::Query(subquery) = &statements[0] {
                         if let AnalyzedResult::SelectQuery(state) =

@@ -46,12 +46,6 @@ async fn test_select() -> PoemResult<()> {
     let server = Server::new();
 
     {
-        let (status, body) = server.get("").await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_error!(body, "Empty query");
-    }
-
-    {
         let (status, body) = server.get("bad sql").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "sql parser error");
@@ -67,6 +61,12 @@ async fn test_select() -> PoemResult<()> {
         let (status, body) = server.post("", "bad sql").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "sql parser error");
+    }
+
+    {
+        let (status, body) = server.get("").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(&body, "");
     }
 
     {

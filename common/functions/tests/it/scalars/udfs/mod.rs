@@ -13,5 +13,4 @@
 // limitations under the License.
 
 mod database;
-mod to_type_name;
 mod version;

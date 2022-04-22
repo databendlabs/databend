@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateDatabase;
@@ -31,11 +31,12 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
         });
         expect_parse_ok(sql, expected)?;
     }
+    expect_synonym_parse_eq("CREATE DATABASE db1", "CREATE SCHEMA db1")?;
 
     {
         let sql = "CREATE DATABASE db1 engine = github";
@@ -43,11 +44,15 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "github".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
         });
         expect_parse_ok(sql, expected)?;
     }
+    expect_synonym_parse_eq(
+        "CREATE DATABASE db1 engine = github",
+        "CREATE SCHEMA db1 engine = github",
+    )?;
 
     {
         let sql = "CREATE DATABASE IF NOT EXISTS db1";
@@ -55,11 +60,15 @@ fn create_database() -> Result<()> {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
         });
         expect_parse_ok(sql, expected)?;
     }
+    expect_synonym_parse_eq(
+        "CREATE DATABASE IF NOT EXISTS db1",
+        "CREATE SCHEMA IF NOT EXISTS db1",
+    )?;
 
     Ok(())
 }
@@ -74,6 +83,8 @@ fn drop_database() -> Result<()> {
         });
         expect_parse_ok(sql, expected)?;
     }
+    expect_synonym_parse_eq("DROP DATABASE db1", "DROP SCHEMA db1")?;
+
     {
         let sql = "DROP DATABASE IF EXISTS db1";
         let expected = DfStatement::DropDatabase(DfDropDatabase {
@@ -82,6 +93,7 @@ fn drop_database() -> Result<()> {
         });
         expect_parse_ok(sql, expected)?;
     }
+    expect_synonym_parse_eq("DROP DATABASE IF EXISTS db1", "DROP SCHEMA IF EXISTS db1")?;
 
     Ok(())
 }
@@ -94,6 +106,7 @@ fn show_create_database_test() -> Result<()> {
             name: ObjectName(vec![Ident::new("test")]),
         }),
     )?;
+    expect_synonym_parse_eq("SHOW CREATE DATABASE test", "SHOW CREATE SCHEMA test")?;
 
     Ok(())
 }

@@ -43,7 +43,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     let create_db_req = CreateDatabaseReq {
         if_not_exists: false,
         tenant: tenant.to_string(),
-        db: "system".to_string(),
+        db_name: "system".to_string(),
         meta: Default::default(),
     };
     let create_db_req = catalog.create_database(create_db_req).await;
@@ -52,7 +52,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     let drop_db_req = DropDatabaseReq {
         if_exists: false,
         tenant: tenant.to_string(),
-        db: "system".to_string(),
+        db_name: "system".to_string(),
     };
     let drop_db_req = catalog.drop_database(drop_db_req).await;
     assert!(drop_db_req.is_err());

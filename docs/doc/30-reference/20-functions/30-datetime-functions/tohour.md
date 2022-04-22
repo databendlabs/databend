@@ -23,14 +23,14 @@ toHour(expr)
 ## Examples
 
 ```sql
-mysql> select toHour(now());
+SELECT toHour(now());
 +---------------+
 | toHour(now()) |
 +---------------+
 |             6 |
 +---------------+
 
-mysql> select toHour(toDateTime(1630812366));
+SELECT toHour(toDateTime(1630812366));
 +--------------------------------+
 | toHour(toDateTime(1630812366)) |
 +--------------------------------+

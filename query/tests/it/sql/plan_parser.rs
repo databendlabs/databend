@@ -165,7 +165,7 @@ async fn test_plan_parser() -> Result<()> {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 2602, displayText = Unknown UDF unsupported (while in analyze select projection).",
+            error: "Code: 2602, displayText = Unknown Function unsupported (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",
@@ -266,6 +266,12 @@ async fn test_plan_parser() -> Result<()> {
             sql: "DROP ROLE role1",
             expect: "Drop role role1 if_exists:false",
             error: "",
+        },
+        Test {
+            name: "select-without-table",
+            sql: "SELECT *",
+            expect: "",
+            error: "Code: 1015, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
         }
     ];
 

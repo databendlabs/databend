@@ -24,7 +24,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT INSTR('foobarbar', 'bar');
 +---------------------------+
 | INSTR('foobarbar', 'bar') |

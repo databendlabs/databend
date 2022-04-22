@@ -21,15 +21,12 @@ Execute [CREATE STAGE](/doc/reference/sql/ddl/stage/ddl-create-stage) to create 
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```sql title='mysql>'
-create stage my_int_stage;
-```
-
-```sql title='mysql>'
-desc stage my_int_stage;
+```sql
+CREATE STAGE my_int_stage;
 ```
 
 ```sql
+DESC STAGE my_int_stage;
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
 | name         | stage_type | stage_params                                                                                                                                                | copy_options                                  | file_format_options                                                                                                | comment |
 +--------------+------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
@@ -125,11 +122,8 @@ curl -H "stage_name:my_int_stage"\
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```sql title='mysql>'
-list @my_int_stage;
-```
-
-```text
+```sql
+LIST @my_int_stage;
 +---------------+
 | file_name     |
 +---------------+
@@ -140,20 +134,20 @@ list @my_int_stage;
 
 ### Step 4. Creating Database and Table
 
-```sql title='mysql>'
-create database book_db;
+```sql
+CREATE DATABASE book_db;
 ```
 
-```sql title='mysql>'
-use book_db;
+```sql
+USE book_db;
 ```
 
-```sql title='mysql>'
-create table books
+```sql
+CREATE TABLE books
 (
-    title VARCHAR(255),
-    author VARCHAR(255),
-    date VARCHAR(255)
+    title VARCHAR,
+    author VARCHAR,
+    date VARCHAR
 );
 ```
 
@@ -165,10 +159,9 @@ Execute [COPY](/doc/reference/sql/dml/dml-copy) to load staged files to the targ
 
 <TabItem value="csv" label="CSV">
 
-```sql title='mysql>'
-copy into books from '@my_int_stage' files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
+```sql
+COPY INTO books FROM '@my_int_stage' files=('books.csv') file_format = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0);
 ```
-
 
 :::tip
 
@@ -190,8 +183,8 @@ copy into books from '@my_int_stage' files=('books.csv') file_format = (type = '
 
 <TabItem value="parquet" label="Parquet">
 
-```sql title='mysql>'
-copy into books from '@my_int_stage' files=('books.parquet') file_format = (type = 'Parquet');
+```sql
+COPY INTO books FROM '@my_int_stage' files=('books.parquet') file_format = (type = 'Parquet');
 ```
 
 </TabItem>
@@ -201,11 +194,8 @@ copy into books from '@my_int_stage' files=('books.parquet') file_format = (type
 
 ### Step 6. Verify the Loaded Data
 
-```sql title='mysql>'
-select * from books;
-```
-
-```
+```sql
+SELECT * FROM Books;
 +------------------------------+----------------------+-------+
 | title                        | author               | date  |
 +------------------------------+----------------------+-------+

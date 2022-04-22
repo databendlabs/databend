@@ -25,6 +25,7 @@ use crate::scalars::function_common::assert_numeric;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
@@ -35,7 +36,8 @@ pub struct SignFunction {
 }
 
 impl SignFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        assert_numeric(args[0])?;
         Ok(Box::new(SignFunction {
             display_name: display_name.to_string(),
         }))
@@ -65,12 +67,16 @@ impl Function for SignFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        assert_numeric(args[0])?;
-        Ok(i8::to_data_type())
+    fn return_type(&self) -> DataTypePtr {
+        Int8Type::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             let col = scalar_unary_op::<$S, i8, _>(columns[0].column(), sign::<$S>, &mut ctx)?;

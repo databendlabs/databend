@@ -13,11 +13,8 @@ LIST { internalStage | externalStage } [ PATTERN = '<regex_pattern>' ]
 
 ## Examples
 
-```sql title='mysql>'
-list @my_int_stage;
-```
-
-```text
+```sql
+LIST @my_int_stage;
 +-----------+
 | file_name |
 +-----------+

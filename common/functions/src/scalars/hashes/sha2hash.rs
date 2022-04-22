@@ -24,6 +24,7 @@ use sha2::Digest;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -33,7 +34,21 @@ pub struct Sha2HashFunction {
 }
 
 impl Sha2HashFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        if args[0].data_type_id() != TypeID::String {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected first arg as string type, but got {:?}",
+                args[0]
+            )));
+        }
+
+        if !args[1].data_type_id().is_numeric() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected second arg as integer type, but got {:?}",
+                args[1]
+            )));
+        }
+
         Ok(Box::new(Sha2HashFunction {
             display_name: display_name.to_string(),
         }))
@@ -50,28 +65,13 @@ impl Function for Sha2HashFunction {
         &*self.display_name
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        if args[0].data_type_id() != TypeID::String {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected first arg as string type, but got {:?}",
-                args[0]
-            )));
-        }
-
-        if !args[1].data_type_id().is_numeric() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected second arg as integer type, but got {:?}",
-                args[1]
-            )));
-        }
-        Ok(StringType::arc())
+    fn return_type(&self) -> DataTypePtr {
+        StringType::arc()
     }
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {

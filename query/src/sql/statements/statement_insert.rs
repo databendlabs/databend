@@ -163,7 +163,7 @@ impl<'a> DfInsertStatement<'a> {
             Err(_) => {
                 let bytes = values_str.as_bytes();
                 source
-                    .parser_read(bytes, ExpressionAnalyzer::create(ctx))
+                    .parser_read(bytes, ExpressionAnalyzer::create(ctx.clone()), ctx)
                     .await
             }
         }?;

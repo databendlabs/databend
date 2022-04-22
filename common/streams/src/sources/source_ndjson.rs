@@ -15,13 +15,13 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use common_base::tokio::io::AsyncBufRead;
-use common_base::tokio::io::AsyncBufReadExt;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use futures::AsyncBufRead;
+use futures::AsyncBufReadExt;
 
 use crate::Source;
 

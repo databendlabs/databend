@@ -262,7 +262,7 @@ impl fmt::Display for AggregateDistinctCombinator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.nested_name.as_str() {
             "uniq" => write!(f, "uniq"),
-            _ => write!(f, "{}distinct", self.nested_name),
+            _ => write!(f, "{}_distinct", self.nested_name),
         }
     }
 }

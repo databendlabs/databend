@@ -27,7 +27,7 @@ A f64 data type value.
 
 ## Examples
 
-```text
+```sql
 SELECT ROUND(-1.23);
 +-----------------+
 | ROUND((- 1.23)) |

@@ -109,6 +109,18 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
     MetaApiTestSuite {}.table_list(&client).await
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_api_share_create_get_drop() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+
+    MetaApiTestSuite {}.share_create_get_drop(&client).await
+}
+
 // TODO(xp): uncomment following tests when the function is ready
 // ------------------------------------------------------------
 

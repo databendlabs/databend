@@ -20,13 +20,17 @@ use common_meta_types::AddResult;
 use common_meta_types::AppError;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
+use common_meta_types::Cmd::CreateShare;
 use common_meta_types::Cmd::CreateTable;
 use common_meta_types::Cmd::DropDatabase;
+use common_meta_types::Cmd::DropShare;
 use common_meta_types::Cmd::DropTable;
 use common_meta_types::Cmd::RenameTable;
 use common_meta_types::Cmd::UpsertTableOptions;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateShareReply;
+use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseAlreadyExists;
@@ -34,9 +38,12 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropShareReply;
+use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -45,12 +52,15 @@ use common_meta_types::MetaError;
 use common_meta_types::OkOrExist;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
+use common_meta_types::ShareAlreadyExists;
+use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableVersionMismatched;
 use common_meta_types::UnknownDatabase;
+use common_meta_types::UnknownShare;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReply;
@@ -63,18 +73,12 @@ use crate::executor::ActionHandler;
 #[async_trait::async_trait]
 impl RequestHandler<CreateDatabaseReq> for ActionHandler {
     async fn handle(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let db_meta = &req.meta;
+        let db_name = req.db_name.clone();
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
-            cmd: CreateDatabase {
-                tenant,
-                name: db_name.clone(),
-                meta: db_meta.clone(),
-            },
+            cmd: CreateDatabase(req),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -112,15 +116,11 @@ impl RequestHandler<GetDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropDatabaseReq> for ActionHandler {
     async fn handle(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
+        let db_name = req.db_name.clone();
         let if_exists = req.if_exists;
         let cr = LogEntry {
             txid: None,
-            cmd: DropDatabase {
-                tenant,
-                name: db_name.clone(),
-            },
+            cmd: DropDatabase(req),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -146,23 +146,15 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableReq> for ActionHandler {
     async fn handle(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table;
+        let db_name = req.db_name.clone();
+        let table_name = req.table_name.clone();
         let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let table_meta = req.table_meta;
-
         let cr = LogEntry {
             txid: None,
-            cmd: CreateTable {
-                tenant,
-                db_name: db_name.clone(),
-                table_name: table_name.clone(),
-                table_meta,
-            },
+            cmd: CreateTable(req),
         };
 
         let rst = self.meta_node.write(cr).await?;
@@ -190,18 +182,12 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropTableReq> for ActionHandler {
     async fn handle(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table;
+        let table_name = req.table_name.clone();
         let if_exists = req.if_exists;
 
         let cr = LogEntry {
             txid: None,
-            cmd: DropTable {
-                tenant,
-                db_name: db_name.clone(),
-                table_name: table_name.clone(),
-            },
+            cmd: DropTable(req),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -225,21 +211,10 @@ impl RequestHandler<DropTableReq> for ActionHandler {
 impl RequestHandler<RenameTableReq> for ActionHandler {
     async fn handle(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
         let if_exists = req.if_exists;
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table_name;
-        let new_db_name = &req.new_db;
-        let new_table_name = &req.new_table_name;
 
         let cr = LogEntry {
             txid: None,
-            cmd: RenameTable {
-                tenant,
-                db_name: db_name.clone(),
-                table_name: table_name.clone(),
-                new_db_name: new_db_name.clone(),
-                new_table_name: new_table_name.clone(),
-            },
+            cmd: RenameTable(req),
         };
 
         let res = self.meta_node.write(cr).await;
@@ -337,5 +312,72 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
         }
 
         Ok(UpsertTableOptionReply {})
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<CreateShareReq> for ActionHandler {
+    async fn handle(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
+        let share_name = &req.share_name;
+        let if_not_exists = req.if_not_exists;
+
+        let cr = LogEntry {
+            txid: None,
+            cmd: CreateShare(req.clone()),
+        };
+
+        let res = self.meta_node.write(cr).await?;
+
+        let mut ch: Change<ShareInfo> = res
+            .try_into()
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
+        let share_id = ch.ident.take().expect("Some(share_id)");
+        let (prev, _result) = ch.unpack_data();
+
+        if prev.is_some() && !if_not_exists {
+            let ae = AppError::from(ShareAlreadyExists::new(
+                share_name,
+                "RequestHandler: create_share",
+            ));
+
+            return Err(MetaError::from(ae));
+        }
+
+        Ok(CreateShareReply { share_id })
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<DropShareReq> for ActionHandler {
+    async fn handle(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
+        let share_name = req.share_name.clone();
+        let if_exists = req.if_exists;
+        let cr = LogEntry {
+            txid: None,
+            cmd: DropShare(req),
+        };
+
+        let res = self.meta_node.write(cr).await?;
+
+        let ch: Change<ShareInfo> = res
+            .try_into()
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
+        let (prev, _result) = ch.unpack_data();
+
+        if prev.is_some() || if_exists {
+            Ok(DropShareReply {})
+        } else {
+            let ae = AppError::from(UnknownShare::new(share_name, "RequestHandler: drop_share"));
+
+            Err(MetaError::from(ae))
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl RequestHandler<GetShareReq> for ActionHandler {
+    async fn handle(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+        let res = self.meta_node.consistent_read(req).await?;
+        Ok(res)
     }
 }

@@ -45,18 +45,17 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     type_factory.register(Float32Type::arc());
     type_factory.register(Float64Type::arc());
 
-    type_factory.register(Date16Type::arc());
-    type_factory.register(Date32Type::arc());
-    type_factory.register(DateTime32Type::arc(None));
+    type_factory.register(DateType::arc());
     type_factory.register(VariantType::arc());
     type_factory.register(VariantArrayType::arc());
     type_factory.register(VariantObjectType::arc());
 
-    // DateTime64 is a special case
+    // DateTime is a special case
     {
-        type_factory.register(DateTime64Type::arc(3, None));
-        type_factory.register(DateTime64Type::arc(6, None));
-        type_factory.register(DateTime64Type::arc(9, None));
+        type_factory.register(DateTimeType::arc(0, None));
+        type_factory.register(DateTimeType::arc(3, None));
+        type_factory.register(DateTimeType::arc(6, None));
+        type_factory.register(DateTimeType::arc(9, None));
     }
 
     type_factory.add_array_wrapper();
@@ -114,7 +113,7 @@ impl TypeFactory {
         let mut nulls = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
             if v.can_inside_nullable() {
-                let data_type: DataTypePtr = Arc::new(NullableType::create(v.clone()));
+                let data_type: DataTypePtr = NullableType::arc(v.clone());
                 nulls.insert(
                     format!("Nullable({})", k).to_ascii_lowercase(),
                     data_type.clone(),

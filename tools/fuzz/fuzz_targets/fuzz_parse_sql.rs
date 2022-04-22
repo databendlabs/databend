@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_query::sessions::SessionType;
 use databend_query::sql::DfParser;
 use honggfuzz::fuzz;
 
 fn main() {
     loop {
         fuzz!(|data: String| {
-            let _ = DfParser::parse_sql(&data);
+            let _ = DfParser::parse_sql(&data, SessionType::Fuzz);
         });
     }
 }

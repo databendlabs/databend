@@ -25,6 +25,7 @@ use common_planners::Expression;
 use common_tracing::tracing;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 use crate::storages::index::IndexSchemaVersion;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
@@ -65,6 +66,8 @@ pub struct BloomFilterIndexer {
 
     // The bloom block contains bloom filters;
     pub bloom_block: DataBlock,
+
+    pub ctx: Arc<QueryContext>,
 }
 
 const BLOOM_FILTER_MAX_NUM_BITS: usize = 20480; // 2.5KB, maybe too big?
@@ -89,10 +92,12 @@ impl BloomFilterIndexer {
     pub fn from_bloom_block(
         source_table_schema: DataSchemaRef,
         bloom_block: DataBlock,
+        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
             bloom_block,
+            ctx,
         })
     }
 
@@ -100,15 +105,19 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     #[allow(dead_code)]
-    pub fn try_create(source_data_blocks: &[DataBlock]) -> Result<Self> {
+    pub fn try_create(source_data_blocks: &[DataBlock], ctx: Arc<QueryContext>) -> Result<Self> {
         let seed = Self::create_seed();
-        Self::try_create_with_seed(source_data_blocks, seed)
+        Self::try_create_with_seed(source_data_blocks, seed, ctx)
     }
 
     /// Create a bloom filter block from source data blocks and seed(s).
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn try_create_with_seed(blocks: &[DataBlock], seed: u64) -> Result<Self> {
+    pub fn try_create_with_seed(
+        blocks: &[DataBlock],
+        seed: u64,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
@@ -139,7 +148,7 @@ impl BloomFilterIndexer {
                 // ingest the same column data from all blocks
                 for block in blocks.iter() {
                     let col = block.column(i);
-                    bloom_filter.add(col)?;
+                    bloom_filter.add(col, ctx.clone())?;
                 }
 
                 // create bloom filter column
@@ -155,6 +164,7 @@ impl BloomFilterIndexer {
         Ok(Self {
             source_schema,
             bloom_block,
+            ctx,
         })
     }
 
@@ -163,6 +173,7 @@ impl BloomFilterIndexer {
         column_name: &str,
         target: DataValue,
         typ: DataTypePtr,
+        ctx: Arc<QueryContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
@@ -176,7 +187,7 @@ impl BloomFilterIndexer {
         let bloom_bytes = self.bloom_block.first(&bloom_column)?.as_string()?;
         let bloom_filter = BloomFilter::from_vec(bloom_bytes.as_ref())?;
 
-        if bloom_filter.find(target, typ)? {
+        if bloom_filter.find(target, typ, ctx)? {
             Ok(BloomFilterExprEvalResult::Unknown)
         } else {
             Ok(BloomFilterExprEvalResult::False)
@@ -226,7 +237,7 @@ impl BloomFilterIndexer {
                 match schema.column_with_name(column) {
                     Some((_index, data_field)) => {
                         let data_type = data_field.data_type();
-                        self.find(column, value.clone(), data_type.clone())
+                        self.find(column, value.clone(), data_type.clone(), self.ctx.clone())
                     }
                     None => Err(ErrorCode::BadArguments(format!(
                         "Column '{}' not found in schema",
@@ -438,10 +449,8 @@ impl BloomFilter {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::DateTime
                 | TypeID::Interval
                 | TypeID::String
         )
@@ -476,7 +485,11 @@ impl BloomFilter {
         seed2.0
     }
 
-    fn compute_column_city_hash(seed: u64, column: &ColumnRef) -> Result<ColumnRef> {
+    fn compute_column_city_hash(
+        seed: u64,
+        column: &ColumnRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<ColumnRef> {
         let input_column = "input"; // create a dummy column name
         let input_field = DataField::new(input_column, column.data_type());
         let input_schema = Arc::new(DataSchema::new(vec![input_field]));
@@ -504,6 +517,7 @@ impl BloomFilter {
             output_schema,
             vec![expr],
             true,
+            ctx,
         )?;
 
         let data_block = DataBlock::create(input_schema, vec![column.clone()]);
@@ -512,10 +526,15 @@ impl BloomFilter {
         Ok(output.column(0).clone())
     }
 
-    fn compute_column_double_hashes(&self, column: &ColumnRef) -> Result<(ColumnRef, ColumnRef)> {
-        let hash1_column: ColumnRef = Self::compute_column_city_hash(self.seed, column)?;
+    fn compute_column_double_hashes(
+        &self,
+        column: &ColumnRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<(ColumnRef, ColumnRef)> {
+        let hash1_column: ColumnRef =
+            Self::compute_column_city_hash(self.seed, column, ctx.clone())?;
         let seed2 = self.generate_seed_2();
-        let hash2_column: ColumnRef = Self::compute_column_city_hash(seed2, column)?;
+        let hash2_column: ColumnRef = Self::compute_column_city_hash(seed2, column, ctx)?;
 
         Ok((hash1_column, hash2_column))
     }
@@ -524,7 +543,7 @@ impl BloomFilter {
     ///
     /// The design of skipping Nulls is arguably correct. For now we do the same as databricks.
     /// See the design of databricks https://docs.databricks.com/delta/optimizations/bloom-filters.html
-    pub fn add(&mut self, column: &ColumnRef) -> Result<()> {
+    pub fn add(&mut self, column: &ColumnRef, ctx: Arc<QueryContext>) -> Result<()> {
         if !Self::is_supported_type(&column.data_type()) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {} ",
@@ -537,7 +556,7 @@ impl BloomFilter {
             return Ok(());
         }
 
-        let (hash1_column, hash2_column) = self.compute_column_double_hashes(column)?;
+        let (hash1_column, hash2_column) = self.compute_column_double_hashes(column, ctx)?;
 
         // If the input is not nullable, we say all hashed values should be valid and we put them into bloom filter without checking validity.
         if !column.is_nullable() {
@@ -573,14 +592,15 @@ impl BloomFilter {
         &self,
         data_value: DataValue,
         data_type: DataTypePtr,
+        ctx: Arc<QueryContext>,
     ) -> Result<(u64, u64)> {
         let col = data_value.as_const_column(&data_type, 1)?;
 
-        let hash1_column = Self::compute_column_city_hash(self.seed, &col)?;
+        let hash1_column = Self::compute_column_city_hash(self.seed, &col, ctx.clone())?;
         let h1 = hash1_column.get_u64(0)?;
 
         let seed2 = self.generate_seed_2();
-        let hash2_column = Self::compute_column_city_hash(seed2, &col)?;
+        let hash2_column = Self::compute_column_city_hash(seed2, &col, ctx)?;
         let h2 = hash2_column.get_u64(0)?;
 
         Ok((h1, h2))
@@ -604,7 +624,7 @@ impl BloomFilter {
     ///     let not_exist = BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     ///
     /// ```
-    pub fn find(&self, val: DataValue, typ: DataTypePtr) -> Result<bool> {
+    pub fn find(&self, val: DataValue, typ: DataTypePtr, ctx: Arc<QueryContext>) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {:?} ",
@@ -616,7 +636,7 @@ impl BloomFilter {
             return Err(ErrorCode::BadArguments("Null value is not supported"));
         }
 
-        let (hash1, hash2) = self.compute_data_value_double_hashes(val, typ)?;
+        let (hash1, hash2) = self.compute_data_value_double_hashes(val, typ, ctx)?;
         let h1 = Wrapping(hash1);
         let h2 = Wrapping(hash2);
         for i in 0..self.num_hashes {

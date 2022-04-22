@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::EmptyPlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
@@ -35,7 +36,7 @@ pub struct PlanParser;
 
 impl PlanParser {
     pub async fn parse(ctx: Arc<QueryContext>, query: &str) -> Result<PlanNode> {
-        let (statements, _) = DfParser::parse_sql(query)?;
+        let (statements, _) = DfParser::parse_sql(query, ctx.get_current_session().get_type())?;
         PlanParser::build_plan(statements, ctx).await
     }
 
@@ -43,7 +44,7 @@ impl PlanParser {
         query: &str,
         ctx: Arc<QueryContext>,
     ) -> (Result<PlanNode>, Vec<DfHint>) {
-        match DfParser::parse_sql(query) {
+        match DfParser::parse_sql(query, ctx.get_current_session().get_type()) {
             Err(cause) => (Err(cause), vec![]),
             Ok((statements, hints)) => (PlanParser::build_plan(statements, ctx).await, hints),
         }
@@ -54,7 +55,7 @@ impl PlanParser {
         ctx: Arc<QueryContext>,
     ) -> Result<PlanNode> {
         if statements.is_empty() {
-            return Err(ErrorCode::SyntaxException("Empty query"));
+            return Ok(PlanNode::Empty(EmptyPlan::create()));
         } else if statements.len() > 1 {
             return Err(ErrorCode::SyntaxException("Only support single query"));
         }

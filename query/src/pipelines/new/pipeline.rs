@@ -133,6 +133,7 @@ impl NewPipeline {
         Ok(())
     }
 
+    /// Add a ResizePipe to pipes
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::LogicalError("Cannot resize empty pipe.")),

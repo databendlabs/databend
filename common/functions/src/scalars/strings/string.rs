@@ -44,6 +44,7 @@ use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RegexpInStrFunction;
 use crate::scalars::RegexpLikeFunction;
+use crate::scalars::RegexpReplaceFunction;
 use crate::scalars::RegexpSubStrFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
@@ -85,6 +86,7 @@ impl StringFunction {
         factory.register("length", LengthFunction::desc());
         factory.register("regexp_instr", RegexpInStrFunction::desc());
         factory.register("regexp_like", RegexpLikeFunction::desc());
+        factory.register("regexp_replace", RegexpReplaceFunction::desc());
         factory.register("regexp_substr", RegexpSubStrFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("oct", OctFunction::desc());

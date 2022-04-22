@@ -49,7 +49,7 @@ fn test_display_create_table() {
                 name: "column".to_owned(),
                 quote: None,
             },
-            data_type: TypeName::Int(None),
+            data_type: TypeName::Int { unsigned: false },
             nullable: false,
             default_value: Some(Literal::Number("123".to_owned())),
         }],
@@ -69,7 +69,7 @@ fn test_display_query() {
     let stmt = SelectStmt {
         distinct: true,
         select_list: vec![
-            SelectTarget::Indirections(vec![
+            SelectTarget::QualifiedName(vec![
                 Indirection::Identifier(Identifier {
                     name: "table".to_owned(),
                     quote: None,
@@ -79,7 +79,7 @@ fn test_display_query() {
                     quote: None,
                 }),
             ]),
-            SelectTarget::Indirections(vec![Indirection::Star]),
+            SelectTarget::QualifiedName(vec![Indirection::Star]),
         ],
         from: TableReference::Join(Join {
             op: JoinOperator::Inner,
@@ -187,7 +187,8 @@ fn test_display_expr() {
             args: vec![
                 Expr::Cast {
                     expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
-                    target_type: TypeName::Int(None),
+                    target_type: TypeName::Int { unsigned: true },
+                    pg_style: false,
                 },
                 Expr::Between {
                     expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
@@ -216,6 +217,6 @@ fn test_display_expr() {
 
     assert_eq!(
         format!("{}", expr),
-        r#"FUNC(123)(DISTINCT CAST(1 AS INTEGER), 1 NOT BETWEEN 1 AND 1, 1 NOT IN(1, 1)) AND CASE 1 WHEN 1 THEN 1 ELSE 1 END"#
+        r#"FUNC(123)(DISTINCT CAST(1 AS INTEGER UNSIGNED), 1 NOT BETWEEN 1 AND 1, 1 NOT IN(1, 1)) AND CASE 1 WHEN 1 THEN 1 ELSE 1 END"#
     );
 }

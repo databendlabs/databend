@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -44,9 +44,9 @@ pub struct DfCopy {
     pub name: ObjectName,
     pub columns: Vec<Ident>,
     pub location: String,
-    pub credential_options: HashMap<String, String>,
-    pub encryption_options: HashMap<String, String>,
-    pub file_format_options: HashMap<String, String>,
+    pub credential_options: BTreeMap<String, String>,
+    pub encryption_options: BTreeMap<String, String>,
+    pub file_format_options: BTreeMap<String, String>,
     pub files: Vec<String>,
     pub pattern: String,
     pub on_error: String,
@@ -113,9 +113,9 @@ impl AnalyzableStatement for DfCopy {
             catalog: catalog_name.clone(),
             source_info: SourceInfo::S3StageSource(S3StageTableInfo {
                 schema: schema.clone(),
-                file_name: None,
                 stage_info,
                 path,
+                files: vec![],
             }),
             scan_fields: None,
             parts: vec![],

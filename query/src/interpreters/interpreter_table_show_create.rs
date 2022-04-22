@@ -61,22 +61,35 @@ impl Interpreter for ShowCreateTableInterpreter {
         let schema = table.schema();
 
         let mut table_info = format!("CREATE TABLE `{}` (\n", name);
-        for field in schema.fields().iter() {
-            let default_expr = match field.default_expr() {
-                Some(expr) => {
-                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
-                    format!(" DEFAULT {}", expression.column_name())
-                }
-                None => "".to_string(),
-            };
-            let column = format!(
-                "  `{}` {}{},\n",
-                field.name(),
-                format_data_type_sql(field.data_type()),
-                default_expr
-            );
-            table_info.push_str(column.as_str());
+
+        // Append columns.
+        {
+            let mut columns = vec![];
+            for field in schema.fields().iter() {
+                let default_expr = match field.default_expr() {
+                    Some(expr) => {
+                        let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                        format!(" DEFAULT {}", expression.column_name())
+                    }
+                    None => "".to_string(),
+                };
+                let column = format!(
+                    "  `{}` {}{}",
+                    field.name(),
+                    format_data_type_sql(field.data_type()),
+                    default_expr
+                );
+                columns.push(column);
+            }
+            // Format is:
+            //  (
+            //      x,
+            //      y
+            //  )
+            let columns_str = format!("{}\n", columns.join(",\n"));
+            table_info.push_str(&columns_str);
         }
+
         let table_engine = format!(") ENGINE={}", engine);
         table_info.push_str(table_engine.as_str());
         table_info.push_str({

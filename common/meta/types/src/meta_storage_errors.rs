@@ -174,6 +174,54 @@ impl UnknownTableId {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("ShareAlreadyExists: {share_name} while {context}")]
+pub struct ShareAlreadyExists {
+    share_name: String,
+    context: String,
+}
+
+impl ShareAlreadyExists {
+    pub fn new(share_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            share_name: share_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UnknownShare: {share_name} while {context}")]
+pub struct UnknownShare {
+    share_name: String,
+    context: String,
+}
+
+impl UnknownShare {
+    pub fn new(share_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            share_name: share_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UnknownShareID: {share_id} while {context}")]
+pub struct UnknownShareId {
+    share_id: u64,
+    context: String,
+}
+
+impl UnknownShareId {
+    pub fn new(share_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            share_id,
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AppError {
     #[error(transparent)]
@@ -196,6 +244,15 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownTableId(#[from] UnknownTableId),
+
+    #[error(transparent)]
+    ShareAlreadyExists(#[from] ShareAlreadyExists),
+
+    #[error(transparent)]
+    UnknownShare(#[from] UnknownShare),
+
+    #[error(transparent)]
+    UnknownShareId(#[from] UnknownShareId),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -226,6 +283,24 @@ impl AppErrorMessage for TableAlreadyExists {
     }
 }
 
+impl AppErrorMessage for ShareAlreadyExists {
+    fn message(&self) -> String {
+        format!("Share '{}' already exists", self.share_name)
+    }
+}
+
+impl AppErrorMessage for UnknownShare {
+    fn message(&self) -> String {
+        format!("Unknown share '{}'", self.share_name)
+    }
+}
+
+impl AppErrorMessage for UnknownShareId {
+    fn message(&self) -> String {
+        format!("Unknown share id '{}'", self.share_id)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -238,6 +313,9 @@ impl From<AppError> for ErrorCode {
             AppError::TableVersionMismatched(err) => {
                 ErrorCode::TableVersionMismatched(err.message())
             }
+            AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
+            AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
+            AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
         }
     }
 }

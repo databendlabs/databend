@@ -26,12 +26,14 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq; // for `app.oneshot()`
 
+use crate::tests::SessionManagerBuilder;
+
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let sessions = SessionManagerBuilder::create().build()?;
     let cluster_router = Route::new()
         .at("/v1/config", get(config_handler))
-        .data(conf.clone());
+        .data(sessions);
 
     let response = cluster_router
         .call(

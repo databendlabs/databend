@@ -18,6 +18,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
+use common_base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;
@@ -28,9 +29,12 @@ use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::WatchRequest;
+use common_meta_types::protobuf::WatchResponse;
 use common_tracing::tracing;
 use futures::StreamExt;
 use prost::Message;
+use tokio_stream;
 use tokio_stream::Stream;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
@@ -160,6 +164,23 @@ impl MetaService for MetaServiceImpl {
         let s = stream.map(|strings| Ok(ExportedChunk { data: strings }));
 
         Ok(Response::new(Box::pin(s)))
+    }
+
+    type WatchStream =
+        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn watch(
+        &self,
+        request: Request<WatchRequest>,
+    ) -> Result<Response<Self::WatchStream>, Status> {
+        let (tx, rx) = mpsc::channel(4);
+
+        let meta_node = &self.action_handler.meta_node;
+        meta_node.create_watcher_stream(request.into_inner(), tx);
+
+        let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        Ok(Response::new(Box::pin(output_stream) as Self::WatchStream))
     }
 }
 

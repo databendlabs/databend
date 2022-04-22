@@ -33,7 +33,7 @@ pub const OPT_KEY_SNAPSHOT_LOC: &str = "snapshot_loc";
 lazy_static! {
     /// Table option keys that reserved for internal usage only
     /// - Users are not allowed to specified this option keys in DDL
-    /// - Should not be shown in `show create table` statment
+    /// - Should not be shown in `show create table` statement
     pub static ref RESERVED_TABLE_OPTION_KEYS: HashSet<&'static str> = {
         let mut r = HashSet::new();
         r.insert(OPT_KEY_DATABASE_ID);
@@ -41,11 +41,10 @@ lazy_static! {
         r
     };
 
-    /// Table option keys that Should not be shown in `show create table` statment
+    /// Table option keys that Should not be shown in `show create table` statement
     pub static ref INTERNAL_TABLE_OPTION_KEYS: HashSet<&'static str> = {
         let mut r = HashSet::new();
         r.insert(OPT_KEY_SNAPSHOT_LOC);
-        r.insert(OPT_KEY_SNAPSHOT_LOCATION);
         r.insert(OPT_KEY_DATABASE_ID);
         r
     };

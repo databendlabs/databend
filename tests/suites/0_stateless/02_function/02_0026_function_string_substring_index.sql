@@ -35,4 +35,3 @@ SELECT SUBSTRING_INDEX(number + 10, number, 1) FROM numbers(5) ORDER BY number;
 
 SELECT '=== series, series, series ===';
 SELECT SUBSTRING_INDEX(number + 10, number, number) FROM numbers(5) ORDER BY number;
-

@@ -32,38 +32,21 @@ impl ToCastFunction {
         // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
         features = match type_name {
             "Boolean" => features.num_arguments(1).bool_function(),
-            "DateTime" | "DateTime32" => features.variadic_arguments(1, 2),
-            "DateTime64" => features.variadic_arguments(1, 3),
+            // "DateTime" | "DateTime32" => features.variadic_arguments(1, 2),
+            "DateTime" => features.variadic_arguments(1, 3),
             _ => features.num_arguments(1),
         };
 
         let function_creator: FactoryCreator =
-            Box::new(move |display_name| CastFunction::create(display_name, type_name));
+            Box::new(move |display_name, _args| CastFunction::create(display_name, type_name));
 
         Ok(FunctionDescription::creator(function_creator).features(features))
     }
 
     pub fn register(factory: &mut FunctionFactory) {
         let names = vec![
-            "Null",
-            "Boolean",
-            "UInt8",
-            "UInt16",
-            "UInt32",
-            "UInt64",
-            "Int8",
-            "Int16",
-            "Int32",
-            "Int64",
-            "Float32",
-            "Float64",
-            "Date16",
-            "Date32",
-            "String",
-            "Date",
-            "DateTime",
-            "DateTime32",
-            "DateTime64",
+            "Null", "Boolean", "UInt8", "UInt16", "UInt32", "UInt64", "Int8", "Int16", "Int32",
+            "Int64", "Float32", "Float64", "Date", "String", "Date", "DateTime",
         ];
 
         for name in names {

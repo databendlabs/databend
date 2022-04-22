@@ -156,7 +156,8 @@ async fn test_statement_copy() -> Result<()> {
 
     for test in &tests {
         let ctx = create_query_context().await?;
-        let (mut statements, _) = DfParser::parse_sql(test.query)?;
+        let (mut statements, _) =
+            DfParser::parse_sql(test.query, ctx.get_current_session().get_type())?;
         let statement = statements.remove(0);
         if test.err.is_empty() {
             let result = statement.analyze(ctx).await?;

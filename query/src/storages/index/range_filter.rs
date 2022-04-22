@@ -31,6 +31,7 @@ use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
 
 pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
 
@@ -51,7 +52,11 @@ pub struct RangeFilter {
 }
 
 impl RangeFilter {
-    pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
+    pub fn try_create(
+        expr: &Expression,
+        schema: DataSchemaRef,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
         let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
         let input_fields = stat_columns
@@ -68,6 +73,7 @@ impl RangeFilter {
             output_schema,
             vec![verifiable_expr],
             false,
+            ctx,
         )?;
 
         Ok(Self {
@@ -372,14 +378,14 @@ impl<'a> VerifiableExprBuilder<'a> {
     fn build(&mut self) -> Result<Expression> {
         // TODO: support in/not in.
         match self.op {
-            "isnull" => {
+            "is_null" => {
                 let nulls_expr = self.nulls_column_expr(0)?;
                 let scalar_expr = lit(0u64);
                 Ok(nulls_expr.gt(scalar_expr))
             }
-            "isnotnull" => {
+            "is_not_null" => {
                 let left_min = self.min_column_expr(0)?;
-                Ok(Expression::create_scalar_function("isNotNull", vec![
+                Ok(Expression::create_scalar_function("is_not_null", vec![
                     left_min,
                 ]))
             }

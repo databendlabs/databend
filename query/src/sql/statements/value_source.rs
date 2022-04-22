@@ -14,6 +14,7 @@
 //
 
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -22,11 +23,14 @@ use common_io::prelude::*;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Tokenizer;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionType;
 use crate::sql::statements::ExpressionAnalyzer;
 
 pub struct ValueSource {
@@ -99,12 +103,13 @@ impl ValueSource {
         self,
         bytes: &[u8],
         analyzer: ExpressionAnalyzer,
+        ctx: Arc<QueryContext>,
     ) -> Result<DataBlock> {
-        let values = parse_exprs(bytes)?;
+        let values = parse_exprs(bytes, ctx.get_current_session().get_type())?;
 
         let mut blocks = vec![];
         for value in values {
-            let block = exprs_to_datablock(value, &analyzer, &self.schema).await?;
+            let block = exprs_to_datablock(value, &analyzer, &self.schema, ctx.clone()).await?;
             blocks.push(block);
         }
         DataBlock::concat_blocks(&blocks)
@@ -115,6 +120,7 @@ async fn exprs_to_datablock(
     exprs: Vec<Expr>,
     analyzer: &ExpressionAnalyzer,
     schema: &DataSchemaRef,
+    ctx: Arc<QueryContext>,
 ) -> Result<DataBlock> {
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
@@ -123,6 +129,7 @@ async fn exprs_to_datablock(
             Expression::Cast {
                 expr: Box::new(expr),
                 data_type: schema.field(i).data_type().clone(),
+                pg_style: false,
             }
         } else {
             expr
@@ -141,15 +148,28 @@ async fn exprs_to_datablock(
         schema.clone(),
         expressions,
         true,
+        ctx,
     )?;
     executor.execute(&one_row_block)
 }
 
-fn parse_exprs(buf: &[u8]) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
-    let dialect = GenericDialect {};
-    let sql = std::str::from_utf8(buf).unwrap();
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let (tokens, position_map) = tokenizer.tokenize()?;
-    let mut parser = Parser::new(tokens, position_map, &dialect);
-    parser.parse_values()
+fn parse_exprs(buf: &[u8], typ: SessionType) -> std::result::Result<Vec<Vec<Expr>>, ParserError> {
+    match typ {
+        SessionType::MySQL => {
+            let dialect = MySqlDialect {};
+            let sql = std::str::from_utf8(buf).unwrap();
+            let mut tokenizer = Tokenizer::new(&dialect, sql);
+            let (tokens, position_map) = tokenizer.tokenize()?;
+            let mut parser = Parser::new(tokens, position_map, &dialect);
+            parser.parse_values()
+        }
+        _ => {
+            let dialect = GenericDialect {};
+            let sql = std::str::from_utf8(buf).unwrap();
+            let mut tokenizer = Tokenizer::new(&dialect, sql);
+            let (tokens, position_map) = tokenizer.tokenize()?;
+            let mut parser = Parser::new(tokens, position_map, &dialect);
+            parser.parse_values()
+        }
+    }
 }

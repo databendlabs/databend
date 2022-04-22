@@ -87,6 +87,7 @@ impl Interpreter for InsertInterpreter {
                         stream,
                         self.plan.schema(),
                         table.schema(),
+                        self.ctx.clone(),
                     )?)
                 } else {
                     stream
@@ -106,6 +107,7 @@ impl Interpreter for InsertInterpreter {
                         stream,
                         self.plan.schema(),
                         table.schema(),
+                        self.ctx.clone(),
                     )?)
                 } else {
                     stream

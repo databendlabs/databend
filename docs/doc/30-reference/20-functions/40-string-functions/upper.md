@@ -23,7 +23,7 @@ A string data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT UPPER('Hello, World!')
 +------------------------+
 | upper('Hello, World!') |

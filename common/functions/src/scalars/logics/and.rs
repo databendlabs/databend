@@ -12,24 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::logic::LogicExpression;
+use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
-use super::LogicFunction;
+use crate::calcute;
+use crate::impl_logic_expression;
+use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
+
+impl_logic_expression!(LogicAndExpression, &, |lhs: bool, rhs: bool, lhs_v: bool, rhs_v: bool| -> (bool, bool) {
+    (lhs & rhs,  (lhs_v & rhs_v) | (!lhs & lhs_v) | (!rhs & rhs_v))
+});
 
 #[derive(Clone)]
 pub struct LogicAndFunction;
 
 impl LogicAndFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
-        LogicFunction::try_create(LogicOperator::And)
+    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        LogicFunctionImpl::<LogicAndExpression>::try_create(LogicOperator::And, args)
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .disable_passthrough_null()
+                .num_arguments(2),
+        )
     }
 }

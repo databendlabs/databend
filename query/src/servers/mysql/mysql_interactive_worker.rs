@@ -35,7 +35,9 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::SelectInterpreterV2;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::MySQLFederated;
@@ -254,31 +256,61 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    fn federated_server_setup_command_check(&self, query: &str) -> Option<DataBlock> {
+    fn federated_server_command_check(&self, query: &str) -> Option<DataBlock> {
         let federated = MySQLFederated::create();
         federated.check(query)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        match self.federated_server_setup_command_check(query) {
+        match self.federated_server_command_check(query) {
             Some(data_block) => {
                 tracing::info!("Federated query: {}", query);
+                if data_block.num_rows() > 0 {
+                    tracing::info!("Federated response: {:?}", data_block);
+                }
                 Ok((vec![data_block], String::from("")))
             }
             None => {
                 tracing::info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
+
                 let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
+                if let (Some(hint_error_code), Err(error_code)) = (
+                    hints
+                        .iter()
+                        .find(|v| v.error_code.is_some())
+                        .and_then(|x| x.error_code),
+                    &plan,
+                ) {
+                    // Pre-check if parsing error can be ignored
+                    if hint_error_code == error_code.code() {
+                        return Ok((vec![DataBlock::empty()], String::from("")));
+                    }
+                }
+
+                let plan = plan?;
+                let settings = context.get_settings();
+
+                let interpreter: Arc<dyn Interpreter> =
+                    if settings.get_enable_new_processor_framework()? != 0
+                        && settings.get_enable_planner_v2()? != 0
+                        && matches!(plan, PlanNode::Select(..))
+                    {
+                        // New planner is enabled, and the statement is ensured to be `SELECT` statement.
+                        SelectInterpreterV2::try_create(context.clone(), query)?
+                    } else {
+                        InterpreterFactory::get(context.clone(), plan)?
+                    };
 
                 match hints
                     .iter()
                     .find(|v| v.error_code.is_some())
                     .and_then(|x| x.error_code)
                 {
-                    None => Self::exec_query(plan, &context).await,
-                    Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                    None => Self::exec_query(interpreter, &context).await,
+                    Some(hint_error_code) => match Self::exec_query(interpreter, &context).await {
                         Ok(_) => Err(ErrorCode::UnexpectedError(format!(
                             "Expected server error code: {} but got: Ok.",
                             hint_error_code
@@ -300,13 +332,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(plan, context))]
+    #[tracing::instrument(level = "debug", skip(interpreter, context))]
     async fn exec_query(
-        plan: Result<PlanNode>,
+        interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
-        let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
 
         let query_result = context.try_spawn(
             async move {
@@ -377,7 +408,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
 
         let mut scramble: [u8; 20] = [0; 20];
         for i in 0..20 {
-            scramble[i] = bs[i];
+            scramble[i] = bs[i] & 0x7fu8;
             if scramble[i] == b'\0' || scramble[i] == b'$' {
                 scramble[i] += 1;
             }
