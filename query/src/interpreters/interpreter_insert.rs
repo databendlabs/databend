@@ -68,7 +68,7 @@ impl InsertInterpreter {
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
-            .get_table(&plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
             .await?;
 
         let mut pipeline = self.create_new_pipeline()?;
