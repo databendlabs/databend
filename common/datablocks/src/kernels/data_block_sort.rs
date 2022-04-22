@@ -26,6 +26,7 @@ use common_exception::Result;
 
 use crate::DataBlock;
 
+#[derive(Clone)]
 pub struct SortColumnDescription {
     pub column_name: String,
     pub asc: bool,

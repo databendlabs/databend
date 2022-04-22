@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -49,13 +50,21 @@ use crate::storages::TableStatistics;
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
+
+    pub(crate) order_keys: Vec<Expression>,
 }
 
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let mut order_keys = Vec::new();
+        if let Some(order) = &table_info.meta.order_keys {
+            order_keys = serde_json::from_slice(order.as_slice())?;
+        }
+
         Ok(Box::new(FuseTable {
             table_info,
+            order_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
         }))
     }
