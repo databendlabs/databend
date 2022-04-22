@@ -99,11 +99,6 @@ impl TypeDeserializer for VariantDeserializer {
             .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
                 "Fail to parse VariantValue when deserialize json string text"
             })?;
-        println!(
-            "{}, {}",
-            String::from_utf8(self.buffer.clone()).unwrap(),
-            val
-        );
         self.builder.append_value(val);
         Ok(())
     }
