@@ -22,3 +22,4 @@ mod interactive_worker_base;
 mod reject_connection;
 
 pub use clickhouse_handler::ClickHouseHandler;
+pub use writers::from_clickhouse_block;

@@ -18,21 +18,21 @@ use common_exception::Result;
 use super::Compactor;
 use super::TransformCompact;
 
-pub struct BlockCompactCompactor {
+pub struct BlockCompactor {
     max_row_per_block: usize,
     min_row_per_block: usize,
 }
 
-impl BlockCompactCompactor {
+impl BlockCompactor {
     pub fn new(max_row_per_block: usize, min_row_per_block: usize) -> Self {
-        BlockCompactCompactor {
+        BlockCompactor {
             max_row_per_block,
             min_row_per_block,
         }
     }
 }
 
-impl Compactor for BlockCompactCompactor {
+impl Compactor for BlockCompactor {
     fn name() -> &'static str {
         "BlockCompactTransform"
     }
@@ -107,20 +107,21 @@ impl Compactor for BlockCompactCompactor {
             blocks.remove(size - 1);
         } else {
             let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
+            let merged = DataBlock::concat_blocks(blocks)?;
             blocks.clear();
 
             if accumulated_rows >= self.max_row_per_block {
-                let cut = block.slice(0, self.max_row_per_block);
+                let cut = merged.slice(0, self.max_row_per_block);
                 res.push(cut);
 
                 if accumulated_rows != self.max_row_per_block {
-                    blocks.push(block.slice(
+                    blocks.push(merged.slice(
                         self.max_row_per_block,
                         accumulated_rows - self.max_row_per_block,
                     ));
                 }
             } else {
-                blocks.push(block);
+                blocks.push(merged);
             }
         }
 
@@ -128,4 +129,4 @@ impl Compactor for BlockCompactCompactor {
     }
 }
 
-pub type TransformBlockCompact = TransformCompact<BlockCompactCompactor>;
+pub type TransformBlockCompact = TransformCompact<BlockCompactor>;
