@@ -28,7 +28,7 @@ pub struct ColumnBinding {
     // Column name of this `ColumnBinding` in current context
     pub column_name: String,
     // Column index of ColumnBinding
-    pub index: Option<IndexType>,
+    pub index: IndexType,
 
     pub data_type: DataTypePtr,
     pub nullable: bool,
@@ -133,5 +133,18 @@ impl BindContext {
         } else {
             Ok(result.remove(0))
         }
+    }
+
+    /// Get result columns of current context in order.
+    /// For example, a query `SELECT b, a AS b FROM t` has `[(index_of(b), "b"), index_of(a), "b"]` as
+    /// its result columns.
+    ///
+    /// This method is used to retrieve the physical representation of result set of
+    /// a query.
+    pub fn result_columns(&self) -> Vec<(IndexType, String)> {
+        self.columns
+            .iter()
+            .map(|col| (col.index, col.column_name.clone()))
+            .collect()
     }
 }

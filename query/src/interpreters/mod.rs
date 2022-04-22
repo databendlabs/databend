@@ -95,6 +95,7 @@ pub use interpreter_role_drop::DropRoleInterpreter;
 pub use interpreter_role_grant::GrantRoleInterpreter;
 pub use interpreter_role_revoke::RevokeRoleInterpreter;
 pub use interpreter_select::SelectInterpreter;
+pub use interpreter_select_v2::SelectInterpreterV2;
 pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_show_databases::ShowDatabasesInterpreter;
 pub use interpreter_show_functions::ShowFunctionsInterpreter;

@@ -39,6 +39,7 @@ impl PipelineCompleteExecutor {
         }
 
         let executor = PipelineExecutor::create(async_runtime, pipeline)?;
+
         Ok(PipelineCompleteExecutor { executor })
     }
 
