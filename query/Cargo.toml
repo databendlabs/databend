@@ -107,7 +107,7 @@ typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 serde-bridge = { git = "https://github.com/Xuanwo/serde-bridge", rev = "4879af8" }
-serfig = { git = "https://github.com/Xuanwo/serfig", rev = "f6e37fc" }
+serfig = { git = "https://github.com/Xuanwo/serfig", rev = "dce0fe7" }
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }

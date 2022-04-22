@@ -46,7 +46,7 @@ impl FromStr for StorageType {
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "_data")]
     pub data_path: String,
 }
 
@@ -66,7 +66,10 @@ pub struct S3StorageConfig {
     pub region: String,
 
     /// Endpoint URL for S3 storage
-    #[clap(long = "storage-s3-endpoint-url", default_value_t)]
+    #[clap(
+        long = "storage-s3-endpoint-url",
+        default_value = "https://s3.amazonaws.com"
+    )]
     pub endpoint_url: String,
 
     // Access key for S3 storage
@@ -158,7 +161,7 @@ impl fmt::Debug for AzureStorageBlobConfig {
 #[serde(default)]
 pub struct StorageConfig {
     /// Current storage type: fs|s3
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "fs")]
     #[serde(rename = "type")]
     pub storage_type: String,
 

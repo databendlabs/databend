@@ -5453,7 +5453,7 @@ dependencies = [
 [[package]]
 name = "serfig"
 version = "0.0.0"
-source = "git+https://github.com/Xuanwo/serfig?rev=f6e37fc#f6e37fcda6b9d1c76b2eaad8b13bbda4c4ec7e73"
+source = "git+https://github.com/Xuanwo/serfig?rev=dce0fe7#dce0fe7c87ef4c2f1c363c818837486afa1ef237"
 dependencies = [
  "anyhow",
  "indexmap",

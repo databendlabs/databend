@@ -21,7 +21,7 @@ use serde::Serialize;
 #[serde(default)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "admin")]
     pub tenant_id: String,
 
     /// ID for construct the cluster.
@@ -31,37 +31,37 @@ pub struct QueryConfig {
     #[clap(long, default_value_t)]
     pub num_cpus: u64,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "127.0.0.1")]
     pub mysql_handler_host: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "3307")]
     pub mysql_handler_port: u16,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "127.0.0.1")]
     pub clickhouse_handler_host: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "9000")]
     pub clickhouse_handler_port: u16,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "127.0.0.1")]
     pub http_handler_host: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "8000")]
     pub http_handler_port: u16,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "10000")]
     pub http_handler_result_timeout_millis: u64,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "127.0.0.1:8080")]
     pub admin_api_address: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "127.0.0.1:7070")]
     pub metric_api_address: String,
 
     #[clap(long, default_value_t)]
@@ -94,7 +94,7 @@ pub struct QueryConfig {
     #[clap(long, default_value_t)]
     pub rpc_tls_query_server_root_ca_cert: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
     /// Table engine csv enabled
@@ -106,17 +106,17 @@ pub struct QueryConfig {
     pub table_engine_parquet_enabled: bool,
 
     /// Table engine memory enabled
-    #[clap(long)]
+    #[clap(long, parse(try_from_str), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
     /// Database engine github enabled
-    #[clap(long)]
+    #[clap(long, parse(try_from_str), default_value = "true")]
     pub database_engine_github_enabled: bool,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "5000")]
     pub wait_timeout_mills: u64,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
 
     /// Table Cached enabled
@@ -124,27 +124,27 @@ pub struct QueryConfig {
     pub table_cache_enabled: bool,
 
     /// Max number of cached table snapshot
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "256")]
     pub table_cache_snapshot_count: u64,
 
     /// Max number of cached table segment
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "10240")]
     pub table_cache_segment_count: u64,
 
     /// Max number of cached table block meta
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "102400")]
     pub table_cache_block_meta_count: u64,
 
     /// Table memory cache size (mb)
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "256")]
     pub table_memory_cache_mb_size: u64,
 
     /// Table disk cache folder root
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "_cache")]
     pub table_disk_cache_root: String,
 
     /// Table disk cache size (mb)
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value = "1024")]
     pub table_disk_cache_mb_size: u64,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.

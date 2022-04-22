@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
+
 use clap::Parser;
 use common_exception::Result;
 use common_grpc::RpcClientTlsConfig;
@@ -69,21 +71,33 @@ pub struct Config {
 }
 
 impl Config {
+    /// Load will load config from file, env and args.
+    ///
+    /// - Load from file as default.
+    /// - Load from env, will override config from file.
+    /// - Load from args as finally override
     pub fn load() -> Result<Self> {
-        let arg_conf = Config::parse();
+        let arg_conf: Self = Config::parse();
 
-        // TODO: load from file first.
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
 
-        // Load from env first as default.
-        let mut builder = serfig::Builder::default().collect(Environment::create());
+        // Load from config file first.
+        {
+            let config_file = if !arg_conf.config_file.is_empty() {
+                arg_conf.config_file.clone()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
 
-        // TODO: load from CONFIG_FILE after env.
-
-        // Override by file if exist
-        if !arg_conf.config_file.is_empty() {
-            builder = builder.collect(File::create(&arg_conf.config_file, Toml));
+            builder = builder.collect(File::create(&config_file, Toml));
         }
-        // Override by args.
+
+        // Then, load from env.
+        builder = builder.collect(Environment::create());
+
+        // Finally, load from args.
         builder = builder.collect(Box::new(
             serde_bridge::into_value(arg_conf).expect("into value failed"),
         ));

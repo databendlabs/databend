@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env::temp_dir;
+use std::fs;
+use std::io::Write;
+
 use common_exception::Result;
 use databend_query::configs::Config;
 use pretty_assertions::assert_eq;
@@ -178,6 +182,114 @@ fn test_env_config() -> Result<()> {
             assert_eq!(512, configured.query.table_memory_cache_mb_size);
             assert_eq!("_cache_env", configured.query.table_disk_cache_root);
             assert_eq!(512, configured.query.table_disk_cache_mb_size);
+        },
+    );
+
+    Ok(())
+}
+
+/// Test whether override works as expected.
+#[test]
+fn test_override_config() -> Result<()> {
+    let file_path = temp_dir().join("databend_config.toml");
+
+    let mut f = fs::File::create(&file_path)?;
+    f.write_all(
+        r#"config_file = ""
+
+[query]
+tenant_id = "tenant_id_from_file"
+cluster_id = ""
+num_cpus = 0
+mysql_handler_host = "127.0.0.1"
+mysql_handler_port = 3307
+max_active_sessions = 256
+clickhouse_handler_host = "127.0.0.1"
+clickhouse_handler_port = 9000
+http_handler_host = "127.0.0.1"
+http_handler_port = 8000
+http_handler_result_timeout_millis = 10000
+flight_api_address = "127.0.0.1:9090"
+admin_api_address = "127.0.0.1:8080"
+metric_api_address = "127.0.0.1:7070"
+http_handler_tls_server_cert = ""
+http_handler_tls_server_key = ""
+http_handler_tls_server_root_ca_cert = ""
+api_tls_server_cert = ""
+api_tls_server_key = ""
+api_tls_server_root_ca_cert = ""
+rpc_tls_server_cert = ""
+rpc_tls_server_key = ""
+rpc_tls_query_server_root_ca_cert = ""
+rpc_tls_query_service_domain_name = "localhost"
+table_engine_csv_enabled = false
+table_engine_parquet_enabled = false
+table_engine_memory_enabled = true
+database_engine_github_enabled = true
+wait_timeout_mills = 5000
+max_query_log_size = 10000
+table_cache_enabled = false
+table_cache_snapshot_count = 256
+table_cache_segment_count = 10240
+table_cache_block_meta_count = 102400
+table_memory_cache_mb_size = 256
+table_disk_cache_root = "_cache"
+table_disk_cache_mb_size = 1024
+management_mode = false
+jwt_key_file = ""
+
+[log]
+level = "INFO"
+dir = "./_logs"
+query_enabled = false
+
+[meta]
+embedded_dir = "./_meta_embedded"
+address = ""
+username = "username_from_file"
+password = "password_from_file"
+client_timeout_in_second = 10
+rpc_tls_meta_server_root_ca_cert = ""
+rpc_tls_meta_service_domain_name = "localhost"
+
+[storage]
+type = "type_from_file"
+num_cpus = 0
+
+[storage.fs]
+data_path = "_data"
+
+[storage.s3]
+region = ""
+endpoint_url = "https://s3.amazonaws.com"
+access_key_id = "access_key_id_from_file"
+secret_access_key = ""
+bucket = ""
+root = ""
+
+[storage.azure_storage_blob]
+account = ""
+master_key = ""
+container = ""
+    "#
+        .as_bytes(),
+    )?;
+
+    // Make sure all data flushed.
+    let _ = f.flush()?;
+
+    temp_env::with_vars(
+        vec![
+            ("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref())),
+            ("QUERY_TENANT_ID", Some("tenant_id_from_env")),
+            ("STORAGE_S3_ACCESS_KEY_ID", Some("access_key_id_from_env")),
+        ],
+        || {
+            let cfg = Config::load().expect("config load success");
+
+            assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
+            assert_eq!("******env", cfg.storage.s3.access_key_id);
+            assert_eq!("type_from_file", cfg.storage.storage_type);
         },
     );
 
