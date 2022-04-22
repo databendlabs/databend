@@ -1763,6 +1763,7 @@ dependencies = [
  "criterion",
  "dyn-clone",
  "futures",
+ "goldenfile",
  "headers",
  "http",
  "hyper",

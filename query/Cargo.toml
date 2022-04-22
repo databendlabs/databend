@@ -110,6 +110,7 @@ walkdir = "2.3.2"
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
 criterion = "0.3.5"
+goldenfile = "1.1.0"
 maplit = "1.0.2"
 mysql_async = "0.29.0"
 pretty_assertions = "1.2.1"
