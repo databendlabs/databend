@@ -55,7 +55,6 @@ impl Interpreter for RenameTableInterpreter {
                 .rename_table(RenameTableReq {
                     tenant,
                     if_exists: entity.if_exists,
-                    catalog: entity.catalog.clone(),
                     db_name: entity.db.clone(),
                     table_name: entity.table_name.clone(),
                     new_db_name: entity.new_db.clone(),

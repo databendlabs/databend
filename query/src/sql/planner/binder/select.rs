@@ -63,6 +63,7 @@ impl Binder {
     async fn bind_table_reference(&mut self, stmt: &TableReference) -> Result<BindContext> {
         match stmt {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
@@ -71,6 +72,10 @@ impl Binder {
                     .as_ref()
                     .map(|ident| ident.name.clone())
                     .unwrap_or_else(|| self.context.get_current_database());
+                let catalog = catalog
+                    .as_ref()
+                    .map(|id| id.name.clone())
+                    .unwrap_or_else(|| self.context.get_current_catalog());
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
@@ -78,12 +83,18 @@ impl Binder {
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
-                    .resolve_data_source(tenant.as_str(), database.as_str(), table.as_str())
+                    .resolve_data_source(
+                        tenant.as_str(),
+                        catalog.as_str(),
+                        database.as_str(),
+                        table.as_str(),
+                    )
                     .await?;
                 let (statistics, parts) = table_meta
                     .read_partitions(self.context.clone(), None)
                     .await?;
                 let source = ReadDataSourcePlan {
+                    catalog: catalog.clone(),
                     source_info: SourceInfo::TableSource(table_meta.get_table_info().clone()),
                     scan_fields: None,
                     parts,
@@ -92,7 +103,9 @@ impl Binder {
                     tbl_args: None,
                     push_downs: None,
                 };
-                let table_index = self.metadata.add_table(database, table_meta, source);
+                let table_index = self
+                    .metadata
+                    .add_table(catalog, database, table_meta, source);
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {

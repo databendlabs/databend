@@ -24,8 +24,8 @@ use crate::storages::Table;
 pub struct TableEntry {
     pub index: IndexType,
     pub name: String,
-    pub database: String,
     pub catalog: String,
+    pub database: String,
 
     pub table: Arc<dyn Table>,
 
@@ -36,6 +36,7 @@ impl TableEntry {
     pub fn new(
         index: IndexType,
         name: String,
+        catalog: String,
         database: String,
         table: Arc<dyn Table>,
         source: ReadDataSourcePlan,
@@ -43,6 +44,7 @@ impl TableEntry {
         TableEntry {
             index,
             name,
+            catalog,
             database,
             table,
             source,

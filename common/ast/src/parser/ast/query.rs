@@ -112,7 +112,6 @@ pub enum Indirection {
 pub enum TableReference {
     // Table name
     Table {
-        // `[catalog.][db.]table`
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,

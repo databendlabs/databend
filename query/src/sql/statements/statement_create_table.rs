@@ -158,7 +158,8 @@ impl DfCreateTable {
             options: self.options.clone(),
             ..Default::default()
         };
-        self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
+        self.plan_with_db_id(ctx.as_ref(), catalog_name, db_name, meta)
+            .await
     }
 
     async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {

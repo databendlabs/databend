@@ -57,15 +57,6 @@ impl AnalyzableStatement for DfCreateDatabase {
 }
 
 impl DfCreateDatabase {
-    fn database_name(&self) -> Result<String> {
-        match self.name.0.len() {
-            1 => Ok(self.name.0[0].value.clone()),
-            _ => Err(ErrorCode::SyntaxException(
-                "Compact database name must be [`db`]",
-            )),
-        }
-    }
-
     fn database_meta(&self) -> Result<DatabaseMeta> {
         Ok(DatabaseMeta {
             engine: self.engine.clone(),

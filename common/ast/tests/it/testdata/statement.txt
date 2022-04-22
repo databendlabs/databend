@@ -59,6 +59,7 @@ Explain {
                         },
                     ],
                     from: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "b",
@@ -606,6 +607,7 @@ Select(
                     },
                 ],
                 from: Table {
+                    catalog: None,
                     database: None,
                     table: Identifier {
                         name: "t",
@@ -723,6 +725,7 @@ Select(
                                 op: CrossJoin,
                                 condition: None,
                                 left: Table {
+                                    catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "a",
@@ -731,6 +734,7 @@ Select(
                                     alias: None,
                                 },
                                 right: Table {
+                                    catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "b",
@@ -741,6 +745,7 @@ Select(
                             },
                         ),
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "c",
@@ -813,6 +818,7 @@ Select(
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -821,6 +827,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -893,6 +900,7 @@ Select(
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -901,6 +909,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -973,6 +982,7 @@ Select(
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -981,6 +991,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -1053,6 +1064,7 @@ Select(
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -1061,6 +1073,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -1133,6 +1146,7 @@ Select(
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -1141,6 +1155,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -1190,6 +1205,7 @@ Select(
                             ],
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -1198,6 +1214,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -1247,6 +1264,7 @@ Select(
                             ],
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -1255,6 +1273,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -1304,6 +1323,7 @@ Select(
                             ],
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -1312,6 +1332,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -1361,6 +1382,7 @@ Select(
                             ],
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "a",
@@ -1369,6 +1391,7 @@ Select(
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",

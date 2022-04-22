@@ -217,7 +217,7 @@ impl DfQueryStatement {
                 // TODO
                 // shall we put the catalog name in the table_info?
                 // table already resolved here
-                let (catalog_name, _, _) = Self::resolve_table(&ctx, &name_parts, "")?;
+                let catalog_name = Self::resolve_catalog(&ctx, &name_parts)?;
                 let source_plan = table
                     .read_plan_with_catalog(ctx.clone(), catalog_name, push_downs)
                     .await?;
@@ -235,32 +235,14 @@ impl DfQueryStatement {
         Ok(AnalyzedResult::SelectQuery(Box::new(state)))
     }
 
-    // TODO (dantensky) duplicated code (statement_common)
-    pub fn resolve_table(
-        ctx: &QueryContext,
-        idents: &[String],
-        statement_name: &str,
-    ) -> Result<(String, String, String)> {
+    // TODO (dantengsky) refine this, looks weird
+    fn resolve_catalog(ctx: &QueryContext, idents: &[String]) -> Result<String> {
         match idents.len() {
-            0 => Err(ErrorCode::SyntaxException(format!(
-                "table name must be specified in statement `{}`",
-                statement_name
-            ))),
-            1 => Ok((
-                ctx.get_current_catalog(),
-                ctx.get_current_database(),
-                idents[0].clone(),
+            0 | 1 | 2 => Ok(ctx.get_current_catalog()),
+            3 => Ok(idents[0].clone()),
+            _ => Err(ErrorCode::SyntaxException(
+                "table name should be [`catalog`].[`db`].`table` in statement",
             )),
-            2 => Ok((
-                ctx.get_current_catalog(),
-                idents[0].clone(),
-                idents[1].clone(),
-            )),
-            3 => Ok((idents[0].clone(), idents[1].clone(), idents[2].clone())),
-            _ => Err(ErrorCode::SyntaxException(format!(
-                "table name should be [`catalog`].[`db`].`table` in statement {}",
-                statement_name
-            ))),
         }
     }
 

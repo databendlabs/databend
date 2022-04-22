@@ -76,6 +76,7 @@ Query {
                             op: CrossJoin,
                             condition: None,
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "customer",
@@ -84,6 +85,7 @@ Query {
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "orders",
@@ -181,6 +183,7 @@ Query {
                                                 },
                                             ),
                                             left: Table {
+                                                catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     name: "customer",
@@ -189,6 +192,7 @@ Query {
                                                 alias: None,
                                             },
                                             right: Table {
+                                                catalog: None,
                                                 database: None,
                                                 table: Identifier {
                                                     name: "orders",
@@ -340,6 +344,7 @@ Query {
                         },
                     ),
                     left: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "customer",
@@ -348,6 +353,7 @@ Query {
                         alias: None,
                     },
                     right: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "orders",
@@ -394,6 +400,7 @@ Query {
                     op: FullOuter,
                     condition: Natural,
                     left: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "customer",
@@ -402,6 +409,7 @@ Query {
                         alias: None,
                     },
                     right: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "orders",
@@ -453,6 +461,7 @@ Query {
                             op: Inner,
                             condition: Natural,
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "customer",
@@ -461,6 +470,7 @@ Query {
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "orders",
@@ -471,6 +481,7 @@ Query {
                         },
                     ),
                     right: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "detail",

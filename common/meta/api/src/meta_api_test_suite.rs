@@ -682,7 +682,6 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                catalog: "default".to_string(),
                 db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db_name: db_name.to_string(),
@@ -746,7 +745,6 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                catalog: "default".to_string(),
                 db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db_name: db_name.to_string(),
@@ -779,7 +777,6 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                catalog: "default".to_string(),
                 db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db_name: db_name.to_string(),
@@ -816,7 +813,6 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                catalog: "default".to_string(),
                 db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db_name: db_name.to_string(),
@@ -837,7 +833,6 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                catalog: "default".to_string(),
                 db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db_name: new_db_name.to_string(),
@@ -876,7 +871,6 @@ impl MetaApiTestSuite {
             let req = RenameTableReq {
                 if_exists: false,
                 tenant: tenant.to_string(),
-                catalog: "default".to_string(),
                 db_name: db_name.to_string(),
                 table_name: tbl_name.to_string(),
                 new_db_name: new_db_name.to_string(),

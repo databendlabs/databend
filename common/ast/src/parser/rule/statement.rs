@@ -299,15 +299,20 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
 
     map(
         rule! {
-            #ident ~ ( "." ~ #ident )? ~ ( AS? ~ #table_alias )?
+            #ident ~ ( "." ~ #ident )? ~ ( "." ~ #ident )? ~ ( AS? ~ #table_alias )?
         },
-        |(fst, snd, alias)| {
-            let (database, table) = match (fst, snd) {
-                (database, Some((_, table))) => (Some(database), table),
-                (table, None) => (None, table),
+        |(fst, snd, third, alias)| {
+            let (catalog, database, table) = match (fst, snd, third) {
+                (catalog, Some((_, database)), Some((_, table))) => {
+                    (Some(catalog), Some(database), table)
+                }
+                (database, Some((_, table)), None) => (None, Some(database), table),
+                (database, None, Some((_, table))) => (None, Some(database), table),
+                (table, None, None) => (None, None, table),
             };
 
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias: alias.map(|(_, alias)| alias),

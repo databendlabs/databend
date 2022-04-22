@@ -21,7 +21,7 @@ use common_exception::Result;
 pub use scalar::ScalarExpr;
 pub use scalar::ScalarExprRef;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
@@ -40,15 +40,15 @@ mod select;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
-    catalog: Arc<dyn Catalog>,
+    catalogs: Arc<CatalogManager>,
     metadata: Metadata,
     context: Arc<QueryContext>,
 }
 
 impl Binder {
-    pub fn new(catalog: Arc<dyn Catalog>, context: Arc<QueryContext>) -> Self {
+    pub fn new(catalogs: Arc<CatalogManager>, context: Arc<QueryContext>) -> Self {
         Binder {
-            catalog,
+            catalogs,
             metadata: Metadata::create(),
             context,
         }
@@ -72,11 +72,13 @@ impl Binder {
     async fn resolve_data_source(
         &self,
         tenant: &str,
-        database: &str,
-        table: &str,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let table_meta = self.catalog.get_table(tenant, database, table).await?;
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
         Ok(table_meta)
     }
 }

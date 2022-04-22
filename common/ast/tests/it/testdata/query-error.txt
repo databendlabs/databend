@@ -43,6 +43,7 @@ Query {
                     op: Inner,
                     condition: Natural,
                     left: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "customer",
@@ -51,6 +52,7 @@ Query {
                         alias: None,
                     },
                     right: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "orders",
