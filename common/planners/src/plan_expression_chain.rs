@@ -191,7 +191,13 @@ impl ExpressionChain {
                     "Action must be a non-aggregated function.",
                 ));
             }
+
+            Expression::WindowFunction { .. } => {
+                todo!("not figure out yet @doki")
+            }
+
             Expression::Wildcard | Expression::Sort { .. } => {}
+
             Expression::Cast {
                 expr: sub_expr,
                 data_type,

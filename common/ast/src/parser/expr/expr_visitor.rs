@@ -163,6 +163,15 @@ pub trait ExprVisitor: Sized + Send {
             };
         }
 
+        if let Some(over) = &function.over {
+            for partition_by in &over.partition_by {
+                ExprTraverser::accept(partition_by, self).await?;
+            }
+            for order_by in &over.order_by {
+                ExprTraverser::accept(&order_by.expr, self).await?;
+            }
+        }
+
         Ok(())
     }
 

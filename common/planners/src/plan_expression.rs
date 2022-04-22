@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::window::WindowFrame;
 use once_cell::sync::Lazy;
 
 use crate::plan_expression_common::ExpressionDataTypeVisitor;
@@ -92,6 +93,18 @@ pub enum Expression {
         distinct: bool,
         params: Vec<DataValue>,
         args: Vec<Expression>,
+    },
+
+    /// WindowFunction
+    WindowFunction {
+        /// operation performed
+        func: Box<Expression>,
+        /// partition by
+        partition_by: Vec<Expression>,
+        /// order by
+        order_by: Vec<Expression>,
+        /// Window frame
+        window_frame: Option<WindowFrame>,
     },
 
     /// A sort expression, that can be used to sort values.
@@ -404,6 +417,31 @@ impl fmt::Debug for Expression {
                     true => write!(f, "(distinct {})", args_column_name.join(", "))?,
                     false => write!(f, "({})", args_column_name.join(", "))?,
                 }
+                Ok(())
+            }
+
+            Expression::WindowFunction {
+                func,
+                partition_by,
+                order_by,
+                window_frame,
+            } => {
+                write!(f, "{:?}", func)?;
+                write!(f, " OVER( ")?;
+                if !partition_by.is_empty() {
+                    write!(f, "PARTITION BY {:?} ", partition_by)?;
+                }
+                if !order_by.is_empty() {
+                    write!(f, "ORDER BY {:?} ", order_by)?;
+                }
+                if let Some(window_frame) = window_frame {
+                    write!(
+                        f,
+                        "{} BETWEEN {} AND {} ",
+                        window_frame.units, window_frame.start_bound, window_frame.end_bound
+                    )?;
+                }
+                write!(f, ")")?;
                 Ok(())
             }
 

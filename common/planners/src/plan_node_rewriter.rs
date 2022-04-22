@@ -639,6 +639,8 @@ impl RewriteHelper {
                 }
             }
 
+            Expression::WindowFunction { .. } => todo!("not figure out yet @doki"),
+
             Expression::Alias(alias, plan) => {
                 if data.inside_aliases.contains(alias) {
                     return Result::Err(ErrorCode::SyntaxException(format!(
@@ -730,6 +732,17 @@ impl RewriteHelper {
             }
             Expression::ScalarFunction { args, .. } => args.clone(),
             Expression::AggregateFunction { args, .. } => args.clone(),
+            Expression::WindowFunction {
+                func,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                let mut v = vec![func.as_ref().clone()];
+                v.extend(partition_by.clone());
+                v.extend(order_by.clone());
+                v
+            }
             Expression::Wildcard => vec![],
             Expression::Sort { expr, .. } => vec![expr.as_ref().clone()],
             Expression::Cast { expr, .. } => vec![expr.as_ref().clone()],
@@ -765,6 +778,22 @@ impl RewriteHelper {
                 for arg in args {
                     let mut col = Self::expression_plan_columns(arg)?;
                     v.append(&mut col);
+                }
+                v
+            }
+            Expression::WindowFunction {
+                func,
+                partition_by,
+                order_by,
+                ..
+            } => {
+                let mut v = vec![];
+                v.append(&mut Self::expression_plan_columns(func)?);
+                for part_by_expr in partition_by {
+                    v.append(&mut Self::expression_plan_columns(part_by_expr)?)
+                }
+                for order_by_expr in order_by {
+                    v.append(&mut Self::expression_plan_columns(order_by_expr)?)
                 }
                 v
             }

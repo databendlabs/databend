@@ -303,6 +303,24 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                     .collect::<Result<Vec<Expression>>>()?,
             }),
 
+            Expression::WindowFunction {
+                func,
+                partition_by,
+                order_by,
+                window_frame,
+            } => Ok(Expression::WindowFunction {
+                func: Box::new(clone_with_replacement(func, replacement_fn)?),
+                partition_by: partition_by
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+                order_by: order_by
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+                window_frame: window_frame.to_owned(),
+            }),
+
             Expression::Sort {
                 expr: nested_expr,
                 asc,
@@ -466,6 +484,16 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 let return_type = aggregate_function.return_type()?;
 
                 self.stack.push(return_type);
+                Ok(self)
+            }
+            Expression::WindowFunction {
+                partition_by,
+                order_by,
+                ..
+            } => {
+                for _ in 0..partition_by.len() + order_by.len() {
+                    self.stack.remove(0);
+                }
                 Ok(self)
             }
             Expression::Cast { data_type, .. } => {

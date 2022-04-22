@@ -24,6 +24,7 @@ use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
 use common_tracing::tracing;
+use common_tracing::tracing::log::debug;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Offset;
 use sqlparser::ast::OrderByExpr;
@@ -64,12 +65,18 @@ impl AnalyzableStatement for DfQueryStatement {
         let mut joined_schema = analyzer.analyze(self).await?;
 
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
-
-        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
+        debug!("QueryASTIR after normalize:\n{:?}", ir);
 
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
+        debug!("QueryASTIR after qualified rewrite:\n{:?}", ir);
+
+        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
+        debug!("QueryASTIR after push downs:\n{:?}", ir);
+
         let analyze_state = self.analyze_query(ir).await?;
+        debug!("QueryAnalyzeState:\n{:?}", analyze_state);
+
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
     }
@@ -200,6 +207,10 @@ impl DfQueryStatement {
     ) -> Result<AnalyzedResult> {
         let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
         state.finalize_schema = dry_run_res.schema().clone();
+        debug!(
+            "QueryAnalyzeState finalized schema:\n{}",
+            state.finalize_schema
+        );
 
         let mut tables_desc = schema.take_tables_desc();
 

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::window::WindowFrame;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -121,6 +122,21 @@ pub trait ExpressionRewriter: Sized {
             distinct,
             args,
             params: params.to_owned(),
+        })
+    }
+
+    fn mutate_window_function(
+        &mut self,
+        func: Expression,
+        partition_by: Vec<Expression>,
+        order_by: Vec<Expression>,
+        window_frame: Option<WindowFrame>,
+    ) -> Result<Expression> {
+        Ok(Expression::WindowFunction {
+            func: Box::new(func),
+            partition_by,
+            order_by,
+            window_frame,
         })
     }
 
@@ -283,6 +299,52 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 let new_expr = self
                     .inner
                     .mutate_aggregate_function(op, *distinct, params, args_expr, expr)?;
+                self.stack.push(new_expr);
+                Ok(self)
+            }
+            Expression::WindowFunction {
+                func: _,
+                partition_by,
+                order_by,
+                window_frame,
+            } => {
+                let new_func = self.stack.pop().unwrap();
+
+                let mut new_partition_by = Vec::with_capacity(partition_by.len());
+                for (i, _) in partition_by.iter().enumerate() {
+                    match self.stack.pop() {
+                        Some(new_partition_by_expr) => new_partition_by.push(new_partition_by_expr),
+                        None => {
+                            return Err(ErrorCode::LogicalError(format!(
+                                "WindowFunction expects {} partition by arguments, actual {}",
+                                partition_by.len(),
+                                i
+                            )))
+                        }
+                    }
+                }
+
+                let mut new_order_by = Vec::with_capacity(order_by.len());
+                for (i, _) in order_by.iter().enumerate() {
+                    match self.stack.pop() {
+                        Some(new_order_by_expr) => new_order_by.push(new_order_by_expr),
+                        None => {
+                            return Err(ErrorCode::LogicalError(format!(
+                                "WindowFunction expects {} order by arguments, actual {}",
+                                order_by.len(),
+                                i
+                            )))
+                        }
+                    }
+                }
+
+                let new_expr = self.inner.mutate_window_function(
+                    new_func,
+                    new_partition_by,
+                    new_order_by,
+                    window_frame.to_owned(),
+                )?;
+
                 self.stack.push(new_expr);
                 Ok(self)
             }
