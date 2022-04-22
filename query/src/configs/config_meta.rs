@@ -26,25 +26,25 @@ use serde::Serialize;
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(long, default_value = "./_meta_embedded")]
+    #[clap(long, default_value_t)]
     #[serde(rename = "embedded_dir")]
     pub meta_embedded_dir: String,
 
-    #[clap(long, default_value = "", help = "MetaStore backend address")]
+    #[clap(long, default_value_t, help = "MetaStore backend address")]
     #[serde(rename = "address")]
     pub meta_address: String,
 
-    #[clap(long, default_value = "", help = "MetaStore backend user name")]
+    #[clap(long, default_value_t, help = "MetaStore backend user name")]
     #[serde(rename = "username")]
     pub meta_username: String,
 
-    #[clap(long, default_value = "", help = "MetaStore backend user password")]
+    #[clap(long, default_value_t, help = "MetaStore backend user password")]
     #[serde(rename = "password")]
     pub meta_password: String,
 
     #[clap(
         long,
-        default_value = "10",
+        default_value_t,
         help = "Timeout for each client request, in seconds"
     )]
     #[serde(rename = "client_timeout_in_second")]
@@ -52,15 +52,12 @@ pub struct MetaConfig {
 
     #[clap(
         long = "meta-rpc-tls-meta-server-root-ca-cert",
-        default_value = "",
+        default_value_t,
         help = "Certificate for client to identify meta rpc server"
     )]
     pub rpc_tls_meta_server_root_ca_cert: String,
 
-    #[clap(
-        long = "meta-rpc-tls-meta-service-domain-name",
-        default_value = "localhost"
-    )]
+    #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
     pub rpc_tls_meta_service_domain_name: String,
 }
 

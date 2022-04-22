@@ -45,7 +45,7 @@ impl FromStr for StorageType {
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
-    #[clap(long, default_value = "_data")]
+    #[clap(long, default_value_t)]
     pub data_path: String,
 }
 
@@ -61,30 +61,27 @@ impl Default for FsStorageConfig {
 #[serde(default)]
 pub struct S3StorageConfig {
     /// Region for S3 storage
-    #[clap(long = "storage-s3-region", default_value = "")]
+    #[clap(long = "storage-s3-region", default_value_t)]
     pub region: String,
 
     /// Endpoint URL for S3 storage
-    #[clap(
-        long = "storage-s3-endpoint-url",
-        default_value = "https://s3.amazonaws.com"
-    )]
+    #[clap(long = "storage-s3-endpoint-url", default_value_t)]
     pub endpoint_url: String,
 
     // Access key for S3 storage
-    #[clap(long = "storage-s3-access-key-id", default_value = "")]
+    #[clap(long = "storage-s3-access-key-id", default_value_t)]
     pub access_key_id: String,
 
     /// Secret key for S3 storage
-    #[clap(long = "storage-s3-secret-access-key", default_value = "")]
+    #[clap(long = "storage-s3-secret-access-key", default_value_t)]
     pub secret_access_key: String,
 
     /// S3 Bucket to use for storage
-    #[clap(long = "storage-s3-bucket", default_value = "")]
+    #[clap(long = "storage-s3-bucket", default_value_t)]
     pub bucket: String,
 
     /// <root>
-    #[clap(long = "storage-s3-root", default_value = "")]
+    #[clap(long = "storage-s3-root", default_value_t)]
     pub root: String,
 }
 
@@ -125,15 +122,15 @@ impl fmt::Debug for S3StorageConfig {
 #[serde(default)]
 pub struct AzureStorageBlobConfig {
     /// Account for Azure storage
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value_t)]
     pub account: String,
 
     /// Master key for Azure storage
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value_t)]
     pub master_key: String,
 
     /// Container for Azure storage
-    #[clap(long, default_value = "")]
+    #[clap(long, default_value_t)]
     pub container: String,
 }
 
@@ -156,16 +153,15 @@ impl fmt::Debug for AzureStorageBlobConfig {
 }
 
 /// Storage config group.
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
     /// Current storage type: fs|s3
-    #[clap(long, default_value = "fs")]
+    #[clap(long, default_value_t)]
     #[serde(rename = "type")]
     pub storage_type: String,
 
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value_t)]
     #[serde(rename = "num_cpus")]
     pub storage_num_cpus: u64,
 

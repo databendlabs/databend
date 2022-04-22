@@ -26,11 +26,11 @@ pub const LOG_QUERY_ENABLED: &str = "LOG_QUERY_ENABLED";
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long, default_value = "INFO")]
+    #[clap(long, default_value_t)]
     pub log_level: String,
 
     /// Log file dir
-    #[clap(required = false, long, default_value = "./_logs")]
+    #[clap(long, default_value_t)]
     pub log_dir: String,
 
     /// Log file dir

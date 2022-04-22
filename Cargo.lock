@@ -5365,7 +5365,7 @@ dependencies = [
 [[package]]
 name = "serde-env"
 version = "0.0.0"
-source = "git+https://github.com/Xuanwo/serde-env?rev=ead9be2#ead9be2f0d51b99c89e4a2d2375b5e1a34301bc2"
+source = "git+https://github.com/Xuanwo/serde-env?rev=4394117#4394117be182f0dafdbde2ffd858f518adb5fb10"
 dependencies = [
  "anyhow",
  "log",
@@ -5452,7 +5452,7 @@ dependencies = [
 [[package]]
 name = "serfig"
 version = "0.0.0"
-source = "git+https://github.com/Xuanwo/serfig?rev=b1cedad#b1cedad038352e203eb9a073e584824c0c1b6df0"
+source = "git+https://github.com/Xuanwo/serfig?rev=f6e37fc#f6e37fcda6b9d1c76b2eaad8b13bbda4c4ec7e73"
 dependencies = [
  "anyhow",
  "indexmap",

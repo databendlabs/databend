@@ -49,7 +49,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
-    #[clap(long, short = 'c', default_value = "")]
+    #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
 
     // Query engine config.
