@@ -103,7 +103,7 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            table_create_sql.push_str(format!(" ORDER KEY ({})", order_keys_str).as_str());
+            table_create_sql.push_str(format!(" CLUSTER BY ({})", order_keys_str).as_str());
         }
 
         table_create_sql.push_str({

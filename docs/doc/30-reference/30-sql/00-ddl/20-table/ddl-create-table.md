@@ -19,7 +19,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-) [ORDER KEY(<order_keys>)]
+) [CLUSTER BY(<expr> [, <expr>, ...] )]
 
 <data_type>:
   TINYINT

@@ -16,7 +16,7 @@ select a+b from t2;
 
 create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
 
-create table t3(a int,b int) engine=Memory ORDER BY(a); -- {ErrorCode 2703}
+create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
 
 
 create table t3(`a` int) ENGINE = Null;

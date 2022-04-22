@@ -18,14 +18,14 @@ DROP TABLE t2;
 
 set max_threads = 1;
 select '==sort1==';
-CREATE TABLE IF NOT EXISTS t_sort(a INT) Engine = fuse ORDER KEY(a % 3, a);
+CREATE TABLE IF NOT EXISTS t_sort(a INT) Engine = fuse CLUSTER BY(a % 3, a);
 INSERT INTO t_sort (a) select number from numbers(10);
 SELECT * FROM t_sort;
 drop table t_sort;
 
 
 select '==sort2==';
-CREATE TABLE IF NOT EXISTS t_sort2(a INT) Engine = fuse ORDER KEY(a);
+CREATE TABLE IF NOT EXISTS t_sort2(a INT) Engine = fuse CLUSTER BY(a);
 INSERT INTO t_sort2 (a) select number from numbers(5) order by number % 3;
 SELECT * FROM t_sort2;
 drop table t_sort2;
