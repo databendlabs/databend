@@ -67,12 +67,14 @@ pub trait ExpressionVisitor: Sized {
                                     }
                                 }
                                 Expression::WindowFunction {
-                                    func,
+                                    args,
                                     partition_by,
                                     order_by,
                                     ..
                                 } => {
-                                    stack.push(RecursionProcessing::Call(func));
+                                    for arg_exppr in args {
+                                        stack.push(RecursionProcessing::Call(arg_exppr));
+                                    }
                                     for part_by_expr in partition_by {
                                         stack.push(RecursionProcessing::Call(part_by_expr));
                                     }

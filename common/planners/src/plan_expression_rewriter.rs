@@ -127,13 +127,15 @@ pub trait ExpressionRewriter: Sized {
 
     fn mutate_window_function(
         &mut self,
-        func: Expression,
+        op: String,
+        args: Vec<Expression>,
         partition_by: Vec<Expression>,
         order_by: Vec<Expression>,
         window_frame: Option<WindowFrame>,
     ) -> Result<Expression> {
         Ok(Expression::WindowFunction {
-            func: Box::new(func),
+            op,
+            args,
             partition_by,
             order_by,
             window_frame,
@@ -303,17 +305,23 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 Ok(self)
             }
             Expression::WindowFunction {
-                func: _,
+                op,
+                args,
                 partition_by,
                 order_by,
                 window_frame,
             } => {
-                let new_func = self.stack.pop().unwrap();
-
                 let mut new_partition_by = Vec::with_capacity(partition_by.len());
-                for (i, _) in partition_by.iter().enumerate() {
+                let mut new_order_by = Vec::with_capacity(order_by.len());
+                for i in 0..partition_by.len() + order_by.len() {
                     match self.stack.pop() {
-                        Some(new_partition_by_expr) => new_partition_by.push(new_partition_by_expr),
+                        Some(expr) => {
+                            if i < order_by.len() {
+                                new_order_by.push(expr);
+                            } else {
+                                new_partition_by.push(expr);
+                            }
+                        }
                         None => {
                             return Err(ErrorCode::LogicalError(format!(
                                 "WindowFunction expects {} partition by arguments, actual {}",
@@ -324,14 +332,14 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                     }
                 }
 
-                let mut new_order_by = Vec::with_capacity(order_by.len());
-                for (i, _) in order_by.iter().enumerate() {
+                let mut new_args = Vec::with_capacity(args.len());
+                for i in 0..args.len() {
                     match self.stack.pop() {
-                        Some(new_order_by_expr) => new_order_by.push(new_order_by_expr),
+                        Some(expr) => new_args.push(expr),
                         None => {
                             return Err(ErrorCode::LogicalError(format!(
-                                "WindowFunction expects {} order by arguments, actual {}",
-                                order_by.len(),
+                                "WindowFunction expects {} partition by arguments, actual {}",
+                                partition_by.len(),
                                 i
                             )))
                         }
@@ -339,7 +347,8 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 }
 
                 let new_expr = self.inner.mutate_window_function(
-                    new_func,
+                    op.clone(),
+                    new_args,
                     new_partition_by,
                     new_order_by,
                     window_frame.to_owned(),

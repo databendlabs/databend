@@ -129,58 +129,33 @@ impl ExpressionAnalyzer {
     }
 
     fn analyze_function(&self, info: &FunctionExprInfo, args: &mut Vec<Expression>) -> Result<()> {
-        // window function partition by and order by args
-        let mut partition_by_args = vec![];
-        let mut order_by_args = vec![];
-        if let Some(window_spec) = &info.over {
-            let order_by_args_count = window_spec.order_by.len();
-            let partition_by_args_count = window_spec.partition_by.len();
-
-            for i in 0..partition_by_args_count + order_by_args_count {
-                match args.pop() {
-                    None => {
-                        return Err(ErrorCode::LogicalError("It's a bug."));
-                    }
-                    Some(arg) => {
-                        if i < order_by_args_count {
-                            order_by_args.insert(0, arg);
-                        } else {
-                            partition_by_args.insert(0, arg);
+        let func = match &info.over {
+            Some(_) => self.window_function(info, args)?,
+            None => {
+                let mut arguments = Vec::with_capacity(info.args_count);
+                for _ in 0..info.args_count {
+                    match args.pop() {
+                        None => {
+                            return Err(ErrorCode::LogicalError("It's a bug."));
+                        }
+                        Some(arg) => {
+                            arguments.insert(0, arg);
                         }
                     }
                 }
-            }
-        }
 
-        let mut arguments = Vec::with_capacity(info.args_count);
-        for _ in 0..info.args_count {
-            match args.pop() {
-                None => {
-                    return Err(ErrorCode::LogicalError("It's a bug."));
-                }
-                Some(arg) => {
-                    arguments.insert(0, arg);
-                }
+                match AggregateFunctionFactory::instance().check(&info.name) {
+                    true => self.aggr_function(info, &arguments),
+                    false => match info.kind {
+                        OperatorKind::Unary => Self::unary_function(info, &arguments),
+                        OperatorKind::Binary => Self::binary_function(info, &arguments),
+                        OperatorKind::Other => self.other_function(info, &arguments),
+                    },
+                }?
             }
-        }
-
-        let func_expr = match AggregateFunctionFactory::instance().check(&info.name) {
-            true => self.aggr_function(info, &arguments),
-            false => match info.kind {
-                OperatorKind::Unary => Self::unary_function(info, &arguments),
-                OperatorKind::Binary => Self::binary_function(info, &arguments),
-                OperatorKind::Other => self.other_function(info, &arguments),
-            },
-        }?;
-
-        let func_expr = match &info.over {
-            Some(window_spec) => {
-                self.window_function(func_expr, partition_by_args, order_by_args, window_spec)?
-            }
-            None => func_expr,
         };
 
-        args.push(func_expr);
+        args.push(func);
         Ok(())
     }
 
@@ -275,12 +250,47 @@ impl ExpressionAnalyzer {
 
     fn window_function(
         &self,
-        func: Expression,
-        partition_by: Vec<Expression>,
-        order_by_exprs: Vec<Expression>,
-        window_spec: &WindowSpec,
+        info: &FunctionExprInfo,
+        args: &mut Vec<Expression>,
     ) -> Result<Expression> {
-        let order_by: Vec<Expression> = order_by_exprs
+        // window function partition by and order by args
+        let mut partition_by = vec![];
+        let mut order_by_expr = vec![];
+        if let Some(window_spec) = &info.over {
+            let order_by_args_count = window_spec.order_by.len();
+            let partition_by_args_count = window_spec.partition_by.len();
+
+            for i in 0..partition_by_args_count + order_by_args_count {
+                match args.pop() {
+                    None => {
+                        return Err(ErrorCode::LogicalError("It's a bug."));
+                    }
+                    Some(arg) => {
+                        if i < order_by_args_count {
+                            order_by_expr.insert(0, arg);
+                        } else {
+                            partition_by.insert(0, arg);
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut arguments = Vec::with_capacity(info.args_count);
+        for _ in 0..info.args_count {
+            match args.pop() {
+                None => {
+                    return Err(ErrorCode::LogicalError("It's a bug."));
+                }
+                Some(arg) => {
+                    arguments.insert(0, arg);
+                }
+            }
+        }
+
+        let window_spec = info.over.as_ref().unwrap();
+
+        let order_by: Vec<Expression> = order_by_expr
             .into_iter()
             .zip(window_spec.order_by.clone())
             .map(|(expr_sort_on, parser_sort_expr)| Expression::Sort {
@@ -297,7 +307,8 @@ impl ExpressionAnalyzer {
             .map(|wf| wf.try_into().unwrap());
 
         Ok(Expression::WindowFunction {
-            func: Box::new(func),
+            op: info.name.clone(),
+            args: arguments,
             partition_by,
             order_by,
             window_frame,

@@ -98,12 +98,14 @@ pub enum Expression {
     /// WindowFunction
     WindowFunction {
         /// operation performed
-        func: Box<Expression>,
+        op: String,
+        /// arguments
+        args: Vec<Expression>,
         /// partition by
         partition_by: Vec<Expression>,
         /// order by
         order_by: Vec<Expression>,
-        /// Window frame
+        /// window frame
         window_frame: Option<WindowFrame>,
     },
 
@@ -421,12 +423,22 @@ impl fmt::Debug for Expression {
             }
 
             Expression::WindowFunction {
-                func,
+                op,
+                args,
                 partition_by,
                 order_by,
                 window_frame,
             } => {
-                write!(f, "{:?}", func)?;
+                write!(f, "{}(", op)?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i < args.len() {
+                        write!(f, "{},", arg.column_name())?;
+                    } else {
+                        write!(f, "{}", arg.column_name())?;
+                    }
+                }
+                write!(f, ")")?;
+
                 write!(f, " OVER( ")?;
                 if !partition_by.is_empty() {
                     write!(f, "PARTITION BY {:?} ", partition_by)?;
@@ -442,6 +454,7 @@ impl fmt::Debug for Expression {
                     )?;
                 }
                 write!(f, ")")?;
+
                 Ok(())
             }
 

@@ -733,12 +733,12 @@ impl RewriteHelper {
             Expression::ScalarFunction { args, .. } => args.clone(),
             Expression::AggregateFunction { args, .. } => args.clone(),
             Expression::WindowFunction {
-                func,
+                args,
                 partition_by,
                 order_by,
                 ..
             } => {
-                let mut v = vec![func.as_ref().clone()];
+                let mut v = args.clone();
                 v.extend(partition_by.clone());
                 v.extend(order_by.clone());
                 v
@@ -782,13 +782,15 @@ impl RewriteHelper {
                 v
             }
             Expression::WindowFunction {
-                func,
+                args,
                 partition_by,
                 order_by,
                 ..
             } => {
                 let mut v = vec![];
-                v.append(&mut Self::expression_plan_columns(func)?);
+                for arg_expr in args {
+                    v.append(&mut Self::expression_plan_columns(arg_expr)?)
+                }
                 for part_by_expr in partition_by {
                     v.append(&mut Self::expression_plan_columns(part_by_expr)?)
                 }

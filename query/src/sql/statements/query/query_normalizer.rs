@@ -21,7 +21,6 @@ use common_planners::extract_aliases;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::resolve_aliases_to_exprs;
 use common_planners::Expression;
-use common_tracing::tracing::log::debug;
 use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
@@ -65,32 +64,26 @@ impl QueryNormalizer {
         if let Err(cause) = self.visit_filter(query).await {
             return Err(cause.add_message_back(" (while in analyze select filter)"));
         }
-        debug!("ir after analyzing filter:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_projection(query).await {
             return Err(cause.add_message_back(" (while in analyze select projection)"));
         }
-        debug!("ir after analyzing projection:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_group_by(query).await {
             return Err(cause.add_message_back(" (while in analyze select group by)"));
         }
-        debug!("ir after analyzing group by:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_having(query).await {
             return Err(cause.add_message_back(" (while in analyze select having)"));
         }
-        debug!("ir after analyzing having:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_order_by(query).await {
             return Err(cause.add_message_back(" (while in analyze select order by)"));
         }
-        debug!("ir after analyzing order by:\n{:?}", self.query_ast_ir);
 
         if let Err(cause) = self.analyze_limit(query).await {
             return Err(cause.add_message_back(" (while in analyze select limit)"));
         }
-        debug!("ir after analyzing limit:\n{:?}", self.query_ast_ir);
 
         Ok(self.query_ast_ir)
     }
@@ -109,15 +102,7 @@ impl QueryNormalizer {
         self.aliases_map = extract_aliases(&projection_expressions);
 
         for projection_expression in &projection_expressions {
-            match projection_expression {
-                Expression::WindowFunction { .. } => continue,
-                Expression::Alias(_, expr)
-                    if matches!(expr.as_ref(), Expression::WindowFunction { .. }) =>
-                {
-                    continue
-                }
-                _ => self.add_aggregate_function(projection_expression)?,
-            }
+            self.add_aggregate_function(projection_expression)?;
         }
 
         self.query_ast_ir.projection_expressions = projection_expressions;

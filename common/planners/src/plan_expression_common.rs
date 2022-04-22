@@ -75,6 +75,12 @@ pub fn expand_aggregate_arg_exprs(exprs: &[Expression]) -> Vec<Expression> {
     res
 }
 
+pub fn find_window_exprs(exprs: &[Expression]) -> Vec<Expression> {
+    find_exprs_in_exprs(exprs, &|nested_expr| {
+        matches!(nested_expr, Expression::WindowFunction { .. })
+    })
+}
+
 /// Collect all deeply nested `Expression::Column`'s. They are returned in order of
 /// appearance (depth first), with duplicates omitted.
 pub fn find_column_exprs(exprs: &[Expression]) -> Vec<Expression> {
@@ -304,12 +310,17 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             }),
 
             Expression::WindowFunction {
-                func,
+                op,
+                args,
                 partition_by,
                 order_by,
                 window_frame,
             } => Ok(Expression::WindowFunction {
-                func: Box::new(clone_with_replacement(func, replacement_fn)?),
+                op: op.clone(),
+                args: args
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
                 partition_by: partition_by
                     .iter()
                     .map(|e| clone_with_replacement(e, replacement_fn))
