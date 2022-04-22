@@ -15,4 +15,11 @@ SELECT * FROM t2;
 
 DROP TABLE t1;
 DROP TABLE t2;
+
+CREATE TABLE IF NOT EXISTS t_sort(a INT) Engine = fuse ORDER KEY(a % 3, a);
+INSERT INTO t_sort (a) select number from numbers(10);
+SELECT * FROM t_sort;
+drop table t_sort;
+
+
 DROP DATABASE db1;
