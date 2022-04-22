@@ -42,6 +42,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;
 use crate::pipelines::new::SourcePipeBuilder;
@@ -75,12 +76,12 @@ impl InteractiveWorkerBase {
                 // It has select plan, so we do not need to consume data from client
                 // data is from server and insert into server, just behave like select query
                 if insert.has_select_plan() {
-                    return Self::process_select_query(plan, ctx).await;
+                    return Self::process_select_query(plan, ctx, query).await;
                 }
 
                 Self::process_insert_query(insert.clone(), ch_ctx, ctx).await
             }
-            _ => Self::process_select_query(plan, ctx).await,
+            _ => Self::process_select_query(plan, ctx, query).await,
         }
     }
 
@@ -162,9 +163,19 @@ impl InteractiveWorkerBase {
     pub async fn process_select_query(
         plan: PlanNode,
         ctx: Arc<QueryContext>,
+        query: &str,
     ) -> Result<Receiver<BlockItem>> {
         let start = Instant::now();
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+        let settings = ctx.get_settings();
+        let interpreter = if settings.get_enable_new_processor_framework()? != 0
+            && ctx.get_cluster().is_empty()
+            && settings.get_enable_planner_v2()? != 0
+        {
+            // Use new planner
+            SelectInterpreterV2::try_create(ctx.clone(), query)?
+        } else {
+            InterpreterFactory::get(ctx.clone(), plan)?
+        };
         let name = interpreter.name().to_string();
         histogram!(
             super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
