@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::mask_string;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -80,13 +79,7 @@ impl SyncSystemTable for ConfigsTable {
             meta_config_value,
         );
 
-        let masked_access_key_id = mask_string(&config.storage.s3.access_key_id[..], 3);
-        let masked_secret_access_key = mask_string(&config.storage.s3.secret_access_key[..], 3);
-        let mut storage_config = config.storage;
-        // mask sensitive data in storage.s3
-        storage_config.s3.access_key_id = masked_access_key_id;
-        storage_config.s3.secret_access_key = masked_secret_access_key;
-
+        let storage_config = config.storage;
         let storage_config_value = serde_json::to_value(storage_config)?;
         ConfigsTable::extract_config(
             &mut names,
@@ -102,9 +95,9 @@ impl SyncSystemTable for ConfigsTable {
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
         Ok(DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(groups),
             Series::from_data(names),
             Series::from_data(values),
-            Series::from_data(groups),
             Series::from_data(descs),
         ]))
     }
@@ -113,9 +106,9 @@ impl SyncSystemTable for ConfigsTable {
 impl ConfigsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
+            DataField::new("group", Vu8::to_data_type()),
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("value", Vu8::to_data_type()),
-            DataField::new("group", Vu8::to_data_type()),
             DataField::new("description", Vu8::to_data_type()),
         ]);
 

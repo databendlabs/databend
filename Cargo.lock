@@ -1794,6 +1794,7 @@ dependencies = [
  "sha1",
  "sha2 0.10.2",
  "sqlparser",
+ "temp-env",
  "tempfile",
  "threadpool",
  "time 0.3.9",
@@ -5864,6 +5865,15 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "temp-env"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45107136c2ddf8c4b87453c02294fd0adf41751796e81e8ba3f7fd951977ab57"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "tempfile"

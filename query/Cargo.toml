@@ -120,6 +120,7 @@ tempfile = "3.3.0"
 toml = { version = "0.5.8", default-features = false }
 url = "2.2.2"
 wiremock = "0.5.12"
+temp-env = "0.2.0"
 
 [build-dependencies]
 common-building = { path = "../common/building" }

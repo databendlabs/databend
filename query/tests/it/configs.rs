@@ -14,52 +14,40 @@
 
 use common_exception::Result;
 use databend_query::configs::Config;
-use databend_query::configs::LogConfig;
-use databend_query::configs::MetaConfig;
-use databend_query::configs::QueryConfig;
-use databend_query::configs::StorageConfig;
 use pretty_assertions::assert_eq;
 
 // Default.
 #[test]
 fn test_default_config() -> Result<()> {
-    let expect = Config {
-        log: LogConfig::default(),
-        meta: MetaConfig::default(),
-        storage: StorageConfig::default(),
-        query: QueryConfig::default(),
-        config_file: "".to_string(),
-    };
     let actual = Config::default();
-    assert_eq!(actual, expect);
 
-    let tom_expect = "config_file = \"\"
+    let tom_expect = r#"config_file = ""
 
 [query]
-tenant_id = \"\"
-cluster_id = \"\"
+tenant_id = "admin"
+cluster_id = ""
 num_cpus = 0
-mysql_handler_host = \"127.0.0.1\"
+mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307
 max_active_sessions = 256
-clickhouse_handler_host = \"127.0.0.1\"
+clickhouse_handler_host = "127.0.0.1"
 clickhouse_handler_port = 9000
-http_handler_host = \"127.0.0.1\"
+http_handler_host = "127.0.0.1"
 http_handler_port = 8000
 http_handler_result_timeout_millis = 10000
-flight_api_address = \"127.0.0.1:9090\"
-admin_api_address = \"127.0.0.1:8080\"
-metric_api_address = \"127.0.0.1:7070\"
-http_handler_tls_server_cert = \"\"
-http_handler_tls_server_key = \"\"
-http_handler_tls_server_root_ca_cert = \"\"
-api_tls_server_cert = \"\"
-api_tls_server_key = \"\"
-api_tls_server_root_ca_cert = \"\"
-rpc_tls_server_cert = \"\"
-rpc_tls_server_key = \"\"
-rpc_tls_query_server_root_ca_cert = \"\"
-rpc_tls_query_service_domain_name = \"localhost\"
+flight_api_address = "127.0.0.1:9090"
+admin_api_address = "127.0.0.1:8080"
+metric_api_address = "127.0.0.1:7070"
+http_handler_tls_server_cert = ""
+http_handler_tls_server_key = ""
+http_handler_tls_server_root_ca_cert = ""
+api_tls_server_cert = ""
+api_tls_server_key = ""
+api_tls_server_root_ca_cert = ""
+rpc_tls_server_cert = ""
+rpc_tls_server_key = ""
+rpc_tls_query_server_root_ca_cert = ""
+rpc_tls_query_service_domain_name = "localhost"
 table_engine_csv_enabled = false
 table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
@@ -71,46 +59,45 @@ table_cache_snapshot_count = 256
 table_cache_segment_count = 10240
 table_cache_block_meta_count = 102400
 table_memory_cache_mb_size = 256
-table_disk_cache_root = \"_cache\"
+table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 management_mode = false
-jwt_key_file = \"\"
+jwt_key_file = ""
 
 [log]
-log_level = \"INFO\"
-log_dir = \"./_logs\"
-log_query_enabled = false
+level = "INFO"
+dir = "./_logs"
+query_enabled = false
 
 [meta]
-meta_embedded_dir = \"./_meta_embedded\"
-meta_address = \"\"
-meta_username = \"root\"
-meta_password = \"\"
-meta_client_timeout_in_second = 10
-rpc_tls_meta_server_root_ca_cert = \"\"
-rpc_tls_meta_service_domain_name = \"localhost\"
+embedded_dir = "./_meta_embedded"
+address = ""
+username = "root"
+password = ""
+client_timeout_in_second = 10
+rpc_tls_meta_server_root_ca_cert = ""
+rpc_tls_meta_service_domain_name = "localhost"
 
 [storage]
-storage_type = \"fs\"
-storage_num_cpus = 0
+type = "fs"
+num_cpus = 0
 
 [storage.fs]
-data_path = \"_data\"
+data_path = "_data"
 
 [storage.s3]
-region = \"\"
-endpoint_url = \"https://s3.amazonaws.com\"
-access_key_id = \"\"
-secret_access_key = \"\"
-enable_pod_iam_policy = false
-bucket = \"\"
-root = \"\"
+region = ""
+endpoint_url = "https://s3.amazonaws.com"
+access_key_id = ""
+secret_access_key = ""
+bucket = ""
+root = ""
 
 [storage.azure_storage_blob]
-account = \"\"
-master_key = \"\"
-container = \"\"
-";
+account = ""
+master_key = ""
+container = ""
+"#;
 
     let tom_actual = toml::to_string(&actual).unwrap();
     assert_eq!(tom_actual, tom_expect);
@@ -120,103 +107,80 @@ container = \"\"
 // From env, defaulting.
 #[test]
 fn test_env_config() -> Result<()> {
-    std::env::set_var("LOG_LEVEL", "DEBUG");
-    std::env::set_var("QUERY_TENANT_ID", "tenant-1");
-    std::env::set_var("QUERY_CLUSTER_ID", "cluster-1");
-    std::env::set_var("QUERY_MYSQL_HANDLER_HOST", "127.0.0.1");
-    std::env::set_var("QUERY_MYSQL_HANDLER_PORT", "3306");
-    std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
-    std::env::set_var("QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
-    std::env::set_var("QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
-    std::env::set_var("QUERY_HTTP_HANDLER_HOST", "1.2.3.4");
-    std::env::set_var("QUERY_HTTP_HANDLER_PORT", "8001");
-    std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
-    std::env::set_var("QUERY_ADMIN_API_ADDRESS", "1.2.3.4:8081");
-    std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
-    std::env::set_var("QUERY_TABLE_CACHE_ENABLED", "true");
-    std::env::set_var("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", "512");
-    std::env::set_var("QUERY_TABLE_DISK_CACHE_ROOT", "_cache_env");
-    std::env::set_var("QUERY_TABLE_DISK_CACHE_MB_SIZE", "512");
-    std::env::set_var("STORAGE_TYPE", "s3");
-    std::env::set_var("STORAGE_NUM_CPUS", "16");
-    std::env::set_var("STORAGE_FS_DATA_PATH", "/tmp/test");
-    std::env::set_var("STORAGE_S3_REGION", "us.region");
-    std::env::set_var("STORAGE_S3_ENDPOINT_URL", "");
-    std::env::set_var("STORAGE_S3_ACCESS_KEY_ID", "us.key.id");
-    std::env::set_var("STORAGE_S3_SECRET_ACCESS_KEY", "us.key");
-    std::env::set_var("STORAGE_S3_ENABLE_POD_IAM_POLICY", "true");
-    std::env::set_var("STORAGE_S3_BUCKET", "us.bucket");
-    std::env::set_var("QUERY_TABLE_ENGINE_CSV_ENABLED", "true");
-    std::env::set_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED", "true");
-    std::env::set_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED", "true");
-    std::env::set_var("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", "false");
-    std::env::remove_var("CONFIG_FILE");
+    temp_env::with_vars(
+        vec![
+            ("LOG_LEVEL", Some("DEBUG")),
+            ("QUERY_TENANT_ID", Some("tenant-1")),
+            ("QUERY_CLUSTER_ID", Some("cluster-1")),
+            ("QUERY_MYSQL_HANDLER_HOST", Some("127.0.0.1")),
+            ("QUERY_MYSQL_HANDLER_PORT", Some("3306")),
+            ("QUERY_MAX_ACTIVE_SESSIONS", Some("255")),
+            ("QUERY_CLICKHOUSE_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_CLICKHOUSE_HANDLER_PORT", Some("9000")),
+            ("QUERY_HTTP_HANDLER_HOST", Some("1.2.3.4")),
+            ("QUERY_HTTP_HANDLER_PORT", Some("8001")),
+            ("QUERY_FLIGHT_API_ADDRESS", Some("1.2.3.4:9091")),
+            ("QUERY_ADMIN_API_ADDRESS", Some("1.2.3.4:8081")),
+            ("QUERY_METRIC_API_ADDRESS", Some("1.2.3.4:7071")),
+            ("QUERY_TABLE_CACHE_ENABLED", Some("true")),
+            ("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", Some("512")),
+            ("QUERY_TABLE_DISK_CACHE_ROOT", Some("_cache_env")),
+            ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
+            ("STORAGE_TYPE", Some("s3")),
+            ("STORAGE_NUM_CPUS", Some("16")),
+            ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
+            ("STORAGE_S3_REGION", Some("us.region")),
+            ("STORAGE_S3_ENDPOINT_URL", Some("http://127.0.0.1:10024")),
+            ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
+            ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
+            ("STORAGE_S3_BUCKET", Some("us.bucket")),
+            ("QUERY_TABLE_ENGINE_CSV_ENABLED", Some("true")),
+            ("QUERY_TABLE_ENGINE_PARQUET_ENABLED", Some("true")),
+            ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
+            ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
+            ("CONFIG_FILE", None),
+        ],
+        || {
+            let configured = Config::load().expect("must success");
+            assert_eq!("DEBUG", configured.log.level);
 
-    let configured = Config::load()?;
-    assert_eq!("DEBUG", configured.log.log_level);
+            assert_eq!("tenant-1", configured.query.tenant_id);
+            assert_eq!("cluster-1", configured.query.cluster_id);
+            assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
+            assert_eq!(3306, configured.query.mysql_handler_port);
+            assert_eq!(255, configured.query.max_active_sessions);
+            assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
+            assert_eq!(9000, configured.query.clickhouse_handler_port);
+            assert_eq!("1.2.3.4", configured.query.http_handler_host);
+            assert_eq!(8001, configured.query.http_handler_port);
 
-    assert_eq!("tenant-1", configured.query.tenant_id);
-    assert_eq!("cluster-1", configured.query.cluster_id);
-    assert_eq!("127.0.0.1", configured.query.mysql_handler_host);
-    assert_eq!(3306, configured.query.mysql_handler_port);
-    assert_eq!(255, configured.query.max_active_sessions);
-    assert_eq!("1.2.3.4", configured.query.clickhouse_handler_host);
-    assert_eq!(9000, configured.query.clickhouse_handler_port);
-    assert_eq!("1.2.3.4", configured.query.http_handler_host);
-    assert_eq!(8001, configured.query.http_handler_port);
+            assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
+            assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
+            assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
-    assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
-    assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
-    assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+            assert_eq!("s3", configured.storage.storage_type);
+            assert_eq!(16, configured.storage.storage_num_cpus);
 
-    assert_eq!("s3", configured.storage.storage_type);
-    assert_eq!(15, configured.storage.storage_num_cpus);
+            assert_eq!("/tmp/test", configured.storage.fs.data_path);
 
-    assert_eq!("/tmp/test", configured.storage.fs.data_path);
+            assert_eq!("us.region", configured.storage.s3.region);
+            assert_eq!("http://127.0.0.1:10024", configured.storage.s3.endpoint_url);
+            assert_eq!("******.id", configured.storage.s3.access_key_id);
+            assert_eq!("******key", configured.storage.s3.secret_access_key);
+            assert_eq!("us.bucket", configured.storage.s3.bucket);
 
-    assert_eq!("us.region", configured.storage.s3.region);
-    assert_eq!("", configured.storage.s3.endpoint_url);
-    assert_eq!("us.key.id", configured.storage.s3.access_key_id);
-    assert_eq!("us.key", configured.storage.s3.secret_access_key);
-    assert_eq!("us.bucket", configured.storage.s3.bucket);
+            assert!(configured.query.table_engine_csv_enabled);
+            assert!(configured.query.table_engine_parquet_enabled);
+            assert!(configured.query.table_engine_memory_enabled);
+            assert!(!configured.query.database_engine_github_enabled);
 
-    assert!(configured.query.table_engine_csv_enabled);
-    assert!(configured.query.table_engine_parquet_enabled);
-    assert!(configured.query.table_engine_memory_enabled);
-    assert!(!configured.query.database_engine_github_enabled);
+            assert!(configured.query.table_cache_enabled);
+            assert_eq!(512, configured.query.table_memory_cache_mb_size);
+            assert_eq!("_cache_env", configured.query.table_disk_cache_root);
+            assert_eq!(512, configured.query.table_disk_cache_mb_size);
+        },
+    );
 
-    assert!(configured.query.table_cache_enabled);
-    assert_eq!(512, configured.query.table_memory_cache_mb_size);
-    assert_eq!("_cache_env", configured.query.table_disk_cache_root);
-    assert_eq!(512, configured.query.table_disk_cache_mb_size);
-
-    // clean up
-    std::env::remove_var("LOG_LEVEL");
-    std::env::remove_var("QUERY_TENANT_ID");
-    std::env::remove_var("QUERY_CLUSTER_ID");
-    std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
-    std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
-    std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");
-    std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_HOST");
-    std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_PORT");
-    std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
-    std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
-    std::env::remove_var("QUERY_ADMIN_API_ADDRESS");
-    std::env::remove_var("QUERY_METRIC_API_ADDRESS");
-    std::env::remove_var("QUERY_TABLE_CACHE_ENABLED");
-    std::env::remove_var("QUERY_TABLE_MEMORY_CACHE_MB_SIZE");
-    std::env::remove_var("QUERY_TABLE_DISK_CACHE_ROOT");
-    std::env::remove_var("QUERY_TABLE_DISK_CACHE_MB_SIZE");
-    std::env::remove_var("STORAGE_TYPE");
-    std::env::remove_var("STORAGE_FS_DATA_PATH");
-    std::env::remove_var("STORAGE_S3_REGION");
-    std::env::remove_var("STORAGE_S3_ACCESS_KEY_ID");
-    std::env::remove_var("STORAGE_S3_SECRET_ACCESS_KEY");
-    std::env::remove_var("STORAGE_S3_BUCKET");
-    std::env::remove_var("QUERY_TABLE_ENGINE_CSV_ENABLED");
-    std::env::remove_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED");
-    std::env::remove_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED");
-    std::env::remove_var("QUERY_DATABASE_ENGINE_GITHUB_ENABLED");
     Ok(())
 }
 

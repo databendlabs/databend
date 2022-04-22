@@ -47,8 +47,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     //let _guards = init_tracing_with_file(
     let _guards = init_global_tracing(
         app_name.as_str(),
-        conf.log.log_dir.as_str(),
-        conf.log.log_level.as_str(),
+        conf.log.dir.as_str(),
+        conf.log.level.as_str(),
     );
 
     init_default_metrics_recorder();

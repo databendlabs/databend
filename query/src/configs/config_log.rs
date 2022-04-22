@@ -16,34 +16,29 @@ use clap::Args;
 use serde::Deserialize;
 use serde::Serialize;
 
-// Log env.
-pub const LOG_LEVEL: &str = "LOG_LEVEL";
-pub const LOG_DIR: &str = "LOG_DIR";
-pub const LOG_QUERY_ENABLED: &str = "LOG_QUERY_ENABLED";
-
 /// Log config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long, default_value_t)]
-    pub log_level: String,
+    pub level: String,
 
     /// Log file dir
     #[clap(long, default_value_t)]
-    pub log_dir: String,
+    pub dir: String,
 
     /// Log file dir
     #[clap(long)]
-    pub log_query_enabled: bool,
+    pub query_enabled: bool,
 }
 
 impl Default for LogConfig {
     fn default() -> Self {
         Self {
-            log_level: "INFO".to_string(),
-            log_dir: "./_logs".to_string(),
-            log_query_enabled: false,
+            level: "INFO".to_string(),
+            dir: "./_logs".to_string(),
+            query_enabled: false,
         }
     }
 }

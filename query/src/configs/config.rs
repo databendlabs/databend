@@ -45,7 +45,7 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     ver
 });
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
@@ -57,7 +57,6 @@ pub struct Config {
     pub query: QueryConfig,
 
     #[clap(flatten)]
-    #[serde(flatten)]
     pub log: LogConfig,
 
     // Meta Service config.
@@ -67,19 +66,6 @@ pub struct Config {
     // Storage backend config.
     #[clap(flatten)]
     pub storage: StorageConfig,
-}
-
-impl Default for Config {
-    /// Default configs.
-    fn default() -> Self {
-        Self {
-            config_file: "".to_string(),
-            query: QueryConfig::default(),
-            log: LogConfig::default(),
-            meta: MetaConfig::default(),
-            storage: StorageConfig::default(),
-        }
-    }
 }
 
 impl Config {

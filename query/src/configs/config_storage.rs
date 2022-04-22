@@ -17,6 +17,7 @@ use std::str::FromStr;
 
 use clap::Args;
 use common_base::mask_string;
+use common_base::serde_mask_string;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -70,10 +71,12 @@ pub struct S3StorageConfig {
 
     // Access key for S3 storage
     #[clap(long = "storage-s3-access-key-id", default_value_t)]
+    #[serde(serialize_with = "serde_mask_string")]
     pub access_key_id: String,
 
     /// Secret key for S3 storage
     #[clap(long = "storage-s3-secret-access-key", default_value_t)]
+    #[serde(serialize_with = "serde_mask_string")]
     pub secret_access_key: String,
 
     /// S3 Bucket to use for storage
@@ -100,21 +103,17 @@ impl Default for S3StorageConfig {
 
 impl fmt::Debug for S3StorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{")?;
-        write!(f, "s3.storage.region: \"{}\", ", self.region)?;
-        write!(f, "s3.storage.endpoint_url: \"{}\", ", self.endpoint_url)?;
-        write!(f, "s3.storage.bucket: \"{}\", ", self.bucket)?;
-        write!(
-            f,
-            "s3.storage.access_key_id: \"{}\", ",
-            mask_string(&self.access_key_id[..], 3)
-        )?;
-        write!(
-            f,
-            "s3.storage.secret_access_key: \"{}\", ",
-            mask_string(&self.secret_access_key[..], 3)
-        )?;
-        write!(f, "}}")
+        f.debug_struct("S3StorageConfig")
+            .field("endpoint_url", &self.endpoint_url)
+            .field("region", &self.region)
+            .field("bucket", &self.bucket)
+            .field("root", &self.root)
+            .field("access_key_id", &mask_string(&self.access_key_id, 3))
+            .field(
+                "secret_access_key",
+                &mask_string(&self.secret_access_key, 3),
+            )
+            .finish()
     }
 }
 
@@ -146,9 +145,11 @@ impl Default for AzureStorageBlobConfig {
 
 impl fmt::Debug for AzureStorageBlobConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{")?;
-        write!(f, "Azure.storage.container: \"{}\", ", self.container)?;
-        write!(f, "}}")
+        f.debug_struct("AzureStorageBlobConfig")
+            .field("container", &self.container)
+            .field("account", &mask_string(&self.account, 3))
+            .field("master_key", &mask_string(&self.master_key, 3))
+            .finish()
     }
 }
 
@@ -182,10 +183,11 @@ impl Default for StorageConfig {
     fn default() -> Self {
         Self {
             storage_type: "fs".to_string(),
+            storage_num_cpus: 0,
+
             fs: FsStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azure_storage_blob: AzureStorageBlobConfig::default(),
-            storage_num_cpus: num_cpus::get() as u64,
         }
     }
 }

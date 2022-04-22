@@ -160,7 +160,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: "admin".to_string(),
             cluster_id: "".to_string(),
-            num_cpus: num_cpus::get() as u64,
+            num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
             max_active_sessions: 256,
