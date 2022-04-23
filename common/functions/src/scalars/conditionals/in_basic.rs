@@ -127,26 +127,23 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
         let types: Vec<DataTypePtr> = columns.iter().map(|col| col.column().data_type()).collect();
 
-        let least_super_dt = if columns[0]
-            .field()
-            .data_type()
-            .data_type_id()
-            .is_date_or_date_time()
-        {
+        let data_type = remove_nullable(columns[0].field().data_type());
+        let least_super_dt = if data_type.data_type_id().is_date_or_date_time() {
             match columns[1..]
                 .iter()
                 .map(|column| column.field().data_type().data_type_id())
-                .all(|t| t.is_string() || t.is_date_or_date_time())
+                .all(|t| t.is_string() || t.is_date_or_date_time() || t.is_null())
             {
-                true => columns[0].field().data_type().clone(),
+                true => wrap_nullable(columns[0].field().data_type()),
                 false => {
-                    return Result::Err(ErrorCode::BadDataValueType("In values contain unexpected type"));
+                    return Result::Err(ErrorCode::BadDataValueType(
+                        "In values contain unexpected type",
+                    ));
                 }
             }
         } else {
             aggregate_types(&types)?
         };
-
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
         let input_col = cast_column_field(&columns[0], &least_super_dt)?;
 
@@ -193,9 +190,10 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             TypeID::DateTime => {
                 scalar_contains!(i64, input_col, input_rows, columns, least_super_dt);
             }
-            _ => {
-                unimplemented!()
-            }
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
+                "{} type is not supported for IN now",
+                least_super_type_id
+            ))),
         }
     }
 }
