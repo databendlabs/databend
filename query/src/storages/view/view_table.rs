@@ -57,6 +57,7 @@ impl ViewTable {
         StorageDescription {
             engine_name: "VIEW".to_string(),
             comment: "VIEW STORAGE (LOGICAL VIEW)".to_string(),
+            ..Default::default()
         }
     }
 }

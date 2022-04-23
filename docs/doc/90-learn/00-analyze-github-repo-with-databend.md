@@ -78,16 +78,16 @@ SHOW CREATE TABLE databend_issues;
 | Table           | Create Table                                                                                                                                                                                                                                                          |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | databend_issues | CREATE TABLE `databend_issues` (
-  `number` Int64,
-  `title` String,
-  `state` String,
-  `user` String,
-  `labels` String,
-  `assigness` String,
-  `comments` UInt32,
-  `created_at` DateTime32,
-  `updated_at` DateTime32,
-  `closed_at` DateTime32,
+  `number` BIGINT,
+  `title` VARCHAR,
+  `state` VARCHAR,
+  `user` VARCHAR,
+  `labels` VARCHAR,
+  `assigness` VARCHAR,
+  `comments` INT UNSIGNED,
+  `created_at` TIMESTAMP,
+  `updated_at` TIMESTAMP,
+  `closed_at` TIMESTAMP,
 ) ENGINE=GITHUB |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 ```

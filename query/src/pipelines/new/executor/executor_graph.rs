@@ -212,7 +212,7 @@ impl ExecutingGraph {
 
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
-                let target_index = DirectedEdge::get_target(&edge, &locker.graph);
+                let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
                 let node = &locker.graph[target_index];
                 let node_state = node.state.lock().unwrap();
@@ -291,7 +291,6 @@ impl ScheduleQueue {
         while let Some(processor) = self.async_queue.pop_front() {
             tasks.push_back(ExecutorTask::Async(processor));
         }
-
         global.push_tasks(ctx, tasks)
     }
 

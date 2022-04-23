@@ -31,6 +31,8 @@ pub struct Query {
     pub order_by: Vec<OrderByExpr>,
     // `LIMIT` clause
     pub limit: Vec<Expr>,
+    // `OFFSET` expr
+    pub offset: Option<Expr>,
 }
 
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -377,6 +379,11 @@ impl Display for Query {
         if !self.limit.is_empty() {
             write!(f, " LIMIT ")?;
             write_comma_separated_list(f, &self.limit)?;
+        }
+
+        // TODO: We should validate if offset exists, limit should be empty or just one element
+        if let Some(offset) = &self.offset {
+            write!(f, " OFFSET {}", offset)?;
         }
 
         Ok(())

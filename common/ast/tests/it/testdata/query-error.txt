@@ -67,6 +67,7 @@ Query {
     ),
     order_by: [],
     limit: [],
+    offset: None,
 }
 ---------- REST -----------
 on a = b

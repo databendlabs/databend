@@ -18,9 +18,12 @@ mod util;
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
@@ -35,21 +38,29 @@ use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
+use crate::sql::IndexType;
 use crate::sql::Metadata;
 
 /// Helper to build a `Pipeline` from `SExpr`
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
     metadata: Metadata,
+    result_columns: Vec<(IndexType, String)>,
     expression: SExpr,
     pipeline: NewPipeline,
 }
 
 impl PipelineBuilder {
-    pub fn new(ctx: Arc<QueryContext>, metadata: Metadata, expression: SExpr) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        result_columns: Vec<(IndexType, String)>,
+        metadata: Metadata,
+        expression: SExpr,
+    ) -> Self {
         PipelineBuilder {
             ctx,
             metadata,
+            result_columns,
             expression,
             pipeline: NewPipeline::create(),
         }
@@ -57,8 +68,48 @@ impl PipelineBuilder {
 
     pub fn spawn(mut self) -> Result<NewPipeline> {
         let expr = self.expression.clone();
-        self.build_pipeline(&expr)?;
+        let schema = self.build_pipeline(&expr)?;
+        self.align_data_schema(schema)?;
+        let settings = self.ctx.get_settings();
+        self.pipeline
+            .set_max_threads(settings.get_max_threads()? as usize);
         Ok(self.pipeline)
+    }
+
+    fn align_data_schema(&mut self, input_schema: DataSchemaRef) -> Result<()> {
+        let mut projections = Vec::with_capacity(self.result_columns.len());
+        let mut output_fields = Vec::with_capacity(self.result_columns.len());
+        for (index, name) in self.result_columns.iter() {
+            let column_entry = self.metadata.column(*index);
+            let field_name = &column_entry.name;
+            projections.push(Expression::Alias(
+                name.clone(),
+                Box::new(Expression::Column(format_field_name(
+                    field_name.as_str(),
+                    *index,
+                ))),
+            ));
+            let field = if column_entry.nullable {
+                DataField::new_nullable(name.as_str(), column_entry.data_type.clone())
+            } else {
+                DataField::new(name.as_str(), column_entry.data_type.clone())
+            };
+            output_fields.push(field);
+        }
+        let output_schema = Arc::new(DataSchema::new(output_fields));
+
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ProjectionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    input_schema.clone(),
+                    output_schema.clone(),
+                    projections.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        Ok(())
     }
 
     fn build_pipeline(&mut self, expression: &SExpr) -> Result<DataSchemaRef> {
@@ -75,14 +126,18 @@ impl PipelineBuilder {
             }
             PlanType::Project => {
                 let project = plan.as_any().downcast_ref::<ProjectPlan>().unwrap();
-                self.build_project(project, &expression.children()[0])
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_project(project, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
     }
 
-    fn build_project(&mut self, project: &ProjectPlan, child: &SExpr) -> Result<DataSchemaRef> {
-        let input_schema = self.build_pipeline(child)?;
+    fn build_project(
+        &mut self,
+        project: &ProjectPlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
 
@@ -113,8 +168,35 @@ impl PipelineBuilder {
         let plan = table_entry.source.clone();
 
         let table = self.ctx.build_table_from_source_plan(&plan)?;
+        self.ctx.try_set_partitions(plan.parts.clone())?;
         table.read2(self.ctx.clone(), &plan, &mut self.pipeline)?;
+        let columns: Vec<IndexType> = scan.columns.iter().cloned().collect();
+        let projections: Vec<Expression> = columns
+            .iter()
+            .map(|index| {
+                let column_entry = self.metadata.column(*index);
+                Expression::Alias(
+                    format_field_name(column_entry.name.as_str(), column_entry.column_index),
+                    Box::new(Expression::Column(column_entry.name.clone())),
+                )
+            })
+            .collect();
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
-        schema_builder.build_physical_scan(scan)
+        let input_schema = schema_builder.build_canonical_schema(&columns);
+        let output_schema = schema_builder.build_physical_scan(scan)?;
+
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ProjectionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    input_schema.clone(),
+                    output_schema.clone(),
+                    projections.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+
+        Ok(output_schema)
     }
 }

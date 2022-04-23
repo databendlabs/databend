@@ -16,6 +16,7 @@ mod execute_state;
 mod expirable;
 mod expiring_map;
 mod http_query;
+mod http_query_context;
 mod http_query_manager;
 mod result_data_manager;
 
@@ -30,6 +31,7 @@ pub use http_query::HttpSession;
 pub use http_query::HttpSessionConf;
 pub use http_query::PaginationConf;
 pub use http_query::ResponseState;
+pub use http_query_context::HttpQueryContext;
 pub use http_query_manager::HttpQueryManager;
 pub use result_data_manager::Page;
 pub use result_data_manager::ResponseData;

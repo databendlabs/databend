@@ -18,6 +18,9 @@ mod source_ndjson;
 mod source_parquet;
 
 pub use source::Source;
+pub use source_csv::CsvSource;
 pub use source_csv::CsvSourceBuilder;
+pub use source_ndjson::NDJsonSource;
 pub use source_ndjson::NDJsonSourceBuilder;
+pub use source_parquet::ParquetSource;
 pub use source_parquet::ParquetSourceBuilder;

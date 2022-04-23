@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_io::prelude::get_abs_path;
 use common_meta_types::StageStorage;
 use common_meta_types::StageType;
-use common_meta_types::UserInfo;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
-use poem::web::Data;
 use poem::web::Json;
 use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::sessions::SessionManager;
+use super::HttpQueryContext;
 use crate::sessions::SessionType;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -41,18 +37,14 @@ pub struct UploadToStageResponse {
 
 #[poem::handler]
 pub async fn upload_to_stage(
+    ctx: &HttpQueryContext,
     req: &Request,
     mut multipart: Multipart,
-    user_info: Data<&UserInfo>,
-    sessions_extension: Data<&Arc<SessionManager>>,
 ) -> PoemResult<Json<UploadToStageResponse>> {
-    let session_manager = sessions_extension.0;
-    let session = session_manager
+    let session = ctx
         .create_session(SessionType::HTTPAPI("UploadToStage".to_string()))
         .await
         .map_err(InternalServerError)?;
-
-    session.set_current_user(user_info.0.clone());
     let context = session
         .create_query_context()
         .await

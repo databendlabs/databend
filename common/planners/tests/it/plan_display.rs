@@ -41,6 +41,7 @@ fn test_plan_display_indent() -> Result<()> {
             ..Default::default()
         },
         as_select: None,
+        order_keys: vec![],
     });
 
     assert_eq!(

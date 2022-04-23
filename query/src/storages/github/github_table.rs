@@ -81,6 +81,7 @@ impl GithubTable {
         StorageDescription {
             engine_name: "GITHUB".to_string(),
             comment: "GITHUB Storage Engine".to_string(),
+            ..Default::default()
         }
     }
 }

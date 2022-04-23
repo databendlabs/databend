@@ -33,6 +33,7 @@ pub fn query(i: Input) -> IResult<Query> {
             ~ ( HAVING ~ #expr )?
             ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ #comma_separated_list1(expr) )?
+            ~ ( OFFSET ~ #expr )?
             : "`SELECT ...`"
         },
         |(
@@ -46,6 +47,7 @@ pub fn query(i: Input) -> IResult<Query> {
             opt_having_block,
             opt_order_by_block,
             opt_limit_block,
+            opt_offset_block,
         )| {
             let from = table_refs
                 .into_iter()
@@ -74,6 +76,7 @@ pub fn query(i: Input) -> IResult<Query> {
                     .map(|(_, _, order_by)| order_by)
                     .unwrap_or_default(),
                 limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+                offset: opt_offset_block.map(|(_, offset)| offset),
             }
         },
     )(i)

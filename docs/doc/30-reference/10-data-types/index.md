@@ -22,9 +22,8 @@ Databend supports SQL data types in several categories:
 | BIGINT               | 8 bytes      |  -9223372036854775808       |  9223372036854775807    |
 | FLOAT                | 4 bytes      |  -3.40282347e+38            | 3.40282347e+38          |
 | DOUBLE               | 8 bytes      |  -1.7976931348623157E+308   | 1.7976931348623157E+308 |
-| DATE                 | 2 bytes      |  1000-01-01                 | 9999-12-31              | YYYY-MM-DD
-| DATETIME             | 4 bytes      |  1970-01-01 00:00:00        | 2105-12-31 23:59:59     | YYYY-MM-DD hh:mm:ss
-| TIMESTAMP            | 8 bytes      |  1677-09-21 00:12:44.000    | 2262-04-11 23:47:16.854 | YYYY-MM-DD hh:mm:ss.ff
+|  DATE                | 4 bytes      |  1000-01-01                 | 9999-12-31                       | YYYY-MM-DD             
+|  TIMESTAMP           | 8 bytes      |  0001-01-01 00:00:00        | 9999-12-31 23:59:59.999999 UTC   | YYYY-MM-DD hh:mm:ss[.fraction], up to microseconds (6 digits) precision
 | VARCHAR              | variable     | | | | 
 
 

@@ -23,7 +23,7 @@ pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLFederated;
 pub use self::mysql::MySQLHandler;
 
-mod clickhouse;
+pub(crate) mod clickhouse;
 pub mod http;
 mod mysql;
 pub(crate) mod server;
