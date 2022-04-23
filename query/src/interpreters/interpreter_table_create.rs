@@ -70,9 +70,7 @@ impl Interpreter for CreateTableInterpreter {
             .iter()
             .all(|table| table.name() != self.plan.table.as_str());
 
-        let engine_desc: Option<StorageDescription> = self
-            .ctx
-            .get_catalog()
+        let engine_desc: Option<StorageDescription> = catalog
             .get_table_engines()
             .iter()
             .find(|desc| {
