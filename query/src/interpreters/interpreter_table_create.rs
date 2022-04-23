@@ -31,6 +31,7 @@ use super::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::StorageDescription;
 
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -63,20 +64,39 @@ impl Interpreter for CreateTableInterpreter {
 
         let engine = self.plan.engine();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-
-        if catalog
+        let name_not_duplicate = catalog
             .list_tables(&*self.plan.tenant, &*self.plan.db)
             .await?
             .iter()
-            .all(|table| table.name() != self.plan.table.as_str())
-            && catalog.get_table_engines().iter().all(|desc| {
-                desc.engine_name.to_string().to_lowercase() != engine.to_string().to_lowercase()
+            .all(|table| table.name() != self.plan.table.as_str());
+
+        let engine_desc: Option<StorageDescription> = self
+            .ctx
+            .get_catalog()
+            .get_table_engines()
+            .iter()
+            .find(|desc| {
+                desc.engine_name.to_string().to_lowercase() == engine.to_string().to_lowercase()
             })
-        {
-            return Err(ErrorCode::UnknownTableEngine(format!(
-                "Unknown table engine {}",
-                engine
-            )));
+            .cloned();
+
+        match engine_desc {
+            Some(engine) => {
+                if !self.plan.order_keys.is_empty() && !engine.support_order_key {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "Unsupported cluster key for engine: {}",
+                        engine.engine_name
+                    )));
+                }
+            }
+            None => {
+                if name_not_duplicate {
+                    return Err(ErrorCode::UnknownTableEngine(format!(
+                        "Unknown table engine {}",
+                        engine
+                    )));
+                }
+            }
         }
 
         match &self.plan.as_select {

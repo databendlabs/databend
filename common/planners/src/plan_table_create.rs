@@ -18,6 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 
+use crate::Expression;
 use crate::PlanNode;
 
 pub type TableOptions = BTreeMap<String, String>;
@@ -34,6 +35,7 @@ pub struct CreateTablePlan {
 
     pub table_meta: TableMeta,
 
+    pub order_keys: Vec<Expression>,
     pub as_select: Option<Box<PlanNode>>,
 }
 
