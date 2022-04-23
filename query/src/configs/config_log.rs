@@ -21,15 +21,15 @@ use serde::Serialize;
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long, default_value = "INFO")]
+    #[clap(long = "log-level", default_value = "INFO")]
     pub level: String,
 
     /// Log file dir
-    #[clap(long, default_value = "./_logs")]
+    #[clap(long = "log-dir", default_value = "./_logs")]
     pub dir: String,
 
     /// Log file dir
-    #[clap(long)]
+    #[clap(long = "log-query-enabled")]
     pub query_enabled: bool,
 }
 

@@ -46,7 +46,7 @@ impl FromStr for StorageType {
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
-    #[clap(long, default_value = "_data")]
+    #[clap(long = "storage-fs-data-path", default_value = "_data")]
     pub data_path: String,
 }
 
@@ -120,30 +120,20 @@ impl fmt::Debug for S3StorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default, Args)]
 #[serde(default)]
 pub struct AzureStorageBlobConfig {
     /// Account for Azure storage
-    #[clap(long, default_value_t)]
+    #[clap(long = "storage-azblob-account", default_value_t)]
     pub account: String,
 
     /// Master key for Azure storage
-    #[clap(long, default_value_t)]
+    #[clap(long = "storage-azblob-master-key", default_value_t)]
     pub master_key: String,
 
     /// Container for Azure storage
-    #[clap(long, default_value_t)]
+    #[clap(long = "storage-azblob-container", default_value_t)]
     pub container: String,
-}
-
-impl Default for AzureStorageBlobConfig {
-    fn default() -> Self {
-        Self {
-            account: "".to_string(),
-            master_key: "".to_string(),
-            container: "".to_string(),
-        }
-    }
 }
 
 impl fmt::Debug for AzureStorageBlobConfig {
