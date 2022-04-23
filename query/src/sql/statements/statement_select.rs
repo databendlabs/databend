@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
+use common_planners::find_window_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
 use common_tracing::tracing;
@@ -178,6 +179,11 @@ impl DfQueryStatement {
             match item {
                 Expression::Alias(_, expr) => state.add_expression(expr),
                 _ => state.add_expression(item),
+            }
+
+            let window_exprs = find_window_exprs_in_expr(item);
+            if !window_exprs.is_empty() {
+                state.window_expressions.extend(window_exprs);
             }
 
             let rebased_expr = rebase_expr(item, &state.expressions)?;

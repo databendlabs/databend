@@ -51,6 +51,19 @@ pub fn find_aggregate_exprs_in_expr(expr: &Expression) -> Vec<Expression> {
     })
 }
 
+/// Collect all deeply nested `Expression::WindowFunction`.
+pub fn find_window_exprs(exprs: &[Expression]) -> Vec<Expression> {
+    find_exprs_in_exprs(exprs, &|nested_expr| {
+        matches!(nested_expr, Expression::WindowFunction { .. })
+    })
+}
+
+pub fn find_window_exprs_in_expr(expr: &Expression) -> Vec<Expression> {
+    find_exprs_in_expr(expr, &|nest_exprs| {
+        matches!(nest_exprs, Expression::WindowFunction { .. })
+    })
+}
+
 /// Collect all arguments from aggregation function and append to this exprs
 /// [ColumnExpr(b), Aggr(sum(a, b))] ---> [ColumnExpr(b), ColumnExpr(a)]
 
@@ -73,12 +86,6 @@ pub fn expand_aggregate_arg_exprs(exprs: &[Expression]) -> Vec<Expression> {
         }
     }
     res
-}
-
-pub fn find_window_exprs(exprs: &[Expression]) -> Vec<Expression> {
-    find_exprs_in_exprs(exprs, &|nested_expr| {
-        matches!(nested_expr, Expression::WindowFunction { .. })
-    })
 }
 
 /// Collect all deeply nested `Expression::Column`'s. They are returned in order of

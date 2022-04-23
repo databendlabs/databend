@@ -54,7 +54,8 @@ pub struct QueryAnalyzeState {
     pub aggregate_expressions: Vec<Expression>,
     pub before_group_by_expressions: Vec<Expression>,
 
-    // pub window_expressions: Vec<Expression>,
+    pub window_expressions: Vec<Expression>,
+
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 
@@ -87,6 +88,7 @@ impl Default for QueryAnalyzeState {
             group_by_expressions: vec![],
             aggregate_expressions: vec![],
             before_group_by_expressions: vec![],
+            window_expressions: vec![],
             limit: None,
             offset: None,
             relation: QueryRelation::None,
@@ -113,6 +115,10 @@ impl Debug for QueryAnalyzeState {
 
         if !self.aggregate_expressions.is_empty() {
             debug_struct.field("aggregate", &self.aggregate_expressions);
+        }
+
+        if !self.window_expressions.is_empty() {
+            debug_struct.field("window_aggr", &self.window_expressions);
         }
 
         if !self.expressions.is_empty() {

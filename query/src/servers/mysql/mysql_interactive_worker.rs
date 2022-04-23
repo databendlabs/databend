@@ -24,6 +24,7 @@ use common_exception::ToErrorCode;
 use common_io::prelude::*;
 use common_planners::PlanNode;
 use common_tracing::tracing;
+use common_tracing::tracing::debug;
 use common_tracing::tracing::Instrument;
 use metrics::histogram;
 use opensrv_mysql::AsyncMysqlShim;
@@ -274,6 +275,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
                 let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
+                let plan = plan?;
+                debug!("\nget query plan:\n{:?}", plan);
 
                 match hints
                     .iter()
@@ -305,11 +308,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     #[tracing::instrument(level = "debug", skip(plan, context))]
     async fn exec_query(
-        plan: Result<PlanNode>,
+        plan: PlanNode,
         context: &Arc<QueryContext>,
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
-        let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+        let interpreter = InterpreterFactory::get(context.clone(), plan)?;
 
         let query_result = context.try_spawn(
             async move {

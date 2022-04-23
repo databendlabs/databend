@@ -83,6 +83,8 @@ impl Interpreter for SelectInterpreter {
             return Ok(Box::pin(self.ctx.try_create_abortable(executor_stream)?));
         }
         let optimized_plan = self.rewrite_plan()?;
+        tracing::debug!("\nget optimized plan:\n{:?}", optimized_plan);
+
         plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
     }
 

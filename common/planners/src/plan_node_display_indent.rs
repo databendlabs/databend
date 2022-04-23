@@ -68,6 +68,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::AggregatorFinal(plan) => Self::format_aggregator_final(f, plan),
             PlanNode::Filter(plan) => write!(f, "Filter: {:?}", plan.predicate),
             PlanNode::Having(plan) => write!(f, "Having: {:?}", plan.predicate),
+            PlanNode::WindowAggr(plan) => write!(f, "WindowAggr: {:?}", plan.window_func),
             PlanNode::Sort(plan) => Self::format_sort(f, plan),
             PlanNode::Limit(plan) => Self::format_limit(f, plan),
             PlanNode::SubQueryExpression(plan) => Self::format_subquery_expr(f, plan),

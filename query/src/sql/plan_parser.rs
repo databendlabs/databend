@@ -78,7 +78,8 @@ impl PlanParser {
         let group_by = Self::build_group_by_plan(filter, data)?;
         let before_order = Self::build_before_order(group_by, data)?;
         let having = Self::build_having_plan(before_order, data)?;
-        let order_by = Self::build_order_by_plan(having, data)?;
+        let window = Self::build_window_plan(having, data)?;
+        let order_by = Self::build_order_by_plan(window, data)?;
         let projection = Self::build_projection_plan(order_by, data)?;
         let limit = Self::build_limit_plan(projection, data)?;
 
@@ -170,6 +171,22 @@ impl PlanParser {
                     .expression(&data.expressions, "Before OrderBy")?
                     .build(),
             },
+        }
+    }
+
+    fn build_window_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        match data.window_expressions.is_empty() {
+            true => Ok(plan),
+            false => {
+                let exprs = data.window_expressions.to_vec();
+                Ok(exprs.into_iter().fold(plan, |input, window_func| {
+                    PlanBuilder::from(&input)
+                        .window_aggr(window_func)
+                        .unwrap()
+                        .build()
+                        .unwrap()
+                }))
+            }
         }
     }
 

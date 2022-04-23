@@ -20,6 +20,7 @@ use common_exception::Result;
 
 use crate::col;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
+use crate::plan_window_aggr::WindowAggrPlan;
 use crate::validate_expression;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -211,6 +212,22 @@ impl PlanBuilder {
             predicate: expr.clone(),
             schema: self.plan.schema(),
             input: self.wrap_subquery_plan(&[expr])?,
+        })))
+    }
+
+    /// Apply a window function
+    pub fn window_aggr(&self, expr: Expression) -> Result<Self> {
+        let window_func = expr.clone();
+        let input = self.wrap_subquery_plan(&[expr])?;
+        let input_schema = input.schema();
+        let mut input_fields = input_schema.fields().to_owned();
+        let window_field = window_func.to_data_field(&input_schema).unwrap();
+        input_fields.push(window_field);
+        let schema = Arc::new(DataSchema::new(input_fields));
+        Ok(Self::from(&PlanNode::WindowAggr(WindowAggrPlan {
+            window_func,
+            input,
+            schema,
         })))
     }
 

@@ -98,6 +98,7 @@ mod plan_user_udf_drop;
 mod plan_view_alter;
 mod plan_view_create;
 mod plan_view_drop;
+mod plan_window_aggr;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
@@ -125,6 +126,8 @@ pub use plan_expression_common::extract_aliases;
 pub use plan_expression_common::find_aggregate_exprs;
 pub use plan_expression_common::find_aggregate_exprs_in_expr;
 pub use plan_expression_common::find_columns_not_satisfy_exprs;
+pub use plan_expression_common::find_window_exprs;
+pub use plan_expression_common::find_window_exprs_in_expr;
 pub use plan_expression_common::rebase_expr;
 pub use plan_expression_common::rebase_expr_from_input;
 pub use plan_expression_common::resolve_aliases_to_exprs;

@@ -431,7 +431,7 @@ impl fmt::Debug for Expression {
             } => {
                 write!(f, "{}(", op)?;
                 for (i, arg) in args.iter().enumerate() {
-                    if i < args.len() {
+                    if i < args.len() - 1 {
                         write!(f, "{},", arg.column_name())?;
                     } else {
                         write!(f, "{}", arg.column_name())?;

@@ -192,9 +192,7 @@ impl ExpressionChain {
                 ));
             }
 
-            Expression::WindowFunction { .. } => {
-                todo!("not figure out yet @doki")
-            }
+            Expression::WindowFunction { .. } => {}
 
             Expression::Wildcard | Expression::Sort { .. } => {}
 
