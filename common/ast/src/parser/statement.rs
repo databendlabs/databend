@@ -23,6 +23,18 @@ use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
 
+pub fn statements(i: Input) -> IResult<Vec<Statement>> {
+    let stmt = map(
+        rule! {
+            #statement ~ ";"
+        },
+        |(stmt, _)| stmt,
+    );
+    rule!(
+        #stmt+
+    )(i)
+}
+
 pub fn statement(i: Input) -> IResult<Statement> {
     let query = map(query, |query| Statement::Select(Box::new(query)));
     let show_tables = value(Statement::ShowTables, rule! { SHOW ~ TABLES });
@@ -132,6 +144,16 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, object_id)| Statement::KillStmt { object_id },
     );
+    let insert = map(
+        rule! {
+            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
+        },
+        |(_, _, _, table, columns, source)| Statement::Insert {
+            table,
+            columns: columns.map(|(_, columns, _)| columns).unwrap_or_default(),
+            source,
+        },
+    );
 
     rule!(
         #query
@@ -149,6 +171,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database>`"
         | #use_database : "`USE <database>`"
         | #kill : "`KILL <object id>`"
+        | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
     )(i)
 }
 
@@ -189,4 +212,39 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             def
         },
     )(i)
+}
+
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+            FORMAT ~ #ident
+        },
+        |(_, format)| InsertSource::Streaming {
+            format: format.name,
+        },
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #values_tokens
+        },
+        |(_, values_tokens)| InsertSource::Values { values_tokens },
+    );
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #streaming
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn values_tokens(i: Input) -> IResult<Input> {
+    let semicolon_pos = i
+        .iter()
+        .position(|token| token.text() == ";")
+        .unwrap_or(i.len() - 1);
+    let (value_tokens, rest_tokens) = i.split_at(semicolon_pos);
+    Ok((rest_tokens, value_tokens))
 }

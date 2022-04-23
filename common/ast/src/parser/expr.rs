@@ -527,14 +527,14 @@ pub fn literal(i: Input) -> IResult<Literal> {
         rule! {
             LiteralString
         },
-        |quoted| Literal::String(quoted.text[1..quoted.text.len() - 1].to_string()),
+        |quoted| Literal::String(quoted.text()[1..quoted.text().len() - 1].to_string()),
     );
     // TODO (andylokandy): handle hex numbers in parser
     let number = map(
         rule! {
             LiteralHex | LiteralNumber
         },
-        |number| Literal::Number(number.text.to_string()),
+        |number| Literal::Number(number.text().to_string()),
     );
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
@@ -624,6 +624,6 @@ pub fn function_name(i: Input) -> IResult<String> {
             | STDDEV_POP
             | SQRT
         },
-        |name| name.text.to_string(),
+        |name| name.text().to_string(),
     )(i)
 }

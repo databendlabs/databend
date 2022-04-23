@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -44,9 +45,10 @@ impl Planner {
         Planner { context }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<NewPipeline> {
+    pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<NewPipeline> {
         // Step 1: parse SQL text into AST
-        let stmts = parse_sql(sql)?;
+        let tokens = tokenize_sql(sql)?;
+        let stmts = parse_sql(&tokens)?;
         if stmts.len() > 1 {
             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
         }

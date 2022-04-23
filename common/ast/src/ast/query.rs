@@ -15,7 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::display_identifier_vec;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 
@@ -189,7 +190,7 @@ impl Display for TableAlias {
         write!(f, "AS {}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, " (")?;
-            display_identifier_vec(f, &self.columns)?;
+            write_period_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
         Ok(())
@@ -204,12 +205,7 @@ impl Display for TableReference {
                 table,
                 alias,
             } => {
-                let mut idents = vec![];
-                if let Some(ident) = database {
-                    idents.push(ident.to_owned());
-                }
-                idents.push(table.to_owned());
-                display_identifier_vec(f, &idents)?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 if let Some(alias) = alias {
                     write!(f, " {}", alias)?;
                 }
@@ -253,12 +249,7 @@ impl Display for TableReference {
                     }
                     JoinCondition::Using(idents) => {
                         write!(f, " USING(")?;
-                        for i in 0..idents.len() {
-                            write!(f, "{}", idents[i])?;
-                            if i != idents.len() - 1 {
-                                write!(f, ", ")?;
-                            }
-                        }
+                        write_comma_separated_list(f, idents)?;
                         write!(f, ")")?;
                     }
                     _ => {}
@@ -293,12 +284,7 @@ impl Display for SelectTarget {
                 }
             }
             SelectTarget::QualifiedName(indirections) => {
-                for i in 0..indirections.len() {
-                    write!(f, "{}", indirections[i])?;
-                    if i != indirections.len() - 1 {
-                        write!(f, ".")?;
-                    }
-                }
+                write_period_separated_list(f, indirections)?;
             }
         }
         Ok(())
@@ -312,12 +298,7 @@ impl Display for SelectStmt {
         if self.distinct {
             write!(f, "DISTINCT ")?;
         }
-        for i in 0..self.select_list.len() {
-            write!(f, "{}", self.select_list[i])?;
-            if i != self.select_list.len() - 1 {
-                write!(f, ", ")?;
-            }
-        }
+        write_comma_separated_list(f, &self.select_list)?;
 
         // FROM clause
         write!(f, " FROM {}", self.from)?;
@@ -331,12 +312,7 @@ impl Display for SelectStmt {
         // GROUP BY clause
         if !self.group_by.is_empty() {
             write!(f, " GROUP BY ")?;
-            for i in 0..self.group_by.len() {
-                write!(f, "{}", self.group_by[i])?;
-                if i != self.group_by.len() - 1 {
-                    write!(f, ", ")?;
-                }
-            }
+            write_comma_separated_list(f, &self.group_by)?;
         }
 
         // HAVING clause
@@ -394,23 +370,13 @@ impl Display for Query {
         // ORDER BY clause
         if !self.order_by.is_empty() {
             write!(f, " ORDER BY ")?;
-            for (i, expr) in self.order_by.iter().enumerate() {
-                if i != 0 {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{}", expr)?;
-            }
+            write_comma_separated_list(f, &self.order_by)?;
         }
 
         // LIMIT clause
         if !self.limit.is_empty() {
             write!(f, " LIMIT ")?;
-            for (i, expr) in self.limit.iter().enumerate() {
-                if i != 0 {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{}", expr)?;
-            }
+            write_comma_separated_list(f, &self.limit)?;
         }
 
         Ok(())
