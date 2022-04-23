@@ -45,8 +45,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             SHOW ~ CREATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, _, database, table)| Statement::ShowCreateTable {
-            database: database.map(|(name, _)| name),
+        |(_, _, _, opt_database, table)| Statement::ShowCreateTable {
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -54,8 +54,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             EXPLAIN ~ ANALYZE? ~ #statement
         },
-        |(_, analyze, statement)| Statement::Explain {
-            analyze: analyze.is_some(),
+        |(_, opt_analyze, statement)| Statement::Explain {
+            analyze: opt_analyze.is_some(),
             query: Box::new(statement),
         },
     );
@@ -63,8 +63,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             DESCRIBE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, database, table)| Statement::Describe {
-            database: database.map(|(name, _)| name),
+        |(_, opt_database, table)| Statement::Describe {
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -74,9 +74,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ "(" ~ #comma_separated_list1(column_def) ~ ")"
         },
-        |(_, _, if_not_exists, database, table, _, columns, _)| Statement::CreateTable {
-            if_not_exists: if_not_exists.is_some(),
-            database: database.map(|(name, _)| name),
+        |(_, _, opt_if_not_exists, opt_database, table, _, columns, _)| Statement::CreateTable {
+            if_not_exists: opt_if_not_exists.is_some(),
+            database: opt_database.map(|(name, _)| name),
             table,
             columns,
             engine: "".to_string(),
@@ -91,24 +91,26 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ LIKE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, if_not_exists, database, table, _, like_db, like_table)| Statement::CreateTable {
-            if_not_exists: if_not_exists.is_some(),
-            database: database.map(|(name, _)| name),
-            table,
-            columns: vec![],
-            engine: "".to_string(),
-            options: vec![],
-            like_db: like_db.map(|(like_db, _)| like_db),
-            like_table: Some(like_table),
+        |(_, _, opt_if_not_exists, opt_database, table, _, opt_like_db, like_table)| {
+            Statement::CreateTable {
+                if_not_exists: opt_if_not_exists.is_some(),
+                database: opt_database.map(|(name, _)| name),
+                table,
+                columns: vec![],
+                engine: "".to_string(),
+                options: vec![],
+                like_db: opt_like_db.map(|(like_db, _)| like_db),
+                like_table: Some(like_table),
+            }
         },
     );
     let drop_table = map(
         rule! {
             DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, if_exists, database, table)| Statement::DropTable {
-            if_exists: if_exists.is_some(),
-            database: database.map(|(name, _)| name),
+        |(_, _, opt_if_exists, opt_database, table)| Statement::DropTable {
+            if_exists: opt_if_exists.is_some(),
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -116,8 +118,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, database, table)| Statement::TruncateTable {
-            database: database.map(|(name, _)| name),
+        |(_, _, opt_database, table)| Statement::TruncateTable {
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -125,8 +127,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
         },
-        |(_, _, if_not_exists, name)| Statement::CreateDatabase {
-            if_not_exists: if_not_exists.is_some(),
+        |(_, _, opt_if_not_exists, name)| Statement::CreateDatabase {
+            if_not_exists: opt_if_not_exists.is_some(),
             name,
             engine: "".to_string(),
             options: vec![],
@@ -148,9 +150,11 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
         },
-        |(_, _, _, table, columns, source)| Statement::Insert {
+        |(_, _, _, table, opt_columns, source)| Statement::Insert {
             table,
-            columns: columns.map(|(_, columns, _)| columns).unwrap_or_default(),
+            columns: opt_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
             source,
         },
     );
