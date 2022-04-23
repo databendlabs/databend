@@ -95,9 +95,9 @@ regex = "1.5.5"
 reqwest = "0.11.10"
 rsa = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
-serde-bridge = { git = "https://github.com/Xuanwo/serde-bridge", rev = "4879af8" }
+serde-bridge = "0.0.3"
 serde_json = "1.0.79"
-serfig = { git = "https://github.com/Xuanwo/serfig", rev = "dce0fe7" }
+serfig = "0.0.1"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 threadpool = "1.8.1"

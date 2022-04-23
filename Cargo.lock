@@ -5355,8 +5355,9 @@ dependencies = [
 
 [[package]]
 name = "serde-bridge"
-version = "0.0.2"
-source = "git+https://github.com/Xuanwo/serde-bridge?rev=4879af8#4879af8c234ecf1608c2a4bf25d0b458fc828626"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f68e451f87e0f0a51c565c907017f033ecce23a1aef9eb3faee0dfd6e578d84"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -5365,8 +5366,9 @@ dependencies = [
 
 [[package]]
 name = "serde-env"
-version = "0.0.0"
-source = "git+https://github.com/Xuanwo/serde-env?rev=4394117#4394117be182f0dafdbde2ffd858f518adb5fb10"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e25cbc2db78bdf2b85ae2bb9894106e14092f87e2c47191dc3d704d7dca78be"
 dependencies = [
  "anyhow",
  "log",
@@ -5452,8 +5454,9 @@ dependencies = [
 
 [[package]]
 name = "serfig"
-version = "0.0.0"
-source = "git+https://github.com/Xuanwo/serfig?rev=dce0fe7#dce0fe7c87ef4c2f1c363c818837486afa1ef237"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfe138b57b8dea13fbe1d1b7007be08322bd60a76eb938f89113d3d82dcc480a"
 dependencies = [
  "anyhow",
  "indexmap",

@@ -20,8 +20,9 @@ use common_grpc::RpcClientTlsConfig;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
-use serfig::collectors::Environment;
-use serfig::collectors::File;
+use serfig::collectors::from_env;
+use serfig::collectors::from_file;
+use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use crate::configs::LogConfig;
@@ -91,16 +92,14 @@ impl Config {
                 "".to_string()
             };
 
-            builder = builder.collect(File::create(&config_file, Toml));
+            builder = builder.collect(from_file(Toml, &config_file));
         }
 
         // Then, load from env.
-        builder = builder.collect(Environment::create());
+        builder = builder.collect(from_env());
 
         // Finally, load from args.
-        builder = builder.collect(Box::new(
-            serde_bridge::into_value(arg_conf).expect("into value failed"),
-        ));
+        builder = builder.collect(from_self(arg_conf));
 
         Ok(builder.build()?)
     }
