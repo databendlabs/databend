@@ -417,8 +417,7 @@ impl Display for Query {
 
         // TODO: We should validate if offset exists, limit should be empty or just one element
         if let Some(offset) = &self.offset {
-            write!(f, " OFFSET ")?;
-            write!(f, "{}", offset)?;
+            write!(f, " OFFSET {}", offset)?;
         }
 
         Ok(())
