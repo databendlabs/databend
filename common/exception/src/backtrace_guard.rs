@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod backtrace_guard;
-pub mod exception;
-mod exception_code;
-mod exception_into;
+use crate::exception_code::ENABLE_BACKTRACE;
 
-pub use backtrace_guard::BacktraceGuard;
-pub use exception::ErrorCode;
-pub use exception::Result;
-pub use exception::ToErrorCode;
-pub use exception_code::ABORT_QUERY;
-pub use exception_code::ABORT_SESSION;
-pub use exception_into::SerializedError;
+pub struct BacktraceGuard {}
+
+impl BacktraceGuard {
+    pub fn new(enable: bool) -> Self {
+        ENABLE_BACKTRACE.store(enable, std::sync::atomic::Ordering::Relaxed);
+        Self {}
+    }
+}
+
+impl Drop for BacktraceGuard {
+    fn drop(&mut self) {
+        ENABLE_BACKTRACE.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}

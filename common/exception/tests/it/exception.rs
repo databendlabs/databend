@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::BacktraceGuard;
 use common_exception::ErrorCode;
 use common_exception::SerializedError;
 use tonic::Code;
@@ -133,6 +134,30 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
         let e1: ErrorCode = status1.into();
         assert_eq!(1067, e1.code());
         assert_eq!("foo", e1.message());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_guard() -> anyhow::Result<()> {
+    use common_exception::exception::*;
+    let e = ErrorCode::IllegalDataType("foo");
+    assert!(e.backtrace().is_some());
+
+    {
+        let _guard = BacktraceGuard::new(false);
+        let e = ErrorCode::IllegalDataType("foo");
+        assert!(e.backtrace().is_none());
+    }
+
+    let e = ErrorCode::IllegalDataType("foo");
+    assert!(e.backtrace().is_some());
+
+    {
+        let _guard = BacktraceGuard::new(false);
+        let e = ErrorCode::IllegalDataType("foo");
+        assert!(e.backtrace().is_none());
     }
 
     Ok(())
