@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -97,8 +98,6 @@ impl ValueSource {
         desers: &mut [Box<dyn TypeDeserializer>],
         session_type: &SessionType,
     ) -> Result<()> {
-        let mut datavalues: Option<Vec<DataValue>> = None;
-
         let _ = reader.ignore_white_spaces()?;
         reader.checkpoint();
 
@@ -109,20 +108,30 @@ impl ValueSource {
             ));
         }
 
-        for (col, deser) in desers.iter_mut().enumerate().take(col_size) {
-            if let Some(values) = &datavalues {
-                deser.append_data_value(values[col].clone())?;
-                continue;
-            }
-
+        for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces()?;
-            let col_end = if col + 1 == col_size { b')' } else { b',' };
-            let result = self.try_deserialize_next_column(reader, deser, col_end);
+            let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
+
+            let deser = desers
+                .get_mut(col_idx)
+                .ok_or_else(|| ErrorCode::NoneBtBadBytes("Deserializer is None"))?;
+            let (need_fallback, pop_count) = deser
+                .de_text_quoted(reader)
+                .and_then(|_| {
+                    let _ = reader.ignore_white_spaces()?;
+                    let need_fallback = reader.ignore_byte(col_end)?.not();
+                    Ok((need_fallback, col_idx + 1))
+                })
+                .unwrap_or((true, col_idx));
 
             // Deserializer and expr-parser both will eat the end ')' of the row.
-            if result.is_err() {
+            if need_fallback {
+                for deser in desers.iter_mut().take(pop_count) {
+                    deser.pop_data_value()?;
+                }
                 skip_to_next_row(reader, 1)?;
-                // Parse from expression and set datavalues
+
+                // Parse from expression and append all columns.
                 let buf = reader.get_checkpoint_buffer();
                 let exprs = parse_exprs(buf, session_type)?;
                 reader.reset_checkpoint();
@@ -130,29 +139,16 @@ impl ValueSource {
                 let values =
                     exprs_to_datavalue(exprs, &self.analyzer, &self.schema, self.ctx.clone())
                         .await?;
-                deser.append_data_value(values[col].clone())?;
-                datavalues = Some(values);
+
+                for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
+                    deser.append_data_value(values[append_idx].clone())?;
+                }
+
+                return Ok(());
             }
         }
 
         Ok(())
-    }
-
-    fn try_deserialize_next_column(
-        &self,
-        reader: &mut CpBufferReader,
-        deserializer: &mut Box<dyn TypeDeserializer>,
-        col_end: u8,
-    ) -> Result<()> {
-        deserializer.de_text_quoted(reader).and_then(|_| {
-            let _ = reader.ignore_white_spaces()?;
-            reader.ignore_byte(col_end)?.then_some(()).ok_or_else(|| {
-                // Ignore the pop-result is safe here,
-                // because pop-err(empty builder) only happens when `de_text_quoted` return error.
-                let _ = deserializer.pop_data_value();
-                ErrorCode::NoneBtBadBytes("Invalid column data when deserialize")
-            })
-        })
     }
 }
 
