@@ -32,7 +32,7 @@ async fn test_parse_value_source() -> Result<()> {
         DataField::new("born_time", DateTimeType::arc(0, None)),
     ]);
 
-    let parser = ValueSource::new(schema, ctx);
+    let parser = ValueSource::new(ctx, schema);
     let s = "('ABC', 30 , 'China', '1992-03-15 00:00:00'),
                     ('XYZ', 11 + 20 , 'Japen', '1991-03-15 00:00:00'), 
                     ('UVW', 32 , CONCAT('Amer', 'ican'), '1990-03-15 00:00:00'), 

@@ -14,9 +14,7 @@
 
 use std::io::Read;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::CpBufferReader;
@@ -89,16 +87,9 @@ impl TypeDeserializer for VariantDeserializer {
 
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         self.buffer.clear();
-        reader
-            .read_quoted_text(&mut self.buffer, b'\'')
-            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
-                "Invalid json string format when deserialize json string text"
-            })?;
+        reader.read_quoted_text(&mut self.buffer, b'\'')?;
 
-        let val = serde_json::from_slice(self.buffer.as_slice())
-            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
-                "Fail to parse VariantValue when deserialize json string text"
-            })?;
+        let val = serde_json::from_slice(self.buffer.as_slice())?;
         self.builder.append_value(val);
         Ok(())
     }

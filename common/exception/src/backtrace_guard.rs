@@ -18,13 +18,25 @@ pub struct BacktraceGuard {}
 
 impl BacktraceGuard {
     pub fn new(enable: bool) -> Self {
-        ENABLE_BACKTRACE.store(enable, std::sync::atomic::Ordering::Relaxed);
+        ENABLE_BACKTRACE.with(|v| v.set(enable));
         Self {}
+    }
+
+    pub fn enable(&self) {
+        ENABLE_BACKTRACE.with(|v| v.set(true));
+    }
+
+    pub fn disable(&self) {
+        ENABLE_BACKTRACE.with(|v| v.set(false));
+    }
+
+    pub fn enabled(&self) -> bool {
+        ENABLE_BACKTRACE.with(|v| v.get())
     }
 }
 
 impl Drop for BacktraceGuard {
     fn drop(&mut self) {
-        ENABLE_BACKTRACE.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.enable();
     }
 }

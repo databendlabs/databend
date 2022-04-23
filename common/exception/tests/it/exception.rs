@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Not;
+
 use common_exception::BacktraceGuard;
 use common_exception::ErrorCode;
 use common_exception::SerializedError;
@@ -146,19 +148,24 @@ fn test_guard() -> anyhow::Result<()> {
     assert!(e.backtrace().is_some());
 
     {
-        let _guard = BacktraceGuard::new(false);
+        let guard = BacktraceGuard::new(false);
         let e = ErrorCode::IllegalDataType("foo");
+        assert!(guard.enabled().not());
+        assert!(e.backtrace().is_none());
+
+        guard.enable();
+        let e = ErrorCode::IllegalDataType("foo");
+        assert!(guard.enabled());
+        assert!(e.backtrace().is_some());
+
+        guard.disable();
+        let e = ErrorCode::IllegalDataType("foo");
+        assert!(guard.enabled().not());
         assert!(e.backtrace().is_none());
     }
 
     let e = ErrorCode::IllegalDataType("foo");
     assert!(e.backtrace().is_some());
-
-    {
-        let _guard = BacktraceGuard::new(false);
-        let e = ErrorCode::IllegalDataType("foo");
-        assert!(e.backtrace().is_none());
-    }
 
     Ok(())
 }

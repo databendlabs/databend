@@ -69,17 +69,9 @@ where
     }
 
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
-        reader
-            .must_ignore_byte(b'\'')
-            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
-                "Invalid start of datetime string"
-            })?;
+        reader.must_ignore_byte(b'\'')?;
         let datetime = reader.read_datetime_text(&self.tz)?;
-        reader
-            .must_ignore_byte(b'\'')
-            .map_err_to_code(ErrorCode::NoneBtBadBytes, || {
-                "Invalid end of datetime string"
-            })?;
+        reader.must_ignore_byte(b'\'')?;
 
         self.builder
             .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());

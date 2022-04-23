@@ -151,7 +151,7 @@ impl<'a> DfInsertStatement<'a> {
         let bytes = values_str.as_bytes();
         let cursor = Cursor::new(bytes);
         let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
-        let source = ValueSource::new(schema.clone(), ctx.clone());
+        let source = ValueSource::new(ctx.clone(), schema.clone());
         let block = source.read(&mut reader).await?;
         Ok(InsertInputSource::Values(InsertValueBlock { block }))
     }
