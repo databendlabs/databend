@@ -140,7 +140,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             {
                 true => columns[0].field().data_type().clone(),
                 false => {
-                    return Result::Err(ErrorCode::BadDataValueType("test"));
+                    return Result::Err(ErrorCode::BadDataValueType("In values contain unexpected type"));
                 }
             }
         } else {
