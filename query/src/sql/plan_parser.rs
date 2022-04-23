@@ -21,6 +21,7 @@ use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
+use common_tracing::tracing::debug;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
@@ -74,14 +75,31 @@ impl PlanParser {
 
     pub fn build_query_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {
         let from = Self::build_from_plan(data)?;
+        debug!("\nfrom plan node:\n{:?}", from);
+
         let filter = Self::build_filter_plan(from, data)?;
+        debug!("\nfilter plan node:\n{:?}", filter);
+
         let group_by = Self::build_group_by_plan(filter, data)?;
+        debug!("\ngroup_by plan node:\n{:?}", group_by);
+
         let before_order = Self::build_before_order(group_by, data)?;
+        debug!("\nbefore_order plan node:\n{:?}", before_order);
+
         let having = Self::build_having_plan(before_order, data)?;
+        debug!("\nhaving plan node:\n{:?}", having);
+
         let window = Self::build_window_plan(having, data)?;
+        debug!("\nwindow plan node:\n{:?}", window);
+
         let order_by = Self::build_order_by_plan(window, data)?;
+        debug!("\norder_by plan node:\n{:?}", order_by);
+
         let projection = Self::build_projection_plan(order_by, data)?;
+        debug!("\nprojection plan node:\n{:?}", projection);
+
         let limit = Self::build_limit_plan(projection, data)?;
+        debug!("\nlimit plan node:\n{:?}", limit);
 
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(limit),

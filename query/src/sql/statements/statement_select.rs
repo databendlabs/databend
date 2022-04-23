@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
+use common_planners::find_window_exprs;
 use common_planners::find_window_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
@@ -74,6 +75,8 @@ impl AnalyzableStatement for DfQueryStatement {
         let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
         tracing::debug!("\nQueryASTIR after push downs:\n{:?}", ir);
+
+        // todo collect window_functions @doki
 
         let analyze_state = self.analyze_query(ir).await?;
         tracing::debug!("\nQueryAnalyzeState:\n{:?}", analyze_state);
@@ -153,6 +156,18 @@ impl DfQueryStatement {
             Self::analyze_aggregate(&ir.aggregate_expressions, &mut analyze_state)?;
         }
 
+        if !ir.window_expressions.is_empty() {
+            let mut expressions = Vec::with_capacity(analyze_state.expressions.len());
+            for expression in &analyze_state.expressions {
+                let expression = rebase_expr(expression, &ir.window_expressions)?;
+                expressions.push(expression);
+            }
+
+            analyze_state.expressions = expressions;
+
+            Self::analyze_window(&ir.window_expressions, &mut analyze_state)?;
+        }
+
         Ok(analyze_state)
     }
 
@@ -174,16 +189,16 @@ impl DfQueryStatement {
         Ok(())
     }
 
+    fn analyze_window(exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
+        let window_functions = find_window_exprs(exprs);
+        Ok(())
+    }
+
     fn analyze_projection(exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
         for item in exprs {
             match item {
                 Expression::Alias(_, expr) => state.add_expression(expr),
                 _ => state.add_expression(item),
-            }
-
-            let window_exprs = find_window_exprs_in_expr(item);
-            if !window_exprs.is_empty() {
-                state.window_expressions.extend(window_exprs);
             }
 
             let rebased_expr = rebase_expr(item, &state.expressions)?;

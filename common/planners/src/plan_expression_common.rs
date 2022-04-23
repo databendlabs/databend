@@ -66,7 +66,6 @@ pub fn find_window_exprs_in_expr(expr: &Expression) -> Vec<Expression> {
 
 /// Collect all arguments from aggregation function and append to this exprs
 /// [ColumnExpr(b), Aggr(sum(a, b))] ---> [ColumnExpr(b), ColumnExpr(a)]
-
 pub fn expand_aggregate_arg_exprs(exprs: &[Expression]) -> Vec<Expression> {
     let mut res = vec![];
     for expr in exprs {

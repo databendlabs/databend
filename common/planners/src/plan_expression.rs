@@ -439,17 +439,23 @@ impl fmt::Debug for Expression {
                 }
                 write!(f, ")")?;
 
-                write!(f, " OVER( ")?;
+                write!(f, " OVER(")?;
                 if !partition_by.is_empty() {
-                    write!(f, "PARTITION BY {:?} ", partition_by)?;
+                    write!(f, "PARTITION BY {:?}", partition_by)?;
                 }
                 if !order_by.is_empty() {
-                    write!(f, "ORDER BY {:?} ", order_by)?;
+                    if !partition_by.is_empty() {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "ORDER BY {:?}", order_by)?;
                 }
                 if let Some(window_frame) = window_frame {
+                    if !partition_by.is_empty() || !order_by.is_empty() {
+                        write!(f, " ")?;
+                    }
                     write!(
                         f,
-                        "{} BETWEEN {} AND {} ",
+                        "{} BETWEEN {} AND {}",
                         window_frame.units, window_frame.start_bound, window_frame.end_bound
                     )?;
                 }
