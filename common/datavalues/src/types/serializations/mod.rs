@@ -22,23 +22,23 @@ use crate::prelude::*;
 mod array;
 mod boolean;
 mod date;
-mod date_time;
 mod null;
 mod nullable;
 mod number;
 mod string;
 mod struct_;
+mod timestamp;
 mod variant;
 
 pub use array::*;
 pub use boolean::*;
 pub use date::*;
-pub use date_time::*;
 pub use null::*;
 pub use nullable::*;
 pub use number::*;
 pub use string::*;
 pub use struct_::*;
+pub use timestamp::*;
 pub use variant::*;
 
 pub trait TypeSerializer: Send + Sync {

@@ -20,20 +20,20 @@ use crate::prelude::*;
 
 mod boolean;
 mod date;
-mod date_time;
 mod null;
 mod nullable;
 mod number;
 mod string;
+mod timestamp;
 mod variant;
 
 pub use boolean::*;
 pub use date::*;
-pub use date_time::*;
 pub use null::*;
 pub use nullable::*;
 pub use number::*;
 pub use string::*;
+pub use timestamp::*;
 pub use variant::*;
 
 pub trait TypeDeserializer: Send + Sync {

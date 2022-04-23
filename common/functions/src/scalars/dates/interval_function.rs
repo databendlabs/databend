@@ -27,7 +27,7 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::define_date_add_year_months;
-use crate::define_datetime64_add_year_months;
+use crate::define_timestamp_add_year_months;
 use crate::impl_interval_year_month;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
@@ -61,13 +61,13 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                     factor,
                     0,
                 ),
-                TypeID::DateTime => {
-                    let datetime = args[0].as_any().downcast_ref::<DateTimeType>().unwrap();
-                    let precision = datetime.precision();
+                TypeID::TimeStamp => {
+                    let ts = args[0].as_any().downcast_ref::<TimeStampType>().unwrap();
+                    let precision = ts.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,
                         args[0].clone(),
-                        T::eval_datetime,
+                        T::eval_timestamp,
                         factor,
                         precision,
                     )
@@ -173,10 +173,10 @@ pub trait IntervalArithmeticImpl {
     type DateResultType: LogicalDateType + ToDateType;
 
     /// when date type add year/month/day, output is date type
-    /// when date type add hour/minute/second/... output is datetime type
+    /// when date type add hour/minute/second/... output is timestamp type
     fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType;
 
-    fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64;
+    fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64;
 }
 
 impl_interval_year_month!(AddYearsImpl, add_years_base);
@@ -192,7 +192,7 @@ impl IntervalArithmeticImpl for AddDaysImpl {
         (l as i64 + r.as_() * ctx.factor) as Self::DateResultType
     }
 
-    fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
+    fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * 24 * 3600 * base;
         l as i64 + r.as_() * factor
@@ -209,7 +209,7 @@ impl IntervalArithmeticImpl for AddTimesImpl {
         (l as i64 * 3600 * 24 + r.as_() * ctx.factor) as Self::DateResultType
     }
 
-    fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
+    fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * base;
         l as i64 + r.as_() * factor

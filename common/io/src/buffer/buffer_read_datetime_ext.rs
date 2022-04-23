@@ -26,7 +26,7 @@ use super::BufferReadExt;
 
 pub trait BufferReadDateTimeExt: BufferRead {
     fn read_date_text(&mut self) -> Result<NaiveDate>;
-    fn read_datetime_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>>;
+    fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>>;
 }
 
 const DATE_LEN: usize = 10;
@@ -46,7 +46,7 @@ where R: BufferRead
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot parse value to Date type")
     }
 
-    fn read_datetime_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
+    fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
         let mut buf = vec![0; DATE_TIME_LEN];
         self.read_exact(buf.as_mut_slice())?;
 

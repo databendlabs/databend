@@ -20,9 +20,9 @@ use serde::Serialize;
 use crate::DFTryFrom;
 use crate::DataTypePtr;
 use crate::DataValue;
-use crate::DateTimeType;
 use crate::DateType;
 use crate::Scalar;
+use crate::TimeStampType;
 use crate::VariantType;
 use crate::VariantValue;
 
@@ -102,7 +102,7 @@ impl ToDateType for i32 {
 
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypePtr {
-        DateTimeType::arc(0, None)
+        TimeStampType::arc(0, None)
     }
 }
 

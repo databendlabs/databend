@@ -95,7 +95,7 @@ macro_rules! with_match_date_date_time_types {
             TypeID::Date => {
                 $dispatch! { i32,  $($args),* }
             }
-            TypeID::DateTime => {
+            TypeID::TimeStamp => {
                 $dispatch! { i64,  $($args),* }
             },
             _ => {},

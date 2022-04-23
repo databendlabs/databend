@@ -29,7 +29,7 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateTimeType {
+pub struct TimeStampType {
     /// The time resolution is determined by the precision parameter, range from 0 to 9
     /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
     precision: usize,
@@ -37,13 +37,13 @@ pub struct DateTimeType {
     tz: Option<String>,
 }
 
-impl DateTimeType {
+impl TimeStampType {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
-        DateTimeType { precision, tz }
+        TimeStampType { precision, tz }
     }
 
     pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTimeType { precision, tz })
+        Arc::new(TimeStampType { precision, tz })
     }
 
     pub fn tz(&self) -> Option<&String> {
@@ -83,9 +83,9 @@ impl DateTimeType {
 }
 
 #[typetag::serde]
-impl DataType for DateTimeType {
+impl DataType for TimeStampType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::DateTime
+        TypeID::TimeStamp
     }
 
     #[inline]
@@ -95,16 +95,16 @@ impl DataType for DateTimeType {
 
     fn name(&self) -> &str {
         match self.precision {
-            0 => "DateTime",
-            1 => "DateTime(1)",
-            2 => "DateTime(2)",
-            3 => "DateTime(3)",
-            4 => "DateTime(4)",
-            5 => "DateTime(5)",
-            6 => "DateTime(6)",
-            7 => "DateTime(7)",
-            8 => "DateTime(8)",
-            9 => "DateTime(9)",
+            0 => "TimeStamp",
+            1 => "TimeStamp(1)",
+            2 => "TimeStamp(2)",
+            3 => "TimeStamp(3)",
+            4 => "TimeStamp(4)",
+            5 => "TimeStamp(5)",
+            6 => "TimeStamp(6)",
+            7 => "TimeStamp(7)",
+            8 => "TimeStamp(8)",
+            9 => "TimeStamp(9)",
             _ => unreachable!(),
         }
     }
@@ -138,7 +138,7 @@ impl DataType for DateTimeType {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "TimeStamp".to_string());
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         mp.insert(
             ARROW_EXTENSION_META.to_string(),
@@ -149,7 +149,7 @@ impl DataType for DateTimeType {
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeSerializer::<i64>::create(
+        Box::new(TimeStampSerializer::<i64>::create(
             tz.parse::<Tz>().unwrap(),
             self.precision as u32,
         ))
@@ -157,7 +157,7 @@ impl DataType for DateTimeType {
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeDeserializer::<i64> {
+        Box::new(TimeStampDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
             precision: self.precision,
@@ -169,12 +169,12 @@ impl DataType for DateTimeType {
     }
 }
 
-impl std::fmt::Debug for DateTimeType {
+impl std::fmt::Debug for TimeStampType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.precision() == 0 {
-            write!(f, "DateTime")
+            write!(f, "TimeStamp")
         } else {
-            write!(f, "DateTime({})", self.precision())
+            write!(f, "TimeStamp({})", self.precision())
         }
     }
 }

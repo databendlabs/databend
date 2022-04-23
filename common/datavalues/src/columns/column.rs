@@ -32,7 +32,7 @@ pub type ColumnRef = Arc<dyn Column>;
 pub trait Column: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     /// Type of data that column contains. It's an underlying physical type:
-    /// UInt16 for Date, UInt32 for DateTime, so on.
+    /// Int32 for Date, Int64 for TimeStamp, so on.
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
@@ -171,7 +171,7 @@ where A: AsRef<dyn Array>
             Int8 => Arc::new(Int8Column::from_arrow_array(self.as_ref())),
             Int16 => Arc::new(Int16Column::from_arrow_array(self.as_ref())),
             Int32 | Date => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
-            Int64 | Interval | DateTime => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
+            Int64 | Interval | TimeStamp => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
             Array => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),

@@ -21,13 +21,13 @@ use num::cast::AsPrimitive;
 use crate::columns::MutableColumn;
 use crate::prelude::*;
 
-pub struct DateTimeDeserializer<T: PrimitiveType> {
+pub struct TimeStampDeserializer<T: PrimitiveType> {
     pub builder: MutablePrimitiveColumn<T>,
     pub tz: Tz,
     pub precision: usize,
 }
 
-impl<T> TypeDeserializer for DateTimeDeserializer<T>
+impl<T> TypeDeserializer for TimeStampDeserializer<T>
 where
     i64: AsPrimitive<T>,
     T: PrimitiveType,
@@ -59,9 +59,9 @@ where
             serde_json::Value::String(v) => {
                 let v = v.clone();
                 let mut reader = BufferReader::new(v.as_bytes());
-                let datetime = reader.read_datetime_text(&self.tz)?;
+                let ts = reader.read_timestamp_text(&self.tz)?;
                 self.builder
-                    .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+                    .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
@@ -70,48 +70,48 @@ where
 
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
-        let datetime = reader.read_datetime_text(&self.tz)?;
+        let ts = reader.read_timestamp_text(&self.tz)?;
         reader.must_ignore_byte(b'\'')?;
 
         self.builder
-            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
         Ok(())
     }
 
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let mut reader = BufferReader::new(reader);
-        let datetime = reader.read_datetime_text(&self.tz)?;
+        let ts = reader.read_timestamp_text(&self.tz)?;
         reader.must_eof()?;
         self.builder
-            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
         Ok(())
     }
 
     fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
-        let datetime = reader.read_datetime_text(&self.tz)?;
+        let ts = reader.read_timestamp_text(&self.tz)?;
         self.builder
-            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
         Ok(())
     }
 
     fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
-        let datetime = reader.read_datetime_text(&self.tz)?;
+        let ts = reader.read_timestamp_text(&self.tz)?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
         self.builder
-            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
         Ok(())
     }
 
     fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
-        let datetime = reader.read_datetime_text(&self.tz)?;
+        let ts = reader.read_timestamp_text(&self.tz)?;
         reader.must_ignore_byte(b'"')?;
 
         self.builder
-            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
         Ok(())
     }
 

@@ -190,7 +190,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             TypeID::Date => {
                 scalar_contains!(i32, input_col, input_rows, columns, least_super_dt)
             }
-            TypeID::DateTime => {
+            TypeID::TimeStamp => {
                 scalar_contains!(i64, input_col, input_rows, columns, least_super_dt);
             }
             _ => {
