@@ -158,6 +158,7 @@ fn test_query() {
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
+        r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
     ];
