@@ -248,7 +248,7 @@ jobs:
         run: |
           _base=${{ secrets.DOCKERHUB_NAMESPACE }}/databend-${{ matrix.service }}:${{ steps.get_version.outputs.VERSION }}
           _tags=${_base}-${{ matrix.distro }}
-          if [[ "${{ matrix.service }}" == "debian" ]]; then
+          if [[ "${{ matrix.distro }}" == "debian" ]]; then
             _tags="${_tags}, ${_base}"
           fi
           echo ::set-output name=IMAGE_TAGS::${_tags}

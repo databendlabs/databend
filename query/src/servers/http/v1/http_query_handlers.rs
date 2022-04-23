@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
-use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::http::StatusCode;
 use poem::post;
-use poem::web::Data;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
@@ -37,8 +33,8 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
-use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -142,12 +138,11 @@ pub(crate) struct CancelParams {
 
 #[poem::handler]
 async fn query_cancel_handler(
-    sessions_extension: Data<&Arc<SessionManager>>,
+    ctx: &HttpQueryContext,
     Query(params): Query<CancelParams>,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
-    let session_manager = sessions_extension.0;
-    let http_query_manager = session_manager.get_http_query_manager();
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.kill().await;
@@ -162,11 +157,10 @@ async fn query_cancel_handler(
 
 #[poem::handler]
 async fn query_state_handler(
-    sessions_extension: Data<&Arc<SessionManager>>,
+    ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<Json<QueryResponse>> {
-    let session_manager = sessions_extension.0;
-    let http_query_manager = session_manager.get_http_query_manager();
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             let response = query.get_response_state_only().await;
@@ -178,11 +172,10 @@ async fn query_state_handler(
 
 #[poem::handler]
 async fn query_page_handler(
-    sessions_extension: Data<&Arc<SessionManager>>,
+    ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<Json<QueryResponse>> {
-    let session_manager = sessions_extension.0;
-    let http_query_manager = session_manager.get_http_query_manager();
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.clear_expire_time().await;
@@ -199,16 +192,14 @@ async fn query_page_handler(
 
 #[poem::handler]
 pub(crate) async fn query_handler(
-    sessions_extension: Data<&Arc<SessionManager>>,
-    user_info: Data<&UserInfo>,
+    ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<Json<QueryResponse>> {
     tracing::info!("receive http query: {:?}", req);
-    let session_manager = sessions_extension.0;
-    let http_query_manager = session_manager.get_http_query_manager();
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
     let query_id = http_query_manager.next_query_id();
     let query = http_query_manager
-        .try_create_query(&query_id, req, session_manager, &user_info)
+        .try_create_query(&query_id, ctx, req)
         .await;
 
     match query {

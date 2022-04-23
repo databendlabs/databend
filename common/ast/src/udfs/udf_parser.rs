@@ -25,8 +25,8 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::parser::expr::ExprTraverser;
-use crate::parser::expr::ExprVisitor;
+use crate::udfs::UDFExprTraverser;
+use crate::udfs::UDFExprVisitor;
 
 #[derive(Default)]
 pub struct UDFParser {
@@ -74,7 +74,7 @@ impl UDFParser {
         expr_params.clear();
         self.name = name.to_string();
 
-        ExprTraverser::accept(definition_expr, self).await?;
+        UDFExprTraverser::accept(definition_expr, self).await?;
         let expr_params = &self.expr_params;
         let parameters = parameters.iter().cloned().collect::<HashSet<_>>();
         let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
@@ -101,7 +101,7 @@ impl UDFParser {
 }
 
 #[async_trait]
-impl ExprVisitor for UDFParser {
+impl UDFExprVisitor for UDFParser {
     async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
             Expr::Identifier(Ident { value, .. }) => {

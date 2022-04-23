@@ -30,12 +30,15 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
+use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::EmptySink;
 use crate::pipelines::new::processors::SyncSource;
 use crate::pipelines::new::processors::SyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -54,6 +57,7 @@ impl NullTable {
         StorageDescription {
             engine_name: "NULL".to_string(),
             comment: "NULL Storage Engine".to_string(),
+            ..Default::default()
         }
     }
 }
@@ -121,6 +125,16 @@ impl Table for NullTable {
             None,
             vec![],
         )))
+    }
+
+    fn append2(&self, _: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _ in 0..pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(input_port.clone(), EmptySink::create(input_port));
+        }
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        Ok(())
     }
 
     async fn truncate(

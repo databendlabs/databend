@@ -165,7 +165,7 @@ async fn test_plan_parser() -> Result<()> {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 2602, displayText = Unknown UDF unsupported (while in analyze select projection).",
+            error: "Code: 2602, displayText = Unknown Function unsupported (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",

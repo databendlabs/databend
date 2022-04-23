@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -26,7 +26,7 @@ fn test_plan_display_indent() -> Result<()> {
     // TODO test other plan type
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
 
-    let mut options = HashMap::new();
+    let mut options = BTreeMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());
 
     let plan_create = PlanNode::CreateTable(CreateTablePlan {
@@ -41,6 +41,7 @@ fn test_plan_display_indent() -> Result<()> {
             ..Default::default()
         },
         as_select: None,
+        order_keys: vec![],
     });
 
     assert_eq!(

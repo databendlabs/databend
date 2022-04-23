@@ -22,14 +22,14 @@ toDayOfWeek(expr)
 ## Examples
 
 ```sql
-mysql> select toDayOfWeek(toDate(18869));
+SELECT toDayOfWeek(toDate(18869));
 +----------------------------+
 | toDayOfWeek(toDate(18869)) |
 +----------------------------+
 |                          1 |
 +----------------------------+
 
-mysql> select toDayOfWeek(now());
+SELECT toDayOfWeek(now());
 +--------------------+
 | toDayOfWeek(now()) |
 +--------------------+

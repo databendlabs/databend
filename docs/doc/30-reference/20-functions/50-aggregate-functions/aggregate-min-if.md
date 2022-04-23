@@ -1,14 +1,14 @@
 ---
-title: minIf
+title: MIN_IF
 ---
 
 
-## minIf 
+## MIN_IF 
 
-The suffix -If can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
+The suffix `_IF` can be appended to the name of any aggregate function. In this case, the aggregate function accepts an extra argument – a condition.
 
 ```
-minIf(column, cond)
+MIN_IF(column, cond)
 ```
 
 ## Examples
@@ -18,17 +18,17 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 :::
 
 ```sql
-mysql> SELECT min(number) FROM numbers(10);
+SELECT min(number) FROM numbers(10);
 +-------------+
 | min(number) |
 +-------------+
 |           0 |
 +-------------+
 
-mysql> SELECT minIf(number, number > 7) FROM numbers(10);
-+-----------------------------+
-| minIf(number, (number > 7)) |
-+-----------------------------+
-|                           8 |
-+-----------------------------+
+SELECT min_if(number, number > 7) FROM numbers(10);
++------------------------------+
+| min_if(number, (number > 7)) |
++------------------------------+
+|                            8 |
++------------------------------+
 ```

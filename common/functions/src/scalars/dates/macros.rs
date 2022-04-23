@@ -19,30 +19,17 @@ macro_rules! impl_interval_year_month {
         pub struct $name;
 
         impl IntervalArithmeticImpl for $name {
-            type Date16Result = u16;
-            type Date32Result = i32;
+            type DateResultType = i32;
 
-            fn eval_date16(
-                l: u16,
-                r: impl AsPrimitive<i64>,
-                ctx: &mut EvalContext,
-            ) -> Self::Date16Result {
-                define_date_add_year_months!(l, r, ctx, u16, $op)
-            }
-
-            fn eval_date32(
+            fn eval_date(
                 l: i32,
                 r: impl AsPrimitive<i64>,
                 ctx: &mut EvalContext,
-            ) -> Self::Date32Result {
-                define_date_add_year_months!(l, r, ctx, i32, $op)
+            ) -> Self::DateResultType {
+                define_date_add_year_months!(l, r, ctx, $op)
             }
 
-            fn eval_datetime32(l: u32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> u32 {
-                define_datetime32_add_year_months!(l, r, ctx, $op)
-            }
-
-            fn eval_datetime64(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
+            fn eval_datetime(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
                 define_datetime64_add_year_months!(l, r, ctx, $op)
             }
         }
@@ -51,7 +38,7 @@ macro_rules! impl_interval_year_month {
 
 #[macro_export]
 macro_rules! define_date_add_year_months {
-    ($l: ident, $r: ident, $ctx: ident, $date_type:ident, $op: expr) => {{
+    ($l: ident, $r: ident, $ctx: ident, $op: expr) => {{
         let factor = $ctx.factor;
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
         let naive = epoch.checked_add_signed(Duration::days($l as i64));
@@ -70,7 +57,7 @@ macro_rules! define_date_add_year_months {
                 $ctx.set_error(e);
                 0
             },
-            |d| d.signed_duration_since(epoch).num_days() as $date_type,
+            |d| d.signed_duration_since(epoch).num_days() as i32,
         )
     }};
 }
@@ -106,6 +93,7 @@ macro_rules! define_datetime64_add_year_months {
         let factor = $ctx.factor;
         let precision = $ctx.precision as u32;
         let base = 10_i64.pow(9 - precision);
+        println!("l: {}, precision: {}, base: {}", $l, precision, base);
         let nano = $l * base;
         let naive =
             NaiveDateTime::from_timestamp_opt(nano / 1_000_000_000, (nano % 1_000_000_000) as u32);

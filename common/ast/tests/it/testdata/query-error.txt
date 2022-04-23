@@ -1,0 +1,75 @@
+---------- Input ----------
+select * from customer join where a = b
+---------- Output ---------
+error: 
+  --> SQL:1:29
+  |
+1 | select * from customer join where a = b
+  | ------                      ^^^^^ expected token <Ident>
+  | |                            
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from join customer
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | select * from join customer
+  | ------        ^^^^ expected token <Ident>
+  | |              
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from customer natural inner join orders on a = b
+---------- Output ---------
+SELECT * FROM customer NATURAL INNER JOIN orders
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Join(
+                Join {
+                    op: Inner,
+                    condition: Natural,
+                    left: Table {
+                        database: None,
+                        table: Identifier {
+                            name: "customer",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                    right: Table {
+                        database: None,
+                        table: Identifier {
+                            name: "orders",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                },
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+}
+---------- REST -----------
+[Token { kind: ON, text: "on", span: 49..51 }, Token { kind: Ident, text: "a", span: 52..53 }, Token { kind: Eq, text: "=", span: 54..55 }, Token { kind: Ident, text: "b", span: 56..57 }, Token { kind: EOI, text: "", span: 57..57 }]
+
+

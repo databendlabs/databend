@@ -40,15 +40,15 @@ fn copy_from_external_test() -> Result<()> {
             name: ObjectName(vec![Ident::new("mytable")]),
             columns: vec![],
             location: "s3://mybucket/data/files".to_string(),
-            credential_options: maplit::hashmap! {
+            credential_options: maplit::btreemap! {
                    "aws_key_id".into() => "my_key_id".into(),
                    "aws_secret_key".into() => "my_secret_key".into(),
             },
-            encryption_options: maplit::hashmap! {
+            encryption_options: maplit::btreemap! {
                    "master_key".into() => "my_master_key".into(),
             },
 
-            file_format_options: maplit::hashmap! {
+            file_format_options: maplit::btreemap! {
                    "type".into() => "csv".into(),
                    "field_delimiter".into() => "|".into(),
                    "skip_header".into() => "1".into(),

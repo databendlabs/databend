@@ -26,7 +26,7 @@ use crate::users::UserApiProvider;
 
 pub struct AuthMgr {
     tenant: String,
-    users: Arc<UserApiProvider>,
+    user_mgr: Arc<UserApiProvider>,
     jwt: Option<JwtAuthenticator>,
 }
 
@@ -42,30 +42,42 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub async fn create(cfg: Config, users: Arc<UserApiProvider>) -> Result<Self> {
+    pub async fn create(cfg: Config, user_mgr: Arc<UserApiProvider>) -> Result<Self> {
         Ok(AuthMgr {
-            users,
+            user_mgr,
             tenant: cfg.query.tenant_id.clone(),
             jwt: JwtAuthenticator::try_create(cfg).await?,
         })
     }
 
     pub async fn no_auth(&self) -> Result<UserInfo> {
-        self.users
+        self.user_mgr
             .get_user(&self.tenant, UserIdentity::new("root", "127.0.0.1"))
             .await
     }
 
-    pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
+    pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {
         match credential {
             Credential::Jwt { token: t } => {
-                let user_name = match &self.jwt {
-                    Some(j) => j.get_user(t.as_str())?,
+                let jwt = match &self.jwt {
+                    Some(j) => j.parse_jwt_claims(t.as_str())?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
-                self.users
-                    .get_user(&self.tenant, UserIdentity::new(&user_name, "%"))
-                    .await
+                let user_name = jwt.subject.unwrap();
+                let tenant = jwt.custom.tenant_id.unwrap_or_else(|| self.tenant.clone());
+                if let Some(ensure_user) = jwt.custom.ensure_user {
+                    let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                    for role in ensure_user.roles {
+                        user_info.grants.grant_role(role);
+                    }
+                    self.user_mgr.add_user(&tenant, user_info, true).await?;
+                }
+                Ok((
+                    Some(tenant.clone()),
+                    self.user_mgr
+                        .get_user(&tenant, UserIdentity::new(&user_name, "%"))
+                        .await?,
+                ))
             }
             Credential::Password {
                 name: n,
@@ -73,14 +85,14 @@ impl AuthMgr {
                 hostname: h,
             } => {
                 let user = self
-                    .users
+                    .user_mgr
                     .get_user_with_client_ip(
                         &self.tenant,
                         n,
                         h.as_ref().unwrap_or(&"%".to_string()),
                     )
                     .await?;
-                match &user.auth_info {
+                let user_info = match &user.auth_info {
                     AuthInfo::None => Ok(user),
                     AuthInfo::Password {
                         hash_value: h,
@@ -96,7 +108,8 @@ impl AuthMgr {
                         }
                     },
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
-                }
+                }?;
+                Ok((None, user_info))
             }
         }
     }

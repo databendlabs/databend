@@ -25,28 +25,28 @@ A UInt64 data type hash value.
 ## Examples
 
 ```sql
-mysql> SELECT SIPHASH('1234567890');
+SELECT SIPHASH('1234567890');
 +-----------------------+
 | SIPHASH('1234567890') |
 +-----------------------+
 |  18110648197875983073 |
 +-----------------------+
 
-mysql> SELECT SIPHASH(1);
+SELECT SIPHASH(1);
 +---------------------+
 | SIPHASH(1)          |
 +---------------------+
 | 4952851536318644461 |
 +---------------------+
 
-mysql> SELECT SIPHASH(1.2);
+SELECT SIPHASH(1.2);
 +---------------------+
 | SIPHASH(1.2)        |
 +---------------------+
 | 2854037594257667269 |
 +---------------------+
 
-mysql> SELECT SIPHASH(number) FROM numbers(2);
+SELECT SIPHASH(number) FROM numbers(2);
 +----------------------+
 | SIPHASH(number)      |
 +----------------------+

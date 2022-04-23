@@ -28,23 +28,15 @@ pub struct RoleInfo {
 }
 
 impl RoleInfo {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
-            name,
+            name: name.to_string(),
             grants: UserGrantSet::empty(),
         }
     }
 
     pub fn identity(&self) -> String {
         self.name.clone()
-    }
-
-    pub fn format_grants(&self) -> Vec<Vec<u8>> {
-        self.grants
-            .entries()
-            .iter()
-            .map(|e| format!("{} TO '{}'", e, self.name).into_bytes())
-            .collect::<Vec<_>>()
     }
 }
 

@@ -23,7 +23,7 @@ A number data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT STRCMP('text', 'text2');
 +-------------------------+
 | STRCMP('text', 'text2') |

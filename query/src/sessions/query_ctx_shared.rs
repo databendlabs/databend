@@ -137,8 +137,12 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
+    pub fn set_current_tenant(&self, tenant: String) {
+        self.session.set_current_tenant(tenant);
+    }
+
     pub fn get_tenant(&self) -> String {
-        self.session.get_tenant()
+        self.session.get_current_tenant()
     }
 
     pub fn get_user_manager(&self) -> Arc<UserApiProvider> {

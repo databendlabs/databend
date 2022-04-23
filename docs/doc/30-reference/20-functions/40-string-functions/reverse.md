@@ -22,8 +22,8 @@ A String data type value.
 
 ## Examples
 
-```txt
-mysql> SELECT REVERSE('abc');
+```sql
+SELECT REVERSE('abc');
 +----------------+
 | REVERSE('abc') |
 +----------------+

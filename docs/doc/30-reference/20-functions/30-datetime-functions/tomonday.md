@@ -23,21 +23,21 @@ toMonday(expr)
 ## Examples
 
 ```sql
-mysql> select toMonday(now());
+SELECT toMonday(now());
 +-----------------+
 | tomonday(now()) |
 +-----------------+
 |           19079 |
 +-----------------+
 
-mysql> select todate(toMonday(now()));
+SELECT todate(toMonday(now()));
 +-------------------------+
 | todate(toMonday(now())) |
 +-------------------------+
 | 2022-03-28              |
 +-------------------------+
 
-mysql> select toMonday(toDateTime(1630812366));
+SELECT toMonday(toDateTime(1630812366));
 +----------------------------------+
 | toMonday(toDateTime(1630812366)) |
 +----------------------------------+

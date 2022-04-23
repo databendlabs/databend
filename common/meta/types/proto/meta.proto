@@ -48,6 +48,45 @@ message ExportedChunk {
   repeated string data = 10;
 }
 
+message WatchRequest {
+  // key is the key to register for watching.
+  string key = 1;
+
+  // key_end is the end of the range [key, key_end] to watch.
+  // if key_end is None, then watch only key.
+  optional string key_end = 2;
+
+  enum FilterType {
+    // recv all kind update event.
+    ALL = 0;    
+    // filter only update event.
+    UPDATE = 1;
+    // filter only delete event.
+    DELETE = 2;
+  }  
+  FilterType filter_type = 3;
+}
+
+
+message Event {
+  string key = 1;
+
+  message SeqV {
+    uint64 seq = 1;
+    bytes data = 2;
+  }
+
+  // current hold current value of key(if any)
+  optional SeqV current = 2;
+
+  // prev value of key(if any)
+  optional SeqV prev = 3;
+}
+
+message WatchResponse {
+  Event event = 1;
+}
+
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
@@ -76,4 +115,8 @@ service MetaService {
   // Including raft hard state, logs and state machine.
   // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
   rpc Export(Empty) returns (stream ExportedChunk);
+
+  // Add watch key stream.
+  // Whenever the watch key data updated, client will be notified accross the stream.
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
 }

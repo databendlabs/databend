@@ -20,10 +20,8 @@ Where:
 
 ## Examples
 
-```sql title='mysql>'
+```sql
 list @named_external_stage PATTERN = 'ontime.*parquet';
-```
-```
 +-----------------------+
 | file_name             |
 +-----------------------+

@@ -1,5 +1,5 @@
 ---
-title: runningDifference
+title: RUNNING_DIFFERENCE
 ---
 
 Calculates the difference between successive row values ​​in the data block.
@@ -8,18 +8,18 @@ Returns 0 for the first row and the difference from the previous row for each su
 ## Syntax
 
 ```sql
-runningDifference(expression)
+RUNNING_DIFFERENCE( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expression  | Any expression which generates numberic result, including integer numbers, real numbers, date  and datetime.   
+| `<expr>`| Any expression which generates numeric result, including integer numbers, real numbers, date  and datetime.   
 
 ## Return Type
 
-Numberic Type
+Numeric Type
 
 ## Examples
 
@@ -41,14 +41,14 @@ databend :) SELECT * FROM runing_difference_test;
 │ 20 │
 └────┘
 
-databend :) SELECT runningDifference(a) FROM runing_difference_test;
-┌─runningDifference(a)─┐
+databend :) SELECT running_difference(a) FROM runing_difference_test;
+┌─running_difference(a)┐
 │                    0 │
 │                    2 │
 │                    2 │
 │                    5 │
 └──────────────────────┘
-┌─runningDifference(a)─┐
+┌─running_difference(a)┐
 │                    0 │
 │                    5 │
 └──────────────────────┘

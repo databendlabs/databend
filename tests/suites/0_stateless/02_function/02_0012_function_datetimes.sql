@@ -2,16 +2,16 @@ SELECT today() >= 18869;
 SELECT now() >= 1630295616;
 select  toDateTime(1630320462), toUInt32(toDateTime(1630320462))  = 1630320462;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
-select  toDateTime64(1640019661000), toInt64(toDateTime64(1640019661000))  = 1640019661000;
+select  toDateTime(1640019661), toInt64(toDateTime(1640019661))  = 1640019661;
 
-select toTypeName(today() + 3) = 'Date16';
-select toTypeName(today() - 3) = 'Date16';
-select toTypeName(now() - 3) = 'DateTime32';
-select toTypeName(toDateTime64(1640019661000)) = 'DateTime64(3)';
+select typeof(today() + 3) = 'DATE';
+select typeof(today() - 3) = 'DATE';
+select typeof(now() - 3) = 'DATETIME';
+select typeof(toDateTime(1640019661)) = 'DATETIME';
 select today() + 1 - today() = 1;
 
-select toTypeName(today() - today()) = 'Int32';
-select toTypeName(now() - now()) = 'Int32';
+select typeof(today() - today()) = 'INT';
+select typeof(now() - now()) = 'INT';
 select sum(today() + number - today()) = 45 from numbers(10);
 
 select today() - 1 = yesterday();
@@ -187,19 +187,19 @@ select '===EXTRACT===';
 
 select '===CMP===';
 
-select toDateTime64('2022-04-01 06:50:20.000')   = '2022-04-01 06:50:20.000';
-select toDateTime64('2022-04-01 06:50:20.000')   > '2022-04-01 04:50:20.000';
-select toDateTime64('2022-04-01 06:50:20.000')   < '2022-04-02 04:50:20.000';
+select toDateTime('2022-04-01 06:50:20')   = '2022-04-01 06:50:20';
+select toDateTime('2022-04-01 06:50:20')   > '2022-04-01 04:50:20';
+select toDateTime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
 select '===INSERT===';
 drop table if exists ts;
-create table ts(a DateTime64, b DateTime, c Date, d Date32);
-insert into ts values(now(), now(), today(), today());
-select toDateTime64(a) = toDateTime64(b),  toDateTime32(a) = toDateTime(b),  toDate32(c) = toDate32(d), toDate(c) = toDate(d) from ts;
+create table ts(a DateTime(3), b DateTime, c Date);
+insert into ts values(now(), now(), today());
+select toDateTime(a) = toDateTime(b) from ts;
 drop table if exists ts;
 
 
-create table t(d32 datetime32, d64 datetime64);
+create table t(d32 datetime, d64 DateTime(3));
 
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28');
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');

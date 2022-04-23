@@ -18,7 +18,6 @@ use async_stream::stream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::SendableDataBlockStream;
@@ -29,7 +28,6 @@ use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::post;
-use poem::web::Data;
 use poem::web::Query;
 use poem::Body;
 use poem::Endpoint;
@@ -38,10 +36,13 @@ use poem::Route;
 use serde::Deserialize;
 
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::StreamSource;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::formats::tsv_output::block_to_tsv;
 use crate::servers::http::formats::Format;
+use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -70,8 +71,22 @@ async fn execute(
         .start()
         .await
         .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-
-    let data_stream = interpreter.execute(input_stream).await?;
+    let data_stream: SendableDataBlockStream =
+        if ctx.get_settings().get_enable_new_processor_framework()? != 0
+            && ctx.get_cluster().is_empty()
+        {
+            let output_port = OutputPort::create();
+            let stream_source =
+                StreamSource::create(ctx.clone(), input_stream, output_port.clone())?;
+            let mut source_pipe_builder = SourcePipeBuilder::create();
+            source_pipe_builder.add_source(output_port, stream_source);
+            let _ = interpreter
+                .set_source_pipe_builder(Option::from(source_pipe_builder))
+                .map_err(|e| tracing::error!("interpreter.set_source_pipe_builder.error: {:?}", e));
+            interpreter.execute(None).await?
+        } else {
+            interpreter.execute(input_stream).await?
+        };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
     let stream = stream! {
@@ -95,16 +110,13 @@ async fn execute(
 
 #[poem::handler]
 pub async fn clickhouse_handler_get(
-    sessions_extension: Data<&Arc<SessionManager>>,
-    user_info: Data<&UserInfo>,
+    ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session_manager = sessions_extension.0;
-    let session = session_manager
+    let session = ctx
         .create_session(SessionType::ClickHouseHttpHandler)
         .await
         .map_err(InternalServerError)?;
-    session.set_current_user(user_info.0.clone());
 
     let context = session
         .create_query_context()
@@ -127,8 +139,11 @@ pub async fn clickhouse_handler_get(
         .map_err(InternalServerError)
 }
 
-fn try_parse_insert_formatted(sql: &str) -> Result<Option<(Format, Vec<DfStatement>)>> {
-    if let Ok((statements, _)) = DfParser::parse_sql(sql) {
+fn try_parse_insert_formatted(
+    sql: &str,
+    typ: SessionType,
+) -> Result<Option<(Format, Vec<DfStatement>)>> {
+    if let Ok((statements, _)) = DfParser::parse_sql(sql, typ) {
         if statements.is_empty() {
             return Ok(None);
         }
@@ -158,17 +173,14 @@ fn try_parse_insert_formatted(sql: &str) -> Result<Option<(Format, Vec<DfStateme
 
 #[poem::handler]
 pub async fn clickhouse_handler_post(
-    sessions_extension: Data<&Arc<SessionManager>>,
-    user_info: Data<&UserInfo>,
+    ctx: &HttpQueryContext,
     body: Body,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session_manager = sessions_extension.0;
-    let session = session_manager
+    let session = ctx
         .create_session(SessionType::ClickHouseHttpHandler)
         .await
         .map_err(InternalServerError)?;
-    session.set_current_user(user_info.0.clone());
 
     let ctx = session
         .create_query_context()
@@ -178,30 +190,33 @@ pub async fn clickhouse_handler_post(
     let mut sql = params.query;
 
     // Insert into format sql
-    let (plan, input_stream) =
-        if let Some((format, statements)) = try_parse_insert_formatted(&sql).map_err(BadRequest)? {
-            let plan = PlanParser::build_plan(statements, ctx.clone())
-                .await
-                .map_err(InternalServerError)?;
-            ctx.attach_query_str(&sql);
+    let (plan, input_stream) = if let Some((format, statements)) =
+        try_parse_insert_formatted(&sql, ctx.get_current_session().get_type())
+            .map_err(BadRequest)?
+    {
+        let plan = PlanParser::build_plan(statements, ctx.clone())
+            .await
+            .map_err(InternalServerError)?;
+        ctx.attach_query_str(&sql);
 
-            let input_stream = match format {
-                Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
-            };
-            (plan, Some(input_stream))
-        } else {
-            // Other sql
-            let body = body.into_string().await.map_err(BadRequest)?;
-            let sql = format!("{}\n{}", sql, body);
-            let (statements, _) = DfParser::parse_sql(&sql).map_err(BadRequest)?;
-
-            let plan = PlanParser::build_plan(statements, ctx.clone())
-                .await
-                .map_err(InternalServerError)?;
-            ctx.attach_query_str(&sql);
-
-            (plan, None)
+        let input_stream = match format {
+            Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
         };
+        (plan, Some(input_stream))
+    } else {
+        // Other sql
+        let body = body.into_string().await.map_err(BadRequest)?;
+        let sql = format!("{}\n{}", sql, body);
+        let (statements, _) =
+            DfParser::parse_sql(&sql, ctx.get_current_session().get_type()).map_err(BadRequest)?;
+
+        let plan = PlanParser::build_plan(statements, ctx.clone())
+            .await
+            .map_err(InternalServerError)?;
+        ctx.attach_query_str(&sql);
+
+        (plan, None)
+    };
 
     execute(ctx, plan, input_stream)
         .await

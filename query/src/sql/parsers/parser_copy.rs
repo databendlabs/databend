@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::IsOptional;
@@ -40,7 +40,7 @@ impl<'a> DfParser<'a> {
         let location = self.parser.parse_literal_string()?;
 
         // credentials=(aws_key_id='$AWS_ACCESS_KEY_ID' aws_secret_key='$AWS_SECRET_ACCESS_KEY')
-        let mut credential_options = HashMap::default();
+        let mut credential_options = BTreeMap::default();
         if self.consume_token("CREDENTIALS") {
             self.expect_token("=")?;
             self.expect_token("(")?;
@@ -49,7 +49,7 @@ impl<'a> DfParser<'a> {
         }
 
         // encryption=(master_key = '$MASER_KEY')
-        let mut encryption_options = HashMap::default();
+        let mut encryption_options = BTreeMap::default();
         if self.consume_token("ENCRYPTION") {
             self.expect_token("=")?;
             self.expect_token("(")?;
@@ -74,7 +74,7 @@ impl<'a> DfParser<'a> {
         }
 
         // file_format = (type = csv field_delimiter = '|' skip_header = 1)
-        let mut file_format_options = HashMap::default();
+        let mut file_format_options = BTreeMap::default();
         if self.consume_token("FILE_FORMAT") {
             self.expect_token("=")?;
             self.expect_token("(")?;

@@ -54,14 +54,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -69,7 +69,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nightly/databend-v0.7.14-nightly-aarch64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -79,14 +79,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.14-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.14-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.26-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.14-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -94,7 +94,7 @@ tar xzvf databend-v0.7.14-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.14-nightly-aarch64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.26-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -207,19 +207,18 @@ Check the response is `HTTP/1.1 200 OK`.
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```shell title="mysql>"
-create table t1(a int);
+```sql
+CREATE TABLE t1(a int);
 ```
 
-```shell title="mysql>"
-insert into t1 values(1), (2);
+```sql
+INSERT INTO t1 VALUES(1), (2);
 ```
 
-```shell title="mysql>"
-select * from t1
+```sql
+SELECT * FROM t1
 ```
-
-```shell"
+```
 +------+
 | a    |
 +------+

@@ -15,6 +15,7 @@
 use super::get::GetFunction;
 use super::get::GetIgnoreCaseFunction;
 use super::get::GetPathFunction;
+use super::json_extract_path_text::JsonExtractPathTextFunction;
 use super::parse_json::ParseJsonFunction;
 use super::parse_json::TryParseJsonFunction;
 use crate::scalars::CheckJsonFunction;
@@ -30,5 +31,9 @@ impl SemiStructuredFunction {
         factory.register("get", GetFunction::desc());
         factory.register("get_ignore_case", GetIgnoreCaseFunction::desc());
         factory.register("get_path", GetPathFunction::desc());
+        factory.register(
+            "json_extract_path_text",
+            JsonExtractPathTextFunction::desc(),
+        );
     }
 }

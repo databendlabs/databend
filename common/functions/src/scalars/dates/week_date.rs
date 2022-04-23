@@ -54,13 +54,13 @@ pub trait WeekResultFunction<R> {
 #[derive(Clone)]
 pub struct ToStartOfWeek;
 
-impl WeekResultFunction<u32> for ToStartOfWeek {
+impl WeekResultFunction<i32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
     fn return_type() -> DataTypePtr {
-        Date16Type::arc()
+        DateType::arc()
     }
-    fn to_number(value: DateTime<Utc>, week_mode: u64) -> u32 {
+    fn to_number(value: DateTime<Utc>, week_mode: u64) -> i32 {
         let mut weekday = value.weekday().number_from_sunday();
         if week_mode & 1 == 1 {
             weekday = value.weekday().number_from_monday();
@@ -148,16 +148,7 @@ where
         }
 
         match columns[0].data_type().data_type_id() {
-            TypeID::Date16 => {
-
-                    let col: &UInt16Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
-            TypeID::Date32 => {
+            TypeID::Date => {
                     let col: &Int32Column = Series::check_get(columns[0].column())?;
                     let iter = col.scalar_iter().map(|v| {
                            let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
@@ -165,16 +156,7 @@ where
                     });
                     Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
             },
-            TypeID::DateTime32 => {
-                    let col: &UInt32Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
-
-            TypeID::DateTime64 => {
+            TypeID::DateTime => {
                     let col: &Int64Column = Series::check_get(columns[0].column())?;
                     let iter = col.scalar_iter().map(|v| {
                             let date_time = Utc.timestamp(v as i64, 0_u32);
@@ -229,10 +211,10 @@ impl<T, R> fmt::Display for WeekFunction<T, R> {
     }
 }
 
-fn get_day(date: DateTime<Utc>) -> u32 {
+fn get_day(date: DateTime<Utc>) -> i32 {
     let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
     let duration = date.signed_duration_since(start);
-    duration.num_days() as u32
+    duration.num_days() as i32
 }
 
-pub type ToStartOfWeekFunction = WeekFunction<ToStartOfWeek, u32>;
+pub type ToStartOfWeekFunction = WeekFunction<ToStartOfWeek, i32>;

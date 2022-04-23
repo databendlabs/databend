@@ -14,21 +14,21 @@ This doc is intended to explain the new design of expressions and plan builder.
 ### Alias Expression
 
 Aliasing is useful in SQL, we can alias a complex expression as a short alias name. Such as:
-`select a + 3 as b`.
+`SELECT a + 3 as b`.
 
 In the standard SQL protocol, aliasing can work in:
 
-- Group By, eg: ```select a + 3 as b, count(1) from table group by b```
-- Having, eg: ```select a + 3 as b, count(1) as c from table group by b having c > 0```
-- Order By: eg: ```select a + 3 as b from table order by b```
+- Group By, eg: ```SELECT a + 3 as b, count(1) from table group by b```
+- Having, eg: ```SELECT a + 3 as b, count(1) as c from table group by b having c > 0```
+- Order By: eg: ```SELECT a + 3 as b from table order by b```
 
 
 :::tip
 ClickHouse has extended the usage of expression alias, it can be work in:
 
-- recursive alias expression: eg: `select a + 1 as b, b + 1 as c`
+- recursive alias expression: eg: `SELECT a + 1 as b, b + 1 as c`
 
-- filter: eg: `select a + 1 as b, b + 1 as c  from table where c > 0`
+- filter: eg: `SELECT a + 1 as b, b + 1 as c  from table where c > 0`
 
 Note Currently we do not support clickhouse style alias expression. It can be implemented later.
 :::
@@ -37,10 +37,10 @@ For expression alias, we only handle it at last, in projection stage. But We hav
 
 Eg:
 
-`select number + 1 as c, sum(number) from numbers(10) group by c having c > 3 order by c limit 10`
+`SELECT number + 1 as c, sum(number) from numbers(10) group by c having c > 3 order by c limit 10`
 
 - Firstly, we can scan all the alias expressions from projection ASTs. `c ---> (number + 1)`
-- Then we replaced the alias into the corresponding expression in *having*, *order by*, *group by* clause. So the query will be: `select number + 1 as c, sum(number) from numbers(10) group by (number + 1) having (number + 1) > 3 order by (number + 1) limit 10`
+- Then we replaced the alias into the corresponding expression in *having*, *order by*, *group by* clause. So the query will be: `SELECT number + 1 as c, sum(number) from numbers(10) group by (number + 1) having (number + 1) > 3 order by (number + 1) limit 10`
 - At last, when the query is finished, we apply the projection to rename the column `(number+1)` to `c`
 
 Let's take a look at the explain result of this query:
@@ -65,7 +65,7 @@ Materialized expression processing is that we can rebase the expression as a *Ex
 
 Eg:
 
-`select number + 1 as c, sum(number) as d group by c having number + 1 > 3 order by  d desc`
+`SELECT number + 1 as c, sum(number) as d group by c having number + 1 > 3 order by  d desc`
 
 After aliases replacement, we will know that order by is `sum(number)`, but `sum(number)` is already processed during the aggregating stage, so we can rebase the order by expression `SortExpression { ... }` to `Column("sum(number)")`, this could remove useless calculation of same expressions.
 
@@ -76,9 +76,9 @@ So `number + 1` in having can also apply to rebase the expression.
 
 There are many kinds of expression functions.
 
-- ScalarFunctions, One-to-one calculation process, the result rows is same as the input rows. eg: `select database()`
-- AggregateFunctions, Many-to-one calculation process, eg: `select sum(number)`
-- BinaryFunctions, a special kind of ·ScalarFunctions· eg: `select 1 + 2 `
+- ScalarFunctions, One-to-one calculation process, the result rows is same as the input rows. eg: `SELECT database()`
+- AggregateFunctions, Many-to-one calculation process, eg: `SELECT sum(number)`
+- BinaryFunctions, a special kind of ·ScalarFunctions· eg: `SELECT 1 + 2 `
 - ...
 
 For ScalarFunctions, we really don't care about the whole block, we just care about the columns involved by the arguments. `sum(number)` just care about the Column which named *number* .  And the result is also a column, so we have the virtual method in `IFunction` is:
@@ -134,7 +134,7 @@ We have the *ExpressionExecutor* the execute the expression chain, during the ex
 
 This is for queries without *group by* and *aggregate functions*.
 
-Eg: `explain select number + 1 as b from numbers(10) where number + 1 > 3  order by number + 3 `
+Eg: `explain SELECT number + 1 as b from numbers(10) where number + 1 > 3  order by number + 3 `
 
 
 ```
@@ -162,7 +162,7 @@ The build process is
 
 To build `Aggregation` query, there will be more complex than the previous one.
 
-Eg:  `explain select number + 1 as b, sum(number + 2 ) + 4 as c from numbers(10) where number + 3 > 0  group by number + 1 having c > 3 and sum(number + 4) + 1 > 4  order by sum(number + 5) + 1;`
+Eg:  `explain SELECT number + 1 as b, sum(number + 2 ) + 4 as c from numbers(10) where number + 3 > 0  group by number + 1 having c > 3 and sum(number + 4) + 1 > 4  order by sum(number + 5) + 1;`
 
 ```
 | Projection: (number + 1) as b:UInt64, (sum((number + 2)) + 4) as c:UInt64

@@ -12,7 +12,6 @@ Summary about this PR
 - Performance Improvement
 - Build/Testing/CI
 - Documentation
-- Other 
 - Not for changelog (changelog entry is not required)
 
 ## Related Issues

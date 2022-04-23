@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
@@ -32,9 +32,9 @@ pub struct RepoTableOptions {
     pub table_type: String,
 }
 
-impl From<RepoTableOptions> for HashMap<String, String> {
-    fn from(options: RepoTableOptions) -> HashMap<String, String> {
-        let mut map = HashMap::new();
+impl From<RepoTableOptions> for BTreeMap<String, String> {
+    fn from(options: RepoTableOptions) -> BTreeMap<String, String> {
+        let mut map = BTreeMap::new();
         map.insert(OWNER.to_string(), options.owner);
         map.insert(REPO.to_string(), options.repo);
         map.insert(TOKEN.to_string(), options.token);
@@ -43,9 +43,9 @@ impl From<RepoTableOptions> for HashMap<String, String> {
     }
 }
 
-impl TryFrom<&HashMap<String, String>> for RepoTableOptions {
+impl TryFrom<&BTreeMap<String, String>> for RepoTableOptions {
     type Error = ErrorCode;
-    fn try_from(options: &HashMap<String, String>) -> Result<RepoTableOptions> {
+    fn try_from(options: &BTreeMap<String, String>) -> Result<RepoTableOptions> {
         let owner = options
             .get(OWNER)
             .ok_or_else(|| ErrorCode::UnexpectedError("Github engine table missing owner key"))?

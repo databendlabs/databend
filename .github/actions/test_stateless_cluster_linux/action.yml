@@ -28,6 +28,11 @@ runs:
       run: |
         chmod +x ./target/debug/databend-*
 
+    - name: Install python dependences
+      shell: bash
+      run: |
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector pymysql sqlalchemy clickhouse_driver
+
     - name: Run Stateless Tests with Cluster mode
       shell: bash
       run: |

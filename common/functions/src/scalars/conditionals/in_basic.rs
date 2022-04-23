@@ -36,11 +36,7 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
     pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         for dt in args {
             let type_id = remove_nullable(dt).data_type_id();
-            if type_id.is_date_or_date_time()
-                || type_id.is_interval()
-                || type_id.is_array()
-                || type_id.is_struct()
-            {
+            if type_id.is_interval() || type_id.is_array() || type_id.is_struct() {
                 return Err(ErrorCode::UnexpectedError(format!(
                     "{} type is not supported for IN now",
                     type_id
@@ -130,9 +126,28 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         }
 
         let types: Vec<DataTypePtr> = columns.iter().map(|col| col.column().data_type()).collect();
-        let least_super_dt = aggregate_types(&types)?;
-        let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
 
+        let least_super_dt = if columns[0]
+            .field()
+            .data_type()
+            .data_type_id()
+            .is_date_or_date_time()
+        {
+            match columns[1..]
+                .iter()
+                .map(|column| column.field().data_type().data_type_id())
+                .all(|t| t.is_string() || t.is_date_or_date_time())
+            {
+                true => columns[0].field().data_type().clone(),
+                false => {
+                    return Result::Err(ErrorCode::BadDataValueType("test"));
+                }
+            }
+        } else {
+            aggregate_types(&types)?
+        };
+
+        let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
         let input_col = cast_column_field(&columns[0], &least_super_dt)?;
 
         match least_super_type_id {
@@ -171,6 +186,12 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
             TypeID::Float64 => {
                 float_contains!(f64, input_col, input_rows, columns, least_super_dt);
+            }
+            TypeID::Date => {
+                scalar_contains!(i32, input_col, input_rows, columns, least_super_dt)
+            }
+            TypeID::DateTime => {
+                scalar_contains!(i64, input_col, input_rows, columns, least_super_dt);
             }
             _ => {
                 unimplemented!()

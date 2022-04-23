@@ -47,19 +47,13 @@ pub enum TypeID {
     String,
 
     /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in days (16 bits), it's physical type is UInt16
-    Date16,
-    /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
     /// in days (32 bits), it's physical type is Int32
-    Date32,
-
-    /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in seconds, it's physical type is UInt32
-    DateTime32,
+    Date,
 
     /// A 64-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
     /// in nanoseconds, it's physical type is Int64
-    DateTime64,
+    /// store UTC timestamp
+    DateTime,
 
     /// Interval represents the time interval, e.g. the elapsed time between two date or datetime.
     /// Underneath Interval is stored as int64, so it supports negative values.
@@ -129,10 +123,7 @@ impl TypeID {
 
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
-        matches!(
-            self,
-            TypeID::Date16 | TypeID::Date32 | TypeID::DateTime32 | TypeID::DateTime64,
-        )
+        matches!(self, TypeID::Date | TypeID::DateTime,)
     }
 
     /// Determine if a TypeID is signed numeric or not
@@ -172,14 +163,7 @@ impl TypeID {
 
     #[inline]
     pub fn is_quoted(&self) -> bool {
-        matches!(
-            self,
-            TypeID::String
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
-        )
+        matches!(self, TypeID::String | TypeID::Date | TypeID::DateTime)
     }
 
     #[inline]
@@ -204,9 +188,9 @@ impl TypeID {
     pub fn numeric_byte_size(&self) -> Result<usize> {
         match self {
             TypeID::Int8 | TypeID::UInt8 => Ok(1),
-            TypeID::Int16 | TypeID::UInt16 | TypeID::Date16 => Ok(2),
-            TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 | TypeID::DateTime32 => Ok(4),
-            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 | TypeID::DateTime64 => Ok(8),
+            TypeID::Int16 | TypeID::UInt16 => Ok(2),
+            TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 | TypeID::Date => Ok(4),
+            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 | TypeID::DateTime => Ok(8),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
@@ -223,12 +207,12 @@ impl TypeID {
             Int8 => PhysicalTypeID::Int8,
             Int16 => PhysicalTypeID::Int16,
 
-            Int32 | Date32 => PhysicalTypeID::Int32,
-            Int64 | Interval | DateTime64 => PhysicalTypeID::Int64,
+            Int32 | Date => PhysicalTypeID::Int32,
+            Int64 | Interval | DateTime => PhysicalTypeID::Int64,
 
             UInt8 => PhysicalTypeID::UInt8,
-            Date16 | UInt16 => PhysicalTypeID::UInt16,
-            DateTime32 | UInt32 => PhysicalTypeID::UInt32,
+            UInt16 => PhysicalTypeID::UInt16,
+            UInt32 => PhysicalTypeID::UInt32,
             UInt64 => PhysicalTypeID::UInt64,
             Float32 => PhysicalTypeID::Float32,
             Float64 => PhysicalTypeID::Float64,
@@ -243,7 +227,11 @@ impl TypeID {
 
 impl std::fmt::Display for TypeID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            TypeID::VariantArray => write!(f, "Array"),
+            TypeID::VariantObject => write!(f, "Object"),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 

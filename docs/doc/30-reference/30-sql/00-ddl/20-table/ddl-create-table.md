@@ -13,35 +13,32 @@ In Databend, you **don't need to specify any of these**, one of Databend's desig
 ## Syntax
 
 ### Create Table
-```text
+```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-)
+) [CLUSTER BY(<expr> [, <expr>, ...] )]
 
 <data_type>:
-  Int8
-| UInt8
-| Int16
-| UInt16
-| Int32
-| UInt32
-| Int64
-| UInt64
-| Float32
-| Float64
-| Date
-| Date32
-| DateTime
-| DateTime64
-| String
-| Variant
+  TINYINT
+| SMALLINT 
+| INT
+| BIGINT
+| FLOAT
+| DOUBLE
+| DATE
+| TIMESTAMP 
+| VARCHAR
+| ARRAY
+| OBJECT
+| VARIANT
 ```
 
 :::tip
 Data type reference:
+* [Boolean Data Types](../../../10-data-types/00-data-type-logical-types.md)
 * [Numeric Data Types](../../../10-data-types/10-data-type-numeric-types.md)
 * [Date & Time Data Types](../../../10-data-types/20-data-type-time-date-types.md)
 * [String Data Types](../../../10-data-types/30-data-type-string-types.md)
@@ -71,7 +68,7 @@ AS SELECT query
 ## Column Nullable
 
 By default, **all columns are not nullable(NOT NULL)**, if you want to specify a column default to `NULL`, please use:
-```text
+```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
     <column_name> <data_type> NULL,
@@ -82,15 +79,12 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 Let check it out how difference the column is `NULL` or `NOT NULL`.
 
 Create a table `t_not_null` which column with `NOT NULL`(Databend Column is `NOT NULL` by default):
-```text title='mysql>'
-create table t_not_null(a Int32);
+```sql
+CREATE TABLE t_not_null(a INT);
 ```
 
-```text title='mysql>'
-desc t_not_null;
-```
-
-```
+```sql
+DESC t_not_null;
 +-------+-------+------+---------+
 | Field | Type  | Null | Default |
 +-------+-------+------+---------+
@@ -99,15 +93,12 @@ desc t_not_null;
 ```
 
 Create another table `t_null` column with `NULL`:
-```text title='mysql>'
-create table t_null(a Int32 NULL);
+```sql
+CREATE TABLE t_null(a INT NULL);
 ```
 
-```text title='mysql>'
-desc t_null;
-```
-
-```
+```sql
+DESC t_null;
 +-------+-------+------+---------+
 | Field | Type  | Null | Default |
 +-------+-------+------+---------+
@@ -122,15 +113,13 @@ DEFAULT <expression>
 Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
 
 For example:
-```text title='mysql>'
-create table t_default_value(a UInt8, b Int16 DEFAULT (a+3), c String DEFAULT 'c');
+```sql
+CREATE TABLE t_default_value(a TINYINT UNSIGNED, b SMALLINT DEFAULT (a+3), c VARCHAR DEFAULT 'c');
 ```
 
 Desc the `t_default_value` table:
-```text title='mysql>'
-desc t_default_value;
-```
-```text
+```sql
+DESC t_default_value;
 +-------+--------+------+---------+
 | Field | Type   | Null | Default |
 +-------+--------+------+---------+
@@ -141,15 +130,13 @@ desc t_default_value;
 ```
 
 Insert a value:
-```text title='mysql>'
-insert into t_default_value(a) values(1);
+```sql
+INSERT INTO T_default_value(a) VALUES(1);
 ```
 
 Check the table values:
-```text title='mysql>'
-select * from t_default_value;
-```
-```
+```sql
+SELECT * FROM t_default_value;
 +------+------+------+
 | a    | b    | c    |
 +------+------+------+
@@ -165,14 +152,12 @@ Databend’s syntax is difference from MySQL mainly in the data type and some sp
 
 ### Create Table
 
-```text title='mysql>'
-create table test(a UInt64, b String, c String DEFAULT concat(b, '-b'));
+```sql
+CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR , c VARCHAR  DEFAULT concat(b, '-b'));
 ```
 
-```text title='mysql>'
-desc test;
-```
-```text
+```sql
+DESC test;
 +-------+--------+------+---------------+
 | Field | Type   | Null | Default       |
 +-------+--------+------+---------------+
@@ -182,14 +167,12 @@ desc test;
 +-------+--------+------+---------------+
 ```
 
-```text title='mysql>'
-insert into test(a,b) values(888, 'stars');
+```sql
+INSERT INTO test(a,b) VALUES(888, 'stars');
 ```
 
-```text title='mysql>'
-select * from test;
-```
-```text
+```sql
+SELECT * FROM test;
 +------+-------+---------+
 | a    | b     | c       |
 +------+-------+---------+
@@ -198,14 +181,12 @@ select * from test;
 ```
 
 ### Create Table Like Statement
-```text title='mysql>'
-create table test2 like test;
+```sql
+CREATE TABLE test2 LIKE test;
 ```
 
-```text title='mysql>'
-desc test2;
-```
-```text
+```sql
+DESC test2;
 +-------+--------+------+---------------+
 | Field | Type   | Null | Default       |
 +-------+--------+------+---------------+
@@ -215,14 +196,12 @@ desc test2;
 +-------+--------+------+---------------+
 ```
 
-```text title='mysql>'
-insert into test2(a,b) values(888, 'stars');
+```sql
+INSERT INTO test2(a,b) VALUES(888, 'stars');
 ```
 
-```text title='mysql>'
-select * from test2;
-```
-```text
+```sql
+SELECT * FROM test2;
 +------+-------+---------+
 | a    | b     | c       |
 +------+-------+---------+
@@ -230,15 +209,13 @@ select * from test2;
 +------+-------+---------+
 ```
 
-### Create Table As Select (CTAS) Statement
+### Create Table As SELECT (CTAS) Statement
 
-```text title='mysql>'
-create table test3 as select * from test2;
+```sql
+CREATE TABLE test3 AS SELECT * FROM test2;
 ```
-```text title='mysql>'
-desc test3;
-```
-```text
+```sql
+DESC test3;
 +-------+--------+------+---------------+
 | Field | Type   | Null | Default       |
 +-------+--------+------+---------------+
@@ -248,10 +225,8 @@ desc test3;
 +-------+--------+------+---------------+
 ```
 
-```text title='mysql>'
-select * from test3;
-```
-```text
+```sql
+SELECT * FROM test3;
 +------+-------+---------+
 | a    | b     | c       |
 +------+-------+---------+

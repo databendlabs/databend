@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 
+use crate::Expression;
 use crate::PlanNode;
 
-pub type TableOptions = HashMap<String, String>;
+pub type TableOptions = BTreeMap<String, String>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTablePlan {
@@ -32,6 +33,7 @@ pub struct CreateTablePlan {
 
     pub table_meta: TableMeta,
 
+    pub order_keys: Vec<Expression>,
     pub as_select: Option<Box<PlanNode>>,
 }
 
@@ -40,8 +42,8 @@ impl From<CreateTablePlan> for CreateTableReq {
         CreateTableReq {
             if_not_exists: p.if_not_exists,
             tenant: p.tenant,
-            db: p.db,
-            table: p.table,
+            db_name: p.db,
+            table_name: p.table,
             table_meta: p.table_meta,
         }
     }
@@ -52,7 +54,7 @@ impl CreateTablePlan {
         self.table_meta.schema.clone()
     }
 
-    pub fn options(&self) -> &HashMap<String, String> {
+    pub fn options(&self) -> &BTreeMap<String, String> {
         &self.table_meta.options
     }
 

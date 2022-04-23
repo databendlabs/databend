@@ -18,8 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_infallible::RwLock;
-use common_infallible::RwLockUpgradableReadGuard;
 use common_tracing::tracing;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
@@ -88,7 +86,7 @@ struct ExecutingGraph {
     graph: StableGraph<Arc<Node>, ()>,
 }
 
-type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, ExecutingGraph>;
+type StateLockGuard = ExecutingGraph;
 
 impl ExecutingGraph {
     pub fn create(pipeline: NewPipeline) -> Result<ExecutingGraph> {
@@ -214,7 +212,7 @@ impl ExecutingGraph {
 
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
-                let target_index = DirectedEdge::get_target(&edge, &locker.graph);
+                let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
                 let node = &locker.graph[target_index];
                 let node_state = node.state.lock().unwrap();
@@ -293,7 +291,6 @@ impl ScheduleQueue {
         while let Some(processor) = self.async_queue.pop_front() {
             tasks.push_back(ExecutorTask::Async(processor));
         }
-
         global.push_tasks(ctx, tasks)
     }
 
@@ -319,25 +316,27 @@ impl ScheduleQueue {
 
     fn schedule_async(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.async_queue.pop_front() {
+            let workers_notify = ctx.get_workers_notify();
+            workers_notify.inc_active_async_worker();
             ctx.set_task(ExecutorTask::Async(processor));
         }
     }
 }
 
-pub struct RunningGraph(RwLock<ExecutingGraph>);
+pub struct RunningGraph(ExecutingGraph);
 
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
         tracing::debug!("Create running graph:{:?}", graph_state);
-        Ok(RunningGraph(RwLock::new(graph_state)))
+        Ok(RunningGraph(graph_state))
     }
 
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn init_schedule_queue(&self) -> Result<ScheduleQueue> {
-        ExecutingGraph::init_schedule_queue(&self.0.upgradable_read())
+        ExecutingGraph::init_schedule_queue(&self.0)
     }
 
     /// # Safety
@@ -345,7 +344,7 @@ impl RunningGraph {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::create();
-        ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index, &mut schedule_queue)?;
+        ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue)?;
         Ok(schedule_queue)
     }
 }
@@ -368,8 +367,8 @@ impl Debug for ExecutingGraph {
 
 impl Debug for RunningGraph {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        let graph = self.0.read();
-        write!(f, "{:?}", graph)
+        // let graph = self.0.read();
+        write!(f, "{:?}", self.0)
     }
 }
 

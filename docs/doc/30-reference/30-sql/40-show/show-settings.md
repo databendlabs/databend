@@ -15,7 +15,7 @@ SHOW SETTINGS
 ## Examples
 
 ```sql
-mysql> SHOW SETTINGS;
+SHOW SETTINGS;
 +-----------------------+-----------+
 | name                  | value     |
 +-----------------------+-----------+

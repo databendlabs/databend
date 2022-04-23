@@ -23,7 +23,7 @@ String data type value.
 
 ## Examples
 
-```txt
+```sql
 SELECT RIGHT('foobarbar', 4);
 +-----------------------+
 | RIGHT('foobarbar', 4) |

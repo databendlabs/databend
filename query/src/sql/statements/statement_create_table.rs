@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -28,6 +29,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
+use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
@@ -49,7 +51,8 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
-    pub options: HashMap<String, String>,
+    pub order_keys: Vec<Expr>,
+    pub options: BTreeMap<String, String>,
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,
@@ -66,6 +69,8 @@ impl AnalyzableStatement for DfCreateTable {
         let mut table_meta = self.table_meta(ctx.clone(), db.as_str()).await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
+
+        let expression_analyzer = ExpressionAnalyzer::create(ctx.clone());
         let as_select_plan_node = match &self.query {
             // CTAS
             Some(query_statement) => {
@@ -90,6 +95,18 @@ impl AnalyzableStatement for DfCreateTable {
             None => None,
         };
 
+        let mut order_keys = vec![];
+        for k in self.order_keys.iter() {
+            let expr = expression_analyzer.analyze(k).await?;
+            validate_expression(&expr, &table_meta.schema)?;
+            order_keys.push(expr);
+        }
+
+        if !order_keys.is_empty() {
+            let order_keys_v = serde_json::to_vec(&order_keys)?;
+            table_meta.order_keys = Some(order_keys_v);
+        }
+
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::CreateTable(CreateTablePlan {
                 if_not_exists,
@@ -97,6 +114,7 @@ impl AnalyzableStatement for DfCreateTable {
                 db,
                 table,
                 table_meta,
+                order_keys,
                 as_select: as_select_plan_node,
             }),
         )))

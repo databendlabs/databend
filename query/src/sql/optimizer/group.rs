@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::iter::Iterator;
 
 use common_exception::Result;
@@ -60,20 +58,5 @@ impl Group {
 
     pub fn relational_prop(&self) -> Option<&RelationalProperty> {
         self.relational_prop.as_ref()
-    }
-}
-
-impl Debug for Group {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[")?;
-        for (index, m_expr) in self.expressions.iter().enumerate() {
-            write!(f, "{:?}", m_expr)?;
-            if index < self.expressions.len() - 1 {
-                write!(f, ", ")?;
-            }
-        }
-        write!(f, "]")?;
-
-        Ok(())
     }
 }

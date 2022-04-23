@@ -17,14 +17,14 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-mysql> select YESTERDAY();
+SELECT YESTERDAY();
 +-------------+
 | YESTERDAY() |
 +-------------+
 | 2021-09-02  |
 +-------------+
 
-mysql> select TODAY()-1;
+SELECT TODAY()-1;
 +---------------+
 | (TODAY() - 1) |
 +---------------+

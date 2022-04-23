@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowEngines;
 use databend_query::sql::statements::DfShowFunctions;
@@ -335,5 +336,16 @@ fn show_tab_stat_test() -> Result<()> {
         )),
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn show_fields_from() -> Result<()> {
+    expect_parse_ok(
+        "show fields from t2",
+        DfStatement::DescribeTable(DfDescribeTable {
+            name: ObjectName(vec![Ident::new("t2")]),
+        }),
+    )?;
     Ok(())
 }

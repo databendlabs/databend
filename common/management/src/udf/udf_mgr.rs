@@ -107,7 +107,7 @@ impl UdfApi for UdfMgr {
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUDF(format!(
-                "unknown UDF, or seq not match {}",
+                "Unknown Function, or seq not match {}",
                 info.name.clone()
             ))),
         }
@@ -119,11 +119,14 @@ impl UdfApi for UdfMgr {
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name)))?;
+            res.ok_or_else(|| ErrorCode::UnknownUDF(format!("Unknown Function {}", udf_name)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name))),
+            Err(_) => Err(ErrorCode::UnknownUDF(format!(
+                "Unknown Function {}",
+                udf_name
+            ))),
         }
     }
 
@@ -155,7 +158,10 @@ impl UdfApi for UdfMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name)))
+            Err(ErrorCode::UnknownUDF(format!(
+                "Unknown Function {}",
+                udf_name
+            )))
         }
     }
 }

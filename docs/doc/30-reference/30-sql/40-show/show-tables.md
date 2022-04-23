@@ -15,7 +15,7 @@ SHOW [EXTENDED] [FULL] TABLES
 ## Examples
 
 ```sql
-mysql> SHOW TABLES;
+SHOW TABLES;
 +------------------+
 | Tables_in_system |
 +------------------+
@@ -42,7 +42,7 @@ mysql> SHOW TABLES;
 
 Showing the tables with table name `"settings"`:
 ```sql
-mysql> SHOW TABLES LIKE 'settings';
+SHOW TABLES LIKE 'settings';
 +------------------+
 | Tables_in_system |
 +------------------+
@@ -52,7 +52,7 @@ mysql> SHOW TABLES LIKE 'settings';
 
 Showing the tables begin with `"co"`:
 ```sql
-mysql> SHOW TABLES LIKE 'co%';
+SHOW TABLES LIKE 'co%';
 +------------------+
 | Tables_in_system |
 +------------------+
@@ -64,7 +64,7 @@ mysql> SHOW TABLES LIKE 'co%';
 
 Showing the tables begin with `"co"` with `WHERE`:
 ```sql
-mysql> SHOW TABLES WHERE table_name LIKE 'co%';
+SHOW TABLES WHERE table_name LIKE 'co%';
 +------------------+
 | Tables_in_system |
 +------------------+
@@ -76,7 +76,7 @@ mysql> SHOW TABLES WHERE table_name LIKE 'co%';
 
 Showing the tables are inside `"system"`:
 ```sql
-mysql> SHOW TABLES FROM 'system';
+SHOW TABLES FROM 'system';
 +------------------+
 | Tables_in_system |
 +------------------+

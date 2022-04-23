@@ -15,7 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
@@ -24,6 +24,7 @@ use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::MySqlDialect;
 use sqlparser::dialect::SnowflakeDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
@@ -32,6 +33,7 @@ use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfShowRoles;
+use crate::sessions::SessionType;
 use crate::sql::statements::DfShowEngines;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
@@ -55,12 +57,6 @@ pub struct DfParser<'a> {
 }
 
 impl<'a> DfParser<'a> {
-    /// Parse the specified tokens
-    pub fn new(sql: &'a str) -> Result<Self, ParserError> {
-        let dialect = &GenericDialect {};
-        DfParser::new_with_dialect(sql, dialect)
-    }
-
     /// Parse the specified tokens with dialect
     pub fn new_with_dialect(sql: &'a str, dialect: &'a dyn Dialect) -> Result<Self, ParserError> {
         let mut tokenizer = Tokenizer::new(dialect, sql);
@@ -73,12 +69,26 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parse a SQL statement and produce a set of statements with dialect
-    pub fn parse_sql(sql: &'a str) -> Result<(Vec<DfStatement<'a>>, Vec<DfHint>), ErrorCode> {
-        let dialect = &GenericDialect {};
-        let start = Instant::now();
-        let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
-        histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
-        Ok(result)
+    pub fn parse_sql(
+        sql: &'a str,
+        typ: SessionType,
+    ) -> Result<(Vec<DfStatement<'a>>, Vec<DfHint>), ErrorCode> {
+        match typ {
+            SessionType::MySQL => {
+                let dialect = &MySqlDialect {};
+                let start = Instant::now();
+                let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
+                histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
+                Ok(result)
+            }
+            _ => {
+                let dialect = &GenericDialect {};
+                let start = Instant::now();
+                let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
+                histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
+                Ok(result)
+            }
+        }
     }
 
     /// Parse a SQL statement and produce a set of statements
@@ -336,6 +346,8 @@ impl<'a> DfParser<'a> {
             Ok(DfStatement::ShowSettings(DfShowSettings))
         } else if self.consume_token("CREATE") {
             self.parse_show_create()
+        } else if self.consume_token("FIELDS") {
+            self.parse_show_fields()
         } else if self.consume_token("PROCESSLIST") {
             Ok(DfStatement::ShowProcessList(DfShowProcessList))
         } else if self.consume_token("METRICS") {
@@ -377,8 +389,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    pub(crate) fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
-        let mut options = HashMap::new();
+    pub(crate) fn parse_options(&mut self) -> Result<BTreeMap<String, String>, ParserError> {
+        let mut options = BTreeMap::new();
         loop {
             let name = self.parser.parse_identifier();
             if name.is_err() {

@@ -1,51 +1,44 @@
 ---
-title: Date & Time Data Types
+title: Date & Time
 description: Basic Date and Time data type.
 ---
 
-## Date and Time
+## Date and Time Data Types
 
 ---
-| Data Type             | Size    |  Resolution | Min Value             | Max Value                     | Precision              |
-| ----------------------| ------- |  ---------- | --------------------- |------------------------------ | ---------------------- |
-| Date                  | 2 byte  |  day        | 1000-01-01            | 9999-12-31                    | YYYY-MM-DD             |
-| DateTime              | 4 byte  |  second     | 1970-01-01 00:00:00   | 2105-12-31 23:59:59           | YYYY-MM-DD hh:mm:ss    |
-| DateTime64            | 8 byte  |  nanosecond | 1677-09-21 00:12:44.0 | 2262-04-11 23:47:16.854775804 | YYYY-MM-DD hh:mm:ss.ff |
+|  Name | Storage Size |  Resolution  | Min Value             | Max Value                     | Description
+|------------| ------- |  ----------- | --------------------- |--------------------------------- | ---------------------- |
+|  DATE      | 4 bytes |  day         | 1000-01-01            | 9999-12-31                       | YYYY-MM-DD             |
+|  TIMESTAMP | 8 bytes |  microsecond | 0001-01-01 00:00:00   | 9999-12-31 23:59:59.999999 UTC   | YYYY-MM-DD hh:mm:ss[.fraction], up to microseconds (6 digits) precision
+
+## Functions
+
+See [Date & Time Functions](/doc/reference/functions/datetime-functions).
 
 ## Example
-```text title='mysql>'
-CREATE TABLE dt
+```sql
+CREATE TABLE test_dt
 (
-    date Date,
-    datetime DateTime,
-    datetime64 DateTime64
+    date DATE,
+    ts TIMESTAMP 
 );
-```
 
-```text title='mysql>'
-desc dt;
-```
-```
-+------------+---------------+------+---------+
-| Field      | Type          | Null | Default |
-+------------+---------------+------+---------+
-| date       | Date16        | NO   | 0       |
-| datetime   | DateTime32    | NO   | 0       |
-| datetime64 | DateTime64(3) | NO   | 0       |
-+------------+---------------+------+---------+
-```
 
-```text title='mysql>'
-insert into dt values ('2022-04-07', '2022-04-07 01:01:01', '2022-04-07 01:01:01.123');
-```
+DESC test_dt;
++-------+-------------+------+---------+-------+
+| Field | Type        | Null | Default | Extra |
++-------+-------------+------+---------+-------+
+| date  | DATE        | NO   | 0       |       |
+| ts    | DATETIME(6) | NO   | 0       |       |
++-------+-------------+------+---------+-------+
 
-```text title='mysql>'
-select * from dt;
-```
-```
-+------------+---------------------+-------------------------+
-| date       | datetime            | datetime64              |
-+------------+---------------------+-------------------------+
-| 2022-04-07 | 2022-04-07 01:01:01 | 2022-04-07 01:01:01.123 |
-+------------+---------------------+-------------------------+
+INSERT INTO test_dt VALUES ('2022-04-07', '2022-04-07 01:01:01.123456'), ('2022-04-08', '2022-04-08 01:01:01');
+
+SELECT * FROM TEST_DT;
++------------+----------------------------+
+| date       | ts                         |
++------------+----------------------------+
+| 2022-04-07 | 2022-04-07 01:01:01.123456 |
+| 2022-04-08 | 2022-04-08 01:01:01.000000 |
++------------+----------------------------+
 ```
