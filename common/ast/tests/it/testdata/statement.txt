@@ -73,6 +73,7 @@ Explain {
             ),
             order_by: [],
             limit: [],
+            offset: None,
         },
     ),
 }
@@ -95,7 +96,7 @@ Describe {
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NULL)
+CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -131,7 +132,7 @@ CreateTable {
                 quote: None,
             },
             data_type: Varchar,
-            nullable: true,
+            nullable: false,
             default_value: None,
         },
     ],
@@ -145,7 +146,7 @@ CreateTable {
 ---------- Input ----------
 create table if not exists a.b (c integer default 1 not null, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NULL)
+CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -181,7 +182,7 @@ CreateTable {
                 quote: None,
             },
             data_type: Varchar,
-            nullable: true,
+            nullable: false,
             default_value: None,
         },
     ],
@@ -333,7 +334,7 @@ CreateDatabase {
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NULL)
+CREATE TABLE c (a DATETIME NULL, b DATETIME(3) NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -364,7 +365,7 @@ CreateTable {
                     3,
                 ),
             },
-            nullable: true,
+            nullable: false,
             default_value: None,
         },
     ],
@@ -545,7 +546,7 @@ CreateTable {
 ---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
-CREATE TABLE t (c1 INTEGER NULL DEFAULT 1)
+CREATE TABLE t (c1 INTEGER NOT NULL DEFAULT 1)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -563,7 +564,7 @@ CreateTable {
             data_type: Int {
                 unsigned: false,
             },
-            nullable: true,
+            nullable: false,
             default_value: Some(
                 Number(
                     "1",
@@ -693,6 +694,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -757,6 +759,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -837,6 +840,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -917,6 +921,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -997,6 +1002,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -1077,6 +1083,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -1157,6 +1164,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -1214,6 +1222,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -1271,6 +1280,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -1328,6 +1338,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
@@ -1385,6 +1396,7 @@ Select(
         ),
         order_by: [],
         limit: [],
+        offset: None,
     },
 )
 
