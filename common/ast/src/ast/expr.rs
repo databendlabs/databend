@@ -17,7 +17,8 @@ use std::fmt::Formatter;
 
 use sqlparser::ast::Value;
 
-use crate::ast::display_identifier_vec;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -340,18 +341,7 @@ impl Display for Expr {
                 table,
                 column,
             } => {
-                display_identifier_vec(
-                    f,
-                    vec![
-                        database.to_owned(),
-                        table.to_owned(),
-                        Some(column.to_owned()),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-                )?;
+                write_period_separated_list(f, database.iter().chain(table).chain(Some(column)))?;
             }
             Expr::IsNull { expr, not } => {
                 write!(f, "{} IS ", expr)?;
@@ -366,12 +356,7 @@ impl Display for Expr {
                     write!(f, "NOT ")?;
                 }
                 write!(f, "IN(")?;
-                for i in 0..list.len() {
-                    write!(f, "{}", list[i])?;
-                    if i != list.len() - 1 {
-                        write!(f, ", ")?;
-                    }
-                }
+                write_comma_separated_list(f, list)?;
                 write!(f, ")")?;
             }
             Expr::InSubquery {
@@ -432,24 +417,14 @@ impl Display for Expr {
                 write!(f, "{}", name)?;
                 if !params.is_empty() {
                     write!(f, "(")?;
-                    for i in 0..params.len() {
-                        write!(f, "{}", params[i])?;
-                        if i != params.len() - 1 {
-                            write!(f, ", ")?;
-                        }
-                    }
+                    write_comma_separated_list(f, params)?;
                     write!(f, ")")?;
                 }
                 write!(f, "(")?;
                 if *distinct {
                     write!(f, "DISTINCT ")?;
                 }
-                for i in 0..args.len() {
-                    write!(f, "{}", args[i])?;
-                    if i != args.len() - 1 {
-                        write!(f, ", ")?;
-                    }
-                }
+                write_comma_separated_list(f, args)?;
                 write!(f, ")")?;
             }
             Expr::Case {

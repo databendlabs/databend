@@ -23,6 +23,18 @@ use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
 
+pub fn statements(i: Input) -> IResult<Vec<Statement>> {
+    let stmt = map(
+        rule! {
+            #statement ~ ";"
+        },
+        |(stmt, _)| stmt,
+    );
+    rule!(
+        #stmt+
+    )(i)
+}
+
 pub fn statement(i: Input) -> IResult<Statement> {
     let query = map(query, |query| Statement::Select(Box::new(query)));
     let show_tables = value(Statement::ShowTables, rule! { SHOW ~ TABLES });
@@ -33,8 +45,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             SHOW ~ CREATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, _, database, table)| Statement::ShowCreateTable {
-            database: database.map(|(name, _)| name),
+        |(_, _, _, opt_database, table)| Statement::ShowCreateTable {
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -42,8 +54,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             EXPLAIN ~ ANALYZE? ~ #statement
         },
-        |(_, analyze, statement)| Statement::Explain {
-            analyze: analyze.is_some(),
+        |(_, opt_analyze, statement)| Statement::Explain {
+            analyze: opt_analyze.is_some(),
             query: Box::new(statement),
         },
     );
@@ -51,8 +63,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             DESCRIBE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, database, table)| Statement::Describe {
-            database: database.map(|(name, _)| name),
+        |(_, opt_database, table)| Statement::Describe {
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -62,9 +74,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ "(" ~ #comma_separated_list1(column_def) ~ ")"
         },
-        |(_, _, if_not_exists, database, table, _, columns, _)| Statement::CreateTable {
-            if_not_exists: if_not_exists.is_some(),
-            database: database.map(|(name, _)| name),
+        |(_, _, opt_if_not_exists, opt_database, table, _, columns, _)| Statement::CreateTable {
+            if_not_exists: opt_if_not_exists.is_some(),
+            database: opt_database.map(|(name, _)| name),
             table,
             columns,
             engine: "".to_string(),
@@ -79,24 +91,26 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ ( #ident ~ "." )? ~ #ident
             ~ LIKE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, if_not_exists, database, table, _, like_db, like_table)| Statement::CreateTable {
-            if_not_exists: if_not_exists.is_some(),
-            database: database.map(|(name, _)| name),
-            table,
-            columns: vec![],
-            engine: "".to_string(),
-            options: vec![],
-            like_db: like_db.map(|(like_db, _)| like_db),
-            like_table: Some(like_table),
+        |(_, _, opt_if_not_exists, opt_database, table, _, opt_like_db, like_table)| {
+            Statement::CreateTable {
+                if_not_exists: opt_if_not_exists.is_some(),
+                database: opt_database.map(|(name, _)| name),
+                table,
+                columns: vec![],
+                engine: "".to_string(),
+                options: vec![],
+                like_db: opt_like_db.map(|(like_db, _)| like_db),
+                like_table: Some(like_table),
+            }
         },
     );
     let drop_table = map(
         rule! {
             DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, if_exists, database, table)| Statement::DropTable {
-            if_exists: if_exists.is_some(),
-            database: database.map(|(name, _)| name),
+        |(_, _, opt_if_exists, opt_database, table)| Statement::DropTable {
+            if_exists: opt_if_exists.is_some(),
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -104,8 +118,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, _, database, table)| Statement::TruncateTable {
-            database: database.map(|(name, _)| name),
+        |(_, _, opt_database, table)| Statement::TruncateTable {
+            database: opt_database.map(|(name, _)| name),
             table,
         },
     );
@@ -113,8 +127,8 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
         },
-        |(_, _, if_not_exists, name)| Statement::CreateDatabase {
-            if_not_exists: if_not_exists.is_some(),
+        |(_, _, opt_if_not_exists, name)| Statement::CreateDatabase {
+            if_not_exists: opt_if_not_exists.is_some(),
             name,
             engine: "".to_string(),
             options: vec![],
@@ -131,6 +145,18 @@ pub fn statement(i: Input) -> IResult<Statement> {
             KILL ~ #ident
         },
         |(_, object_id)| Statement::KillStmt { object_id },
+    );
+    let insert = map(
+        rule! {
+            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
+        },
+        |(_, _, _, table, opt_columns, source)| Statement::Insert {
+            table,
+            columns: opt_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source,
+        },
     );
 
     rule!(
@@ -149,6 +175,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database>`"
         | #use_database : "`USE <database>`"
         | #kill : "`KILL <object id>`"
+        | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
     )(i)
 }
 
@@ -189,4 +216,39 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             def
         },
     )(i)
+}
+
+pub fn insert_source(i: Input) -> IResult<InsertSource> {
+    let streaming = map(
+        rule! {
+            FORMAT ~ #ident
+        },
+        |(_, format)| InsertSource::Streaming {
+            format: format.name,
+        },
+    );
+    let values = map(
+        rule! {
+            VALUES ~ #values_tokens
+        },
+        |(_, values_tokens)| InsertSource::Values { values_tokens },
+    );
+    let query = map(query, |query| InsertSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+        #streaming
+        | #values
+        | #query
+    )(i)
+}
+
+pub fn values_tokens(i: Input) -> IResult<Input> {
+    let semicolon_pos = i
+        .iter()
+        .position(|token| token.text() == ";")
+        .unwrap_or(i.len() - 1);
+    let (value_tokens, rest_tokens) = i.split_at(semicolon_pos);
+    Ok((rest_tokens, value_tokens))
 }

@@ -1401,3 +1401,145 @@ Select(
 )
 
 
+---------- Input ----------
+insert into t (c1, c2) values (1, 2), (3, 4);
+---------- Output ---------
+INSERT INTO t(c1, c2) VALUES (1, 2), (3, 4)
+---------- AST ------------
+Insert {
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [
+        Identifier {
+            name: "c1",
+            quote: None,
+        },
+        Identifier {
+            name: "c2",
+            quote: None,
+        },
+    ],
+    source: Values {
+        values_tokens: [
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: LParen,
+                span: 30..31,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: LiteralNumber,
+                span: 31..32,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: Comma,
+                span: 32..33,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: LiteralNumber,
+                span: 34..35,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: RParen,
+                span: 35..36,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: Comma,
+                span: 36..37,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: LParen,
+                span: 38..39,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: LiteralNumber,
+                span: 39..40,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: Comma,
+                span: 40..41,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: LiteralNumber,
+                span: 42..43,
+            },
+            Token {
+                source: "insert into t (c1, c2) values (1, 2), (3, 4);",
+                kind: RParen,
+                span: 43..44,
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+insert into table t format json;
+---------- Output ---------
+INSERT INTO t FORMAT json
+---------- AST ------------
+Insert {
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [],
+    source: Streaming {
+        format: "json",
+    },
+}
+
+
+---------- Input ----------
+insert into table t select * from t2;
+---------- Output ---------
+INSERT INTO t SELECT * FROM t2
+---------- AST ------------
+Insert {
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [],
+    source: Select {
+        query: Query {
+            body: Select(
+                SelectStmt {
+                    distinct: false,
+                    select_list: [
+                        QualifiedName(
+                            [
+                                Star,
+                            ],
+                        ),
+                    ],
+                    from: Table {
+                        database: None,
+                        table: Identifier {
+                            name: "t2",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+        },
+    },
+}
+
+
