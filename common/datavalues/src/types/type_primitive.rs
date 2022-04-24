@@ -109,14 +109,14 @@ macro_rules! impl_numeric {
                 ArrowType::$tname
             }
 
-            fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-                Box::new(NumberSerializer::<$ty>::default())
+            fn create_serializer(&self) -> TypeSerializerImpl {
+                NumberSerializer::<$ty>::default().into()
             }
 
-            fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-                Box::new(NumberDeserializer::<$ty> {
+            fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+                NumberDeserializer::<$ty> {
                     builder: MutablePrimitiveColumn::<$ty>::with_capacity(capacity),
-                })
+                }.into()
             }
 
             fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

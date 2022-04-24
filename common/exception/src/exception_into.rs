@@ -60,11 +60,11 @@ impl From<anyhow::Error> for ErrorCode {
     }
 }
 
-impl From<T: AsRef<&str>> for ErrorCode {
-    fn from(error: T) -> Self {
+impl From<&str> for ErrorCode {
+    fn from(error: &str) -> Self {
         ErrorCode::create(
             1002,
-            format!("{}", error.as_ref()),
+            format!("{}", error),
             None,
             Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         )

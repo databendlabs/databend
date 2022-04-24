@@ -21,6 +21,7 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct StringSerializer {}
 
 impl TypeSerializer for StringSerializer {

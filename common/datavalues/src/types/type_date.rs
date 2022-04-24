@@ -76,14 +76,15 @@ impl DataType for DateType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateSerializer::<i32>::default())
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        DateSerializer::<i32>::default().into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(DateDeserializer::<i32> {
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        DateDeserializer::<i32> {
             builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
