@@ -55,6 +55,17 @@ use common_meta_types::SeqV;
 use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableMeta;
+use common_meta_types::TransactionCondition;
+use common_meta_types::TransactionDeleteRequest;
+use common_meta_types::TransactionDeleteResponse;
+use common_meta_types::TransactionGetRequest;
+use common_meta_types::TransactionGetResponse;
+use common_meta_types::TransactionOperation;
+use common_meta_types::TransactionOperationResponse;
+use common_meta_types::TransactionPutRequest;
+use common_meta_types::TransactionPutResponse;
+use common_meta_types::TransactionReq;
+use common_meta_types::TransactionResponse;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownDatabaseId;
 use common_meta_types::UnknownShare;
@@ -559,6 +570,173 @@ impl StateMachine {
         Ok(Change::new(prev, result).into())
     }
 
+    fn txn_execute_cond(&self, cond: &TransactionCondition) -> bool {
+        let is_key_condition = cond.is_key_condition();
+
+        let key = cond.key.generate_key();
+        let sv = self.kvs().get(&key);
+
+        if is_key_condition {
+            match sv {
+                Ok(sv) => match sv {
+                    Some(_) => cond.return_key_condition_result(true),
+                    None => cond.return_key_condition_result(false),
+                },
+                Err(_) => cond.return_key_condition_result(false),
+            }
+        } else {
+            match sv {
+                Ok(sv) => match sv {
+                    Some(_val) => cond.return_key_condition_result(true),
+                    None => false,
+                },
+                Err(_) => false,
+            }
+        }
+    }
+
+    fn txn_execute_get_operation(
+        &self,
+        get: &TransactionGetRequest,
+        resp: &mut TransactionResponse,
+    ) {
+        let key = get.key.generate_key();
+        let sv = self.kvs().get(&key);
+        let get = match sv {
+            Ok(v) => match v {
+                Some(v) => TransactionGetResponse {
+                    key: get.key.clone(),
+                    value: Some(v),
+                },
+                None => TransactionGetResponse {
+                    key: get.key.clone(),
+                    value: None,
+                },
+            },
+            Err(_v) => TransactionGetResponse {
+                key: get.key.clone(),
+                value: None,
+            },
+        };
+
+        resp.responses
+            .push(TransactionOperationResponse::TransactionGetResponse(get));
+    }
+
+    fn txn_execute_put_operation(
+        &self,
+        txn_tree: &TransactionSledTree,
+        put: &TransactionPutRequest,
+        resp: &mut TransactionResponse,
+    ) {
+        let key = put.key.generate_key();
+        let sub_tree = txn_tree.key_space::<GenericKV>();
+        let key_str = key.to_string();
+
+        if let Ok(result) = self.txn_sub_tree_upsert(
+            &sub_tree,
+            &key_str,
+            &MatchSeq::Any,
+            Operation::Update(put.value.clone()),
+            None,
+        ) {
+            let (prev, result) = result;
+            tracing::debug!("applied txn_execute_put_operation: {} {:?}", key, result);
+
+            let put_resp = TransactionPutResponse {
+                key: put.key.clone(),
+                prev_value: if put.prev_kv { prev } else { None },
+            };
+
+            resp.responses
+                .push(TransactionOperationResponse::TransactionPutResponse(
+                    put_resp,
+                ));
+        }
+    }
+
+    fn txn_execute_delete_operation(
+        &self,
+        txn_tree: &TransactionSledTree,
+        delete: &TransactionDeleteRequest,
+        resp: &mut TransactionResponse,
+    ) {
+        let key = delete.key.generate_key();
+        let sub_tree = txn_tree.key_space::<GenericKV>();
+        let key_str = key.to_string();
+
+        let del_resp = if let Ok(result) =
+            self.txn_sub_tree_upsert(&sub_tree, &key_str, &MatchSeq::Any, Operation::Delete, None)
+        {
+            let (prev, result) = result;
+            tracing::debug!("applied txn_execute_delete_operation: {} {:?}", key, result);
+
+            TransactionDeleteResponse {
+                key: delete.key.clone(),
+                success: true,
+                prev_value: if delete.prev_kv { prev } else { None },
+            }
+        } else {
+            TransactionDeleteResponse {
+                key: delete.key.clone(),
+                success: false,
+                prev_value: None,
+            }
+        };
+
+        resp.responses
+            .push(TransactionOperationResponse::TransactionDeleteResponse(
+                del_resp,
+            ));
+    }
+
+    fn txn_execute_operation(
+        &self,
+        txn_tree: &TransactionSledTree,
+        op: &TransactionOperation,
+        resp: &mut TransactionResponse,
+    ) {
+        match op {
+            TransactionOperation::TransactionGetRequest(get) => {
+                self.txn_execute_get_operation(get, resp);
+            }
+            TransactionOperation::TransactionPutRequest(put) => {
+                self.txn_execute_put_operation(txn_tree, put, resp);
+            }
+            TransactionOperation::TransactionDeleteRequest(delete) => {
+                self.txn_execute_delete_operation(txn_tree, delete, resp);
+            }
+        }
+    }
+
+    fn apply_txn_cmd(
+        &self,
+        req: &TransactionReq,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let cond = &req.cond;
+
+        let ops: &Vec<TransactionOperation>;
+        let success = if self.txn_execute_cond(cond) {
+            ops = &req.if_then;
+            true
+        } else {
+            ops = &req.else_then;
+            false
+        };
+
+        let mut resp: TransactionResponse = TransactionResponse {
+            success,
+            responses: vec![],
+        };
+
+        for op in ops {
+            self.txn_execute_operation(txn_tree, op, &mut resp);
+        }
+
+        Ok(AppliedState::TransactionResponse(resp))
+    }
+
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_upsert_table_options_cmd(
         &self,
@@ -655,6 +833,8 @@ impl StateMachine {
             } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, txn_tree),
 
             Cmd::UpsertTableOptions(ref req) => self.apply_upsert_table_options_cmd(req, txn_tree),
+
+            Cmd::Transaction(txn) => self.apply_txn_cmd(txn, txn_tree),
         }
     }
 

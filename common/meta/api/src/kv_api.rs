@@ -20,6 +20,8 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaError;
 use common_meta_types::PrefixListReply;
+use common_meta_types::TransactionReq;
+use common_meta_types::TransactionResponse;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
@@ -44,6 +46,8 @@ pub trait KVApi: Send + Sync {
     async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply, MetaError>;
 
     async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
+
+    async fn transaction(&self, txn: TransactionReq) -> Result<TransactionResponse, MetaError>;
 }
 
 #[async_trait]
@@ -62,5 +66,9 @@ impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
 
     async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError> {
         self.deref().prefix_list_kv(prefix).await
+    }
+
+    async fn transaction(&self, txn: TransactionReq) -> Result<TransactionResponse, MetaError> {
+        self.deref().transaction(txn).await
     }
 }

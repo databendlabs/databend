@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::cmp::Ordering;
 use std::convert::TryInto;
 
 use serde::Deserialize;
@@ -90,5 +91,21 @@ impl<T> SeqV<T> {
     pub fn set_value(mut self, v: T) -> SeqV<T> {
         self.data = v;
         self
+    }
+}
+
+impl<T> Ord for SeqV<T>
+where T: Ord
+{
+    fn cmp(&self, other: &SeqV<T>) -> Ordering {
+        self.data.cmp(&other.data)
+    }
+}
+
+impl<T> PartialOrd for SeqV<T>
+where T: Ord
+{
+    fn partial_cmp(&self, other: &SeqV<T>) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }

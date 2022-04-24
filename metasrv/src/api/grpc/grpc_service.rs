@@ -29,8 +29,11 @@ use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::TxnReply;
+use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::TransactionReq;
 use common_tracing::tracing;
 use futures::StreamExt;
 use prost::Message;
@@ -181,6 +184,24 @@ impl MetaService for MetaServiceImpl {
 
         let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(output_stream) as Self::WatchStream))
+    }
+
+    async fn transaction(
+        &self,
+        request: Request<TxnRequest>,
+    ) -> Result<Response<TxnReply>, Status> {
+        self.check_token(request.metadata())?;
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let request = request.into_inner();
+
+        tracing::info!("Receive txn_action: {:?}", request);
+
+        let body = self
+            .action_handler
+            .execute_txn(TransactionReq::new(request))
+            .await;
+        Ok(Response::new(body.to_pb()))
     }
 }
 

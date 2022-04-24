@@ -21,7 +21,7 @@ use common_base::Stoppable;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
-use common_meta_types::protobuf::GetRequest;
+use common_meta_types::protobuf::RaftGetRequest;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -179,7 +179,7 @@ impl MetaSrvTestContext {
     pub async fn assert_raft_server_connection(&self) -> anyhow::Result<()> {
         let mut client = self.raft_client().await?;
 
-        let req = tonic::Request::new(GetRequest {
+        let req = tonic::Request::new(RaftGetRequest {
             key: "ensure-connection".into(),
         });
         let rst = client.get(req).await?.into_inner();

@@ -16,10 +16,12 @@ syntax = "proto3";
 
 package meta;
 
-message Empty {}
-message GetRequest { string key = 1; }
+import "request.proto";
 
-message GetReply {
+message Empty {}
+message RaftGetRequest { string key = 1; }
+
+message RaftGetReply {
   bool ok = 1;
   string value = 2;
 }
@@ -67,14 +69,8 @@ message WatchRequest {
   FilterType filter_type = 3;
 }
 
-
 message Event {
   string key = 1;
-
-  message SeqV {
-    uint64 seq = 1;
-    bytes data = 2;
-  }
 
   // current hold current value of key(if any)
   optional SeqV current = 2;
@@ -87,10 +83,72 @@ message WatchResponse {
   Event event = 1;
 }
 
+// messages for txn
+message TxnCondition {
+  // compare target enum
+  enum ConditionTarget {
+    Key = 0;
+    Value = 1;
+  }
+
+  // condition result
+  enum ConditionResult {
+    // only used for key compare
+    Exist = 0;
+    NotExist = 1;
+
+    // only used for value compare
+    Equal = 2;
+    Greater = 3;
+    Less = 4;
+    NotEqual = 5;    
+  }
+
+  TxnKey key = 1;
+  ConditionTarget target = 2;
+
+  optional SeqV value = 3;
+
+  // the expected result of condition, if `expected` match the condition result,
+  // then the `if_then` op will be executed, otherwise `else_then` op will be executed.
+  ConditionResult expected = 4;
+}
+
+message TxnOp {
+  oneof request {
+    GetRequest get = 1;
+    PutRequest put = 2;
+    DeleteRequest delete = 3;
+  }
+}
+
+message TxnOpResponse {
+  oneof response {
+    GetResponse get = 1;
+    PutResponse put = 2;
+    DeleteResponse delete = 3;
+  }
+}
+
+message TxnRequest {
+  TxnCondition cond = 1;
+
+  // if condition returns true, then the `if_then` op will be executed, 
+  // otherwise `else_then` op will be executed.  
+  repeated TxnOp if_then = 2;
+
+  repeated TxnOp else_then = 3;
+}
+
+message TxnReply {
+  bool success = 1;
+  repeated TxnOpResponse responses = 2;
+}
+
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
-  rpc Get(GetRequest) returns (GetReply) {}
+  rpc Get(RaftGetRequest) returns (RaftGetReply) {}
 
   /// Forward a request to other
   rpc Forward(RaftRequest) returns (RaftReply) {}
@@ -119,4 +177,6 @@ service MetaService {
   // Add watch key stream.
   // Whenever the watch key data updated, client will be notified accross the stream.
   rpc Watch(WatchRequest) returns (stream WatchResponse);
+
+  rpc Transaction(TxnRequest) returns (TxnReply);
 }

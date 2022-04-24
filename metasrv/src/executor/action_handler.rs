@@ -20,6 +20,8 @@ use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_grpc::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::MetaError;
+use common_meta_types::TransactionReq;
+use common_meta_types::TransactionResponse;
 
 use crate::meta_service::MetaNode;
 
@@ -133,6 +135,17 @@ impl ActionHandler {
             MetaGrpcReadReq::GetShare(a) => {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
+            }
+        }
+    }
+
+    pub async fn execute_txn(&self, req: TransactionReq) -> TransactionResponse {
+        if let Ok(req) = self.meta_node.transaction(req).await {
+            req
+        } else {
+            TransactionResponse {
+                success: false,
+                responses: vec![],
             }
         }
     }
