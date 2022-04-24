@@ -22,32 +22,36 @@ use serde::Deserialize;
 use serde::Serialize;
 
 /// Meta config group.
+/// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(long, default_value = "./_meta_embedded")]
-    #[serde(rename = "embedded_dir")]
+    #[serde(rename = "embedded_dir", alias = "meta_embedded_dir")]
     pub meta_embedded_dir: String,
 
     /// MetaStore backend address
     #[clap(long, default_value_t)]
-    #[serde(rename = "address")]
+    #[serde(rename = "address", alias = "meta_address")]
     pub meta_address: String,
 
     /// MetaStore backend user name
     #[clap(long, default_value = "root")]
-    #[serde(rename = "username")]
+    #[serde(rename = "username", alias = "meta_username")]
     pub meta_username: String,
 
     /// MetaStore backend user password
     #[clap(long, default_value_t)]
-    #[serde(rename = "password")]
+    #[serde(rename = "password", alias = "meta_password")]
     pub meta_password: String,
 
     /// Timeout for each client request, in seconds
     #[clap(long, default_value = "10")]
-    #[serde(rename = "client_timeout_in_second")]
+    #[serde(
+        rename = "client_timeout_in_second",
+        alias = "meta_client_timeout_in_second"
+    )]
     pub meta_client_timeout_in_second: u64,
 
     /// Certificate for client to identify meta rpc serve
