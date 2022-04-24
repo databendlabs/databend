@@ -29,7 +29,7 @@ use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
-    let conf = Config::load_from_args();
+    let conf = Config::load()?;
     let session_ctx = SessionContext::try_create(conf)?;
 
     // Abort status.

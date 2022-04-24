@@ -101,9 +101,8 @@ impl SessionManager {
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
-        let (_guards, query_logger) = if conf.log.log_query_enabled {
-            let (_guards, query_logger) =
-                init_query_logger("query-detail", conf.log.log_dir.as_str());
+        let (_guards, query_logger) = if conf.log.query_enabled {
+            let (_guards, query_logger) = init_query_logger("query-detail", conf.log.dir.as_str());
             (_guards, Some(query_logger))
         } else {
             (Vec::new(), None)
@@ -388,9 +387,7 @@ impl SessionManager {
         let config = {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
-            *config = Config::load_from_file(&config_file)?;
-            // ensure the environment variables are immutable
-            *config = Config::load_from_env(&config)?;
+            *config = Config::load()?;
             config.config_file = config_file;
             config.clone()
         };
