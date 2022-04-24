@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::mask_string;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -79,7 +80,13 @@ impl SyncSystemTable for ConfigsTable {
             meta_config_value,
         );
 
-        let storage_config = config.storage;
+        // Clone storage config to avoid change it's value.
+        //
+        // TODO(xuanwo):
+        // Refactor into config so that config can  decide which value needs mask.
+        let mut storage_config = config.storage;
+        storage_config.s3.access_key_id = mask_string(&storage_config.s3.access_key_id, 3);
+        storage_config.s3.secret_access_key = mask_string(&storage_config.s3.secret_access_key, 3);
         let storage_config_value = serde_json::to_value(storage_config)?;
         ConfigsTable::extract_config(
             &mut names,

@@ -17,7 +17,6 @@ use std::str::FromStr;
 
 use clap::Args;
 use common_base::mask_string;
-use common_base::serde_mask_string;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -74,12 +73,10 @@ pub struct S3StorageConfig {
 
     // Access key for S3 storage
     #[clap(long = "storage-s3-access-key-id", default_value_t)]
-    #[serde(serialize_with = "serde_mask_string")]
     pub access_key_id: String,
 
     /// Secret key for S3 storage
     #[clap(long = "storage-s3-secret-access-key", default_value_t)]
-    #[serde(serialize_with = "serde_mask_string")]
     pub secret_access_key: String,
 
     /// S3 Bucket to use for storage
@@ -152,11 +149,11 @@ impl fmt::Debug for AzureStorageBlobConfig {
 pub struct StorageConfig {
     /// Current storage type: fs|s3
     #[clap(long, default_value = "fs")]
-    #[serde(rename = "type")]
+    #[serde(rename = "type", alias = "storage_type")]
     pub storage_type: String,
 
     #[clap(long, default_value_t)]
-    #[serde(rename = "num_cpus")]
+    #[serde(rename = "num_cpus", alias = "storage_num_cpus")]
     pub storage_num_cpus: u64,
 
     // Fs storage backend config.

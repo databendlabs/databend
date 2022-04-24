@@ -169,8 +169,8 @@ fn test_env_config() -> Result<()> {
 
             assert_eq!("us.region", configured.storage.s3.region);
             assert_eq!("http://127.0.0.1:10024", configured.storage.s3.endpoint_url);
-            assert_eq!("******.id", configured.storage.s3.access_key_id);
-            assert_eq!("******key", configured.storage.s3.secret_access_key);
+            assert_eq!("us.key.id", configured.storage.s3.access_key_id);
+            assert_eq!("us.key", configured.storage.s3.secret_access_key);
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
             assert!(configured.query.table_engine_csv_enabled);
@@ -283,12 +283,13 @@ container = ""
             ("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref())),
             ("QUERY_TENANT_ID", Some("tenant_id_from_env")),
             ("STORAGE_S3_ACCESS_KEY_ID", Some("access_key_id_from_env")),
+            ("STORAGE_TYPE", None),
         ],
         || {
             let cfg = Config::load().expect("config load success");
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
-            assert_eq!("******env", cfg.storage.s3.access_key_id);
+            assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("type_from_file", cfg.storage.storage_type);
         },
     );

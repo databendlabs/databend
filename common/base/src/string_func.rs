@@ -103,16 +103,3 @@ pub fn mask_string(s: &str, unmask_len: usize) -> String {
         ret
     }
 }
-
-/// This function is used in `serde` context to make sure our sensitive
-/// data will not leak during serializing.
-///
-/// ```
-/// #[serde(serialize_with = "serde_mask_string")]
-/// pub secret_access_key: String,
-/// ```
-#[inline]
-pub fn serde_mask_string<S>(s: &str, ser: S) -> Result<S::Ok, S::Error>
-where S: serde::ser::Serializer {
-    ser.serialize_str(&mask_string(s, 3))
-}
