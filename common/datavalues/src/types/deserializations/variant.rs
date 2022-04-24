@@ -88,6 +88,7 @@ impl TypeDeserializer for VariantDeserializer {
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'\'')?;
+
         let val = serde_json::from_slice(self.buffer.as_slice())?;
         self.builder.append_value(val);
         Ok(())
