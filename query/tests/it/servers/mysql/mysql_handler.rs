@@ -46,19 +46,6 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_switch_to_empty_db() -> Result<()> {
-    let mut handler =
-        MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
-
-    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
-    let runnable_server = handler.start(listening).await?;
-    let mut connection = create_connection(runnable_server.port()).await?;
-    let result = connection.query_iter("USE ``;").await;
-    assert!(result.is_err());
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_rejected_session_with_sequence() -> Result<()> {
     let mut handler =
         MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
