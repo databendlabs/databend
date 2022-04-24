@@ -128,7 +128,7 @@ impl SessionManagerBuilder {
 
     pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
-        new_config.log.log_dir = env::current_dir()
+        new_config.log.dir = env::current_dir()
             .unwrap()
             .join(path.into())
             .display()
