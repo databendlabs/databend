@@ -20,6 +20,7 @@ use std::sync::Arc;
 use backtrace::Backtrace;
 
 use crate::exception::ErrorCodeBacktrace;
+use crate::exception_code::ENABLE_BACKTRACE;
 use crate::ErrorCode;
 
 #[derive(thiserror::Error)]
