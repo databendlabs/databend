@@ -46,7 +46,11 @@ impl Binder {
     }
 
     pub(super) async fn bind_select_stmt(&mut self, stmt: &SelectStmt) -> Result<BindContext> {
-        let mut input_context = self.bind_table_reference(&stmt.from).await?;
+        let mut input_context = if let Some(from) = &stmt.from {
+            self.bind_table_reference(from).await?
+        } else {
+            BindContext::create()
+        };
 
         if let Some(expr) = &stmt.selection {
             self.bind_where(expr, &mut input_context)?;

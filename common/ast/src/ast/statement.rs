@@ -37,13 +37,19 @@ pub enum Statement<'a> {
     Select(Box<Query>),
 
     // Operational statements
-    ShowTables,
+    ShowTables {
+        database: Option<Identifier>,
+    },
     ShowDatabases,
     ShowSettings,
     ShowProcessList,
     ShowCreateTable {
         database: Option<Identifier>,
         table: Identifier,
+    },
+    SetVariable {
+        variable: Identifier,
+        value: Literal,
     },
 
     // DDL statements
@@ -147,8 +153,11 @@ impl<'a> Display for Statement<'a> {
             Statement::Select(query) => {
                 write!(f, "{}", &query)?;
             }
-            Statement::ShowTables => {
+            Statement::ShowTables { database } => {
                 write!(f, "SHOW TABLES")?;
+                if let Some(database) = database {
+                    write!(f, " FROM {}", database)?;
+                }
             }
             Statement::ShowDatabases => {
                 write!(f, "SHOW DATABASES")?;
@@ -162,6 +171,9 @@ impl<'a> Display for Statement<'a> {
             Statement::ShowCreateTable { database, table } => {
                 write!(f, "SHOW CREATE TABLE ")?;
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
+            }
+            Statement::SetVariable { variable, value } => {
+                write!(f, "SET {} = {}", variable, value)?;
             }
             Statement::CreateTable {
                 if_not_exists,

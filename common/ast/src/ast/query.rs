@@ -65,7 +65,7 @@ pub struct SelectStmt {
     // `FROM` clause, a list of table references.
     // The table references split by `,` will be joined with cross join,
     // and the result set is union of the joined tables by default.
-    pub from: TableReference,
+    pub from: Option<TableReference>,
     // `WHERE` clause
     pub selection: Option<Expr>,
     // `GROUP BY` clause
@@ -123,11 +123,12 @@ pub enum TableReference {
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
         subquery: Box<Query>,
-        alias: TableAlias,
+        alias: Option<TableAlias>,
     },
     // `TABLE(expr)[ AS alias ]`
-    TableFunction {
-        expr: Expr,
+    SetReturningFunction {
+        name: Identifier,
+        param: Expr,
         alias: Option<TableAlias>,
     },
     Join(Join),
@@ -209,17 +210,19 @@ impl Display for TableReference {
             } => {
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 if let Some(alias) = alias {
-                    write!(f, " {}", alias)?;
+                    write!(f, " AS {}", alias)?;
                 }
             }
             TableReference::Subquery { subquery, alias } => {
                 write!(f, "({})", subquery)?;
-                write!(f, " {}", alias)?;
-            }
-            TableReference::TableFunction { expr, alias } => {
-                write!(f, "{}", expr)?;
                 if let Some(alias) = alias {
-                    write!(f, " {}", alias)?;
+                    write!(f, " AS {}", alias)?;
+                }
+            }
+            TableReference::SetReturningFunction { name, param, alias } => {
+                write!(f, "{}({})", name, param)?;
+                if let Some(alias) = alias {
+                    write!(f, " AS {}", alias)?;
                 }
             }
             TableReference::Join(join) => {
@@ -303,7 +306,9 @@ impl Display for SelectStmt {
         write_comma_separated_list(f, &self.select_list)?;
 
         // FROM clause
-        write!(f, " FROM {}", self.from)?;
+        if let Some(from) = &self.from {
+            write!(f, " FROM {}", from)?;
+        }
 
         // WHERE clause
         if let Some(expr) = &self.selection {

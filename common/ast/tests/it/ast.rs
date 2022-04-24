@@ -49,7 +49,7 @@ fn test_display_create_table() {
                 name: "column".to_owned(),
                 quote: None,
             },
-            data_type: TypeName::Int { unsigned: false },
+            data_type: TypeName::Int32,
             nullable: false,
             default_value: Some(Literal::Number("123".to_owned())),
         }],
@@ -81,7 +81,7 @@ fn test_display_query() {
             ]),
             SelectTarget::QualifiedName(vec![Indirection::Star]),
         ],
-        from: TableReference::Join(Join {
+        from: Some(TableReference::Join(Join {
             op: JoinOperator::Inner,
             condition: JoinCondition::Natural,
             left: Box::new(TableReference::Table {
@@ -100,7 +100,7 @@ fn test_display_query() {
                 },
                 alias: None,
             }),
-        }),
+        })),
         selection: Some(Expr::BinaryOp {
             op: BinaryOperator::Eq,
             left: Box::new(Expr::ColumnRef {
@@ -184,7 +184,7 @@ fn test_display_expr() {
             args: vec![
                 Expr::Cast {
                     expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
-                    target_type: TypeName::Int { unsigned: true },
+                    target_type: TypeName::UInt32,
                     pg_style: false,
                 },
                 Expr::Between {

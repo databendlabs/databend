@@ -1,4 +1,287 @@
 ---------- Input ----------
+select * from customer inner join orders on a = b limit 1
+---------- Output ---------
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 1
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Some(
+                Join(
+                    Join {
+                        op: Inner,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "customer",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "orders",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+    ],
+    offset: None,
+}
+
+
+---------- Input ----------
+select * from customer inner join orders on a = b limit 2 offset 3
+---------- Output ---------
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 2 OFFSET 3
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Some(
+                Join(
+                    Join {
+                        op: Inner,
+                        condition: On(
+                            BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "b",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                        ),
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "customer",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "orders",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [
+        Literal(
+            Number(
+                "2",
+            ),
+        ),
+    ],
+    offset: Some(
+        Literal(
+            Number(
+                "3",
+            ),
+        ),
+    ),
+}
+
+
+---------- Input ----------
+select * from customer natural full join orders
+---------- Output ---------
+SELECT * FROM customer NATURAL FULL OUTER JOIN orders
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Some(
+                Join(
+                    Join {
+                        op: FullOuter,
+                        condition: Natural,
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "customer",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "orders",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+}
+
+
+---------- Input ----------
+select * from customer natural join orders left outer join detail using (id)
+---------- Output ---------
+SELECT * FROM customer NATURAL INNER JOIN orders LEFT OUTER JOIN detail USING(id)
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Some(
+                Join(
+                    Join {
+                        op: LeftOuter,
+                        condition: Using(
+                            [
+                                Identifier {
+                                    name: "id",
+                                    quote: None,
+                                },
+                            ],
+                        ),
+                        left: Join(
+                            Join {
+                                op: Inner,
+                                condition: Natural,
+                                left: Table {
+                                    database: None,
+                                    table: Identifier {
+                                        name: "customer",
+                                        quote: None,
+                                    },
+                                    alias: None,
+                                },
+                                right: Table {
+                                    database: None,
+                                    table: Identifier {
+                                        name: "orders",
+                                        quote: None,
+                                    },
+                                    alias: None,
+                                },
+                            },
+                        ),
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "detail",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    },
+                ),
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+}
+
+
+---------- Input ----------
 select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -16,7 +299,7 @@ select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal
 ---------- Output ---------
-SELECT c_count, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer CROSS JOIN orders AS ODS CROSS JOIN (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC, c_count ASC, totacctbal LIMIT 10, totacctbal
+SELECT c_count, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer CROSS JOIN orders AS AS ODS CROSS JOIN (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS AS c_orders GROUP BY c_count ORDER BY custdist DESC, c_count ASC, totacctbal LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
     body: Select(
@@ -67,48 +350,143 @@ Query {
                     ),
                 },
             ],
-            from: Join(
-                Join {
-                    op: CrossJoin,
-                    condition: None,
-                    left: Join(
-                        Join {
-                            op: CrossJoin,
-                            condition: None,
-                            left: Table {
-                                database: None,
-                                table: Identifier {
-                                    name: "customer",
-                                    quote: None,
-                                },
-                                alias: None,
-                            },
-                            right: Table {
-                                database: None,
-                                table: Identifier {
-                                    name: "orders",
-                                    quote: None,
-                                },
-                                alias: Some(
-                                    TableAlias {
-                                        name: Identifier {
-                                            name: "ODS",
-                                            quote: None,
-                                        },
-                                        columns: [],
+            from: Some(
+                Join(
+                    Join {
+                        op: CrossJoin,
+                        condition: None,
+                        left: Join(
+                            Join {
+                                op: CrossJoin,
+                                condition: None,
+                                left: Table {
+                                    database: None,
+                                    table: Identifier {
+                                        name: "customer",
+                                        quote: None,
                                     },
-                                ),
+                                    alias: None,
+                                },
+                                right: Table {
+                                    database: None,
+                                    table: Identifier {
+                                        name: "orders",
+                                        quote: None,
+                                    },
+                                    alias: Some(
+                                        TableAlias {
+                                            name: Identifier {
+                                                name: "ODS",
+                                                quote: None,
+                                            },
+                                            columns: [],
+                                        },
+                                    ),
+                                },
                             },
-                        },
-                    ),
-                    right: Subquery {
-                        subquery: Query {
-                            body: Select(
-                                SelectStmt {
-                                    distinct: false,
-                                    select_list: [
-                                        AliasedExpr {
-                                            expr: ColumnRef {
+                        ),
+                        right: Subquery {
+                            subquery: Query {
+                                body: Select(
+                                    SelectStmt {
+                                        distinct: false,
+                                        select_list: [
+                                            AliasedExpr {
+                                                expr: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Identifier {
+                                                        name: "c_custkey",
+                                                        quote: None,
+                                                    },
+                                                },
+                                                alias: None,
+                                            },
+                                            AliasedExpr {
+                                                expr: FunctionCall {
+                                                    distinct: false,
+                                                    name: "count",
+                                                    args: [
+                                                        ColumnRef {
+                                                            database: None,
+                                                            table: None,
+                                                            column: Identifier {
+                                                                name: "o_orderkey",
+                                                                quote: None,
+                                                            },
+                                                        },
+                                                    ],
+                                                    params: [],
+                                                },
+                                                alias: None,
+                                            },
+                                        ],
+                                        from: Some(
+                                            Join(
+                                                Join {
+                                                    op: LeftOuter,
+                                                    condition: On(
+                                                        BinaryOp {
+                                                            op: And,
+                                                            left: BinaryOp {
+                                                                op: Eq,
+                                                                left: ColumnRef {
+                                                                    database: None,
+                                                                    table: None,
+                                                                    column: Identifier {
+                                                                        name: "c_custkey",
+                                                                        quote: None,
+                                                                    },
+                                                                },
+                                                                right: ColumnRef {
+                                                                    database: None,
+                                                                    table: None,
+                                                                    column: Identifier {
+                                                                        name: "o_custkey",
+                                                                        quote: None,
+                                                                    },
+                                                                },
+                                                            },
+                                                            right: BinaryOp {
+                                                                op: NotLike,
+                                                                left: ColumnRef {
+                                                                    database: None,
+                                                                    table: None,
+                                                                    column: Identifier {
+                                                                        name: "o_comment",
+                                                                        quote: None,
+                                                                    },
+                                                                },
+                                                                right: Literal(
+                                                                    String(
+                                                                        "%:1%:2%",
+                                                                    ),
+                                                                ),
+                                                            },
+                                                        },
+                                                    ),
+                                                    left: Table {
+                                                        database: None,
+                                                        table: Identifier {
+                                                            name: "customer",
+                                                            quote: None,
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                    right: Table {
+                                                        database: None,
+                                                        table: Identifier {
+                                                            name: "orders",
+                                                            quote: None,
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                },
+                                            ),
+                                        ),
+                                        selection: None,
+                                        group_by: [
+                                            ColumnRef {
                                                 database: None,
                                                 table: None,
                                                 column: Identifier {
@@ -116,115 +494,26 @@ Query {
                                                     quote: None,
                                                 },
                                             },
-                                            alias: None,
-                                        },
-                                        AliasedExpr {
-                                            expr: FunctionCall {
-                                                distinct: false,
-                                                name: "count",
-                                                args: [
-                                                    ColumnRef {
-                                                        database: None,
-                                                        table: None,
-                                                        column: Identifier {
-                                                            name: "o_orderkey",
-                                                            quote: None,
-                                                        },
-                                                    },
-                                                ],
-                                                params: [],
-                                            },
-                                            alias: None,
-                                        },
-                                    ],
-                                    from: Join(
-                                        Join {
-                                            op: LeftOuter,
-                                            condition: On(
-                                                BinaryOp {
-                                                    op: And,
-                                                    left: BinaryOp {
-                                                        op: Eq,
-                                                        left: ColumnRef {
-                                                            database: None,
-                                                            table: None,
-                                                            column: Identifier {
-                                                                name: "c_custkey",
-                                                                quote: None,
-                                                            },
-                                                        },
-                                                        right: ColumnRef {
-                                                            database: None,
-                                                            table: None,
-                                                            column: Identifier {
-                                                                name: "o_custkey",
-                                                                quote: None,
-                                                            },
-                                                        },
-                                                    },
-                                                    right: BinaryOp {
-                                                        op: NotLike,
-                                                        left: ColumnRef {
-                                                            database: None,
-                                                            table: None,
-                                                            column: Identifier {
-                                                                name: "o_comment",
-                                                                quote: None,
-                                                            },
-                                                        },
-                                                        right: Literal(
-                                                            String(
-                                                                "%:1%:2%",
-                                                            ),
-                                                        ),
-                                                    },
-                                                },
-                                            ),
-                                            left: Table {
-                                                database: None,
-                                                table: Identifier {
-                                                    name: "customer",
-                                                    quote: None,
-                                                },
-                                                alias: None,
-                                            },
-                                            right: Table {
-                                                database: None,
-                                                table: Identifier {
-                                                    name: "orders",
-                                                    quote: None,
-                                                },
-                                                alias: None,
-                                            },
-                                        },
-                                    ),
-                                    selection: None,
-                                    group_by: [
-                                        ColumnRef {
-                                            database: None,
-                                            table: None,
-                                            column: Identifier {
-                                                name: "c_custkey",
-                                                quote: None,
-                                            },
-                                        },
-                                    ],
-                                    having: None,
+                                        ],
+                                        having: None,
+                                    },
+                                ),
+                                order_by: [],
+                                limit: [],
+                                offset: None,
+                            },
+                            alias: Some(
+                                TableAlias {
+                                    name: Identifier {
+                                        name: "c_orders",
+                                        quote: None,
+                                    },
+                                    columns: [],
                                 },
                             ),
-                            order_by: [],
-                            limit: [],
-                            offset: None,
-                        },
-                        alias: TableAlias {
-                            name: Identifier {
-                                name: "c_orders",
-                                quote: None,
-                            },
-                            columns: [],
                         },
                     },
-                },
+                ),
             ),
             selection: None,
             group_by: [
@@ -297,281 +586,6 @@ Query {
             },
         },
     ],
-    offset: None,
-}
-
-
----------- Input ----------
-select * from customer inner join orders on a = b limit 1
----------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 1
----------- AST ------------
-Query {
-    body: Select(
-        SelectStmt {
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: Join(
-                Join {
-                    op: Inner,
-                    condition: On(
-                        BinaryOp {
-                            op: Eq,
-                            left: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                },
-                            },
-                            right: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Identifier {
-                                    name: "b",
-                                    quote: None,
-                                },
-                            },
-                        },
-                    ),
-                    left: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "customer",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                    right: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "orders",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                },
-            ),
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [
-        Literal(
-            Number(
-                "1",
-            ),
-        ),
-    ],
-    offset: None,
-}
-
-
----------- Input ----------
-select * from customer inner join orders on a = b limit 2 offset 3
----------- Output ---------
-SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 2 OFFSET 3
----------- AST ------------
-Query {
-    body: Select(
-        SelectStmt {
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: Join(
-                Join {
-                    op: Inner,
-                    condition: On(
-                        BinaryOp {
-                            op: Eq,
-                            left: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                },
-                            },
-                            right: ColumnRef {
-                                database: None,
-                                table: None,
-                                column: Identifier {
-                                    name: "b",
-                                    quote: None,
-                                },
-                            },
-                        },
-                    ),
-                    left: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "customer",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                    right: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "orders",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                },
-            ),
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [
-        Literal(
-            Number(
-                "2",
-            ),
-        ),
-    ],
-    offset: Some(
-        Literal(
-            Number(
-                "3",
-            ),
-        ),
-    ),
-}
-
-
----------- Input ----------
-select * from customer natural full join orders
----------- Output ---------
-SELECT * FROM customer NATURAL FULL OUTER JOIN orders
----------- AST ------------
-Query {
-    body: Select(
-        SelectStmt {
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: Join(
-                Join {
-                    op: FullOuter,
-                    condition: Natural,
-                    left: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "customer",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                    right: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "orders",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                },
-            ),
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [],
-    offset: None,
-}
-
-
----------- Input ----------
-select * from customer natural join orders left outer join detail using (id)
----------- Output ---------
-SELECT * FROM customer NATURAL INNER JOIN orders LEFT OUTER JOIN detail USING(id)
----------- AST ------------
-Query {
-    body: Select(
-        SelectStmt {
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: Join(
-                Join {
-                    op: LeftOuter,
-                    condition: Using(
-                        [
-                            Identifier {
-                                name: "id",
-                                quote: None,
-                            },
-                        ],
-                    ),
-                    left: Join(
-                        Join {
-                            op: Inner,
-                            condition: Natural,
-                            left: Table {
-                                database: None,
-                                table: Identifier {
-                                    name: "customer",
-                                    quote: None,
-                                },
-                                alias: None,
-                            },
-                            right: Table {
-                                database: None,
-                                table: Identifier {
-                                    name: "orders",
-                                    quote: None,
-                                },
-                                alias: None,
-                            },
-                        },
-                    ),
-                    right: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "detail",
-                            quote: None,
-                        },
-                        alias: None,
-                    },
-                },
-            ),
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [],
     offset: None,
 }
 

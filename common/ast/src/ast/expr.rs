@@ -15,8 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use sqlparser::ast::Value;
-
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
@@ -66,7 +64,6 @@ pub enum Expr {
         target_type: TypeName,
         pg_style: bool,
     },
-
     /// `TRY_CAST` expression`
     TryCast {
         expr: Box<Expr>,
@@ -95,23 +92,42 @@ pub enum Expr {
     Exists(Box<Query>),
     /// Scalar subquery, which will only return a single row with a single column.
     Subquery(Box<Query>),
-    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
-    MapAccess { expr: Box<Expr>, keys: Vec<Value> },
+    // TODO(andylokandy): allow interval, function, and others alike to be a key
+    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
+    MapAccess {
+        expr: Box<Expr>,
+        accessor: MapAccessor,
+    },
+}
+
+/// The display style for a map access expression
+#[derive(Debug, Clone, PartialEq)]
+pub enum MapAccessor {
+    /// `[0][1]`
+    Bracket { key: Literal },
+    /// `.a.b`
+    Period { key: Identifier },
+    /// `:a:b`
+    Colon { key: Identifier },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeName {
     Boolean,
-    TinyInt { unsigned: bool },
-    SmallInt { unsigned: bool },
-    Int { unsigned: bool },
-    BigInt { unsigned: bool },
-    Float,
-    Double,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
     Date,
     DateTime { precision: Option<u64> },
     Timestamp,
-    Varchar,
+    String,
     Array { item_type: Box<TypeName> },
     Object,
     Variant,
@@ -251,35 +267,35 @@ impl Display for TypeName {
             TypeName::Boolean => {
                 write!(f, "BOOLEAN")?;
             }
-            TypeName::TinyInt { unsigned } => {
-                write!(f, "TINYINT")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt8 => {
+                write!(f, "UInt8")?;
             }
-            TypeName::SmallInt { unsigned } => {
-                write!(f, "SMALLINT")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt16 => {
+                write!(f, "UInt16")?;
             }
-            TypeName::Int { unsigned } => {
-                write!(f, "INTEGER")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt32 => {
+                write!(f, "UInt32")?;
             }
-            TypeName::BigInt { unsigned } => {
-                write!(f, "BIGINT")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt64 => {
+                write!(f, "UInt64")?;
             }
-            TypeName::Float => {
-                write!(f, "FLOAT")?;
+            TypeName::Int8 => {
+                write!(f, "Int8")?;
             }
-            TypeName::Double => {
-                write!(f, "DOUBLE")?;
+            TypeName::Int16 => {
+                write!(f, "Int16")?;
+            }
+            TypeName::Int32 => {
+                write!(f, "Int32")?;
+            }
+            TypeName::Int64 => {
+                write!(f, "Int64")?;
+            }
+            TypeName::Float32 => {
+                write!(f, "Float32")?;
+            }
+            TypeName::Float64 => {
+                write!(f, "Float64")?;
             }
             TypeName::Date => {
                 write!(f, "DATE")?;
@@ -293,8 +309,8 @@ impl Display for TypeName {
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
             }
-            TypeName::Varchar => {
-                write!(f, "VARCHAR")?;
+            TypeName::String => {
+                write!(f, "STRING")?;
             }
             TypeName::Array { item_type } => {
                 write!(f, "ARRAY({})", item_type)?;
@@ -451,16 +467,12 @@ impl Display for Expr {
             Expr::Subquery(subquery) => {
                 write!(f, "({})", subquery)?;
             }
-            Expr::MapAccess { expr, keys } => {
+            Expr::MapAccess { expr, accessor } => {
                 write!(f, "{}", expr)?;
-                for k in keys {
-                    match k {
-                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
-                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
-                        Value::ColonString(s) => write!(f, ":{}", s)?,
-                        Value::PeriodString(s) => write!(f, ".{}", s)?,
-                        _ => write!(f, "[{}]", k)?,
-                    }
+                match accessor {
+                    MapAccessor::Bracket { key } => write!(f, "[{}]", key)?,
+                    MapAccessor::Period { key } => write!(f, ".{}", key)?,
+                    MapAccessor::Colon { key } => write!(f, ":{}", key)?,
                 }
             }
         }

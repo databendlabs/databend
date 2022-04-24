@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use nom::branch::alt;
+use nom::combinator::cut;
 use nom::combinator::map;
 use nom::combinator::value;
 
@@ -37,7 +38,12 @@ pub fn statements(i: Input) -> IResult<Vec<Statement>> {
 
 pub fn statement(i: Input) -> IResult<Statement> {
     let query = map(query, |query| Statement::Select(Box::new(query)));
-    let show_tables = value(Statement::ShowTables, rule! { SHOW ~ TABLES });
+    let show_tables = map(
+        rule! { SHOW ~ TABLES ~ ( FROM ~ #ident )? },
+        |(_, _, opt_database)| Statement::ShowTables {
+            database: opt_database.map(|(_, database)| database),
+        },
+    );
     let show_databases = value(Statement::ShowDatabases, rule! { SHOW ~ DATABASES });
     let show_settings = value(Statement::ShowSettings, rule! { SHOW ~ SETTINGS });
     let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
@@ -49,6 +55,12 @@ pub fn statement(i: Input) -> IResult<Statement> {
             database: opt_database.map(|(name, _)| name),
             table,
         },
+    );
+    let set_variable = map(
+        rule! {
+            SET ~ #ident ~ "=" ~ #literal
+        },
+        |(_, variable, _, value)| Statement::SetVariable { variable, value },
     );
     let explain = map(
         rule! {
@@ -72,7 +84,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
-            ~ "(" ~ #comma_separated_list1(column_def) ~ ")"
+            ~ "(" ~ #comma_separated_list1(cut(column_def)) ~ ")"
         },
         |(_, _, opt_if_not_exists, opt_database, table, _, columns, _)| Statement::CreateTable {
             if_not_exists: opt_if_not_exists.is_some(),
@@ -148,7 +160,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let insert = map(
         rule! {
-            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
+            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(cut(ident)) ~ ")" )? ~ #insert_source
         },
         |(_, _, _, table, opt_columns, source)| Statement::Insert {
             table,
@@ -166,6 +178,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         | #show_settings : "`SHOW SETTINGS`"
         | #show_process_list : "`SHOW PROCESSLIST`"
         | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+        | #set_variable : "`SET <variable> = <value>`"
         | #explain : "`EXPLAIN [ANALYZE] <statement>`"
         | #describe : "`DESCRIBE [<database>.]<table>`"
         | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`"

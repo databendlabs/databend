@@ -92,6 +92,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
+        r#"select * from aa.bb;"#,
         r#"select * from a, b, c;"#,
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
@@ -121,6 +122,28 @@ fn test_statement() {
     }
 }
 
+// TODO(andylokandy): remove this test once the new optimizer has been being tested on suites
+#[test]
+fn test_statements_in_legacy_suites() {
+    for entry in glob::glob("../../tests/suites/**/*.sql").unwrap() {
+        let file_content = std::fs::read(entry.unwrap()).unwrap();
+        let file_str = String::from_utf8_lossy(&file_content).into_owned();
+
+        // Remove comments
+        let file_str = regex::Regex::new("--.*")
+            .unwrap()
+            .replace_all(&file_str, "")
+            .into_owned();
+
+        for sql in file_str.split_inclusive(';').map(str::trim) {
+            if !sql.is_empty() {
+                let tokens = tokenize_sql(sql).unwrap();
+                parse_sql(&tokens).unwrap();
+            }
+        }
+    }
+}
+
 #[test]
 fn test_statement_error() {
     let mut mint = Mint::new("tests/it/testdata");
@@ -147,6 +170,10 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
+        r#"select * from customer inner join orders on a = b limit 1"#,
+        r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
+        r#"select * from customer natural full join orders"#,
+        r#"select * from customer natural join orders left outer join detail using (id)"#,
         r#"select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -163,10 +190,6 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
-        r#"select * from customer inner join orders on a = b limit 1"#,
-        r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
-        r#"select * from customer natural full join orders"#,
-        r#"select * from customer natural join orders left outer join detail using (id)"#,
     ];
 
     for case in cases {
@@ -179,9 +202,11 @@ fn test_query_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query-error.txt").unwrap();
     let cases = &[
-        "select * from customer join where a = b",
-        "select * from join customer",
-        "select * from customer natural inner join orders on a = b",
+        r#"select * from customer join where a = b"#,
+        r#"select * from join customer"#,
+        r#"select * from customer natural inner join orders on a = b"#,
+        r#"select * order a"#,
+        r#"select number + 5 as a, cast(number as varchar(255))"#,
     ];
 
     for case in cases {
@@ -196,12 +221,20 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"-1"#,
+        r#"typeof(1 + 2)"#,
+        r#"- - + + - 1 + + - 2"#,
         r#"1 + a * c.d"#,
+        r#"number % 2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#"rand()"#,
         r#"rand(distinct)"#,
+        r#"covar_samp(number, number)"#,
         r#"CAST(col1 AS BIGINT UNSIGNED)"#,
+        r#"TRY_CAST(col1 AS BIGINT UNSIGNED)"#,
+        r#"col1::UInt8"#,
+        r#"(arr[0]:a).b"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
         r#"p_partkey = l_partkey
@@ -226,6 +259,7 @@ fn test_expr_error() {
     let cases = &[
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
+        r#"CAST(col1 AS foo)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
                 AND 1 + col3 DIV sum(col4)"#,

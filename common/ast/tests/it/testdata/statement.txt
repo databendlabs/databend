@@ -3,7 +3,9 @@ show tables;
 ---------- Output ---------
 SHOW TABLES
 ---------- AST ------------
-ShowTables
+ShowTables {
+    database: None,
+}
 
 
 ---------- Input ----------
@@ -58,14 +60,16 @@ Explain {
                             alias: None,
                         },
                     ],
-                    from: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "b",
-                            quote: None,
+                    from: Some(
+                        Table {
+                            database: None,
+                            table: Identifier {
+                                name: "b",
+                                quote: None,
+                            },
+                            alias: None,
                         },
-                        alias: None,
-                    },
+                    ),
                     selection: None,
                     group_by: [],
                     having: None,
@@ -96,7 +100,7 @@ Describe {
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -116,9 +120,7 @@ CreateTable {
                 name: "c",
                 quote: None,
             },
-            data_type: Int {
-                unsigned: false,
-            },
+            data_type: Int32,
             nullable: false,
             default_value: Some(
                 Number(
@@ -146,7 +148,7 @@ CreateTable {
 ---------- Input ----------
 create table if not exists a.b (c integer default 1 not null, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c INTEGER NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -166,9 +168,7 @@ CreateTable {
                 name: "c",
                 quote: None,
             },
-            data_type: Int {
-                unsigned: false,
-            },
+            data_type: Int32,
             nullable: false,
             default_value: Some(
                 Number(
@@ -442,7 +442,7 @@ DropTable {
 ---------- Input ----------
 CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
 ---------- Output ---------
-CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR NULL)
+CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 VARCHAR NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -457,9 +457,7 @@ CreateTable {
                 name: "c1",
                 quote: None,
             },
-            data_type: Int {
-                unsigned: false,
-            },
+            data_type: Int32,
             nullable: true,
             default_value: None,
         },
@@ -468,9 +466,7 @@ CreateTable {
                 name: "c2",
                 quote: None,
             },
-            data_type: BigInt {
-                unsigned: false,
-            },
+            data_type: Int64,
             nullable: true,
             default_value: None,
         },
@@ -494,7 +490,7 @@ CreateTable {
 ---------- Input ----------
 CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
 ---------- Output ---------
-CREATE TABLE t (c1 INTEGER NOT NULL, c2 BIGINT NOT NULL, c3 VARCHAR NOT NULL)
+CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 VARCHAR NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -509,9 +505,7 @@ CreateTable {
                 name: "c1",
                 quote: None,
             },
-            data_type: Int {
-                unsigned: false,
-            },
+            data_type: Int32,
             nullable: false,
             default_value: None,
         },
@@ -520,9 +514,7 @@ CreateTable {
                 name: "c2",
                 quote: None,
             },
-            data_type: BigInt {
-                unsigned: false,
-            },
+            data_type: Int64,
             nullable: false,
             default_value: None,
         },
@@ -546,7 +538,7 @@ CreateTable {
 ---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
-CREATE TABLE t (c1 INTEGER NOT NULL DEFAULT 1)
+CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -561,9 +553,7 @@ CreateTable {
                 name: "c1",
                 quote: None,
             },
-            data_type: Int {
-                unsigned: false,
-            },
+            data_type: Int32,
             nullable: false,
             default_value: Some(
                 Number(
@@ -606,14 +596,16 @@ Select(
                         alias: None,
                     },
                 ],
-                from: Table {
-                    database: None,
-                    table: Identifier {
-                        name: "t",
-                        quote: None,
+                from: Some(
+                    Table {
+                        database: None,
+                        table: Identifier {
+                            name: "t",
+                            quote: None,
+                        },
+                        alias: None,
                     },
-                    alias: None,
-                },
+                ),
                 selection: Some(
                     BinaryOp {
                         op: And,
@@ -700,6 +692,50 @@ Select(
 
 
 ---------- Input ----------
+select * from aa.bb;
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Some(
+                    Table {
+                        database: Some(
+                            Identifier {
+                                name: "aa",
+                                quote: None,
+                            },
+                        ),
+                        table: Identifier {
+                            name: "bb",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+    },
+)
+
+
+---------- Input ----------
 select * from a, b, c;
 ---------- Output ---------
 SELECT * FROM a CROSS JOIN b CROSS JOIN c
@@ -716,41 +752,43 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: CrossJoin,
-                        condition: None,
-                        left: Join(
-                            Join {
-                                op: CrossJoin,
-                                condition: None,
-                                left: Table {
-                                    database: None,
-                                    table: Identifier {
-                                        name: "a",
-                                        quote: None,
+                from: Some(
+                    Join(
+                        Join {
+                            op: CrossJoin,
+                            condition: None,
+                            left: Join(
+                                Join {
+                                    op: CrossJoin,
+                                    condition: None,
+                                    left: Table {
+                                        database: None,
+                                        table: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                        },
+                                        alias: None,
                                     },
-                                    alias: None,
-                                },
-                                right: Table {
-                                    database: None,
-                                    table: Identifier {
-                                        name: "b",
-                                        quote: None,
+                                    right: Table {
+                                        database: None,
+                                        table: Identifier {
+                                            name: "b",
+                                            quote: None,
+                                        },
+                                        alias: None,
                                     },
-                                    alias: None,
                                 },
+                            ),
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "c",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                        ),
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "c",
-                                quote: None,
-                            },
-                            alias: None,
                         },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -781,57 +819,59 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: Inner,
-                        condition: On(
-                            BinaryOp {
-                                op: Eq,
-                                left: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: Inner,
+                            condition: On(
+                                BinaryOp {
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
                                             name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
-                                },
-                                right: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
-                                            name: "b",
+                                    right: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
                                 },
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -862,57 +902,59 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: LeftOuter,
-                        condition: On(
-                            BinaryOp {
-                                op: Eq,
-                                left: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: LeftOuter,
+                            condition: On(
+                                BinaryOp {
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
                                             name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
-                                },
-                                right: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
-                                            name: "b",
+                                    right: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
                                 },
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -943,57 +985,59 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: RightOuter,
-                        condition: On(
-                            BinaryOp {
-                                op: Eq,
-                                left: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: RightOuter,
+                            condition: On(
+                                BinaryOp {
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
                                             name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
-                                },
-                                right: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
-                                            name: "b",
+                                    right: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
                                 },
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1024,57 +1068,59 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: FullOuter,
-                        condition: On(
-                            BinaryOp {
-                                op: Eq,
-                                left: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: FullOuter,
+                            condition: On(
+                                BinaryOp {
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
                                             name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
-                                },
-                                right: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
-                                            name: "b",
+                                    right: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
                                 },
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1105,57 +1151,59 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: Inner,
-                        condition: On(
-                            BinaryOp {
-                                op: Eq,
-                                left: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: Inner,
+                            condition: On(
+                                BinaryOp {
+                                    op: Eq,
+                                    left: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
                                             name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
-                                },
-                                right: ColumnRef {
-                                    database: None,
-                                    table: Some(
-                                        Identifier {
-                                            name: "b",
+                                    right: ColumnRef {
+                                        database: None,
+                                        table: Some(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                            },
+                                        ),
+                                        column: Identifier {
+                                            name: "a",
                                             quote: None,
                                         },
-                                    ),
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
                                     },
                                 },
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1186,34 +1234,36 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: LeftOuter,
-                        condition: Using(
-                            [
-                                Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: LeftOuter,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
                                     name: "a",
                                     quote: None,
                                 },
-                            ],
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                                alias: None,
                             },
-                            alias: None,
-                        },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1244,34 +1294,36 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: RightOuter,
-                        condition: Using(
-                            [
-                                Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: RightOuter,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
                                     name: "a",
                                     quote: None,
                                 },
-                            ],
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                                alias: None,
                             },
-                            alias: None,
-                        },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1302,34 +1354,36 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: FullOuter,
-                        condition: Using(
-                            [
-                                Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: FullOuter,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
                                     name: "a",
                                     quote: None,
                                 },
-                            ],
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                                alias: None,
                             },
-                            alias: None,
-                        },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1360,34 +1414,36 @@ Select(
                         ],
                     ),
                 ],
-                from: Join(
-                    Join {
-                        op: Inner,
-                        condition: Using(
-                            [
-                                Identifier {
+                from: Some(
+                    Join(
+                        Join {
+                            op: Inner,
+                            condition: Using(
+                                [
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                    },
+                                ],
+                            ),
+                            left: Table {
+                                database: None,
+                                table: Identifier {
                                     name: "a",
                                     quote: None,
                                 },
-                            ],
-                        ),
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "a",
-                                quote: None,
+                                alias: None,
                             },
-                            alias: None,
-                        },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "b",
-                                quote: None,
+                            right: Table {
+                                database: None,
+                                table: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                                alias: None,
                             },
-                            alias: None,
                         },
-                    },
+                    ),
                 ),
                 selection: None,
                 group_by: [],
@@ -1523,14 +1579,16 @@ Insert {
                             ],
                         ),
                     ],
-                    from: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "t2",
-                            quote: None,
+                    from: Some(
+                        Table {
+                            database: None,
+                            table: Identifier {
+                                name: "t2",
+                                quote: None,
+                            },
+                            alias: None,
                         },
-                        alias: None,
-                    },
+                    ),
                     selection: None,
                     group_by: [],
                     having: None,
@@ -1538,6 +1596,7 @@ Insert {
             ),
             order_by: [],
             limit: [],
+            offset: None,
         },
     },
 }

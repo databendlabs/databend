@@ -14,6 +14,89 @@ ColumnRef {
 
 
 ---------- Input ----------
+-1
+---------- Output ---------
+- 1
+---------- AST ------------
+UnaryOp {
+    op: Minus,
+    expr: Literal(
+        Number(
+            "1",
+        ),
+    ),
+}
+
+
+---------- Input ----------
+typeof(1 + 2)
+---------- Output ---------
+typeof(1 + 2)
+---------- AST ------------
+FunctionCall {
+    distinct: false,
+    name: "typeof",
+    args: [
+        BinaryOp {
+            op: Plus,
+            left: Literal(
+                Number(
+                    "1",
+                ),
+            ),
+            right: Literal(
+                Number(
+                    "2",
+                ),
+            ),
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
+- - + + - 1 + + - 2
+---------- Output ---------
+- - + + - 1 + + - 2
+---------- AST ------------
+UnaryOp {
+    op: Minus,
+    expr: UnaryOp {
+        op: Minus,
+        expr: UnaryOp {
+            op: Plus,
+            expr: UnaryOp {
+                op: Plus,
+                expr: UnaryOp {
+                    op: Minus,
+                    expr: BinaryOp {
+                        op: Plus,
+                        left: Literal(
+                            Number(
+                                "1",
+                            ),
+                        ),
+                        right: UnaryOp {
+                            op: Plus,
+                            expr: UnaryOp {
+                                op: Minus,
+                                expr: Literal(
+                                    Number(
+                                        "2",
+                                    ),
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
 1 + a * c.d
 ---------- Output ---------
 1 + a * c.d
@@ -49,6 +132,29 @@ BinaryOp {
             },
         },
     },
+}
+
+
+---------- Input ----------
+number % 2
+---------- Output ---------
+number % 2
+---------- AST ------------
+BinaryOp {
+    op: Modulo,
+    left: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "number",
+            quote: None,
+        },
+    },
+    right: Literal(
+        Number(
+            "2",
+        ),
+    ),
 }
 
 
@@ -129,9 +235,39 @@ FunctionCall {
 
 
 ---------- Input ----------
+covar_samp(number, number)
+---------- Output ---------
+covar_samp(number, number)
+---------- AST ------------
+FunctionCall {
+    distinct: false,
+    name: "covar_samp",
+    args: [
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "number",
+                quote: None,
+            },
+        },
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "number",
+                quote: None,
+            },
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
 CAST(col1 AS BIGINT UNSIGNED)
 ---------- Output ---------
-CAST(col1 AS BIGINT UNSIGNED)
+CAST(col1 AS UInt64)
 ---------- AST ------------
 Cast {
     expr: ColumnRef {
@@ -142,10 +278,83 @@ Cast {
             quote: None,
         },
     },
-    target_type: BigInt {
-        unsigned: true,
-    },
+    target_type: UInt64,
     pg_style: false,
+}
+
+
+---------- Input ----------
+TRY_CAST(col1 AS BIGINT UNSIGNED)
+---------- Output ---------
+TRY_CAST(col1 AS UInt64)
+---------- AST ------------
+TryCast {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+        },
+    },
+    target_type: UInt64,
+}
+
+
+---------- Input ----------
+col1::UInt8
+---------- Output ---------
+col1::UInt8
+---------- AST ------------
+Cast {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+        },
+    },
+    target_type: UInt8,
+    pg_style: true,
+}
+
+
+---------- Input ----------
+(arr[0]:a).b
+---------- Output ---------
+arr[0]:a.b
+---------- AST ------------
+MapAccess {
+    expr: MapAccess {
+        expr: MapAccess {
+            expr: ColumnRef {
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "arr",
+                    quote: None,
+                },
+            },
+            accessor: Bracket {
+                key: Number(
+                    "0",
+                ),
+            },
+        },
+        accessor: Colon {
+            key: Identifier {
+                name: "a",
+                quote: None,
+            },
+        },
+    },
+    accessor: Period {
+        key: Identifier {
+            name: "b",
+            quote: None,
+        },
+    },
 }
 
 
@@ -354,7 +563,7 @@ p_partkey = l_partkey
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
-p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS SMALLINT) AND l_quantity <= CAST(1 + 10 AS SMALLINT) AND p_size BETWEEN CAST(1 AS SMALLINT) AND CAST(5 AS SMALLINT) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS Int16) AND l_quantity <= CAST(1 + 10 AS Int16) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- AST ------------
 BinaryOp {
     op: And,
@@ -456,9 +665,7 @@ BinaryOp {
                                     "1",
                                 ),
                             ),
-                            target_type: SmallInt {
-                                unsigned: false,
-                            },
+                            target_type: Int16,
                             pg_style: false,
                         },
                     },
@@ -487,9 +694,7 @@ BinaryOp {
                                 ),
                             ),
                         },
-                        target_type: SmallInt {
-                            unsigned: false,
-                        },
+                        target_type: Int16,
                         pg_style: false,
                     },
                 },
@@ -509,9 +714,7 @@ BinaryOp {
                             "1",
                         ),
                     ),
-                    target_type: SmallInt {
-                        unsigned: false,
-                    },
+                    target_type: Int16,
                     pg_style: false,
                 },
                 high: Cast {
@@ -520,9 +723,7 @@ BinaryOp {
                             "5",
                         ),
                     ),
-                    target_type: SmallInt {
-                        unsigned: false,
-                    },
+                    target_type: Int16,
                     pg_style: false,
                 },
                 not: false,

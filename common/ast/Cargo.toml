@@ -16,13 +16,14 @@ common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
 
 # Github dependencies
-# TODO (andylokandy): Use the version from crates.io once
+# TODO(andylokandy): Use the version from crates.io once
 # https://github.com/brendanzab/codespan/pull/331 is released.
 codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "fee0056" }
 
 # Crates.io dependencies
 async-trait = "0.1.53"
+itertools = "0.10"
 logos = "0.12.0"
 nom = "7.1.1"
 nom-rule = "0.2.1"
@@ -33,3 +34,5 @@ thiserror = "1.0.30"
 common-base = { path = "../base" }
 goldenfile = "1.1.0"
 pretty_assertions = "1.2.1"
+glob = "0.3"
+regex = "1.5"

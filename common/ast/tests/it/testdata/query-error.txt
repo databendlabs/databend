@@ -5,7 +5,7 @@ error:
   --> SQL:1:29
   |
 1 | select * from customer join where a = b
-  | ------                      ^^^^^ expected token <Ident>
+  | ------                      ^^^^^ expected token "("
   | |                            
   | while parsing `SELECT ...`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected token <Ident>
+  | ------        ^^^^ expected token "("
   | |              
   | while parsing `SELECT ...`
 
@@ -38,27 +38,29 @@ Query {
                     ],
                 ),
             ],
-            from: Join(
-                Join {
-                    op: Inner,
-                    condition: Natural,
-                    left: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "customer",
-                            quote: None,
+            from: Some(
+                Join(
+                    Join {
+                        op: Inner,
+                        condition: Natural,
+                        left: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "customer",
+                                quote: None,
+                            },
+                            alias: None,
                         },
-                        alias: None,
-                    },
-                    right: Table {
-                        database: None,
-                        table: Identifier {
-                            name: "orders",
-                            quote: None,
+                        right: Table {
+                            database: None,
+                            table: Identifier {
+                                name: "orders",
+                                quote: None,
+                            },
+                            alias: None,
                         },
-                        alias: None,
                     },
-                },
+                ),
             ),
             selection: None,
             group_by: [],
@@ -71,5 +73,31 @@ Query {
 }
 ---------- REST -----------
 on a = b
+
+
+---------- Input ----------
+select * order a
+---------- Output ---------
+error: 
+  --> SQL:1:16
+  |
+1 | select * order a
+  | ------         ^ expected token <BY>
+  | |               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select number + 5 as a, cast(number as varchar(255))
+---------- Output ---------
+error: 
+  --> SQL:1:47
+  |
+1 | select number + 5 as a, cast(number as varchar(255))
+  | ------                  ----                  ^ expected token ")"
+  | |                       |                      
+  | |                       while parsing `CAST(... AS ...)`
+  | |                       while parsing expression
+  | while parsing `SELECT ...`
 
 

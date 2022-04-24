@@ -365,10 +365,6 @@ pub enum TokenKind {
     CORRESPONDING,
     #[token("COUNT", ignore(ascii_case))]
     COUNT,
-    #[token("COVAR_POP", ignore(ascii_case))]
-    COVAR_POP,
-    #[token("COVAR_SAMP", ignore(ascii_case))]
-    COVAR_SAMP,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
     #[token("CROSS", ignore(ascii_case))]
@@ -1121,4 +1117,27 @@ pub enum TokenKind {
     DATETIME,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
+    #[token("UINT8", ignore(ascii_case))]
+    UINT8,
+    #[token("UINT16", ignore(ascii_case))]
+    UINT16,
+    #[token("UINT32", ignore(ascii_case))]
+    UINT32,
+    #[token("UINT64", ignore(ascii_case))]
+    UINT64,
+    #[token("INT8", ignore(ascii_case))]
+    INT8,
+    #[token("INT16", ignore(ascii_case))]
+    INT16,
+    #[token("INT32", ignore(ascii_case))]
+    INT32,
+    #[token("INT64", ignore(ascii_case))]
+    INT64,
+    #[token("FLOAT32", ignore(ascii_case))]
+    FLOAT32,
+    #[token("FLOAT64", ignore(ascii_case))]
+    FLOAT64,
 }
+
+// TODO(andylokandy): complete the list
+pub static NON_RESERVED_KEYWORDS: &[TokenKind] = &[SYSTEM, TABLES, COLUMNS, TEMP, DATE];

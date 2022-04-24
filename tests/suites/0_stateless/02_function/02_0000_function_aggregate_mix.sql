@@ -12,8 +12,8 @@ SELECT arg_max(a, b) from (select number + 5 as a, number - 5 as b from numbers_
 SELECT arg_max(b, a) from (select number + 5 as a, number - 5 as b from numbers_mt(10000));
 
 -- test arg_max, arg_min fro String
-SELECT arg_max(a, b) from (select number + 5 as a, cast(number as varchar(255)) as b from numbers_mt(10000)) ;
-SELECT arg_max(b, a) from (select number + 5 as a, cast(number as varchar(255)) as b from numbers_mt(10000)) ;
+SELECT arg_max(a, b) from (select number + 5 as a, cast(number as varchar) as b from numbers_mt(10000)) ;
+SELECT arg_max(b, a) from (select number + 5 as a, cast(number as varchar) as b from numbers_mt(10000)) ;
 
 
 select count(distinct number, number + 1 , number + 3 ) from ( select number % 100 as number from numbers(100000));

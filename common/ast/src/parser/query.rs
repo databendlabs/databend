@@ -26,22 +26,21 @@ use crate::rule;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         rule! {
-            SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
-            ~ FROM ~ #comma_separated_list1(table_reference)
-            ~ ( WHERE ~ #expr )?
-            ~ ( GROUP ~ BY ~ #comma_separated_list1(expr) )?
-            ~ ( HAVING ~ #expr )?
-            ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
-            ~ ( LIMIT ~ #comma_separated_list1(expr) )?
-            ~ ( OFFSET ~ #expr )?
+            SELECT ~ DISTINCT? ~ #comma_separated_list1(cut(select_target))
+            ~ ( FROM ~ #cut(comma_separated_list1(cut(table_reference))) )?
+            ~ ( WHERE ~ #cut(expr) )?
+            ~ ( GROUP ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(cut(expr))) )?
+            ~ ( HAVING ~ #cut(expr) )?
+            ~ ( ORDER ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(cut(order_by_expr))) )?
+            ~ ( LIMIT ~ #cut(comma_separated_list1(cut(expr))) )?
+            ~ ( OFFSET ~ #cut(expr) )?
             : "`SELECT ...`"
         },
         |(
             _select,
             opt_distinct,
             select_list,
-            _from,
-            table_refs,
+            opt_from_block,
             opt_where_block,
             opt_group_by_block,
             opt_having_block,
@@ -49,23 +48,23 @@ pub fn query(i: Input) -> IResult<Query> {
             opt_limit_block,
             opt_offset_block,
         )| {
-            let from = table_refs
-                .into_iter()
-                .reduce(|left, right| {
-                    TableReference::Join(Join {
-                        op: JoinOperator::CrossJoin,
-                        condition: JoinCondition::None,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    })
-                })
-                .unwrap();
-
             Query {
                 body: SetExpr::Select(Box::new(SelectStmt {
                     distinct: opt_distinct.is_some(),
                     select_list,
-                    from,
+                    from: opt_from_block.map(|(_, table_refs)| {
+                        table_refs
+                            .into_iter()
+                            .reduce(|left, right| {
+                                TableReference::Join(Join {
+                                    op: JoinOperator::CrossJoin,
+                                    condition: JoinCondition::None,
+                                    left: Box::new(left),
+                                    right: Box::new(right),
+                                })
+                            })
+                            .unwrap()
+                    }),
                     selection: opt_where_block.map(|(_, selection)| selection),
                     group_by: opt_group_by_block
                         .map(|(_, _, group_by)| group_by)
@@ -120,6 +119,7 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
         #joined_tables
         | #parenthesized_joined_tables
         | #subquery
+        | #set_returning_function
         | #aliased_table
     )(i)
 }
@@ -156,14 +156,27 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
     })(i)
 }
 
+pub fn set_returning_function(i: Input) -> IResult<TableReference> {
+    map(
+        rule! {
+            #ident ~ "(" ~ #expr ~ ")" ~ ( AS? ~ #table_alias )?
+        },
+        |(name, _, param, _, alias)| TableReference::SetReturningFunction {
+            name,
+            param,
+            alias: alias.map(|(_, alias)| alias),
+        },
+    )(i)
+}
+
 pub fn subquery(i: Input) -> IResult<TableReference> {
     map(
         rule! {
-            ( #parenthesized_query | #query ) ~ AS? ~ #table_alias
+            ( #parenthesized_query | #query ) ~ ( AS? ~ #table_alias )?
         },
-        |(subquery, _, alias)| TableReference::Subquery {
+        |(subquery, opt_alias)| TableReference::Subquery {
             subquery: Box::new(subquery),
-            alias,
+            alias: opt_alias.map(|(_, alias)| alias),
         },
     )(i)
 }
@@ -193,8 +206,14 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
         right: Box<TableReference>,
     }
 
-    let table_ref_without_join =
-        |i| rule! { #aliased_table | #subquery | #parenthesized_joined_tables }(i);
+    let table_ref_without_join = |i| {
+        rule! (
+            #parenthesized_joined_tables
+            | #subquery
+            | #set_returning_function
+            | #aliased_table
+        )(i)
+    };
     let join_condition_on = map(
         rule! {
             ON ~ #expr
@@ -203,7 +222,7 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
     );
     let join_condition_using = map(
         rule! {
-            USING ~ "(" ~ #comma_separated_list1(ident) ~ ")"
+            USING ~ "(" ~ #comma_separated_list1(cut(ident)) ~ ")"
         },
         |(_, _, idents, _)| JoinCondition::Using(idents),
     );

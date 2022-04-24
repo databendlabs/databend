@@ -14,7 +14,6 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
-use nom::multi::separated_list1;
 
 use crate::ast::Identifier;
 use crate::parser::error::Error;
@@ -44,12 +43,28 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     }
 }
 
+pub fn non_reserved_keyword(i: Input) -> IResult<&Token> {
+    match i
+        .get(0)
+        .filter(|token| NON_RESERVED_KEYWORDS.contains(&token.kind))
+    {
+        Some(token) => Ok((&i[1..], token)),
+        _ => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::ExpectToken(Ident),
+        ))),
+    }
+}
+
 pub fn ident(i: Input) -> IResult<Identifier> {
     alt((
-        map(match_token(TokenKind::Ident), |token| Identifier {
-            name: token.text().to_string(),
-            quote: None,
-        }),
+        map(
+            alt((match_token(TokenKind::Ident), non_reserved_keyword)),
+            |token| Identifier {
+                name: token.text().to_string(),
+                quote: None,
+            },
+        ),
         map(match_token(TokenKind::QuotedIdent), |token| Identifier {
             name: token.text()[1..token.text().len() - 1].to_string(),
             quote: Some('"'),
@@ -69,6 +84,121 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
     })
 }
 
+pub fn comma_separated_list0<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    // TODO: fork one
+    separated_list0(match_text(","), item)
+}
+
+/// A fork of `separated_list0` from nom, but never forgive parser error
+/// after a separator is encountered, and always forgive the first element
+/// failure.
+pub fn comma_separated_list1<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    separated_list1(match_text(","), item)
+}
+
+pub fn separated_list0<I, O, O2, E, F, G>(
+    mut sep: G,
+    mut f: F,
+) -> impl FnMut(I) -> nom::IResult<I, Vec<O>, E>
+where
+    I: Clone + nom::InputLength,
+    F: nom::Parser<I, O, E>,
+    G: nom::Parser<I, O2, E>,
+    E: nom::error::ParseError<I>,
+{
+    move |mut i: I| {
+        let mut res = Vec::new();
+
+        match f.parse(i.clone()) {
+            Err(_) => return Ok((i, res)),
+            Ok((i1, o)) => {
+                res.push(o);
+                i = i1;
+            }
+        }
+
+        loop {
+            let len = i.input_len();
+            match sep.parse(i.clone()) {
+                Err(nom::Err::Error(_)) => return Ok((i, res)),
+                Err(e) => return Err(e),
+                Ok((i1, _)) => {
+                    // infinite loop check: the parser must always consume
+                    if i1.input_len() == len {
+                        return Err(nom::Err::Error(E::from_error_kind(
+                            i1,
+                            nom::error::ErrorKind::SeparatedList,
+                        )));
+                    }
+
+                    match f.parse(i1.clone()) {
+                        Err(e) => return Err(e),
+                        Ok((i2, o)) => {
+                            res.push(o);
+                            i = i2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A fork of `separated_list1` from nom, but never forgive parser error
+/// after a separator is encountered.
+pub fn separated_list1<I, O, O2, E, F, G>(
+    mut sep: G,
+    mut f: F,
+) -> impl FnMut(I) -> nom::IResult<I, Vec<O>, E>
+where
+    I: Clone + nom::InputLength,
+    F: nom::Parser<I, O, E>,
+    G: nom::Parser<I, O2, E>,
+    E: nom::error::ParseError<I>,
+{
+    move |mut i: I| {
+        let mut res = Vec::new();
+
+        // Parse the first element
+        match f.parse(i.clone()) {
+            Err(e) => return Err(e),
+            Ok((i1, o)) => {
+                res.push(o);
+                i = i1;
+            }
+        }
+
+        loop {
+            let len = i.input_len();
+            match sep.parse(i.clone()) {
+                Err(nom::Err::Error(_)) => return Ok((i, res)),
+                Err(e) => return Err(e),
+                Ok((i1, _)) => {
+                    // infinite loop check: the parser must always consume
+                    if i1.input_len() == len {
+                        return Err(nom::Err::Error(E::from_error_kind(
+                            i1,
+                            nom::error::ErrorKind::SeparatedList,
+                        )));
+                    }
+
+                    match f.parse(i1.clone()) {
+                        Err(e) => return Err(e),
+                        Ok((i2, o)) => {
+                            res.push(o);
+                            i = i2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! rule {
     ($($tt:tt)*) => { nom_rule::rule!(
@@ -76,10 +206,4 @@ macro_rules! rule {
         $crate::parser::util::match_token,
         $($tt)*)
     }
-}
-
-pub fn comma_separated_list1<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
-    separated_list1(match_text(","), item)
 }
