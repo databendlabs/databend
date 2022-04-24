@@ -97,10 +97,12 @@ secret_access_key = ""
 bucket = ""
 root = ""
 
-[storage.azure_storage_blob]
-account = ""
-master_key = ""
+[storage.azblob]
+endpoint_url = ""
+account_name = ""
+account_key = ""
 container = ""
+root = ""
 "#;
 
     let tom_actual = toml::to_string(&actual).unwrap();
@@ -267,7 +269,7 @@ secret_access_key = ""
 bucket = ""
 root = ""
 
-[storage.azure_storage_blob]
+[storage.azblob]
 account = ""
 master_key = ""
 container = ""
