@@ -55,4 +55,4 @@ data_path = "management_data"
 [storage.s3]
 
 # Azure storage
-[storage.azure_storage_blob]
+[storage.azblob]

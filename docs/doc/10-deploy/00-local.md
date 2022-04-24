@@ -161,7 +161,7 @@ data_path = "benddata/datas"
 
 [storage.s3]
 
-[storage.azure_storage_blob]
+[storage.azblob]
 ```
 
 ### 3.2 Start databend-query

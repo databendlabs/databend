@@ -60,4 +60,4 @@ data_path = "stateless_test_data"
 [storage.s3]
 
 # Azure storage
-[storage.azure_storage_blob]
+[storage.azblob]
