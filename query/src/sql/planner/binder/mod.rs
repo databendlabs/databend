@@ -28,6 +28,7 @@ use crate::sql::planner::metadata::Metadata;
 use crate::storages::Table;
 
 mod bind_context;
+mod common;
 mod project;
 mod scalar;
 mod select;

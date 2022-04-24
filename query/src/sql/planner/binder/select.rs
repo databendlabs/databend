@@ -18,17 +18,23 @@ use async_recursion::async_recursion;
 use common_ast::ast::Expr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
+use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_exception::Result;
+use common_planners::find_aggregate_exprs_in_expr;
+use common_planners::Expression::ScalarFunction;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::binder::common::find_aggregate_exprs;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
+use crate::sql::planner::binder::ScalarExprRef;
+use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalGet;
 use crate::sql::IndexType;
@@ -54,6 +60,10 @@ impl Binder {
 
         // Output of current `SELECT` statement.
         let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
+
+        if !stmt.group_by.is_empty() {
+            self.bind_group_by(&stmt.group_by, &mut output_context)?;
+        }
 
         self.bind_projection(&mut output_context)?;
 
@@ -88,7 +98,7 @@ impl Binder {
                     scan_fields: None,
                     parts,
                     statistics,
-                    description: "".to_string(),
+                    description: format!("read source from table {}", table),
                     tbl_args: None,
                     push_downs: None,
                 };
@@ -136,6 +146,30 @@ impl Binder {
         let filter_plan = FilterPlan { predicate: scalar };
         let new_expr =
             SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
+        bind_context.expression = Some(new_expr);
+        Ok(())
+    }
+
+    pub(super) fn bind_group_by(
+        &mut self,
+        group_by_expr: &Vec<Expr>,
+        bind_context: &mut BindContext,
+    ) -> Result<()> {
+        let scalar_binder = ScalarBinder::new();
+        let group_expr = group_by_expr
+            .iter()
+            .map(|expr| scalar_binder.bind_expr(expr, bind_context).unwrap())
+            .collect::<Vec<ScalarExprRef>>();
+        // find aggregate expr from bind_context
+        let agg_expr: Vec<ScalarExprRef> = find_aggregate_exprs(bind_context)?;
+        let aggregate_plan = AggregatePlan {
+            group_expr,
+            agg_expr,
+        };
+        let new_expr = SExpr::create_unary(
+            Arc::new(aggregate_plan),
+            bind_context.expression.clone().unwrap(),
+        );
         bind_context.expression = Some(new_expr);
         Ok(())
     }

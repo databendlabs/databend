@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate;
 mod filter;
 mod logical_get;
 mod pattern;
@@ -22,6 +23,7 @@ mod scalar;
 use std::any::Any;
 
 use enum_dispatch::enum_dispatch;
+pub use aggregate::AggregatePlan;
 pub use filter::FilterPlan;
 pub use logical_get::LogicalGet;
 pub use pattern::PatternPlan;
@@ -73,6 +75,7 @@ pub enum PlanType {
     // Operators that are both logical and physical
     Project,
     Filter,
+    Aggregate,
 
     // Pattern
     Pattern,
