@@ -119,26 +119,44 @@ impl fmt::Debug for S3StorageConfig {
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Default, Args)]
 #[serde(default)]
-pub struct AzureStorageBlobConfig {
-    /// Account for Azure storage
-    #[clap(long = "storage-azblob-account", default_value_t)]
-    pub account: String,
+pub struct AzblobStorageConfig {
+    /// Account for Azblob
+    #[clap(long = "storage-azblob-account-name", default_value_t)]
+    pub account_name: String,
 
-    /// Master key for Azure storage
-    #[clap(long = "storage-azblob-master-key", default_value_t)]
-    pub master_key: String,
+    /// Master key for Azblob
+    #[clap(long = "storage-azblob-account-key", default_value_t)]
+    pub account_key: String,
 
-    /// Container for Azure storage
+    /// Container for Azblob
     #[clap(long = "storage-azblob-container", default_value_t)]
     pub container: String,
+
+    /// Endpoint URL for Azblob
+    ///
+    /// # TODO(xuanwo)
+    ///
+    /// Clap doesn't allow us to use endpoint_url directly.
+    #[clap(long = "storage-azblob-endpoint-url", default_value_t)]
+    #[serde(rename = "endpoint_url")]
+    pub azblob_endpoint_url: String,
+
+    /// # TODO(xuanwo)
+    ///
+    /// Clap doesn't allow us to use root directly.
+    #[clap(long = "storage-azblob-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub azblob_root: String,
 }
 
-impl fmt::Debug for AzureStorageBlobConfig {
+impl fmt::Debug for AzblobStorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("AzureStorageBlobConfig")
+            .field("endpoint_url", &self.azblob_endpoint_url)
             .field("container", &self.container)
-            .field("account", &mask_string(&self.account, 3))
-            .field("master_key", &mask_string(&self.master_key, 3))
+            .field("root", &self.azblob_root)
+            .field("account_name", &mask_string(&self.account_name, 3))
+            .field("account_key", &mask_string(&self.account_key, 3))
             .finish()
     }
 }
@@ -166,7 +184,7 @@ pub struct StorageConfig {
 
     // azure storage blob config.
     #[clap(flatten)]
-    pub azure_storage_blob: AzureStorageBlobConfig,
+    pub azblob: AzblobStorageConfig,
 }
 
 impl Default for StorageConfig {
@@ -177,7 +195,7 @@ impl Default for StorageConfig {
 
             fs: FsStorageConfig::default(),
             s3: S3StorageConfig::default(),
-            azure_storage_blob: AzureStorageBlobConfig::default(),
+            azblob: AzblobStorageConfig::default(),
         }
     }
 }

@@ -150,7 +150,7 @@ access_key_id = "<your-access-key>"
 // highlight-next-line
 secret_access_key = "<your-secret-key>"
 
-[storage.azure_storage_blob]
+[storage.azblob]
 ```
 
 :::tip
