@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Expr;
-use common_ast::ast::SelectTarget;
 use common_exception::Result;
 
 use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::BindContext;
 
-pub fn find_aggregate_exprs(bind_context: &mut BindContext) -> Result<Vec<ScalarExprRef>> {
+pub fn find_aggregate_exprs(_bind_context: &mut BindContext) -> Result<Vec<ScalarExprRef>> {
     todo!()
 }

@@ -18,12 +18,9 @@ use async_recursion::async_recursion;
 use common_ast::ast::Expr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
-use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_exception::Result;
-use common_planners::find_aggregate_exprs_in_expr;
-use common_planners::Expression::ScalarFunction;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 
@@ -98,7 +95,7 @@ impl Binder {
                     scan_fields: None,
                     parts,
                     statistics,
-                    description: format!("read source from table {}", table),
+                    description: format!("read source from table {table}"),
                     tbl_args: None,
                     push_downs: None,
                 };
@@ -152,7 +149,7 @@ impl Binder {
 
     pub(super) fn bind_group_by(
         &mut self,
-        group_by_expr: &Vec<Expr>,
+        group_by_expr: &[Expr],
         bind_context: &mut BindContext,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new();
