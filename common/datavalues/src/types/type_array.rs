@@ -26,6 +26,7 @@ use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
+    #[serde(skip)]
     name: String,
     inner: DataTypePtr,
 }
