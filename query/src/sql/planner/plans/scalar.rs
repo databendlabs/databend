@@ -16,6 +16,8 @@ use std::any::Any;
 
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataTypePtr;
+use common_datavalues::DataValue;
 
 use crate::sql::planner::binder::ScalarExpr;
 use crate::sql::planner::binder::ScalarExprRef;
@@ -31,6 +33,14 @@ pub enum Scalar {
         left: ScalarExprRef,
         right: ScalarExprRef,
     },
+    AggregateFunction {
+        func_name: String,
+        distinct: bool,
+        params: Vec<DataValue>,
+        args: Vec<ScalarExprRef>,
+        data_type: DataTypePtr,
+        nullable: bool,
+    },
 }
 
 impl ScalarExpr for Scalar {
@@ -42,6 +52,11 @@ impl ScalarExpr for Scalar {
                 ..
             } => (data_type.clone(), *nullable),
             Scalar::Equal { .. } => (BooleanType::arc(), false),
+            Scalar::AggregateFunction {
+                data_type,
+                nullable,
+                ..
+            } => (data_type.clone(), *nullable),
         }
     }
 

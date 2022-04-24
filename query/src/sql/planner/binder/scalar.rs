@@ -18,8 +18,13 @@ use std::sync::Arc;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_datavalues::DataTypeImpl;
+use common_ast::ast::Literal;
+use common_datavalues::DataField;
+use common_datavalues::DataTypePtr;
 use common_exception::ErrorCode;
+use common_datavalues::DataValue;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::sql::planner::binder::BindContext;
 use crate::sql::plans::Scalar;
@@ -47,6 +52,64 @@ impl ScalarBinder {
             }
             Expr::BinaryOp { op, left, right } => {
                 self.bind_binary_op(op, left.as_ref(), right.as_ref(), bind_context)
+            }
+            Expr::FunctionCall {
+                distinct,
+                name,
+                args,
+                params,
+            } => {
+                match AggregateFunctionFactory::instance().check(name) {
+                    true => {
+                        // Function is aggregate function
+                        let mut data_values = Vec::with_capacity(params.len());
+                        for param in params.iter() {
+                            data_values.push(match param {
+                                Literal::Number(val) => {
+                                    DataValue::try_from_literal(val, None).unwrap()
+                                }
+                                Literal::String(val) => DataValue::String(val.clone().into_bytes()),
+                                Literal::Boolean(val) => DataValue::Boolean(*val),
+                                Literal::Null => DataValue::Null,
+                            })
+                        }
+
+                        let scalar_binder = ScalarBinder::new();
+                        let mut scalar_exprs = Vec::with_capacity(args.len());
+                        for arg in args.iter() {
+                            scalar_exprs.push(scalar_binder.bind_expr(arg, bind_context).unwrap());
+                        }
+
+                        let col_pairs = bind_context.result_columns();
+                        let mut col_bindings = Vec::with_capacity(col_pairs.len());
+                        for col_pair in col_pairs.into_iter() {
+                            col_bindings
+                                .push(bind_context.resolve_column(None, col_pair.1).unwrap());
+                        }
+
+                        let mut fields = Vec::with_capacity(col_bindings.len());
+                        for col_binding in col_bindings.iter() {
+                            fields.push(DataField::new(
+                                col_binding.column_name.as_str(),
+                                col_binding.data_type.clone(),
+                            ))
+                        }
+
+                        let agg_func_ref = AggregateFunctionFactory::instance()
+                            .get(name.clone(), data_values.clone(), fields)
+                            .unwrap();
+
+                        Ok(Arc::new(Scalar::AggregateFunction {
+                            func_name: name.clone(),
+                            distinct: *distinct,
+                            params: data_values,
+                            args: scalar_exprs,
+                            data_type: agg_func_ref.return_type().unwrap(),
+                            nullable: true,
+                        }))
+                    }
+                    false => todo!(),
+                }
             }
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",

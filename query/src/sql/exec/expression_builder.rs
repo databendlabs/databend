@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 
 use crate::sql::exec::util::format_field_name;
+use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
@@ -36,6 +38,13 @@ impl<'a> ExpressionBuilder<'a> {
             Scalar::Equal { left, right } => {
                 self.build_binary_operator(left.clone(), right.clone(), "=".to_string())
             }
+            Scalar::AggregateFunction {
+                func_name,
+                distinct,
+                params,
+                args,
+                ..
+            } => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
         }
     }
 
@@ -59,6 +68,25 @@ impl<'a> ExpressionBuilder<'a> {
             left: Box::new(left_child),
             op,
             right: Box::new(right_child),
+        }
+    }
+    
+    pub fn build_aggr_function(
+        &self,
+        op: String,
+        distinct: bool,
+        params: Vec<DataValue>,
+        args: &Vec<ScalarExprRef>,
+    ) -> Result<Expression> {
+        let mut arg_exprs = Vec::with_capacity(args.len());
+        for arg in args.iter() {
+            arg_exprs.push(self.build(arg.as_any().downcast_ref().unwrap()).unwrap());
+        }
+        Ok(Expression::AggregateFunction {
+            op,
+            distinct,
+            params,
+            args: arg_exprs,
         })
     }
 }
