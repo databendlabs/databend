@@ -98,10 +98,10 @@ bucket = ""
 root = ""
 
 [storage.azblob]
-endpoint_url = ""
 account_name = ""
 account_key = ""
 container = ""
+endpoint_url = ""
 root = ""
 "#;
 
@@ -270,9 +270,11 @@ bucket = ""
 root = ""
 
 [storage.azblob]
-account = ""
-master_key = ""
+account_name = ""
+account_key = ""
 container = ""
+endpoint_url = ""
+root = ""
     "#
         .as_bytes(),
     )?;
