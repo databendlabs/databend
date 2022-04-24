@@ -36,6 +36,13 @@ impl ToCastFunction {
             _ => features.num_arguments(1),
         };
 
+        // special case: datetime is alias to timestamp, change cast type to timestamp
+        let type_name = if type_name == "DateTime" {
+            "TimeStamp"
+        }else {
+            type_name
+        };
+
         let function_creator: FactoryCreator =
             Box::new(move |display_name, _args| CastFunction::create(display_name, type_name));
 

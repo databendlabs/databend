@@ -14,7 +14,7 @@ NULL
 EOF while parsing a value at line 1 column 3
 EOF while parsing a string at line 1 column 3
 Date is not a valid JSON
-DateTime is not a valid JSON
+TimeStamp is not a valid JSON
 ==check_json from table==
 NULL	NULL
 NULL	null

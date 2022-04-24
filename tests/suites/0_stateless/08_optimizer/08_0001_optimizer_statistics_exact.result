@@ -8,8 +8,8 @@ Projection: 1:UInt8
 Projection: (1 + 1):UInt16
   Expression: 2:UInt16 (Before Projection)
     ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
-Projection: now():DateTime
-  Expression: now():DateTime (Before Projection)
+Projection: now():TimeStamp
+  Expression: now():TimeStamp (Before Projection)
     ReadDataSource: scan schema: [a:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
 Projection: sum(a):Nullable(Int64)
   AggregatorFinal: groupBy=[[]], aggr=[[sum(a)]]

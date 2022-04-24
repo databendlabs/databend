@@ -95,7 +95,7 @@ impl DataType for TimeStampType {
 
     fn name(&self) -> &str {
         match self.precision {
-            0 => "TimeStamp",
+            0 => "TimeStamp(0)",
             1 => "TimeStamp(1)",
             2 => "TimeStamp(2)",
             3 => "TimeStamp(3)",
@@ -110,7 +110,10 @@ impl DataType for TimeStampType {
     }
 
     fn aliases(&self) -> &[&str] {
-        &[]
+        match self.precision {
+            6 => &["TimeStamp"],
+            _ => &[]
+        }
     }
 
     fn default_value(&self) -> DataValue {

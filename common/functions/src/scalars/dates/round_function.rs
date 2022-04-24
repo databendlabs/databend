@@ -77,7 +77,9 @@ impl Function for RoundFunction {
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let func = |val: i64, _ctx: &mut EvalContext| self.execute(val);
+        let ts_dt = columns[0].field().data_type().as_any().downcast_ref::<TimeStampType>().unwrap();
+        let to_div = 10_i64.pow(ts_dt.precision() as u32);
+        let func = |val: i64, _ctx: &mut EvalContext| self.execute(val / to_div);
         let col =
             scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
         Ok(col.arc())
