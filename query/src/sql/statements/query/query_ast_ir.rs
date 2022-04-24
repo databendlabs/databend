@@ -21,11 +21,12 @@ use common_planners::Expression;
 // Intermediate representation for query AST(after normalize)
 pub struct QueryASTIR {
     pub filter_predicate: Option<Expression>,
-    pub group_by_expressions: Vec<Expression>,
     pub having_predicate: Option<Expression>,
+    pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
-    pub order_by_expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
+    pub distinct: bool,
+    pub order_by_expressions: Vec<Expression>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
@@ -140,16 +141,20 @@ impl Debug for QueryASTIR {
             debug_struct.field("filter", predicate);
         }
 
-        if !self.group_by_expressions.is_empty() {
-            debug_struct.field("group by", &self.group_by_expressions);
-        }
-
         if let Some(predicate) = &self.having_predicate {
             debug_struct.field("having", predicate);
         }
 
+        if !self.group_by_expressions.is_empty() {
+            debug_struct.field("group by", &self.group_by_expressions);
+        }
+
         if !self.aggregate_expressions.is_empty() {
             debug_struct.field("aggregate", &self.aggregate_expressions);
+        }
+
+        if self.distinct {
+            debug_struct.field("distinct", &true);
         }
 
         if !self.order_by_expressions.is_empty() {

@@ -122,6 +122,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: None,
         query: Some(Box::new(DfQueryStatement {
+            distinct: false,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
                     name: ObjectName(vec![Ident::new("t2")]),

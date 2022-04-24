@@ -54,6 +54,8 @@ pub struct QueryAnalyzeState {
     pub aggregate_expressions: Vec<Expression>,
     pub before_group_by_expressions: Vec<Expression>,
 
+    pub distinct: bool,
+
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 
@@ -86,6 +88,7 @@ impl Default for QueryAnalyzeState {
             group_by_expressions: vec![],
             aggregate_expressions: vec![],
             before_group_by_expressions: vec![],
+            distinct: false,
             limit: None,
             offset: None,
             relation: QueryRelation::None,
@@ -123,6 +126,10 @@ impl Debug for QueryAnalyzeState {
 
         if let Some(predicate) = &self.having {
             debug_struct.field("having", predicate);
+        }
+
+        if self.distinct {
+            debug_struct.field("distinct", &true);
         }
 
         if !self.order_by_expressions.is_empty() {

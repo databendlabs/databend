@@ -46,6 +46,7 @@ use crate::storages::ToReadDataSourcePlan;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
+    pub distinct: bool,
     pub from: Vec<TableWithJoins>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
@@ -65,10 +66,11 @@ impl AnalyzableStatement for DfQueryStatement {
 
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
-        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
-
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
+
+        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
+
         let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
@@ -84,6 +86,10 @@ impl DfQueryStatement {
             offset,
             ..Default::default()
         };
+
+        if ir.distinct {
+            analyze_state.distinct = true;
+        }
 
         if let Some(predicate) = &ir.filter_predicate {
             Self::verify_no_aggregate(predicate, "filter")?;
