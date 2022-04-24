@@ -36,8 +36,8 @@ use databend_query::sessions::SessionManager;
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
 
-    if conf.meta.meta_address.is_empty() {
-        MetaEmbedded::init_global_meta_store(conf.meta.meta_embedded_dir.clone()).await?;
+    if conf.meta.address.is_empty() {
+        MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
 
     let app_name = format!(
@@ -147,7 +147,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         tracing::info!(
             "Databend query has been registered:{:?} to metasrv:[{:?}].",
             conf.query.cluster_id,
-            conf.meta.meta_address
+            conf.meta.address
         );
     }
 

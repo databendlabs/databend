@@ -15,6 +15,7 @@
 use std::fmt;
 
 use clap::Args;
+use common_base::mask_string;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_grpc::MetaGrpcClientConf;
@@ -27,32 +28,29 @@ use serde::Serialize;
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(long, default_value = "./_meta_embedded")]
-    #[serde(rename = "embedded_dir", alias = "meta_embedded_dir")]
-    pub meta_embedded_dir: String,
+    #[clap(long = "meta-embedded-dir", default_value = "./_meta_embedded")]
+    #[serde(alias = "meta_embedded_dir")]
+    pub embedded_dir: String,
 
     /// MetaStore backend address
-    #[clap(long, default_value_t)]
-    #[serde(rename = "address", alias = "meta_address")]
-    pub meta_address: String,
+    #[clap(long = "meta-address", default_value_t)]
+    #[serde(alias = "meta_address")]
+    pub address: String,
 
     /// MetaStore backend user name
-    #[clap(long, default_value = "root")]
-    #[serde(rename = "username", alias = "meta_username")]
-    pub meta_username: String,
+    #[clap(long = "meta-username", default_value = "root")]
+    #[serde(alias = "meta_username")]
+    pub username: String,
 
     /// MetaStore backend user password
-    #[clap(long, default_value_t)]
-    #[serde(rename = "password", alias = "meta_password")]
-    pub meta_password: String,
+    #[clap(long = "meta-password", default_value_t)]
+    #[serde(alias = "meta_password")]
+    pub password: String,
 
     /// Timeout for each client request, in seconds
-    #[clap(long, default_value = "10")]
-    #[serde(
-        rename = "client_timeout_in_second",
-        alias = "meta_client_timeout_in_second"
-    )]
-    pub meta_client_timeout_in_second: u64,
+    #[clap(long = "meta-client-timeout-in-second", default_value = "10")]
+    #[serde(alias = "meta_client_timeout_in_second")]
+    pub client_timeout_in_second: u64,
 
     /// Certificate for client to identify meta rpc serve
     #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
@@ -65,11 +63,11 @@ pub struct MetaConfig {
 impl Default for MetaConfig {
     fn default() -> Self {
         Self {
-            meta_embedded_dir: "./_meta_embedded".to_string(),
-            meta_address: "".to_string(),
-            meta_username: "root".to_string(),
-            meta_password: "".to_string(),
-            meta_client_timeout_in_second: 10,
+            embedded_dir: "./_meta_embedded".to_string(),
+            address: "".to_string(),
+            username: "root".to_string(),
+            password: "".to_string(),
+            client_timeout_in_second: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
         }
@@ -95,26 +93,36 @@ impl MetaConfig {
 
     pub fn to_grpc_client_config(&self) -> MetaGrpcClientConf {
         let meta_config = RpcClientConf {
-            address: self.meta_address.clone(),
-            username: self.meta_username.clone(),
-            password: self.meta_password.clone(),
+            address: self.address.clone(),
+            username: self.username.clone(),
+            password: self.password.clone(),
             tls_conf: self.to_grpc_tls_config(),
         };
 
         MetaGrpcClientConf {
             meta_service_config: meta_config.clone(),
             kv_service_config: meta_config,
-            client_timeout_in_second: self.meta_client_timeout_in_second,
+            client_timeout_in_second: self.client_timeout_in_second,
         }
     }
 }
 
 impl fmt::Debug for MetaConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{")?;
-        write!(f, "meta_address: \"{}\", ", self.meta_address)?;
-        write!(f, "meta_user: \"{}\", ", self.meta_username)?;
-        write!(f, "meta_password: \"******\"")?;
-        write!(f, "}}")
+        f.debug_struct("MetaConfig")
+            .field("address", &self.address)
+            .field("username", &self.username)
+            .field("password", &mask_string(&self.password, 3))
+            .field("embedded_dir", &self.embedded_dir)
+            .field("client_timeout_in_second", &self.client_timeout_in_second)
+            .field(
+                "rpc_tls_meta_server_root_ca_cert",
+                &self.rpc_tls_meta_server_root_ca_cert,
+            )
+            .field(
+                "rpc_tls_meta_service_domain_name",
+                &self.rpc_tls_meta_service_domain_name,
+            )
+            .finish()
     }
 }
