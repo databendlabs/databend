@@ -67,6 +67,7 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn append_data_value(&mut self, value: DataValue) -> Result<()>;
 
+    /// Note this method will return err only when inner builder is empty.
     fn pop_data_value(&mut self) -> Result<DataValue>;
 
     fn finish_to_column(&mut self) -> ColumnRef;
