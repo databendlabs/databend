@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // mod locate;
+mod humanize;
 mod locate;
 mod lower;
 mod regexp_instr;

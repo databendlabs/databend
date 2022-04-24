@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::humanize::HumanizeFunction;
 use super::inet_aton::InetAtonFunction;
 use super::inet_aton::TryInetAtonFunction;
 use super::inet_ntoa::InetNtoaFunction;
@@ -34,6 +35,7 @@ impl OtherFunction {
 
         factory.register("running_difference", RunningDifferenceFunction::desc());
         factory.register("ignore", IgnoreFunction::desc());
+        factory.register("humanize", HumanizeFunction::desc());
 
         // INET string to number.
         factory.register("ipv4_string_to_num", InetAtonFunction::desc());

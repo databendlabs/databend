@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod exists;
+mod humanize;
 mod ignore;
 mod inet_aton;
 mod inet_ntoa;
@@ -22,6 +23,7 @@ mod sleep;
 mod type_of;
 
 pub use exists::ExistsFunction;
+pub use humanize::HumanizeFunction;
 pub use ignore::IgnoreFunction;
 pub use inet_aton::InetAtonFunction;
 pub use inet_aton::TryInetAtonFunction;
