@@ -43,8 +43,8 @@ impl DataType for VariantObjectType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Object"
+    fn name(&self) -> String {
+        "Object".to_string()
     }
 
     fn default_value(&self) -> DataValue {

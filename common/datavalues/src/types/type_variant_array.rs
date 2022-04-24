@@ -43,8 +43,8 @@ impl DataType for VariantArrayType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Array"
+    fn name(&self) -> String {
+        "Array".to_string()
     }
 
     fn default_value(&self) -> DataValue {

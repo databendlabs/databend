@@ -73,8 +73,8 @@ macro_rules! impl_numeric {
                 self
             }
 
-            fn name(&self) -> &str {
-                $name
+            fn name(&self) -> String {
+                $name.to_string()
             }
 
             fn sql_name(&self) -> String {
