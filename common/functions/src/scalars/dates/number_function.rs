@@ -380,9 +380,14 @@ where
                 Ok(col.arc())
             }
             TypeID::TimeStamp => {
-                let ts_dt = columns[0].field().data_type().as_any().downcast_ref::<TimeStampType>().unwrap();
+                let ts_dt = columns[0]
+                    .field()
+                    .data_type()
+                    .as_any()
+                    .downcast_ref::<TimeStampType>()
+                    .unwrap();
                 let to_div = 10.pow(ts_dt.precision()) as i64;
-                
+
                 let func = |v: i64, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v / to_div, 0_u32);
                     T::to_number(date_time)

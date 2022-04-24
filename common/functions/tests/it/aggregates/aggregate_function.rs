@@ -51,7 +51,7 @@ fn test_aggregate_function() -> Result<()> {
         DataField::new("a", i64::to_data_type()),
         DataField::new("b", i64::to_data_type()),
         // args for window funnel function
-        DataField::new("dt", DateTimeType::arc(0, None)),
+        DataField::new("dt", TimeStampType::arc(0, None)),
         DataField::new("event = 1001", bool::to_data_type()),
         DataField::new("event = 1002", bool::to_data_type()),
         DataField::new("event = 1003", bool::to_data_type()),
@@ -385,7 +385,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         DataField::new("b", i64::to_data_type()),
         DataField::new("c", Vu8::to_data_type()),
         // args for window funnel function
-        DataField::new("dt", DateTimeType::arc(0, None)),
+        DataField::new("dt", TimeStampType::arc(0, None)),
         DataField::new("event = 1001", bool::to_data_type()),
         DataField::new("event = 1002", bool::to_data_type()),
     ];

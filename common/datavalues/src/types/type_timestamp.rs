@@ -112,7 +112,7 @@ impl DataType for TimeStampType {
     fn aliases(&self) -> &[&str] {
         match self.precision {
             6 => &["TimeStamp"],
-            _ => &[]
+            _ => &[],
         }
     }
 

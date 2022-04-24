@@ -39,7 +39,7 @@ impl ToCastFunction {
         // special case: datetime is alias to timestamp, change cast type to timestamp
         let type_name = if type_name == "DateTime" {
             "TimeStamp"
-        }else {
+        } else {
             type_name
         };
 

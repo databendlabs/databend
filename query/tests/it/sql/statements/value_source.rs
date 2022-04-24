@@ -23,7 +23,7 @@ async fn test_parse_value_source() -> Result<()> {
         DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", u8::to_data_type()),
         DataField::new("country", Vu8::to_data_type()),
-        DataField::new("born_time", DateTimeType::arc(0, None)),
+        DataField::new("born_time", TimeStampType::arc(0, None)),
     ]);
 
     let parser = ValueSource::new(schema);
