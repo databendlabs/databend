@@ -1243,6 +1243,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-protos"
+version = "0.1.0"
+dependencies = [
+ "common-building",
+ "prost",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "common-range-map"
 version = "0.1.0"
 

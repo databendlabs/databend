@@ -1,0 +1,21 @@
+[package]
+name = "common-protos"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+prost = "=0.9.0"
+tonic = { version = "=0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+
+[build-dependencies]
+common-building = { path = "../building" }
+tonic-build = "=0.6.2"
+
+[dev-dependencies]

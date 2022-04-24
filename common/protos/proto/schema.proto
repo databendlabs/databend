@@ -1,0 +1,88 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+import "types.proto";
+
+// Database proto.
+message Database {
+  // The tenant of the database.
+  string tenant = 1;
+  // Database unique id.
+  uint64 id = 2;
+  // Database name.
+  string name = 3;
+  // Database options.
+  map<string, string> options = 4;
+
+  // Database engine, like github engine.
+  string engine = 5;
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 6;
+
+  // The time table created.
+  string created_on = 20;
+  // The time table updated.
+  string updated_on = 21;
+  // Comment about this table.
+  string comment = 22;
+}
+
+// Table proto.
+message Table {
+  // The tenant of the table.
+  string tenant = 1;
+  // Table unique id.
+  uint64 id = 2;
+  // Table name.
+  string name = 3;
+
+  // Database id of this table.
+  uint64 database_id = 4;
+
+  // Table options.
+  map<string, string> options = 5;
+
+  // Table engine.
+  string engine = 6;
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 7;
+
+  // Columns.
+  repeated Column columns = 8;
+
+  // Cluster by expression.
+  string cluster_by_expr = 9;
+
+  // The time table created.
+  string created_on = 20;
+  // The time table updated.
+  string updated_on = 21;
+  // Comment about this table.
+  string comment = 22;
+}
+
+// DataField describes a single column.
+message Column {
+  // The name of this field.
+  string name = 1;
+  // Data type.
+  DataType data_type = 2;
+  // The default expression.
+  string default_expr = 3;
+  bool nullable = 4;
+}
