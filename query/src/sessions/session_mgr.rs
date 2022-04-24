@@ -32,6 +32,7 @@ use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
+use opendal::services::azblob;
 use opendal::services::fs;
 use opendal::services::memory;
 use opendal::services::s3;
@@ -101,9 +102,8 @@ impl SessionManager {
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
-        let (_guards, query_logger) = if conf.log.log_query_enabled {
-            let (_guards, query_logger) =
-                init_query_logger("query-detail", conf.log.log_dir.as_str());
+        let (_guards, query_logger) = if conf.log.query_enabled {
+            let (_guards, query_logger) = init_query_logger("query-detail", conf.log.dir.as_str());
             (_guards, Some(query_logger))
         } else {
             (Vec::new(), None)
@@ -336,6 +336,41 @@ impl SessionManager {
 
                 builder.finish().await?
             }
+            DalSchema::Azblob => {
+                let azblob_conf = &storage_conf.azblob;
+                let mut builder = azblob::Backend::build();
+
+                // Endpoint
+                {
+                    builder.endpoint(&azblob_conf.azblob_endpoint_url);
+                }
+
+                // Container
+                {
+                    builder.container(&azblob_conf.container);
+                }
+
+                // Root
+                {
+                    builder.root(&azblob_conf.azblob_root);
+                }
+
+                // Credential
+                {
+                    builder.account_name(&azblob_conf.account_name);
+                    builder.account_key(&azblob_conf.account_key);
+                }
+
+                builder.finish().await?
+            }
+            DalSchema::Fs => {
+                let mut path = storage_conf.fs.data_path.clone();
+                if !path.starts_with('/') {
+                    path = env::current_dir().unwrap().join(path).display().to_string();
+                }
+
+                fs::Backend::build().root(&path).finish().await?
+            }
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
                 let mut builder = s3::Backend::build();
@@ -363,22 +398,11 @@ impl SessionManager {
 
                 // Root.
                 {
-                    if !s3_conf.root.is_empty() {
-                        builder.root(&s3_conf.root);
-                    }
+                    builder.root(&s3_conf.root);
                 }
 
                 builder.finish().await?
             }
-            DalSchema::Fs => {
-                let mut path = storage_conf.fs.data_path.clone();
-                if !path.starts_with('/') {
-                    path = env::current_dir().unwrap().join(path).display().to_string();
-                }
-
-                fs::Backend::build().root(&path).finish().await?
-            }
-            _ => return Err(ErrorCode::StorageOther("not supported storage backend")),
         };
 
         Ok(Operator::new(accessor))
@@ -388,9 +412,7 @@ impl SessionManager {
         let config = {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
-            *config = Config::load_from_file(&config_file)?;
-            // ensure the environment variables are immutable
-            *config = Config::load_from_env(&config)?;
+            *config = Config::load()?;
             config.config_file = config_file;
             config.clone()
         };

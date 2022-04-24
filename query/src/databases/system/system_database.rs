@@ -19,6 +19,7 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 
 use crate::catalogs::InMemoryMetas;
+use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::system;
 use crate::storages::Table;
@@ -29,7 +30,7 @@ pub struct SystemDatabase {
 }
 
 impl SystemDatabase {
-    pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
+    pub fn create(sys_db_meta: &mut InMemoryMetas, config: &Config) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             system::OneTable::create(sys_db_meta.next_table_id()),
             system::FunctionsTable::create(sys_db_meta.next_table_id()),
@@ -46,7 +47,10 @@ impl SystemDatabase {
             system::ColumnsTable::create(sys_db_meta.next_table_id()),
             system::UsersTable::create(sys_db_meta.next_table_id()),
             system::WarehousesTable::create(sys_db_meta.next_table_id()),
-            Arc::new(system::QueryLogTable::create(sys_db_meta.next_table_id())),
+            Arc::new(system::QueryLogTable::create(
+                sys_db_meta.next_table_id(),
+                config.query.max_query_log_size as i32,
+            )),
             system::EnginesTable::create(sys_db_meta.next_table_id()),
             system::RolesTable::create(sys_db_meta.next_table_id()),
         ];
