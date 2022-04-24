@@ -55,8 +55,8 @@ impl DataType for StructType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Struct"
+    fn name(&self) -> String {
+        "Struct".to_string()
     }
 
     fn can_inside_nullable(&self) -> bool {

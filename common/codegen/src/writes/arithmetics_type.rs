@@ -123,7 +123,7 @@ impl ResultTypeOfUnary for {} {{
 }
 
 fn to_primitive_str(dt: DataTypePtr) -> &'static str {
-    match dt.name() {
+    match dt.name().as_str() {
         "UInt8" => "u8",
         "UInt16" => "u16",
         "UInt32" => "u32",

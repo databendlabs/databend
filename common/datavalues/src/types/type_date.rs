@@ -42,8 +42,8 @@ impl DataType for DateType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Date"
+    fn name(&self) -> String {
+        "Date".to_string()
     }
 
     fn default_value(&self) -> DataValue {

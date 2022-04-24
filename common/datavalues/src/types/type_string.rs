@@ -40,8 +40,8 @@ impl DataType for StringType {
         self
     }
 
-    fn name(&self) -> &str {
-        "String"
+    fn name(&self) -> String {
+        "String".to_string()
     }
 
     fn sql_name(&self) -> String {

@@ -60,7 +60,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         self.data_type_id() == TypeID::Null
     }
 
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
 
     /// Returns the name to display in the SQL describe
     fn sql_name(&self) -> String {

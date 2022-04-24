@@ -39,8 +39,8 @@ impl DataType for NullType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Null"
+    fn name(&self) -> String {
+        "Null".to_string()
     }
 
     fn can_inside_nullable(&self) -> bool {

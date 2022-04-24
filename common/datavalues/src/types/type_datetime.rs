@@ -93,8 +93,8 @@ impl DataType for DateTimeType {
         self
     }
 
-    fn name(&self) -> &str {
-        match self.precision {
+    fn name(&self) -> String {
+        let c = match self.precision {
             0 => "DateTime",
             1 => "DateTime(1)",
             2 => "DateTime(2)",
@@ -106,7 +106,8 @@ impl DataType for DateTimeType {
             8 => "DateTime(8)",
             9 => "DateTime(9)",
             _ => unreachable!(),
-        }
+        };
+        c.to_string()
     }
 
     fn aliases(&self) -> &[&str] {

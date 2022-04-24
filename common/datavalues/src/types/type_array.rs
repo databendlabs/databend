@@ -26,17 +26,12 @@ use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
-    #[serde(skip)]
-    name: String,
     inner: DataTypePtr,
 }
 
 impl ArrayType {
     pub fn create(inner: DataTypePtr) -> Self {
-        ArrayType {
-            name: format!("Array({})", inner.name()),
-            inner,
-        }
+        ArrayType { inner }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -55,8 +50,8 @@ impl DataType for ArrayType {
         self
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> String {
+        format!("Array({})", self.inner.name())
     }
 
     fn default_value(&self) -> DataValue {
