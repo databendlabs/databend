@@ -14,8 +14,10 @@
 
 mod aggregator;
 mod transform;
+mod transform_addon;
 mod transform_aggregator;
 mod transform_block_compact;
+mod transform_cast_schema;
 mod transform_compact;
 mod transform_create_sets;
 mod transform_dummy;
@@ -28,8 +30,11 @@ mod transform_sort_partial;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
+pub use transform_addon::TransformAddOn;
 pub use transform_aggregator::TransformAggregator;
+pub use transform_block_compact::BlockCompactor;
 pub use transform_block_compact::TransformBlockCompact;
+pub use transform_cast_schema::TransformCastSchema;
 pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
 pub use transform_create_sets::SubQueriesPuller;

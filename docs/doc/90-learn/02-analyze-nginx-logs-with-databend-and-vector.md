@@ -40,7 +40,7 @@ CREATE DATABASE nginx;
 
 ```sql
 CREATE TABLE nginx.access_logs (
-  `timestamp` DATETIME,
+  `timestamp` TIMESTAMP,
   `remote_addr` VARCHAR,
   `remote_port` INT,
   `request_method` VARCHAR,

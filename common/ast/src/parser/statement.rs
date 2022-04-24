@@ -202,7 +202,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                nullable: true,
+                nullable: false,
                 default_value: None,
             };
             for constraint in constraints {

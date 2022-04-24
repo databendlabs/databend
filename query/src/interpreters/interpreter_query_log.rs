@@ -98,6 +98,7 @@ pub struct LogEvent {
     pub extra: String,
 }
 
+#[derive(Clone)]
 pub struct InterpreterQueryLog {
     ctx: Arc<QueryContext>,
     plan: PlanNode,

@@ -61,7 +61,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         let engine = table.engine();
         let schema = table.schema();
 
-        let mut table_info = format!("CREATE TABLE `{}` (\n", name);
+        let mut table_create_sql = format!("CREATE TABLE `{}` (\n", name);
 
         // Append columns.
         {
@@ -88,13 +88,26 @@ impl Interpreter for ShowCreateTableInterpreter {
             //      y
             //  )
             let columns_str = format!("{}\n", columns.join(",\n"));
-            table_info.push_str(&columns_str);
+            table_create_sql.push_str(&columns_str);
         }
 
         let table_engine = format!(") ENGINE={}", engine);
-        table_info.push_str(table_engine.as_str());
-        table_info.push_str({
-            let mut opts = table.options().iter().collect::<Vec<_>>();
+        table_create_sql.push_str(table_engine.as_str());
+
+        let table_info = table.get_table_info();
+        if let Some(order) = &table_info.meta.order_keys {
+            let expressions: Vec<Expression> = serde_json::from_slice(order.as_slice())?;
+            let order_keys_str = expressions
+                .iter()
+                .map(|expr| expr.column_name())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            table_create_sql.push_str(format!(" CLUSTER BY ({})", order_keys_str).as_str());
+        }
+
+        table_create_sql.push_str({
+            let mut opts = table_info.options().iter().collect::<Vec<_>>();
             opts.sort_by_key(|(k, _)| *k);
             opts.iter()
                 .filter(|(k, _)| !is_internal_opt_key(k))
@@ -112,7 +125,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let block = DataBlock::create(show_schema.clone(), vec![
             Series::from_data(vec![name.as_bytes()]),
-            Series::from_data(vec![table_info.into_bytes()]),
+            Series::from_data(vec![table_create_sql.into_bytes()]),
         ]);
         tracing::debug!("Show create table executor result: {:?}", block);
 

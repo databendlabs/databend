@@ -47,7 +47,7 @@ struct Config {
     #[clap(long)]
     pub export: bool,
 
-    #[clap(long, env = METASRV_GRPC_API_ADDRESS, default_value = "127.0.0.1:9191")]
+    #[clap(long, env = METASRV_GRPC_API_ADDRESS, default_value = "")]
     pub grpc_api_address: String,
 
     #[clap(flatten)]
@@ -81,37 +81,32 @@ async fn main() -> anyhow::Result<()> {
 
     eprintln!("raft_config: {}", pretty(raft_config)?);
 
-    // export from grpc api if metasrv is running
-    if config.export && !config.grpc_api_address.is_empty() {
-        let grpc_api_addr: SocketAddr = match config.grpc_api_address.parse() {
-            Ok(addr) => addr,
-            Err(e) => {
-                eprintln!(
-                    "ERROR: grpc api address is invalid: {}",
-                    &config.grpc_api_address
-                );
-                return Err(anyhow!(e));
-            }
-        };
-        if service_is_running(grpc_api_addr).await? {
-            eprintln!("export meta from: {}", &config.grpc_api_address);
-            grpc::export_meta(&config.grpc_api_address).await?;
-            return Ok(());
+    if config.export {
+        // export from grpc api if metasrv is running
+        if config.grpc_api_address.is_empty() {
+            eprintln!("export meta dir from: {}", raft_config.raft_dir);
+
+            init_sled_db(raft_config.raft_dir.clone());
+            export_from_dir()?;
+        } else {
+            export_from_running_node(&config).await?;
         }
+
+        return Ok(());
     }
 
-    init_sled_db(raft_config.raft_dir.clone());
-
-    if config.export {
-        eprintln!("export meta dir from: {}", raft_config.raft_dir);
-        print_meta()?;
-    } else if config.import {
+    if config.import {
         eprintln!("import meta dir into: {}", raft_config.raft_dir);
+
+        init_sled_db(raft_config.raft_dir.clone());
+
         clear()?;
         import_from_stdin()?;
+
+        return Ok(());
     }
 
-    Ok(())
+    Err(anyhow::anyhow!("Nothing to do"))
 }
 
 fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
@@ -174,7 +169,7 @@ fn import_from_stdin() -> anyhow::Result<()> {
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
 /// `["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-fn print_meta() -> anyhow::Result<()> {
+fn export_from_dir() -> anyhow::Result<()> {
     let db = get_sled_db();
 
     let mut tree_names = db.tree_names();
@@ -196,6 +191,28 @@ fn print_meta() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Dump metasrv data, raft-log, state machine etc in json to stdout.
+async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
+    eprintln!("export meta dir from remote: {}", config.grpc_api_address);
+
+    let grpc_api_addr: SocketAddr = match config.grpc_api_address.parse() {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!(
+                "ERROR: grpc api address is invalid: {}",
+                &config.grpc_api_address
+            );
+            return Err(anyhow!(e));
+        }
+    };
+
+    if service_is_running(grpc_api_addr).await? {
+        grpc::export_meta(&config.grpc_api_address).await?;
+        return Ok(());
+    }
     Ok(())
 }
 

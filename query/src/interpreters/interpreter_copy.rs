@@ -31,6 +31,7 @@ use regex::Regex;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -112,15 +113,30 @@ impl CopyInterpreter {
         if let Err(e) = res {
             return Err(e);
         }
+
+        let table = ctx
+            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .await?;
+
+        if ctx.get_settings().get_enable_new_processor_framework()? != 0
+            && self.ctx.get_cluster().is_empty()
+        {
+            table.append2(ctx.clone(), &mut pipeline)?;
+            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+            let async_runtime = ctx.get_storage_runtime();
+            let executor = PipelineCompleteExecutor::try_create(async_runtime, pipeline)?;
+            executor.execute()?;
+
+            return Ok(ctx.consume_precommit_blocks());
+        }
+
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
         let async_runtime = ctx.get_storage_runtime();
         let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
         let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
 
-        let table = ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
-            .await?;
         let operations = table
             .append_data(ctx.clone(), source_stream)
             .await?

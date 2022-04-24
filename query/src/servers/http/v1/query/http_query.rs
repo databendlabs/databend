@@ -23,9 +23,9 @@ use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserInfo;
 use serde::Deserialize;
 
+use super::HttpQueryContext;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
@@ -35,7 +35,6 @@ use crate::servers::http::v1::query::Executor;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::ResultDataManager;
 use crate::servers::http::v1::query::Wait;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
 #[derive(Deserialize, Debug)]
@@ -119,17 +118,14 @@ pub struct HttpQuery {
 impl HttpQuery {
     pub(crate) async fn try_create(
         id: &str,
+        ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        session_manager: &Arc<SessionManager>,
-        user_info: &UserInfo,
         config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
-        let http_query_manager = session_manager.get_http_query_manager();
+        let http_query_manager = ctx.session_mgr.get_http_query_manager();
         let session = match &request.session {
             HttpSession::New(session_conf) => {
-                let session = session_manager
-                    .create_session(SessionType::HTTPQuery)
-                    .await?;
+                let session = ctx.create_session(SessionType::HTTPQuery).await?;
                 if let Some(db) = &session_conf.database {
                     session.set_current_database(db.clone());
                 }
@@ -155,7 +151,6 @@ impl HttpQuery {
                 session
             }
         };
-        session.set_current_user(user_info.clone());
         let session_id = session.get_id().clone();
 
         //TODO(youngsofun): support config/set channel size

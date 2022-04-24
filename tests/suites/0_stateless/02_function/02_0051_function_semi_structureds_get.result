@@ -13,6 +13,13 @@ NULL
 "databend"
 "ext"
 NULL
+==json_extract_path_text==
+1
+2
+1
+"databend"
+"ext"
+NULL
 ==get from table==
 1
 NULL
@@ -28,3 +35,16 @@ NULL
 1
 2
 2
+==json_extract_path_text from table==
+1	1
+2	NULL
+1	"a"
+2	NULL
+1	NULL
+2	1
+1	NULL
+2	1
+1	NULL
+2	2
+1	NULL
+2	2

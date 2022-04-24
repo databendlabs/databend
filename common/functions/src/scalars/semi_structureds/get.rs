@@ -107,7 +107,7 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> fmt::Display
     }
 }
 
-fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
+pub fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     let column: &StringColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         Series::check_get(const_column.inner())?
@@ -164,7 +164,7 @@ fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     Ok(path_keys)
 }
 
-fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
+pub fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         return build_path_keys(const_column.inner());
@@ -177,7 +177,7 @@ fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     Ok(path_keys)
 }
 
-fn extract_value_by_path(
+pub fn extract_value_by_path(
     column: &ColumnRef,
     path_keys: Vec<Vec<DataValue>>,
     input_rows: usize,

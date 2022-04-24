@@ -104,6 +104,10 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
+    fn append2(&self, _: Arc<QueryContext>, _: &mut NewPipeline) -> Result<()> {
+        unimplemented!()
+    }
+
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
