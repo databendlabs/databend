@@ -55,7 +55,9 @@ impl From<anyhow::Error> for ErrorCode {
             1002,
             format!("{}, source: {:?}", error, error.source()),
             Some(Box::new(OtherErrors::AnyHow { error })),
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            ENABLE_BACKTRACE
+                .with(|v| v.get())
+                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         )
     }
 }
@@ -64,9 +66,11 @@ impl From<&str> for ErrorCode {
     fn from(error: &str) -> Self {
         ErrorCode::create(
             1002,
-            format!("{}", error),
+            error.to_string(),
             None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            ENABLE_BACKTRACE
+                .with(|v| v.get())
+                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         )
     }
 }

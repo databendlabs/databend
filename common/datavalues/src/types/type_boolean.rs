@@ -21,7 +21,6 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 pub use crate::prelude::*;
 
-
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BooleanType {}
 

@@ -131,14 +131,13 @@ impl Display for ErrorCode {
 
 impl ErrorCode {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
-        let backtrace = ENABLE_BACKTRACE
-            .with(|v| v.get())
-            .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new())));
         ErrorCode {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace,
+            backtrace: ENABLE_BACKTRACE
+                .with(|v| v.get())
+                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 

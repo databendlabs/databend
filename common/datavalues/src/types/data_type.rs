@@ -42,7 +42,6 @@ use super::type_string::StringType;
 use super::type_struct::StructType;
 use crate::prelude::*;
 
-
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
