@@ -87,7 +87,6 @@ pub enum TypeSerializerImpl {
     Float64(NumberSerializer<f64>),
 
     Date(DateSerializer<i32>),
-    // TODO
     Interval(DateSerializer<i64>),
     DateTime(DateTimeSerializer<i64>),
     String(StringSerializer),
