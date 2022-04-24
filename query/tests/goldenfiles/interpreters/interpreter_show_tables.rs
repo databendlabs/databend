@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Write;
-
 use common_base::tokio;
-use common_datablocks::pretty_format_blocks;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
-use futures::TryStreamExt;
 use goldenfile::Mint;
-use pretty_assertions::assert_eq;
+
+use crate::interpreters::interpreter_goldenfiles;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_tables_interpreter() -> Result<()> {
@@ -61,16 +58,22 @@ async fn test_show_tables_interpreter() -> Result<()> {
         let mut mint = Mint::new("tests/goldenfiles/data");
         let mut file = mint.new_goldenfile("show-tables.txt").unwrap();
 
-        let plan = PlanParser::parse(ctx.clone(), "show tables").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowTablesInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let formatted = pretty_format_blocks(&result).unwrap();
-        writeln!(file, "---------- Input ----------").unwrap();
-        writeln!(file, "show tables").unwrap();
-        writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{}", formatted).unwrap();
+        let cases = &[
+            r#"show tables"#,
+            r#"show full tables"#,
+            r#"show tables like '%da%'"#,
+            r#"show full tables like '%da%'"#,
+            r#"show tables where table_name != 'data'"#,
+            r#"show full tables where table_name != 'data'"#,
+            r#"show tables from db1"#,
+            r#"show full tables from db1"#,
+            r#"show tables in db1"#,
+            r#"show full tables in db1"#,
+        ];
+
+        for case in cases {
+            interpreter_goldenfiles(&mut file, ctx.clone(), "ShowTablesInterpreter", case).await?;
+        }
     }
 
     // Teardown.

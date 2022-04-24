@@ -13,3 +13,34 @@
 // limitations under the License.
 
 mod interpreter_show_tables;
+
+use std::fs::File;
+use std::io::Write;
+use std::sync::Arc;
+
+use common_datablocks::pretty_format_blocks;
+use common_exception::Result;
+use databend_query::interpreters::*;
+use databend_query::sessions::QueryContext;
+use databend_query::sql::PlanParser;
+use futures::TryStreamExt;
+
+pub async fn interpreter_goldenfiles(
+    file: &mut File,
+    ctx: Arc<QueryContext>,
+    interpreter: &str,
+    query: &str,
+) -> Result<()> {
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+    assert_eq!(executor.name(), interpreter);
+    let stream = executor.execute(None).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let formatted = pretty_format_blocks(&result)?;
+    writeln!(file, "---------- Input ----------").unwrap();
+    writeln!(file, "{}", query).unwrap();
+    writeln!(file, "---------- Output ---------").unwrap();
+    writeln!(file, "{}", formatted).unwrap();
+    writeln!(file, "\n").unwrap();
+    Ok(())
+}

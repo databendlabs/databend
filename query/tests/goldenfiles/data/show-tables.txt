@@ -7,3 +7,100 @@ show tables
 | bend          |
 | data          |
 +---------------+
+
+
+---------- Input ----------
+show full tables
+---------- Output ---------
++---------------+------------+
+| Tables_in_db1 | Table_type |
++---------------+------------+
+| bend          | BASE TABLE |
+| data          | BASE TABLE |
++---------------+------------+
+
+
+---------- Input ----------
+show tables like '%da%'
+---------- Output ---------
++---------------+
+| Tables_in_db1 |
++---------------+
+| data          |
++---------------+
+
+
+---------- Input ----------
+show full tables like '%da%'
+---------- Output ---------
++---------------+------------+
+| Tables_in_db1 | Table_type |
++---------------+------------+
+| data          | BASE TABLE |
++---------------+------------+
+
+
+---------- Input ----------
+show tables where table_name != 'data'
+---------- Output ---------
++---------------+
+| Tables_in_db1 |
++---------------+
+| bend          |
++---------------+
+
+
+---------- Input ----------
+show full tables where table_name != 'data'
+---------- Output ---------
++---------------+------------+
+| Tables_in_db1 | Table_type |
++---------------+------------+
+| bend          | BASE TABLE |
++---------------+------------+
+
+
+---------- Input ----------
+show tables from db1
+---------- Output ---------
++---------------+
+| Tables_in_db1 |
++---------------+
+| bend          |
+| data          |
++---------------+
+
+
+---------- Input ----------
+show full tables from db1
+---------- Output ---------
++---------------+------------+
+| Tables_in_db1 | Table_type |
++---------------+------------+
+| bend          | BASE TABLE |
+| data          | BASE TABLE |
++---------------+------------+
+
+
+---------- Input ----------
+show tables in db1
+---------- Output ---------
++---------------+
+| Tables_in_db1 |
++---------------+
+| bend          |
+| data          |
++---------------+
+
+
+---------- Input ----------
+show full tables in db1
+---------- Output ---------
++---------------+------------+
+| Tables_in_db1 | Table_type |
++---------------+------------+
+| bend          | BASE TABLE |
+| data          | BASE TABLE |
++---------------+------------+
+
+
