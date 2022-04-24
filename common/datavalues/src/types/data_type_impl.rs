@@ -31,7 +31,6 @@ use super::type_string::StringType;
 use super::type_struct::StructType;
 use crate::prelude::*;
 
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[enum_dispatch(DataType)]
 pub enum DataTypeImpl {
