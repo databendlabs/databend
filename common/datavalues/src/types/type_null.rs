@@ -65,14 +65,15 @@ impl DataType for NullType {
         ArrowType::Null
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(NullSerializer::default())
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        NullSerializer::default().into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(NullDeserializer {
+    fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {
+        NullDeserializer {
             builder: MutableNullColumn::default(),
-        })
+        }
+        .into()
     }
 
     fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {

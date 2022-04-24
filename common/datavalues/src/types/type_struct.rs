@@ -97,16 +97,21 @@ impl DataType for StructType {
         ArrowType::Struct(fields)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        let inners = self.types.iter().map(|v| v.create_serializer()).collect();
-        Box::new(StructSerializer {
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        let inners = self
+            .types
+            .iter()
+            .map(|v| Box::new(v.create_serializer()))
+            .collect();
+        StructSerializer {
             names: self.names.clone(),
             inners,
             types: self.types.clone(),
-        })
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
+    fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {
         todo!()
     }
 

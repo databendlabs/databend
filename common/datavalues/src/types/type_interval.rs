@@ -120,14 +120,15 @@ impl DataType for IntervalType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateSerializer::<i64>::default())
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        DateSerializer::<i64>::default().into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(DateDeserializer::<i64> {
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        DateDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

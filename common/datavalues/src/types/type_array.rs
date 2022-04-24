@@ -115,14 +115,15 @@ impl DataType for ArrayType {
         ArrowType::LargeList(Box::new(field))
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(ArraySerializer {
-            inner: self.inner.create_serializer(),
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        ArraySerializer {
+            inner: Box::new(self.inner.create_serializer()),
             typ: self.inner.clone(),
-        })
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
+    fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {
         todo!()
     }
 

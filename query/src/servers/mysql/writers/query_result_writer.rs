@@ -21,6 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
 use common_datavalues::DateTimeType;
+use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;

@@ -84,17 +84,19 @@ impl DataType for NullableType {
         self.inner.custom_arrow_meta()
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(NullableSerializer {
-            inner: self.inner.create_serializer(),
-        })
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        NullableSerializer {
+            inner: Box::new(self.inner.create_serializer()),
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(NullableDeserializer {
-            inner: self.inner.create_deserializer(capacity),
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        NullableDeserializer {
+            inner: Box::new(self.inner.create_deserializer(capacity)),
             bitmap: MutableBitmap::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

@@ -98,7 +98,7 @@ impl ValueSource {
         &self,
         reader: &mut CpBufferReader<'a>,
         col_size: usize,
-        desers: &mut [Box<dyn TypeDeserializer>],
+        desers: &mut [TypeDeserializerImpl],
         session_type: &SessionType,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces()?;

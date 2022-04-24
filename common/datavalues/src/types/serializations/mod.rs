@@ -69,8 +69,10 @@ pub trait TypeSerializer: Send + Sync {
     }
 }
 
+#[derive(Debug, Clone)]
 #[enum_dispatch(TypeSerializer)]
 pub enum TypeSerializerImpl {
+    Null(NullSerializer),
     Nullable(NullableSerializer),
     Boolean(BooleanSerializer),
     Int8(NumberSerializer<i8>),
@@ -85,21 +87,11 @@ pub enum TypeSerializerImpl {
     Float64(NumberSerializer<f64>),
 
     Date(DateSerializer<i32>),
+    // TODO
+    Interval(DateSerializer<i64>),
     DateTime(DateTimeSerializer<i64>),
     String(StringSerializer),
     Array(ArraySerializer),
     Struct(StructSerializer),
     Variant(VariantSerializer),
-}
-
-mod test {
-    use super::*;
-
-    #[test]
-    fn test1() {
-        let c = StringSerializer {};
-        let d: TypeSerializerImpl = c.into();
-        let c: std::result::Result<StringSerializer, &str> = d.try_into();
-        assert!(c.is_ok());
-    }
 }
