@@ -22,14 +22,17 @@ use serde::Serialize;
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long = "log-level", default_value = "INFO")]
+    #[serde(alias = "log_level")]
     pub level: String,
 
     /// Log file dir
     #[clap(long = "log-dir", default_value = "./_logs")]
+    #[serde(alias = "log_dir")]
     pub dir: String,
 
     /// Log file dir
     #[clap(long = "log-query-enabled")]
+    #[serde(alias = "log_query_enabled")]
     pub query_enabled: bool,
 }
 
