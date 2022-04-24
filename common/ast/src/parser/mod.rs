@@ -21,29 +21,31 @@ pub mod util;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use nom::combinator::map;
 
 use crate::ast::Statement;
 use crate::parser::error::pretty_print_error;
-use crate::parser::statement::statement;
+use crate::parser::statement::statements;
+use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
-use crate::rule;
+
+pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
+    Tokenizer::new(sql).collect::<Result<Vec<_>>>()
+}
 
 /// Parse a SQL string into `Statement`s.
-pub fn parse_sql(sql: &str) -> Result<Vec<Statement>> {
-    let tokens = Tokenizer::new(sql).collect::<Result<Vec<_>>>()?;
-    let stmt = map(rule! { #statement ~ ";" }, |(stmt, _)| stmt);
-    let mut stmts = rule! { #stmt+ };
-
-    match stmts(tokens.as_slice()) {
+pub fn parse_sql<'a>(sql_tokens: &'a [Token<'a>]) -> Result<Vec<Statement<'a>>> {
+    match statements(sql_tokens) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
-        Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(sql, vec![(
-            rest[0].span.clone(),
-            "unable to parse rest of the sql".to_owned(),
-        )]))),
+        Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(
+            sql_tokens[0].source,
+            vec![(
+                rest[0].span.clone(),
+                "unable to parse rest of the sql".to_owned(),
+            )],
+        ))),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => Err(ErrorCode::SyntaxException(
-            pretty_print_error(sql, err.to_labels()),
+            pretty_print_error(sql_tokens[0].source, err.to_labels()),
         )),
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }

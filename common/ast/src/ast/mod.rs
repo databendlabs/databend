@@ -30,16 +30,6 @@ pub struct Identifier {
     pub quote: Option<char>,
 }
 
-fn display_identifier_vec(f: &mut Formatter<'_>, name: &[Identifier]) -> std::fmt::Result {
-    for i in 0..name.len() {
-        write!(f, "{}", name[i])?;
-        if i != name.len() - 1 {
-            write!(f, ".")?;
-        }
-    }
-    Ok(())
-}
-
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {
@@ -50,4 +40,30 @@ impl Display for Identifier {
             write!(f, "{}", self.name)
         }
     }
+}
+
+fn write_period_separated_list(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = impl Display>,
+) -> std::fmt::Result {
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ".")?;
+        }
+        write!(f, "{}", item)?;
+    }
+    Ok(())
+}
+
+fn write_comma_separated_list(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = impl Display>,
+) -> std::fmt::Result {
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "{}", item)?;
+    }
+    Ok(())
 }
