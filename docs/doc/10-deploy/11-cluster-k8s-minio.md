@@ -129,6 +129,4 @@ SELECT count(*) FROM t1;
 +----------+
 | 10000000 |
 +----------+
-1 row in set (0.02 sec)
-Read 1 rows, 1 B in 0.001 sec., 749.34 rows/sec., 749.34 B/sec.
 ```
