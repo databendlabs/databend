@@ -49,29 +49,6 @@ pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
 pub type DataTypePtr = Arc<dyn DataType>;
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[enum_dispatch(DataType)]
-pub enum DataTypeImpl {
-    Nullable(NullableType),
-    Boolean(BooleanType),
-    Int8(Int8Type),
-    Int16(Int16Type),
-    Int32(Int32Type),
-    Int64(Int64Type),
-    UInt8(UInt8Type),
-    UInt16(UInt16Type),
-    UInt32(UInt32Type),
-    UInt64(UInt64Type),
-    Float32(Float32Type),
-    Float64(Float64Type),
-    Date(DateType),
-    DateTime(DateTimeType),
-    String(StringType),
-    Struct(StructType),
-    Array(ArrayType),
-    Variant(VariantType),
-}
-
 #[typetag::serde(tag = "type")]
 #[enum_dispatch]
 pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {

@@ -27,6 +27,7 @@ use crate::prelude::*;
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: DataTypePtr,
+    #[serde(skip)]
     name: String,
 }
 

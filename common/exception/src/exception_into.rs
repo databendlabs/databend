@@ -60,6 +60,17 @@ impl From<anyhow::Error> for ErrorCode {
     }
 }
 
+impl From<T: AsRef<&str>> for ErrorCode {
+    fn from(error: T) -> Self {
+        ErrorCode::create(
+            1002,
+            format!("{}", error.as_ref()),
+            None,
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+        )
+    }
+}
+
 impl From<std::num::ParseIntError> for ErrorCode {
     fn from(error: std::num::ParseIntError) -> Self {
         ErrorCode::from_std_error(error)

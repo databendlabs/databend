@@ -15,6 +15,7 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use enum_dispatch::enum_dispatch;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
 
@@ -41,6 +42,7 @@ pub use string::*;
 pub use struct_::*;
 pub use variant::*;
 
+#[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue) -> Result<String>;
     fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>>;
@@ -64,5 +66,40 @@ pub trait TypeSerializer: Send + Sync {
         Err(ErrorCode::BadDataValueType(
             "Error parsing JSON: unsupported data type",
         ))
+    }
+}
+
+#[enum_dispatch(TypeSerializer)]
+pub enum TypeSerializerImpl {
+    Nullable(NullableSerializer),
+    Boolean(BooleanSerializer),
+    Int8(NumberSerializer<i8>),
+    Int16(NumberSerializer<i16>),
+    Int32(NumberSerializer<i32>),
+    Int64(NumberSerializer<i64>),
+    UInt8(NumberSerializer<u8>),
+    UInt16(NumberSerializer<u16>),
+    UInt32(NumberSerializer<u32>),
+    UInt64(NumberSerializer<u64>),
+    Float32(NumberSerializer<f32>),
+    Float64(NumberSerializer<f64>),
+
+    Date(DateSerializer<i32>),
+    DateTime(DateTimeSerializer<i64>),
+    String(StringSerializer),
+    Array(ArraySerializer),
+    Struct(StructSerializer),
+    Variant(VariantSerializer),
+}
+
+mod test {
+    use super::*;
+
+    #[test]
+    fn test1() {
+        let c = StringSerializer {};
+        let d: TypeSerializerImpl = c.into();
+        let c: std::result::Result<StringSerializer, &str> = d.try_into();
+        assert!(c.is_ok());
     }
 }
