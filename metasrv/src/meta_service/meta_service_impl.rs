@@ -20,7 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use common_meta_types::protobuf::raft_service_server::RaftService;
-use common_meta_types::protobuf::GetRaftGetReply;
+use common_meta_types::protobuf::GetReply;
 use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -89,12 +89,12 @@ impl RaftService for RaftServiceImpl {
     async fn get(
         &self,
         request: tonic::Request<GetRequest>,
-    ) -> Result<tonic::Response<GetRaftGetReply>, tonic::Status> {
+    ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         // TODO(xp): this method should be removed along with DFS
         common_tracing::extract_remote_span_as_parent(&request);
 
         // let req = request.into_inner();
-        let rst = GetRaftGetReply {
+        let rst = GetReply {
             ok: false,
             value: "".into(),
         };

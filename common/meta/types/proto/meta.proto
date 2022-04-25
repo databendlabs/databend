@@ -21,7 +21,7 @@ import "request.proto";
 message Empty {}
 message GetRequest { string key = 1; }
 
-message GetRaftGetReply {
+message GetReply {
   bool ok = 1;
   string value = 2;
 }
@@ -151,7 +151,7 @@ message TxnReply {
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
-  rpc Get(GetRequest) returns (GetRaftGetReply) {}
+  rpc Get(GetRequest) returns (GetReply) {}
 
   /// Forward a request to other
   rpc Forward(RaftRequest) returns (RaftReply) {}
