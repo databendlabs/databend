@@ -29,8 +29,8 @@ use common_meta_types::Operation;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
-use common_meta_types::TransactionReply;
-use common_meta_types::TransactionReq;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UserIdentity;
@@ -56,7 +56,7 @@ mock! {
 
         async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
 
-        async fn transaction(&self, txn: TransactionReq) -> Result<TransactionReply, MetaError>;
+        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
 
         }
 }

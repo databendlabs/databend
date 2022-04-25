@@ -29,11 +29,10 @@ use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
-use common_meta_types::protobuf::TxnReply;
-use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
-use common_meta_types::TransactionReq;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_tracing::tracing;
 use futures::StreamExt;
 use prost::Message;
@@ -197,11 +196,8 @@ impl MetaService for MetaServiceImpl {
 
         tracing::info!("Receive txn_action: {:?}", request);
 
-        let body = self
-            .action_handler
-            .execute_txn(TransactionReq::new(request))
-            .await;
-        Ok(Response::new(body.to_pb()))
+        let body = self.action_handler.execute_txn(request).await;
+        Ok(Response::new(body))
     }
 }
 

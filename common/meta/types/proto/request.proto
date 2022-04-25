@@ -21,12 +21,6 @@ message SeqV {
   bytes data = 2;
 }
 
-message string {
-  string key = 1;
-  string tenant = 2;
-  string tree = 3;
-}
-
 // Get request and response
 message TxnGetRequest {
   string key = 1;

@@ -19,8 +19,8 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaError;
 use common_meta_types::SeqV;
-use common_meta_types::TransactionReply;
-use common_meta_types::TransactionReq;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
@@ -50,7 +50,7 @@ impl KVApi for StateMachine {
         }
     }
 
-    async fn transaction(&self, txn: TransactionReq) -> Result<TransactionReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         let cmd = Cmd::Transaction(txn);
 
         let res = self.sm_tree.txn(true, |t| {
@@ -59,9 +59,9 @@ impl KVApi for StateMachine {
         })?;
 
         match res {
-            AppliedState::TransactionReply(x) => Ok(x),
+            AppliedState::TxnReply(x) => Ok(x),
             _ => {
-                panic!("expect AppliedState::TransactionReply");
+                panic!("expect AppliedState::TxnReply");
             }
         }
     }

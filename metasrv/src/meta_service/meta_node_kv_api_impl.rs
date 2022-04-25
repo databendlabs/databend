@@ -25,8 +25,8 @@ use common_meta_types::MGetKVReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResultError;
 use common_meta_types::PrefixListReply;
-use common_meta_types::TransactionReply;
-use common_meta_types::TransactionReq;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
@@ -95,7 +95,7 @@ impl KVApi for MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn transaction(&self, txn: TransactionReq) -> Result<TransactionReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         let ent = LogEntry {
             txid: None,
             cmd: Cmd::Transaction(txn),
@@ -103,7 +103,7 @@ impl KVApi for MetaNode {
         let rst = self.write(ent).await?;
 
         match rst {
-            AppliedState::TransactionReply(x) => Ok(x),
+            AppliedState::TxnReply(x) => Ok(x),
             _ => Err(MetaError::MetaResultError(MetaResultError::InvalidType {
                 expect: "AppliedState::transaction".to_string(),
                 got: "other".to_string(),

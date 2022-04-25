@@ -33,7 +33,7 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::RenameTableReq;
-use crate::TransactionReq;
+use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
 /// A Cmd describes what a user want to do to raft state machine
@@ -98,7 +98,7 @@ pub enum Cmd {
         value_meta: Option<KVMeta>,
     },
 
-    Transaction(TransactionReq),
+    Transaction(TxnRequest),
 }
 
 impl fmt::Display for Cmd {
@@ -130,7 +130,9 @@ impl fmt::Display for Cmd {
                     key, seq, value, value_meta
                 )
             }
-            Cmd::Transaction(txn) => txn.fmt(f),
+            Cmd::Transaction(txn) => {
+                write!(f, "txn:{:?}", txn)
+            }
         }
     }
 }

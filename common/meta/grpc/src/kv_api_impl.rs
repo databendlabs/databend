@@ -17,8 +17,8 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaError;
 use common_meta_types::PrefixListReply;
-use common_meta_types::TransactionReply;
-use common_meta_types::TransactionReq;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
@@ -54,7 +54,7 @@ impl KVApi for MetaGrpcClient {
         Ok(reply)
     }
 
-    async fn transaction(&self, txn: TransactionReq) -> Result<TransactionReply, MetaError> {
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         let reply = self.transaction(txn).await?;
         Ok(reply)
     }

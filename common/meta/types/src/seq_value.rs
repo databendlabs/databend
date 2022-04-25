@@ -17,6 +17,8 @@ use std::convert::TryInto;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::protobuf::SeqV as pb_seqv;
+
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct KVMeta {
@@ -91,4 +93,19 @@ impl<T> SeqV<T> {
         self.data = v;
         self
     }
+}
+
+pub fn convert_seqv_to_pb(seqv: Option<SeqV>) -> Option<pb_seqv> {
+    seqv.as_ref().map(|seqv| pb_seqv {
+        seq: seqv.seq,
+        data: seqv.data.clone(),
+    })
+}
+
+pub fn convert_to_pb_to_seqv(seqv: Option<pb_seqv>) -> Option<SeqV> {
+    seqv.as_ref().map(|seqv| SeqV {
+        seq: seqv.seq,
+        data: seqv.data.clone(),
+        meta: None,
+    })
 }

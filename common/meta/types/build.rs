@@ -40,6 +40,70 @@ fn build_proto() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     tonic_build::configure()
         .file_descriptor_set_path(out_dir.join("meta_descriptor.bin"))
+        .type_attribute(
+            "SeqV",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnGetRequest",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnPutRequest",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnDeleteRequest",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnCondition.ConditionTarget",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnCondition.ConditionResult",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnOp.request",
+            "#[derive(Eq,serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnCondition",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnOp",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnRequest",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnGetResponse",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnPutResponse",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnDeleteResponse",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnOpResponse.response",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnOpResponse",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "TxnReply",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
         .compile(&protos, &[&proto_dir])
         .unwrap();
 }

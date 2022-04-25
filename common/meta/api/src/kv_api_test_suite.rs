@@ -16,22 +16,25 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
+use common_meta_types::convert_seqv_to_pb;
+use common_meta_types::txn_op;
+use common_meta_types::txn_op_response;
+use common_meta_types::ConditionResult;
+use common_meta_types::ConditionTarget;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TransactionCondition;
-use common_meta_types::TransactionConditionResult;
-use common_meta_types::TransactionConditionTarget;
-use common_meta_types::TransactionDeleteRequest;
-use common_meta_types::TransactionDeleteResponse;
-use common_meta_types::TransactionGetRequest;
-use common_meta_types::TransactionGetResponse;
-use common_meta_types::TransactionOperation;
-use common_meta_types::TransactionOperationResponse;
-use common_meta_types::TransactionPutRequest;
-use common_meta_types::TransactionPutResponse;
-use common_meta_types::TransactionReq;
+use common_meta_types::TxnCondition;
+use common_meta_types::TxnDeleteRequest;
+use common_meta_types::TxnDeleteResponse;
+use common_meta_types::TxnGetRequest;
+use common_meta_types::TxnGetResponse;
+use common_meta_types::TxnOp;
+use common_meta_types::TxnOpResponse;
+use common_meta_types::TxnPutRequest;
+use common_meta_types::TxnPutResponse;
+use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_tracing::tracing;
 
@@ -68,6 +71,7 @@ impl KVApiTestSuite {
             }
             i += 1;
         }
+
         Ok(())
     }
 }
@@ -546,8 +550,8 @@ impl KVApiTestSuite {
 
     fn check_transaction_responses(
         &self,
-        responses: &Vec<TransactionOperationResponse>,
-        expected: &Vec<TransactionOperationResponse>,
+        responses: &Vec<TxnOpResponse>,
+        expected: &Vec<TxnOpResponse>,
     ) {
         assert_eq!(responses.len(), expected.len());
 
@@ -577,24 +581,23 @@ impl KVApiTestSuite {
 
             // transaction by k1 condition
             let txn_key = k1.to_string();
-            let condition = vec![TransactionCondition {
+            let condition = vec![TxnCondition {
                 key: txn_key.clone(),
-                target: TransactionConditionTarget::Key,
-                expected: TransactionConditionResult::KeyExist,
+                target: ConditionTarget::Key as i32,
+                expected: ConditionResult::KeyExist as i32,
                 value: None,
             }];
 
-            let if_then: Vec<TransactionOperation> =
-                vec![TransactionOperation::TransactionPutRequest(
-                    TransactionPutRequest {
-                        key: txn_key.clone(),
-                        value: b"new_v1".to_vec(),
-                        prev_kv: true,
-                    },
-                )];
+            let if_then: Vec<TxnOp> = vec![TxnOp {
+                request: Some(txn_op::Request::Put(TxnPutRequest {
+                    key: txn_key.clone(),
+                    value: b"new_v1".to_vec(),
+                    prev_kv: true,
+                })),
+            }];
 
-            let else_then: Vec<TransactionOperation> = vec![];
-            let txn = TransactionReq {
+            let else_then: Vec<TxnOp> = vec![];
+            let txn = TxnRequest {
                 condition,
                 if_then,
                 else_then,
@@ -603,13 +606,12 @@ impl KVApiTestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert!(resp.success);
-            let expected: Vec<TransactionOperationResponse> =
-                vec![TransactionOperationResponse::TransactionPutResponse(
-                    TransactionPutResponse {
-                        key: txn_key.clone(),
-                        prev_value: Some(SeqV::with_meta(1, None, val1.clone())),
-                    },
-                )];
+            let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
+                response: Some(txn_op_response::Response::Put(TxnPutResponse {
+                    key: txn_key.clone(),
+                    prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(1, None, val1.clone()))),
+                })),
+            }];
 
             self.check_transaction_responses(&resp.responses, &expected);
         }
@@ -632,31 +634,30 @@ impl KVApiTestSuite {
             let txn_key1 = k1.to_string();
             let txn_key2 = k2.to_string();
             let condition = vec![
-                TransactionCondition {
+                TxnCondition {
                     key: txn_key1.clone(),
-                    target: TransactionConditionTarget::Key,
-                    expected: TransactionConditionResult::KeyExist,
+                    target: ConditionTarget::Key as i32,
+                    expected: ConditionResult::KeyExist as i32,
                     value: None,
                 },
-                TransactionCondition {
+                TxnCondition {
                     key: txn_key2.clone(),
-                    target: TransactionConditionTarget::Key,
-                    expected: TransactionConditionResult::KeyExist,
+                    target: ConditionTarget::Key as i32,
+                    expected: ConditionResult::KeyExist as i32,
                     value: None,
                 },
             ];
 
-            let if_then: Vec<TransactionOperation> =
-                vec![TransactionOperation::TransactionPutRequest(
-                    TransactionPutRequest {
-                        key: txn_key1.clone(),
-                        value: b"new_v1".to_vec(),
-                        prev_kv: true,
-                    },
-                )];
+            let if_then: Vec<TxnOp> = vec![TxnOp {
+                request: Some(txn_op::Request::Put(TxnPutRequest {
+                    key: txn_key1.clone(),
+                    value: b"new_v1".to_vec(),
+                    prev_kv: true,
+                })),
+            }];
 
-            let else_then: Vec<TransactionOperation> = vec![];
-            let txn = TransactionReq {
+            let else_then: Vec<TxnOp> = vec![];
+            let txn = TxnRequest {
                 condition,
                 if_then,
                 else_then,
@@ -699,50 +700,60 @@ impl KVApiTestSuite {
             let txn_key2 = k2.to_string();
 
             let condition = vec![
-                TransactionCondition {
+                TxnCondition {
                     key: txn_key1.clone(),
-                    target: TransactionConditionTarget::Key,
-                    expected: TransactionConditionResult::KeyExist,
+                    target: ConditionTarget::Key as i32,
+                    expected: ConditionResult::KeyExist as i32,
                     value: None,
                 },
-                TransactionCondition {
+                TxnCondition {
                     key: txn_key2.clone(),
-                    target: TransactionConditionTarget::Key,
-                    expected: TransactionConditionResult::KeyExist,
+                    target: ConditionTarget::Key as i32,
+                    expected: ConditionResult::KeyExist as i32,
                     value: None,
                 },
             ];
 
-            let if_then: Vec<TransactionOperation> = vec![
+            let if_then: Vec<TxnOp> = vec![
                 // change k1
-                TransactionOperation::TransactionPutRequest(TransactionPutRequest {
-                    key: txn_key1.clone(),
-                    value: val1_new.clone(),
-                    prev_kv: true,
-                }),
+                TxnOp {
+                    request: Some(txn_op::Request::Put(TxnPutRequest {
+                        key: txn_key1.clone(),
+                        value: val1_new.to_vec(),
+                        prev_kv: true,
+                    })),
+                },
                 // change k2
-                TransactionOperation::TransactionPutRequest(TransactionPutRequest {
-                    key: txn_key2.clone(),
-                    value: b"new_v2".to_vec(),
-                    prev_kv: true,
-                }),
+                TxnOp {
+                    request: Some(txn_op::Request::Put(TxnPutRequest {
+                        key: txn_key2.clone(),
+                        value: b"new_v2".to_vec(),
+                        prev_kv: true,
+                    })),
+                },
                 // get k1
-                TransactionOperation::TransactionGetRequest(TransactionGetRequest {
-                    key: txn_key1.clone(),
-                }),
+                TxnOp {
+                    request: Some(txn_op::Request::Get(TxnGetRequest {
+                        key: txn_key1.clone(),
+                    })),
+                },
                 // delete k1
-                TransactionOperation::TransactionDeleteRequest(TransactionDeleteRequest {
-                    key: txn_key1.clone(),
-                    prev_kv: true,
-                }),
+                TxnOp {
+                    request: Some(txn_op::Request::Delete(TxnDeleteRequest {
+                        key: txn_key1.clone(),
+                        prev_kv: true,
+                    })),
+                },
                 // get k1
-                TransactionOperation::TransactionGetRequest(TransactionGetRequest {
-                    key: txn_key1.clone(),
-                }),
+                TxnOp {
+                    request: Some(txn_op::Request::Get(TxnGetRequest {
+                        key: txn_key1.clone(),
+                    })),
+                },
             ];
 
-            let else_then: Vec<TransactionOperation> = vec![];
-            let txn = TransactionReq {
+            let else_then: Vec<TxnOp> = vec![];
+            let txn = TxnRequest {
                 condition,
                 if_then,
                 else_then,
@@ -751,34 +762,60 @@ impl KVApiTestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert!(resp.success);
-            let expected: Vec<TransactionOperationResponse> = vec![
-                TransactionOperationResponse::TransactionPutResponse(TransactionPutResponse {
-                    key: txn_key1.clone(),
-                    prev_value: Some(SeqV::with_meta(4, None, val1.clone())),
-                }),
-                TransactionOperationResponse::TransactionPutResponse(TransactionPutResponse {
-                    key: txn_key2.clone(),
-                    prev_value: Some(SeqV::with_meta(5, None, val2.clone())),
-                }),
-                TransactionOperationResponse::TransactionGetResponse(TransactionGetResponse {
-                    key: txn_key1.clone(),
-                    value: Some(SeqV::with_meta(6, None, val1_new.clone())),
-                }),
-                TransactionOperationResponse::TransactionDeleteResponse(
-                    TransactionDeleteResponse {
+
+            let expected: Vec<TxnOpResponse> = vec![
+                // change k1
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Put(TxnPutResponse {
+                        key: txn_key1.clone(),
+                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
+                            4,
+                            None,
+                            val1.clone(),
+                        ))),
+                    })),
+                },
+                // change k2
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Put(TxnPutResponse {
+                        key: txn_key2.clone(),
+                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
+                            5,
+                            None,
+                            val2.clone(),
+                        ))),
+                    })),
+                },
+                // get k1
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Get(TxnGetResponse {
+                        key: txn_key1.clone(),
+                        value: convert_seqv_to_pb(Some(SeqV::with_meta(6, None, val1_new.clone()))),
+                    })),
+                },
+                // delete k1
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Delete(TxnDeleteResponse {
                         key: txn_key1.clone(),
                         success: true,
-                        prev_value: Some(SeqV::with_meta(6, None, val1_new.clone())),
-                    },
-                ),
-                TransactionOperationResponse::TransactionGetResponse(TransactionGetResponse {
-                    key: txn_key1.clone(),
-                    value: None,
-                }),
+                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
+                            6,
+                            None,
+                            val1_new.clone(),
+                        ))),
+                    })),
+                },
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Get(TxnGetResponse {
+                        key: txn_key1.clone(),
+                        value: None,
+                    })),
+                },
             ];
 
             self.check_transaction_responses(&resp.responses, &expected);
         }
+
         Ok(())
     }
 }
