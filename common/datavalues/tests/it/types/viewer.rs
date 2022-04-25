@@ -68,3 +68,35 @@ fn test_constant_viewer() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_bump_datetime() -> Result<()> {
+    use std::ops::Sub;
+    use chrono::{offset::TimeZone, NaiveDate};
+    use chrono_tz::Tz;
+    // timestamp microseconds
+    {
+        let tz: Tz = "UTC".parse().unwrap();
+        let dt = tz.ymd(9999, 12, 31).and_hms(23, 59, 59);
+        println!("{}", dt.timestamp_micros());
+        let dt = tz.ymd(1000, 1, 1).and_hms(0, 0, 0);
+        println!("{}", dt.timestamp_micros());
+    }
+    // date
+    {
+        let epoch = NaiveDate::from_ymd(1970, 1, 1);
+        let tz: Tz = "UTC".parse().unwrap();
+        let dt = tz.ymd(9999, 12, 31);
+        let duration = dt.naive_utc().sub(epoch);
+        println!("max days: {}", duration.num_days());
+        
+        let epoch = NaiveDate::from_ymd(1970, 1, 1);
+        let tz: Tz = "UTC".parse().unwrap();
+        let dt = tz.ymd(1000, 1, 1);
+        let duration = dt.naive_utc().sub(epoch);
+        println!("max days: {}", duration.num_days());
+    }
+    Ok(())
+}
+
+
