@@ -68,7 +68,6 @@ macro_rules! define_timestamp_add_year_months {
         let factor = $ctx.factor;
         let precision = $ctx.precision as u32;
         let base = 10_i64.pow(9 - precision);
-        println!("l: {}, precision: {}, base: {}", $l, precision, base);
         let nano = $l * base;
         let naive =
             NaiveDateTime::from_timestamp_opt(nano / 1_000_000_000, (nano % 1_000_000_000) as u32);
