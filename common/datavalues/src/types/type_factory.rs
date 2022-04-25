@@ -88,7 +88,7 @@ impl TypeFactory {
         let mut names = vec![data_type.name()];
 
         for alias in data_type.aliases() {
-            names.push(alias);
+            names.push(alias.to_string());
         }
         for name in names {
             self.case_insensitive_types

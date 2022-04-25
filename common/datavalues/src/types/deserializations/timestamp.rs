@@ -21,13 +21,13 @@ use num::cast::AsPrimitive;
 use crate::columns::MutableColumn;
 use crate::prelude::*;
 
-pub struct TimeStampDeserializer<T: PrimitiveType> {
+pub struct TimestampDeserializer<T: PrimitiveType> {
     pub builder: MutablePrimitiveColumn<T>,
     pub tz: Tz,
     pub precision: usize,
 }
 
-impl<T> TypeDeserializer for TimeStampDeserializer<T>
+impl<T> TypeDeserializer for TimestampDeserializer<T>
 where
     i64: AsPrimitive<T>,
     T: PrimitiveType,

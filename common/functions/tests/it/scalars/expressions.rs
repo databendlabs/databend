@@ -530,7 +530,7 @@ fn test_variant_cast_function() -> Result<()> {
                 VariantValue::from(json!("2021-10-24 10:10:10")),
             ])],
             expect: Series::from_data(vec![1614906061i64, 1635070210]),
-            error: "Cast error happens in casting from Variant to TimeStamp(6)",
+            error: "Cast error happens in casting from Variant to Timestamp(6)",
         }),
     ];
 

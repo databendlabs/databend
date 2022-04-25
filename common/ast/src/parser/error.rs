@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
+use logos::Span;
 
 use crate::parser::token::TokenKind;
 use crate::parser::util::Input;
@@ -93,7 +93,7 @@ impl<'a> Error<'a> {
         }
     }
 
-    pub fn to_labels(&self) -> Vec<(Range<usize>, String)> {
+    pub fn to_labels(&self) -> Vec<(Span, String)> {
         self.errors
             .iter()
             .filter_map(|(input, kind)| {
@@ -122,7 +122,7 @@ impl<'a> Error<'a> {
     }
 }
 
-pub fn pretty_print_error(source: &str, lables: Vec<(Range<usize>, String)>) -> String {
+pub fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
     use codespan_reporting::diagnostic::Diagnostic;
     use codespan_reporting::diagnostic::Label;
     use codespan_reporting::files::SimpleFile;

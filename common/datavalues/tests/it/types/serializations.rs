@@ -191,3 +191,11 @@ fn test_convert_arrow() {
 
     assert_eq!(new_t.name(), t.name())
 }
+
+#[test]
+fn test_enum_dispatch() -> Result<()> {
+    let c = StringSerializer {};
+    let d: TypeSerializerImpl = c.into();
+    let _: StringSerializer = d.try_into()?;
+    Ok(())
+}

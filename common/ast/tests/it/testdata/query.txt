@@ -214,6 +214,7 @@ Query {
                             ),
                             order_by: [],
                             limit: [],
+                            offset: None,
                         },
                         alias: TableAlias {
                             name: Identifier {
@@ -296,6 +297,7 @@ Query {
             },
         },
     ],
+    offset: None,
 }
 
 
@@ -370,6 +372,88 @@ Query {
             ),
         ),
     ],
+    offset: None,
+}
+
+
+---------- Input ----------
+select * from customer inner join orders on a = b limit 2 offset 3
+---------- Output ---------
+SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 2 OFFSET 3
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Join(
+                Join {
+                    op: Inner,
+                    condition: On(
+                        BinaryOp {
+                            op: Eq,
+                            left: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "a",
+                                    quote: None,
+                                },
+                            },
+                            right: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "b",
+                                    quote: None,
+                                },
+                            },
+                        },
+                    ),
+                    left: Table {
+                        database: None,
+                        table: Identifier {
+                            name: "customer",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                    right: Table {
+                        database: None,
+                        table: Identifier {
+                            name: "orders",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                },
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [
+        Literal(
+            Number(
+                "2",
+            ),
+        ),
+    ],
+    offset: Some(
+        Literal(
+            Number(
+                "3",
+            ),
+        ),
+    ),
 }
 
 
@@ -418,6 +502,7 @@ Query {
     ),
     order_by: [],
     limit: [],
+    offset: None,
 }
 
 
@@ -487,6 +572,7 @@ Query {
     ),
     order_by: [],
     limit: [],
+    offset: None,
 }
 
 

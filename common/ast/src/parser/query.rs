@@ -33,19 +33,21 @@ pub fn query(i: Input) -> IResult<Query> {
             ~ ( HAVING ~ #expr )?
             ~ ( ORDER ~ BY ~ #comma_separated_list1(order_by_expr) )?
             ~ ( LIMIT ~ #comma_separated_list1(expr) )?
+            ~ ( OFFSET ~ #expr )?
             : "`SELECT ...`"
         },
         |(
             _select,
-            distinct,
+            opt_distinct,
             select_list,
             _from,
             table_refs,
-            where_block,
-            group_by_block,
-            having_block,
-            order_by_block,
-            limit_block,
+            opt_where_block,
+            opt_group_by_block,
+            opt_having_block,
+            opt_order_by_block,
+            opt_limit_block,
+            opt_offset_block,
         )| {
             let from = table_refs
                 .into_iter()
@@ -61,19 +63,20 @@ pub fn query(i: Input) -> IResult<Query> {
 
             Query {
                 body: SetExpr::Select(Box::new(SelectStmt {
-                    distinct: distinct.is_some(),
+                    distinct: opt_distinct.is_some(),
                     select_list,
                     from,
-                    selection: where_block.map(|(_, selection)| selection),
-                    group_by: group_by_block
+                    selection: opt_where_block.map(|(_, selection)| selection),
+                    group_by: opt_group_by_block
                         .map(|(_, _, group_by)| group_by)
                         .unwrap_or_default(),
-                    having: having_block.map(|(_, having)| having),
+                    having: opt_having_block.map(|(_, having)| having),
                 })),
-                order_by: order_by_block
+                order_by: opt_order_by_block
                     .map(|(_, _, order_by)| order_by)
                     .unwrap_or_default(),
-                limit: limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+                limit: opt_limit_block.map(|(_, limit)| limit).unwrap_or_default(),
+                offset: opt_offset_block.map(|(_, offset)| offset),
             }
         },
     )(i)
@@ -100,9 +103,9 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         rule! {
             #expr ~ ( AS ~ #ident )?
         },
-        |(expr, alias)| SelectTarget::AliasedExpr {
+        |(expr, opt_alias)| SelectTarget::AliasedExpr {
             expr,
-            alias: alias.map(|(_, name)| name),
+            alias: opt_alias.map(|(_, name)| name),
         },
     );
 
@@ -131,7 +134,7 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
         rule! {
             #ident ~ ( "." ~ #ident )? ~ ( AS? ~ #table_alias )?
         },
-        |(fst, snd, alias)| {
+        |(fst, snd, opt_alias)| {
             let (database, table) = match (fst, snd) {
                 (database, Some((_, table))) => (Some(database), table),
                 (table, None) => (None, table),
@@ -140,7 +143,7 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
             TableReference::Table {
                 database,
                 table,
-                alias: alias.map(|(_, alias)| alias),
+                alias: opt_alias.map(|(_, alias)| alias),
             }
         },
     )(i)
@@ -210,8 +213,8 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
         rule! {
             #join_operator? ~ JOIN ~ #cut(table_ref_without_join) ~ #cut(join_condition)
         },
-        |(op, _, right, condition)| JoinElement {
-            op: op.unwrap_or(JoinOperator::Inner),
+        |(opt_op, _, right, condition)| JoinElement {
+            op: opt_op.unwrap_or(JoinOperator::Inner),
             condition,
             right: Box::new(right),
         },
@@ -220,8 +223,8 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
         rule! {
             NATURAL ~ #join_operator? ~ #cut(rule! { JOIN }) ~ #cut(table_ref_without_join)
         },
-        |(_, op, _, right)| JoinElement {
-            op: op.unwrap_or(JoinOperator::Inner),
+        |(_, opt_op, _, right)| JoinElement {
+            op: opt_op.unwrap_or(JoinOperator::Inner),
             condition: JoinCondition::Natural,
             right: Box::new(right),
         },
@@ -263,9 +266,9 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
         rule! {
             #expr ~ ( ASC | DESC )?
         },
-        |(expr, asc)| OrderByExpr {
+        |(expr, opt_asc)| OrderByExpr {
             expr,
-            asc: asc.map(|asc| asc.kind == ASC),
+            asc: opt_asc.map(|asc| asc.kind == ASC),
             nulls_first: None,
         },
     )(i)

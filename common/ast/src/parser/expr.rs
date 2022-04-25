@@ -361,34 +361,36 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         rule! {
             IS ~ NOT? ~ NULL
         },
-        |(_, not, _)| ExprElement::IsNull { not: not.is_some() },
+        |(_, opt_not, _)| ExprElement::IsNull {
+            not: opt_not.is_some(),
+        },
     );
     let in_list = map(
         rule! {
             NOT? ~ IN ~ "(" ~ #cut(comma_separated_list1(subexpr(0))) ~ ")"
         },
-        |(not, _, _, list, _)| ExprElement::InList {
+        |(opt_not, _, _, list, _)| ExprElement::InList {
             list,
-            not: not.is_some(),
+            not: opt_not.is_some(),
         },
     );
     let in_subquery = map(
         rule! {
             NOT? ~ IN ~ "(" ~ #query  ~ ")"
         },
-        |(not, _, _, subquery, _)| ExprElement::InSubquery {
+        |(opt_not, _, _, subquery, _)| ExprElement::InSubquery {
             subquery,
-            not: not.is_some(),
+            not: opt_not.is_some(),
         },
     );
     let between = map(
         rule! {
             NOT? ~ BETWEEN ~ #cut(subexpr(BETWEEN_PREC)) ~ AND ~  #cut(subexpr(BETWEEN_PREC))
         },
-        |(not, _, low, _, high)| ExprElement::Between {
+        |(opt_not, _, low, _, high)| ExprElement::Between {
             low,
             high,
-            not: not.is_some(),
+            not: opt_not.is_some(),
         },
     );
     let cast = map(
@@ -409,10 +411,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list1(subexpr(0))? ~ ")"
         },
-        |(name, _, distinct, args, _)| ExprElement::FunctionCall {
-            distinct: distinct.is_some(),
+        |(name, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+            distinct: opt_distinct.is_some(),
             name,
-            args: args.unwrap_or_default(),
+            args: opt_args.unwrap_or_default(),
             params: vec![],
         },
     );
@@ -422,10 +424,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             ~ "(" ~ #comma_separated_list1(literal) ~ ")"
             ~ "(" ~ DISTINCT? ~ #comma_separated_list1(subexpr(0))? ~ ")"
         },
-        |(name, _, params, _, _, distinct, args, _)| ExprElement::FunctionCall {
-            distinct: distinct.is_some(),
+        |(name, _, params, _, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+            distinct: opt_distinct.is_some(),
             name,
-            args: args.unwrap_or_default(),
+            args: opt_args.unwrap_or_default(),
             params,
         },
     );
@@ -527,14 +529,14 @@ pub fn literal(i: Input) -> IResult<Literal> {
         rule! {
             LiteralString
         },
-        |quoted| Literal::String(quoted.text[1..quoted.text.len() - 1].to_string()),
+        |quoted| Literal::String(quoted.text()[1..quoted.text().len() - 1].to_string()),
     );
     // TODO (andylokandy): handle hex numbers in parser
     let number = map(
         rule! {
             LiteralHex | LiteralNumber
         },
-        |number| Literal::Number(number.text.to_string()),
+        |number| Literal::Number(number.text().to_string()),
     );
     let boolean = alt((
         value(Literal::Boolean(true), rule! { TRUE }),
@@ -552,24 +554,25 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN });
-    let ty_tiny_int = map(rule! { TINYINT ~ UNSIGNED? }, |(_, unsigned)| {
+    let ty_tiny_int = map(rule! { TINYINT ~ UNSIGNED? }, |(_, opt_unsigned)| {
         TypeName::TinyInt {
-            unsigned: unsigned.is_some(),
+            unsigned: opt_unsigned.is_some(),
         }
     });
-    let ty_small_int = map(rule! { SMALLINT ~ UNSIGNED? }, |(_, unsigned)| {
+    let ty_small_int = map(rule! { SMALLINT ~ UNSIGNED? }, |(_, opt_unsigned)| {
         TypeName::SmallInt {
-            unsigned: unsigned.is_some(),
+            unsigned: opt_unsigned.is_some(),
         }
     });
-    let ty_int = map(rule! { ( INT | INTEGER ) ~ UNSIGNED? }, |(_, unsigned)| {
-        TypeName::Int {
-            unsigned: unsigned.is_some(),
-        }
-    });
-    let ty_big_int = map(rule! { BIGINT ~ UNSIGNED? }, |(_, unsigned)| {
+    let ty_int = map(
+        rule! { ( INT | INTEGER ) ~ UNSIGNED? },
+        |(_, opt_unsigned)| TypeName::Int {
+            unsigned: opt_unsigned.is_some(),
+        },
+    );
+    let ty_big_int = map(rule! { BIGINT ~ UNSIGNED? }, |(_, opt_unsigned)| {
         TypeName::BigInt {
-            unsigned: unsigned.is_some(),
+            unsigned: opt_unsigned.is_some(),
         }
     });
     let ty_array = map(
@@ -583,9 +586,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_date = value(TypeName::Date, rule! { DATE });
     let ty_datetime = map(
         rule! { DATETIME ~ ( "(" ~ #literal_u64 ~ ")" )? },
-        |(_, opt_precision)| {
-            let precision = opt_precision.map(|(_, p, _)| p);
-            TypeName::DateTime { precision }
+        |(_, opt_precision)| TypeName::DateTime {
+            precision: opt_precision.map(|(_, precision, _)| precision),
         },
     );
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
@@ -624,6 +626,6 @@ pub fn function_name(i: Input) -> IResult<String> {
             | STDDEV_POP
             | SQRT
         },
-        |name| name.text.to_string(),
+        |name| name.text().to_string(),
     )(i)
 }

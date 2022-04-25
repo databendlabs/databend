@@ -41,8 +41,6 @@ use super::type_string::StringType;
 use super::type_struct::StructType;
 use super::type_timestamp::TimestampType;
 use crate::prelude::*;
-use crate::TypeDeserializer;
-use crate::TypeSerializer;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
@@ -85,7 +83,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         self.data_type_id() == TypeID::Null
     }
 
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
 
     /// Returns the name to display in the SQL describe
     fn sql_name(&self) -> String {
@@ -125,8 +123,8 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
-    fn create_serializer(&self) -> Box<dyn TypeSerializer>;
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer>;
+    fn create_serializer(&self) -> TypeSerializerImpl;
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {

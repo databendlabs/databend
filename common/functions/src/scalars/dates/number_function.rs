@@ -250,7 +250,8 @@ impl NumberOperator<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(CastFunction::create("toDate", DateType::arc().name()).unwrap())
+        let type_name = DateType::arc().name();
+        Some(CastFunction::create("toDate", type_name.as_str()).unwrap())
     }
 }
 

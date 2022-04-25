@@ -15,20 +15,22 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::display_identifier_vec;
 use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::parser::token::Token;
 
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
-pub enum Statement {
+pub enum Statement<'a> {
     // EXPLAIN
     Explain {
         analyze: bool,
-        query: Box<Statement>,
+        query: Box<Statement<'a>>,
     },
 
     // Query statement
@@ -86,12 +88,26 @@ pub enum Statement {
     KillStmt {
         object_id: Identifier,
     },
+
+    // DML statements
+    Insert {
+        table: Identifier,
+        columns: Vec<Identifier>,
+        source: InsertSource<'a>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQLProperty {
     pub name: String,
     pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InsertSource<'a> {
+    Streaming { format: String },
+    Values { values_tokens: &'a [Token<'a>] },
+    Select { query: Box<Query> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -118,7 +134,7 @@ impl Display for ColumnDefinition {
     }
 }
 
-impl Display for Statement {
+impl<'a> Display for Statement<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Statement::Explain { analyze, query } => {
@@ -145,12 +161,7 @@ impl Display for Statement {
             }
             Statement::ShowCreateTable { database, table } => {
                 write!(f, "SHOW CREATE TABLE ")?;
-                let mut idents = vec![];
-                if let Some(ident) = database {
-                    idents.push(ident.to_owned());
-                }
-                idents.push(table.to_owned());
-                display_identifier_vec(f, &idents)?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
             }
             Statement::CreateTable {
                 if_not_exists,
@@ -163,30 +174,15 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                let mut idents = vec![];
-                if let Some(ident) = database {
-                    idents.push(ident.to_owned());
-                }
-                idents.push(table.to_owned());
-                display_identifier_vec(f, &idents)?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 write!(f, " (")?;
-                for i in 0..columns.len() {
-                    write!(f, "{}", columns[i])?;
-                    if i != columns.len() - 1 {
-                        write!(f, ", ")?;
-                    }
-                }
+                write_comma_separated_list(f, columns)?;
                 write!(f, ")")?;
                 // TODO(leiysky): display rest information
             }
             Statement::Describe { database, table } => {
                 write!(f, "DESCRIBE ")?;
-                let mut idents = vec![];
-                if let Some(ident) = database {
-                    idents.push(ident.to_owned());
-                }
-                idents.push(table.to_owned());
-                display_identifier_vec(f, &idents)?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
             }
             Statement::DropTable {
                 if_exists,
@@ -197,21 +193,11 @@ impl Display for Statement {
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
-                let mut idents = vec![];
-                if let Some(ident) = database {
-                    idents.push(ident.to_owned());
-                }
-                idents.push(table.to_owned());
-                display_identifier_vec(f, &idents)?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
             }
             Statement::TruncateTable { database, table } => {
                 write!(f, "TRUNCATE TABLE ")?;
-                let mut idents = vec![];
-                if let Some(ident) = database {
-                    idents.push(ident.to_owned());
-                }
-                idents.push(table.to_owned());
-                display_identifier_vec(f, &idents)?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
             }
             Statement::CreateDatabase {
                 if_not_exists,
@@ -226,11 +212,32 @@ impl Display for Statement {
                 // TODO(leiysky): display rest information
             }
             Statement::UseDatabase { name } => {
-                write!(f, "USE ")?;
-                write!(f, "{}", name)?;
+                write!(f, "USE {}", name)?;
             }
             Statement::KillStmt { object_id } => {
                 write!(f, "KILL {}", object_id)?;
+            }
+            Statement::Insert {
+                table,
+                columns,
+                source,
+            } => {
+                write!(f, "INSERT INTO {}", table)?;
+                if !columns.is_empty() {
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, columns)?;
+                    write!(f, ")")?;
+                }
+                match source {
+                    InsertSource::Streaming { format } => write!(f, " FORMAT {}", format)?,
+                    InsertSource::Values { values_tokens } => write!(
+                        f,
+                        " VALUES {}",
+                        &values_tokens[0].source[values_tokens.first().unwrap().span.start
+                            ..values_tokens.last().unwrap().span.end]
+                    )?,
+                    InsertSource::Select { query } => write!(f, " {}", query)?,
+                }
             }
         }
         Ok(())
