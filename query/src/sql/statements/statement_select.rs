@@ -87,10 +87,6 @@ impl DfQueryStatement {
             ..Default::default()
         };
 
-        if ir.distinct {
-            analyze_state.distinct = true;
-        }
-
         if let Some(predicate) = &ir.filter_predicate {
             Self::verify_no_aggregate(predicate, "filter")?;
             analyze_state.filter = Some(predicate.clone());
@@ -151,6 +147,10 @@ impl DfQueryStatement {
             Self::analyze_aggregate(&ir.aggregate_expressions, &mut analyze_state)?;
         }
 
+        if ir.distinct {
+            Self::analyze_distinct(&ir.projection_expressions, &mut analyze_state)?;
+        }
+
         Ok(analyze_state)
     }
 
@@ -167,6 +167,25 @@ impl DfQueryStatement {
             state
                 .aggregate_expressions
                 .push(rebase_expr(aggr_expression, base_exprs)?);
+        }
+
+        Ok(())
+    }
+
+    fn analyze_distinct(
+        projection_exprs: &[Expression],
+        state: &mut QueryAnalyzeState,
+    ) -> Result<()> {
+        for item in projection_exprs {
+            let distinct_expr = match item {
+                Expression::Alias(_, expr) => *expr.clone(),
+                _ => item.clone(),
+            };
+
+            // support select distinct aggr_func()...
+            let distinct_expr = rebase_expr(&distinct_expr, &state.group_by_expressions)?;
+            let distinct_expr = rebase_expr(&distinct_expr, &state.aggregate_expressions)?;
+            state.distinct_expressions.push(distinct_expr);
         }
 
         Ok(())

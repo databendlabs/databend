@@ -45,16 +45,18 @@ pub enum QueryRelation {
 pub struct QueryAnalyzeState {
     pub filter: Option<Expression>,
     pub having: Option<Expression>,
-    pub order_by_expressions: Vec<Expression>,
-    // before order or before projection expression plan
-    pub expressions: Vec<Expression>,
-    pub projection_expressions: Vec<Expression>,
 
+    pub before_group_by_expressions: Vec<Expression>,
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
-    pub before_group_by_expressions: Vec<Expression>,
 
-    pub distinct: bool,
+    // same as projection expressions without alias
+    pub distinct_expressions: Vec<Expression>,
+
+    // before order or before projection expression plan
+    pub expressions: Vec<Expression>,
+    pub order_by_expressions: Vec<Expression>,
+    pub projection_expressions: Vec<Expression>,
 
     pub limit: Option<usize>,
     pub offset: Option<usize>,
@@ -82,13 +84,13 @@ impl Default for QueryAnalyzeState {
         QueryAnalyzeState {
             filter: None,
             having: None,
-            order_by_expressions: vec![],
-            expressions: vec![],
-            projection_expressions: vec![],
+            before_group_by_expressions: vec![],
             group_by_expressions: vec![],
             aggregate_expressions: vec![],
-            before_group_by_expressions: vec![],
-            distinct: false,
+            distinct_expressions: vec![],
+            expressions: vec![],
+            order_by_expressions: vec![],
+            projection_expressions: vec![],
             limit: None,
             offset: None,
             relation: QueryRelation::None,
@@ -105,6 +107,10 @@ impl Debug for QueryAnalyzeState {
             debug_struct.field("filter", predicate);
         }
 
+        if let Some(predicate) = &self.having {
+            debug_struct.field("having", predicate);
+        }
+
         if !self.before_group_by_expressions.is_empty() {
             debug_struct.field("before_group_by", &self.before_group_by_expressions);
         }
@@ -117,19 +123,15 @@ impl Debug for QueryAnalyzeState {
             debug_struct.field("aggregate", &self.aggregate_expressions);
         }
 
+        if !self.distinct_expressions.is_empty() {
+            debug_struct.field("distinct", &self.distinct_expressions);
+        }
+
         if !self.expressions.is_empty() {
             match self.order_by_expressions.is_empty() {
                 true => debug_struct.field("before_projection", &self.expressions),
                 false => debug_struct.field("before_order_by", &self.expressions),
             };
-        }
-
-        if let Some(predicate) = &self.having {
-            debug_struct.field("having", predicate);
-        }
-
-        if self.distinct {
-            debug_struct.field("distinct", &true);
         }
 
         if !self.order_by_expressions.is_empty() {

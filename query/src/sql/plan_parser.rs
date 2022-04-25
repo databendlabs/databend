@@ -21,7 +21,6 @@ use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
-use common_planners::ProjectionPlan;
 use common_planners::SelectPlan;
 use common_tracing::tracing;
 
@@ -172,6 +171,29 @@ impl PlanParser {
         }
     }
 
+    fn build_distinct_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        match data.distinct_expressions.is_empty() {
+            false => {
+                let group_by_exprs = &data.distinct_expressions;
+                let aggr_exprs = vec![];
+                PlanBuilder::from(&plan)
+                    .aggregate_partial(&aggr_exprs, group_by_exprs)?
+                    .aggregate_final(plan.schema(), &aggr_exprs, group_by_exprs)?
+                    .build()
+            }
+            true => Ok(plan),
+        }
+    }
+
+    fn build_order_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        match data.order_by_expressions.is_empty() {
+            true => Ok(plan),
+            false => PlanBuilder::from(&plan)
+                .sort(&data.order_by_expressions)?
+                .build(),
+        }
+    }
+
     fn build_before_order(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
         fn is_all_column(exprs: &[Expression]) -> bool {
             exprs
@@ -194,33 +216,10 @@ impl PlanParser {
         }
     }
 
-    fn build_order_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        match data.order_by_expressions.is_empty() {
-            true => Ok(plan),
-            false => PlanBuilder::from(&plan)
-                .sort(&data.order_by_expressions)?
-                .build(),
-        }
-    }
-
     fn build_projection_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
         PlanBuilder::from(&plan)
             .project(&data.projection_expressions)?
             .build()
-    }
-
-    fn build_distinct_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        match data.distinct {
-            true => {
-                let group_by_exprs = &data.projection_expressions;
-                let aggr_exprs = vec![];
-                PlanBuilder::from(&plan)
-                    .aggregate_partial(&aggr_exprs, group_by_exprs)?
-                    .aggregate_final(plan.schema(), &aggr_exprs, group_by_exprs)?
-                    .build()
-            }
-            false => Ok(plan),
-        }
     }
 
     fn build_limit_plan(input: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
