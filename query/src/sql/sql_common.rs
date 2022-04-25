@@ -85,4 +85,12 @@ impl SQLCommon {
             ))),
         }
     }
+
+    pub fn short_sql(query: &str) -> String {
+        if query.len() > 64 && query[0..=6].eq_ignore_ascii_case("INSERT") {
+            format!("{}...", query[0..64].to_string())
+        } else {
+            query.to_string()
+        }
+    }
 }
