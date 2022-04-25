@@ -16,3 +16,5 @@ SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number; -- 
 SELECT number, 'number', "number" FROM numbers(3) AS a order by a.number;
 SELECT 'That\'s good.';
 SELECT *; -- {ErrorCode 1015}
+SELECT DISTINCT * FROM numbers(3);
+SELECT DISTINCT 1 FROM numbers(3);
