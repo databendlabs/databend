@@ -37,6 +37,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use crate::sql::SQLCommon;
 use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
@@ -221,7 +222,7 @@ impl QueryContextShared {
 
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
-        *running_query = Some(query.to_string());
+        *running_query = Some(SQLCommon::short_sql(query));
     }
 
     pub fn get_query_str(&self) -> String {
