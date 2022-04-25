@@ -18,3 +18,4 @@ SELECT 'That\'s good.';
 SELECT *; -- {ErrorCode 1015}
 SELECT DISTINCT * FROM numbers(3);
 SELECT DISTINCT 1 FROM numbers(3);
+SELECT DISTINCT (number %3) c FROM numbers(1000) ORDER BY c;
