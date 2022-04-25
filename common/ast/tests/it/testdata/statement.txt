@@ -1547,6 +1547,7 @@ Insert {
                         ),
                     ],
                     from: Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "t2",
