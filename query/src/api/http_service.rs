@@ -60,6 +60,16 @@ impl HttpService {
                 "/debug/pprof/profile",
                 get(super::http::debug::pprof::debug_pprof_handler),
             )
+            .at(
+                // to follow the conversions of jepref, we arrange the path in
+                // this way, so that jeprof could be invoked like:
+                //   `jeprof ./target/debug/databend-query http://localhost:8080/debug/mem`
+                // and jeprof will translate the above url into sth like:
+                //    "http://localhost:8080/debug/mem/pprof/profile?seconds=30"
+                //
+                "/debug/mem/pprof/profile",
+                get(super::http::debug::jeprof::debug_jeprof_dump_handler),
+            )
             .data(self.sessions.clone())
     }
 

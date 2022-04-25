@@ -12,9 +12,11 @@ test = false
 [dependencies]
 common-base = { path = "../base" }
 common-infallible = { path = "../infallible" }
+libc = "0.2"
 
 parking_lot = "0.12.0"
-tikv-jemalloc-sys = "0.4.3"
+tikv-jemalloc-ctl = "0.4"
+tikv-jemalloc-sys = { version = "0.4.3", features = ["stats", "profiling", "unprefixed_malloc_on_supported_platforms"] }
 
 [dev-dependencies]
 common-macros = { path = "../macros" }

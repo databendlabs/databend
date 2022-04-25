@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod home;
+pub mod jeprof;
 pub mod pprof;
 
 pub use home::PProfRequest;
