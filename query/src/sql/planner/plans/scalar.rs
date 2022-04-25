@@ -20,9 +20,9 @@ use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 
 use crate::sql::planner::binder::ScalarExpr;
-use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::IndexType;
 
+#[derive(PartialEq, Clone)]
 pub enum Scalar {
     ColumnRef {
         index: IndexType,
@@ -37,7 +37,7 @@ pub enum Scalar {
         func_name: String,
         distinct: bool,
         params: Vec<DataValue>,
-        args: Vec<ScalarExprRef>,
+        args: Vec<Scalar>,
         data_type: DataTypePtr,
         nullable: bool,
     },

@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::sql::exec::util::format_field_name;
-use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
@@ -76,11 +75,11 @@ impl<'a> ExpressionBuilder<'a> {
         op: String,
         distinct: bool,
         params: Vec<DataValue>,
-        args: &Vec<ScalarExprRef>,
+        args: &Vec<Scalar>,
     ) -> Result<Expression> {
         let mut arg_exprs = Vec::with_capacity(args.len());
         for arg in args.iter() {
-            arg_exprs.push(self.build(arg.as_any().downcast_ref().unwrap()).unwrap());
+            arg_exprs.push(self.build(arg).unwrap());
         }
         Ok(Expression::AggregateFunction {
             op,

@@ -20,13 +20,14 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::binder::common::find_aggregate_exprs;
 use crate::sql::planner::binder::scalar::ScalarBinder;
+use crate::sql::planner::binder::scalar_common::find_aggregate_scalars_from_bind_context;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
@@ -34,6 +35,7 @@ use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalGet;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::storages::Table;
 
@@ -158,7 +160,31 @@ impl Binder {
             .map(|expr| scalar_binder.bind_expr(expr, bind_context).unwrap())
             .collect::<Vec<ScalarExprRef>>();
         // find aggregate expr from bind_context
-        let agg_expr: Vec<ScalarExprRef> = find_aggregate_exprs(bind_context)?;
+        let mut agg_expr: Vec<ScalarExprRef> = Vec::new();
+        for agg_scalar in find_aggregate_scalars_from_bind_context(bind_context)? {
+            match agg_scalar {
+                Scalar::AggregateFunction {
+                    func_name,
+                    distinct,
+                    params,
+                    args,
+                    data_type,
+                    nullable,
+                } => agg_expr.push(Arc::new(Scalar::AggregateFunction {
+                    func_name,
+                    distinct,
+                    params,
+                    args,
+                    data_type,
+                    nullable,
+                })),
+                _ => {
+                    return Err(ErrorCode::LogicalError(
+                        "scalar expr must be Aggregation scalar expr",
+                    ))
+                }
+            }
+        }
         let aggregate_plan = AggregatePlan {
             group_expr,
             agg_expr,

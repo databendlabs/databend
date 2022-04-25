@@ -77,7 +77,14 @@ impl ScalarBinder {
                         let scalar_binder = ScalarBinder::new();
                         let mut scalar_exprs = Vec::with_capacity(args.len());
                         for arg in args.iter() {
-                            scalar_exprs.push(scalar_binder.bind_expr(arg, bind_context).unwrap());
+                            scalar_exprs.push(
+                                scalar_binder
+                                    .bind_expr(arg, bind_context)?
+                                    .as_any()
+                                    .downcast_ref::<Scalar>()
+                                    .unwrap()
+                                    .clone(),
+                            );
                         }
 
                         let col_pairs = bind_context.result_columns();
@@ -111,6 +118,7 @@ impl ScalarBinder {
                     false => todo!(),
                 }
             }
+<<<<<<< HEAD
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -135,6 +143,10 @@ impl ScalarBinder {
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported binary operator: {op}",
             ))),
+=======
+            Expr::BinaryOp { .. } => todo!("group by may use BinaryOp, such as col + 1"),
+            _ => todo!(),
+>>>>>>> 27f0d36c5 (add visitor)
         }
     }
 }
