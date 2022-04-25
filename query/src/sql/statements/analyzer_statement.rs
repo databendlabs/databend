@@ -50,7 +50,7 @@ pub struct QueryAnalyzeState {
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
 
-    // same as projection expressions without alias
+    // rebase on projection expressions without aliases, aggregate and group by expressions
     pub distinct_expressions: Vec<Expression>,
 
     // before order or before projection expression plan
