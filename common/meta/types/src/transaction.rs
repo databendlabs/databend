@@ -138,16 +138,16 @@ impl TransactionCondition {
         if let Some(value) = &self.value {
             let v = value.clone();
             if self.expected == (txn_condition::ConditionResult::ValueEqual as i32).into() {
-                return v == val;
+                return v.data == val.data;
             }
             if self.expected == (txn_condition::ConditionResult::ValueGreater as i32).into() {
-                return v > val;
+                return v.data > val.data;
             }
             if self.expected == (txn_condition::ConditionResult::ValueLess as i32).into() {
-                return v < val;
+                return v.data < val.data;
             }
             if self.expected == (txn_condition::ConditionResult::ValueNotEqual as i32).into() {
-                return v != val;
+                return v.data != val.data;
             }
         }
 
