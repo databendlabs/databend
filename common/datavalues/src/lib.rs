@@ -25,6 +25,7 @@ mod macros;
 
 mod utils;
 
+mod array_value;
 mod columns;
 mod data_field;
 mod data_group_value;
@@ -35,10 +36,9 @@ mod scalars;
 mod types;
 mod variant_value;
 
-/// third partry
+pub use array_value::*;
 pub use chrono;
 pub use chrono_tz::Tz;
-/// current
 pub use columns::*;
 pub use data_field::*;
 pub use data_schema::*;

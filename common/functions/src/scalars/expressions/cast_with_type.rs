@@ -173,6 +173,12 @@ pub fn cast_with_type(
         for x in viewer {
             let _ = check_timestamp(x)?;
         }
+    } else if nonull_data_type.data_type_id() == TypeID::Array {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "Cast error happens in casting from {} to {}",
+            from_type.name(),
+            target_type.name()
+        )));
     }
 
     let (all_nulls, source_valids) = column.validity();

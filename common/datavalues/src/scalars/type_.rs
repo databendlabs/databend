@@ -188,3 +188,33 @@ impl<'a> ScalarRef<'a> for &'a VariantValue {
         true
     }
 }
+
+impl Scalar for ArrayValue {
+    type ColumnType = ArrayColumn;
+    type RefType<'a> = ArrayValueRef<'a>;
+    type Viewer<'a> = ArrayViewer<'a>;
+
+    #[inline]
+    fn as_scalar_ref(&self) -> ArrayValueRef<'_> {
+        ArrayValueRef::ValueRef { val: self }
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: ArrayValueRef<'long>) -> ArrayValueRef<'short> {
+        long
+    }
+}
+
+impl<'a> ScalarRef<'a> for ArrayValueRef<'a> {
+    type ColumnType = ArrayColumn;
+    type ScalarType = ArrayValue;
+
+    #[inline]
+    fn to_owned_scalar(&self) -> ArrayValue {
+        match self {
+            ArrayValueRef::Indexed { column, idx } => column.get(*idx).into(),
+            ArrayValueRef::ValueRef { val } => (*val).clone(),
+        }
+    }
+}

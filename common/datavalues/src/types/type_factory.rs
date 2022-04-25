@@ -106,7 +106,7 @@ impl TypeFactory {
     pub fn add_array_wrapper(&mut self) {
         let mut arrays = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
-            let data_type: DataTypeImpl = DataTypeImpl::Array(ArrayType::create(v.clone()));
+            let data_type: DataTypeImpl = ArrayType::new_impl(v.clone());
             arrays.insert(
                 format!("Array({})", k).to_ascii_lowercase(),
                 data_type.clone(),
