@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataGroupValue;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -22,7 +22,7 @@ use crate::storages::fuse::meta::BlockMeta;
 
 #[derive(Clone)]
 pub struct Points {
-    points_map: HashMap<Vec<DataGroupValue>, (Vec<BlockMeta>, Vec<BlockMeta>)>,
+    points_map: HashMap<Vec<DataValue>, (Vec<BlockMeta>, Vec<BlockMeta>)>,
     const_blocks: Vec<BlockMeta>,
 }
 
@@ -31,8 +31,7 @@ fn gather_parts(blocks: Vec<BlockMeta>, keys: Vec<u32>) -> Result<Points> {
     // 所有的blocks.
     // 获取其cluster key的minmax统计信息。 min： Vec<DataValue>, max: Vec<DataValue>.需要知道cluster key的index. Vec<u32>,
     let mut const_blocks = Vec::new();
-    let mut points_map: HashMap<Vec<DataGroupValue>, (Vec<BlockMeta>, Vec<BlockMeta>)> =
-        HashMap::new();
+    let mut points_map: HashMap<Vec<DataValue>, (Vec<BlockMeta>, Vec<BlockMeta>)> = HashMap::new();
     let size = keys.len();
     for block in blocks {
         let mut min = Vec::with_capacity(size);
@@ -44,8 +43,8 @@ fn gather_parts(blocks: Vec<BlockMeta>, keys: Vec<u32>) -> Result<Points> {
                     key
                 ))
             })?;
-            min.push(DataGroupValue::try_from(&stat.min)?);
-            max.push(DataGroupValue::try_from(&stat.max)?);
+            min.push(stat.min);
+            max.push(stat.max);
         }
 
         if min.eq(&max) {
@@ -53,23 +52,23 @@ fn gather_parts(blocks: Vec<BlockMeta>, keys: Vec<u32>) -> Result<Points> {
             continue;
         }
 
-        let value = if let Some(v) = points_map.get(&min) {
-            let mut val = v.clone();
-            val.0.push(block.clone());
-            val
-        } else {
-            (vec![block.clone()], vec![])
+        match points_map.get_mut(&min) {
+            None => {
+                points_map.insert(min, (vec![block.clone()], vec![]));
+            }
+            Some((v, _)) => {
+                v.push(block.clone());
+            }
         };
-        points_map.insert(min, value);
 
-        let value = if let Some(v) = points_map.get(&max) {
-            let mut val = v.clone();
-            val.1.push(block);
-            val
-        } else {
-            (vec![], vec![block.clone()])
+        match points_map.get_mut(&max) {
+            None => {
+                points_map.insert(max, (vec![], vec![block.clone()]));
+            }
+            Some((_, v)) => {
+                v.push(block.clone());
+            }
         };
-        points_map.insert(max, value);
     }
     Ok(Points {
         points_map,
@@ -77,6 +76,4 @@ fn gather_parts(blocks: Vec<BlockMeta>, keys: Vec<u32>) -> Result<Points> {
     })
 }
 
-fn sort_points(points: Vec<DataGroupValue>) {
-
-}
+fn sort_points(points: Vec<DataValue>) {}
