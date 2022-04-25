@@ -21,6 +21,7 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct BooleanSerializer {}
 
 const TRUE_STR: &str = "1";

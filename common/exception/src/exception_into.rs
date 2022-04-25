@@ -20,6 +20,7 @@ use std::sync::Arc;
 use backtrace::Backtrace;
 
 use crate::exception::ErrorCodeBacktrace;
+use crate::exception_code::ENABLE_BACKTRACE;
 use crate::ErrorCode;
 
 #[derive(thiserror::Error)]
@@ -55,7 +56,22 @@ impl From<anyhow::Error> for ErrorCode {
             1002,
             format!("{}, source: {:?}", error, error.source()),
             Some(Box::new(OtherErrors::AnyHow { error })),
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            ENABLE_BACKTRACE
+                .with(|v| v.get())
+                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+        )
+    }
+}
+
+impl From<&str> for ErrorCode {
+    fn from(error: &str) -> Self {
+        ErrorCode::create(
+            1002,
+            error.to_string(),
+            None,
+            ENABLE_BACKTRACE
+                .with(|v| v.get())
+                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         )
     }
 }

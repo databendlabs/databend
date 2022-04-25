@@ -93,8 +93,8 @@ impl DataType for DateTimeType {
         self
     }
 
-    fn name(&self) -> &str {
-        match self.precision {
+    fn name(&self) -> String {
+        let c = match self.precision {
             0 => "DateTime",
             1 => "DateTime(1)",
             2 => "DateTime(2)",
@@ -106,7 +106,8 @@ impl DataType for DateTimeType {
             8 => "DateTime(8)",
             9 => "DateTime(9)",
             _ => unreachable!(),
-        }
+        };
+        c.to_string()
     }
 
     fn aliases(&self) -> &[&str] {
@@ -147,21 +148,19 @@ impl DataType for DateTimeType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+    fn create_serializer(&self) -> TypeSerializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeSerializer::<i64>::create(
-            tz.parse::<Tz>().unwrap(),
-            self.precision as u32,
-        ))
+        DateTimeSerializer::<i64>::create(tz.parse::<Tz>().unwrap(), self.precision as u32).into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeDeserializer::<i64> {
+        DateTimeDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
             precision: self.precision,
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

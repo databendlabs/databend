@@ -43,8 +43,8 @@ impl DataType for VariantObjectType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Object"
+    fn name(&self) -> String {
+        "Object".to_string()
     }
 
     fn default_value(&self) -> DataValue {
@@ -85,12 +85,12 @@ impl DataType for VariantObjectType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(VariantSerializer {})
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        VariantSerializer {}.into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(VariantDeserializer::with_capacity(capacity))
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        VariantDeserializer::with_capacity(capacity).into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

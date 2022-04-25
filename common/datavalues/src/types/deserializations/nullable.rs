@@ -23,9 +23,10 @@ use crate::ColumnRef;
 use crate::DataValue;
 use crate::NullableColumn;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct NullableDeserializer {
-    pub inner: Box<dyn TypeDeserializer>,
+    pub inner: Box<TypeDeserializerImpl>,
     pub bitmap: MutableBitmap,
 }
 
@@ -47,6 +48,7 @@ impl TypeDeserializer for NullableDeserializer {
     }
 
     fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, _rows: usize) -> Result<()> {
+        // it's covered outside
         unreachable!()
     }
 

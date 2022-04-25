@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
