@@ -21,7 +21,8 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
-use crate::pipelines::new::{ProcessInfo, ProcessorProfiling};
+
+use crate::pipelines::new::ProcessInfo;
 
 pub enum Event {
     NeedData,

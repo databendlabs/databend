@@ -33,7 +33,6 @@ use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipe::NewPipe;
 use crate::pipelines::new::pipeline::NewPipeline;
-use crate::pipelines::new::{ProcessInfo, ProcessorProfiling};
 use crate::pipelines::new::processors::connect;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -43,6 +42,7 @@ use crate::pipelines::new::processors::DirectedEdge;
 use crate::pipelines::new::processors::UpdateList;
 use crate::pipelines::new::processors::UpdateTrigger;
 use crate::pipelines::new::profiling::ExecutorProfiling;
+use crate::pipelines::new::ProcessInfo;
 
 enum State {
     Idle,
@@ -356,7 +356,10 @@ impl RunningGraph {
     pub fn profiling(&self) -> Result<ExecutorProfiling> {
         let graph = self.0.read();
         let processors = self.profiling_processors(&graph)?;
-        let graphviz = format!("{:?}", Dot::with_config(&graph.graph, &[Config::EdgeNoLabel]));
+        let graphviz = format!(
+            "{:?}",
+            Dot::with_config(&graph.graph, &[Config::EdgeNoLabel])
+        );
         Ok(ExecutorProfiling::create(graphviz, processors))
     }
 

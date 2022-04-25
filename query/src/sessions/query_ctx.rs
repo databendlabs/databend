@@ -49,7 +49,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::pipelines::new::executor::{PipelineExecutor, PipelinePullingExecutor};
+use crate::pipelines::new::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -377,9 +377,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

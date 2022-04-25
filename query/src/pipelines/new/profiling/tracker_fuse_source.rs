@@ -1,7 +1,14 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use crate::pipelines::new::profiling::profiling_processor::{FuseTableProcessInfo, ProcessInfo};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
 use common_exception::Result;
+
+use crate::pipelines::new::profiling::profiling_processor::FuseTableProcessInfo;
+use crate::pipelines::new::profiling::profiling_processor::ProcessInfo;
 
 pub struct FuseSourceTracker {
     pub s3_elapse_ns: AtomicUsize,
@@ -34,8 +41,10 @@ impl FuseSourceTracker {
     pub fn deserialize(&self, rows: usize, bytes: usize) {
         let elapse_nanos = self.deserialize_duration.elapsed().as_nanos() as usize;
         self.read_data_block_rows.fetch_add(rows, Ordering::Relaxed);
-        self.read_data_block_bytes.fetch_add(bytes, Ordering::Relaxed);
-        self.deserialize_elapse_ns.fetch_add(elapse_nanos, Ordering::Relaxed);
+        self.read_data_block_bytes
+            .fetch_add(bytes, Ordering::Relaxed);
+        self.deserialize_elapse_ns
+            .fetch_add(elapse_nanos, Ordering::Relaxed);
     }
 
     pub fn restart_s3_download(&mut self) {
@@ -45,7 +54,8 @@ impl FuseSourceTracker {
     pub fn s3_download(&self, files_size: usize) {
         let elapse_nanos = self.s3_instant.elapsed().as_nanos() as usize;
         self.s3_elapse_ns.fetch_add(elapse_nanos, Ordering::Relaxed);
-        self.read_compressed_bytes.fetch_add(files_size, Ordering::Relaxed);
+        self.read_compressed_bytes
+            .fetch_add(files_size, Ordering::Relaxed);
     }
 
     pub fn fetch_increment(&self, id: usize) -> Result<Box<dyn ProcessInfo>> {
@@ -59,5 +69,3 @@ impl FuseSourceTracker {
         ))
     }
 }
-
-

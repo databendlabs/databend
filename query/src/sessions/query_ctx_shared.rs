@@ -262,7 +262,7 @@ impl QueryContextShared {
     pub fn profiling_query(&self) -> Result<ExecutorProfiling> {
         match self.query_executor.read().as_ref() {
             None => Err(ErrorCode::NotFoundSession("Not found session.")),
-            Some(executor) => executor.profiling_executor()
+            Some(executor) => executor.profiling_executor(),
         }
     }
 }

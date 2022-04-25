@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use crate::pipelines::new::{ProcessorProfiling, ProcessorTracker};
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;

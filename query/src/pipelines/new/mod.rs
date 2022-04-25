@@ -24,16 +24,14 @@ mod pipe;
 mod pipeline;
 mod pipeline_builder;
 pub mod processors;
-mod unsafe_cell_wrap;
 mod profiling;
+mod unsafe_cell_wrap;
 
 pub use pipe::NewPipe;
 pub use pipe::SourcePipeBuilder;
 pub use pipeline::NewPipeline;
 pub use pipeline_builder::QueryPipelineBuilder;
 pub use profiling::ExecutorProfiling;
-pub use profiling::ProcessorProfiling;
-pub use profiling::ProcessorTracker;
 pub use profiling::FuseSourceTracker;
-pub use profiling::ProcessInfo;
 pub use profiling::FuseTableProcessInfo;
+pub use profiling::ProcessInfo;

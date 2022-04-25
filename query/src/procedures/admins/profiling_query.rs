@@ -15,14 +15,20 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::{DataField, DataSchema, Series, SeriesFrom, StringColumn, StringType};
-use common_exception::{ErrorCode, Result};
-use common_meta_types::UserOptionFlag;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::Series;
+use common_datavalues::SeriesFrom;
+use common_datavalues::StringColumn;
+use common_datavalues::StringType;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_tracing::tracing;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
-use crate::sessions::{QueryContext, SessionRef};
+use crate::sessions::QueryContext;
+use crate::sessions::SessionRef;
 
 pub struct ProfilingQueryProcedure {}
 
@@ -34,8 +40,13 @@ impl ProfilingQueryProcedure {
     fn profiling_query(&self, session: SessionRef) -> Result<DataBlock> {
         let profiling_info = session.profiling_query()?;
         match serde_json::to_string(&profiling_info) {
-            Ok(json_str) => Ok(DataBlock::create(self.schema(), vec![Series::from_data(vec![json_str])])),
-            Err(cause) => Err(ErrorCode::LogicalError(format!("Cannot format profiling info, cause {:?}", cause))),
+            Ok(json_str) => Ok(DataBlock::create(self.schema(), vec![Series::from_data(
+                vec![json_str],
+            )])),
+            Err(cause) => Err(ErrorCode::LogicalError(format!(
+                "Cannot format profiling info, cause {:?}",
+                cause
+            ))),
         }
     }
 }
@@ -56,11 +67,17 @@ impl Procedure for ProfilingQueryProcedure {
         tracing::info!("ProfilingQuery: query_id: {:?}", query_id);
         match ctx.get_session_by_id(query_id).await {
             Some(session) => self.profiling_query(session),
-            None => Err(ErrorCode::NotFoundSession(format!("Not found session by id: {}", query_id))),
+            None => Err(ErrorCode::NotFoundSession(format!(
+                "Not found session by id: {}",
+                query_id
+            ))),
         }
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        Arc::new(DataSchema::new(vec![DataField::new("profiling", StringType::arc())]))
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "profiling",
+            StringType::arc(),
+        )]))
     }
 }

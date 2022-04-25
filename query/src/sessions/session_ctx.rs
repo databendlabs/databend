@@ -17,7 +17,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
@@ -139,7 +140,7 @@ impl SessionContext {
     pub fn profiling_query(&self) -> Result<ExecutorProfiling> {
         match self.query_context_shared.read().as_ref() {
             None => Err(ErrorCode::NotFoundSession("Not found session.")),
-            Some(query_ctx) => query_ctx.profiling_query()
+            Some(query_ctx) => query_ctx.profiling_query(),
         }
     }
 }

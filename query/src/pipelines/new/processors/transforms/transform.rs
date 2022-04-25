@@ -22,7 +22,6 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::{ProcessorProfiling, ProcessorTracker};
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
@@ -39,7 +38,6 @@ pub struct Transformer<T: Transform + 'static> {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
-
     // tracker: ProcessorTracker,
 }
 

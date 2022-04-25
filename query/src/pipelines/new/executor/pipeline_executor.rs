@@ -26,8 +26,8 @@ use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::new::ExecutorProfiling;
 use crate::pipelines::new::pipeline::NewPipeline;
+use crate::pipelines::new::ExecutorProfiling;
 
 pub struct PipelineExecutor {
     threads_num: usize,
