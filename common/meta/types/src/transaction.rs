@@ -20,22 +20,21 @@ use std::vec::Vec;
 use crate::protobuf::txn_condition;
 use crate::protobuf::txn_op;
 use crate::protobuf::txn_op_response;
-use crate::protobuf::DeleteRequest as pb_del_request;
-use crate::protobuf::DeleteResponse as pb_del_response;
-use crate::protobuf::GetRequest as pb_get_request;
-use crate::protobuf::GetResponse as pb_get_response;
-use crate::protobuf::PutRequest as pb_put_request;
-use crate::protobuf::PutResponse as pb_put_response;
 use crate::protobuf::SeqV as pb_seqv;
 use crate::protobuf::TxnCondition;
-use crate::protobuf::TxnKey;
+use crate::protobuf::TxnDeleteRequest as pb_del_request;
+use crate::protobuf::TxnDeleteResponse as pb_del_response;
+use crate::protobuf::TxnGetRequest as pb_get_request;
+use crate::protobuf::TxnGetResponse as pb_get_response;
 use crate::protobuf::TxnOp;
 use crate::protobuf::TxnOpResponse;
+use crate::protobuf::TxnPutRequest as pb_put_request;
+use crate::protobuf::TxnPutResponse as pb_put_response;
 use crate::protobuf::TxnReply;
 use crate::protobuf::TxnRequest;
 use crate::SeqV;
 
-const TXN_KEY_DELIMITER: char = '/';
+//const TXN_KEY_DELIMITER: char = '/';
 
 fn convert_seqv_to_pb(seqv: &Option<SeqV>) -> Option<pb_seqv> {
     seqv.as_ref().map(|seqv| pb_seqv {
@@ -53,50 +52,67 @@ fn convert_to_pb_to_seqv(seqv: &Option<pb_seqv>) -> Option<SeqV> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct TransactionKey {
-    pub key: String,
-    pub tenant: String,
-    pub tree: String,
+#[repr(i32)]
+pub enum TransactionConditionTarget {
+    Key = txn_condition::ConditionTarget::Key as i32,
+
+    Value = txn_condition::ConditionTarget::Value as i32,
 }
 
-impl TransactionKey {
-    pub fn generate_key(&self) -> String {
-        format!("{}{}{}", self.tenant, TXN_KEY_DELIMITER, self.key)
-    }
-
-    pub fn to_pb(&self) -> TxnKey {
-        TxnKey {
-            key: self.key.clone(),
-            tenant: self.tenant.clone(),
-            tree: self.tree.clone(),
+impl From<i32> for TransactionConditionTarget {
+    fn from(target: i32) -> Self {
+        if target == txn_condition::ConditionTarget::Key as i32 {
+            TransactionConditionTarget::Key
+        } else {
+            TransactionConditionTarget::Value
         }
     }
 }
 
-impl From<&TxnKey> for TransactionKey {
-    fn from(key: &TxnKey) -> Self {
-        TransactionKey {
-            key: key.key.clone(),
-            tenant: key.tenant.clone(),
-            tree: key.tenant.clone(),
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[repr(i32)]
+pub enum TransactionConditionResult {
+    KeyExist = txn_condition::ConditionResult::KeyExist as i32,
+    KeyNotExist = txn_condition::ConditionResult::KeyNotExist as i32,
+
+    ValueEqual = txn_condition::ConditionResult::ValueEqual as i32,
+    ValueGreater = txn_condition::ConditionResult::ValueGreater as i32,
+    ValueLess = txn_condition::ConditionResult::ValueLess as i32,
+    ValueNotEqual = txn_condition::ConditionResult::ValueNotEqual as i32,
+}
+
+impl From<i32> for TransactionConditionResult {
+    fn from(target: i32) -> Self {
+        if target == txn_condition::ConditionResult::KeyExist as i32 {
+            TransactionConditionResult::KeyExist
+        } else if target == txn_condition::ConditionResult::KeyNotExist as i32 {
+            TransactionConditionResult::KeyNotExist
+        } else if target == txn_condition::ConditionResult::ValueEqual as i32 {
+            TransactionConditionResult::ValueEqual
+        } else if target == txn_condition::ConditionResult::ValueGreater as i32 {
+            TransactionConditionResult::ValueGreater
+        } else if target == txn_condition::ConditionResult::ValueLess as i32 {
+            TransactionConditionResult::ValueLess
+        } else {
+            TransactionConditionResult::ValueNotEqual
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionCondition {
-    pub key: TransactionKey,
-    pub target: i32,
-    pub expected: i32,
+    pub key: String,
+    pub target: TransactionConditionTarget,
+    pub expected: TransactionConditionResult,
     pub value: Option<SeqV>,
 }
 
-impl From<TxnCondition> for TransactionCondition {
-    fn from(cond: TxnCondition) -> Self {
+impl From<&TxnCondition> for TransactionCondition {
+    fn from(cond: &TxnCondition) -> Self {
         TransactionCondition {
-            key: (&(cond.key.unwrap())).into(),
-            target: cond.target,
-            expected: cond.expected,
+            key: cond.key.clone(),
+            target: cond.target.into(),
+            expected: cond.expected.into(),
             value: convert_to_pb_to_seqv(&cond.value),
         }
     }
@@ -104,14 +120,14 @@ impl From<TxnCondition> for TransactionCondition {
 
 impl TransactionCondition {
     pub fn is_key_condition(&self) -> bool {
-        self.target == txn_condition::ConditionTarget::Key as i32
+        self.target == (txn_condition::ConditionTarget::Key as i32).into()
     }
 
     pub fn return_key_condition_result(&self, key_exist: bool) -> bool {
-        if self.expected == txn_condition::ConditionResult::Exist as i32 {
+        if self.expected == (txn_condition::ConditionResult::KeyExist as i32).into() {
             return key_exist;
         }
-        if self.expected == txn_condition::ConditionResult::NotExist as i32 {
+        if self.expected == (txn_condition::ConditionResult::KeyNotExist as i32).into() {
             return !key_exist;
         }
 
@@ -121,16 +137,16 @@ impl TransactionCondition {
     pub fn return_value_condition_result(&self, val: SeqV) -> bool {
         if let Some(value) = &self.value {
             let v = value.clone();
-            if self.expected == txn_condition::ConditionResult::Equal as i32 {
+            if self.expected == (txn_condition::ConditionResult::ValueEqual as i32).into() {
                 return v == val;
             }
-            if self.expected == txn_condition::ConditionResult::Greater as i32 {
+            if self.expected == (txn_condition::ConditionResult::ValueGreater as i32).into() {
                 return v > val;
             }
-            if self.expected == txn_condition::ConditionResult::Less as i32 {
+            if self.expected == (txn_condition::ConditionResult::ValueLess as i32).into() {
                 return v < val;
             }
-            if self.expected == txn_condition::ConditionResult::NotEqual as i32 {
+            if self.expected == (txn_condition::ConditionResult::ValueNotEqual as i32).into() {
                 return v != val;
             }
         }
@@ -140,29 +156,29 @@ impl TransactionCondition {
 
     pub fn to_pb(&self) -> TxnCondition {
         TxnCondition {
-            key: Some(self.key.clone().to_pb()),
-            target: self.target,
+            key: self.key.clone(),
+            target: self.target.clone() as i32,
             value: convert_seqv_to_pb(&self.value),
-            expected: self.expected,
+            expected: self.expected.clone() as i32,
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionGetRequest {
-    pub key: TransactionKey,
+    pub key: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionPutRequest {
-    pub key: TransactionKey,
+    pub key: String,
     pub value: Vec<u8>,
     pub prev_kv: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionDeleteRequest {
-    pub key: TransactionKey,
+    pub key: String,
     pub prev_kv: bool,
 }
 
@@ -178,19 +194,19 @@ impl TransactionOperation {
         match &*self {
             TransactionOperation::TransactionGetRequest(get) => TxnOp {
                 request: Some(txn_op::Request::Get(pb_get_request {
-                    key: Some(get.key.to_pb()),
+                    key: get.key.clone(),
                 })),
             },
             TransactionOperation::TransactionPutRequest(put) => TxnOp {
                 request: Some(txn_op::Request::Put(pb_put_request {
-                    key: Some(put.key.to_pb()),
+                    key: put.key.clone(),
                     value: put.value.clone(),
                     prev_kv: put.prev_kv,
                 })),
             },
             TransactionOperation::TransactionDeleteRequest(delete) => TxnOp {
                 request: Some(txn_op::Request::Delete(pb_del_request {
-                    key: Some(delete.key.to_pb()),
+                    key: delete.key.clone(),
                     prev_kv: delete.prev_kv,
                 })),
             },
@@ -205,7 +221,7 @@ impl From<&TxnOp> for TransactionOperation {
             match req {
                 txn_op::Request::Get(pb_get_request { key }) => {
                     TransactionOperation::TransactionGetRequest(TransactionGetRequest {
-                        key: key.as_ref().unwrap().into(),
+                        key: key.clone(),
                     })
                 }
                 txn_op::Request::Put(pb_put_request {
@@ -213,13 +229,13 @@ impl From<&TxnOp> for TransactionOperation {
                     value,
                     prev_kv,
                 }) => TransactionOperation::TransactionPutRequest(TransactionPutRequest {
-                    key: key.as_ref().unwrap().into(),
+                    key: key.clone(),
                     value: value.clone(),
                     prev_kv: *prev_kv,
                 }),
                 txn_op::Request::Delete(pb_del_request { key, prev_kv }) => {
                     TransactionOperation::TransactionDeleteRequest(TransactionDeleteRequest {
-                        key: key.as_ref().unwrap().into(),
+                        key: key.clone(),
                         prev_kv: *prev_kv,
                     })
                 }
@@ -230,7 +246,7 @@ impl From<&TxnOp> for TransactionOperation {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From, PartialEq)]
 pub struct TransactionReq {
-    pub cond: TransactionCondition,
+    pub condition: Vec<TransactionCondition>,
     pub if_then: Vec<TransactionOperation>,
     pub else_then: Vec<TransactionOperation>,
 }
@@ -238,7 +254,7 @@ pub struct TransactionReq {
 impl TransactionReq {
     pub fn new(req: TxnRequest) -> Self {
         return Self {
-            cond: req.cond.unwrap().into(),
+            condition: req.condition.iter().map(|op| (op.into())).collect(),
             if_then: req.if_then.iter().map(|op| (op.into())).collect(),
             else_then: req.else_then.iter().map(|op| (op.into())).collect(),
         };
@@ -246,7 +262,7 @@ impl TransactionReq {
 
     pub fn to_pb(&self) -> TxnRequest {
         TxnRequest {
-            cond: Some(self.cond.to_pb()),
+            condition: self.condition.iter().map(|op| (op.to_pb())).collect(),
             if_then: self.if_then.iter().map(|op| (op.to_pb())).collect(),
             else_then: self.else_then.iter().map(|op| (op.to_pb())).collect(),
         }
@@ -258,26 +274,26 @@ impl Display for TransactionReq {
         write!(
             f,
             "txn:if {:?} then {:?} else {:?}",
-            self.cond, self.if_then, self.else_then
+            self.condition, self.if_then, self.else_then
         )
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionGetResponse {
-    pub key: TransactionKey,
+    pub key: String,
     pub value: Option<SeqV>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionPutResponse {
-    pub key: TransactionKey,
+    pub key: String,
     pub prev_value: Option<SeqV>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct TransactionDeleteResponse {
-    pub key: TransactionKey,
+    pub key: String,
     pub success: bool,
     pub prev_value: Option<SeqV>,
 }
@@ -289,12 +305,45 @@ pub enum TransactionOperationResponse {
     TransactionDeleteResponse(TransactionDeleteResponse),
 }
 
+impl From<&TxnOpResponse> for TransactionOperationResponse {
+    fn from(op: &TxnOpResponse) -> Self {
+        return {
+            let req = op.response.as_ref().unwrap();
+            match req {
+                txn_op_response::Response::Get(pb_get_response { key, value }) => {
+                    TransactionOperationResponse::TransactionGetResponse(TransactionGetResponse {
+                        key: key.clone(),
+                        value: convert_to_pb_to_seqv(value),
+                    })
+                }
+                txn_op_response::Response::Put(pb_put_response { key, prev_value }) => {
+                    TransactionOperationResponse::TransactionPutResponse(TransactionPutResponse {
+                        key: key.clone(),
+                        prev_value: convert_to_pb_to_seqv(prev_value),
+                    })
+                }
+                txn_op_response::Response::Delete(pb_del_response {
+                    key,
+                    success,
+                    prev_value,
+                }) => TransactionOperationResponse::TransactionDeleteResponse(
+                    TransactionDeleteResponse {
+                        key: key.clone(),
+                        success: *success,
+                        prev_value: convert_to_pb_to_seqv(prev_value),
+                    },
+                ),
+            }
+        };
+    }
+}
+
 impl TransactionOperationResponse {
     pub fn to_pb(&self) -> TxnOpResponse {
         match &*self {
             TransactionOperationResponse::TransactionGetResponse(get) => {
                 let get_resp = pb_get_response {
-                    key: Some(get.key.to_pb()),
+                    key: get.key.clone(),
                     value: convert_seqv_to_pb(&get.value),
                 };
                 let response = txn_op_response::Response::Get(get_resp);
@@ -304,7 +353,7 @@ impl TransactionOperationResponse {
             }
             TransactionOperationResponse::TransactionPutResponse(put) => {
                 let put_resp = pb_put_response {
-                    key: Some(put.key.to_pb()),
+                    key: put.key.clone(),
                     prev_value: convert_seqv_to_pb(&put.prev_value),
                 };
                 let response = txn_op_response::Response::Put(put_resp);
@@ -314,7 +363,7 @@ impl TransactionOperationResponse {
             }
             TransactionOperationResponse::TransactionDeleteResponse(delete) => {
                 let put_resp = pb_del_response {
-                    key: Some(delete.key.to_pb()),
+                    key: delete.key.clone(),
                     success: delete.success,
                     prev_value: convert_seqv_to_pb(&delete.prev_value),
                 };
@@ -328,14 +377,14 @@ impl TransactionOperationResponse {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From, PartialEq)]
-pub struct TransactionResponse {
+pub struct TransactionReply {
     pub success: bool,
     pub responses: Vec<TransactionOperationResponse>,
 }
 
-impl TransactionResponse {
+impl TransactionReply {
     pub fn new(reply: TxnReply) -> Self {
-        TransactionResponse {
+        TransactionReply {
             success: reply.success,
             responses: vec![],
         }
@@ -345,6 +394,15 @@ impl TransactionResponse {
         TxnReply {
             success: self.success,
             responses: self.responses.iter().map(|op| (op.to_pb())).collect(),
+        }
+    }
+}
+
+impl From<TxnReply> for TransactionReply {
+    fn from(reply: TxnReply) -> Self {
+        TransactionReply {
+            success: reply.success,
+            responses: reply.responses.iter().map(|op| (op.into())).collect(),
         }
     }
 }

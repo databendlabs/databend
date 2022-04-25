@@ -64,8 +64,8 @@ use common_meta_types::TransactionOperation;
 use common_meta_types::TransactionOperationResponse;
 use common_meta_types::TransactionPutRequest;
 use common_meta_types::TransactionPutResponse;
+use common_meta_types::TransactionReply;
 use common_meta_types::TransactionReq;
-use common_meta_types::TransactionResponse;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownDatabaseId;
 use common_meta_types::UnknownShare;
@@ -570,38 +570,63 @@ impl StateMachine {
         Ok(Change::new(prev, result).into())
     }
 
-    fn txn_execute_cond(&self, cond: &TransactionCondition) -> bool {
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn txn_execute_one_condition(
+        &self,
+        txn_tree: &TransactionSledTree,
+        cond: &TransactionCondition,
+    ) -> bool {
         let is_key_condition = cond.is_key_condition();
 
-        let key = cond.key.generate_key();
-        let sv = self.kvs().get(&key);
+        let key = cond.key.clone();
+        tracing::debug!("before txn_execute_one_condition: {:?}", key);
 
+        let sub_tree = txn_tree.key_space::<GenericKV>();
+        let sv = sub_tree.get(&key);
+        if sv.is_err() {
+            return false;
+        }
+        let sv = sv.unwrap();
+        tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
         if is_key_condition {
             match sv {
-                Ok(sv) => match sv {
-                    Some(_) => cond.return_key_condition_result(true),
-                    None => cond.return_key_condition_result(false),
-                },
-                Err(_) => cond.return_key_condition_result(false),
+                Some(_sv) => cond.return_key_condition_result(true),
+                None => cond.return_key_condition_result(false),
             }
         } else {
             match sv {
-                Ok(sv) => match sv {
-                    Some(_val) => cond.return_key_condition_result(true),
-                    None => false,
-                },
-                Err(_) => false,
+                Some(sv) => cond.return_value_condition_result(sv),
+                None => false,
             }
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn txn_execute_condition(
+        &self,
+        txn_tree: &TransactionSledTree,
+        condition: &Vec<TransactionCondition>,
+    ) -> bool {
+        for cond in condition {
+            if !self.txn_execute_one_condition(txn_tree, cond) {
+                return false;
+            }
+        }
+
+        true
+    }
+
     fn txn_execute_get_operation(
         &self,
+        txn_tree: &TransactionSledTree,
         get: &TransactionGetRequest,
-        resp: &mut TransactionResponse,
+        resp: &mut TransactionReply,
     ) {
-        let key = get.key.generate_key();
-        let sv = self.kvs().get(&key);
+        let key = get.key.clone();
+
+        let sub_tree = txn_tree.key_space::<GenericKV>();
+        let sv = sub_tree.get(&key);
+
         let get = match sv {
             Ok(v) => match v {
                 Some(v) => TransactionGetResponse {
@@ -627,41 +652,48 @@ impl StateMachine {
         &self,
         txn_tree: &TransactionSledTree,
         put: &TransactionPutRequest,
-        resp: &mut TransactionResponse,
+        resp: &mut TransactionReply,
     ) {
-        let key = put.key.generate_key();
+        let key = put.key.clone();
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let key_str = key.to_string();
 
-        if let Ok(result) = self.txn_sub_tree_upsert(
+        let result = self.txn_sub_tree_upsert(
             &sub_tree,
             &key_str,
             &MatchSeq::Any,
             Operation::Update(put.value.clone()),
             None,
-        ) {
-            let (prev, result) = result;
-            tracing::debug!("applied txn_execute_put_operation: {} {:?}", key, result);
+        );
 
-            let put_resp = TransactionPutResponse {
-                key: put.key.clone(),
-                prev_value: if put.prev_kv { prev } else { None },
-            };
+        let put_resp = match result {
+            Ok((prev, result)) => {
+                tracing::debug!("applied txn_execute_put_operation: {} {:?}", key, result);
 
-            resp.responses
-                .push(TransactionOperationResponse::TransactionPutResponse(
-                    put_resp,
-                ));
-        }
+                TransactionOperationResponse::TransactionPutResponse(TransactionPutResponse {
+                    key: put.key.clone(),
+                    prev_value: if put.prev_kv { prev } else { None },
+                })
+            }
+            Err(err) => {
+                tracing::debug!("txn_execute_put_operation fail: {} {:?}", key, err);
+                TransactionOperationResponse::TransactionPutResponse(TransactionPutResponse {
+                    key: put.key.clone(),
+                    prev_value: None,
+                })
+            }
+        };
+
+        resp.responses.push(put_resp);
     }
 
     fn txn_execute_delete_operation(
         &self,
         txn_tree: &TransactionSledTree,
         delete: &TransactionDeleteRequest,
-        resp: &mut TransactionResponse,
+        resp: &mut TransactionReply,
     ) {
-        let key = delete.key.generate_key();
+        let key = delete.key.clone();
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let key_str = key.to_string();
 
@@ -690,15 +722,16 @@ impl StateMachine {
             ));
     }
 
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn txn_execute_operation(
         &self,
         txn_tree: &TransactionSledTree,
         op: &TransactionOperation,
-        resp: &mut TransactionResponse,
+        resp: &mut TransactionReply,
     ) {
         match op {
             TransactionOperation::TransactionGetRequest(get) => {
-                self.txn_execute_get_operation(get, resp);
+                self.txn_execute_get_operation(txn_tree, get, resp);
             }
             TransactionOperation::TransactionPutRequest(put) => {
                 self.txn_execute_put_operation(txn_tree, put, resp);
@@ -709,15 +742,16 @@ impl StateMachine {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_txn_cmd(
         &self,
         req: &TransactionReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let cond = &req.cond;
+        let condition = &req.condition;
 
         let ops: &Vec<TransactionOperation>;
-        let success = if self.txn_execute_cond(cond) {
+        let success = if self.txn_execute_condition(txn_tree, condition) {
             ops = &req.if_then;
             true
         } else {
@@ -725,7 +759,7 @@ impl StateMachine {
             false
         };
 
-        let mut resp: TransactionResponse = TransactionResponse {
+        let mut resp: TransactionReply = TransactionReply {
             success,
             responses: vec![],
         };
@@ -734,7 +768,7 @@ impl StateMachine {
             self.txn_execute_operation(txn_tree, op, &mut resp);
         }
 
-        Ok(AppliedState::TransactionResponse(resp))
+        Ok(AppliedState::TransactionReply(resp))
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]

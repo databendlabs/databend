@@ -24,6 +24,7 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::TableMeta;
+use crate::TransactionReq;
 use crate::UpsertTableOptionReq;
 
 /// Compatible with latest changes made in 34e89c99 on 20220413
@@ -110,4 +111,7 @@ pub enum Cmd {
         value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
     },
+
+    // 20220425
+    Transaction(TransactionReq),
 }

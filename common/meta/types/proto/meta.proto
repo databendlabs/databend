@@ -19,9 +19,9 @@ package meta;
 import "request.proto";
 
 message Empty {}
-message RaftGetRequest { string key = 1; }
+message GetRequest { string key = 1; }
 
-message RaftGetReply {
+message GetRaftGetReply {
   bool ok = 1;
   string value = 2;
 }
@@ -94,17 +94,17 @@ message TxnCondition {
   // condition result
   enum ConditionResult {
     // only used for key compare
-    Exist = 0;
-    NotExist = 1;
+    KeyExist = 0;
+    KeyNotExist = 1;
 
     // only used for value compare
-    Equal = 2;
-    Greater = 3;
-    Less = 4;
-    NotEqual = 5;    
+    ValueEqual = 2;
+    ValueGreater = 3;
+    ValueLess = 4;
+    ValueNotEqual = 5;    
   }
 
-  TxnKey key = 1;
+  string key = 1;
   ConditionTarget target = 2;
 
   optional SeqV value = 3;
@@ -116,27 +116,30 @@ message TxnCondition {
 
 message TxnOp {
   oneof request {
-    GetRequest get = 1;
-    PutRequest put = 2;
-    DeleteRequest delete = 3;
+    TxnGetRequest get = 1;
+    TxnPutRequest put = 2;
+    TxnDeleteRequest delete = 3;
   }
 }
 
 message TxnOpResponse {
   oneof response {
-    GetResponse get = 1;
-    PutResponse put = 2;
-    DeleteResponse delete = 3;
+    TxnGetResponse get = 1;
+    TxnPutResponse put = 2;
+    TxnDeleteResponse delete = 3;
   }
 }
 
 message TxnRequest {
-  TxnCondition cond = 1;
+  // `condition` is a list of predicates.
+  // If all of them success, the `if_then` will be executed, 
+  // otherwise `else_then` op will be executed.
+  repeated TxnCondition condition = 1;
 
-  // if condition returns true, then the `if_then` op will be executed, 
-  // otherwise `else_then` op will be executed.  
+  // `if_then` is a list of operations will be executed when all condition evaluates to true.
   repeated TxnOp if_then = 2;
 
+  // `else_then` is a list of operations will be executed when not all condition evaluates to true.
   repeated TxnOp else_then = 3;
 }
 
@@ -148,7 +151,7 @@ message TxnReply {
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
-  rpc Get(RaftGetRequest) returns (RaftGetReply) {}
+  rpc Get(GetRequest) returns (GetRaftGetReply) {}
 
   /// Forward a request to other
   rpc Forward(RaftRequest) returns (RaftReply) {}

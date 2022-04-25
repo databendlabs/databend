@@ -26,7 +26,7 @@ use crate::MetaError;
 use crate::Node;
 use crate::ShareInfo;
 use crate::TableMeta;
-use crate::TransactionResponse;
+use crate::TransactionReply;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
@@ -56,7 +56,7 @@ pub enum AppliedState {
 
     AppError(AppError),
 
-    TransactionResponse(TransactionResponse),
+    TransactionReply(TransactionReply),
 
     #[try_into(ignore)]
     None,
@@ -128,7 +128,7 @@ impl AppliedState {
             AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
             AppliedState::AppError(_e) => false,
-            AppliedState::TransactionResponse(txn) => txn.success,
+            AppliedState::TransactionReply(txn) => txn.success,
         }
     }
 
@@ -159,7 +159,7 @@ impl AppliedState {
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
             AppliedState::AppError(_e) => true,
-            AppliedState::TransactionResponse(_txn) => true,
+            AppliedState::TransactionReply(_txn) => true,
         }
     }
 
@@ -174,7 +174,7 @@ impl AppliedState {
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::AppError(_e) => true,
-            AppliedState::TransactionResponse(txn) => !txn.success,
+            AppliedState::TransactionReply(txn) => !txn.success,
         }
     }
 }

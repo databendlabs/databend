@@ -21,43 +21,45 @@ message SeqV {
   bytes data = 2;
 }
 
-message TxnKey {
+message string {
   string key = 1;
   string tenant = 2;
   string tree = 3;
 }
 
 // Get request and response
-message GetRequest {
-  TxnKey key = 1;
+message TxnGetRequest {
+  string key = 1;
 }
 
-message GetResponse {
-  TxnKey key = 1;
+message TxnGetResponse {
+  string key = 1;
 
   optional SeqV value = 2;
 }
 
 // Put request and response
-message PutRequest {
-  TxnKey key = 1;
+message TxnPutRequest {
+  string key = 1;
   bytes value = 2;
+  // if or not return the prev value
   bool prev_kv = 3;
 }
 
-message PutResponse {
-  TxnKey key = 1;
+message TxnPutResponse {
+  string key = 1;
   optional SeqV prev_value = 2;
 }
 
 // Delete request and response
-message DeleteRequest {
-  TxnKey key = 1;
+message TxnDeleteRequest {
+  string key = 1;
+  // if or not return the prev value
   bool prev_kv = 2;
 }
 
-message DeleteResponse {
-  TxnKey key = 1;
+message TxnDeleteResponse {
+  string key = 1;
   bool success = 2;
   optional SeqV prev_value = 3;
 }

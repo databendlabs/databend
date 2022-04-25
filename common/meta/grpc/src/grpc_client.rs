@@ -34,8 +34,8 @@ use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::ConnectionError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::TransactionReply;
 use common_meta_types::TransactionReq;
-use common_meta_types::TransactionResponse;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
@@ -269,11 +269,11 @@ impl MetaGrpcClient {
         res
     }
 
-    //#[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn transaction(
         &self,
         req: TransactionReq,
-    ) -> std::result::Result<TransactionResponse, MetaError> {
+    ) -> std::result::Result<TransactionReply, MetaError> {
         let txn: TxnRequest = req.to_pb();
 
         let req: Request<TxnRequest> = Request::new(txn.clone());
@@ -281,8 +281,8 @@ impl MetaGrpcClient {
 
         let mut client = self.make_client().await?;
         let result = client.transaction(req).await;
-        let result = match result {
-            Ok(r) => Ok(r),
+        let result: std::result::Result<TransactionReply, Status> = match result {
+            Ok(r) => return Ok(r.into_inner().into()),
             Err(s) => {
                 if status_is_retryable(&s) {
                     {
@@ -293,16 +293,16 @@ impl MetaGrpcClient {
                     let req: Request<TxnRequest> = Request::new(txn);
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     let ret = client.transaction(req).await?.into_inner();
-                    return Ok(TransactionResponse::new(ret));
+                    return Ok(ret.into());
                 } else {
                     Err(s)
                 }
             }
         };
 
-        let reply = result?.into_inner();
+        let reply = result?;
 
-        Ok(TransactionResponse::new(reply))
+        Ok(reply)
     }
 }
 

@@ -20,8 +20,8 @@ use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_grpc::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::MetaError;
+use common_meta_types::TransactionReply;
 use common_meta_types::TransactionReq;
-use common_meta_types::TransactionResponse;
 
 use crate::meta_service::MetaNode;
 
@@ -139,11 +139,11 @@ impl ActionHandler {
         }
     }
 
-    pub async fn execute_txn(&self, req: TransactionReq) -> TransactionResponse {
+    pub async fn execute_txn(&self, req: TransactionReq) -> TransactionReply {
         if let Ok(req) = self.meta_node.transaction(req).await {
             req
         } else {
-            TransactionResponse {
+            TransactionReply {
                 success: false,
                 responses: vec![],
             }
