@@ -90,7 +90,7 @@ fn assert_lex<'a>(source: &'a str, expected_tokens: &[(TokenKind, &'a str, Span)
 
     let tuples: Vec<_> = tokens
         .into_iter()
-        .map(|token| (token.kind, token.text, token.span))
+        .map(|token| (token.kind, token.text(), token.span))
         .collect();
 
     assert_eq!(tuples, expected_tokens);

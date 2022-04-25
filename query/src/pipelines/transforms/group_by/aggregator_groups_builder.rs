@@ -20,6 +20,7 @@ use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
 use common_datavalues::PrimitiveType;
 use common_datavalues::ScalarColumnBuilder;
+use common_datavalues::TypeDeserializer;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::AggregatorParams;

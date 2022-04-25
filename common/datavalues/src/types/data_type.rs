@@ -41,36 +41,11 @@ use super::type_primitive::UInt8Type;
 use super::type_string::StringType;
 use super::type_struct::StructType;
 use crate::prelude::*;
-use crate::TypeDeserializer;
-use crate::TypeSerializer;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
 pub type DataTypePtr = Arc<dyn DataType>;
-
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[enum_dispatch(DataType)]
-pub enum DataTypeImpl {
-    Nullable(NullableType),
-    Boolean(BooleanType),
-    Int8(Int8Type),
-    Int16(Int16Type),
-    Int32(Int32Type),
-    Int64(Int64Type),
-    UInt8(UInt8Type),
-    UInt16(UInt16Type),
-    UInt32(UInt32Type),
-    UInt64(UInt64Type),
-    Float32(Float32Type),
-    Float64(Float64Type),
-    Date(DateType),
-    DateTime(DateTimeType),
-    String(StringType),
-    Struct(StructType),
-    Array(ArrayType),
-    Variant(VariantType),
-}
 
 #[typetag::serde(tag = "type")]
 #[enum_dispatch]
@@ -85,7 +60,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         self.data_type_id() == TypeID::Null
     }
 
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
 
     /// Returns the name to display in the SQL describe
     fn sql_name(&self) -> String {
@@ -125,8 +100,8 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
-    fn create_serializer(&self) -> Box<dyn TypeSerializer>;
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer>;
+    fn create_serializer(&self) -> TypeSerializerImpl;
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {

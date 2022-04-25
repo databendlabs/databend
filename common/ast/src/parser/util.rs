@@ -25,7 +25,7 @@ pub type Input<'a> = &'a [Token<'a>];
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.get(0).filter(|token| token.text == text) {
+    move |i| match i.get(0).filter(|token| token.text() == text) {
         Some(token) => Ok((&i[1..], token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -47,11 +47,11 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
 pub fn ident(i: Input) -> IResult<Identifier> {
     alt((
         map(match_token(TokenKind::Ident), |token| Identifier {
-            name: token.text.to_string(),
+            name: token.text().to_string(),
             quote: None,
         }),
         map(match_token(TokenKind::QuotedIdent), |token| Identifier {
-            name: token.text[1..token.text.len() - 1].to_string(),
+            name: token.text()[1..token.text().len() - 1].to_string(),
             quote: Some('"'),
         }),
     ))(i)
@@ -60,7 +60,7 @@ pub fn ident(i: Input) -> IResult<Identifier> {
 pub fn literal_u64(i: Input) -> IResult<u64> {
     match_token(LiteralNumber)(i).and_then(|(input_inner, token)| {
         token
-            .text
+            .text()
             .parse()
             .map(|num| (input_inner, num))
             .map_err(|err| {

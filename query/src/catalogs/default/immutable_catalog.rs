@@ -53,13 +53,13 @@ pub struct ImmutableCatalog {
 }
 
 impl ImmutableCatalog {
-    pub async fn try_create_with_config(_conf: &Config) -> Result<Self> {
+    pub async fn try_create_with_config(conf: &Config) -> Result<Self> {
         // The global db meta.
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");
         sys_db_meta.init_db("INFORMATION_SCHEMA");
 
-        let sys_db = SystemDatabase::create(&mut sys_db_meta);
+        let sys_db = SystemDatabase::create(&mut sys_db_meta, conf);
         let info_schema_db = InformationSchemaDatabase::create(&mut sys_db_meta);
 
         Ok(Self {

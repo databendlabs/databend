@@ -20,6 +20,7 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
 use common_ast::parser::statement::*;
 use common_ast::parser::token::*;
+use common_ast::parser::tokenize_sql;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
@@ -45,7 +46,7 @@ macro_rules! test_parse {
                 writeln!($file, "---------- AST ------------").unwrap();
                 writeln!($file, "{:#?}", output).unwrap();
                 writeln!($file, "---------- REST -----------").unwrap();
-                writeln!($file, "{:?}", i).unwrap();
+                writeln!($file, "{}", &$source[i[0].span.start..]).unwrap();
                 writeln!($file, "\n").unwrap();
             }
             Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
@@ -101,10 +102,14 @@ fn test_statement() {
         r#"select * from a right outer join b using(a);"#,
         r#"select * from a full outer join b using(a);"#,
         r#"select * from a inner join b using(a);"#,
+        r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
+        r#"insert into table t format json;"#,
+        r#"insert into table t select * from t2;"#,
     ];
 
     for case in cases {
-        let stmts = parse_sql(case).unwrap();
+        let tokens = tokenize_sql(case).unwrap();
+        let stmts = parse_sql(&tokens).unwrap();
         assert_eq!(stmts.len(), 1);
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
@@ -129,6 +134,7 @@ fn test_statement_error() {
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
         r#"drop a"#,
+        r#"insert into t format"#,
     ];
 
     for case in cases {
@@ -158,6 +164,7 @@ fn test_query() {
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
         r#"select * from customer inner join orders on a = b limit 1"#,
+        r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
         r#"select * from customer natural full join orders"#,
         r#"select * from customer natural join orders left outer join detail using (id)"#,
     ];
