@@ -26,16 +26,12 @@ use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
-    name: String,
     inner: DataTypePtr,
 }
 
 impl ArrayType {
     pub fn create(inner: DataTypePtr) -> Self {
-        ArrayType {
-            name: format!("Array({})", inner.name()),
-            inner,
-        }
+        ArrayType { inner }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -54,8 +50,8 @@ impl DataType for ArrayType {
         self
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> String {
+        format!("Array({})", self.inner.name())
     }
 
     fn default_value(&self) -> DataValue {
@@ -114,14 +110,15 @@ impl DataType for ArrayType {
         ArrowType::LargeList(Box::new(field))
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(ArraySerializer {
-            inner: self.inner.create_serializer(),
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        ArraySerializer {
+            inner: Box::new(self.inner.create_serializer()),
             typ: self.inner.clone(),
-        })
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
+    fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {
         todo!()
     }
 

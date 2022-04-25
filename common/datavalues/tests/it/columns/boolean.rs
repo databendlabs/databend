@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 
 #[test]

@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BufferReadExt;
@@ -22,9 +23,10 @@ use crate::ColumnRef;
 use crate::DataValue;
 use crate::NullableColumn;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct NullableDeserializer {
-    pub inner: Box<dyn TypeDeserializer>,
+    pub inner: Box<TypeDeserializerImpl>,
     pub bitmap: MutableBitmap,
 }
 
@@ -46,6 +48,7 @@ impl TypeDeserializer for NullableDeserializer {
     }
 
     fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, _rows: usize) -> Result<()> {
+        // it's covered outside
         unreachable!()
     }
 
@@ -109,6 +112,18 @@ impl TypeDeserializer for NullableDeserializer {
             self.bitmap.push(true);
         }
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.bitmap
+            .pop()
+            .ok_or_else(|| {
+                ErrorCode::BadDataArrayLength("Nullable deserializer is empty when pop data value")
+            })
+            .and_then(|v| {
+                let inner_value = self.inner.pop_data_value();
+                v.then(|| inner_value).unwrap_or(Ok(DataValue::Null))
+            })
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

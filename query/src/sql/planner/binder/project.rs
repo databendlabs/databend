@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::ast::Expr;
-use common_ast::parser::ast::Indirection;
-use common_ast::parser::ast::SelectTarget;
+use common_ast::ast::Expr;
+use common_ast::ast::Indirection;
+use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -27,6 +27,7 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
+use crate::sql::plans::Scalar;
 
 impl Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
@@ -38,7 +39,7 @@ impl Binder {
             if let Some(expr) = &column_binding.scalar {
                 projections.push(ProjectItem {
                     expr: expr.clone(),
-                    index: column_binding.index.unwrap(),
+                    index: column_binding.index,
                 });
             }
         }
@@ -70,6 +71,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
+    #[allow(unreachable_patterns)]
     pub(super) fn normalize_select_list(
         &mut self,
         select_list: &[SelectTarget],
@@ -115,15 +117,45 @@ impl Binder {
                         None => get_expr_display_string(expr),
                     };
 
-                    self.metadata
-                        .add_column(expr_name.clone(), data_type.clone(), nullable, None);
-                    let column_binding = ColumnBinding {
-                        table_name: None,
-                        column_name: expr_name,
-                        index: None,
-                        data_type,
-                        nullable,
-                        scalar: Some(bound_expr),
+                    // If expr is a ColumnRef, then it's a pass-through column. There is no need to
+                    // generate a new ColumnEntry for it.
+                    let column_binding = match bound_expr.as_any().downcast_ref::<Scalar>().unwrap()
+                    {
+                        Scalar::ColumnRef {
+                            index,
+                            data_type,
+                            nullable,
+                        } => {
+                            let table_name = self
+                                .metadata
+                                .column(*index)
+                                .table_index
+                                .map(|idx| self.metadata.table(idx).name.clone());
+                            ColumnBinding {
+                                table_name,
+                                column_name: expr_name,
+                                index: *index,
+                                data_type: data_type.clone(),
+                                nullable: *nullable,
+                                scalar: None,
+                            }
+                        }
+                        _ => {
+                            let index = self.metadata.add_column(
+                                expr_name.clone(),
+                                data_type.clone(),
+                                nullable,
+                                None,
+                            );
+                            ColumnBinding {
+                                table_name: None,
+                                column_name: expr_name,
+                                index,
+                                data_type,
+                                nullable,
+                                scalar: Some(bound_expr),
+                            }
+                        }
                     };
                     output_context.add_column_binding(column_binding);
                 }

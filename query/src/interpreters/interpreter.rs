@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 
 #[async_trait::async_trait]
 /// Interpreter is a trait for different PlanNode
@@ -62,6 +63,13 @@ pub trait Interpreter: Sync + Send {
     async fn finish(&self) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement finish method for {:?}",
+            self.name()
+        )))
+    }
+
+    fn set_source_pipe_builder(&self, _builder: Option<SourcePipeBuilder>) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "UnImplement set_source_pipe_builder method for {:?}",
             self.name()
         )))
     }

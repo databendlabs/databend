@@ -104,6 +104,10 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
+    fn append2(&self, _: Arc<QueryContext>, _: &mut NewPipeline) -> Result<()> {
+        unimplemented!()
+    }
+
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
@@ -147,7 +151,7 @@ pub trait Table: Sync + Send {
 
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
-    pub data_length: Option<u64>,
-    pub data_length_compressed: Option<u64>,
+    pub data_size: Option<u64>,
+    pub data_size_compressed: Option<u64>,
     pub index_length: Option<u64>,
 }

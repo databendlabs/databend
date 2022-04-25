@@ -78,7 +78,7 @@ impl TracingTable {
     }
 
     fn log_files(ctx: Arc<QueryContext>) -> Result<VecDeque<String>> {
-        WalkDir::new(ctx.get_config().log.log_dir.as_str())
+        WalkDir::new(ctx.get_config().log.dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())
             .into_iter()
             .filter_map(|dir_entry| match dir_entry {

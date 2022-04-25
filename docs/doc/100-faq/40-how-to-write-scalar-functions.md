@@ -26,7 +26,7 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 
 ### Knowledge before writing the eval function
 
-####  Logical datatypes and physical datatypes.
+#### Logical datatypes and physical datatypes.
 
 Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
 Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `Int32Column`.
@@ -34,7 +34,7 @@ Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its 
 We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `ColumnRef`.
 `ColumnsWithField` has `data_type` function which returns the logical datatype.
 
-####  Arrow's memory layout
+#### Arrow's memory layout
 
 Databend's memory layout is based on the Arrow system, you can find Arrow's memory layout [here] (https://arrow.apache.org/docs/format/Columnar.html#format-columnar).
 
@@ -162,7 +162,7 @@ impl Function for SqrtFunction {
         Float64Type::arc()
     }
 
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize, _func_ctx: FunctionContext) -> Result<ColumnRef>{
+    fn eval(&self, _func_ctx: FunctionContext, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
              let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), sqrt::<$S>, &mut ctx)?;

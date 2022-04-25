@@ -23,9 +23,10 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct StructSerializer {
     pub names: Vec<String>,
-    pub inners: Vec<Box<dyn TypeSerializer>>,
+    pub inners: Vec<Box<TypeSerializerImpl>>,
     pub types: Vec<DataTypePtr>,
 }
 

@@ -29,9 +29,8 @@ fn test_add_months() -> Result<()> {
     let dt_to_seconds = |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("date16", Date16Type::arc()),
-        DataField::new("date32", Date32Type::arc()),
-        DataField::new("datetime32", DateTime32Type::arc(None)),
+        DataField::new("date", DateType::arc()),
+        DataField::new("datetime", TimestampType::arc(0, None)),
         DataField::new("u8", u8::to_data_type()),
         DataField::new("u16", u16::to_data_type()),
         DataField::new("u32", u32::to_data_type()),
@@ -45,9 +44,8 @@ fn test_add_months() -> Result<()> {
     ]);
 
     let blocks = DataBlock::create(schema.clone(), vec![
-        Series::from_data(vec![dt_to_days("2020-02-29T10:00:00Z") as u16]),
         Series::from_data(vec![dt_to_days("2020-02-29T10:00:00Z") as i32]),
-        Series::from_data(vec![dt_to_seconds("2020-02-29T01:02:03Z") as u32]),
+        Series::from_data(vec![dt_to_seconds("2020-02-29T01:02:03Z")]),
         Series::from_data(vec![12_u8]),
         Series::from_data(vec![12_u16]),
         Series::from_data(vec![12_u32]),
@@ -84,43 +82,14 @@ fn test_add_months() -> Result<()> {
     ];
 
     {
-        let mut expects: Vec<u16> = Vec::new();
-        expects.reserve(10);
-        for (field, arg) in fields.iter().zip(args.iter()) {
-            let add_months =
-                AddMonthsFunction::try_create_func("addMonths", 1, &[&Date16Type::arc(), arg])?;
-            let col = add_months.eval(
-                FunctionContext::default(),
-                &[column("date16"), column(field)],
-                1,
-            )?;
-            assert_eq!(col.len(), 1);
-            assert_eq!(col.data_type().data_type_id(), TypeID::UInt16);
-            expects.push(col.get_u64(0)? as u16);
-        }
-        assert_eq!(expects, vec![
-            dt_to_days("2021-02-28T10:00:00Z") as u16,
-            dt_to_days("2021-02-28T10:00:00Z") as u16,
-            dt_to_days("2021-02-28T10:00:00Z") as u16,
-            dt_to_days("2021-02-28T10:00:00Z") as u16,
-            dt_to_days("2019-01-29T10:00:00Z") as u16,
-            dt_to_days("2019-01-29T10:00:00Z") as u16,
-            dt_to_days("2019-01-29T10:00:00Z") as u16,
-            dt_to_days("2019-01-29T10:00:00Z") as u16,
-            dt_to_days("2020-03-29T10:00:00Z") as u16,
-            dt_to_days("2020-01-29T10:00:00Z") as u16,
-        ]);
-    }
-
-    {
         let mut expects: Vec<i32> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months =
-                AddMonthsFunction::try_create_func("addMonths", 1, &[&Date32Type::arc(), arg])?;
+                AddMonthsFunction::try_create_func("addMonths", 1, &[&DateType::arc(), arg])?;
             let col = add_months.eval(
                 FunctionContext::default(),
-                &[column("date32"), column(field)],
+                &[column("date"), column(field)],
                 1,
             )?;
             assert_eq!(col.len(), 1);
@@ -142,33 +111,33 @@ fn test_add_months() -> Result<()> {
     }
 
     {
-        let mut expects: Vec<u32> = Vec::new();
+        let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months = AddMonthsFunction::try_create_func("addMonths", 1, &[
-                &DateTime32Type::arc(None),
+                &TimestampType::arc(0, None),
                 arg,
             ])?;
             let col = add_months.eval(
                 FunctionContext::default(),
-                &[column("datetime32"), column(field)],
+                &[column("datetime"), column(field)],
                 1,
             )?;
             assert_eq!(col.len(), 1);
-            assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
-            expects.push(col.get_u64(0)? as u32);
+            assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
+            expects.push(col.get_i64(0)?);
         }
         assert_eq!(expects, vec![
-            dt_to_seconds("2021-02-28T01:02:03Z") as u32,
-            dt_to_seconds("2021-02-28T01:02:03Z") as u32,
-            dt_to_seconds("2021-02-28T01:02:03Z") as u32,
-            dt_to_seconds("2021-02-28T01:02:03Z") as u32,
-            dt_to_seconds("2019-01-29T01:02:03Z") as u32,
-            dt_to_seconds("2019-01-29T01:02:03Z") as u32,
-            dt_to_seconds("2019-01-29T01:02:03Z") as u32,
-            dt_to_seconds("2019-01-29T01:02:03Z") as u32,
-            dt_to_seconds("2020-03-29T01:02:03Z") as u32,
-            dt_to_seconds("2020-01-29T01:02:03Z") as u32,
+            dt_to_seconds("2021-02-28T01:02:03Z"),
+            dt_to_seconds("2021-02-28T01:02:03Z"),
+            dt_to_seconds("2021-02-28T01:02:03Z"),
+            dt_to_seconds("2021-02-28T01:02:03Z"),
+            dt_to_seconds("2019-01-29T01:02:03Z"),
+            dt_to_seconds("2019-01-29T01:02:03Z"),
+            dt_to_seconds("2019-01-29T01:02:03Z"),
+            dt_to_seconds("2019-01-29T01:02:03Z"),
+            dt_to_seconds("2020-03-29T01:02:03Z"),
+            dt_to_seconds("2020-01-29T01:02:03Z"),
         ]);
     }
 
@@ -180,7 +149,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     let dt_to_seconds = |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("datetime32", DateTime32Type::arc(None)),
+        DataField::new("datetime", TimestampType::arc(0, None)),
         DataField::new("u8", u8::to_data_type()),
         DataField::new("u16", u16::to_data_type()),
         DataField::new("u32", u32::to_data_type()),
@@ -235,16 +204,16 @@ fn test_add_subtract_seconds() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("addSeconds", 1, &[
-                &DateTime32Type::arc(None),
+                &TimestampType::arc(0, None),
                 arg,
             ])?;
             let col = add_seconds.eval(
                 FunctionContext::default(),
-                &[column("datetime32"), column(field)],
+                &[column("datetime"), column(field)],
                 1,
             )?;
             assert_eq!(col.len(), 1);
-            assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
+            assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
             expects.push(col.get_u64(0)? as u32);
         }
         assert_eq!(expects, vec![
@@ -266,16 +235,16 @@ fn test_add_subtract_seconds() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("subtractSeconds", -1, &[
-                &DateTime32Type::arc(None),
+                &TimestampType::arc(0, None),
                 arg,
             ])?;
             let col = add_seconds.eval(
                 FunctionContext::default(),
-                &[column("datetime32"), column(field)],
+                &[column("datetime"), column(field)],
                 1,
             )?;
             assert_eq!(col.len(), 1);
-            assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
+            assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
             expects.push(col.get_u64(0)? as u32);
         }
         assert_eq!(expects, vec![

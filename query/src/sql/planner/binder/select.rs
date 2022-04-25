@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use common_ast::parser::ast::Expr;
-use common_ast::parser::ast::Query;
-use common_ast::parser::ast::SelectStmt;
-use common_ast::parser::ast::SetExpr;
-use common_ast::parser::ast::TableReference;
+use common_ast::ast::Expr;
+use common_ast::ast::Query;
+use common_ast::ast::SelectStmt;
+use common_ast::ast::SetExpr;
+use common_ast::ast::TableReference;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -112,7 +112,7 @@ impl Binder {
             let column_binding = ColumnBinding {
                 table_name: Some(table.name.clone()),
                 column_name: column.name.clone(),
-                index: Some(column.column_index),
+                index: column.column_index,
                 data_type: column.data_type.clone(),
                 nullable: column.nullable,
                 scalar: None,

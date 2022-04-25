@@ -45,15 +45,37 @@ async fn interpreter_describe_table_test() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+-------+----------+------+---------+",
-            "| Field | Type     | Null | Default |",
-            "+-------+----------+------+---------+",
-            "| a     | BIGINT   | NO   | 0       |",
-            "| b     | INT      | NO   | 0       |",
-            "| c     | VARCHAR  | NO   |         |",
-            "| d     | SMALLINT | NO   | 0       |",
-            "| e     | DATE16   | NO   | 0       |",
-            "+-------+----------+------+---------+",
+            "+-------+----------+------+---------+-------+",
+            "| Field | Type     | Null | Default | Extra |",
+            "+-------+----------+------+---------+-------+",
+            "| a     | BIGINT   | NO   | 0       |       |",
+            "| b     | INT      | NO   | 0       |       |",
+            "| c     | VARCHAR  | NO   |         |       |",
+            "| d     | SMALLINT | NO   | 0       |       |",
+            "| e     | DATE     | NO   | 0       |       |",
+            "+-------+----------+------+---------+-------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    // `show fields from ` is same as `describe` table.
+    {
+        let plan = PlanParser::parse(ctx.clone(), "show fields from a").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "DescribeTableInterpreter");
+
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+-------+----------+------+---------+-------+",
+            "| Field | Type     | Null | Default | Extra |",
+            "+-------+----------+------+---------+-------+",
+            "| a     | BIGINT   | NO   | 0       |       |",
+            "| b     | INT      | NO   | 0       |       |",
+            "| c     | VARCHAR  | NO   |         |       |",
+            "| d     | SMALLINT | NO   | 0       |       |",
+            "| e     | DATE     | NO   | 0       |       |",
+            "+-------+----------+------+---------+-------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

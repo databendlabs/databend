@@ -41,9 +41,9 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 10240
 
 [log]
-log_level = "ERROR"
-log_dir = "./_logs"
-log_query_enabled = false
+level = "ERROR"
+dir = "./_logs"
+query_enabled = false
 
 [meta]
 # To enable embedded meta-store, set meta_address to ""
@@ -56,7 +56,7 @@ meta_client_timeout_in_second = 60
 # Storage config.
 [storage]
 # fs|s3
-storage_type = "fs"
+type = "fs"
 
 # FS storage.
 [storage.fs]
@@ -66,4 +66,4 @@ data_path = "stateless_test_data"
 [storage.s3]
 
 # Azure storage
-[storage.azure_storage_blob]
+[storage.azblob]

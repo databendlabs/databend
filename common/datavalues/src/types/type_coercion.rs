@@ -271,17 +271,13 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
 
     if lhs_id.is_date_or_date_time() && rhs_id.is_date_or_date_time() {
         return match (lhs_id, rhs_id) {
-            (TypeID::Date16, _) => Ok(rhs_type.clone()),
-            (_, TypeID::Date16) => Ok(lhs_type.clone()),
-            (TypeID::Date32, TypeID::DateTime32) => Ok(DateTime64Type::arc(0, None)),
-            (TypeID::DateTime32, TypeID::Date32) => Ok(DateTime64Type::arc(0, None)),
-            (TypeID::Date32 | TypeID::DateTime32, TypeID::DateTime64) => Ok(rhs_type.clone()),
-            (TypeID::DateTime64, TypeID::Date32 | TypeID::DateTime32) => Ok(lhs_type.clone()),
-            (TypeID::DateTime64, TypeID::DateTime64) => {
-                let lhs: &DateTime64Type = lhs_type.as_any().downcast_ref().unwrap();
-                let rhs: &DateTime64Type = rhs_type.as_any().downcast_ref().unwrap();
+            (TypeID::Date, _) => Ok(rhs_type.clone()),
+            (_, TypeID::Date) => Ok(lhs_type.clone()),
+            (TypeID::Timestamp, TypeID::Timestamp) => {
+                let lhs: &TimestampType = lhs_type.as_any().downcast_ref().unwrap();
+                let rhs: &TimestampType = rhs_type.as_any().downcast_ref().unwrap();
                 let precision = cmp::max(lhs.precision(), rhs.precision());
-                Ok(DateTime64Type::arc(precision, None))
+                Ok(TimestampType::arc(precision, None))
             }
             _ => unreachable!(),
         };

@@ -45,18 +45,16 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     type_factory.register(Float32Type::arc());
     type_factory.register(Float64Type::arc());
 
-    type_factory.register(Date16Type::arc());
-    type_factory.register(Date32Type::arc());
-    type_factory.register(DateTime32Type::arc(None));
+    type_factory.register(DateType::arc());
     type_factory.register(VariantType::arc());
     type_factory.register(VariantArrayType::arc());
     type_factory.register(VariantObjectType::arc());
 
-    // DateTime64 is a special case
+    // Timestamp is a special case
     {
-        type_factory.register(DateTime64Type::arc(3, None));
-        type_factory.register(DateTime64Type::arc(6, None));
-        type_factory.register(DateTime64Type::arc(9, None));
+        for precision in 0..10 {
+            type_factory.register(TimestampType::arc(precision, None));
+        }
     }
 
     type_factory.add_array_wrapper();
@@ -90,7 +88,7 @@ impl TypeFactory {
         let mut names = vec![data_type.name()];
 
         for alias in data_type.aliases() {
-            names.push(alias);
+            names.push(alias.to_string());
         }
         for name in names {
             self.case_insensitive_types

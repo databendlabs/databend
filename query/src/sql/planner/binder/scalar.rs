@@ -15,11 +15,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_ast::parser::ast::Expr;
+use common_ast::ast::Expr;
 use common_datavalues::DataTypePtr;
 use common_exception::Result;
 
 use crate::sql::planner::binder::BindContext;
+use crate::sql::plans::Scalar;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder;
@@ -34,9 +35,13 @@ impl ScalarBinder {
             Expr::ColumnRef { table, column, .. } => {
                 let table_name: Option<String> = table.clone().map(|ident| ident.name);
                 let column_name = column.name.clone();
-                let _column_binding = bind_context.resolve_column(table_name, column_name)?;
+                let column_binding = bind_context.resolve_column(table_name, column_name)?;
 
-                todo!()
+                Ok(Arc::new(Scalar::ColumnRef {
+                    index: column_binding.index,
+                    data_type: column_binding.data_type.clone(),
+                    nullable: column_binding.nullable,
+                }))
             }
             _ => todo!(),
         }

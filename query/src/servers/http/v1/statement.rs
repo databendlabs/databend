@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_meta_types::UserInfo;
 use hyper::StatusCode;
 use poem::error::Result as PoemResult;
 use poem::post;
-use poem::web::Data;
 use poem::web::Json;
 use poem::web::Query;
 use poem::Endpoint;
@@ -29,8 +25,8 @@ use super::query::HttpQueryRequest;
 use super::query::HttpSession;
 use super::query::HttpSessionConf;
 use super::query::PaginationConf;
+use super::HttpQueryContext;
 use super::QueryResponse;
-use crate::sessions::SessionManager;
 
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
@@ -39,13 +35,11 @@ pub struct StatementHandlerParams {
 
 #[poem::handler]
 pub async fn statement_handler(
-    sessions_extension: Data<&Arc<SessionManager>>,
-    user_info: Data<&UserInfo>,
+    ctx: &HttpQueryContext,
     sql: String,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Json<QueryResponse>> {
-    let session_manager = sessions_extension.0;
-    let http_query_manager = session_manager.get_http_query_manager();
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
     let query_id = http_query_manager.next_query_id();
     let session = HttpSessionConf {
         database: params.db.filter(|x| !x.is_empty()),
@@ -57,7 +51,7 @@ pub async fn statement_handler(
         pagination: PaginationConf { wait_time_secs: -1 },
     };
     let query = http_query_manager
-        .try_create_query(&query_id, req, session_manager, &user_info)
+        .try_create_query(&query_id, ctx, req)
         .await;
     match query {
         Ok(query) => {

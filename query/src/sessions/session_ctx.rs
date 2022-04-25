@@ -32,6 +32,7 @@ pub struct SessionContext {
     conf: Config,
     abort: AtomicBool,
     current_database: RwLock<String>,
+    current_tenant: RwLock<String>,
     #[ignore_malloc_size_of = "insignificant"]
     current_user: RwLock<Option<UserInfo>>,
     #[ignore_malloc_size_of = "insignificant"]
@@ -48,6 +49,7 @@ impl SessionContext {
             conf,
             abort: Default::default(),
             current_user: Default::default(),
+            current_tenant: Default::default(),
             client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
             io_shutdown_tx: Default::default(),
@@ -77,8 +79,19 @@ impl SessionContext {
         *lock = db
     }
 
-    pub fn get_tenant(&self) -> String {
+    pub fn get_current_tenant(&self) -> String {
+        if self.conf.query.management_mode {
+            let lock = self.current_tenant.read();
+            if !lock.is_empty() {
+                return lock.clone();
+            }
+        }
         self.conf.query.tenant_id.clone()
+    }
+
+    pub fn set_current_tenant(&self, tenant: String) {
+        let mut lock = self.current_tenant.write();
+        *lock = tenant;
     }
 
     // Get current user

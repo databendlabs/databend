@@ -449,10 +449,8 @@ impl BloomFilter {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::Timestamp
                 | TypeID::Interval
                 | TypeID::String
         )

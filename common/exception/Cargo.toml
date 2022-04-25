@@ -26,4 +26,4 @@ tonic = "=0.6.2"
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "818c0f9" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "fee0056" }

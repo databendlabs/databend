@@ -20,8 +20,6 @@ use common_exception::Result;
 use super::data_type::DataType;
 use super::type_id::TypeID;
 pub use crate::prelude::*;
-use crate::TypeDeserializer;
-use crate::TypeSerializer;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BooleanType {}
@@ -43,8 +41,8 @@ impl DataType for BooleanType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Boolean"
+    fn name(&self) -> String {
+        "Boolean".to_string()
     }
 
     fn default_value(&self) -> DataValue {
@@ -70,13 +68,15 @@ impl DataType for BooleanType {
         ArrowType::Boolean
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(BooleanSerializer {})
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        BooleanSerializer {}.into()
     }
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(BooleanDeserializer {
+
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        BooleanDeserializer {
             builder: MutableBooleanColumn::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

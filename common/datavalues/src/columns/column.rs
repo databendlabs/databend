@@ -32,7 +32,7 @@ pub type ColumnRef = Arc<dyn Column>;
 pub trait Column: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     /// Type of data that column contains. It's an underlying physical type:
-    /// UInt16 for Date, UInt32 for DateTime, so on.
+    /// Int32 for Date, Int64 for Timestamp, so on.
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
@@ -165,21 +165,21 @@ where A: AsRef<dyn Array>
             Null => Arc::new(NullColumn::from_arrow_array(self.as_ref())),
             Boolean => Arc::new(BooleanColumn::from_arrow_array(self.as_ref())),
             UInt8 => Arc::new(UInt8Column::from_arrow_array(self.as_ref())),
-            UInt16 | Date16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
-            UInt32 | DateTime32 => Arc::new(UInt32Column::from_arrow_array(self.as_ref())),
+            UInt16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
+            UInt32 => Arc::new(UInt32Column::from_arrow_array(self.as_ref())),
             UInt64 => Arc::new(UInt64Column::from_arrow_array(self.as_ref())),
             Int8 => Arc::new(Int8Column::from_arrow_array(self.as_ref())),
             Int16 => Arc::new(Int16Column::from_arrow_array(self.as_ref())),
-            Int32 | Date32 => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
-            Int64 | Interval | DateTime64 => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
+            Int32 | Date => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
+            Int64 | Interval | Timestamp => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
             Array => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
             Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
-            Variant => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
-            VariantArray => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
-            VariantObject => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
+            Variant => Arc::new(VariantColumn::from_arrow_array(self.as_ref())),
+            VariantArray => Arc::new(VariantColumn::from_arrow_array(self.as_ref())),
+            VariantObject => Arc::new(VariantColumn::from_arrow_array(self.as_ref())),
         }
     }
 
@@ -248,7 +248,7 @@ impl std::fmt::Debug for dyn Column + '_ {
                     fmt_dyn!(col, StructColumn, f)
                 },
                 Variant | VariantArray | VariantObject => {
-                    fmt_dyn!(col, JsonColumn, f)
+                    fmt_dyn!(col, VariantColumn, f)
                 }
                 _ => {
                     unimplemented!()

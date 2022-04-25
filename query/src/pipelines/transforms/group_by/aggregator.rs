@@ -84,21 +84,16 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     }
 
     #[inline(always)]
-    #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute(params: &AggregatorParams, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute(params: &AggregatorParams, block: &DataBlock, places: &[StateAddr]) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
         let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;
-
-        // This can benificial for the case of dereferencing
-        // This will help improve the performance ~hundreds of megabits per second
-        let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
         for index in 0..aggregate_functions.len() {
             let rows = block.num_rows();
             let function = &aggregate_functions[index];
             let state_offset = offsets_aggregate_states[index];
-            let function_arguments = &aggr_arg_columns_slice[index];
+            let function_arguments = &aggregate_arguments_columns[index];
             function.accumulate_keys(places, state_offset, function_arguments, rows)?;
         }
 
