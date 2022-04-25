@@ -107,10 +107,6 @@ impl Debug for QueryAnalyzeState {
             debug_struct.field("filter", predicate);
         }
 
-        if let Some(predicate) = &self.having {
-            debug_struct.field("having", predicate);
-        }
-
         if !self.before_group_by_expressions.is_empty() {
             debug_struct.field("before_group_by", &self.before_group_by_expressions);
         }
@@ -123,15 +119,19 @@ impl Debug for QueryAnalyzeState {
             debug_struct.field("aggregate", &self.aggregate_expressions);
         }
 
-        if !self.distinct_expressions.is_empty() {
-            debug_struct.field("distinct", &self.distinct_expressions);
-        }
-
         if !self.expressions.is_empty() {
             match self.order_by_expressions.is_empty() {
                 true => debug_struct.field("before_projection", &self.expressions),
                 false => debug_struct.field("before_order_by", &self.expressions),
             };
+        }
+
+        if let Some(predicate) = &self.having {
+            debug_struct.field("having", predicate);
+        }
+
+        if !self.distinct_expressions.is_empty() {
+            debug_struct.field("distinct", &self.distinct_expressions);
         }
 
         if !self.order_by_expressions.is_empty() {

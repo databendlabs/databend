@@ -141,12 +141,12 @@ impl Debug for QueryASTIR {
             debug_struct.field("filter", predicate);
         }
 
-        if let Some(predicate) = &self.having_predicate {
-            debug_struct.field("having", predicate);
-        }
-
         if !self.group_by_expressions.is_empty() {
             debug_struct.field("group by", &self.group_by_expressions);
+        }
+
+        if let Some(predicate) = &self.having_predicate {
+            debug_struct.field("having", predicate);
         }
 
         if !self.aggregate_expressions.is_empty() {
