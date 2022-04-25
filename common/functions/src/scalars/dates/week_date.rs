@@ -25,7 +25,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::assert_date_or_datetime;
+use crate::scalars::assert_date_or_timestamp;
 use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
@@ -81,7 +81,7 @@ where
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
     pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        assert_date_or_datetime(args[0])?;
+        assert_date_or_timestamp(args[0])?;
         if args.len() > 1 {
             assert_numeric(args[1])?;
         }
@@ -156,10 +156,12 @@ where
                     });
                     Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
             },
-            TypeID::DateTime => {
+            TypeID::Timestamp => {
+                    let ts_dt = columns[0].field().data_type().as_any().downcast_ref::<TimestampType>().unwrap();
+                    let to_div = 10_i64.pow(ts_dt.precision() as u32);
                     let col: &Int64Column = Series::check_get(columns[0].column())?;
                     let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64, 0_u32);
+                            let date_time = Utc.timestamp(v / to_div, 0_u32);
                             T::to_number(date_time, mode)
                     });
                     Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())

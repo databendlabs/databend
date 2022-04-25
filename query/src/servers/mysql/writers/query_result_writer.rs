@@ -20,7 +20,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::DateTimeType;
+use common_datavalues::TimestampType;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -79,7 +79,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
-                TypeID::DateTime => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -134,8 +134,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let v = v as i32;
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (TypeID::DateTime, DataValue::Int64(v)) => {
-                                    let data_type: &DateTimeType =
+                                (TypeID::Timestamp, DataValue::Int64(v)) => {
+                                    let data_type: &TimestampType =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());

@@ -42,17 +42,17 @@ pub fn cast_from_date(
             let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
 
             for v in c.iter() {
-                let s = datetime_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
+                let s = timestamp_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
                 builder.append(s.as_bytes());
             }
             Ok((builder.build(size), None))
         }
 
-        TypeID::DateTime => {
-            let datetime = data_type.as_any().downcast_ref::<DateTimeType>().unwrap();
+        TypeID::Timestamp => {
+            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
             let it = c
                 .iter()
-                .map(|v| datetime.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
+                .map(|v| ts.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -61,7 +61,7 @@ pub fn cast_from_date(
     }
 }
 
-pub fn cast_from_datetime(
+pub fn cast_from_timestamp(
     column: &ColumnRef,
     from_type: &DataTypePtr,
     data_type: &DataTypePtr,
@@ -71,13 +71,13 @@ pub fn cast_from_datetime(
     let c: &Int64Column = Series::check_get(&c)?;
     let size = c.len();
 
-    let date_time64 = from_type.as_any().downcast_ref::<DateTimeType>().unwrap();
+    let date_time64 = from_type.as_any().downcast_ref::<TimestampType>().unwrap();
 
     match data_type.data_type_id() {
         TypeID::String => {
             let mut builder = MutableStringColumn::with_capacity(size);
             for v in c.iter() {
-                let s = datetime_to_string(
+                let s = timestamp_to_string(
                     date_time64.utc_timestamp(*v),
                     date_time64.format_string().as_str(),
                 );
@@ -94,11 +94,11 @@ pub fn cast_from_datetime(
             Ok((result, None))
         }
 
-        TypeID::DateTime => {
+        TypeID::Timestamp => {
             // TODO(veeupup): optimize convert different precisions, will be done in next pr
             let to_precision = data_type
                 .as_any()
-                .downcast_ref::<DateTimeType>()
+                .downcast_ref::<TimestampType>()
                 .unwrap()
                 .precision();
             let x = 10_i64.pow(9 - to_precision as u32);
@@ -114,6 +114,6 @@ pub fn cast_from_datetime(
 }
 
 #[inline]
-fn datetime_to_string(date: DateTime<Utc>, fmt: &str) -> String {
+fn timestamp_to_string(date: DateTime<Utc>, fmt: &str) -> String {
     date.format(fmt).to_string()
 }

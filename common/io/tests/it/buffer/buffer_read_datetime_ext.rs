@@ -29,7 +29,7 @@ fn test_read_datetime_ext() -> Result<()> {
     ];
     let mut res = vec![];
     for _ in 0..expected.len() {
-        let time = reader.read_datetime_text(&tz)?;
+        let time = reader.read_timestamp_text(&tz)?;
         res.push(format!("{:?}", time));
         let _ = reader.ignore_byte(b',')?;
     }

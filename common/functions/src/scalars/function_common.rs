@@ -36,10 +36,10 @@ pub fn assert_numeric(data_type: &DataTypePtr) -> Result<()> {
     Ok(())
 }
 
-pub fn assert_date_or_datetime(data_type: &DataTypePtr) -> Result<()> {
+pub fn assert_date_or_timestamp(data_type: &DataTypePtr) -> Result<()> {
     if !data_type.data_type_id().is_date_or_date_time() {
         return Err(ErrorCode::IllegalDataType(format!(
-            "Expected a data or datetime type, but got {:?}",
+            "Expected a date or timestamp type, but got {:?}",
             data_type
         )));
     }
