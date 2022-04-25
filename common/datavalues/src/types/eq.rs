@@ -52,7 +52,7 @@ pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
             true
         }
 
-        TimeStamp => {
+        Timestamp => {
             let lhs: &TimestampType = lhs.as_any().downcast_ref().unwrap();
             let rhs: &TimestampType = rhs.as_any().downcast_ref().unwrap();
 

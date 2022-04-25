@@ -21,12 +21,12 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
 use common_datavalues::TimestampType;
+use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_tracing::tracing;
-use common_datavalues::TypeSerializer;
 use opensrv_mysql::*;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
@@ -79,7 +79,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
-                TypeID::TimeStamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -134,7 +134,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let v = v as i32;
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (TypeID::TimeStamp, DataValue::Int64(v)) => {
+                                (TypeID::Timestamp, DataValue::Int64(v)) => {
                                     let data_type: &TimestampType =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();

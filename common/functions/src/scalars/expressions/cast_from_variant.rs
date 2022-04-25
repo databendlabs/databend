@@ -131,7 +131,7 @@ pub fn cast_from_variant(
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
-            TypeID::TimeStamp => {
+            TypeID::Timestamp => {
                 // TODO(veeupup): support datetime with precision
                 let mut builder = ColumnBuilder::<i64>::with_capacity(size);
                 let datetime = TimestampType::create(0, None);

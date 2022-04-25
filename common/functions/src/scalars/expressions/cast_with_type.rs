@@ -125,7 +125,7 @@ pub fn cast_with_type(
             cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         TypeID::Date => cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options),
-        TypeID::TimeStamp => {
+        TypeID::Timestamp => {
             cast_from_timestamp(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {

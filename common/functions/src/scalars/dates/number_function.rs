@@ -380,7 +380,7 @@ where
                 )?;
                 Ok(col.arc())
             }
-            TypeID::TimeStamp => {
+            TypeID::Timestamp => {
                 let ts_dt = columns[0]
                     .field()
                     .data_type()

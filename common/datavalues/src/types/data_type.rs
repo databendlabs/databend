@@ -63,7 +63,7 @@ pub enum DataTypeImpl {
     Float32(Float32Type),
     Float64(Float64Type),
     Date(DateType),
-    TimeStamp(TimestampType),
+    Timestamp(TimestampType),
     String(StringType),
     Struct(StructType),
     Array(ArrayType),
@@ -180,7 +180,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
             "Date" => return DateType::arc(),
-            "TimeStamp" => match metadata {
+            "Timestamp" => match metadata {
                 Some(meta) => {
                     let mut chars = meta.chars();
                     let precision = chars.next().unwrap().to_digit(10).unwrap();

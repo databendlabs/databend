@@ -44,7 +44,7 @@ impl RunningDifferenceFunction {
             | TypeID::Int64
             | TypeID::UInt64
             | TypeID::Date
-            | TypeID::TimeStamp
+            | TypeID::Timestamp
             | TypeID::Interval => Ok(type_primitive::Int64Type::arc()),
             TypeID::Float32 | TypeID::Float64 => Ok(type_primitive::Float64Type::arc()),
             _ => Err(ErrorCode::IllegalDataType(
@@ -101,7 +101,7 @@ impl Function for RunningDifferenceFunction {
             TypeID::UInt16 => compute_u16(col, input_rows),
             TypeID::Int32 | TypeID::Date => compute_i32(col, input_rows),
             TypeID::UInt32 => compute_u32(col, input_rows),
-            TypeID::Int64 | TypeID::Interval | TypeID::TimeStamp => compute_i64(col, input_rows),
+            TypeID::Int64 | TypeID::Interval | TypeID::Timestamp => compute_i64(col, input_rows),
             TypeID::UInt64 => compute_u64(col, input_rows),
             TypeID::Float32 => compute_f32(col, input_rows),
             TypeID::Float64 => compute_f64(col, input_rows),

@@ -85,7 +85,7 @@ impl TimestampType {
 #[typetag::serde]
 impl DataType for TimestampType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::TimeStamp
+        TypeID::Timestamp
     }
 
     #[inline]
@@ -99,7 +99,16 @@ impl DataType for TimestampType {
 
     fn aliases(&self) -> &[&str] {
         match self.precision {
-            6 => &["TimeStamp"],
+            0 => &["DateTime(0)"],
+            1 => &["DateTime(1)"],
+            2 => &["DateTime(2)"],
+            3 => &["DateTime(3)"],
+            4 => &["DateTime(4)"],
+            5 => &["DateTime(5)"],
+            6 => &["Timestamp", "DateTime"],
+            7 => &["DateTime(7)"],
+            8 => &["DateTime(8)"],
+            9 => &["DateTime(9)"],
             _ => &[],
         }
     }
@@ -129,7 +138,7 @@ impl DataType for TimestampType {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "TimeStamp".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Timestamp".to_string());
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         mp.insert(
             ARROW_EXTENSION_META.to_string(),
@@ -140,11 +149,8 @@ impl DataType for TimestampType {
 
     fn create_serializer(&self) -> TypeSerializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        
-        TimestampSerializer::<i64>::create(
-            tz.parse::<Tz>().unwrap(),
-            self.precision as u32,
-        ).into()
+
+        TimestampSerializer::<i64>::create(tz.parse::<Tz>().unwrap(), self.precision as u32).into()
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
@@ -164,6 +170,6 @@ impl DataType for TimestampType {
 
 impl std::fmt::Debug for TimestampType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TimeStamp({})", self.precision())
+        write!(f, "Timestamp({})", self.precision())
     }
 }

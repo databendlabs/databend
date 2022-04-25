@@ -32,15 +32,8 @@ impl ToCastFunction {
         // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
         features = match type_name {
             "Boolean" => features.num_arguments(1).bool_function(),
-            "TimeStamp" | "DateTime" => features.variadic_arguments(1, 3),
+            "Timestamp" | "DateTime" => features.variadic_arguments(1, 3),
             _ => features.num_arguments(1),
-        };
-
-        // special case: datetime is alias to timestamp, change cast type to timestamp
-        let type_name = if type_name == "DateTime" {
-            "TimeStamp"
-        } else {
-            type_name
         };
 
         let function_creator: FactoryCreator =
@@ -65,9 +58,8 @@ impl ToCastFunction {
             "Float64",
             "Date",
             "String",
-            "Date",
             "DateTime",
-            "TimeStamp",
+            "Timestamp",
         ];
 
         for name in names {

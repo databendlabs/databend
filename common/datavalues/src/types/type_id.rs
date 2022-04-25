@@ -53,7 +53,7 @@ pub enum TypeID {
     /// A 64-bit timestamp representing the elapsed time since UNIX epoch (1970-01-01)
     /// in nanoseconds, it's physical type is Int64
     /// store UTC timestamp
-    TimeStamp,
+    Timestamp,
 
     /// Interval represents the time interval, e.g. the elapsed time between two date or timestamp.
     /// Underneath Interval is stored as int64, so it supports negative values.
@@ -123,7 +123,7 @@ impl TypeID {
 
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
-        matches!(self, TypeID::Date | TypeID::TimeStamp,)
+        matches!(self, TypeID::Date | TypeID::Timestamp,)
     }
 
     /// Determine if a TypeID is signed numeric or not
@@ -163,7 +163,7 @@ impl TypeID {
 
     #[inline]
     pub fn is_quoted(&self) -> bool {
-        matches!(self, TypeID::String | TypeID::Date | TypeID::TimeStamp)
+        matches!(self, TypeID::String | TypeID::Date | TypeID::Timestamp)
     }
 
     #[inline]
@@ -190,7 +190,7 @@ impl TypeID {
             TypeID::Int8 | TypeID::UInt8 => Ok(1),
             TypeID::Int16 | TypeID::UInt16 => Ok(2),
             TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 | TypeID::Date => Ok(4),
-            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 | TypeID::TimeStamp => Ok(8),
+            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 | TypeID::Timestamp => Ok(8),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function number_byte_size argument must be numeric types, but got {:?}",
                 self
@@ -208,7 +208,7 @@ impl TypeID {
             Int16 => PhysicalTypeID::Int16,
 
             Int32 | Date => PhysicalTypeID::Int32,
-            Int64 | Interval | TimeStamp => PhysicalTypeID::Int64,
+            Int64 | Interval | Timestamp => PhysicalTypeID::Int64,
 
             UInt8 => PhysicalTypeID::UInt8,
             UInt16 => PhysicalTypeID::UInt16,

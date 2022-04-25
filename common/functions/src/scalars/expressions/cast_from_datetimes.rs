@@ -48,7 +48,7 @@ pub fn cast_from_date(
             Ok((builder.build(size), None))
         }
 
-        TypeID::TimeStamp => {
+        TypeID::Timestamp => {
             let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
             let it = c
                 .iter()
@@ -94,7 +94,7 @@ pub fn cast_from_timestamp(
             Ok((result, None))
         }
 
-        TypeID::TimeStamp => {
+        TypeID::Timestamp => {
             // TODO(veeupup): optimize convert different precisions, will be done in next pr
             let to_precision = data_type
                 .as_any()

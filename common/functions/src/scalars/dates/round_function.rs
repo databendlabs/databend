@@ -36,9 +36,9 @@ impl RoundFunction {
         args: &[&DataTypePtr],
         round: u32,
     ) -> Result<Box<dyn Function>> {
-        if args[0].data_type_id() != TypeID::TimeStamp {
+        if args[0].data_type_id() != TypeID::Timestamp {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Function {} must have a TimeStamp type as argument, but got {}",
+                "Function {} must have a Timestamp type as argument, but got {}",
                 display_name,
                 args[0].name(),
             )));

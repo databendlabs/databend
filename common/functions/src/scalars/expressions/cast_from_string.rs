@@ -51,7 +51,7 @@ pub fn cast_from_string(
             Ok((builder.build(size), Some(bitmap.into())))
         }
 
-        TypeID::TimeStamp => {
+        TypeID::Timestamp => {
             let mut builder = ColumnBuilder::<i64>::with_capacity(size);
             let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
 

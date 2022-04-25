@@ -156,7 +156,7 @@ where
                     });
                     Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
             },
-            TypeID::TimeStamp => {
+            TypeID::Timestamp => {
                     let ts_dt = columns[0].field().data_type().as_any().downcast_ref::<TimestampType>().unwrap();
                     let to_div = 10_i64.pow(ts_dt.precision() as u32);
                     let col: &Int64Column = Series::check_get(columns[0].column())?;

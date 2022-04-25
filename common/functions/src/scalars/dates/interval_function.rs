@@ -61,7 +61,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                     factor,
                     0,
                 ),
-                TypeID::TimeStamp => {
+                TypeID::Timestamp => {
                     let ts = args[0].as_any().downcast_ref::<TimestampType>().unwrap();
                     let precision = ts.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
@@ -206,7 +206,8 @@ impl IntervalArithmeticImpl for AddTimesImpl {
     type DateResultType = i64;
 
     fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType {
-        (l as i64 * 3600 * 24 * 1_000_000 + r.as_() * ctx.factor * 1_000_000) as Self::DateResultType
+        (l as i64 * 3600 * 24 * 1_000_000 + r.as_() * ctx.factor * 1_000_000)
+            as Self::DateResultType
     }
 
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {

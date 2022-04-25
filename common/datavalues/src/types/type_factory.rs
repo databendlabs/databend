@@ -50,7 +50,7 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     type_factory.register(VariantArrayType::arc());
     type_factory.register(VariantObjectType::arc());
 
-    // TimeStamp is a special case
+    // Timestamp is a special case
     {
         for precision in 0..10 {
             type_factory.register(TimestampType::arc(precision, None));
