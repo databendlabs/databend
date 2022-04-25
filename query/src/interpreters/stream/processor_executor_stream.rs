@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
@@ -28,7 +27,7 @@ pub struct ProcessorExecutorStream {
 }
 
 impl ProcessorExecutorStream {
-    pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
+    pub fn create(executor: PipelinePullingExecutor) -> Result<Self> {
         executor.start();
         Ok(Self { executor })
     }

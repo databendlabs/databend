@@ -78,8 +78,8 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
     fn process(&mut self) -> Result<()> {
         // self.tracker.restart_sync();
         if let Some(data_block) = self.input_data.take() {
-            let before_rows = data_block.num_rows();
-            let before_bytes = data_block.memory_size();
+            let _before_rows = data_block.num_rows();
+            let _before_bytes = data_block.memory_size();
 
             let data_block = self.transform.transform(data_block)?;
 

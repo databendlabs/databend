@@ -19,7 +19,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
-use common_datavalues::StringColumn;
 use common_datavalues::StringType;
 use common_exception::ErrorCode;
 use common_exception::Result;

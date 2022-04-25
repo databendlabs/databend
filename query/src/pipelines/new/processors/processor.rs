@@ -54,7 +54,7 @@ pub trait Processor: Send {
     }
 
     // Profiling processor
-    fn profiling(&self, id: usize) -> Result<Box<dyn ProcessInfo>> {
+    fn profiling(&self, _id: usize) -> Result<Box<dyn ProcessInfo>> {
         Err(ErrorCode::UnImplement("Unimplemented profiling."))
     }
 }

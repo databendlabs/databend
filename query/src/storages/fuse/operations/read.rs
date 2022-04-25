@@ -162,7 +162,7 @@ impl FuseTableSource {
         }
     }
 
-    fn calculate_compressed_size(chunks: &Vec<Vec<u8>>) -> usize {
+    fn calculate_compressed_size(chunks: &[Vec<u8>]) -> usize {
         chunks.iter().map(|x| x.len()).sum()
     }
 }

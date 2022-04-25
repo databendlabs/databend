@@ -1,5 +1,3 @@
-use petgraph::stable_graph::NodeIndex;
-
 #[typetag::serde(tag = "type")]
 pub trait ProcessInfo: Send + Sync {}
 
