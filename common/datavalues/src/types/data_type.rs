@@ -39,7 +39,7 @@ use super::type_primitive::UInt64Type;
 use super::type_primitive::UInt8Type;
 use super::type_string::StringType;
 use super::type_struct::StructType;
-use super::type_timestamp::TimeStampType;
+use super::type_timestamp::TimestampType;
 use crate::prelude::*;
 use crate::TypeDeserializer;
 use crate::TypeSerializer;
@@ -65,7 +65,7 @@ pub enum DataTypeImpl {
     Float32(Float32Type),
     Float64(Float64Type),
     Date(DateType),
-    TimeStamp(TimeStampType),
+    TimeStamp(TimestampType),
     String(StringType),
     Struct(StructType),
     Array(ArrayType),
@@ -154,7 +154,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
             Arc::new(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(TimeStampType::create(0, tz.clone())),
+        ArrowType::Timestamp(_, tz) => Arc::new(TimestampType::create(0, tz.clone())),
         ArrowType::Date32 | ArrowType::Date64 => Arc::new(DateType::default()),
 
         ArrowType::Struct(fields) => {
@@ -187,9 +187,9 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
                     let mut chars = meta.chars();
                     let precision = chars.next().unwrap().to_digit(10).unwrap();
                     let tz = chars.collect::<String>();
-                    return TimeStampType::arc(precision as usize, Some(tz));
+                    return TimestampType::arc(precision as usize, Some(tz));
                 }
-                None => return TimeStampType::arc(0, None),
+                None => return TimestampType::arc(0, None),
             },
             "Interval" => return IntervalType::arc(metadata.unwrap().into()),
             "Variant" => return VariantType::arc(),

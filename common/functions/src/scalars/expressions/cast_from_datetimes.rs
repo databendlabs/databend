@@ -49,7 +49,7 @@ pub fn cast_from_date(
         }
 
         TypeID::TimeStamp => {
-            let ts = data_type.as_any().downcast_ref::<TimeStampType>().unwrap();
+            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
             let it = c
                 .iter()
                 .map(|v| ts.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
@@ -71,7 +71,7 @@ pub fn cast_from_timestamp(
     let c: &Int64Column = Series::check_get(&c)?;
     let size = c.len();
 
-    let date_time64 = from_type.as_any().downcast_ref::<TimeStampType>().unwrap();
+    let date_time64 = from_type.as_any().downcast_ref::<TimestampType>().unwrap();
 
     match data_type.data_type_id() {
         TypeID::String => {
@@ -98,7 +98,7 @@ pub fn cast_from_timestamp(
             // TODO(veeupup): optimize convert different precisions, will be done in next pr
             let to_precision = data_type
                 .as_any()
-                .downcast_ref::<TimeStampType>()
+                .downcast_ref::<TimestampType>()
                 .unwrap()
                 .precision();
             let x = 10_i64.pow(9 - to_precision as u32);

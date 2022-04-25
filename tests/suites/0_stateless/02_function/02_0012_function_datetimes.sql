@@ -6,7 +6,7 @@ select  toDateTime(1640019661000000), toInt64(toDateTime(1640019661000000))  = 1
 
 select typeof(today() + 3) = 'DATE';
 select typeof(today() - 3) = 'DATE';
-select typeof(now() - 3) = 'TIMESTAMP(0)';
+select typeof(now() - 3) = 'TIMESTAMP(6)';
 select typeof(toDateTime(1640019661000000)) = 'TIMESTAMP(6)';
 select today() + 1 - today() = 1;
 
@@ -193,7 +193,7 @@ select toDateTime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
 select '===INSERT===';
 drop table if exists ts;
-create table ts(a DateTime(3), b DateTime, c Date);
+create table ts(a DateTime(9), b DateTime, c Date);
 insert into ts values(now(), now(), today());
 select toDateTime(a) = toDateTime(b) from ts;
 drop table if exists ts;

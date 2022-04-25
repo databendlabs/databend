@@ -134,7 +134,7 @@ pub fn cast_from_variant(
             TypeID::TimeStamp => {
                 // TODO(veeupup): support datetime with precision
                 let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-                let datetime = TimeStampType::create(0, None);
+                let datetime = TimestampType::create(0, None);
 
                 for (row, value) in json_column.iter().enumerate() {
                     match value.as_ref() {

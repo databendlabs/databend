@@ -68,7 +68,7 @@ impl Function for RoundFunction {
     }
 
     fn return_type(&self) -> DataTypePtr {
-        TimeStampType::arc(0, None)
+        TimestampType::arc(0, None)
     }
 
     fn eval(
@@ -81,7 +81,7 @@ impl Function for RoundFunction {
             .field()
             .data_type()
             .as_any()
-            .downcast_ref::<TimeStampType>()
+            .downcast_ref::<TimestampType>()
             .unwrap();
         let to_div = 10_i64.pow(ts_dt.precision() as u32);
         let func = |val: i64, _ctx: &mut EvalContext| self.execute(val / to_div);

@@ -22,7 +22,7 @@ use crate::DataTypePtr;
 use crate::DataValue;
 use crate::DateType;
 use crate::Scalar;
-use crate::TimeStampType;
+use crate::TimestampType;
 use crate::VariantType;
 use crate::VariantValue;
 
@@ -102,7 +102,7 @@ impl ToDateType for i32 {
 
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypePtr {
-        TimeStampType::arc(0, None)
+        TimestampType::arc(6, None)
     }
 }
 

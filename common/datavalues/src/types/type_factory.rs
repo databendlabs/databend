@@ -53,7 +53,7 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     // TimeStamp is a special case
     {
         for precision in 0..10 {
-            type_factory.register(TimeStampType::arc(precision, None));
+            type_factory.register(TimestampType::arc(precision, None));
         }
     }
 

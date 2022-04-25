@@ -76,7 +76,7 @@ impl WarehousesTable {
             DataField::new("tenant_id", Vu8::to_data_type()),
             DataField::new("id", Vu8::to_data_type()),
             DataField::new("size", Vu8::to_data_type()),
-            DataField::new("creation_time", TimeStampType::arc(0, None)),
+            DataField::new("creation_time", TimestampType::arc(0, None)),
         ])
     }
     pub fn create(table_id: u64) -> Arc<dyn Table> {

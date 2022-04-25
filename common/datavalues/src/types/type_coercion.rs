@@ -274,10 +274,10 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
             (TypeID::Date, _) => Ok(rhs_type.clone()),
             (_, TypeID::Date) => Ok(lhs_type.clone()),
             (TypeID::TimeStamp, TypeID::TimeStamp) => {
-                let lhs: &TimeStampType = lhs_type.as_any().downcast_ref().unwrap();
-                let rhs: &TimeStampType = rhs_type.as_any().downcast_ref().unwrap();
+                let lhs: &TimestampType = lhs_type.as_any().downcast_ref().unwrap();
+                let rhs: &TimestampType = rhs_type.as_any().downcast_ref().unwrap();
                 let precision = cmp::max(lhs.precision(), rhs.precision());
-                Ok(TimeStampType::arc(precision, None))
+                Ok(TimestampType::arc(precision, None))
             }
             _ => unreachable!(),
         };

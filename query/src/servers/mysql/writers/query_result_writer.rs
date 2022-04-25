@@ -20,7 +20,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::TimeStampType;
+use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
@@ -134,7 +134,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
                                 (TypeID::TimeStamp, DataValue::Int64(v)) => {
-                                    let data_type: &TimeStampType =
+                                    let data_type: &TimestampType =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());

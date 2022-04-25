@@ -29,7 +29,7 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct TimeStampType {
+pub struct TimestampType {
     /// The time resolution is determined by the precision parameter, range from 0 to 9
     /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
     precision: usize,
@@ -37,13 +37,13 @@ pub struct TimeStampType {
     tz: Option<String>,
 }
 
-impl TimeStampType {
+impl TimestampType {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
-        TimeStampType { precision, tz }
+        TimestampType { precision, tz }
     }
 
     pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
-        Arc::new(TimeStampType { precision, tz })
+        Arc::new(TimestampType { precision, tz })
     }
 
     pub fn tz(&self) -> Option<&String> {
@@ -83,7 +83,7 @@ impl TimeStampType {
 }
 
 #[typetag::serde]
-impl DataType for TimeStampType {
+impl DataType for TimestampType {
     fn data_type_id(&self) -> TypeID {
         TypeID::TimeStamp
     }
@@ -172,12 +172,8 @@ impl DataType for TimeStampType {
     }
 }
 
-impl std::fmt::Debug for TimeStampType {
+impl std::fmt::Debug for TimestampType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.precision() == 0 {
-            write!(f, "TimeStamp")
-        } else {
-            write!(f, "TimeStamp({})", self.precision())
-        }
+        write!(f, "TimeStamp({})", self.precision())
     }
 }

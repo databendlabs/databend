@@ -53,7 +53,7 @@ pub fn cast_from_string(
 
         TypeID::TimeStamp => {
             let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-            let ts = data_type.as_any().downcast_ref::<TimeStampType>().unwrap();
+            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
 
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_timestamp(v) {

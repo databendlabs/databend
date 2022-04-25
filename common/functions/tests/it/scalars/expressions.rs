@@ -109,7 +109,7 @@ fn test_datetime_cast_function() -> Result<()> {
             name: "cast-datetime-to-string-passed",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1614906061i64, 1635070210]),
-                DataField::new("dummy_1", TimeStampType::arc(0, None)),
+                DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
             error: "",

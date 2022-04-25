@@ -17,7 +17,7 @@ use std::sync::Arc;
 use super::type_array::ArrayType;
 use super::type_nullable::NullableType;
 use super::type_struct::StructType;
-use super::type_timestamp::TimeStampType;
+use super::type_timestamp::TimestampType;
 use super::DataType;
 
 impl Eq for dyn DataType + '_ {}
@@ -53,8 +53,8 @@ pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
         }
 
         TimeStamp => {
-            let lhs: &TimeStampType = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &TimeStampType = rhs.as_any().downcast_ref().unwrap();
+            let lhs: &TimestampType = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &TimestampType = rhs.as_any().downcast_ref().unwrap();
 
             lhs.precision() == rhs.precision()
         }
