@@ -19,8 +19,8 @@ mod table_memory_meta;
 
 mod backends;
 mod impls;
-mod types;
 
+pub use backends::KvBackend;
 pub use backends::MetaBackend;
 pub use catalog::Catalog;
 pub use catalog_context::CatalogContext;

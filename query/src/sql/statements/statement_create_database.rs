@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::DatabaseMeta;
 use common_planners::CreateDatabasePlan;
+use common_planners::DatabaseMeta;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
@@ -49,7 +49,7 @@ impl AnalyzableStatement for DfCreateDatabase {
             PlanNode::CreateDatabase(CreateDatabasePlan {
                 tenant,
                 if_not_exists,
-                db,
+                db_name: db,
                 meta,
             }),
         )))

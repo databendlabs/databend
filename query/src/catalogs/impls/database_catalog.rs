@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -31,6 +30,7 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_planners::CreateDatabasePlan;
 use common_tracing::tracing;
 
 use crate::catalogs::catalog::Catalog;
@@ -129,8 +129,30 @@ impl Catalog for DatabaseCatalog {
         Ok(dbs)
     }
 
-    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        if req.tenant.is_empty() {
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+        if plan.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while create database)",
+            ));
+        }
+        tracing::info!("Create database from plan:{:?}", plan);
+
+        if self
+            .immutable_catalog
+            .exists_database(&plan.tenant, &plan.db_name)
+            .await?
+        {
+            return Err(ErrorCode::DatabaseAlreadyExists(format!(
+                "{} database exists",
+                plan.db_name
+            )));
+        }
+        // create db in BOTTOM layer only
+        self.mutable_catalog.create_database(plan).await
+    }
+
+    async fn create_database_v1(&self, tenant: &str, req: CreateDatabasePlan) -> Result<()> {
+        if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while create database)",
             ));
@@ -139,7 +161,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(tenant, &req.db_name)
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
@@ -148,7 +170,7 @@ impl Catalog for DatabaseCatalog {
             )));
         }
         // create db in BOTTOM layer only
-        self.mutable_catalog.create_database(req).await
+        self.mutable_catalog.create_database_v1(tenant, req).await
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {

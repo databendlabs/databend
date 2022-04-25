@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -30,6 +29,7 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_planners::CreateDatabasePlan;
 use dyn_clone::DynClone;
 
 use crate::databases::Database;
@@ -50,8 +50,11 @@ pub trait Catalog: DynClone + Send + Sync {
     // Get all the databases.
     async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>>;
 
-    // Operation with database.
-    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
+    // This will be deprecated when create_database_v1 ready.
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
+
+    // Create database based on KV API.
+    async fn create_database_v1(&self, tenant: &str, plan: CreateDatabasePlan) -> Result<()>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
 

@@ -19,10 +19,10 @@ use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::DatabaseMeta;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
@@ -70,16 +70,13 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             tenant,
             if_not_exists: false,
-            db: db_name,
+            db_name,
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
             },
         };
-        ctx.get_catalog()
-            .create_database(plan.into())
-            .await
-            .unwrap();
+        ctx.get_catalog().create_database(plan).await.unwrap();
 
         Self {
             _tmp_dir: tmp_dir,

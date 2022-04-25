@@ -38,8 +38,10 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_planners::CreateDatabasePlan;
 use common_tracing::tracing;
 
+use crate::catalogs::backends::KvBackend;
 use crate::catalogs::backends::MetaBackend;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::CatalogContext;
@@ -80,6 +82,7 @@ impl MutableCatalog {
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.meta_address.is_empty();
 
+        // Meta backend.
         let meta: Arc<dyn MetaApi> = if local_mode {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
@@ -98,16 +101,31 @@ impl MutableCatalog {
         let tenant = conf.query.tenant_id.clone();
 
         // Create default database.
-        let req = CreateDatabaseReq {
-            if_not_exists: true,
-            tenant,
-            db_name: "default".to_string(),
-            meta: DatabaseMeta {
-                engine: "".to_string(),
-                ..Default::default()
-            },
-        };
-        meta.create_database(req).await?;
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: true,
+                tenant: tenant.clone(),
+                db_name: "default".to_string(),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..Default::default()
+                },
+            };
+            meta.create_database(req).await?;
+        }
+
+        // KV backend.
+        let kv = KvBackend::create(conf.clone()).await?;
+        // Create default database.
+        {
+            let req = CreateDatabasePlan {
+                if_not_exists: false,
+                tenant: tenant.clone(),
+                db_name: "default".to_string(),
+                meta: Default::default(),
+            };
+            kv.create_database(&tenant, req).await?;
+        }
 
         // Storage factory.
         let storage_factory = StorageFactory::create(conf.clone());
@@ -117,6 +135,7 @@ impl MutableCatalog {
 
         let ctx = CatalogContext {
             meta,
+            kv,
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
             in_memory_data: Arc::new(Default::default()),
@@ -160,7 +179,20 @@ impl Catalog for MutableCatalog {
         })
     }
 
-    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+        let req = CreateDatabaseReq {
+            if_not_exists: plan.if_not_exists,
+            tenant: plan.tenant,
+            db_name: plan.db_name,
+            meta: common_meta_types::DatabaseMeta {
+                engine: plan.meta.engine,
+                engine_options: plan.meta.engine_options,
+                options: plan.meta.options,
+                created_on: plan.meta.created_on,
+                updated_on: plan.meta.updated_on,
+                comment: plan.meta.comment,
+            },
+        };
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
         tracing::error!("db name: {}, engine: {}", &req.db_name, &req.meta.engine);
@@ -176,6 +208,10 @@ impl Catalog for MutableCatalog {
         Ok(CreateDatabaseReply {
             database_id: res.database_id,
         })
+    }
+
+    async fn create_database_v1(&self, tenant: &str, plan: CreateDatabasePlan) -> Result<()> {
+        self.ctx.kv.create_database(tenant, plan).await
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {

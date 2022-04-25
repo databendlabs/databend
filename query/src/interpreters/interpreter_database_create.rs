@@ -56,7 +56,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             .await?;
 
         let catalog = self.ctx.get_catalog();
-        catalog.create_database(self.plan.clone().into()).await?;
+        catalog.create_database(self.plan.clone()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

@@ -263,7 +263,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     }
 
     fn format_create_database(f: &mut Formatter, plan: &CreateDatabasePlan) -> fmt::Result {
-        write!(f, "Create database {:},", plan.db)?;
+        write!(f, "Create database {:},", plan.db_name)?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
         if !plan.meta.engine.is_empty() {
             write!(

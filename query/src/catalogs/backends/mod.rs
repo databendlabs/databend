@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+mod kv_backend;
 mod meta_backend;
 
+pub use kv_backend::KvBackend;
 pub use meta_backend::MetaBackend;

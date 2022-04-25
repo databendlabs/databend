@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
-use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -30,6 +29,7 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_planners::CreateDatabasePlan;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::InMemoryMetas;
@@ -87,7 +87,11 @@ impl Catalog for ImmutableCatalog {
         Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
     }
 
-    async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, _: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+        Err(ErrorCode::UnImplement("Cannot create system database"))
+    }
+
+    async fn create_database_v1(&self, _tenant: &str, _req: CreateDatabasePlan) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot create system database"))
     }
 

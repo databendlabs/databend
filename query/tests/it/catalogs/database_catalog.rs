@@ -18,12 +18,12 @@ use chrono::Utc;
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::TableMeta;
+use common_planners::CreateDatabasePlan;
+use common_planners::DatabaseMeta;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;
@@ -65,7 +65,7 @@ async fn test_catalogs_database() -> Result<()> {
 
     // Create.
     {
-        let mut req = CreateDatabaseReq {
+        let mut req = CreateDatabasePlan {
             if_not_exists: false,
             tenant: tenant.to_string(),
             db_name: "db1".to_string(),

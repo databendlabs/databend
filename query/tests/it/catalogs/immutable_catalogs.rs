@@ -14,8 +14,8 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DropDatabaseReq;
+use common_planners::CreateDatabasePlan;
 use databend_query::catalogs::Catalog;
 use databend_query::catalogs::ImmutableCatalog;
 
@@ -40,13 +40,13 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     assert!(db_3.is_err());
 
     // create database should failed
-    let create_db_req = CreateDatabaseReq {
+    let create_db_plan = CreateDatabasePlan {
         if_not_exists: false,
         tenant: tenant.to_string(),
         db_name: "system".to_string(),
         meta: Default::default(),
     };
-    let create_db_req = catalog.create_database(create_db_req).await;
+    let create_db_req = catalog.create_database(create_db_plan).await;
     assert!(create_db_req.is_err());
 
     let drop_db_req = DropDatabaseReq {

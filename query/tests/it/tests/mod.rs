@@ -23,7 +23,6 @@ pub(crate) mod tls_constants;
 
 pub use catalog::create_catalog;
 pub use config::ConfigBuilder;
-pub use context::create_catalog_context;
 pub use context::create_query_context;
 pub use context::create_query_context_with_cluster;
 pub use context::create_query_context_with_config;

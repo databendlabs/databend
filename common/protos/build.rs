@@ -37,5 +37,7 @@ fn build_proto() -> Result<()> {
         println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());
     }
 
-    tonic_build::configure().compile(&proto_defs, &[&output_path])
+    let mut config = prost_build::Config::new();
+    config.btree_map(&["."]);
+    tonic_build::configure().compile_with_config(config, &proto_defs, &[&output_path])
 }
