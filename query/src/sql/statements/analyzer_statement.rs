@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::ExplainType;
@@ -41,7 +40,13 @@ pub enum QueryRelation {
     Nested(Box<QueryAnalyzeState>),
 }
 
-#[derive(Clone)]
+impl Default for QueryRelation {
+    fn default() -> Self {
+        QueryRelation::None
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct QueryAnalyzeState {
     pub filter: Option<Expression>,
     pub having: Option<Expression>,
@@ -79,25 +84,25 @@ impl QueryAnalyzeState {
     }
 }
 
-impl Default for QueryAnalyzeState {
-    fn default() -> Self {
-        QueryAnalyzeState {
-            filter: None,
-            having: None,
-            before_group_by_expressions: vec![],
-            group_by_expressions: vec![],
-            aggregate_expressions: vec![],
-            distinct_expressions: vec![],
-            expressions: vec![],
-            order_by_expressions: vec![],
-            projection_expressions: vec![],
-            limit: None,
-            offset: None,
-            relation: QueryRelation::None,
-            finalize_schema: Arc::new(DataSchema::empty()),
-        }
-    }
-}
+// impl Default for QueryAnalyzeState {
+// fn default() -> Self {
+//     QueryAnalyzeState {
+//         filter: None,
+//         having: None,
+//         before_group_by_expressions: vec![],
+//         group_by_expressions: vec![],
+//         aggregate_expressions: vec![],
+//         distinct_expressions: vec![],
+//         expressions: vec![],
+//         order_by_expressions: vec![],
+//         projection_expressions: vec![],
+//         limit: None,
+//         offset: None,
+//         relation: QueryRelation::None,
+//         finalize_schema: Arc::new(DataSchema::empty()),
+//     }
+// }
+// }
 
 impl Debug for QueryAnalyzeState {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
