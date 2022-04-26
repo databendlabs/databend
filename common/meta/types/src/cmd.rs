@@ -14,14 +14,14 @@
 
 use std::fmt;
 
+use latest_version_cmd_mod::Cmd as latest_version_cmd;
 use openraft::NodeId;
 use serde::de;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
-use LatestVersionCmdMod::Cmd as LatestVersionCmd;
 
-use crate::compatibility::cmd_00000000_20220425 as LatestVersionCmdMod;
+use crate::compatibility::cmd_00000000_20220425 as latest_version_cmd_mod;
 use crate::CreateDatabaseReq;
 use crate::CreateShareReq;
 use crate::CreateTableReq;
@@ -140,11 +140,11 @@ impl fmt::Display for Cmd {
 impl<'de> Deserialize<'de> for Cmd {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        let c: LatestVersionCmdMod::Cmd = de::Deserialize::deserialize(deserializer)?;
+        let c: latest_version_cmd_mod::Cmd = de::Deserialize::deserialize(deserializer)?;
         let latest = match c {
-            LatestVersionCmd::IncrSeq { key } => Cmd::IncrSeq { key },
-            LatestVersionCmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
-            LatestVersionCmd::CreateDatabase {
+            latest_version_cmd::IncrSeq { key } => Cmd::IncrSeq { key },
+            latest_version_cmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
+            latest_version_cmd::CreateDatabase {
                 if_not_exists,
                 tenant,
                 name,
@@ -169,7 +169,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     })
                 }
             }
-            LatestVersionCmd::DropDatabase {
+            latest_version_cmd::DropDatabase {
                 if_exists,
                 tenant,
                 name,
@@ -191,7 +191,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     })
                 }
             }
-            LatestVersionCmd::CreateTable {
+            latest_version_cmd::CreateTable {
                 if_not_exists,
                 tenant,
                 db_name,
@@ -209,7 +209,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     table_meta,
                 })
             }
-            LatestVersionCmd::DropTable {
+            latest_version_cmd::DropTable {
                 if_exists,
                 tenant,
                 db_name,
@@ -225,7 +225,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     table_name,
                 })
             }
-            LatestVersionCmd::RenameTable {
+            latest_version_cmd::RenameTable {
                 if_exists,
                 tenant,
                 db_name,
@@ -245,10 +245,10 @@ impl<'de> Deserialize<'de> for Cmd {
                     new_table_name,
                 })
             }
-            LatestVersionCmd::CreateShare(x) => Cmd::CreateShare(x),
-            LatestVersionCmd::DropShare(x) => Cmd::DropShare(x),
-            LatestVersionCmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
-            LatestVersionCmd::UpsertKV {
+            latest_version_cmd::CreateShare(x) => Cmd::CreateShare(x),
+            latest_version_cmd::DropShare(x) => Cmd::DropShare(x),
+            latest_version_cmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
+            latest_version_cmd::UpsertKV {
                 key,
                 seq,
                 value,
@@ -259,7 +259,7 @@ impl<'de> Deserialize<'de> for Cmd {
                 value,
                 value_meta,
             },
-            LatestVersionCmd::Transaction(txn) => Cmd::Transaction(txn),
+            latest_version_cmd::Transaction(txn) => Cmd::Transaction(txn),
         };
 
         Ok(latest)
