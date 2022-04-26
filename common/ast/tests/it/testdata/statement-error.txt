@@ -29,8 +29,10 @@ error:
   --> SQL:1:19
   |
 1 | create table a (c varch)
-  | ------          - ^^^^^ expected token <BOOLEAN>
-  | |               |  
+  | ------          - ^^^^^
+  | |               | |
+  | |               | expected keyword `BOOLEAN`
+  | |               | while parsing type name
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
 
@@ -38,13 +40,18 @@ error:
 ---------- Input ----------
 drop table if a.b
 ---------- Output ---------
-error: 
-  --> SQL:1:12
-  |
-1 | drop table if a.b
-  | ----       ^^ expected token <Ident>
-  | |           
-  | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
+DROP TABLE if
+---------- AST ------------
+DropTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "if",
+        quote: None,
+    },
+}
+---------- REST -----------
+a.b
 
 
 ---------- Input ----------
@@ -75,7 +82,7 @@ error:
   --> SQL:1:10
   |
 1 | truncate a
-  | -------- ^ expected token <TABLE>
+  | -------- ^ expected keyword `TABLE`
   | |         
   | while parsing `TRUNCATE TABLE [<database>.]<table>`
 
@@ -87,7 +94,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  | ---- ^ expected token <TABLE>
+  | ---- ^ expected keyword `TABLE`
   | |     
   | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
 

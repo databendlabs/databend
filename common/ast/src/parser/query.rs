@@ -26,13 +26,13 @@ use crate::rule;
 pub fn query(i: Input) -> IResult<Query> {
     map(
         rule! {
-            SELECT ~ DISTINCT? ~ #comma_separated_list1(cut(select_target))
-            ~ ( FROM ~ #cut(comma_separated_list1(cut(table_reference))) )?
+            SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
+            ~ ( FROM ~ #cut(comma_separated_list1(table_reference)) )?
             ~ ( WHERE ~ #cut(expr) )?
-            ~ ( GROUP ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(cut(expr))) )?
+            ~ ( GROUP ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(expr)) )?
             ~ ( HAVING ~ #cut(expr) )?
-            ~ ( ORDER ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(cut(order_by_expr))) )?
-            ~ ( LIMIT ~ #cut(comma_separated_list1(cut(expr))) )?
+            ~ ( ORDER ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(order_by_expr)) )?
+            ~ ( LIMIT ~ #cut(comma_separated_list1(expr)) )?
             ~ ( OFFSET ~ #cut(expr) )?
             : "`SELECT ...`"
         },
@@ -222,7 +222,7 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
     );
     let join_condition_using = map(
         rule! {
-            USING ~ "(" ~ #comma_separated_list1(cut(ident)) ~ ")"
+            USING ~ "(" ~ #comma_separated_list1(ident) ~ ")"
         },
         |(_, _, idents, _)| JoinCondition::Using(idents),
     );
@@ -230,7 +230,7 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
 
     let join = map(
         rule! {
-            #join_operator? ~ JOIN ~ #cut(table_ref_without_join) ~ #cut(join_condition)
+            #join_operator? ~ JOIN ~ #table_ref_without_join ~ #join_condition
         },
         |(opt_op, _, right, condition)| JoinElement {
             op: opt_op.unwrap_or(JoinOperator::Inner),
@@ -240,7 +240,7 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
     );
     let natural_join = map(
         rule! {
-            NATURAL ~ #join_operator? ~ #cut(rule! { JOIN }) ~ #cut(table_ref_without_join)
+            NATURAL ~ #join_operator? ~ JOIN ~ #table_ref_without_join
         },
         |(_, opt_op, _, right)| JoinElement {
             op: opt_op.unwrap_or(JoinOperator::Inner),

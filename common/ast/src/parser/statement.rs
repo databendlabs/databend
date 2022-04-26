@@ -39,7 +39,7 @@ pub fn statements(i: Input) -> IResult<Vec<Statement>> {
 pub fn statement(i: Input) -> IResult<Statement> {
     let query = map(query, |query| Statement::Select(Box::new(query)));
     let show_tables = map(
-        rule! { SHOW ~ TABLES ~ ( FROM ~ #ident )? },
+        rule! { SHOW ~ TABLES ~ ( FROM ~ #cut(ident) )? },
         |(_, _, opt_database)| Statement::ShowTables {
             database: opt_database.map(|(_, database)| database),
         },
@@ -80,21 +80,31 @@ pub fn statement(i: Input) -> IResult<Statement> {
             table,
         },
     );
+    let engine = |i| {
+        map(
+            rule! {
+                ENGINE ~ "=" ~ #ident
+            },
+            |(_, _, engine)| engine.name,
+        )(i)
+    };
     let create_table = map(
         rule! {
             CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
-            ~ "(" ~ #comma_separated_list1(cut(column_def)) ~ ")"
+            ~ "(" ~ #comma_separated_list1(column_def) ~ ")"
+            ~ #engine?
         },
-        |(_, _, opt_if_not_exists, opt_database, table, _, columns, _)| Statement::CreateTable {
-            if_not_exists: opt_if_not_exists.is_some(),
-            database: opt_database.map(|(name, _)| name),
-            table,
-            columns,
-            engine: "".to_string(),
-            options: vec![],
-            like_db: None,
-            like_table: None,
+        |(_, _, opt_if_not_exists, opt_database, table, _, columns, _, opt_engine)| {
+            Statement::CreateTable {
+                if_not_exists: opt_if_not_exists.is_some(),
+                database: opt_database.map(|(name, _)| name),
+                table,
+                columns,
+                engine: opt_engine.unwrap_or_default(),
+                options: vec![],
+                like_table: None,
+            }
         },
     );
     let create_table_like = map(
@@ -102,17 +112,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
             ~ LIKE ~ ( #ident ~ "." )? ~ #ident
+            ~ #engine?
         },
-        |(_, _, opt_if_not_exists, opt_database, table, _, opt_like_db, like_table)| {
+        |(_, _, opt_if_not_exists, opt_database, table, _, opt_like_db, like_table, opt_engine)| {
             Statement::CreateTable {
                 if_not_exists: opt_if_not_exists.is_some(),
                 database: opt_database.map(|(name, _)| name),
                 table,
                 columns: vec![],
-                engine: "".to_string(),
+                engine: opt_engine.unwrap_or_default(),
                 options: vec![],
-                like_db: opt_like_db.map(|(like_db, _)| like_db),
-                like_table: Some(like_table),
+                like_table: Some((opt_like_db.map(|(like_db, _)| like_db), like_table)),
             }
         },
     );
@@ -160,7 +170,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let insert = map(
         rule! {
-            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(cut(ident)) ~ ")" )? ~ #insert_source
+            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
         },
         |(_, _, _, table, opt_columns, source)| Statement::Insert {
             table,
@@ -201,7 +211,10 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
-        value(ColumnConstraint::Nullable(false), rule! { NOT ~ NULL }),
+        value(
+            ColumnConstraint::Nullable(false),
+            rule! { NOT ~ #cut(rule! { NULL }) },
+        ),
     ));
     let default_value = map(rule! { DEFAULT ~ #literal }, |(_, default_value)| {
         ColumnConstraint::DefaultValue(default_value)

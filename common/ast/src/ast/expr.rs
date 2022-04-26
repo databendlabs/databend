@@ -69,15 +69,41 @@ pub enum Expr {
         expr: Box<Expr>,
         target_type: TypeName,
     },
+    /// EXTRACT(DateTimeField FROM <expr>)
+    Extract {
+        field: DateTimeField,
+        expr: Box<Expr>,
+    },
+    /// POSITION(<expr> IN <expr>)
+    Position {
+        substr_expr: Box<Expr>,
+        str_expr: Box<Expr>,
+    },
+    /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
+    Substring {
+        expr: Box<Expr>,
+        substring_from: Option<Box<Expr>>,
+        substring_for: Option<Box<Expr>>,
+    },
+    /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
+    /// Or
+    /// TRIM(<expr>)
+    Trim {
+        expr: Box<Expr>,
+        // ([BOTH | LEADING | TRAILING], <expr>)
+        trim_where: Option<(TrimWhere, Box<Expr>)>,
+    },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
     /// `COUNT(*)` expression
     CountAll,
+    /// `(foo, bar)`
+    Tuple { exprs: Vec<Expr> },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: String,
+        name: Identifier,
         args: Vec<Expr>,
         params: Vec<Literal>,
     },
@@ -98,6 +124,17 @@ pub enum Expr {
         expr: Box<Expr>,
         accessor: MapAccessor,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    // Numeric literal value
+    Number(String),
+    // Quoted string literal value
+    String(String),
+    Boolean(bool),
+    Interval(Interval),
+    Null,
 }
 
 /// The display style for a map access expression
@@ -128,19 +165,48 @@ pub enum TypeName {
     DateTime { precision: Option<u64> },
     Timestamp,
     String,
-    Array { item_type: Box<TypeName> },
+    Array { item_type: Option<Box<TypeName>> },
     Object,
     Variant,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    // Numeric literal value
-    Number(String),
-    // Quoted string literal value
-    String(String),
-    Boolean(bool),
-    Null,
+pub struct Interval {
+    pub value: String,
+    pub field: DateTimeField,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DateTimeField {
+    Year,
+    Month,
+    Week,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Century,
+    Decade,
+    Dow,
+    Doy,
+    Epoch,
+    Isodow,
+    Isoyear,
+    Julian,
+    Microseconds,
+    Millenium,
+    Milliseconds,
+    Quarter,
+    Timezone,
+    TimezoneHour,
+    TimezoneMinute,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TrimWhere {
+    Both,
+    Leading,
+    Trailing,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -166,6 +232,10 @@ pub enum BinaryOperator {
     Or,
     Like,
     NotLike,
+    Regexp,
+    RLike,
+    NotRegexp,
+    NotRLike,
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
@@ -248,6 +318,18 @@ impl Display for BinaryOperator {
             BinaryOperator::NotLike => {
                 write!(f, "NOT LIKE")
             }
+            BinaryOperator::Regexp => {
+                write!(f, "REGEXP")
+            }
+            BinaryOperator::RLike => {
+                write!(f, "RLIKE")
+            }
+            BinaryOperator::NotRegexp => {
+                write!(f, "NOT REGEXP")
+            }
+            BinaryOperator::NotRLike => {
+                write!(f, "NOT RLIKE")
+            }
             BinaryOperator::BitwiseOr => {
                 write!(f, "|")
             }
@@ -313,7 +395,10 @@ impl Display for TypeName {
                 write!(f, "STRING")?;
             }
             TypeName::Array { item_type } => {
-                write!(f, "ARRAY({})", item_type)?;
+                write!(f, "ARRAY")?;
+                if let Some(item_type) = item_type {
+                    write!(f, "({})", *item_type)?;
+                }
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;
@@ -323,6 +408,45 @@ impl Display for TypeName {
             }
         }
         Ok(())
+    }
+}
+
+impl Display for DateTimeField {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            DateTimeField::Year => "YEAR",
+            DateTimeField::Month => "MONTH",
+            DateTimeField::Week => "WEEK",
+            DateTimeField::Day => "DAY",
+            DateTimeField::Hour => "HOUR",
+            DateTimeField::Minute => "MINUTE",
+            DateTimeField::Second => "SECOND",
+            DateTimeField::Century => "CENTURY",
+            DateTimeField::Decade => "DECADE",
+            DateTimeField::Dow => "DOW",
+            DateTimeField::Doy => "DOY",
+            DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Isodow => "ISODOW",
+            DateTimeField::Isoyear => "ISOYEAR",
+            DateTimeField::Julian => "JULIAN",
+            DateTimeField::Microseconds => "MICROSECONDS",
+            DateTimeField::Millenium => "MILLENIUM",
+            DateTimeField::Milliseconds => "MILLISECONDS",
+            DateTimeField::Quarter => "QUARTER",
+            DateTimeField::Timezone => "TIMEZONE",
+            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
+            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
+        })
+    }
+}
+
+impl Display for TrimWhere {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            TrimWhere::Both => "BOTH",
+            TrimWhere::Leading => "LEADING",
+            TrimWhere::Trailing => "TRAILING",
+        })
     }
 }
 
@@ -344,6 +468,9 @@ impl Display for Literal {
             }
             Literal::Null => {
                 write!(f, "NULL")
+            }
+            Literal::Interval(interval) => {
+                write!(f, "INTERVAL {} {}", interval.value, interval.field)
             }
         }
     }
@@ -418,11 +545,49 @@ impl Display for Expr {
             Expr::TryCast { expr, target_type } => {
                 write!(f, "TRY_CAST({} AS {})", expr, target_type)?;
             }
+            Expr::Extract { field, expr } => {
+                write!(f, "EXTRACT({} FROM {})", field, expr)?;
+            }
+            Expr::Position {
+                substr_expr,
+                str_expr,
+            } => {
+                write!(f, "POSITION({} IN {})", substr_expr, str_expr)?;
+            }
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => {
+                write!(f, "SUBSTRING({}", expr)?;
+                if let Some(substring_from) = substring_from {
+                    write!(f, " FROM {}", substring_from)?;
+                }
+                if let Some(substring_for) = substring_for {
+                    write!(f, " FOR {}", substring_for)?;
+                }
+                write!(f, ")")?;
+            }
+            Expr::Trim { expr, trim_where } => {
+                if let Some((trim_where, trim_str)) = trim_where {
+                    write!(f, "TRIM({} {} FROM {})", trim_where, trim_str, expr)?;
+                } else {
+                    write!(f, "TRIM({})", expr)?;
+                }
+            }
             Expr::Literal(lit) => {
                 write!(f, "{}", lit)?;
             }
             Expr::CountAll => {
                 write!(f, "COUNT(*)")?;
+            }
+            Expr::Tuple { exprs } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, exprs)?;
+                if exprs.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")?;
             }
             Expr::FunctionCall {
                 distinct,

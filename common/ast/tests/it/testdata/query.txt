@@ -299,7 +299,7 @@ select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal
 ---------- Output ---------
-SELECT c_count, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer CROSS JOIN orders AS AS ODS CROSS JOIN (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS AS c_orders GROUP BY c_count ORDER BY custdist DESC, c_count ASC, totacctbal LIMIT 10, totacctbal
+SELECT c_count, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer CROSS JOIN orders AS ODS CROSS JOIN (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC, c_count ASC, totacctbal LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
     body: Select(
@@ -329,7 +329,10 @@ Query {
                 AliasedExpr {
                     expr: FunctionCall {
                         distinct: false,
-                        name: "sum",
+                        name: Identifier {
+                            name: "sum",
+                            quote: None,
+                        },
                         args: [
                             ColumnRef {
                                 database: None,
@@ -405,7 +408,10 @@ Query {
                                             AliasedExpr {
                                                 expr: FunctionCall {
                                                     distinct: false,
-                                                    name: "count",
+                                                    name: Identifier {
+                                                        name: "count",
+                                                        quote: None,
+                                                    },
                                                     args: [
                                                         ColumnRef {
                                                             database: None,

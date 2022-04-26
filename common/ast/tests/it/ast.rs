@@ -55,12 +55,11 @@ fn test_display_create_table() {
         }],
         engine: "".to_string(),
         options: vec![],
-        like_db: None,
         like_table: None,
     };
     assert_eq!(
         format!("{}", stmt),
-        r#"CREATE TABLE IF NOT EXISTS `db`.`table` (column INTEGER NOT NULL DEFAULT 123)"#
+        r#"CREATE TABLE IF NOT EXISTS `db`.`table` (column Int32 NOT NULL DEFAULT 123)"#
     );
 }
 
@@ -180,7 +179,10 @@ fn test_display_expr() {
         op: BinaryOperator::And,
         left: Box::new(Expr::FunctionCall {
             distinct: true,
-            name: "FUNC".to_owned(),
+            name: Identifier {
+                name: "FUNC".to_owned(),
+                quote: None,
+            },
             args: vec![
                 Expr::Cast {
                     expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
@@ -214,6 +216,6 @@ fn test_display_expr() {
 
     assert_eq!(
         format!("{}", expr),
-        r#"FUNC(123)(DISTINCT CAST(1 AS INTEGER UNSIGNED), 1 NOT BETWEEN 1 AND 1, 1 NOT IN(1, 1)) AND CASE 1 WHEN 1 THEN 1 ELSE 1 END"#
+        r#"FUNC(123)(DISTINCT CAST(1 AS UInt32), 1 NOT BETWEEN 1 AND 1, 1 NOT IN(1, 1)) AND CASE 1 WHEN 1 THEN 1 ELSE 1 END"#
     );
 }

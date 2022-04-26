@@ -100,7 +100,7 @@ Describe {
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -133,22 +133,21 @@ CreateTable {
                 name: "b",
                 quote: None,
             },
-            data_type: Varchar,
+            data_type: String,
             nullable: false,
             default_value: None,
         },
     ],
     engine: "",
-    options: [],
-    like_db: None,
     like_table: None,
+    options: [],
 }
 
 
 ---------- Input ----------
 create table if not exists a.b (c integer default 1 not null, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b VARCHAR NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -181,22 +180,21 @@ CreateTable {
                 name: "b",
                 quote: None,
             },
-            data_type: Varchar,
+            data_type: String,
             nullable: false,
             default_value: None,
         },
     ],
     engine: "",
-    options: [],
-    like_db: None,
     like_table: None,
+    options: [],
 }
 
 
 ---------- Input ----------
 create table a.b like c.d;
 ---------- Output ---------
-CREATE TABLE a.b ()
+CREATE TABLE a.b () LIKE c.d
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -212,19 +210,48 @@ CreateTable {
     },
     columns: [],
     engine: "",
-    options: [],
-    like_db: Some(
-        Identifier {
-            name: "c",
-            quote: None,
-        },
-    ),
     like_table: Some(
-        Identifier {
-            name: "d",
-            quote: None,
-        },
+        (
+            Some(
+                Identifier {
+                    name: "c",
+                    quote: None,
+                },
+            ),
+            Identifier {
+                name: "d",
+                quote: None,
+            },
+        ),
     ),
+    options: [],
+}
+
+
+---------- Input ----------
+create table t like t2 engine = memory;
+---------- Output ---------
+CREATE TABLE t () LIKE t2 ENGINE = memory
+---------- AST ------------
+CreateTable {
+    if_not_exists: false,
+    database: None,
+    table: Identifier {
+        name: "t",
+        quote: None,
+    },
+    columns: [],
+    engine: "memory",
+    like_table: Some(
+        (
+            None,
+            Identifier {
+                name: "t2",
+                quote: None,
+            },
+        ),
+    ),
+    options: [],
 }
 
 
@@ -370,9 +397,8 @@ CreateTable {
         },
     ],
     engine: "",
-    options: [],
-    like_db: None,
     like_table: None,
+    options: [],
 }
 
 
@@ -442,7 +468,7 @@ DropTable {
 ---------- Input ----------
 CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 VARCHAR NULL)
+CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -475,22 +501,21 @@ CreateTable {
                 name: "c3",
                 quote: None,
             },
-            data_type: Varchar,
+            data_type: String,
             nullable: true,
             default_value: None,
         },
     ],
     engine: "",
-    options: [],
-    like_db: None,
     like_table: None,
+    options: [],
 }
 
 
 ---------- Input ----------
 CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 VARCHAR NOT NULL)
+CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -523,15 +548,14 @@ CreateTable {
                 name: "c3",
                 quote: None,
             },
-            data_type: Varchar,
+            data_type: String,
             nullable: false,
             default_value: None,
         },
     ],
     engine: "",
-    options: [],
-    like_db: None,
     like_table: None,
+    options: [],
 }
 
 
@@ -563,9 +587,8 @@ CreateTable {
         },
     ],
     engine: "",
-    options: [],
-    like_db: None,
     like_table: None,
+    options: [],
 }
 
 
@@ -682,6 +705,45 @@ Select(
                         ),
                     },
                 ),
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+    },
+)
+
+
+---------- Input ----------
+select * from t4;
+---------- Output ---------
+SELECT * FROM t4
+---------- AST ------------
+Select(
+    Query {
+        body: Select(
+            SelectStmt {
+                distinct: false,
+                select_list: [
+                    QualifiedName(
+                        [
+                            Star,
+                        ],
+                    ),
+                ],
+                from: Some(
+                    Table {
+                        database: None,
+                        table: Identifier {
+                            name: "t4",
+                            quote: None,
+                        },
+                        alias: None,
+                    },
+                ),
+                selection: None,
+                group_by: [],
+                having: None,
             },
         ),
         order_by: [],

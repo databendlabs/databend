@@ -190,7 +190,7 @@ impl Display for OrderByExpr {
 
 impl Display for TableAlias {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AS {}", &self.name)?;
+        write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
             write!(f, " (")?;
             write_period_separated_list(f, &self.columns)?;

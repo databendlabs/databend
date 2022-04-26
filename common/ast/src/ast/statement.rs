@@ -61,9 +61,8 @@ pub enum Statement<'a> {
         // TODO(leiysky): use enum to represent engine instead?
         // Thus we have to check validity of engine in parser.
         engine: String,
+        like_table: Option<(Option<Identifier>, Identifier)>,
         options: Vec<SQLProperty>,
-        like_db: Option<Identifier>,
-        like_table: Option<Identifier>,
     },
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
@@ -180,6 +179,8 @@ impl<'a> Display for Statement<'a> {
                 database,
                 table,
                 columns,
+                engine,
+                like_table,
                 ..
             } => {
                 write!(f, "CREATE TABLE ")?;
@@ -190,6 +191,13 @@ impl<'a> Display for Statement<'a> {
                 write!(f, " (")?;
                 write_comma_separated_list(f, columns)?;
                 write!(f, ")")?;
+                if let Some((like_db, like_table)) = like_table {
+                    write!(f, " LIKE ")?;
+                    write_period_separated_list(f, like_db.iter().chain(Some(like_table)))?;
+                }
+                if !engine.is_empty() {
+                    write!(f, " ENGINE = {}", engine)?;
+                }
                 // TODO(leiysky): display rest information
             }
             Statement::Describe { database, table } => {

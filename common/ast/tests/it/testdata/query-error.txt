@@ -1,13 +1,40 @@
 ---------- Input ----------
 select * from customer join where a = b
 ---------- Output ---------
-error: 
-  --> SQL:1:29
-  |
-1 | select * from customer join where a = b
-  | ------                      ^^^^^ expected token "("
-  | |                            
-  | while parsing `SELECT ...`
+SELECT * FROM customer
+---------- AST ------------
+Query {
+    body: Select(
+        SelectStmt {
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Some(
+                Table {
+                    database: None,
+                    table: Identifier {
+                        name: "customer",
+                        quote: None,
+                    },
+                    alias: None,
+                },
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+}
+---------- REST -----------
+join where a = b
 
 
 ---------- Input ----------
@@ -82,7 +109,7 @@ error:
   --> SQL:1:16
   |
 1 | select * order a
-  | ------         ^ expected token <BY>
+  | ------         ^ expected keyword `BY`
   | |               
   | while parsing `SELECT ...`
 

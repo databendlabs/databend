@@ -29,13 +29,74 @@ UnaryOp {
 
 
 ---------- Input ----------
+(1,)
+---------- Output ---------
+(1,)
+---------- AST ------------
+Tuple {
+    exprs: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+    ],
+}
+
+
+---------- Input ----------
+(1,2)
+---------- Output ---------
+(1, 2)
+---------- AST ------------
+Tuple {
+    exprs: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+        Literal(
+            Number(
+                "2",
+            ),
+        ),
+    ],
+}
+
+
+---------- Input ----------
+(1,2,)
+---------- Output ---------
+(1, 2)
+---------- AST ------------
+Tuple {
+    exprs: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+        Literal(
+            Number(
+                "2",
+            ),
+        ),
+    ],
+}
+
+
+---------- Input ----------
 typeof(1 + 2)
 ---------- Output ---------
 typeof(1 + 2)
 ---------- AST ------------
 FunctionCall {
     distinct: false,
-    name: "typeof",
+    name: Identifier {
+        name: "typeof",
+        quote: None,
+    },
     args: [
         BinaryOp {
             op: Plus,
@@ -193,7 +254,10 @@ sum(col1)
 ---------- AST ------------
 FunctionCall {
     distinct: false,
-    name: "sum",
+    name: Identifier {
+        name: "sum",
+        quote: None,
+    },
     args: [
         ColumnRef {
             database: None,
@@ -209,26 +273,34 @@ FunctionCall {
 
 
 ---------- Input ----------
-rand()
+"random"()
 ---------- Output ---------
-rand()
+"random"()
 ---------- AST ------------
 FunctionCall {
     distinct: false,
-    name: "rand",
+    name: Identifier {
+        name: "random",
+        quote: Some(
+            '"',
+        ),
+    },
     args: [],
     params: [],
 }
 
 
 ---------- Input ----------
-rand(distinct)
+random(distinct)
 ---------- Output ---------
-rand(DISTINCT )
+random(DISTINCT )
 ---------- AST ------------
 FunctionCall {
     distinct: true,
-    name: "rand",
+    name: Identifier {
+        name: "random",
+        quote: None,
+    },
     args: [],
     params: [],
 }
@@ -241,7 +313,10 @@ covar_samp(number, number)
 ---------- AST ------------
 FunctionCall {
     distinct: false,
-    name: "covar_samp",
+    name: Identifier {
+        name: "covar_samp",
+        quote: None,
+    },
     args: [
         ColumnRef {
             database: None,
@@ -302,6 +377,144 @@ TryCast {
 
 
 ---------- Input ----------
+trim(leading 'abc' from 'def')
+---------- Output ---------
+TRIM(LEADING 'abc' FROM 'def')
+---------- AST ------------
+Trim {
+    expr: Literal(
+        String(
+            "def",
+        ),
+    ),
+    trim_where: Some(
+        (
+            Leading,
+            Literal(
+                String(
+                    "abc",
+                ),
+            ),
+        ),
+    ),
+}
+
+
+---------- Input ----------
+extract(year from d)
+---------- Output ---------
+EXTRACT(YEAR FROM d)
+---------- AST ------------
+Extract {
+    field: Year,
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "d",
+            quote: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+position('a' in str)
+---------- Output ---------
+POSITION('a' IN str)
+---------- AST ------------
+Position {
+    substr_expr: Literal(
+        String(
+            "a",
+        ),
+    ),
+    str_expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "str",
+            quote: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+substring(a from b for c)
+---------- Output ---------
+SUBSTRING(a FROM b FOR c)
+---------- AST ------------
+Substring {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+        },
+    },
+    substring_from: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+            },
+        },
+    ),
+    substring_for: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+substring(a, b, c)
+---------- Output ---------
+SUBSTRING(a FROM b FOR c)
+---------- AST ------------
+Substring {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+        },
+    },
+    substring_from: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+            },
+        },
+    ),
+    substring_for: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
 col1::UInt8
 ---------- Output ---------
 col1::UInt8
@@ -355,6 +568,29 @@ MapAccess {
             quote: None,
         },
     },
+}
+
+
+---------- Input ----------
+a rlike '^11'
+---------- Output ---------
+a RLIKE '^11'
+---------- AST ------------
+BinaryOp {
+    op: RLike,
+    left: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+        },
+    },
+    right: Literal(
+        String(
+            "^11",
+        ),
+    ),
 }
 
 
@@ -423,7 +659,10 @@ BinaryOp {
             },
             right: FunctionCall {
                 distinct: false,
-                name: "sum",
+                name: Identifier {
+                    name: "sum",
+                    quote: None,
+                },
                 args: [
                     ColumnRef {
                         database: None,
@@ -451,7 +690,10 @@ BinaryOp {
     op: Divide,
     left: FunctionCall {
         distinct: false,
-        name: "sum",
+        name: Identifier {
+            name: "sum",
+            quote: None,
+        },
         args: [
             Case {
                 operand: None,
@@ -506,7 +748,10 @@ BinaryOp {
                 op: Eq,
                 left: FunctionCall {
                     distinct: false,
-                    name: "sum",
+                    name: Identifier {
+                        name: "sum",
+                        quote: None,
+                    },
                     args: [
                         ColumnRef {
                             database: None,
@@ -536,7 +781,10 @@ BinaryOp {
         else_result: Some(
             FunctionCall {
                 distinct: false,
-                name: "sum",
+                name: Identifier {
+                    name: "sum",
+                    quote: None,
+                },
                 args: [
                     ColumnRef {
                         database: None,

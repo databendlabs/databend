@@ -53,7 +53,7 @@ impl<'a> nom::error::ParseError<Input<'a>> for Error<'a> {
         unreachable!()
     }
 
-    // Select the longest parse tree while brancing by the `alt` function.
+    // Select the farthest parse tree while brancing by the `alt` function.
     fn or(self, other: Self) -> Self {
         let pos_self = self
             .errors
@@ -96,6 +96,9 @@ impl<'a> Error<'a> {
                 let span = input[0].span.clone();
                 let msg = match kind {
                     ErrorKind::Context(msg) => format!("while parsing {}", msg),
+                    ErrorKind::ExpectToken(token) if token.is_keyword() => {
+                        format!("expected keyword `{:?}`", token)
+                    }
                     ErrorKind::ExpectToken(token) => format!("expected token <{:?}>", token),
                     ErrorKind::ExpectText(text) => format!("expected token {:?}", text),
                     ErrorKind::ParseIntError(err) => {
