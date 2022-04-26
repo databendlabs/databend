@@ -57,10 +57,6 @@ fn build_proto() {
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(
-            "TxnCondition.ConditionTarget",
-            "#[derive(serde::Serialize, serde::Deserialize)]",
-        )
-        .type_attribute(
             "TxnCondition.ConditionResult",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )

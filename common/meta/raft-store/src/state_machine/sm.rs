@@ -37,7 +37,6 @@ use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::ConditionResult;
-use common_meta_types::ConditionTarget;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
@@ -579,48 +578,54 @@ impl StateMachine {
     pub fn return_value_condition_result(
         &self,
         expected: i32,
-        cond: &TxnCondition,
+        target_value: &Vec<u8>,
         value: SeqV,
     ) -> bool {
-        if let Some(txn_condition::TargetUnion::Value(target_value)) = &cond.target_union {
-            if expected == ConditionResult::Equal as i32 {
-                return value.data == *target_value;
-            }
-            if expected == ConditionResult::Greater as i32 {
-                return value.data > *target_value;
-            }
-            if expected == ConditionResult::Less as i32 {
-                return value.data < *target_value;
-            }
-            if expected == ConditionResult::NotEqual as i32 {
-                return value.data != *target_value;
-            }
+        if expected == ConditionResult::Eq as i32 {
+            return value.data == *target_value;
         }
-
+        if expected == ConditionResult::Gt as i32 {
+            return value.data > *target_value;
+        }
+        if expected == ConditionResult::Lt as i32 {
+            return value.data < *target_value;
+        }
+        if expected == ConditionResult::Ne as i32 {
+            return value.data != *target_value;
+        }
+        if expected == ConditionResult::Ge as i32 {
+            return value.data >= *target_value;
+        }
+        if expected == ConditionResult::Le as i32 {
+            return value.data <= *target_value;
+        }
         false
     }
 
     pub fn return_seq_condition_result(
         &self,
         expected: i32,
-        cond: &TxnCondition,
+        target_seq: &u64,
         value: SeqV,
     ) -> bool {
-        if let Some(txn_condition::TargetUnion::Seq(target_seq)) = &cond.target_union {
-            if expected == ConditionResult::Equal as i32 {
-                return value.seq == *target_seq;
-            }
-            if expected == ConditionResult::Greater as i32 {
-                return value.seq > *target_seq;
-            }
-            if expected == ConditionResult::Less as i32 {
-                return value.seq < *target_seq;
-            }
-            if expected == ConditionResult::NotEqual as i32 {
-                return value.seq != *target_seq;
-            }
+        if expected == ConditionResult::Eq as i32 {
+            return value.seq == *target_seq;
         }
-
+        if expected == ConditionResult::Gt as i32 {
+            return value.seq > *target_seq;
+        }
+        if expected == ConditionResult::Lt as i32 {
+            return value.seq < *target_seq;
+        }
+        if expected == ConditionResult::Ne as i32 {
+            return value.seq != *target_seq;
+        }
+        if expected == ConditionResult::Ge as i32 {
+            return value.seq >= *target_seq;
+        }
+        if expected == ConditionResult::Le as i32 {
+            return value.seq <= *target_seq;
+        }
         false
     }
 
@@ -640,18 +645,20 @@ impl StateMachine {
         let sv = sv.unwrap();
         tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
 
-        match sv {
-            Some(sv) => {
-                if cond.target == ConditionTarget::Value as i32 {
-                    // compare the value
-                    self.return_value_condition_result(cond.expected, cond, sv)
-                } else {
-                    // compare the seq
-                    self.return_seq_condition_result(cond.expected, cond, sv)
+        if let Some(sv) = sv {
+            if let Some(target_union) = &cond.target_union {
+                match target_union {
+                    txn_condition::TargetUnion::Seq(target_seq) => {
+                        return self.return_seq_condition_result(cond.expected, target_seq, sv);
+                    }
+                    txn_condition::TargetUnion::Value(target_value) => {
+                        return self.return_value_condition_result(cond.expected, target_value, sv);
+                    }
                 }
-            }
-            None => false,
+            };
         }
+
+        false
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]

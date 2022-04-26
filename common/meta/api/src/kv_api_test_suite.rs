@@ -21,7 +21,6 @@ use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
 use common_meta_types::ConditionResult;
-use common_meta_types::ConditionTarget;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
@@ -584,8 +583,7 @@ impl KVApiTestSuite {
             let txn_key = k1.to_string();
             let condition = vec![TxnCondition {
                 key: txn_key.clone(),
-                target: ConditionTarget::Seq as i32,
-                expected: ConditionResult::Greater as i32,
+                expected: ConditionResult::Gt as i32,
                 target_union: Some(txn_condition::TargetUnion::Seq(0)),
             }];
 
@@ -637,14 +635,12 @@ impl KVApiTestSuite {
             let condition = vec![
                 TxnCondition {
                     key: txn_key1.clone(),
-                    target: ConditionTarget::Seq as i32,
-                    expected: ConditionResult::Greater as i32,
+                    expected: ConditionResult::Gt as i32,
                     target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
                 TxnCondition {
                     key: txn_key2.clone(),
-                    target: ConditionTarget::Seq as i32,
-                    expected: ConditionResult::Greater as i32,
+                    expected: ConditionResult::Gt as i32,
                     target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
             ];
@@ -703,14 +699,12 @@ impl KVApiTestSuite {
             let condition = vec![
                 TxnCondition {
                     key: txn_key1.clone(),
-                    target: ConditionTarget::Seq as i32,
-                    expected: ConditionResult::Greater as i32,
+                    expected: ConditionResult::Gt as i32,
                     target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
                 TxnCondition {
                     key: txn_key2.clone(),
-                    target: ConditionTarget::Seq as i32,
-                    expected: ConditionResult::Greater as i32,
+                    expected: ConditionResult::Gt as i32,
                     target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
             ];
@@ -832,13 +826,12 @@ impl KVApiTestSuite {
             ))
             .await?;
 
-            // transaction by k1 and k2 condition
+            // transaction by k1 condition
             let txn_key1 = k1.to_string();
 
             let condition = vec![TxnCondition {
                 key: txn_key1.clone(),
-                target: ConditionTarget::Value as i32,
-                expected: ConditionResult::Greater as i32,
+                expected: ConditionResult::Gt as i32,
                 target_union: Some(txn_condition::TargetUnion::Value(b"v".to_vec())),
             }];
 

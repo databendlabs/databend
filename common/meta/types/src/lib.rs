@@ -129,7 +129,6 @@ pub use operation::Operation;
 pub use principal_identity::PrincipalIdentity;
 pub use protobuf::txn_condition;
 pub use protobuf::txn_condition::ConditionResult;
-pub use protobuf::txn_condition::ConditionTarget;
 pub use protobuf::txn_op;
 pub use protobuf::txn_op_response;
 pub use protobuf::SeqV as PbSeqV;
