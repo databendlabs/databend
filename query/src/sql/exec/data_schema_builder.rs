@@ -20,7 +20,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
 use crate::sql::exec::util::format_field_name;
-use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::IndexType;

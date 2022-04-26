@@ -28,7 +28,6 @@ use common_planners::Expression;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::sql::plans::AggregatePlan;
 
 pub struct AggregatorParams {
     pub schema: DataSchemaRef,

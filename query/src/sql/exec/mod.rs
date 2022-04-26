@@ -23,9 +23,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::rebase_expr;
 use common_planners::Expression;
-use poem::web::Data;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
@@ -45,7 +43,6 @@ use crate::sql::plans::FilterPlan;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
-use crate::sql::plans::PlanType::Aggregate;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
