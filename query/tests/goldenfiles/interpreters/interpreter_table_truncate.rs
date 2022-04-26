@@ -16,11 +16,15 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
-use futures::TryStreamExt;
-use pretty_assertions::assert_eq;
+use goldenfile::Mint;
+
+use crate::interpreters::interpreter_goldenfiles;
 
 #[tokio::test]
 async fn test_truncate_table_interpreter() -> Result<()> {
+    let mut mint = Mint::new("tests/goldenfiles/data");
+    let mut file = mint.new_goldenfile("table-truncate.txt").unwrap();
+
     let ctx = crate::tests::create_query_context().await?;
 
     // Create table.
@@ -46,43 +50,35 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // select.
     {
-        let query = "SELECT * FROM default.a";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let stream = interpreter.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+-----+-----+",
-            "| a   | b   |",
-            "+-----+-----+",
-            "| 1,1 | 2,2 |",
-            "+-----+-----+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "SelectInterpreter",
+            r#"SELECT * FROM default.a"#,
+        )
+        .await?;
     }
 
     // truncate table.
     {
-        let query = "TRUNCATE TABLE default.a";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(interpreter.name(), "TruncateTableInterpreter");
-
-        let stream = interpreter.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec!["++", "++"];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "TruncateTableInterpreter",
+            r#"TRUNCATE TABLE default.a"#,
+        )
+        .await?;
     }
 
     // select.
     {
-        let query = "SELECT * FROM default.a";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let stream = interpreter.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec!["++", "++"];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "SelectInterpreter",
+            r#"SELECT * FROM default.a"#,
+        )
+        .await?;
     }
 
     Ok(())

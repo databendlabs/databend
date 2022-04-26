@@ -16,11 +16,15 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
-use futures::TryStreamExt;
-use pretty_assertions::assert_eq;
+use goldenfile::Mint;
+
+use crate::interpreters::interpreter_goldenfiles;
 
 #[tokio::test]
 async fn test_rename_table_interpreter() -> Result<()> {
+    let mut mint = Mint::new("tests/goldenfiles/data");
+    let mut file = mint.new_goldenfile("table-rename.txt").unwrap();
+
     let ctx = crate::tests::create_query_context().await?;
 
     // Create table.
@@ -38,24 +42,24 @@ async fn test_rename_table_interpreter() -> Result<()> {
 
     // Rename table.
     {
-        let plan = PlanParser::parse(ctx.clone(), "RENAME TABLE a TO b").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "RenameTableInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec!["++", "++"];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "RenameTableInterpreter",
+            r#"RENAME TABLE a TO b"#,
+        )
+        .await?;
     }
 
     // Drop table.
     {
-        let plan = PlanParser::parse(ctx.clone(), "DROP TABLE b").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "DropTableInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec!["++", "++"];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "DropTableInterpreter",
+            r#"DROP TABLE b"#,
+        )
+        .await?;
     }
 
     Ok(())

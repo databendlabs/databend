@@ -1,0 +1,22 @@
+---------- Input ----------
+show databases
+---------- Output ---------
++--------------------+
+| Database           |
++--------------------+
+| INFORMATION_SCHEMA |
+| default            |
+| system             |
++--------------------+
+
+
+---------- Input ----------
+show databases like '%tem%'
+---------- Output ---------
++----------+
+| Database |
++----------+
+| system   |
++----------+
+
+

@@ -17,7 +17,10 @@ use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::TryStreamExt;
+use goldenfile::Mint;
 use pretty_assertions::assert_eq;
+
+use crate::interpreters::interpreter_goldenfiles;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_interpreter() -> Result<()> {
@@ -36,24 +39,16 @@ async fn test_empty_interpreter() -> Result<()> {
     }
 
     {
-        let query = "/*!40101*/select number from numbers_mt(1)";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
-        assert_eq!(executor.name(), "SelectInterpreter");
+        let mut mint = Mint::new("tests/goldenfiles/data");
+        let mut file = mint.new_goldenfile("empty.txt").unwrap();
 
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let block = &result[0];
-        assert_eq!(block.num_columns(), 1);
-
-        let expected = vec![
-            "+--------+",
-            "| number |",
-            "+--------+",
-            "| 0      |",
-            "+--------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "SelectInterpreter",
+            r#"/*!40101*/select number from numbers_mt(1)"#,
+        )
+        .await?;
     }
 
     Ok(())

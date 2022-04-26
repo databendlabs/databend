@@ -1,0 +1,7 @@
+---------- Input ----------
+drop database default
+---------- Output ---------
+++
+++
+
+

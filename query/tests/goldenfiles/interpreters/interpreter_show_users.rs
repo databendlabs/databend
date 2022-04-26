@@ -16,10 +16,15 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
-use futures::TryStreamExt;
+use goldenfile::Mint;
+
+use crate::interpreters::interpreter_goldenfiles;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_users_interpreter() -> Result<()> {
+    let mut mint = Mint::new("tests/goldenfiles/data");
+    let mut file = mint.new_goldenfile("show-users.txt").unwrap();
+
     let ctx = crate::tests::create_query_context().await?;
 
     {
@@ -31,20 +36,13 @@ async fn test_show_users_interpreter() -> Result<()> {
 
     // show users.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show users").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowUsersInterpreter");
-
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-                "+------+-----------+----------------------+------------------------------------------+",
-                "| name | hostname  | auth_type            | auth_string                              |",
-                "+------+-----------+----------------------+------------------------------------------+",
-                "| test | localhost | double_sha1_password | 2470c0c06dee42fd1618bb99005adca2ec9d1e19 |",
-                "+------+-----------+----------------------+------------------------------------------+",
-            ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "ShowUsersInterpreter",
+            r#"show users"#,
+        )
+        .await?;
     }
 
     Ok(())

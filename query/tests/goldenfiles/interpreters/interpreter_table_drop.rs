@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,35 +16,39 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
-use futures::TryStreamExt;
+use goldenfile::Mint;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_show_roles_interpreter() -> Result<()> {
+use crate::interpreters::interpreter_goldenfiles;
+
+#[tokio::test]
+async fn test_drop_table_interpreter() -> Result<()> {
+    let mut mint = Mint::new("tests/goldenfiles/data");
+    let mut file = mint.new_goldenfile("table-drop.txt").unwrap();
+
     let ctx = crate::tests::create_query_context().await?;
 
+    // Create table.
     {
-        let query = "CREATE ROLE test";
+        let query = "\
+            CREATE TABLE default.a(\
+                a bigint, b int, c varchar(255), d smallint, e Date\
+            ) Engine = Null\
+        ";
+
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
 
-    // show roles.
+    // Drop table.
     {
-        let plan = PlanParser::parse(ctx.clone(), "show roles").await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "ShowRolesInterpreter");
-
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+------+-----------------+",
-            "| name | inherited_roles |",
-            "+------+-----------------+",
-            "| test | 0               |",
-            "+------+-----------------+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "DropTableInterpreter",
+            r#"DROP TABLE a"#,
+        )
+        .await?;
     }
 
     Ok(())

@@ -12,7 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod interpreter_database_drop;
+mod interpreter_database_show_create;
+mod interpreter_empty;
+mod interpreter_factory_interceptor;
+mod interpreter_insert;
+mod interpreter_select;
+mod interpreter_show_databases;
+mod interpreter_show_engines;
+mod interpreter_show_grant;
+mod interpreter_show_roles;
 mod interpreter_show_tables;
+mod interpreter_show_users;
+mod interpreter_table_describe;
+mod interpreter_table_drop;
+mod interpreter_table_rename;
+mod interpreter_table_truncate;
 
 use std::fs::File;
 use std::io::Write;
@@ -37,10 +52,20 @@ pub async fn interpreter_goldenfiles(
     let stream = executor.execute(None).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let formatted = pretty_format_blocks(&result)?;
+    let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
+
+    // sort except for header + footer
+    let num_lines = actual_lines.len();
+    if num_lines > 3 {
+        actual_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
+    }
+
     writeln!(file, "---------- Input ----------").unwrap();
     writeln!(file, "{}", query).unwrap();
     writeln!(file, "---------- Output ---------").unwrap();
-    writeln!(file, "{}", formatted).unwrap();
+    for line in actual_lines {
+        writeln!(file, "{}", line).unwrap();
+    }
     writeln!(file, "\n").unwrap();
     Ok(())
 }

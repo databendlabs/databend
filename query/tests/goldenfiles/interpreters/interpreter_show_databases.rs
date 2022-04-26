@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,22 +14,22 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::interpreters::*;
-use databend_query::sql::PlanParser;
-use futures::TryStreamExt;
-use pretty_assertions::assert_eq;
+use goldenfile::Mint;
 
-#[tokio::test]
-async fn test_drop_database_interpreter() -> Result<()> {
+use crate::interpreters::interpreter_goldenfiles;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_show_databases_interpreter() -> Result<()> {
+    let mut mint = Mint::new("tests/goldenfiles/data");
+    let mut file = mint.new_goldenfile("show-databases.txt").unwrap();
+
     let ctx = crate::tests::create_query_context().await?;
 
-    let plan = PlanParser::parse(ctx.clone(), "drop database default").await?;
-    let executor = InterpreterFactory::get(ctx, plan.clone())?;
-    assert_eq!(executor.name(), "DropDatabaseInterpreter");
-    let stream = executor.execute(None).await?;
-    let result = stream.try_collect::<Vec<_>>().await?;
-    let expected = vec!["++", "++"];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    let cases = &[r#"show databases"#, r#"show databases like '%tem%'"#];
+
+    for case in cases {
+        interpreter_goldenfiles(&mut file, ctx.clone(), "ShowDatabasesInterpreter", case).await?;
+    }
 
     Ok(())
 }

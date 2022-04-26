@@ -1,0 +1,14 @@
+---------- Input ----------
+show engines
+---------- Output ---------
++--------+-----------------------------+
+| Engine | Comment                     |
++--------+-----------------------------+
+| FUSE   | FUSE Storage Engine         |
+| GITHUB | GITHUB Storage Engine       |
+| MEMORY | MEMORY Storage Engine       |
+| NULL   | NULL Storage Engine         |
+| VIEW   | VIEW STORAGE (LOGICAL VIEW) |
++--------+-----------------------------+
+
+

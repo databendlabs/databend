@@ -1,0 +1,11 @@
+---------- Input ----------
+select log_type, handler_type, cpu_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota from system.query_log
+---------- Output ---------
++----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+--------------------------------+
+| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_quota                 |
++----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+--------------------------------+
+| 1        | Test         | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota<cpu:0,mem:0,store:0> |
+| 2        | Test         | 8         | 1         | 8          | 0               | 1            | 8             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota<cpu:0,mem:0,store:0> |
++----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+--------------------------------+
+
+

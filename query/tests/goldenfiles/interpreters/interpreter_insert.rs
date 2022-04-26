@@ -16,10 +16,15 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
-use futures::TryStreamExt;
+use goldenfile::Mint;
+
+use crate::interpreters::interpreter_goldenfiles;
 
 #[tokio::test]
 async fn test_insert_into_interpreter() -> Result<()> {
+    let mut mint = Mint::new("tests/goldenfiles/data");
+    let mut file = mint.new_goldenfile("insert.txt").unwrap();
+
     let ctx = crate::tests::create_query_context().await?;
 
     // Create default value table.
@@ -66,20 +71,13 @@ async fn test_insert_into_interpreter() -> Result<()> {
 
         // select.
         {
-            let query = "select * from default.default_value_table";
-            let plan = PlanParser::parse(ctx.clone(), query).await?;
-            let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec![
-                "+---+---+",
-                "| a | b |",
-                "+---+---+",
-                "| a | b |",
-                "| a | b |",
-                "+---+---+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+            interpreter_goldenfiles(
+                &mut file,
+                ctx.clone(),
+                "SelectInterpreter",
+                r#"select * from default.default_value_table"#,
+            )
+            .await?;
         }
     }
 
@@ -102,20 +100,13 @@ async fn test_insert_into_interpreter() -> Result<()> {
 
     // select.
     {
-        let query = "select * from default.output_table";
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec![
-            "+---+---+---+---+---+",
-            "| a | b | c | d | e |",
-            "+---+---+---+---+---+",
-            "| 1 | 1 | 1 | 1 | 1 |",
-            "| 2 | 2 | 2 | 2 | 2 |",
-            "+---+---+---+---+---+",
-        ];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter_goldenfiles(
+            &mut file,
+            ctx.clone(),
+            "SelectInterpreter",
+            r#"select * from default.output_table"#,
+        )
+        .await?;
     }
 
     Ok(())

@@ -1,0 +1,20 @@
+---------- Input ----------
+show create database default
+---------- Output ---------
++----------+---------------------------+
+| Database | Create Database           |
++----------+---------------------------+
+| default  | CREATE DATABASE `default` |
++----------+---------------------------+
+
+
+---------- Input ----------
+show create database system
+---------- Output ---------
++----------+----------------------------------------+
+| Database | Create Database                        |
++----------+----------------------------------------+
+| system   | CREATE DATABASE `system` ENGINE=SYSTEM |
++----------+----------------------------------------+
+
+
