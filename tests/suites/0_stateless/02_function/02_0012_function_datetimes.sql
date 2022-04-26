@@ -199,12 +199,14 @@ select toDateTime(a) = toDateTime(b) from ts;
 drop table if exists ts;
 
 
-create table t(d32 datetime, d64 DateTime(3));
+create table t(a datetime, b DateTime(3), c Date);
 
-insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28');
-insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');
-insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221'); -- {ErrorCode 1068}
-insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221'); -- {ErrorCode 1010}
+insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01');
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999-12-31');
+insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '2020-10-10'); -- {ErrorCode 1069}
+insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); -- {ErrorCode 1010}
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999-10-10'); -- {ErrorCode 1068}
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); -- {ErrorCode 1010}
 
-select * from t order by d64;
+select * from t order by b;
 drop table t;

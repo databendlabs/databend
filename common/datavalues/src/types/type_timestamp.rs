@@ -43,7 +43,7 @@ pub fn check_timestamp(microseconds: Option<i64>) -> Result<i64> {
         }
     }
     common_tracing::tracing::error!("check timestamp: {:?} failed", microseconds);
-    Err(ErrorCode::InvalidDate("Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999"))
+    Err(ErrorCode::InvalidTimestamp("Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999"))
 }
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]

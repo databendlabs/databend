@@ -37,6 +37,7 @@ where
 {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
+        let _ = check_timestamp(Some(value.as_i64()))?;
         self.builder.append_value(value);
         Ok(())
     }
@@ -49,6 +50,7 @@ where
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
+            let _ = check_timestamp(Some(value.as_i64()))?;
             self.builder.append_value(value);
         }
         Ok(())
