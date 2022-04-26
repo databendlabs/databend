@@ -77,7 +77,9 @@ impl Binder {
     ) -> Result<BindContext> {
         let mut output_context = BindContext::create();
         output_context.expression = input_context.expression.clone();
-
+        for col_binding in input_context.all_column_bindings().into_iter() {
+            output_context.add_column_binding(col_binding.clone());
+        }
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName(names) => {

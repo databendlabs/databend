@@ -118,7 +118,6 @@ impl ScalarBinder {
                     false => todo!(),
                 }
             }
-<<<<<<< HEAD
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -143,10 +142,6 @@ impl ScalarBinder {
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported binary operator: {op}",
             ))),
-=======
-            Expr::BinaryOp { .. } => todo!("group by may use BinaryOp, such as col + 1"),
-            _ => todo!(),
->>>>>>> 27f0d36c5 (add visitor)
         }
     }
 }
