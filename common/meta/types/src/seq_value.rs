@@ -101,11 +101,3 @@ pub fn convert_seqv_to_pb(seqv: Option<SeqV>) -> Option<PbSeqV> {
         data: seqv.data,
     })
 }
-
-pub fn convert_to_pb_to_seqv(seqv: Option<PbSeqV>) -> Option<SeqV> {
-    seqv.map(|seqv| SeqV {
-        seq: seqv.seq,
-        data: seqv.data,
-        meta: None,
-    })
-}

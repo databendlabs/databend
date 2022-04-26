@@ -151,7 +151,6 @@ pub use raft_types::Term;
 pub use role_info::RoleInfo;
 pub use seq_num::SeqNum;
 pub use seq_value::convert_seqv_to_pb;
-pub use seq_value::convert_to_pb_to_seqv;
 pub use seq_value::IntoSeqV;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
