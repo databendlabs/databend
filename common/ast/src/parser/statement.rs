@@ -24,14 +24,11 @@ use crate::parser::util::*;
 use crate::rule;
 
 pub fn statements(i: Input) -> IResult<Vec<Statement>> {
-    let stmt = map(
+    map(
         rule! {
-            #statement ~ ";"
+            #statement ~ ";"? ~ &EOI
         },
-        |(stmt, _)| stmt,
-    );
-    rule!(
-        #stmt+
+        |(stmt, _, _)| vec![stmt],
     )(i)
 }
 
