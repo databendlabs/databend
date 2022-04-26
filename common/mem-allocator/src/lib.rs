@@ -14,16 +14,12 @@
 
 mod allocators;
 mod malloc_size;
-mod profiling;
-// mod sizeof;
-
 pub use allocators::new_malloc_size_ops;
 pub use allocators::Allocator;
 pub use allocators::MallocSizeOfExt;
 pub use malloc_size::MallocShallowSizeOf;
 pub use malloc_size::MallocSizeOf;
 pub use malloc_size::MallocSizeOfOps;
-pub use profiling::dump_profile;
 
 /// Heap size of structure.
 ///
@@ -31,3 +27,8 @@ pub use profiling::dump_profile;
 pub fn malloc_size<T: MallocSizeOf + ?Sized>(t: &T) -> usize {
     MallocSizeOf::size_of(t, &mut allocators::new_malloc_size_ops())
 }
+
+#[cfg(feature = "memory-profiling")]
+mod profiling;
+#[cfg(feature = "memory-profiling")]
+pub use profiling::dump_profile;

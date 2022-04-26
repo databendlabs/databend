@@ -21,6 +21,7 @@ test = false
 default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
+memory-profiling = ["common-mem-allocator/memory-profiling", "tempfile"]
 
 [dependencies]
 # Workspace dependencies
@@ -100,7 +101,7 @@ serde_json = "1.0.79"
 serfig = "0.0.1"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
-tempfile = "3.3.0"
+tempfile = { version = "3.3.0", optional = true }
 threadpool = "1.8.1"
 time = "0.3.9"
 tokio-rustls = "0.23.3"
