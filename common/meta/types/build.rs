@@ -61,7 +61,7 @@ fn build_proto() {
             "#[derive(serde::Serialize, serde::Deserialize, num_derive::FromPrimitive)]",
         )
         .type_attribute(
-            "TxnCondition.target_union",
+            "TxnCondition.target",
             "#[derive(Eq,serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(

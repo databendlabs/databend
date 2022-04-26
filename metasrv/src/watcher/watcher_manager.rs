@@ -20,9 +20,9 @@ use common_base::tokio::sync::mpsc::Sender;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
-use common_meta_types::protobuf::SeqV as PbSeqV;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
 use common_range_map::RangeKey;
 use common_range_map::RangeMap;
@@ -119,13 +119,6 @@ impl WatcherManagerCore {
         self.watcher_range_map.remove_by_key(&key);
     }
 
-    fn convert_seqv_to_pb(seqv: &Option<SeqV>) -> Option<PbSeqV> {
-        seqv.as_ref().map(|seqv| PbSeqV {
-            seq: seqv.seq,
-            data: seqv.data.clone(),
-        })
-    }
-
     async fn notify_event(&mut self, kv: StateMachineKvData) {
         let set = self.watcher_range_map.get_by_point(&kv.key);
         if set.is_empty() {
@@ -154,8 +147,8 @@ impl WatcherManagerCore {
             let resp = WatchResponse {
                 event: Some(Event {
                     key: kv.key.clone(),
-                    current: WatcherManagerCore::convert_seqv_to_pb(&current),
-                    prev: WatcherManagerCore::convert_seqv_to_pb(&prev),
+                    current: current.clone().map(PbSeqV::from),
+                    prev: prev.clone().map(PbSeqV::from),
                 }),
             };
 

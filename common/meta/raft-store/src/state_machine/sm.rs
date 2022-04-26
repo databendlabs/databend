@@ -27,7 +27,6 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
-use common_meta_types::convert_seqv_to_pb;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
@@ -55,6 +54,7 @@ use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
+use common_meta_types::PbSeqV;
 use common_meta_types::RenameTableReq;
 use common_meta_types::SeqV;
 use common_meta_types::ShareInfo;
@@ -580,7 +580,7 @@ impl StateMachine {
         &self,
         expected: i32,
         target_value: &Vec<u8>,
-        value: SeqV,
+        value: &SeqV,
     ) -> bool {
         match FromPrimitive::from_i32(expected) {
             Some(ConditionResult::Eq) => value.data == *target_value,
@@ -597,7 +597,7 @@ impl StateMachine {
         &self,
         expected: i32,
         target_seq: &u64,
-        value: SeqV,
+        value: &SeqV,
     ) -> bool {
         match FromPrimitive::from_i32(expected) {
             Some(ConditionResult::Eq) => value.seq == *target_seq,
@@ -624,16 +624,20 @@ impl StateMachine {
         tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
 
         if let Some(sv) = sv {
-            if let Some(target_union) = &cond.target_union {
-                match target_union {
-                    txn_condition::TargetUnion::Seq(target_seq) => {
-                        return Ok(self.return_seq_condition_result(cond.expected, target_seq, sv));
+            if let Some(target) = &cond.target {
+                match target {
+                    txn_condition::Target::Seq(target_seq) => {
+                        return Ok(self.return_seq_condition_result(
+                            cond.expected,
+                            target_seq,
+                            &sv,
+                        ));
                     }
-                    txn_condition::TargetUnion::Value(target_value) => {
+                    txn_condition::Target::Value(target_value) => {
                         return Ok(self.return_value_condition_result(
                             cond.expected,
                             target_value,
-                            sv,
+                            &sv,
                         ));
                     }
                 }
@@ -666,17 +670,10 @@ impl StateMachine {
     ) -> MetaStorageResult<()> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let sv = sub_tree.get(&get.key)?;
-
-        let get_resp = if let Some(sv) = sv {
-            TxnGetResponse {
-                key: get.key.clone(),
-                value: convert_seqv_to_pb(Some(sv)),
-            }
-        } else {
-            TxnGetResponse {
-                key: get.key.clone(),
-                value: None,
-            }
+        let value = sv.map(PbSeqV::from);
+        let get_resp = TxnGetResponse {
+            key: get.key.clone(),
+            value,
         };
 
         resp.responses.push(TxnOpResponse {
@@ -705,7 +702,7 @@ impl StateMachine {
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
             prev_value: if put.prev_value {
-                convert_seqv_to_pb(prev)
+                prev.map(PbSeqV::from)
             } else {
                 None
             },
@@ -734,22 +731,14 @@ impl StateMachine {
             None,
         )?;
 
-        let del_resp = if let Some(prev) = prev {
-            TxnDeleteResponse {
-                key: delete.key.clone(),
-                success: true,
-                prev_value: if delete.prev_value {
-                    convert_seqv_to_pb(Some(prev))
-                } else {
-                    None
-                },
-            }
-        } else {
-            TxnDeleteResponse {
-                key: delete.key.clone(),
-                success: false,
-                prev_value: None,
-            }
+        let del_resp = TxnDeleteResponse {
+            key: delete.key.clone(),
+            success: prev.is_some(),
+            prev_value: if delete.prev_value {
+                prev.map(PbSeqV::from)
+            } else {
+                None
+            },
         };
 
         resp.responses.push(TxnOpResponse {
@@ -801,6 +790,7 @@ impl StateMachine {
 
         let mut resp: TxnReply = TxnReply {
             success,
+            error: "".to_string(),
             responses: vec![],
         };
 

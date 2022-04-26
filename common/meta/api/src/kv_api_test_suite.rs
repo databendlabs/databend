@@ -16,7 +16,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
-use common_meta_types::convert_seqv_to_pb;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
@@ -24,6 +23,7 @@ use common_meta_types::ConditionResult;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteRequest;
@@ -34,6 +34,7 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnOpResponse;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnPutResponse;
+use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_tracing::tracing;
@@ -548,11 +549,9 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    fn check_transaction_responses(
-        &self,
-        responses: &Vec<TxnOpResponse>,
-        expected: &Vec<TxnOpResponse>,
-    ) {
+    fn check_transaction_responses(&self, reply: &TxnReply, expected: &Vec<TxnOpResponse>) {
+        assert!(reply.success);
+        let responses = &reply.responses;
         assert_eq!(responses.len(), expected.len());
 
         for i in 0..responses.len() {
@@ -584,7 +583,7 @@ impl KVApiTestSuite {
             let condition = vec![TxnCondition {
                 key: txn_key.clone(),
                 expected: ConditionResult::Gt as i32,
-                target_union: Some(txn_condition::TargetUnion::Seq(0)),
+                target: Some(txn_condition::Target::Seq(0)),
             }];
 
             let if_then: Vec<TxnOp> = vec![TxnOp {
@@ -604,15 +603,14 @@ impl KVApiTestSuite {
 
             let resp = kv.transaction(txn).await?;
 
-            assert!(resp.success);
             let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
                 response: Some(txn_op_response::Response::Put(TxnPutResponse {
                     key: txn_key.clone(),
-                    prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(1, None, val1.clone()))),
+                    prev_value: Some(PbSeqV::from(SeqV::new(1, val1.clone()))),
                 })),
             }];
 
-            self.check_transaction_responses(&resp.responses, &expected);
+            self.check_transaction_responses(&resp, &expected);
         }
         // second case: get two key(one not exist) and set one key transaction
         {
@@ -636,12 +634,12 @@ impl KVApiTestSuite {
                 TxnCondition {
                     key: txn_key1.clone(),
                     expected: ConditionResult::Gt as i32,
-                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
+                    target: Some(txn_condition::Target::Seq(0)),
                 },
                 TxnCondition {
                     key: txn_key2.clone(),
                     expected: ConditionResult::Gt as i32,
-                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
+                    target: Some(txn_condition::Target::Seq(0)),
                 },
             ];
 
@@ -700,12 +698,12 @@ impl KVApiTestSuite {
                 TxnCondition {
                     key: txn_key1.clone(),
                     expected: ConditionResult::Gt as i32,
-                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
+                    target: Some(txn_condition::Target::Seq(0)),
                 },
                 TxnCondition {
                     key: txn_key2.clone(),
                     expected: ConditionResult::Gt as i32,
-                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
+                    target: Some(txn_condition::Target::Seq(0)),
                 },
             ];
 
@@ -756,36 +754,26 @@ impl KVApiTestSuite {
 
             let resp = kv.transaction(txn).await?;
 
-            assert!(resp.success);
-
             let expected: Vec<TxnOpResponse> = vec![
                 // change k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
-                            4,
-                            None,
-                            val1.clone(),
-                        ))),
+                        prev_value: Some(PbSeqV::from(SeqV::new(4, val1.clone()))),
                     })),
                 },
                 // change k2
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key2.clone(),
-                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
-                            5,
-                            None,
-                            val2.clone(),
-                        ))),
+                        prev_value: Some(PbSeqV::from(SeqV::new(5, val2.clone()))),
                     })),
                 },
                 // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: convert_seqv_to_pb(Some(SeqV::with_meta(6, None, val1_new.clone()))),
+                        value: Some(PbSeqV::from(SeqV::new(6, val1_new.clone()))),
                     })),
                 },
                 // delete k1
@@ -793,13 +781,10 @@ impl KVApiTestSuite {
                     response: Some(txn_op_response::Response::Delete(TxnDeleteResponse {
                         key: txn_key1.clone(),
                         success: true,
-                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
-                            6,
-                            None,
-                            val1_new.clone(),
-                        ))),
+                        prev_value: Some(PbSeqV::from(SeqV::new(6, val1_new.clone()))),
                     })),
                 },
+                // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
@@ -808,7 +793,7 @@ impl KVApiTestSuite {
                 },
             ];
 
-            self.check_transaction_responses(&resp.responses, &expected);
+            self.check_transaction_responses(&resp, &expected);
         }
 
         // 4th case: get one key by value and set key transaction
@@ -832,7 +817,7 @@ impl KVApiTestSuite {
             let condition = vec![TxnCondition {
                 key: txn_key1.clone(),
                 expected: ConditionResult::Gt as i32,
-                target_union: Some(txn_condition::TargetUnion::Value(b"v".to_vec())),
+                target: Some(txn_condition::Target::Value(b"v".to_vec())),
             }];
 
             let if_then: Vec<TxnOp> = vec![
@@ -861,30 +846,24 @@ impl KVApiTestSuite {
 
             let resp = kv.transaction(txn).await?;
 
-            assert!(resp.success);
-
             let expected: Vec<TxnOpResponse> = vec![
                 // change k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
-                            8,
-                            None,
-                            val1.clone(),
-                        ))),
+                        prev_value: Some(PbSeqV::from(SeqV::new(8, val1.clone()))),
                     })),
                 },
                 // get k1
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: convert_seqv_to_pb(Some(SeqV::with_meta(9, None, val1_new.clone()))),
+                        value: Some(PbSeqV::from(SeqV::new(9, val1_new.clone()))),
                     })),
                 },
             ];
 
-            self.check_transaction_responses(&resp.responses, &expected);
+            self.check_transaction_responses(&resp, &expected);
         }
         Ok(())
     }

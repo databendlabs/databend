@@ -97,7 +97,7 @@ message TxnCondition {
 
   string key = 1;
 
-  oneof target_union {
+  oneof target {
     // used when compare value
     bytes value = 2;
     // used when compare seq
@@ -141,6 +141,7 @@ message TxnRequest {
 message TxnReply {
   bool success = 1;
   repeated TxnOpResponse responses = 2;
+  string error = 3;
 }
 
 service RaftService {

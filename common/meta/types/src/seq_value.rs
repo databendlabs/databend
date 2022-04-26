@@ -17,7 +17,7 @@ use std::convert::TryInto;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::protobuf::SeqV as PbSeqV;
+pub type PbSeqV = crate::protobuf::SeqV;
 
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -95,9 +95,11 @@ impl<T> SeqV<T> {
     }
 }
 
-pub fn convert_seqv_to_pb(seqv: Option<SeqV>) -> Option<PbSeqV> {
-    seqv.map(|seqv| PbSeqV {
-        seq: seqv.seq,
-        data: seqv.data,
-    })
+impl From<SeqV> for PbSeqV {
+    fn from(seqv: SeqV) -> Self {
+        PbSeqV {
+            seq: seqv.seq,
+            data: seqv.data,
+        }
+    }
 }

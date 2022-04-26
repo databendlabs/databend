@@ -140,13 +140,13 @@ impl ActionHandler {
     }
 
     pub async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
-        if let Ok(req) = self.meta_node.transaction(req).await {
-            req
-        } else {
-            TxnReply {
+        match self.meta_node.transaction(req).await {
+            Ok(resp) => resp,
+            Err(err) => TxnReply {
                 success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
                 responses: vec![],
-            }
+            },
         }
     }
 }
