@@ -32,9 +32,8 @@ use crate::sessions::QueryContext;
 pub enum LogType {
     Start = 1,
     Finish = 2,
-    ErrorBeforeStart = 3,
-    ErrorExecute = 4,
-    Aborted = 5,
+    Error = 3,
+    Aborted = 4,
 }
 
 #[derive(Clone, Serialize)]
@@ -365,7 +364,7 @@ impl InterpreterQueryLog {
                     )
                 } else {
                     (
-                        LogType::ErrorExecute,
+                        LogType::Error,
                         e.code().into(),
                         e.to_string(),
                         e.backtrace_str(),

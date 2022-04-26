@@ -370,7 +370,7 @@ async fn test_query_log() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_some(), "{:?}", result);
 
-    let sql = "select query_text, exception_code, exception_text, stack_trace  from system.query_log where log_type=4";
+    let sql = "select query_text, exception_code, exception_text, stack_trace  from system.query_log where log_type=3";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
@@ -388,7 +388,12 @@ async fn test_query_log() -> Result<()> {
         "{:?}",
         result
     );
-    assert_eq!(result.data[0][1].as_u64().unwrap(), 2302, "{:?}", result);
+    assert_eq!(
+        result.data[0][1].as_u64().unwrap(),
+        ErrorCode::TableAlreadyExists("").code().to_u64().unwrap(),
+        "{:?}",
+        result
+    );
     assert!(
         result.data[0][3]
             .as_str()
@@ -413,7 +418,7 @@ async fn test_query_log() -> Result<()> {
     let response = get_uri(&ep, &result.final_uri.unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=5";
+    let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
