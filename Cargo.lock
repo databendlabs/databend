@@ -1081,7 +1081,9 @@ dependencies = [
  "common-base",
  "common-infallible",
  "common-macros",
+ "libc",
  "parking_lot 0.12.0",
+ "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
 ]
 
@@ -5985,6 +5987,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "tikv-jemalloc-ctl"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb833c46ecbf8b6daeccb347cefcabf9c1beb5c9b0f853e1cec45632d9963e69"
+dependencies = [
+ "libc",
+ "paste",
+ "tikv-jemalloc-sys",
 ]
 
 [[package]]
