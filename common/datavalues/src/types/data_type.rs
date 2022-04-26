@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
@@ -45,11 +44,10 @@ use crate::prelude::*;
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
-pub type DataTypePtr = Arc<dyn DataType>;
-
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[enum_dispatch(DataType)]
 pub enum DataTypeImpl {
+    Null(NullType),
     Nullable(NullableType),
     Boolean(BooleanType),
     Int8(Int8Type),
@@ -68,9 +66,11 @@ pub enum DataTypeImpl {
     Struct(StructType),
     Array(ArrayType),
     Variant(VariantType),
+    VariantArray(VariantArrayType),
+    VariantObjet(VariantObjectType),
+    Interval(IntervalType),
 }
 
-#[typetag::serde(tag = "type")]
 #[enum_dispatch]
 pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn data_type_id(&self) -> TypeID;
@@ -127,44 +127,46 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 
-pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
+pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
     match dt {
-        ArrowType::Null => Arc::new(NullType {}),
-        ArrowType::UInt8 => Arc::new(UInt8Type::default()),
-        ArrowType::UInt16 => Arc::new(UInt16Type::default()),
-        ArrowType::UInt32 => Arc::new(UInt32Type::default()),
-        ArrowType::UInt64 => Arc::new(UInt64Type::default()),
-        ArrowType::Int8 => Arc::new(Int8Type::default()),
-        ArrowType::Int16 => Arc::new(Int16Type::default()),
-        ArrowType::Int32 => Arc::new(Int32Type::default()),
-        ArrowType::Int64 => Arc::new(Int64Type::default()),
-        ArrowType::Boolean => Arc::new(BooleanType::default()),
-        ArrowType::Float32 => Arc::new(Float32Type::default()),
-        ArrowType::Float64 => Arc::new(Float64Type::default()),
+        ArrowType::Null => DataTypeImpl::Null(NullType {}),
+        ArrowType::UInt8 => DataTypeImpl::UInt8(UInt8Type::default()),
+        ArrowType::UInt16 => DataTypeImpl::UInt16(UInt16Type::default()),
+        ArrowType::UInt32 => DataTypeImpl::UInt32(UInt32Type::default()),
+        ArrowType::UInt64 => DataTypeImpl::UInt64(UInt64Type::default()),
+        ArrowType::Int8 => DataTypeImpl::Int8(Int8Type::default()),
+        ArrowType::Int16 => DataTypeImpl::Int16(Int16Type::default()),
+        ArrowType::Int32 => DataTypeImpl::Int32(Int32Type::default()),
+        ArrowType::Int64 => DataTypeImpl::Int64(Int64Type::default()),
+        ArrowType::Boolean => DataTypeImpl::Boolean(BooleanType::default()),
+        ArrowType::Float32 => DataTypeImpl::Float32(Float32Type::default()),
+        ArrowType::Float64 => DataTypeImpl::Float64(Float64Type::default()),
 
         // TODO support other list
         ArrowType::LargeList(f) => {
             let inner = from_arrow_field(f);
-            Arc::new(ArrayType::create(inner))
+            DataTypeImpl::Array(ArrayType::create(inner))
         }
 
         ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
-            Arc::new(StringType::default())
+            DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(TimestampType::create(0, tz.clone())),
-        ArrowType::Date32 | ArrowType::Date64 => Arc::new(DateType::default()),
+        ArrowType::Timestamp(_, tz) => {
+            DataTypeImpl::Timestamp(TimestampType::create(0, tz.clone()))
+        }
+        ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 
         ArrowType::Struct(fields) => {
             let names = fields.iter().map(|f| f.name.clone()).collect();
             let types = fields.iter().map(from_arrow_field).collect();
 
-            Arc::new(StructType::create(names, types))
+            DataTypeImpl::Struct(StructType::create(names, types))
         }
         ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
-            "Variant" => Arc::new(VariantType::default()),
-            "VariantArray" => Arc::new(VariantArrayType::default()),
-            "VariantObject" => Arc::new(VariantObjectType::default()),
+            "Variant" => DataTypeImpl::Variant(VariantType::default()),
+            "VariantArray" => DataTypeImpl::VariantArray(VariantArrayType::default()),
+            "VariantObject" => DataTypeImpl::VariantObjet(VariantObjectType::default()),
             _ => unimplemented!("data_type: {:?}", dt),
         },
 
@@ -175,7 +177,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
     }
 }
 
-pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
+pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
     if let Some(custom_name) = f.metadata.get(ARROW_EXTENSION_NAME) {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
@@ -209,7 +211,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
 }
 
 pub trait ToDataType {
-    fn to_data_type() -> DataTypePtr;
+    fn to_data_type() -> DataTypeImpl;
 }
 
 macro_rules! impl_to_data_type {
@@ -217,7 +219,7 @@ macro_rules! impl_to_data_type {
         $(
             paste::paste!{
                 impl ToDataType for $S {
-                    fn to_data_type() -> DataTypePtr {
+                    fn to_data_type() -> DataTypeImpl {
                         [<$TY Type>]::arc()
                     }
                 }
@@ -228,14 +230,14 @@ macro_rules! impl_to_data_type {
 
 for_all_scalar_varints! { impl_to_data_type }
 
-pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
+pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if !data_type.can_inside_nullable() {
         return data_type.clone();
     }
     NullableType::arc(data_type.clone())
 }
 
-pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
+pub fn remove_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if matches!(data_type.data_type_id(), TypeID::Nullable) {
         let nullable = data_type.as_any().downcast_ref::<NullableType>().unwrap();
         return nullable.inner_type().clone();
@@ -243,7 +245,7 @@ pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     data_type.clone()
 }
 
-pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
+pub fn format_data_type_sql(data_type: &DataTypeImpl) -> String {
     let notnull_type = remove_nullable(data_type);
     match data_type.is_nullable() {
         true => format!("{} NULL", notnull_type.sql_name()),

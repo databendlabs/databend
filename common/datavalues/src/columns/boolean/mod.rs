@@ -71,7 +71,7 @@ impl Column for BooleanColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         BooleanType::arc()
     }
 

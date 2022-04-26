@@ -42,7 +42,7 @@ impl PartialEq<dyn Column> for Box<dyn Column + '_> {
 }
 
 pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
-    if lhs.data_type() != rhs.data_type() || lhs.len() != lhs.len() {
+    if lhs.data_type_id() != rhs.data_type_id() || lhs.len() != lhs.len() {
         return false;
     }
 

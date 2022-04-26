@@ -66,8 +66,8 @@ impl From<String> for IntervalKind {
 }
 
 impl IntervalType {
-    pub fn arc(kind: IntervalKind) -> DataTypePtr {
-        Arc::new(Self { kind })
+    pub fn arc(kind: IntervalKind) -> DataTypeImpl {
+        DataTypeImpl::Interval(Self { kind })
     }
 
     pub fn kind(&self) -> &IntervalKind {
@@ -75,7 +75,6 @@ impl IntervalType {
     }
 }
 
-#[typetag::serde]
 impl DataType for IntervalType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Interval

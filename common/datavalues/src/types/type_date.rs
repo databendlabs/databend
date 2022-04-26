@@ -43,12 +43,11 @@ pub fn check_date(days: i32) -> Result<()> {
 pub struct DateType {}
 
 impl DateType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::Date(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for DateType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Date
