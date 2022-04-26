@@ -126,6 +126,8 @@ build_exceptions! {
     SemanticError(1065),
     InvalidAuthInfo(1066),
     InvalidTimezone(1067),
+    InvalidDate(1068),
+    InvalidTimestamp(1068),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),

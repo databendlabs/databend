@@ -21,12 +21,28 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use common_exception::ErrorCode;
 
 use super::data_type::DataType;
 use super::data_type::ARROW_EXTENSION_META;
 use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
+
+/// date ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999
+/// date_max and date_min means days offset from 1970-01-01
+/// any date not in the range will be invalid
+pub const TIMESTAMP_MAX: i64 = 253402300799999999;
+pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+
+pub fn check_timestamp(microseconds: Option<i64>) -> Result<i64> {
+    if let Some(microseconds) = microseconds {
+        if microseconds >= TIMESTAMP_MIN && microseconds <= TIMESTAMP_MAX {
+            return Ok(microseconds)
+        }
+    }
+    Err(ErrorCode::InvalidDate("Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999"))
+}
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct TimestampType {
