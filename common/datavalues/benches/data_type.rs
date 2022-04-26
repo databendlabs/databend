@@ -27,7 +27,7 @@ fn add_benchmark(c: &mut Criterion) {
     ];
 
     let data_type = UInt64Type::arc();
-    let data_type_enum = DataTypeImpl::from(UInt64Type::new());
+    let data_type_enum = DataTypeImpl::UInt64(UInt64Type::new());
 
     c.bench_function("data_type_ptr_create", |b| {
         b.iter(|| criterion::black_box(data_type_ptr_create(&data_type, &values)))
