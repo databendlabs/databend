@@ -60,13 +60,50 @@ impl Binder {
         // Output of current `SELECT` statement.
         let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
 
+        self.analyze_aggregate(&output_context, &mut input_context)?;
+
         if !stmt.group_by.is_empty() {
-            self.bind_group_by(&stmt.group_by, &mut output_context)?;
+            self.bind_group_by(&stmt.group_by, &mut input_context)?;
+            output_context.expression = input_context.expression.clone();
         }
 
         self.bind_projection(&mut output_context)?;
 
         Ok(output_context)
+    }
+
+    fn analyze_aggregate(
+        &self,
+        output_context: &BindContext,
+        input_context: &mut BindContext,
+    ) -> Result<()> {
+        let mut agg_expr: Vec<ScalarExprRef> = Vec::new();
+        for agg_scalar in find_aggregate_scalars_from_bind_context(output_context)? {
+            match agg_scalar {
+                Scalar::AggregateFunction {
+                    func_name,
+                    distinct,
+                    params,
+                    args,
+                    data_type,
+                    nullable,
+                } => agg_expr.push(Arc::new(Scalar::AggregateFunction {
+                    func_name,
+                    distinct,
+                    params,
+                    args,
+                    data_type,
+                    nullable,
+                })),
+                _ => {
+                    return Err(ErrorCode::LogicalError(
+                        "scalar expr must be Aggregation scalar expr",
+                    ))
+                }
+            }
+        }
+        input_context.agg_scalar_exprs = Some(agg_expr);
+        Ok(())
     }
 
     async fn bind_table_reference(&mut self, stmt: &TableReference) -> Result<BindContext> {
@@ -152,48 +189,23 @@ impl Binder {
     pub(super) fn bind_group_by(
         &mut self,
         group_by_expr: &[Expr],
-        bind_context: &mut BindContext,
+        input_context: &mut BindContext,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new();
         let group_expr = group_by_expr
             .iter()
-            .map(|expr| scalar_binder.bind_expr(expr, bind_context).unwrap())
+            .map(|expr| scalar_binder.bind_expr(expr, input_context).unwrap())
             .collect::<Vec<ScalarExprRef>>();
-        // find aggregate expr from bind_context
-        let mut agg_expr: Vec<ScalarExprRef> = Vec::new();
-        for agg_scalar in find_aggregate_scalars_from_bind_context(bind_context)? {
-            match agg_scalar {
-                Scalar::AggregateFunction {
-                    func_name,
-                    distinct,
-                    params,
-                    args,
-                    data_type,
-                    nullable,
-                } => agg_expr.push(Arc::new(Scalar::AggregateFunction {
-                    func_name,
-                    distinct,
-                    params,
-                    args,
-                    data_type,
-                    nullable,
-                })),
-                _ => {
-                    return Err(ErrorCode::LogicalError(
-                        "scalar expr must be Aggregation scalar expr",
-                    ))
-                }
-            }
-        }
+
         let aggregate_plan = AggregatePlan {
             group_expr,
-            agg_expr,
+            agg_expr: input_context.agg_scalar_exprs.as_ref().unwrap().clone(),
         };
         let new_expr = SExpr::create_unary(
             Arc::new(aggregate_plan),
-            bind_context.expression.clone().unwrap(),
+            input_context.expression.clone().unwrap(),
         );
-        bind_context.expression = Some(new_expr);
+        input_context.expression = Some(new_expr);
         Ok(())
     }
 }

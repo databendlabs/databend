@@ -82,9 +82,7 @@ pub fn find_aggregate_scalars(scalars: &[&Scalar]) -> Vec<Scalar> {
     })
 }
 
-pub fn find_aggregate_scalars_from_bind_context(
-    bind_context: &mut BindContext,
-) -> Result<Vec<Scalar>> {
+pub fn find_aggregate_scalars_from_bind_context(bind_context: &BindContext) -> Result<Vec<Scalar>> {
     let scalars = bind_context
         .all_column_bindings()
         .iter()
