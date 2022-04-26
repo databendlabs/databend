@@ -12,35 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-pub fn assert_string(data_type: &DataTypePtr) -> Result<()> {
+pub fn assert_string(data_type: &DataTypeImpl) -> Result<()> {
     if !data_type.data_type_id().is_string() {
         return Err(ErrorCode::IllegalDataType(format!(
             "Expected a string type, but got {:?}",
-            data_type
+            data_type.data_type_id()
         )));
     }
     Ok(())
 }
 
-pub fn assert_numeric(data_type: &DataTypePtr) -> Result<()> {
+pub fn assert_numeric(data_type: &DataTypeImpl) -> Result<()> {
     if !data_type.data_type_id().is_numeric() {
         return Err(ErrorCode::IllegalDataType(format!(
             "Expected a numeric type, but got {:?}",
-            data_type
+            data_type.data_type_id()
         )));
     }
     Ok(())
 }
 
-pub fn assert_date_or_timestamp(data_type: &DataTypePtr) -> Result<()> {
+pub fn assert_date_or_timestamp(data_type: &DataTypeImpl) -> Result<()> {
     if !data_type.data_type_id().is_date_or_date_time() {
         return Err(ErrorCode::IllegalDataType(format!(
             "Expected a date or timestamp type, but got {:?}",
-            data_type
+            data_type.data_type_id()
         )));
     }
     Ok(())

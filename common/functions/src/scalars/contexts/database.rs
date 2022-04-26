@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::StringType;
 use common_exception::Result;
 
@@ -28,7 +28,7 @@ pub struct DatabaseFunction {}
 
 // we bind database as first argument in eval
 impl DatabaseFunction {
-    pub fn try_create(_display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(DatabaseFunction {}))
     }
 
@@ -46,7 +46,7 @@ impl Function for DatabaseFunction {
         "DatabaseFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

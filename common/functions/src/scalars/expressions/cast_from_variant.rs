@@ -27,7 +27,7 @@ use super::cast_with_type::new_mutable_bitmap;
 
 pub fn cast_from_variant(
     column: &ColumnRef,
-    data_type: &DataTypePtr,
+    data_type: &DataTypeImpl,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let json_column: &VariantColumn = if column.is_const() {

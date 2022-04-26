@@ -58,7 +58,7 @@ where
         "AggregateMinMaxFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(self.arguments[0].data_type().clone())
     }
 

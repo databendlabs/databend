@@ -29,8 +29,8 @@ const DATE_FMT: &str = "%Y-%m-%d";
 
 pub fn cast_from_date(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
@@ -63,8 +63,8 @@ pub fn cast_from_date(
 
 pub fn cast_from_timestamp(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);

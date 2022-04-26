@@ -116,7 +116,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         self.nested.return_type()
     }
 

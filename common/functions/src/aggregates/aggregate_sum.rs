@@ -74,7 +74,7 @@ where
         "AggregateSumFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(SumT::to_data_type())
     }
 

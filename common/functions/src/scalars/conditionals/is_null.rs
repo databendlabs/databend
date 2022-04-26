@@ -30,7 +30,7 @@ pub struct IsNullFunction {
 impl IsNullFunction {
     pub fn try_create_func(
         _display_name: &str,
-        _args: &[&DataTypePtr],
+        _args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNullFunction {
             _display_name: "is_null".to_string(),
@@ -54,7 +54,7 @@ impl Function for IsNullFunction {
         "IsNullFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         bool::to_data_type()
     }
 

@@ -33,7 +33,7 @@ pub struct InFunction<const NEGATED: bool> {
 }
 
 impl<const NEGATED: bool> InFunction<NEGATED> {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for dt in args {
             let type_id = remove_nullable(dt).data_type_id();
             if type_id.is_interval() || type_id.is_array() || type_id.is_struct() {
@@ -107,7 +107,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         "InFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         if self.is_null {
             return NullType::arc();
         }
@@ -125,7 +125,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             return Ok(col);
         }
 
-        let types: Vec<DataTypePtr> = columns.iter().map(|col| col.column().data_type()).collect();
+        let types: Vec<DataTypeImpl> = columns.iter().map(|col| col.column().data_type()).collect();
 
         let least_super_dt = if columns[0]
             .field()

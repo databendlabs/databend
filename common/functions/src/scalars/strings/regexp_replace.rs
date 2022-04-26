@@ -37,7 +37,7 @@ pub struct RegexpReplaceFunction {
 }
 
 impl RegexpReplaceFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for (i, arg) in args.iter().enumerate() {
             if arg.is_null() {
                 continue;
@@ -74,7 +74,7 @@ impl Function for RegexpReplaceFunction {
         &self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         NullableType::arc(StringType::arc())
     }
 

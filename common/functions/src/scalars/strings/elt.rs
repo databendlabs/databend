@@ -30,14 +30,14 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct EltFunction {
     display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 //MySQL ELT() returns the string at the index number specified in the list of arguments. The first argument indicates the index of the string to be retrieved from the list of arguments.
 // Note: According to Wikipedia ELT stands for Extract, Load, Transform (ELT), a data manipulation process
 
 impl EltFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let result_type = if args[0].is_null() {
             NullType::arc()
         } else {
@@ -79,7 +79,7 @@ impl Function for EltFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

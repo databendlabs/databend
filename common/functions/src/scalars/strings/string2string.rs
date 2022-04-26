@@ -43,7 +43,7 @@ pub struct String2StringFunction<T> {
 }
 
 impl<T: StringOperator> String2StringFunction<T> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_string(args[0])?;
 
         Ok(Box::new(Self {
@@ -63,7 +63,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         &self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

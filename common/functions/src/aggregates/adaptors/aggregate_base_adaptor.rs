@@ -38,7 +38,7 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
         self.inner.name()
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         self.inner.return_type()
     }
 

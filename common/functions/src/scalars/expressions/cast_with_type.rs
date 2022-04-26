@@ -64,7 +64,7 @@ impl CastOptions {
 
 pub fn cast_column_field(
     column_with_field: &ColumnWithField,
-    data_type: &DataTypePtr,
+    data_type: &DataTypeImpl,
 ) -> Result<ColumnRef> {
     cast_with_type(
         column_with_field.column(),
@@ -76,7 +76,7 @@ pub fn cast_column_field(
 
 // No logical type is specified
 // Use Default options
-pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Result<ColumnRef> {
+pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
     cast_with_type(
         column,
         &column.data_type(),
@@ -87,8 +87,8 @@ pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Resul
 
 pub fn cast_with_type(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<ColumnRef> {
     // they are pyhsically the same type
@@ -180,8 +180,8 @@ pub fn cast_with_type(
 
 pub fn cast_to_variant(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let size = column.len();
@@ -220,8 +220,8 @@ pub fn cast_to_variant(
 // cast using arrow's cast compute
 pub fn arrow_cast_compute(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     if data_type.data_type_id().is_variant() {

@@ -27,8 +27,8 @@ use super::cast_with_type::CastOptions;
 
 pub fn cast_from_string(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let str_column = Series::remove_nullable(column);

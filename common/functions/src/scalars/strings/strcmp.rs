@@ -33,7 +33,7 @@ pub struct StrcmpFunction {
 }
 
 impl StrcmpFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
             assert_string(*arg)?;
         }
@@ -53,7 +53,7 @@ impl Function for StrcmpFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         i8::to_data_type()
     }
 
