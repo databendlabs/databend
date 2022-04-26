@@ -19,6 +19,7 @@ use std::time::UNIX_EPOCH;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -32,6 +33,7 @@ pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
+    Aborted = 4,
 }
 
 #[derive(Clone, Serialize)]
@@ -286,7 +288,7 @@ impl InterpreterQueryLog {
         self.write_log(&log_event).await
     }
 
-    pub async fn log_finish(&self, now: SystemTime) -> Result<()> {
+    pub async fn log_finish(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_config().query.tenant_id;
@@ -349,8 +351,30 @@ impl InterpreterQueryLog {
         }
         session_settings.push_str("scope: SESSION");
 
+        // Error
+        let (log_type, exception_code, exception, stack_trace) = match err {
+            None => (LogType::Finish, 0, "".to_string(), "".to_string()),
+            Some(e) => {
+                if e.code() == ErrorCode::AbortedQuery("").code() {
+                    (
+                        LogType::Aborted,
+                        e.code().into(),
+                        e.to_string(),
+                        e.backtrace_str(),
+                    )
+                } else {
+                    (
+                        LogType::Error,
+                        e.code().into(),
+                        e.to_string(),
+                        e.backtrace_str(),
+                    )
+                }
+            }
+        };
+
         let log_event = LogEvent {
-            log_type: LogType::Finish,
+            log_type,
             handler_type,
             tenant_id,
             cluster_id,
@@ -384,9 +408,9 @@ impl InterpreterQueryLog {
             client_address,
             current_database,
 
-            exception_code: 0,
-            exception: "".to_string(),
-            stack_trace: "".to_string(),
+            exception_code,
+            exception,
+            stack_trace,
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),

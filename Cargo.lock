@@ -1260,6 +1260,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "common-io",
  "common-tracing",
  "csv-async",
