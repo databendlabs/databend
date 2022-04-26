@@ -61,6 +61,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) write_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
+    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -92,6 +93,7 @@ impl QueryContextShared {
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
+            error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
@@ -105,6 +107,11 @@ impl QueryContextShared {
             auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
             role_cache_manager: Arc::new(RoleCacheMgr::new(user_manager)),
         }))
+    }
+
+    pub fn set_error(&self, err: ErrorCode) {
+        let mut guard = self.error.lock();
+        *guard = Some(err);
     }
 
     pub fn kill(&self) {
