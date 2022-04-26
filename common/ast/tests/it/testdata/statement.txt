@@ -98,6 +98,32 @@ Describe {
 
 
 ---------- Input ----------
+describe a; describe b
+---------- Output ---------
+DESCRIBE a
+---------- AST ------------
+Describe {
+    database: None,
+    table: Identifier {
+        name: "a",
+        quote: None,
+    },
+}
+
+
+---------- Output ---------
+DESCRIBE b
+---------- AST ------------
+Describe {
+    database: None,
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
@@ -333,7 +359,7 @@ use "a";
 USE "a"
 ---------- AST ------------
 UseDatabase {
-    name: Identifier {
+    database: Identifier {
         name: "a",
         quote: Some(
             '"',
@@ -349,7 +375,7 @@ CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase {
     if_not_exists: true,
-    name: Identifier {
+    database: Identifier {
         name: "a",
         quote: None,
     },
@@ -589,6 +615,20 @@ CreateTable {
     engine: "",
     like_table: None,
     options: [],
+}
+
+
+---------- Input ----------
+DROP database if exists db1;
+---------- Output ---------
+DROP DATABASE IF EXISTS db1
+---------- AST ------------
+DropDatabase {
+    if_exists: true,
+    database: Identifier {
+        name: "db1",
+        quote: None,
+    },
 }
 
 
@@ -1522,9 +1562,10 @@ Select(
 ---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
-INSERT INTO t(c1, c2) VALUES (1, 2), (3, 4)
+INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 Insert {
+    database: None,
     table: Identifier {
         name: "t",
         quote: None,
@@ -1607,6 +1648,7 @@ insert into table t format json;
 INSERT INTO t FORMAT json
 ---------- AST ------------
 Insert {
+    database: None,
     table: Identifier {
         name: "t",
         quote: None,
@@ -1624,6 +1666,7 @@ insert into table t select * from t2;
 INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
 Insert {
+    database: None,
     table: Identifier {
         name: "t",
         quote: None,

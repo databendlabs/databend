@@ -81,14 +81,18 @@ pub enum Statement<'a> {
     },
     CreateDatabase {
         if_not_exists: bool,
-        name: Identifier,
+        database: Identifier,
         // TODO(leiysky): use enum to represent engine instead?
         // Thus we have to check validity of engine in parser.
         engine: String,
         options: Vec<SQLProperty>,
     },
     UseDatabase {
-        name: Identifier,
+        database: Identifier,
+    },
+    DropDatabase {
+        if_exists: bool,
+        database: Identifier,
     },
     KillStmt {
         object_id: Identifier,
@@ -96,6 +100,7 @@ pub enum Statement<'a> {
 
     // DML statements
     Insert {
+        database: Option<Identifier>,
         table: Identifier,
         columns: Vec<Identifier>,
         source: InsertSource<'a>,
@@ -221,30 +226,42 @@ impl<'a> Display for Statement<'a> {
             }
             Statement::CreateDatabase {
                 if_not_exists,
-                name,
+                database,
                 ..
             } => {
                 write!(f, "CREATE DATABASE ")?;
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
-                write!(f, "{}", name)?;
+                write!(f, "{}", database)?;
                 // TODO(leiysky): display rest information
             }
-            Statement::UseDatabase { name } => {
-                write!(f, "USE {}", name)?;
+            Statement::UseDatabase { database } => {
+                write!(f, "USE {}", database)?;
+            }
+            Statement::DropDatabase {
+                database,
+                if_exists,
+            } => {
+                write!(f, "DROP DATABASE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{}", database)?;
             }
             Statement::KillStmt { object_id } => {
                 write!(f, "KILL {}", object_id)?;
             }
             Statement::Insert {
+                database,
                 table,
                 columns,
                 source,
             } => {
-                write!(f, "INSERT INTO {}", table)?;
+                write!(f, "INSERT INTO ")?;
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 if !columns.is_empty() {
-                    write!(f, "(")?;
+                    write!(f, " (")?;
                     write_comma_separated_list(f, columns)?;
                     write!(f, ")")?;
                 }

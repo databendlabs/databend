@@ -68,7 +68,7 @@ fn non_reserved_identifier(
             ),
             map(match_token(TokenKind::QuotedIdent), |token| Identifier {
                 name: token.text()[1..token.text().len() - 1].to_string(),
-                quote: Some('"'),
+                quote: Some(token.text().chars().next().unwrap()),
             }),
         ))(i)
     }
@@ -120,6 +120,18 @@ pub fn comma_separated_list1_allow_trailling<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     nom::multi::separated_list1(match_text(","), item)
+}
+
+pub fn semicolon_separated_list1<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    separated_list1(match_text(";"), item)
+}
+
+pub fn semicolon_separated_list1_allow_trailling<'a, T>(
+    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    nom::multi::separated_list1(match_text(";"), item)
 }
 
 /// A fork of `separated_list0` from nom, but never forgive parser error

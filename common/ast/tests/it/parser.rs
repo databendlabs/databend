@@ -74,6 +74,7 @@ fn test_statement() {
         r#"show create table a.b;"#,
         r#"explain analyze select a from b;"#,
         r#"describe a;"#,
+        r#"describe a; describe b"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar);"#,
         r#"create table a.b like c.d;"#,
@@ -92,6 +93,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
+        r#"DROP database if exists db1;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
         r#"select * from aa.bb;"#,
@@ -113,14 +115,15 @@ fn test_statement() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let stmts = parse_sql(&tokens).unwrap();
-        assert_eq!(stmts.len(), 1);
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
-        writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{}", stmts[0]).unwrap();
-        writeln!(file, "---------- AST ------------").unwrap();
-        writeln!(file, "{:#?}", stmts[0]).unwrap();
-        writeln!(file, "\n").unwrap();
+        for stmt in stmts {
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{}", stmt).unwrap();
+            writeln!(file, "---------- AST ------------").unwrap();
+            writeln!(file, "{:#?}", stmt).unwrap();
+            writeln!(file, "\n").unwrap();
+        }
     }
 }
 
@@ -132,17 +135,17 @@ fn test_statements_in_legacy_suites() {
         let file_str = String::from_utf8_lossy(&file_content).into_owned();
 
         // Remove comments
-        let file_str = regex::Regex::new("--.*")
-            .unwrap()
-            .replace_all(&file_str, "")
-            .into_owned();
+        // let file_str = regex::Regex::new("--.*")
+        //     .unwrap()
+        //     .replace_all(&file_str, "")
+        //     .into_owned();
 
-        for sql in file_str.split_inclusive(';').map(str::trim) {
-            if !sql.is_empty() {
-                let tokens = tokenize_sql(sql).unwrap();
-                parse_sql(&tokens).unwrap();
-            }
-        }
+        let tokens = tokenize_sql(&file_str).unwrap();
+        parse_sql(&tokens).unwrap();
+        // for sql in file_str.split_inclusive(';').map(str::trim) {
+        //     if !sql.is_empty() {
+        //     }
+        // }
     }
 }
 

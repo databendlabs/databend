@@ -19,7 +19,7 @@ use pretty_assertions::assert_eq;
 fn test_display_create_database() {
     let stmt = Statement::CreateDatabase {
         if_not_exists: true,
-        name: Identifier {
+        database: Identifier {
             name: String::from("column"),
             quote: Some('`'),
         },

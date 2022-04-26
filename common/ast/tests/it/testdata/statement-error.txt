@@ -96,7 +96,7 @@ error:
 1 | drop a
   | ---- ^ expected keyword `TABLE`
   | |     
-  | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
 
 ---------- Input ----------

@@ -294,6 +294,8 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
 
+                BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
+
                 BinaryOperator::Plus => Affix::Infix(Precedence(30), Associativity::Left),
                 BinaryOperator::Minus => Affix::Infix(Precedence(30), Associativity::Left),
 
@@ -745,6 +747,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
         alt((
             value(BinaryOperator::And, rule! { AND }),
             value(BinaryOperator::Or, rule! { OR }),
+            value(BinaryOperator::Xor, rule! { XOR }),
             value(BinaryOperator::Like, rule! { LIKE }),
             value(BinaryOperator::NotLike, rule! { NOT ~ LIKE }),
             value(BinaryOperator::Regexp, rule! { REGEXP }),

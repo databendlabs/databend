@@ -102,6 +102,7 @@ pub enum TokenKind {
     Ident,
 
     #[regex(r#""[_a-zA-Z][_$a-zA-Z0-9]*""#)]
+    #[regex(r#"`[_a-zA-Z][_$a-zA-Z0-9]*`"#)]
     QuotedIdent,
 
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -515,6 +516,8 @@ pub enum TokenKind {
     TIMEZONE_HOUR,
     #[token("TIMEZONE_MINUTE", ignore(ascii_case))]
     TIMEZONE_MINUTE,
+    #[token("XOR", ignore(ascii_case))]
+    XOR,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

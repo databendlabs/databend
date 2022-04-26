@@ -230,6 +230,7 @@ pub enum BinaryOperator {
     NotEq,
     And,
     Or,
+    Xor,
     Like,
     NotLike,
     Regexp,
@@ -311,6 +312,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::Or => {
                 write!(f, "OR")
+            }
+            BinaryOperator::Xor => {
+                write!(f, "XOR")
             }
             BinaryOperator::Like => {
                 write!(f, "LIKE")

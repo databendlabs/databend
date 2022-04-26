@@ -25,14 +25,14 @@ use crate::parser::util::*;
 use crate::rule;
 
 pub fn statements(i: Input) -> IResult<Vec<Statement>> {
-    let stmt = map(
-        rule! {
-            #statement ~ ";"
-        },
-        |(stmt, _)| stmt,
-    );
-    rule!(
-        #stmt+
+    let stmt = map(statement, Some);
+    let eoi = map(rule! { &EOI }, |_| None);
+
+    map(
+        rule!(
+            #semicolon_separated_list1(rule! { #stmt | #eoi })
+        ),
+        |stmts| stmts.into_iter().filter_map(|opt_stmt| opt_stmt).collect(),
     )(i)
 }
 
@@ -149,9 +149,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
         },
-        |(_, _, opt_if_not_exists, name)| Statement::CreateDatabase {
+        |(_, _, opt_if_not_exists, database)| Statement::CreateDatabase {
             if_not_exists: opt_if_not_exists.is_some(),
-            name,
+            database,
             engine: "".to_string(),
             options: vec![],
         },
@@ -160,7 +160,16 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             USE ~ #ident
         },
-        |(_, name)| Statement::UseDatabase { name },
+        |(_, database)| Statement::UseDatabase { database },
+    );
+    let drop_database = map(
+        rule! {
+            DROP ~ DATABASE ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, database)| Statement::DropDatabase {
+            if_exists: opt_if_exists.is_some(),
+            database,
+        },
     );
     let kill = map(
         rule! {
@@ -170,9 +179,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let insert = map(
         rule! {
-            INSERT ~ INTO ~ TABLE? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
+            INSERT ~ INTO ~ TABLE? ~ ( #ident ~ "." )? ~ #ident ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )? ~ #insert_source
         },
-        |(_, _, _, table, opt_columns, source)| Statement::Insert {
+        |(_, _, _, opt_database, table, opt_columns, source)| Statement::Insert {
+            database: opt_database.map(|(database, _)| database),
             table,
             columns: opt_columns
                 .map(|(_, columns, _)| columns)
@@ -193,10 +203,11 @@ pub fn statement(i: Input) -> IResult<Statement> {
         | #describe : "`DESCRIBE [<database>.]<table>`"
         | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`"
         | #create_table_like : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> LIKE [<database>.]<table>`"
-        | #drop_table : "`DROP TABLE [IF EXIST] [<database>.]<table>`"
+        | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
         | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
         | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database>`"
         | #use_database : "`USE <database>`"
+        | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
         | #kill : "`KILL <object id>`"
         | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
     )(i)
