@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::ExplainType;
@@ -41,18 +40,28 @@ pub enum QueryRelation {
     Nested(Box<QueryAnalyzeState>),
 }
 
-#[derive(Clone)]
+impl Default for QueryRelation {
+    fn default() -> Self {
+        QueryRelation::None
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct QueryAnalyzeState {
     pub filter: Option<Expression>,
     pub having: Option<Expression>,
-    pub order_by_expressions: Vec<Expression>,
-    // before order or before projection expression plan
-    pub expressions: Vec<Expression>,
-    pub projection_expressions: Vec<Expression>,
 
+    pub before_group_by_expressions: Vec<Expression>,
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
-    pub before_group_by_expressions: Vec<Expression>,
+
+    // rebase on projection expressions without aliases, aggregate and group by expressions
+    pub distinct_expressions: Vec<Expression>,
+
+    // before order or before projection expression plan
+    pub expressions: Vec<Expression>,
+    pub order_by_expressions: Vec<Expression>,
+    pub projection_expressions: Vec<Expression>,
 
     pub limit: Option<usize>,
     pub offset: Option<usize>,
@@ -71,25 +80,6 @@ impl QueryAnalyzeState {
     pub fn add_before_group_expression(&mut self, expr: &Expression) {
         if !self.before_group_by_expressions.contains(expr) {
             self.before_group_by_expressions.push(expr.clone());
-        }
-    }
-}
-
-impl Default for QueryAnalyzeState {
-    fn default() -> Self {
-        QueryAnalyzeState {
-            filter: None,
-            having: None,
-            order_by_expressions: vec![],
-            expressions: vec![],
-            projection_expressions: vec![],
-            group_by_expressions: vec![],
-            aggregate_expressions: vec![],
-            before_group_by_expressions: vec![],
-            limit: None,
-            offset: None,
-            relation: QueryRelation::None,
-            finalize_schema: Arc::new(DataSchema::empty()),
         }
     }
 }
@@ -123,6 +113,10 @@ impl Debug for QueryAnalyzeState {
 
         if let Some(predicate) = &self.having {
             debug_struct.field("having", predicate);
+        }
+
+        if !self.distinct_expressions.is_empty() {
+            debug_struct.field("distinct", &self.distinct_expressions);
         }
 
         if !self.order_by_expressions.is_empty() {
