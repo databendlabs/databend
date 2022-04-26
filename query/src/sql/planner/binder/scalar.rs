@@ -70,8 +70,7 @@ impl ScalarBinder {
                 right: right_scalar,
             })),
             _ => Err(ErrorCode::UnImplement(format!(
-                "Unsupported binary operator: {}",
-                op.to_string()
+                "Unsupported binary operator: {op}",
             ))),
         }
     }

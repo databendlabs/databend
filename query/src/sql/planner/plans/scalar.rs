@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypePtr;
