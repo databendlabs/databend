@@ -194,7 +194,7 @@ impl MetaService for MetaServiceImpl {
 
         let request = request.into_inner();
 
-        tracing::info!("Receive txn_action: {:?}", request);
+        tracing::info!("Receive txn_request: {:?}", request);
 
         let body = self.action_handler.execute_txn(request).await;
         Ok(Response::new(body))

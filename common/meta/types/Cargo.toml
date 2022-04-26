@@ -31,6 +31,9 @@ sha1 = "0.10.1"
 sha2 = "0.10.2"
 thiserror = "1.0.30"
 tonic = { version = "=0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+num = "0.4"
+num-derive = "0.3"
+num-traits = "0.2"
 
 [build-dependencies]
 common-building = { path = "../../building" }

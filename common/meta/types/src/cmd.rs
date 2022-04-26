@@ -14,14 +14,13 @@
 
 use std::fmt;
 
-use latest_version_cmd_mod::Cmd as latest_version_cmd;
 use openraft::NodeId;
 use serde::de;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
-use crate::compatibility::cmd_00000000_20220425 as latest_version_cmd_mod;
+use crate::compatibility::cmd_00000000_20220425::Cmd as latest_version_cmd;
 use crate::CreateDatabaseReq;
 use crate::CreateShareReq;
 use crate::CreateTableReq;
@@ -140,7 +139,7 @@ impl fmt::Display for Cmd {
 impl<'de> Deserialize<'de> for Cmd {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        let c: latest_version_cmd_mod::Cmd = de::Deserialize::deserialize(deserializer)?;
+        let c: latest_version_cmd = de::Deserialize::deserialize(deserializer)?;
         let latest = match c {
             latest_version_cmd::IncrSeq { key } => Cmd::IncrSeq { key },
             latest_version_cmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },

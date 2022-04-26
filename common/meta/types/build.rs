@@ -58,7 +58,7 @@ fn build_proto() {
         )
         .type_attribute(
             "TxnCondition.ConditionResult",
-            "#[derive(serde::Serialize, serde::Deserialize)]",
+            "#[derive(serde::Serialize, serde::Deserialize, num_derive::FromPrimitive)]",
         )
         .type_attribute(
             "TxnCondition.target_union",
