@@ -20,7 +20,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
-use crate::compatibility::cmd_00000000_20220413;
+use crate::compatibility::cmd_00000000_20220425::Cmd as LatestVersionCmd;
 use crate::CreateDatabaseReq;
 use crate::CreateShareReq;
 use crate::CreateTableReq;
@@ -32,6 +32,7 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::RenameTableReq;
+use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
 /// A Cmd describes what a user want to do to raft state machine
@@ -95,6 +96,8 @@ pub enum Cmd {
         /// Meta data of a value.
         value_meta: Option<KVMeta>,
     },
+
+    Transaction(TxnRequest),
 }
 
 impl fmt::Display for Cmd {
@@ -126,6 +129,9 @@ impl fmt::Display for Cmd {
                     key, seq, value, value_meta
                 )
             }
+            Cmd::Transaction(txn) => {
+                write!(f, "txn:{:?}", txn)
+            }
         }
     }
 }
@@ -133,11 +139,11 @@ impl fmt::Display for Cmd {
 impl<'de> Deserialize<'de> for Cmd {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        let c: cmd_00000000_20220413::Cmd = de::Deserialize::deserialize(deserializer)?;
+        let c: LatestVersionCmd = de::Deserialize::deserialize(deserializer)?;
         let latest = match c {
-            cmd_00000000_20220413::Cmd::IncrSeq { key } => Cmd::IncrSeq { key },
-            cmd_00000000_20220413::Cmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
-            cmd_00000000_20220413::Cmd::CreateDatabase {
+            LatestVersionCmd::IncrSeq { key } => Cmd::IncrSeq { key },
+            LatestVersionCmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
+            LatestVersionCmd::CreateDatabase {
                 if_not_exists,
                 tenant,
                 name,
@@ -162,7 +168,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     })
                 }
             }
-            cmd_00000000_20220413::Cmd::DropDatabase {
+            LatestVersionCmd::DropDatabase {
                 if_exists,
                 tenant,
                 name,
@@ -184,7 +190,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     })
                 }
             }
-            cmd_00000000_20220413::Cmd::CreateTable {
+            LatestVersionCmd::CreateTable {
                 if_not_exists,
                 tenant,
                 db_name,
@@ -202,7 +208,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     table_meta,
                 })
             }
-            cmd_00000000_20220413::Cmd::DropTable {
+            LatestVersionCmd::DropTable {
                 if_exists,
                 tenant,
                 db_name,
@@ -218,7 +224,7 @@ impl<'de> Deserialize<'de> for Cmd {
                     table_name,
                 })
             }
-            cmd_00000000_20220413::Cmd::RenameTable {
+            LatestVersionCmd::RenameTable {
                 if_exists,
                 tenant,
                 db_name,
@@ -238,10 +244,10 @@ impl<'de> Deserialize<'de> for Cmd {
                     new_table_name,
                 })
             }
-            cmd_00000000_20220413::Cmd::CreateShare(x) => Cmd::CreateShare(x),
-            cmd_00000000_20220413::Cmd::DropShare(x) => Cmd::DropShare(x),
-            cmd_00000000_20220413::Cmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
-            cmd_00000000_20220413::Cmd::UpsertKV {
+            LatestVersionCmd::CreateShare(x) => Cmd::CreateShare(x),
+            LatestVersionCmd::DropShare(x) => Cmd::DropShare(x),
+            LatestVersionCmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
+            LatestVersionCmd::UpsertKV {
                 key,
                 seq,
                 value,
@@ -252,6 +258,7 @@ impl<'de> Deserialize<'de> for Cmd {
                 value,
                 value_meta,
             },
+            LatestVersionCmd::Transaction(txn) => Cmd::Transaction(txn),
         };
 
         Ok(latest)
