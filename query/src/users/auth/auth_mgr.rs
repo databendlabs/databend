@@ -60,14 +60,19 @@ impl AuthMgr {
         match credential {
             Credential::Jwt { token: t } => {
                 let jwt = match &self.jwt {
-                    Some(j) => j.parse_jwt_claims(t.as_str())?,
+                    Some(j) => j.parse_jwt(t.as_str()).await?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
-                let user_name = jwt.subject.unwrap();
-                let tenant = jwt.custom.tenant_id.unwrap_or_else(|| self.tenant.clone());
-                if let Some(ensure_user) = jwt.custom.ensure_user {
-                    let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-                    for role in ensure_user.roles {
+                let claims = jwt.claims();
+                let user_name = claims.sub.as_ref().unwrap();
+                let tenant = claims
+                    .extra
+                    .tenant_id
+                    .clone()
+                    .unwrap_or_else(|| self.tenant.clone());
+                if let Some(ref ensure_user) = claims.extra.ensure_user {
+                    let mut user_info = UserInfo::new(user_name, "%", AuthInfo::JWT);
+                    for role in ensure_user.roles.clone().into_iter() {
                         user_info.grants.grant_role(role);
                     }
                     self.user_mgr.add_user(&tenant, user_info, true).await?;
@@ -75,7 +80,7 @@ impl AuthMgr {
                 Ok((
                     Some(tenant.clone()),
                     self.user_mgr
-                        .get_user(&tenant, UserIdentity::new(&user_name, "%"))
+                        .get_user(&tenant, UserIdentity::new(user_name, "%"))
                         .await?,
                 ))
             }
