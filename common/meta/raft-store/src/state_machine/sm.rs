@@ -733,7 +733,7 @@ impl StateMachine {
 
                 TxnPutResponse {
                     key: put.key.clone(),
-                    prev_value: if put.prev_kv {
+                    prev_value: if put.prev_value {
                         convert_seqv_to_pb(prev)
                     } else {
                         None
@@ -773,7 +773,7 @@ impl StateMachine {
             TxnDeleteResponse {
                 key: delete.key.clone(),
                 success: true,
-                prev_value: if delete.prev_kv {
+                prev_value: if delete.prev_value {
                     convert_seqv_to_pb(prev)
                 } else {
                     None

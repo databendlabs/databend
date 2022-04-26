@@ -591,7 +591,7 @@ impl KVApiTestSuite {
                 request: Some(txn_op::Request::Put(TxnPutRequest {
                     key: txn_key.clone(),
                     value: b"new_v1".to_vec(),
-                    prev_kv: true,
+                    prev_value: true,
                 })),
             }];
 
@@ -649,7 +649,7 @@ impl KVApiTestSuite {
                 request: Some(txn_op::Request::Put(TxnPutRequest {
                     key: txn_key1.clone(),
                     value: b"new_v1".to_vec(),
-                    prev_kv: true,
+                    prev_value: true,
                 })),
             }];
 
@@ -715,7 +715,7 @@ impl KVApiTestSuite {
                     request: Some(txn_op::Request::Put(TxnPutRequest {
                         key: txn_key1.clone(),
                         value: val1_new.to_vec(),
-                        prev_kv: true,
+                        prev_value: true,
                     })),
                 },
                 // change k2
@@ -723,7 +723,7 @@ impl KVApiTestSuite {
                     request: Some(txn_op::Request::Put(TxnPutRequest {
                         key: txn_key2.clone(),
                         value: b"new_v2".to_vec(),
-                        prev_kv: true,
+                        prev_value: true,
                     })),
                 },
                 // get k1
@@ -736,7 +736,7 @@ impl KVApiTestSuite {
                 TxnOp {
                     request: Some(txn_op::Request::Delete(TxnDeleteRequest {
                         key: txn_key1.clone(),
-                        prev_kv: true,
+                        prev_value: true,
                     })),
                 },
                 // get k1
@@ -841,7 +841,7 @@ impl KVApiTestSuite {
                     request: Some(txn_op::Request::Put(TxnPutRequest {
                         key: txn_key1.clone(),
                         value: val1_new.to_vec(),
-                        prev_kv: true,
+                        prev_value: true,
                     })),
                 },
                 // get k1

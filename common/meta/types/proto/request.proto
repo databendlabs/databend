@@ -37,7 +37,7 @@ message TxnPutRequest {
   string key = 1;
   bytes value = 2;
   // if or not return the prev value
-  bool prev_kv = 3;
+  bool prev_value = 3;
 }
 
 message TxnPutResponse {
@@ -49,7 +49,7 @@ message TxnPutResponse {
 message TxnDeleteRequest {
   string key = 1;
   // if or not return the prev value
-  bool prev_kv = 2;
+  bool prev_value = 2;
 }
 
 message TxnDeleteResponse {
