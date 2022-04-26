@@ -104,6 +104,7 @@ impl PlanBuilder {
     /// Apply a projection.
     pub fn project(&self, exprs: &[Expression]) -> Result<Self> {
         let input_schema = self.plan.schema();
+        dbg!(exprs.clone());
         let fields = RewriteHelper::exprs_to_fields(exprs, &input_schema)?;
 
         Ok(Self::from(&PlanNode::Projection(ProjectionPlan {

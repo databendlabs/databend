@@ -76,12 +76,14 @@ impl PlanParser {
 
     pub fn build_query_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {
         let from = Self::build_from_plan(data)?;
+        dbg!(from.schema());
         tracing::debug!("Build from plan:\n{:?}", from);
 
         let filter = Self::build_filter_plan(from, data)?;
         tracing::debug!("Build filter plan:\n{:?}", filter);
 
         let group_by = Self::build_group_by_plan(filter, data)?;
+        dbg!(group_by.schema());
         tracing::debug!("Build group_by plan:\n{:?}", group_by);
 
         let before_order = Self::build_before_order(group_by, data)?;
@@ -98,6 +100,7 @@ impl PlanParser {
 
         let projection = Self::build_projection_plan(order_by, data)?;
         tracing::debug!("Build projection plan:\n{:?}", projection);
+        dbg!(projection.schema());
 
         let limit = Self::build_limit_plan(projection, data)?;
         tracing::debug!("Build limit plan:\n{:?}", limit);

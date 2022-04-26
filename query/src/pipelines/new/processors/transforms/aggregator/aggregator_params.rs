@@ -86,19 +86,19 @@ impl AggregatorParams {
         }))
     }
 
-    pub fn try_create_partial_v2(
-        aggr_expr: Vec<Expression>,
-        group_expr: Vec<Expression>,
-        input_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
+    pub fn try_create_v2(
+        aggr_expr: &[Expression],
+        group_expr: &[Expression],
+        input_schema: &DataSchemaRef,
+        output_schema: &DataSchemaRef,
     ) -> Result<Arc<AggregatorParams>> {
-        let group_cols = Self::extract_group_columns(&group_expr);
+        let group_cols = Self::extract_group_columns(group_expr);
         let mut aggregate_functions = Vec::with_capacity(aggr_expr.len());
         let mut aggregate_functions_column_name = Vec::with_capacity(aggr_expr.len());
         let mut aggregate_functions_arguments_name = Vec::with_capacity(aggr_expr.len());
 
         for expr in aggr_expr.iter() {
-            aggregate_functions.push(expr.to_aggregate_function(&input_schema)?);
+            aggregate_functions.push(expr.to_aggregate_function(input_schema)?);
             aggregate_functions_column_name.push(expr.column_name());
             aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
         }
@@ -107,17 +107,17 @@ impl AggregatorParams {
 
         let group_data_fields = group_expr
             .iter()
-            .map(|c| c.to_data_field(&input_schema))
+            .map(|c| c.to_data_field(input_schema))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Arc::new(AggregatorParams {
-            before_schema: input_schema,
             group_data_fields,
             aggregate_functions,
             aggregate_functions_column_name,
             aggregate_functions_arguments_name,
             layout: states_layout,
-            schema: output_schema,
+            schema: output_schema.clone(),
+            before_schema: input_schema.clone(),
             group_columns_name: group_cols.to_vec(),
             offsets_aggregate_states: states_offsets,
         }))

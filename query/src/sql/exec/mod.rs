@@ -24,6 +24,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
+use common_planners::RewriteHelper;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
@@ -144,6 +145,7 @@ impl PipelineBuilder {
             PlanType::Aggregate => {
                 let aggregate = plan.as_any().downcast_ref::<AggregatePlan>().unwrap();
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
+                dbg!(input_schema.clone());
                 self.build_aggregate(aggregate, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
@@ -157,7 +159,7 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
-
+        dbg!(output_schema.clone());
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for expr in project.items.iter() {
@@ -244,7 +246,6 @@ impl PipelineBuilder {
         aggregate: &AggregatePlan,
         input_schema: DataSchemaRef,
     ) -> Result<DataSchemaRef> {
-        let output_schema = input_schema.clone();
         let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for scalar_expr in aggregate.agg_expr.iter() {
@@ -252,18 +253,33 @@ impl PipelineBuilder {
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
+        let partial_schema = Arc::new(DataSchema::new(RewriteHelper::exprs_to_fields(
+            agg_expressions.as_slice(),
+            &input_schema,
+        )?));
+
+        dbg!(partial_schema.clone());
+
         let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
         for scalar_expr in aggregate.group_expr.iter() {
             let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
         }
+        let mut final_exprs = agg_expressions.to_owned();
+        final_exprs.extend_from_slice(group_expressions.as_slice());
+        let final_schema = Arc::new(DataSchema::new(RewriteHelper::exprs_to_fields(
+            final_exprs.as_slice(),
+            &input_schema,
+        )?));
 
-        let aggr_params = AggregatorParams::try_create_partial_v2(
-            agg_expressions,
-            group_expressions,
-            input_schema,
-            output_schema.clone(),
+        dbg!(final_schema.clone());
+
+        let partial_aggr_params = AggregatorParams::try_create_v2(
+            &agg_expressions,
+            &group_expressions,
+            &input_schema,
+            &partial_schema,
         )?;
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
@@ -273,11 +289,31 @@ impl PipelineBuilder {
                     AggregatorTransformParams::try_create(
                         transform_input_port,
                         transform_output_port,
-                        &aggr_params,
+                        &partial_aggr_params,
                     )?,
                 )
             })?;
 
-        Ok(output_schema)
+        let final_aggr_params = AggregatorParams::try_create_v2(
+            &agg_expressions,
+            &group_expressions,
+            &input_schema,
+            &final_schema,
+        )?;
+
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAggregator::try_create_final(
+                    transform_input_port.clone(),
+                    transform_output_port.clone(),
+                    AggregatorTransformParams::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        &final_aggr_params,
+                    )?,
+                )
+            })?;
+
+        Ok(final_schema)
     }
 }
