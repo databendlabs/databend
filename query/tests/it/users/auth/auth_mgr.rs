@@ -103,37 +103,27 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     // with create user in other tenant
     {
         let tenant = "other";
-        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
-            tenant_id: Some(tenant.to_string()),
-            ..Default::default()
-        });
+        let custom_claims = CustomClaims::new()
+            .with_tenant_id(tenant)
+            .with_ensure_user(EnsureUser::default());
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let res = auth_mgr.auth(&Credential::Jwt { token }).await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2201, displayText = unknown user 'test'@'%'.",
-            res.err().unwrap().to_string()
-        );
-
-        let user_info = user_mgr
-            .get_user(tenant, UserIdentity::new(user_name, "%"))
-            .await?;
+        let (currnet_tenant, user_info) = auth_mgr.auth(&Credential::Jwt { token }).await?;
+        assert!(currnet_tenant.is_some());
+        assert_eq!(currnet_tenant.unwrap(), tenant.to_string());
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
     // with create user
     {
-        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
-            ..Default::default()
-        });
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser::default());
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let user_info = auth_mgr.auth(&Credential::Jwt { token }).await?;
+        let (_, user_info) = auth_mgr.auth(&Credential::Jwt { token }).await?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -141,13 +131,12 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: vec!["role1".to_string()],
-            ..Default::default()
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
 
-        let user_info = auth_mgr.auth(&Credential::Jwt { token }).await?;
+        let (_, user_info) = auth_mgr.auth(&Credential::Jwt { token }).await?;
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
@@ -157,7 +146,6 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let role_name = "test-role";
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: vec![role_name.to_string()],
-            ..Default::default()
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());

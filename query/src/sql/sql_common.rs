@@ -41,13 +41,26 @@ impl SQLCommon {
             SQLDataType::Real | SQLDataType::Double => Ok(f64::to_data_type()),
             SQLDataType::Boolean => Ok(bool::to_data_type()),
             SQLDataType::Date => Ok(DateType::arc()),
-            SQLDataType::Timestamp | SQLDataType::DateTime(None) => Ok(DateTimeType::arc(0, None)),
-            SQLDataType::DateTime(Some(precision)) => {
+            // default precision is 6, microseconds
+            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => {
+                Ok(TimestampType::arc(6, None))
+            }
+            SQLDataType::Timestamp(Some(precision)) => {
                 if *precision <= 9 {
-                    Ok(DateTimeType::arc(*precision as usize, None))
+                    Ok(TimestampType::arc(*precision as usize, None))
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type DateTime(n), n only ranges from 0~9, {} is invalid",
+                        "The SQL data type TIMESTAMP(n), n only ranges from 0~9, {} is invalid",
+                        precision
+                    )))
+                }
+            }
+            SQLDataType::DateTime(Some(precision)) => {
+                if *precision <= 9 {
+                    Ok(TimestampType::arc(*precision as usize, None))
+                } else {
+                    Err(ErrorCode::IllegalDataType(format!(
+                        "The SQL data type DATETIME(n), n only ranges from 0~9, {} is invalid",
                         precision
                     )))
                 }
@@ -70,6 +83,14 @@ impl SQLCommon {
             _ => Result::Err(ErrorCode::IllegalDataType(format!(
                 "The SQL data type {sql_type:?} is not implemented",
             ))),
+        }
+    }
+
+    pub fn short_sql(query: &str) -> String {
+        if query.len() >= 64 && query[..=6].eq_ignore_ascii_case("INSERT") {
+            format!("{}...", &query[..64])
+        } else {
+            query.to_string()
         }
     }
 }

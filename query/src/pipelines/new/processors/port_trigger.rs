@@ -14,8 +14,13 @@
 
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
+use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+use petgraph::dot::Config;
+use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
@@ -41,10 +46,24 @@ impl DirectedEdge {
         }
     }
 
-    pub fn get_target<N, E>(&self, graph: &StableGraph<N, E>) -> NodeIndex {
+    pub fn get_target<N: Debug, E: Debug>(&self, graph: &StableGraph<N, E>) -> Result<NodeIndex> {
         match self {
-            DirectedEdge::Source(edge_index) => graph.edge_endpoints(*edge_index).unwrap().1,
-            DirectedEdge::Target(edge_index) => graph.edge_endpoints(*edge_index).unwrap().0,
+            DirectedEdge::Source(edge_index) => match graph.edge_endpoints(*edge_index) {
+                Some((_source, target)) => Ok(target),
+                None => Err(ErrorCode::LogicalError(format!(
+                    "Cannot found edge in graph, edge_index: {:?}, graph: {:?}",
+                    edge_index,
+                    Dot::with_config(graph, &[Config::NodeIndexLabel, Config::EdgeIndexLabel])
+                ))),
+            },
+            DirectedEdge::Target(edge_index) => match graph.edge_endpoints(*edge_index) {
+                Some((target, _source)) => Ok(target),
+                None => Err(ErrorCode::LogicalError(format!(
+                    "Cannot found edge in graph, edge_index: {:?}, graph: {:?}",
+                    edge_index,
+                    Dot::with_config(graph, &[Config::NodeIndexLabel, Config::EdgeIndexLabel])
+                ))),
+            },
         }
     }
 }

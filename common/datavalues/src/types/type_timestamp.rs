@@ -29,7 +29,7 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateTimeType {
+pub struct TimestampType {
     /// The time resolution is determined by the precision parameter, range from 0 to 9
     /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
     precision: usize,
@@ -37,13 +37,13 @@ pub struct DateTimeType {
     tz: Option<String>,
 }
 
-impl DateTimeType {
+impl TimestampType {
     pub fn create(precision: usize, tz: Option<String>) -> Self {
-        DateTimeType { precision, tz }
+        TimestampType { precision, tz }
     }
 
     pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTimeType { precision, tz })
+        Arc::new(TimestampType { precision, tz })
     }
 
     pub fn tz(&self) -> Option<&String> {
@@ -83,9 +83,9 @@ impl DateTimeType {
 }
 
 #[typetag::serde]
-impl DataType for DateTimeType {
+impl DataType for TimestampType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::DateTime
+        TypeID::Timestamp
     }
 
     #[inline]
@@ -93,24 +93,24 @@ impl DataType for DateTimeType {
         self
     }
 
-    fn name(&self) -> &str {
-        match self.precision {
-            0 => "DateTime",
-            1 => "DateTime(1)",
-            2 => "DateTime(2)",
-            3 => "DateTime(3)",
-            4 => "DateTime(4)",
-            5 => "DateTime(5)",
-            6 => "DateTime(6)",
-            7 => "DateTime(7)",
-            8 => "DateTime(8)",
-            9 => "DateTime(9)",
-            _ => unreachable!(),
-        }
+    fn name(&self) -> String {
+        format!("Timestamp({})", self.precision)
     }
 
     fn aliases(&self) -> &[&str] {
-        &[]
+        match self.precision {
+            0 => &["DateTime(0)"],
+            1 => &["DateTime(1)"],
+            2 => &["DateTime(2)"],
+            3 => &["DateTime(3)"],
+            4 => &["DateTime(4)"],
+            5 => &["DateTime(5)"],
+            6 => &["Timestamp", "DateTime"],
+            7 => &["DateTime(7)"],
+            8 => &["DateTime(8)"],
+            9 => &["DateTime(9)"],
+            _ => &[],
+        }
     }
 
     fn default_value(&self) -> DataValue {
@@ -138,7 +138,7 @@ impl DataType for DateTimeType {
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Timestamp".to_string());
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         mp.insert(
             ARROW_EXTENSION_META.to_string(),
@@ -147,21 +147,20 @@ impl DataType for DateTimeType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+    fn create_serializer(&self) -> TypeSerializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeSerializer::<i64>::create(
-            tz.parse::<Tz>().unwrap(),
-            self.precision as u32,
-        ))
+
+        TimestampSerializer::<i64>::create(tz.parse::<Tz>().unwrap(), self.precision as u32).into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeDeserializer::<i64> {
+        TimestampDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
             precision: self.precision,
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
@@ -169,12 +168,8 @@ impl DataType for DateTimeType {
     }
 }
 
-impl std::fmt::Debug for DateTimeType {
+impl std::fmt::Debug for TimestampType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.precision() == 0 {
-            write!(f, "DateTime")
-        } else {
-            write!(f, "DateTime({})", self.precision())
-        }
+        write!(f, "Timestamp({})", self.precision())
     }
 }

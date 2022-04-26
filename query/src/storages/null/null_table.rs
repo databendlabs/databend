@@ -57,6 +57,7 @@ impl NullTable {
         StorageDescription {
             engine_name: "NULL".to_string(),
             comment: "NULL Storage Engine".to_string(),
+            ..Default::default()
         }
     }
 }

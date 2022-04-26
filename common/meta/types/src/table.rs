@@ -108,6 +108,8 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
+    // TODO(sundy): Save this as AST format
+    pub order_keys: Option<Vec<u8>>,
     pub created_on: DateTime<Utc>,
 }
 
@@ -165,6 +167,7 @@ impl Default for TableMeta {
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
             created_on: Utc::now(),
+            order_keys: None,
         }
     }
 }

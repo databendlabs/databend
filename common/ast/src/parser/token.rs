@@ -19,13 +19,19 @@ use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
-use super::pretty_print_error;
+use crate::parser::error::pretty_print_error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
+    pub source: &'a str,
     pub kind: TokenKind,
-    pub text: &'a str,
     pub span: Span,
+}
+
+impl<'a> Token<'a> {
+    pub fn text(&self) -> &'a str {
+        &self.source[self.span.clone()]
+    }
 }
 
 pub struct Tokenizer<'a> {
@@ -58,15 +64,15 @@ impl<'a> Iterator for Tokenizer<'a> {
                 ))))
             }
             Some(kind) => Some(Ok(Token {
+                source: self.source,
                 kind,
-                text: self.lexer.slice(),
                 span: self.lexer.span(),
             })),
             None if !self.eoi => {
                 self.eoi = true;
                 Some(Ok(Token {
+                    source: self.source,
                     kind: TokenKind::EOI,
-                    text: "",
                     span: (self.lexer.span().end)..(self.lexer.span().end),
                 }))
             }

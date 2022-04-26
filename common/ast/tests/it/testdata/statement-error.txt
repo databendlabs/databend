@@ -65,7 +65,7 @@ TruncateTable {
     },
 }
 ---------- REST -----------
-[Token { kind: Period, text: ".", span: 18..19 }, Token { kind: Ident, text: "c", span: 19..20 }, Token { kind: Period, text: ".", span: 20..21 }, Token { kind: Ident, text: "d", span: 21..22 }, Token { kind: EOI, text: "", span: 22..22 }]
+.c.d
 
 
 ---------- Input ----------
@@ -90,5 +90,17 @@ error:
   | ---- ^ expected token <TABLE>
   | |     
   | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
+
+
+---------- Input ----------
+insert into t format
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | insert into t format
+  | ------              ^ expected token <Ident>
+  | |                   
+  | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 
 

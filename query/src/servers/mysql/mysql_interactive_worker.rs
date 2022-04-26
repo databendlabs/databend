@@ -291,10 +291,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 }
 
                 let plan = plan?;
+                tracing::debug!("Get logic plan:\n{:?}", plan);
+
                 let settings = context.get_settings();
 
                 let interpreter: Arc<dyn Interpreter> =
                     if settings.get_enable_new_processor_framework()? != 0
+                        && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
                         && matches!(plan, PlanNode::Select(..))
                     {

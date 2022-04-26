@@ -25,7 +25,6 @@ use enum_dispatch::enum_dispatch;
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
 use super::type_date::DateType;
-use super::type_datetime::DateTimeType;
 use super::type_id::TypeID;
 use super::type_nullable::NullableType;
 use super::type_primitive::Float32Type;
@@ -40,9 +39,8 @@ use super::type_primitive::UInt64Type;
 use super::type_primitive::UInt8Type;
 use super::type_string::StringType;
 use super::type_struct::StructType;
+use super::type_timestamp::TimestampType;
 use crate::prelude::*;
-use crate::TypeDeserializer;
-use crate::TypeSerializer;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
@@ -65,7 +63,7 @@ pub enum DataTypeImpl {
     Float32(Float32Type),
     Float64(Float64Type),
     Date(DateType),
-    DateTime(DateTimeType),
+    Timestamp(TimestampType),
     String(StringType),
     Struct(StructType),
     Array(ArrayType),
@@ -85,7 +83,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         self.data_type_id() == TypeID::Null
     }
 
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
 
     /// Returns the name to display in the SQL describe
     fn sql_name(&self) -> String {
@@ -125,8 +123,8 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
-    fn create_serializer(&self) -> Box<dyn TypeSerializer>;
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer>;
+    fn create_serializer(&self) -> TypeSerializerImpl;
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
@@ -154,7 +152,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
             Arc::new(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(DateTimeType::create(0, tz.clone())),
+        ArrowType::Timestamp(_, tz) => Arc::new(TimestampType::create(0, tz.clone())),
         ArrowType::Date32 | ArrowType::Date64 => Arc::new(DateType::default()),
 
         ArrowType::Struct(fields) => {
@@ -182,14 +180,14 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
             "Date" => return DateType::arc(),
-            "DateTime" => match metadata {
+            "Timestamp" => match metadata {
                 Some(meta) => {
                     let mut chars = meta.chars();
                     let precision = chars.next().unwrap().to_digit(10).unwrap();
                     let tz = chars.collect::<String>();
-                    return DateTimeType::arc(precision as usize, Some(tz));
+                    return TimestampType::arc(precision as usize, Some(tz));
                 }
-                None => return DateTimeType::arc(0, None),
+                None => return TimestampType::arc(0, None),
             },
             "Interval" => return IntervalType::arc(metadata.unwrap().into()),
             "Variant" => return VariantType::arc(),

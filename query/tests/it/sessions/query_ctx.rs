@@ -28,7 +28,6 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         endpoint_url: "http://s3.amazonaws.com".to_string(),
         access_key_id: "".to_string(),
         secret_access_key: "".to_string(),
-        enable_pod_iam_policy: true,
         bucket: "bucket".to_string(),
         root: "".to_string(),
     };

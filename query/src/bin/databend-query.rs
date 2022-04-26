@@ -34,24 +34,10 @@ use databend_query::sessions::SessionManager;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
-    // First load configs from args.
-    let mut conf = Config::load_from_args();
+    let conf: Config = Config::load()?;
 
-    // If config file is not empty: -c xx.toml
-    // Reload configs from the file.
-    if !conf.config_file.is_empty() {
-        tracing::info!("Config reload from {:?}", conf.config_file);
-        let config_file = conf.config_file;
-        conf = Config::load_from_file(config_file.as_str())?;
-        conf.config_file = config_file;
-    }
-
-    // Prefer to use env variable in cloud native deployment
-    // Override configs based on env variables
-    conf = Config::load_from_env(&conf)?;
-
-    if conf.meta.meta_address.is_empty() {
-        MetaEmbedded::init_global_meta_store(conf.meta.meta_embedded_dir.clone()).await?;
+    if conf.meta.address.is_empty() {
+        MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
 
     let app_name = format!(
@@ -61,8 +47,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     //let _guards = init_tracing_with_file(
     let _guards = init_global_tracing(
         app_name.as_str(),
-        conf.log.log_dir.as_str(),
-        conf.log.log_level.as_str(),
+        conf.log.dir.as_str(),
+        conf.log.level.as_str(),
     );
 
     init_default_metrics_recorder();
@@ -161,7 +147,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         tracing::info!(
             "Databend query has been registered:{:?} to metasrv:[{:?}].",
             conf.query.cluster_id,
-            conf.meta.meta_address
+            conf.meta.address
         );
     }
 

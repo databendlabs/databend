@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::ast::Expr;
-use common_ast::parser::ast::Indirection;
-use common_ast::parser::ast::SelectTarget;
+use common_ast::ast::Expr;
+use common_ast::ast::Indirection;
+use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

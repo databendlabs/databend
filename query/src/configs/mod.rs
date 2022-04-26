@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod macros;
-
 mod config;
 pub mod config_log;
 pub mod config_meta;
@@ -26,7 +23,7 @@ pub use config::DATABEND_COMMIT_VERSION;
 pub use config_log::LogConfig;
 pub use config_meta::MetaConfig;
 pub use config_query::QueryConfig;
-pub use config_storage::AzureStorageBlobConfig;
+pub use config_storage::AzblobStorageConfig;
 pub use config_storage::FsStorageConfig;
 pub use config_storage::S3StorageConfig;
 pub use config_storage::StorageConfig;

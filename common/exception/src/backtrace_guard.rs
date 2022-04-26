@@ -12,7 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod error;
-pub mod expr;
-pub mod statement;
-pub mod util;
+use crate::exception_code::ENABLE_BACKTRACE;
+
+pub struct BacktraceGuard {}
+
+impl BacktraceGuard {
+    pub fn new(enable: bool) -> Self {
+        ENABLE_BACKTRACE.with(|v| v.set(enable));
+        Self {}
+    }
+
+    pub fn enable(&self) {
+        ENABLE_BACKTRACE.with(|v| v.set(true));
+    }
+
+    pub fn disable(&self) {
+        ENABLE_BACKTRACE.with(|v| v.set(false));
+    }
+
+    pub fn enabled(&self) -> bool {
+        ENABLE_BACKTRACE.with(|v| v.get())
+    }
+}
+
+impl Drop for BacktraceGuard {
+    fn drop(&mut self) {
+        self.enable();
+    }
+}

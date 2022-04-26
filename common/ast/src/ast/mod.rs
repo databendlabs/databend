@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod ast_visitor;
-mod expression;
+mod expr;
 mod query;
 mod statement;
 
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-pub use expression::*;
+pub use expr::*;
 pub use query::*;
 pub use statement::*;
 
@@ -29,16 +28,6 @@ pub use statement::*;
 pub struct Identifier {
     pub name: String,
     pub quote: Option<char>,
-}
-
-fn display_identifier_vec(f: &mut Formatter<'_>, name: &[Identifier]) -> std::fmt::Result {
-    for i in 0..name.len() {
-        write!(f, "{}", name[i])?;
-        if i != name.len() - 1 {
-            write!(f, ".")?;
-        }
-    }
-    Ok(())
 }
 
 impl Display for Identifier {
@@ -51,4 +40,30 @@ impl Display for Identifier {
             write!(f, "{}", self.name)
         }
     }
+}
+
+fn write_period_separated_list(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = impl Display>,
+) -> std::fmt::Result {
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ".")?;
+        }
+        write!(f, "{}", item)?;
+    }
+    Ok(())
+}
+
+fn write_comma_separated_list(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = impl Display>,
+) -> std::fmt::Result {
+    for (i, item) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "{}", item)?;
+    }
+    Ok(())
 }

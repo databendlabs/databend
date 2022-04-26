@@ -18,7 +18,6 @@ use async_stream::stream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::SendableDataBlockStream;
@@ -29,7 +28,6 @@ use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::post;
-use poem::web::Data;
 use poem::web::Query;
 use poem::Body;
 use poem::Endpoint;
@@ -43,8 +41,8 @@ use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::formats::tsv_output::block_to_tsv;
 use crate::servers::http::formats::Format;
+use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -112,16 +110,13 @@ async fn execute(
 
 #[poem::handler]
 pub async fn clickhouse_handler_get(
-    sessions_extension: Data<&Arc<SessionManager>>,
-    user_info: Data<&UserInfo>,
+    ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session_manager = sessions_extension.0;
-    let session = session_manager
+    let session = ctx
         .create_session(SessionType::ClickHouseHttpHandler)
         .await
         .map_err(InternalServerError)?;
-    session.set_current_user(user_info.0.clone());
 
     let context = session
         .create_query_context()
@@ -178,17 +173,14 @@ fn try_parse_insert_formatted(
 
 #[poem::handler]
 pub async fn clickhouse_handler_post(
-    sessions_extension: Data<&Arc<SessionManager>>,
-    user_info: Data<&UserInfo>,
+    ctx: &HttpQueryContext,
     body: Body,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session_manager = sessions_extension.0;
-    let session = session_manager
+    let session = ctx
         .create_session(SessionType::ClickHouseHttpHandler)
         .await
         .map_err(InternalServerError)?;
-    session.set_current_user(user_info.0.clone());
 
     let ctx = session
         .create_query_context()

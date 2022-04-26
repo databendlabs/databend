@@ -287,7 +287,7 @@ macro_rules! with_match_date_type_error {
 
         match $key_type {
             TypeID::Date => __with_ty__! { i32},
-            TypeID::DateTime => __with_ty__! { i64},
+            TypeID::Timestamp => __with_ty__! { i64},
             v => Err(ErrorCode::BadDataValueType(format!(
                 "Ops is not support on datatype: {:?}",
                 v

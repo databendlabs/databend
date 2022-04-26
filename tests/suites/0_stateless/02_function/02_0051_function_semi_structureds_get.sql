@@ -17,6 +17,15 @@ select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["e
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]');
 select get_path(parse_json('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}'), ''); -- {ErrorCode 1005}
 
+select '==json_extract_path_text==';
+select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[0].name');
+select json_extract_path_text('{"attr":[{"name":1}, {"name":2}]}', 'attr[1]:name');
+select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer:id');
+select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer.name');
+select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][0]');
+select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]');
+select json_extract_path_text('{"customer":{"id":1, "name":"databend", "extras":["ext", "test"]}}', ''); -- {ErrorCode 1005}
+
 DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
@@ -28,6 +37,10 @@ insert into t1 select 1, parse_json('[1,2,3,["a","b","c"]]');
 CREATE TABLE IF NOT EXISTS t2(id Int null, obj Object null) Engine = Memory;
 
 insert into t2 select 1, parse_json('{"a":1,"b":{"c":2}}');
+
+CREATE TABLE IF NOT EXISTS t3(id Int null, str String null) Engine = Memory;
+
+insert into t3 values(1, '[1,2,3,["a","b","c"]]'), (2, '{"a":1,"b":{"c":2}}');
 
 select '==get from table==';
 select get(arr, 0) from t1;
@@ -46,5 +59,13 @@ select get_path(obj, 'a') from t2;
 select get_path(obj, '["a"]') from t2;
 select get_path(obj, 'b.c') from t2;
 select get_path(obj, '["b"]["c"]') from t2;
+
+select '==json_extract_path_text from table==';
+select id, json_extract_path_text(str, '[0]') from t3;
+select id, json_extract_path_text(str, '[3][0]') from t3;
+select id, json_extract_path_text(str, 'a') from t3;
+select id, json_extract_path_text(str, '["a"]') from t3;
+select id, json_extract_path_text(str, 'b.c') from t3;
+select id, json_extract_path_text(str, '["b"]["c"]') from t3;
 
 DROP DATABASE db1;
