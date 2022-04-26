@@ -148,7 +148,7 @@ impl HashMethodKind {
             HashMethodKind::KeysU64(v) => v.name(),
         }
     }
-    pub fn data_type(&self) -> DataTypePtr {
+    pub fn data_type(&self) -> DataTypeImpl {
         match self {
             HashMethodKind::Serializer(_) => Vu8::to_data_type(),
             HashMethodKind::SingleString(_) => Vu8::to_data_type(),
@@ -320,7 +320,7 @@ where T: PrimitiveType
         });
 
         for f in sorted_group_fields.iter() {
-            let data_type = f.data_type();
+            let data_type = &f.data_type();
             let non_null_type = remove_nullable(data_type);
             let mut deserializer = non_null_type.create_deserializer(rows);
             let reader = vec8.as_slice();
