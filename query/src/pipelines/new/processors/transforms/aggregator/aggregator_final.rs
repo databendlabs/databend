@@ -58,6 +58,7 @@ pub struct FinalAggregator<
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
+    temp_states: Vec<StateAddr>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -70,6 +71,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             state,
             method,
             params,
+            temp_states: Vec::new(),
         }
     }
 }
@@ -131,6 +133,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
         let temp_place = self.state.alloc_layout2(&self.params);
+
         for (row, place) in places.iter().enumerate() {
             for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let final_place = place.next(offsets_aggregate_states[idx]);
@@ -142,7 +145,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 aggregate_function.merge(final_place, state_place)?;
             }
         }
-
         Ok(())
     }
 
@@ -226,6 +228,42 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
                 let columns = columns_builder.finish()?;
                 Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
+            }
+        }
+    }
+}
+
+impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Drop
+    for FinalAggregator<FINAL, Method>
+{
+    fn drop(&mut self) {
+        let aggregator_params = self.params.as_ref();
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+        let functions = aggregate_functions
+            .iter()
+            .filter(|p| p.need_manual_drop_state())
+            .collect::<Vec<_>>();
+
+        let states = offsets_aggregate_states
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
+
+        for group_entity in self.state.iter() {
+            let place: StateAddr = (*group_entity.get_state_value()).into();
+
+            for (function, state_offset) in functions.iter().zip(states.iter()) {
+                unsafe { function.drop_state(place.next(*state_offset)) }
+            }
+        }
+
+        for place in self.temp_states.iter() {
+            for (function, state_offset) in functions.iter().zip(states.iter()) {
+                unsafe { function.drop_state(place.next(*state_offset)) }
             }
         }
     }

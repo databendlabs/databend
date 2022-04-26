@@ -262,3 +262,33 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         }
     }
 }
+
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> Drop
+    for PartialAggregator<HAS_AGG, Method>
+{
+    fn drop(&mut self) {
+        let aggregator_params = self.params.as_ref();
+        let aggregate_functions = &aggregator_params.aggregate_functions;
+        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+        let functions = aggregate_functions
+            .iter()
+            .filter(|p| p.need_manual_drop_state())
+            .collect::<Vec<_>>();
+
+        let states = offsets_aggregate_states
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
+
+        for group_entity in self.state.iter() {
+            let place: StateAddr = (*group_entity.get_state_value()).into();
+
+            for (function, state_offset) in functions.iter().zip(states.iter()) {
+                unsafe { function.drop_state(place.next(*state_offset)) }
+            }
+        }
+    }
+}

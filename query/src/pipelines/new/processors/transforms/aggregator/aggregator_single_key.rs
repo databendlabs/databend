@@ -170,3 +170,13 @@ impl Aggregator for SingleKeyAggregator<false> {
         Ok(Some(DataBlock::create(self.schema.clone(), columns)))
     }
 }
+
+impl<const FINAL: bool> Drop for SingleKeyAggregator<FINAL> {
+    fn drop(&mut self) {
+        for (place, func) in self.places.iter().zip(self.funcs.iter()) {
+            if func.need_manual_drop_state() {
+                unsafe { func.drop_state((*place).into()) }
+            }
+        }
+    }
+}

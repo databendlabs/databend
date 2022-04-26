@@ -256,6 +256,21 @@ impl AggregateFunction for AggregateDistinctCombinator {
             self.nested.merge_result(netest_place, array)
         }
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<AggregateDistinctState>();
+        std::ptr::drop_in_place(state);
+
+        if self.nested.need_manual_drop_state() {
+            let layout = Layout::new::<AggregateDistinctState>();
+            let netest_place = place.next(layout.size());
+            self.nested.drop_state(netest_place);
+        }
+    }
 }
 
 impl fmt::Display for AggregateDistinctCombinator {

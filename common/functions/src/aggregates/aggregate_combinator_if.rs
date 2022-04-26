@@ -159,6 +159,14 @@ impl AggregateFunction for AggregateIfCombinator {
     fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
         self.nested.merge_result(place, column)
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        self.nested.need_manual_drop_state()
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        self.nested.drop_state(place);
+    }
 }
 
 impl fmt::Display for AggregateIfCombinator {

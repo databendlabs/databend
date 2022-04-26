@@ -28,3 +28,4 @@ mod strings;
 mod tuples;
 mod udfs;
 mod uuids;
+mod bump;
