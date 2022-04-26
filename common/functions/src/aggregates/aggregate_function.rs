@@ -74,6 +74,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         false
     }
 
+    /// # Safety
+    /// The caller must ensure that the [`_place`] has defined memory.
     unsafe fn drop_state(&self, _place: StateAddr) {}
 
     fn get_own_null_adaptor(

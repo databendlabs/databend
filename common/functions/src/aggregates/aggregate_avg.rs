@@ -179,15 +179,6 @@ where
         Ok(())
     }
 
-    fn get_own_null_adaptor(
-        &self,
-        _nested_function: AggregateFunctionRef,
-        _params: Vec<DataValue>,
-        _arguments: Vec<DataField>,
-    ) -> Result<Option<AggregateFunctionRef>> {
-        Ok(None)
-    }
-
     fn convert_const_to_full(&self) -> bool {
         true
     }
