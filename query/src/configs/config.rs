@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
+
 use clap::Parser;
-use common_base::Format;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientTlsConfig;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
+use serfig::collectors::from_env;
+use serfig::collectors::from_file;
+use serfig::collectors::from_self;
+use serfig::parsers::Toml;
 
 use crate::configs::LogConfig;
 use crate::configs::MetaConfig;
@@ -44,14 +48,11 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     ver
 });
 
-// Config file.
-const CONFIG_FILE: &str = "CONFIG_FILE";
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
-    #[clap(long, short = 'c', env = CONFIG_FILE, default_value = "")]
+    #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
 
     // Query engine config.
@@ -70,64 +71,37 @@ pub struct Config {
     pub storage: StorageConfig,
 }
 
-impl Default for Config {
-    /// Default configs.
-    fn default() -> Self {
-        Self {
-            config_file: "".to_string(),
-            query: QueryConfig::default(),
-            log: LogConfig::default(),
-            meta: MetaConfig::default(),
-            storage: StorageConfig::default(),
-        }
-    }
-}
-
 impl Config {
-    /// Load configs from args.
-    pub fn load_from_args() -> Self {
-        let mut cfg = Config::parse();
-        if cfg.query.num_cpus == 0 {
-            cfg.query.num_cpus = num_cpus::get() as u64;
-        }
-        cfg
-    }
+    /// Load will load config from file, env and args.
+    ///
+    /// - Load from file as default.
+    /// - Load from env, will override config from file.
+    /// - Load from args as finally override
+    pub fn load() -> Result<Self> {
+        let arg_conf: Self = Config::parse();
 
-    /// Load configs from file.
-    pub fn load_from_file(file: &str) -> Result<Self> {
-        let txt = std::fs::read_to_string(file)
-            .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
 
-        let format = Format::from_path(file)?;
-        let mut cfg: Config = format.load_config(&txt)?;
-        if cfg.query.num_cpus == 0 {
-            cfg.query.num_cpus = num_cpus::get() as u64;
-        }
-        Ok(cfg)
-    }
+        // Load from config file first.
+        {
+            let config_file = if !arg_conf.config_file.is_empty() {
+                arg_conf.config_file.clone()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
 
-    /// Change config based on configured env variable
-    pub fn load_from_env(cfg: &Config) -> Result<Self> {
-        let mut mut_config = cfg.clone();
-        if std::env::var_os(CONFIG_FILE).is_some() {
-            return Config::load_from_file(
-                std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
-            );
+            builder = builder.collect(from_file(Toml, &config_file));
         }
 
-        // Log.
-        LogConfig::load_from_env(&mut mut_config);
+        // Then, load from env.
+        builder = builder.collect(from_env());
 
-        // Meta.
-        MetaConfig::load_from_env(&mut mut_config);
+        // Finally, load from args.
+        builder = builder.collect(from_self(arg_conf));
 
-        // Storage.
-        StorageConfig::load_from_env(&mut mut_config);
-
-        // Query.
-        QueryConfig::load_from_env(&mut mut_config);
-
-        Ok(mut_config)
+        Ok(builder.build()?)
     }
 
     pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {

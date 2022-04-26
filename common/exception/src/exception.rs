@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ use std::sync::Arc;
 
 use backtrace::Backtrace;
 use thiserror::Error;
+
+use crate::exception_code::ENABLE_BACKTRACE;
 
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
@@ -133,7 +135,9 @@ impl ErrorCode {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            backtrace: ENABLE_BACKTRACE
+                .with(|v| v.get())
+                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
         }
     }
 

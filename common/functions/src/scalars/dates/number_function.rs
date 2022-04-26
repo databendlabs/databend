@@ -23,6 +23,7 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num_traits::Pow;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
@@ -249,7 +250,8 @@ impl NumberOperator<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(CastFunction::create("toDate", DateType::arc().name()).unwrap())
+        let type_name = DateType::arc().name();
+        Some(CastFunction::create("toDate", type_name.as_str()).unwrap())
     }
 }
 
@@ -266,7 +268,7 @@ impl NumberOperator<u8> for ToMinute {
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfHour", &[&DateTimeType::arc(0, None)], 60 * 60)
+            RoundFunction::try_create("toStartOfHour", &[&TimestampType::arc(0, None)], 60 * 60)
                 .unwrap(),
         )
     }
@@ -285,7 +287,7 @@ impl NumberOperator<u8> for ToSecond {
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfMinute", &[&DateTimeType::arc(0, None)], 60)
+            RoundFunction::try_create("toStartOfMinute", &[&TimestampType::arc(0, None)], 60)
                 .unwrap(),
         )
     }
@@ -378,9 +380,17 @@ where
                 )?;
                 Ok(col.arc())
             }
-            TypeID::DateTime => {
+            TypeID::Timestamp => {
+                let ts_dt = columns[0]
+                    .field()
+                    .data_type()
+                    .as_any()
+                    .downcast_ref::<TimestampType>()
+                    .unwrap();
+                let to_div = 10.pow(ts_dt.precision()) as i64;
+
                 let func = |v: i64, _ctx: &mut EvalContext| {
-                    let date_time = Utc.timestamp(v, 0_u32);
+                    let date_time = Utc.timestamp(v / to_div, 0_u32);
                     T::to_number(date_time)
                 };
                 let col = scalar_unary_op::<i64, R, _>(

@@ -1,2 +1,3 @@
 ERROR 1105 (HY000) at line 1: Code: 1003, displayText = Cannot USE 'not_exists_db', because the 'not_exists_db' doesn't exist.
+ERROR 1105 (HY000) at line 2: Code: 1003, displayText = No database selected.
 system

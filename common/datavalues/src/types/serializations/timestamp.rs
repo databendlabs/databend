@@ -23,13 +23,14 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
-pub struct DateTimeSerializer<T: PrimitiveType> {
+#[derive(Debug, Clone)]
+pub struct TimestampSerializer<T: PrimitiveType> {
     _marker: PhantomData<T>,
     precision: u32,
     tz: Tz,
 }
 
-impl<T: PrimitiveType> DateTimeSerializer<T> {
+impl<T: PrimitiveType> TimestampSerializer<T> {
     pub fn create(tz: Tz, precision: u32) -> Self {
         Self {
             _marker: PhantomData,
@@ -51,7 +52,7 @@ impl<T: PrimitiveType> DateTimeSerializer<T> {
 
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
-impl<T: PrimitiveType> TypeSerializer for DateTimeSerializer<T> {
+impl<T: PrimitiveType> TypeSerializer for TimestampSerializer<T> {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         let value = DFTryFrom::try_from(value.clone())?;
         let dt = self.to_date_time(&value);

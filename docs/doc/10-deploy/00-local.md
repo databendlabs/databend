@@ -85,7 +85,7 @@ databend-meta is a global service for the meta data(such as user, table schema e
 ### 2.1 Create databend-meta.toml
 
 ```shell title="databend-meta.toml"
-log_dir = "metadata/_logs"
+dir = "metadata/_logs"
 admin_api_address = "127.0.0.1:8101"
 grpc_api_address = "127.0.0.1:9101"
 
@@ -116,8 +116,8 @@ Check the response is `HTTP/1.1 200 OK`.
 
 ```shell title="databend-query.toml"
 [log]
-log_level = "INFO"
-log_dir = "benddata/_logs"
+level = "INFO"
+dir = "benddata/_logs"
 
 [query]
 # For admin RESET API.
@@ -154,14 +154,14 @@ meta_password = "root"
 
 [storage]
 # fs|s3
-storage_type = "fs"
+type = "fs"
 
 [storage.fs]
 data_path = "benddata/datas"
 
 [storage.s3]
 
-[storage.azure_storage_blob]
+[storage.azblob]
 ```
 
 ### 3.2 Start databend-query

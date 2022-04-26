@@ -69,7 +69,7 @@ fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("statement.txt").unwrap();
     let cases = &[
-        r#"show tables;"#,
+        r#"show tables"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
         r#"explain analyze select a from b;"#,

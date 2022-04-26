@@ -18,7 +18,7 @@ subtractSeconds(exp0, expr1)
 
 ## Return Type
 
-Date16, Date32 or DateTime32, DateTime64, depends on the input.
+Date, Timestamp depends on the input.
 
 ## Examples
 

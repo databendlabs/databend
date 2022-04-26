@@ -1084,7 +1084,9 @@ dependencies = [
  "common-base",
  "common-infallible",
  "common-macros",
+ "libc",
  "parking_lot 0.12.0",
+ "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
 ]
 
@@ -1793,10 +1795,13 @@ dependencies = [
  "reqwest",
  "rsa",
  "serde",
+ "serde-bridge",
  "serde_json",
+ "serfig",
  "sha1",
  "sha2 0.10.2",
  "sqlparser",
+ "temp-env",
  "tempfile",
  "threadpool",
  "time 0.3.9",
@@ -2890,9 +2895,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
+checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg 1.0.1",
  "hashbrown 0.11.2",
@@ -5368,6 +5373,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-bridge"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f68e451f87e0f0a51c565c907017f033ecce23a1aef9eb3faee0dfd6e578d84"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "serde",
+]
+
+[[package]]
+name = "serde-env"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e25cbc2db78bdf2b85ae2bb9894106e14092f87e2c47191dc3d704d7dca78be"
+dependencies = [
+ "anyhow",
+ "log",
+ "serde",
+]
+
+[[package]]
 name = "serde_cbor"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5442,6 +5469,21 @@ dependencies = [
  "ryu",
  "serde",
  "yaml-rust",
+]
+
+[[package]]
+name = "serfig"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfe138b57b8dea13fbe1d1b7007be08322bd60a76eb938f89113d3d82dcc480a"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "log",
+ "serde",
+ "serde-bridge",
+ "serde-env",
+ "toml",
 ]
 
 [[package]]
@@ -5847,6 +5889,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "temp-env"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45107136c2ddf8c4b87453c02294fd0adf41751796e81e8ba3f7fd951977ab57"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5939,6 +5990,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "tikv-jemalloc-ctl"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb833c46ecbf8b6daeccb347cefcabf9c1beb5c9b0f853e1cec45632d9963e69"
+dependencies = [
+ "libc",
+ "paste",
+ "tikv-jemalloc-sys",
 ]
 
 [[package]]
@@ -6122,9 +6184,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.5.8"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
+checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
 dependencies = [
  "serde",
 ]

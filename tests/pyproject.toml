@@ -13,6 +13,9 @@ moto = {extras = ["all"], version = "^2.3.2"}
 yapf = "^0.32.0"
 shfmt-py = "^3.3.1"
 mysql-connector-python = "^8.0.28"
+SQLAlchemy = "^1.4.35"
+clickhouse-driver = "^0.2.3"
+PyMySQL = "^1.0.2"
 
 [tool.poetry.dev-dependencies]
 

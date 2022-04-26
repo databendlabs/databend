@@ -40,8 +40,8 @@ impl DataType for StringType {
         self
     }
 
-    fn name(&self) -> &str {
-        "String"
+    fn name(&self) -> String {
+        "String".to_string()
     }
 
     fn sql_name(&self) -> String {
@@ -72,12 +72,12 @@ impl DataType for StringType {
         ArrowType::LargeBinary
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(StringSerializer {})
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        StringSerializer {}.into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(StringDeserializer::with_capacity(capacity))
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        StringDeserializer::with_capacity(capacity).into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

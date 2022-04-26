@@ -5,4 +5,7 @@ CREATE TABLE t(a bigint null, b int null, c varchar null, d smallint, e Date ) E
 DESCRIBE t;
 DESC t;
 
+-- VIEW table
+DESC INFORMATION_SCHEMA.COLUMNS;
+
 DROP TABLE IF EXISTS t;

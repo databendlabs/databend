@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
 use common_planners::Expression;
@@ -25,6 +26,9 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
+use crate::storages::view::view_table::QUERY;
+use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct DescribeTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -50,7 +54,21 @@ impl Interpreter for DescribeTableInterpreter {
         let database = self.plan.db.as_str();
         let table = self.plan.table.as_str();
         let table = self.ctx.get_table(database, table).await?;
-        let schema = table.schema();
+        let tbl_info = table.get_table_info();
+
+        let schema = if tbl_info.engine() == VIEW_ENGINE {
+            if let Some(query) = tbl_info.options().get(QUERY) {
+                PlanParser::parse(self.ctx.clone(), query.as_str())
+                    .await?
+                    .schema()
+            } else {
+                return Err(ErrorCode::LogicalError(
+                    "Logical error, View Table must have a SelectQuery inside.",
+                ));
+            }
+        } else {
+            table.schema()
+        };
 
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];

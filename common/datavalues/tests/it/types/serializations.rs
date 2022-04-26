@@ -49,7 +49,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: DateTimeType::arc(0, None),
+            data_type: TimestampType::arc(0, None),
             value: DataValue::UInt64(1630320462),
             column: Series::from_data(vec![1630320462i64, 1637117572i64, 1]),
             val_str: "2021-08-30 10:47:42",
@@ -185,9 +185,17 @@ fn test_serializers() -> Result<()> {
 
 #[test]
 fn test_convert_arrow() {
-    let t = DateTimeType::arc(0, None);
+    let t = TimestampType::arc(0, None);
     let arrow_y = t.to_arrow_field("x");
     let new_t = from_arrow_field(&arrow_y);
 
     assert_eq!(new_t.name(), t.name())
+}
+
+#[test]
+fn test_enum_dispatch() -> Result<()> {
+    let c = StringSerializer {};
+    let d: TypeSerializerImpl = c.into();
+    let _: StringSerializer = d.try_into()?;
+    Ok(())
 }
