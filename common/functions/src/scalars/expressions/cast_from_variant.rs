@@ -141,7 +141,7 @@ pub fn cast_from_variant(
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             if let Some(d) = string_to_timestamp(v) {
-                                builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
+                                builder.append(datetime.from_micro_seconds(d.timestamp_micros()));
                             } else {
                                 bitmap.set(row, false);
                             }

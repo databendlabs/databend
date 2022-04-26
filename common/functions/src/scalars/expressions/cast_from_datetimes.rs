@@ -52,7 +52,7 @@ pub fn cast_from_date(
             let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
             let it = c
                 .iter()
-                .map(|v| ts.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
+                .map(|v| ts.from_micro_seconds(*v as i64 * 24 * 3600 * 1_000_000));
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -101,10 +101,10 @@ pub fn cast_from_timestamp(
                 .downcast_ref::<TimestampType>()
                 .unwrap()
                 .precision();
-            let x = 10_i64.pow(9 - to_precision as u32);
+            let x = 10_i64.pow(6 - to_precision as u32);
             let it = c
                 .iter()
-                .map(|v| date_time64.utc_timestamp(*v).timestamp_nanos() / x);
+                .map(|v| date_time64.utc_timestamp(*v).timestamp_micros() / x);
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }

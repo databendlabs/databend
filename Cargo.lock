@@ -926,6 +926,7 @@ dependencies = [
  "common-io",
  "common-macros",
  "common-mem-allocator",
+ "common-tracing",
  "criterion",
  "dyn-clone",
  "enum_dispatch",

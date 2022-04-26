@@ -58,7 +58,7 @@ pub fn cast_from_string(
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_timestamp(v) {
                     Some(d) => {
-                        builder.append(ts.from_nano_seconds(d.timestamp_nanos()));
+                        builder.append(ts.from_micro_seconds(d.timestamp_micros()));
                     }
                     None => bitmap.set(row, false),
                 }

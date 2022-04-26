@@ -193,7 +193,7 @@ select toDateTime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
 select '===INSERT===';
 drop table if exists ts;
-create table ts(a DateTime(9), b DateTime, c Date);
+create table ts(a DateTime(6), b DateTime, c Date);
 insert into ts values(now(), now(), today());
 select toDateTime(a) = toDateTime(b) from ts;
 drop table if exists ts;
@@ -203,6 +203,8 @@ create table t(d32 datetime, d64 DateTime(3));
 
 insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28');
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');
+insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221'); -- {ErrorCode 1068}
+insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221'); -- {ErrorCode 1010}
 
 select * from t order by d64;
 drop table t;

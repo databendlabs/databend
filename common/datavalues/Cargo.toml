@@ -17,6 +17,7 @@ common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 common-macros = { path = "../macros" }
 common-mem-allocator = { path = "../mem-allocator" }
+common-tracing = { path = "../tracing" }
 
 # Github dependencies
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }

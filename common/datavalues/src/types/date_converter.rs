@@ -39,11 +39,11 @@ where T: AsPrimitive<i64>
     }
 
     fn to_date_time64(&self, precision: usize, tz: &Tz) -> DateTime<Tz> {
-        let nano = self.as_() * 10i64.pow(9 - precision as u32);
+        let micros = self.as_() * 10i64.pow(6 - precision as u32);
 
-        let sec = nano / 1_000_000_000;
-        let nsec = nano % 1_000_000_000;
+        let sec = micros / 1_000_000;
+        let nanos = micros % 1_000_000 * 1000;
 
-        tz.timestamp(sec, nsec as u32)
+        tz.timestamp(sec, nanos as u32)
     }
 }
