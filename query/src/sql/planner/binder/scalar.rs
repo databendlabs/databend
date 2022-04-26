@@ -21,8 +21,8 @@ use common_datavalues::DataTypeImpl;
 use common_ast::ast::Literal;
 use common_datavalues::DataField;
 use common_datavalues::DataTypePtr;
-use common_exception::ErrorCode;
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 
@@ -136,8 +136,20 @@ impl ScalarBinder {
         let right_scalar = self.bind_expr(right_child, bind_context)?;
         match op {
             BinaryOperator::Eq => Ok(Arc::new(Scalar::Equal {
-                left: left_scalar,
-                right: right_scalar,
+                left: Box::from(
+                    left_scalar
+                        .as_any()
+                        .downcast_ref::<Scalar>()
+                        .unwrap()
+                        .clone(),
+                ),
+                right: Box::from(
+                    right_scalar
+                        .as_any()
+                        .downcast_ref::<Scalar>()
+                        .unwrap()
+                        .clone(),
+                ),
             })),
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported binary operator: {op}",

@@ -30,8 +30,8 @@ pub enum Scalar {
         nullable: bool,
     },
     Equal {
-        left: ScalarExprRef,
-        right: ScalarExprRef,
+        left: Box<Scalar>,
+        right: Box<Scalar>,
     },
     AggregateFunction {
         func_name: String,
