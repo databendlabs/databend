@@ -127,6 +127,7 @@ pub use operation::MetaId;
 pub use operation::MetaVersion;
 pub use operation::Operation;
 pub use principal_identity::PrincipalIdentity;
+pub use protobuf::txn_condition;
 pub use protobuf::txn_condition::ConditionResult;
 pub use protobuf::txn_condition::ConditionTarget;
 pub use protobuf::txn_op;

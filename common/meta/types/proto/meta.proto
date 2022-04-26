@@ -87,31 +87,31 @@ message WatchResponse {
 message TxnCondition {
   // compare target enum
   enum ConditionTarget {
-    Key = 0;
-    Value = 1;
+    Value = 0;
+    Seq = 1;
   }
 
   // condition result
   enum ConditionResult {
-    // only used for key compare
-    KeyExist = 0;
-    KeyNotExist = 1;
-
-    // only used for value compare
-    ValueEqual = 2;
-    ValueGreater = 3;
-    ValueLess = 4;
-    ValueNotEqual = 5;    
+    Equal = 0;
+    Greater = 1;
+    Less = 2;
+    NotEqual = 3; 
   }
 
   string key = 1;
   ConditionTarget target = 2;
 
-  optional SeqV value = 3;
+  oneof target_union {
+    // used when compare value
+    bytes value = 3;
+    // used when compare seq
+    uint64 seq = 4;
+  }
 
   // the expected result of condition, if `expected` match the condition result,
   // then the `if_then` op will be executed, otherwise `else_then` op will be executed.
-  ConditionResult expected = 4;
+  ConditionResult expected = 5;
 }
 
 message TxnOp {

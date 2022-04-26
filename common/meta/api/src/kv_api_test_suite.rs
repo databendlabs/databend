@@ -17,6 +17,7 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_meta_types::convert_seqv_to_pb;
+use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
 use common_meta_types::ConditionResult;
@@ -583,9 +584,9 @@ impl KVApiTestSuite {
             let txn_key = k1.to_string();
             let condition = vec![TxnCondition {
                 key: txn_key.clone(),
-                target: ConditionTarget::Key as i32,
-                expected: ConditionResult::KeyExist as i32,
-                value: None,
+                target: ConditionTarget::Seq as i32,
+                expected: ConditionResult::Greater as i32,
+                target_union: Some(txn_condition::TargetUnion::Seq(0)),
             }];
 
             let if_then: Vec<TxnOp> = vec![TxnOp {
@@ -615,7 +616,6 @@ impl KVApiTestSuite {
 
             self.check_transaction_responses(&resp.responses, &expected);
         }
-
         // second case: get two key(one not exist) and set one key transaction
         {
             // first insert k1 value
@@ -633,18 +633,19 @@ impl KVApiTestSuite {
             // transaction by k1 and k2 condition
             let txn_key1 = k1.to_string();
             let txn_key2 = k2.to_string();
+
             let condition = vec![
                 TxnCondition {
                     key: txn_key1.clone(),
-                    target: ConditionTarget::Key as i32,
-                    expected: ConditionResult::KeyExist as i32,
-                    value: None,
+                    target: ConditionTarget::Seq as i32,
+                    expected: ConditionResult::Greater as i32,
+                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
                 TxnCondition {
                     key: txn_key2.clone(),
-                    target: ConditionTarget::Key as i32,
-                    expected: ConditionResult::KeyExist as i32,
-                    value: None,
+                    target: ConditionTarget::Seq as i32,
+                    expected: ConditionResult::Greater as i32,
+                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
             ];
 
@@ -702,15 +703,15 @@ impl KVApiTestSuite {
             let condition = vec![
                 TxnCondition {
                     key: txn_key1.clone(),
-                    target: ConditionTarget::Key as i32,
-                    expected: ConditionResult::KeyExist as i32,
-                    value: None,
+                    target: ConditionTarget::Seq as i32,
+                    expected: ConditionResult::Greater as i32,
+                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
                 TxnCondition {
                     key: txn_key2.clone(),
-                    target: ConditionTarget::Key as i32,
-                    expected: ConditionResult::KeyExist as i32,
-                    value: None,
+                    target: ConditionTarget::Seq as i32,
+                    expected: ConditionResult::Greater as i32,
+                    target_union: Some(txn_condition::TargetUnion::Seq(0)),
                 },
             ];
 
@@ -816,6 +817,82 @@ impl KVApiTestSuite {
             self.check_transaction_responses(&resp.responses, &expected);
         }
 
+        // 4th case: get one key by value and set key transaction
+        {
+            let k1 = "txn_4_K1";
+            let val1 = b"v1".to_vec();
+            let val1_new = b"v1_new".to_vec();
+
+            // first insert k1 value
+            kv.upsert_kv(UpsertKVAction::new(
+                k1,
+                MatchSeq::Any,
+                Operation::Update(val1.clone()),
+                None,
+            ))
+            .await?;
+
+            // transaction by k1 and k2 condition
+            let txn_key1 = k1.to_string();
+
+            let condition = vec![TxnCondition {
+                key: txn_key1.clone(),
+                target: ConditionTarget::Value as i32,
+                expected: ConditionResult::Greater as i32,
+                target_union: Some(txn_condition::TargetUnion::Value(b"v".to_vec())),
+            }];
+
+            let if_then: Vec<TxnOp> = vec![
+                // change k1
+                TxnOp {
+                    request: Some(txn_op::Request::Put(TxnPutRequest {
+                        key: txn_key1.clone(),
+                        value: val1_new.to_vec(),
+                        prev_kv: true,
+                    })),
+                },
+                // get k1
+                TxnOp {
+                    request: Some(txn_op::Request::Get(TxnGetRequest {
+                        key: txn_key1.clone(),
+                    })),
+                },
+            ];
+
+            let else_then: Vec<TxnOp> = vec![];
+            let txn = TxnRequest {
+                condition,
+                if_then,
+                else_then,
+            };
+
+            let resp = kv.transaction(txn).await?;
+
+            assert!(resp.success);
+
+            let expected: Vec<TxnOpResponse> = vec![
+                // change k1
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Put(TxnPutResponse {
+                        key: txn_key1.clone(),
+                        prev_value: convert_seqv_to_pb(Some(SeqV::with_meta(
+                            8,
+                            None,
+                            val1.clone(),
+                        ))),
+                    })),
+                },
+                // get k1
+                TxnOpResponse {
+                    response: Some(txn_op_response::Response::Get(TxnGetResponse {
+                        key: txn_key1.clone(),
+                        value: convert_seqv_to_pb(Some(SeqV::with_meta(9, None, val1_new.clone()))),
+                    })),
+                },
+            ];
+
+            self.check_transaction_responses(&resp.responses, &expected);
+        }
         Ok(())
     }
 }

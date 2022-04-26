@@ -29,6 +29,7 @@ use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
 use common_meta_types::convert_seqv_to_pb;
 use common_meta_types::error_context::WithContext;
+use common_meta_types::txn_condition;
 use common_meta_types::txn_op;
 use common_meta_types::txn_op_response;
 use common_meta_types::AppError;
@@ -55,7 +56,6 @@ use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
-use common_meta_types::PbSeqV;
 use common_meta_types::RenameTableReq;
 use common_meta_types::SeqV;
 use common_meta_types::ShareInfo;
@@ -576,36 +576,48 @@ impl StateMachine {
         Ok(Change::new(prev, result).into())
     }
 
-    pub fn return_key_condition_result(&self, expected: i32, key_exist: bool) -> bool {
-        if expected == ConditionResult::KeyExist as i32 {
-            return key_exist;
-        }
-        if expected == ConditionResult::KeyNotExist as i32 {
-            return !key_exist;
+    pub fn return_value_condition_result(
+        &self,
+        expected: i32,
+        cond: &TxnCondition,
+        value: SeqV,
+    ) -> bool {
+        if let Some(txn_condition::TargetUnion::Value(target_value)) = &cond.target_union {
+            if expected == ConditionResult::Equal as i32 {
+                return value.data == *target_value;
+            }
+            if expected == ConditionResult::Greater as i32 {
+                return value.data > *target_value;
+            }
+            if expected == ConditionResult::Less as i32 {
+                return value.data < *target_value;
+            }
+            if expected == ConditionResult::NotEqual as i32 {
+                return value.data != *target_value;
+            }
         }
 
         false
     }
 
-    pub fn return_value_condition_result(
+    pub fn return_seq_condition_result(
         &self,
         expected: i32,
-        value: &Option<PbSeqV>,
-        val: SeqV,
+        cond: &TxnCondition,
+        value: SeqV,
     ) -> bool {
-        if let Some(value) = value {
-            let v = value;
-            if expected == ConditionResult::ValueEqual as i32 {
-                return v.data == val.data;
+        if let Some(txn_condition::TargetUnion::Seq(target_seq)) = &cond.target_union {
+            if expected == ConditionResult::Equal as i32 {
+                return value.seq == *target_seq;
             }
-            if expected == ConditionResult::ValueGreater as i32 {
-                return v.data > val.data;
+            if expected == ConditionResult::Greater as i32 {
+                return value.seq > *target_seq;
             }
-            if expected == ConditionResult::ValueLess as i32 {
-                return v.data < val.data;
+            if expected == ConditionResult::Less as i32 {
+                return value.seq < *target_seq;
             }
-            if expected == ConditionResult::ValueNotEqual as i32 {
-                return v.data != val.data;
+            if expected == ConditionResult::NotEqual as i32 {
+                return value.seq != *target_seq;
             }
         }
 
@@ -618,10 +630,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
     ) -> bool {
-        let is_key_condition = cond.target == ConditionTarget::Key as i32;
-
         let key = cond.key.clone();
-        tracing::debug!("before txn_execute_one_condition: {:?}", key);
 
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let sv = sub_tree.get(&key);
@@ -630,16 +639,18 @@ impl StateMachine {
         }
         let sv = sv.unwrap();
         tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
-        if is_key_condition {
-            match sv {
-                Some(_sv) => self.return_key_condition_result(cond.expected, true),
-                None => self.return_key_condition_result(cond.expected, false),
+
+        match sv {
+            Some(sv) => {
+                if cond.target == ConditionTarget::Value as i32 {
+                    // compare the value
+                    self.return_value_condition_result(cond.expected, cond, sv)
+                } else {
+                    // compare the seq
+                    self.return_seq_condition_result(cond.expected, cond, sv)
+                }
             }
-        } else {
-            match sv {
-                Some(sv) => self.return_value_condition_result(cond.expected, &cond.value, sv),
-                None => false,
-            }
+            None => false,
         }
     }
 
