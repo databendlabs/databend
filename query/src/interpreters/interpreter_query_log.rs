@@ -34,6 +34,7 @@ pub enum LogType {
     Finish = 2,
     ErrorBeforeStart = 3,
     ErrorExecute = 4,
+    Aborted = 5,
 }
 
 #[derive(Clone, Serialize)]
@@ -354,12 +355,23 @@ impl InterpreterQueryLog {
         // Error
         let (log_type, exception_code, exception, stack_trace) = match err {
             None => (LogType::Finish, 0, "".to_string(), "".to_string()),
-            Some(e) => (
-                LogType::ErrorExecute,
-                e.code().into(),
-                e.to_string(),
-                e.backtrace_str(),
-            ),
+            Some(e) => {
+                if e.code() == ErrorCode::AbortedQuery("").code() {
+                    (
+                        LogType::Aborted,
+                        e.code().into(),
+                        e.to_string(),
+                        e.backtrace_str(),
+                    )
+                } else {
+                    (
+                        LogType::ErrorExecute,
+                        e.code().into(),
+                        e.to_string(),
+                        e.backtrace_str(),
+                    )
+                }
+            }
         };
 
         let log_event = LogEvent {

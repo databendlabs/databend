@@ -115,6 +115,10 @@ impl QueryContextShared {
     }
 
     pub fn kill(&self) {
+        self.set_error(ErrorCode::AbortedQuery(
+            "Aborted query, because the server is shutting down or the query was killed",
+        ));
+
         let mut sources_abort_handle = self.sources_abort_handle.write();
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
