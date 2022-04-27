@@ -114,9 +114,14 @@ fn test_arithmetic_date_interval() -> Result<()> {
         date_time.timestamp_millis()
     };
 
+    let to_microseconds = |y: i32, m: u32, d: u32, h: u32, min: u32, sec: u32, micro: u32| -> i64 {
+        let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms_micro(h, min, sec, micro);
+        date_time.timestamp_nanos() / 1000
+    };
+
     let tests = vec![
         ("+", ScalarFunctionWithFieldTest {
-            name: "date16-add-years-passed",
+            name: "date-add-years-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
@@ -137,7 +142,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("-", ScalarFunctionWithFieldTest {
-            name: "date32-sub-years-passed",
+            name: "date-sub-years-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
@@ -158,14 +163,14 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("+", ScalarFunctionWithFieldTest {
-            name: "datetime32-add-years-passed",
+            name: "datetime-add-years-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
                         to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
                         to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", DateTimeType::arc(0, None)),
+                    DataField::new("dummy_0", TimestampType::arc(0, None)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -1]),
@@ -179,14 +184,14 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("-", ScalarFunctionWithFieldTest {
-            name: "datetime64-sub-years-passed",
+            name: "datetime-sub-years-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
                         to_milliseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
                         to_milliseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
                     ]),
-                    DataField::new("dummy_0", DateTimeType::arc(3, None)),
+                    DataField::new("dummy_0", TimestampType::arc(3, None)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -4]),
@@ -200,7 +205,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("+", ScalarFunctionWithFieldTest {
-            name: "date16-add-months-passed",
+            name: "date-add-months-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
@@ -221,14 +226,14 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("+", ScalarFunctionWithFieldTest {
-            name: "datetime32-add-months-passed",
+            name: "datetime-add-months-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
                         to_seconds(2020, 3, 31, 10, 30, 00), /* 2020-3-31 10:30:00 */
                         to_seconds(2000, 1, 31, 10, 30, 00), /* 2000-1-31 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", DateTimeType::arc(0, None)),
+                    DataField::new("dummy_0", TimestampType::arc(0, None)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-1i64, 241]),
@@ -242,7 +247,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("-", ScalarFunctionWithFieldTest {
-            name: "date32-sub-days-passed",
+            name: "date-sub-days-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
@@ -263,14 +268,14 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("+", ScalarFunctionWithFieldTest {
-            name: "datetime64-add-days-passed",
+            name: "datetime-add-days-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
                         to_milliseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
                         to_milliseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
                     ]),
-                    DataField::new("dummy_0", DateTimeType::arc(3, None)),
+                    DataField::new("dummy_0", TimestampType::arc(3, None)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-30i64, 30]),
@@ -284,7 +289,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
             error: "",
         }),
         ("+", ScalarFunctionWithFieldTest {
-            name: "date16-add-hours-passed",
+            name: "date-add-hours-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
@@ -299,17 +304,17 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_seconds(2020, 2, 29, 23, 00, 00), /* 2020-2-29 23:00:00 */
-                to_seconds(2000, 1, 31, 1, 00, 00),  /* 2000-1-31 1:00:00 */
+                to_microseconds(2020, 2, 29, 23, 00, 00, 00), /* 2020-2-29 23:00:00 */
+                to_microseconds(2000, 1, 31, 1, 00, 00, 00),  /* 2000-1-31 1:00:00 */
             ]),
             error: "",
         }),
         ("-", ScalarFunctionWithFieldTest {
-            name: "date32-sub-minutes-passed",
+            name: "date-sub-minutes-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_day32(2400, 2, 29), /* 2400-2-29 */
+                        to_day32(2100, 2, 28), /* 2400-2-29 */
                         to_day32(1960, 2, 29), /* 1960-2-29 */
                     ]),
                     DataField::new("dummy_0", DateType::arc()),
@@ -320,20 +325,20 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_milliseconds(2400, 2, 28, 22, 59, 00, 000) / 1000, /* 2400-2-28 22:59:00 */
-                to_milliseconds(1960, 2, 29, 00, 30, 00, 000) / 1000, /* 1960-2-29 00:30:00 */
+                to_microseconds(2100, 2, 27, 22, 59, 00, 000), /* 2400-2-28 22:59:00 */
+                to_microseconds(1960, 2, 29, 00, 30, 00, 000), /* 1960-2-29 00:30:00 */
             ]),
             error: "",
         }),
         ("-", ScalarFunctionWithFieldTest {
-            name: "datetime32-sub-seconds-passed",
+            name: "datetime-sub-seconds-passed",
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_seconds(2020, 3, 31, 10, 30, 00), /* 2020-3-31 10:30:00 */
-                        to_seconds(2000, 1, 31, 10, 30, 00), /* 2000-1-31 10:30:00 */
+                        to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
+                        to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", DateTimeType::arc(0, None)),
+                    DataField::new("dummy_0", TimestampType::arc(6, None)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-120i64, 23]),
@@ -341,8 +346,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_seconds(2020, 3, 31, 10, 32, 00), /* 2020-3-31 10:32:00 */
-                to_seconds(2000, 1, 31, 10, 29, 37), /* 2000-1-31 10:29:37 */
+                to_microseconds(2020, 3, 31, 10, 32, 00, 00), /* 2020-3-31 10:32:00 */
+                to_microseconds(2000, 1, 31, 10, 29, 37, 00), /* 2000-1-31 10:29:37 */
             ]),
             error: "",
         }),

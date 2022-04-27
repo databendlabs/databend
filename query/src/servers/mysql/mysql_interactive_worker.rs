@@ -291,6 +291,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 }
 
                 let plan = plan?;
+                tracing::debug!("Get logic plan:\n{:?}", plan);
+
                 let settings = context.get_settings();
 
                 let interpreter: Arc<dyn Interpreter> =

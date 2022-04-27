@@ -93,43 +93,43 @@ impl FuseTable {
                 .await
             {
                 Ok(_) => break Ok(()),
-                Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
-                    match backoff.next_backoff() {
-                        Some(d) => {
-                            let name = tbl.table_info.name.clone();
-                            tracing::warn!(
+                Err(e) if self::utils::is_error_recoverable(&e) => match backoff.next_backoff() {
+                    Some(d) => {
+                        let name = tbl.table_info.name.clone();
+                        tracing::warn!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
                                 tbl.table_info.ident
                             );
-                            common_base::tokio::time::sleep(d).await;
+                        common_base::tokio::time::sleep(d).await;
 
-                            // TODO catalog name
-                            let catalog = ctx.get_catalog("default")?;
-                            let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-                            let table_info: TableInfo = TableInfo {
-                                ident,
-                                desc: "".to_owned(),
-                                name,
-                                meta: meta.as_ref().clone(),
-                            };
-                            latest = catalog.get_table_by_info(&table_info)?;
-                            tbl = FuseTable::try_from_table(latest.as_ref())?;
-                            retry_times += 1;
-                            continue;
-                        }
-                        None => {
-                            break Err(ErrorCode::OCCRetryFailure(format!(
+                        // TODO catalog name
+                        let catalog = ctx.get_catalog("default")?;
+                        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
+                        let table_info: TableInfo = TableInfo {
+                            ident,
+                            desc: "".to_owned(),
+                            name,
+                            meta: meta.as_ref().clone(),
+                        };
+                        latest = catalog.get_table_by_info(&table_info)?;
+                        tbl = FuseTable::try_from_table(latest.as_ref())?;
+                        retry_times += 1;
+                        continue;
+                    }
+                    None => {
+                        tracing::info!("aborting operations");
+                        let _ = self::utils::abort_operations(ctx.as_ref(), operation_log).await;
+                        break Err(ErrorCode::OCCRetryFailure(format!(
                                 "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
                                 retry_times,
                                 Instant::now().duration_since(backoff.start_time).as_millis(),
                                 tbl.table_info.name.as_str(),
                                 tbl.table_info.ident,
                             )));
-                        }
                     }
-                }
+                },
                 Err(e) => break Err(e),
             }
         }
@@ -151,6 +151,7 @@ impl FuseTable {
             rows: summary.row_count as usize,
             bytes: summary.uncompressed_byte_size as usize,
         };
+        ctx.get_write_progress().incr(&progress_values);
 
         let segments = segments
             .into_iter()
@@ -182,15 +183,26 @@ impl FuseTable {
         let operator = ctx.get_storage_operator()?;
         operator.object(&snapshot_loc).write(bytes).await?;
 
-        Self::commit_to_meta_server(ctx, self.get_table_info(), snapshot_loc.clone()).await?;
-        ctx.get_write_progress().incr(&progress_values);
+        let result =
+            Self::commit_to_meta_server(ctx, self.get_table_info(), snapshot_loc.clone()).await;
 
-        if let Some(snapshot_cache) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
-            let cache = &mut snapshot_cache.write().await;
-            cache.put(snapshot_loc, Arc::new(new_snapshot));
+        match result {
+            Ok(_) => {
+                if let Some(snapshot_cache) =
+                    ctx.get_storage_cache_manager().get_table_snapshot_cache()
+                {
+                    let cache = &mut snapshot_cache.write().await;
+                    cache.put(snapshot_loc, Arc::new(new_snapshot));
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // commit snapshot to meta server failed, try to delete it.
+                // "major GC" will collect this, if deletion failure (even after DAL retried)
+                let _ = operator.object(&snapshot_loc).delete().await;
+                Err(e)
+            }
         }
-
-        Ok(())
     }
 
     fn merge_table_operations(
@@ -240,7 +252,7 @@ impl FuseTable {
         .collect();
 
         // if there were any legacy options keys, it is a good chance to remove them
-        Self::gather_legacy_options(table_info, &mut options);
+        self::utils::gather_legacy_options(table_info, &mut options);
 
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.version;
@@ -278,9 +290,37 @@ impl FuseTable {
 
         Ok((seg_locs, s))
     }
+}
 
+mod utils {
+    use super::*;
+    #[inline]
+    pub async fn abort_operations(
+        ctx: &QueryContext,
+        operation_log: TableOperationLog,
+    ) -> Result<()> {
+        let operator = ctx.get_storage_operator()?;
+
+        for entry in operation_log {
+            for block in &entry.segment_info.blocks {
+                let block_location = &block.location.0;
+                // if deletion operation failed (after DAL retried)
+                // we just left them there, and let the "major GC" collect them
+                let _ = operator.object(block_location).delete().await;
+            }
+            let _ = operator.object(&entry.segment_location).delete().await;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub fn is_error_recoverable(e: &ErrorCode) -> bool {
+        e.code() == ErrorCode::table_version_mismatched_code()
+    }
+
+    #[inline]
     // check if there are any fuse table legacy options
-    fn gather_legacy_options(
+    pub fn gather_legacy_options(
         table_info: &TableInfo,
         options_of_upsert: &mut HashMap<String, Option<String>>,
     ) {

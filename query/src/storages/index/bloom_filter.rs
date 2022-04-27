@@ -450,7 +450,7 @@ impl BloomFilter {
                 | TypeID::Float32
                 | TypeID::Float64
                 | TypeID::Date
-                | TypeID::DateTime
+                | TypeID::Timestamp
                 | TypeID::Interval
                 | TypeID::String
         )

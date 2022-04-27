@@ -26,7 +26,7 @@ use common_exception::Result;
 use super::cast_from_datetimes::cast_from_date;
 use super::cast_from_string::cast_from_string;
 use super::cast_from_variant::cast_from_variant;
-use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime;
+use crate::scalars::expressions::cast_from_datetimes::cast_from_timestamp;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CastOptions {
@@ -125,8 +125,8 @@ pub fn cast_with_type(
             cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         TypeID::Date => cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options),
-        TypeID::DateTime => {
-            cast_from_datetime(column, &nonull_from_type, &nonull_data_type, cast_options)
+        TypeID::Timestamp => {
+            cast_from_timestamp(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
             cast_from_variant(column, &nonull_data_type)

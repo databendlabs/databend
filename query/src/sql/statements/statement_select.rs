@@ -46,6 +46,7 @@ use crate::storages::ToReadDataSourcePlan;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
+    pub distinct: bool,
     pub from: Vec<TableWithJoins>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
@@ -65,10 +66,11 @@ impl AnalyzableStatement for DfQueryStatement {
 
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
-        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
-
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
+
+        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
+
         let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
@@ -145,6 +147,10 @@ impl DfQueryStatement {
             Self::analyze_aggregate(&ir.aggregate_expressions, &mut analyze_state)?;
         }
 
+        if ir.distinct {
+            Self::analyze_distinct(&ir.projection_expressions, &mut analyze_state)?;
+        }
+
         Ok(analyze_state)
     }
 
@@ -161,6 +167,25 @@ impl DfQueryStatement {
             state
                 .aggregate_expressions
                 .push(rebase_expr(aggr_expression, base_exprs)?);
+        }
+
+        Ok(())
+    }
+
+    fn analyze_distinct(
+        projection_exprs: &[Expression],
+        state: &mut QueryAnalyzeState,
+    ) -> Result<()> {
+        for item in projection_exprs {
+            let distinct_expr = match item {
+                Expression::Alias(_, expr) => *expr.clone(),
+                _ => item.clone(),
+            };
+
+            // support select distinct aggr_func()...
+            let distinct_expr = rebase_expr(&distinct_expr, &state.group_by_expressions)?;
+            let distinct_expr = rebase_expr(&distinct_expr, &state.aggregate_expressions)?;
+            state.distinct_expressions.push(distinct_expr);
         }
 
         Ok(())

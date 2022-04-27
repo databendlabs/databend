@@ -37,14 +37,14 @@ select "FalSex"::boolean; -- {ErrorCode 1010}
 
 
 SELECT '===DATE/DATETIME===';
-SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');
+SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:01.000001');
 SELECT  toDate('2021-03-05') + 1 = toDate('2021-03-06');
 SELECT  toString(toDate('2021-03-05') + 1) = '2021-03-06';
 SELECT toDateTime(toDate('2021-03-05')) = toDateTime('2021-03-05 00:00:00');
 SELECT toDate(toDateTime('2021-03-05 01:00:00')) = toDate('2021-03-05');
-SELECT toString(toDateTime(1640019661)) = '2021-12-20 17:01:01';
-SELECT toDate(toDateTime(1640019661)) = toDate('2021-12-20');
-SELECT toDateTime(toDateTime(1640019661)) = toDateTime('2021-12-20 17:01:01');
+SELECT toString(toDateTime(1640019661000000)) = '2021-12-20 17:01:01.000000';
+SELECT toDate(toDateTime(1640019661000000)) = toDate('2021-12-20');
+SELECT toDateTime(toDateTime(1640019661000000)) = toDateTime('2021-12-20 17:01:01.000000');
 
 SELECT '===Variant===';
 SELECT parse_json(true)::boolean;

@@ -22,6 +22,7 @@ use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
+use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
@@ -75,13 +76,31 @@ impl PlanParser {
 
     pub fn build_query_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {
         let from = Self::build_from_plan(data)?;
+        tracing::debug!("Build from plan:\n{:?}", from);
+
         let filter = Self::build_filter_plan(from, data)?;
+        tracing::debug!("Build filter plan:\n{:?}", filter);
+
         let group_by = Self::build_group_by_plan(filter, data)?;
+        tracing::debug!("Build group_by plan:\n{:?}", group_by);
+
         let before_order = Self::build_before_order(group_by, data)?;
+        tracing::debug!("Build before_order plan:\n{:?}", before_order);
+
         let having = Self::build_having_plan(before_order, data)?;
-        let order_by = Self::build_order_by_plan(having, data)?;
+        tracing::debug!("Build having plan:\n{:?}", having);
+
+        let distinct = Self::build_distinct_plan(having, data)?;
+        tracing::debug!("Build distinct plan:\n{:?}", distinct);
+
+        let order_by = Self::build_order_by_plan(distinct, data)?;
+        tracing::debug!("Build order_by plan:\n{:?}", order_by);
+
         let projection = Self::build_projection_plan(order_by, data)?;
+        tracing::debug!("Build projection plan:\n{:?}", projection);
+
         let limit = Self::build_limit_plan(projection, data)?;
+        tracing::debug!("Build limit plan:\n{:?}", limit);
 
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(limit),
@@ -152,6 +171,29 @@ impl PlanParser {
         }
     }
 
+    fn build_distinct_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        match data.distinct_expressions.is_empty() {
+            false => {
+                let group_by_exprs = &data.distinct_expressions;
+                let aggr_exprs = vec![];
+                PlanBuilder::from(&plan)
+                    .aggregate_partial(&aggr_exprs, group_by_exprs)?
+                    .aggregate_final(plan.schema(), &aggr_exprs, group_by_exprs)?
+                    .build()
+            }
+            true => Ok(plan),
+        }
+    }
+
+    fn build_order_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        match data.order_by_expressions.is_empty() {
+            true => Ok(plan),
+            false => PlanBuilder::from(&plan)
+                .sort(&data.order_by_expressions)?
+                .build(),
+        }
+    }
+
     fn build_before_order(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
         fn is_all_column(exprs: &[Expression]) -> bool {
             exprs
@@ -171,15 +213,6 @@ impl PlanParser {
                     .expression(&data.expressions, "Before OrderBy")?
                     .build(),
             },
-        }
-    }
-
-    fn build_order_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        match data.order_by_expressions.is_empty() {
-            true => Ok(plan),
-            false => PlanBuilder::from(&plan)
-                .sort(&data.order_by_expressions)?
-                .build(),
         }
     }
 

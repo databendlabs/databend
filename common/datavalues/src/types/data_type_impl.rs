@@ -23,7 +23,6 @@ use enum_dispatch::enum_dispatch;
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
 use super::type_date::DateType;
-use super::type_datetime::DateTimeType;
 use super::type_id::TypeID;
 use super::type_nullable::NullableType;
 use super::type_primitive::*;
@@ -47,7 +46,7 @@ pub enum DataTypeImpl {
     Float32(Float32Type),
     Float64(Float64Type),
     Date(DateType),
-    DateTime(DateTimeType),
+    Timestamp(TimestampType),
     String(StringType),
     Struct(StructType),
     Array(ArrayType),
