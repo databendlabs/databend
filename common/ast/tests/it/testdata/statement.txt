@@ -1,5 +1,5 @@
 ---------- Input ----------
-show tables;
+show tables
 ---------- Output ---------
 SHOW TABLES
 ---------- AST ------------

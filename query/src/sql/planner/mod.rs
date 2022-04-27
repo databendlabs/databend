@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+pub use binder::ScalarExpr;
+pub use binder::ScalarExprRef;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;

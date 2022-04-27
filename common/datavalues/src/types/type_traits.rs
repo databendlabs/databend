@@ -23,6 +23,7 @@ use crate::DataValue;
 use crate::DateType;
 use crate::Scalar;
 use crate::TimestampType;
+use crate::TypeID;
 use crate::VariantType;
 use crate::VariantValue;
 
@@ -86,9 +87,19 @@ pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
 
-pub trait LogicalDateType: PrimitiveType {}
-impl LogicalDateType for i32 {}
-impl LogicalDateType for i64 {}
+pub trait LogicalDateType: PrimitiveType {
+    fn get_type_id() -> TypeID;
+}
+impl LogicalDateType for i32 {
+    fn get_type_id() -> TypeID {
+        TypeID::Date
+    }
+}
+impl LogicalDateType for i64 {
+    fn get_type_id() -> TypeID {
+        TypeID::Timestamp
+    }
+}
 
 pub trait ToDateType {
     fn to_date_type() -> DataTypePtr;
