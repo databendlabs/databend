@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod create_column;
+mod date_ts_bound;
 mod deserializations;
 mod serializations;
 mod viewer;
