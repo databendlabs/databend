@@ -462,25 +462,18 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
-    let all = value(OptimizeTableAction::All, rule! { ALL });
-    let purge = value(OptimizeTableAction::Purge, rule! { PURGE });
-    let compact = value(OptimizeTableAction::Compact, rule! { COMPACT });
-
-    rule!(
-        #all
-        | #purge
-        | #compact
-    )(i)
+    alt((
+        value(OptimizeTableAction::All, rule! { ALL }),
+        value(OptimizeTableAction::Purge, rule! { PURGE }),
+        value(OptimizeTableAction::Compact, rule! { COMPACT }),
+    ))(i)
 }
 
 pub fn kill_target(i: Input) -> IResult<KillTarget> {
-    let query = value(KillTarget::Query, rule! { QUERY });
-    let connection = value(KillTarget::Connection, rule! { CONNECTION });
-
-    rule!(
-        #query
-        | #connection
-    )(i)
+    alt((
+        value(KillTarget::Query, rule! { QUERY }),
+        value(KillTarget::Connection, rule! { CONNECTION }),
+    ))(i)
 }
 
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {

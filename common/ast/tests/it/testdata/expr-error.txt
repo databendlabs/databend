@@ -56,13 +56,13 @@ G.E.B IS NOT NULL AND
                 AND 1 + col3 DIV sum(col4)
 ---------- Output ---------
 error: 
-  --> SQL:3:21
+  --> SQL:3:17
   |
 1 | G.E.B IS NOT NULL AND
   | - while parsing expression
 2 |             col1 NOT BETWEEN col2 AND
   |                  --- while parsing `[NOT] BETWEEN ... AND ...`
 3 |                 AND 1 + col3 DIV sum(col4)
-  |                     ^ expected more tokens for expression
+  |                 ^^^ expected more tokens for expression
 
 

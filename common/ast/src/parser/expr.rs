@@ -48,7 +48,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                             if prec <= Precedence(min_precedence) =>
                         {
                             Err(nom::Err::Error(Error::from_error_kind(
-                                rest,
+                                i,
                                 ErrorKind::Other("expected more tokens for expression"),
                             )))
                         }
