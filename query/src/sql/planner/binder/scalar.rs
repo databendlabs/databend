@@ -65,9 +65,7 @@ impl ScalarBinder {
                         let mut data_values = Vec::with_capacity(params.len());
                         for param in params.iter() {
                             data_values.push(match param {
-                                Literal::Number(val) => {
-                                    DataValue::try_from_literal(val, None).unwrap()
-                                }
+                                Literal::Number(val) => DataValue::try_from_literal(val, None)?,
                                 Literal::String(val) => DataValue::String(val.clone().into_bytes()),
                                 Literal::Boolean(val) => DataValue::Boolean(*val),
                                 Literal::Null => DataValue::Null,
@@ -82,7 +80,9 @@ impl ScalarBinder {
                                     .bind_expr(arg, bind_context)?
                                     .as_any()
                                     .downcast_ref::<Scalar>()
-                                    .unwrap()
+                                    .ok_or_else(|| {
+                                        ErrorCode::UnImplement("Can't downcast to Scalar")
+                                    })?
                                     .clone(),
                             );
                         }
@@ -90,8 +90,7 @@ impl ScalarBinder {
                         let col_pairs = bind_context.result_columns();
                         let mut col_bindings = Vec::with_capacity(col_pairs.len());
                         for col_pair in col_pairs.into_iter() {
-                            col_bindings
-                                .push(bind_context.resolve_column(None, col_pair.1).unwrap());
+                            col_bindings.push(bind_context.resolve_column(None, col_pair.1)?);
                         }
 
                         let mut fields = Vec::with_capacity(col_bindings.len());
@@ -102,20 +101,24 @@ impl ScalarBinder {
                             ))
                         }
 
-                        let agg_func_ref = AggregateFunctionFactory::instance()
-                            .get(name.clone(), data_values.clone(), fields)
-                            .unwrap();
+                        let agg_func_ref = AggregateFunctionFactory::instance().get(
+                            name.clone(),
+                            data_values.clone(),
+                            fields,
+                        )?;
 
                         Ok(Arc::new(Scalar::AggregateFunction {
                             func_name: name.clone(),
                             distinct: *distinct,
                             params: data_values,
                             args: scalar_exprs,
-                            data_type: agg_func_ref.return_type().unwrap(),
+                            data_type: agg_func_ref.return_type()?,
                             nullable: false,
                         }))
                     }
-                    false => todo!(),
+                    false => Err(ErrorCode::UnImplement(format!(
+                        "Unsupported function: {name}"
+                    ))),
                 }
             }
             _ => Err(ErrorCode::UnImplement(format!(
@@ -140,14 +143,14 @@ impl ScalarBinder {
                     left_scalar
                         .as_any()
                         .downcast_ref::<Scalar>()
-                        .unwrap()
+                        .ok_or_else(|| ErrorCode::UnImplement("Can't downcast to Scalar"))?
                         .clone(),
                 ),
                 right: Box::from(
                     right_scalar
                         .as_any()
                         .downcast_ref::<Scalar>()
-                        .unwrap()
+                        .ok_or_else(|| ErrorCode::UnImplement("Can't downcast to Scalar"))?
                         .clone(),
                 ),
             })),
