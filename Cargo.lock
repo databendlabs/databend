@@ -1024,6 +1024,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-hive-meta-store"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+ "common-tracing",
+ "thrift",
+]
+
+[[package]]
 name = "common-infallible"
 version = "0.1.0"
 dependencies = [
@@ -1752,6 +1762,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-grpc",
+ "common-hive-meta-store",
  "common-infallible",
  "common-io",
  "common-macros",

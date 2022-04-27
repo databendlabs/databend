@@ -16,13 +16,13 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hive_meta_store::TThriftHiveMetastoreSyncClient;
+use common_hive_meta_store::ThriftHiveMetastoreSyncClient;
 use common_meta_types::*;
 use thrift::protocol::*;
 use thrift::transport::*;
 
 use super::hive_database::HiveDatabase;
-use super::hive_meta_store::TThriftHiveMetastoreSyncClient;
-use super::hive_meta_store::ThriftHiveMetastoreSyncClient;
 use crate::catalogs::hive::HiveTable;
 use crate::catalogs::Catalog;
 use crate::databases::Database;

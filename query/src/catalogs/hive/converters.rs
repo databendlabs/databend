@@ -19,11 +19,11 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::UInt8Type;
 use common_exception::Result;
+use common_hive_meta_store as hms;
 use common_meta_types::*;
 
 use super::hive_database::HiveDatabase;
 use super::hive_database::HIVE_DATABASE_ENGIE;
-use super::hive_meta_store as hms;
 use super::hive_table::HIVE_TABLE_ENGIE;
 
 impl From<hms::Database> for HiveDatabase {

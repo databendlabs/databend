@@ -35,6 +35,7 @@ common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
 common-functions = { path = "../common/functions" }
 common-grpc = { path = "../common/grpc" }
+common-hive-meta-store = { path = "../common/hive-meta-store" }
 common-infallible = { path = "../common/infallible" }
 common-io = { path = "../common/io" }
 common-macros = { path = "../common/macros" }

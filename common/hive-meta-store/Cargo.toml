@@ -1,0 +1,24 @@
+[package]
+name = "common-hive-meta-store"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-base = { path = "../base" }
+common-exception = { path = "../exception" }
+common-tracing = { path = "../tracing" }
+
+# Github dependencies
+
+# Crates.io dependencies
+thrift = "0.15"
+
+[build-dependencies]

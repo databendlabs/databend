@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod converters;
-mod hive_catalog;
-mod hive_database;
-mod hive_table;
+#![allow(clippy::all)]
+#![allow(dead_code)]
+#![allow(unreachable_patterns)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(unused_extern_crates)]
+#![allow(deprecated)]
+#![allow(clippy::too_many_arguments, clippy::type_complexity, clippy::vec_box)]
+#![cfg_attr(rustfmt, rustfmt_skip)]
+mod hive_meta_store;
 
-pub use hive_catalog::HiveCatalog;
-pub use hive_table::HiveTable;
+pub use hive_meta_store::TThriftHiveMetastoreSyncClient;
+pub use hive_meta_store::ThriftHiveMetastoreSyncClient;
+pub use hive_meta_store::*;
+pub use thrift;
