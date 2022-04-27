@@ -112,7 +112,7 @@ impl ScalarBinder {
                             params: data_values,
                             args: scalar_exprs,
                             data_type: agg_func_ref.return_type().unwrap(),
-                            nullable: true,
+                            nullable: false,
                         }))
                     }
                     false => todo!(),

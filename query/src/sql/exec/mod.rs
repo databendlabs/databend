@@ -145,7 +145,6 @@ impl PipelineBuilder {
             PlanType::Aggregate => {
                 let aggregate = plan.as_any().downcast_ref::<AggregatePlan>().unwrap();
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
-                dbg!(input_schema.clone());
                 self.build_aggregate(aggregate, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
@@ -159,7 +158,6 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
-        dbg!(output_schema.clone());
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for expr in project.items.iter() {
@@ -258,8 +256,6 @@ impl PipelineBuilder {
             &input_schema,
         )?));
 
-        dbg!(partial_schema.clone());
-
         let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
         for scalar_expr in aggregate.group_expr.iter() {
             let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
@@ -272,8 +268,6 @@ impl PipelineBuilder {
             final_exprs.as_slice(),
             &input_schema,
         )?));
-
-        dbg!(final_schema.clone());
 
         let partial_aggr_params = AggregatorParams::try_create_v2(
             &agg_expressions,
