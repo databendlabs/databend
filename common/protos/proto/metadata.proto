@@ -1,0 +1,248 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+
+// Complete database info.
+message DatabaseInfo {
+  uint64 ver = 100;
+
+  uint64 db_id = 1;
+  string db_name = 2;
+  DatabaseMeta meta = 3;
+}
+
+// The identifier of a database by name. Names can be changed.
+// There is no guarantee that two get-database request by name will return the same instance.
+message DatabaseNameIdent {
+  uint64 ver = 100;
+
+  // The user this db belongs to
+  string tenant = 1;
+
+  // Database name
+  string db_name = 2;
+}
+
+// The identifier of a database.
+// `db_id` will never change. It can only be created or removed.
+// The `seq` indicates changes of the instance.
+// I.e., the tuple `(db_id, seq)` always identifies the same instance.
+message DatabaseIdent {
+  uint64 ver = 100;
+
+  uint64 db_id = 1;
+
+  // The seq of DatabaseMeta
+  uint64 seq = 2;
+}
+
+// DatabaseMeta is a container of all non-identity information.
+message DatabaseMeta {
+  uint64 ver = 100;
+
+  // Database engine, like github engine.
+  string engine = 5;
+
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 6;
+
+  // Database options.
+  map<string, string> options = 4;
+
+  // The time table created.
+  string created_on = 20;
+
+  // The time table updated.
+  string updated_on = 21;
+
+  // Comment about this table.
+  string comment = 22;
+}
+
+
+// Complete table info.
+message TableInfo {
+  uint64 ver = 100;
+
+  TableIdent ident = 1;
+
+  /// For a table it is `db_name.table_name`.
+  /// For a table function, it is `table_name(args)`
+  string desc = 2;
+
+  /// `name` is meant to be used with table-function.
+  /// Table-function is identified by `name`.
+  /// A table in the contrast, can only be identified by table-id.
+  string name = 3;
+
+  /// The essential information about a table definition.
+  ///
+  /// It is about what a table actually is.
+  /// `name`, `id` or `version` is not included in the table structure definition.
+  TableMeta meta = 4;
+}
+
+// The identifier of a table by name. Names can be changed.
+// There is no guarantee that two get-table request by name will return the same instance.
+message TableNameIdent {
+  uint64 ver = 100;
+
+  // The user this table belongs to.
+  string tenant = 1;
+
+  // The database this table belongs to.
+  string db_name = 2;
+
+  // The table name.
+  string table_name = 3;
+}
+
+// The identifier of a table.
+// `table_id` will never change. It can only be created or removed.
+// The `seq` indicates changes of the instance.
+// I.e., the tuple `(db_id, seq)` always identifies the same instance.
+message TableIdent {
+  uint64 ver = 100;
+
+  uint64 table_id = 1;
+
+  // The seq of TableMeta
+  uint64 seq = 2;
+}
+
+// TableMeta is a container of all non-identity information.
+message TableMeta {
+  uint64 ver = 100;
+
+  // Table schema, i.e., columns definition.
+  DataSchema schema = 1;
+
+  // Table engine.
+  string engine = 6;
+
+  // Database engine options, like github engine <token>.
+  map<string, string> engine_options = 7;
+
+  // Table options.
+  map<string, string> options = 5;
+
+  // Keys to sort rows in table.
+  optional bytes order_keys = 9;
+
+  // The time table created.
+  string created_on = 20;
+}
+
+// The schema of a table, such as column data types and other meta info.
+message DataSchema {
+  uint64 ver = 100;
+
+  // Fields in the table
+  repeated DataField fields = 1;
+
+  // Other optional table info
+  map<string, string> metadata = 2;
+}
+
+// One field, AKA column
+message DataField {
+  uint64 ver = 100;
+
+  // The name of this column.
+  string name = 1;
+
+  // A SQL style expression to define the default value for this field.
+  optional bytes default_expr = 2;
+
+  // Column data type
+  DataType data_type = 3;
+}
+
+// An enumeration of all supported data types.
+message DataType {
+  uint64 ver = 100;
+
+  oneof dt {
+    NullableType nullable_type  = 1;
+    Empty        bool_type      = 2;
+    Empty        int8_type      = 3;
+    Empty        int16_type     = 4;
+    Empty        int32_type     = 5;
+    Empty        int64_type     = 6;
+    Empty        uint8_type     = 7;
+    Empty        uint16_type    = 8;
+    Empty        uint32_type    = 9;
+    Empty        uint64_type    = 10;
+    Empty        float32_type   = 11;
+    Empty        float64_type   = 12;
+    Empty        date_type      = 13;
+    Timestamp    timestamp_type = 14;
+    Empty        string_type    = 15;
+    Struct       struct_type    = 16;
+    Array        array_type     = 17;
+    Variant      variant_type   = 18;
+  }
+}
+
+// A wrapper data type of another type.
+// Such a column allows to contain `null` elements
+message NullableType {
+  uint64 ver = 100;
+
+  // The type for the non-null element.
+  DataType inner = 1;
+}
+
+// Timestamp data type with customizable precision and timezone: `tz`.
+message Timestamp {
+  uint64 ver = 100;
+
+  /// The time resolution is determined by the precision parameter, range from 0 to 9
+  /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
+  uint64 precision = 1;
+
+  /// tz indicates the timezone, if it's None, it's UTC.
+  optional string tz = 2;
+}
+
+// Struct is similar to a `map` with fixed keys.
+message Struct {
+  uint64 ver = 100;
+
+  // Struct field names.
+  repeated string names = 1;
+
+  // The corresponding field types.
+  repeated DataType types = 2;
+}
+
+// Array contains multiple elements of the same type.
+message Array {
+  uint64 ver = 100;
+
+  // The type of the elements
+  DataType inner = 1;
+}
+
+// Something under developing.:)
+message Variant {
+  uint64 ver = 100;
+}
+
+// Place holder type for primitive types
+message Empty {}

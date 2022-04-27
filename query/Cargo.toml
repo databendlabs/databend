@@ -48,6 +48,7 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
+common-protos = { path = "../common/protos" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
@@ -106,6 +107,7 @@ sha1 = "0.10.1"
 sha2 = "0.10.2"
 tempfile = { version = "3.3.0", optional = true }
 threadpool = "1.8.1"
+thiserror = "1.0.30"
 time = "0.3.9"
 tokio-rustls = "0.23.3"
 tokio-stream = { version = "0.1.8", features = ["net"] }

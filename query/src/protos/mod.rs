@@ -11,21 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod api;
-mod catalogs;
-mod clusters;
-mod common;
-mod configs;
-mod functions;
-mod interpreters;
-mod metrics;
-mod optimizers;
-mod pipelines;
-mod protos;
-mod servers;
-mod sessions;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
-mod users;
+
+//! Provides conversion from and to protobuf defined meta data, which is used for transport.
+//!
+//! Thus protobuf messages has the maximized compatibility.
+//! I.e., a protobuf message is able to contain several different versions of metadata in one format.
+//! This mod will convert protobuf message to the current version of meta data used in databend-query.
+
+mod from_to_protobuf;
+mod from_to_protobuf_impl;
+
+pub use from_to_protobuf::FromToProto;
+pub use from_to_protobuf::Incompatible;
