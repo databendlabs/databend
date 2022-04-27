@@ -42,6 +42,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;
 use crate::pipelines::new::SourcePipeBuilder;
@@ -69,7 +70,16 @@ impl InteractiveWorkerBase {
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await;
+
+        let plan = match plan {
+            Ok(p) => p,
+            Err(e) => {
+                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                return Err(e);
+            }
+        };
+
         match plan {
             PlanNode::Insert(ref insert) => {
                 // It has select plan, so we do not need to consume data from client
