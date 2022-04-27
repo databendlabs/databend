@@ -20,6 +20,7 @@ use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 
 #[test]
+#[ignore]
 fn test_load_entry_compatibility() -> anyhow::Result<()> {
     let entries_before_20220413 = vec![
         r#"{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":1,"node":{"name":"","endpoint":{"addr":"localhost","port":28103}}}}}}}"#,

@@ -45,6 +45,7 @@ pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "type")]
 #[enum_dispatch(DataType)]
 pub enum DataTypeImpl {
     Null(NullType),
@@ -67,7 +68,7 @@ pub enum DataTypeImpl {
     Array(ArrayType),
     Variant(VariantType),
     VariantArray(VariantArrayType),
-    VariantObjet(VariantObjectType),
+    VariantObject(VariantObjectType),
     Interval(IntervalType),
 }
 
@@ -166,7 +167,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
         ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
             "Variant" => DataTypeImpl::Variant(VariantType::default()),
             "VariantArray" => DataTypeImpl::VariantArray(VariantArrayType::default()),
-            "VariantObject" => DataTypeImpl::VariantObjet(VariantObjectType::default()),
+            "VariantObject" => DataTypeImpl::VariantObject(VariantObjectType::default()),
             _ => unimplemented!("data_type: {:?}", dt),
         },
 

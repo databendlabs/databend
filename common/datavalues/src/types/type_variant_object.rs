@@ -28,7 +28,7 @@ pub struct VariantObjectType {}
 
 impl VariantObjectType {
     pub fn arc() -> DataTypeImpl {
-        DataTypeImpl::VariantObjet(Self {})
+        DataTypeImpl::VariantObject(Self {})
     }
 }
 
