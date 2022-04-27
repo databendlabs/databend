@@ -111,7 +111,7 @@ impl Binder {
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => alias.name.clone(),
-                        None => get_expr_display_string(expr),
+                        None => get_expr_display_string(expr)?,
                     };
 
                     // If expr is a ColumnRef, then it's a pass-through column. There is no need to
@@ -163,12 +163,29 @@ impl Binder {
     }
 }
 
-pub fn get_expr_display_string(expr: &Expr) -> String {
+fn create_function_display_name(fun: &str, distinct: &bool, args: &[Expr]) -> Result<String> {
+    let names: Vec<String> = args
+        .iter()
+        .map(get_expr_display_string)
+        .collect::<Result<_>>()?;
+    let distinct_str = match distinct {
+        true => "distinct ",
+        false => "",
+    };
+    Ok(format!("{}({}{})", fun, distinct_str, names.join(",")))
+}
+
+pub fn get_expr_display_string(expr: &Expr) -> Result<String> {
     match expr {
-        Expr::ColumnRef { column, .. } => column.name.clone(),
-        _ => {
-            // TODO: this is Postgres style name for anonymous select item
-            "?column?".to_string()
-        }
+        Expr::ColumnRef { column, .. } => Ok(column.name.clone()),
+        Expr::FunctionCall {
+            name,
+            distinct,
+            args,
+            ..
+        } => create_function_display_name(name.as_str(), distinct, args),
+        _ => Err(ErrorCode::LogicalError(
+            "{expr} doesn't implement get_expr_display_string",
+        )),
     }
 }
