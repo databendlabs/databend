@@ -40,7 +40,7 @@ impl InterceptorInterpreter {
         InterceptorInterpreter {
             ctx: ctx.clone(),
             inner,
-            query_log: InterpreterQueryLog::create(ctx, plan),
+            query_log: InterpreterQueryLog::create(ctx, Some(plan)),
             source_pipe_builder: Mutex::new(None),
         }
     }
@@ -83,7 +83,7 @@ impl Interpreter for InterceptorInterpreter {
                 .write()
                 .query_start(now);
         }
-        self.query_log.log_start(now).await
+        self.query_log.log_start(now, None).await
     }
 
     async fn finish(&self) -> Result<()> {
