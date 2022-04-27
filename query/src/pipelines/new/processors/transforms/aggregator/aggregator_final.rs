@@ -132,9 +132,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-        let temp_place = self.state.alloc_layout2(&self.params);
-
         for (row, place) in places.iter().enumerate() {
+            let temp_place = self.state.alloc_layout2(&self.params);
             for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let final_place = place.next(offsets_aggregate_states[idx]);
                 let state_place = temp_place.next(offsets_aggregate_states[idx]);
@@ -144,6 +143,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 aggregate_function.deserialize(state_place, &mut data)?;
                 aggregate_function.merge(final_place, state_place)?;
             }
+            self.temp_states.push(temp_place);
         }
         Ok(())
     }
