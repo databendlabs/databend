@@ -5,6 +5,8 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables {
     database: None,
+    full: false,
+    limit: None,
 }
 
 
@@ -36,13 +38,13 @@ ShowCreateTable {
 
 
 ---------- Input ----------
-explain analyze select a from b;
+explain pipeline select a from b;
 ---------- Output ---------
-EXPLAIN ANALYZE SELECT a FROM b
+EXPLAIN PIPELINE SELECT a FROM b
 ---------- AST ------------
 Explain {
-    analyze: true,
-    query: Select(
+    kind: Pipeline,
+    query: Query(
         Query {
             body: Select(
                 SelectStmt {
@@ -140,32 +142,34 @@ CreateTable {
         name: "b",
         quote: None,
     },
-    columns: [
-        ColumnDefinition {
-            name: Identifier {
-                name: "c",
-                quote: None,
-            },
-            data_type: Int32,
-            nullable: false,
-            default_value: Some(
-                Number(
-                    "1",
+    source: Columns(
+        [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c",
+                    quote: None,
+                },
+                data_type: Int32,
+                nullable: false,
+                default_value: Some(
+                    Number(
+                        "1",
+                    ),
                 ),
-            ),
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "b",
-                quote: None,
             },
-            data_type: String,
-            nullable: false,
-            default_value: None,
-        },
-    ],
-    engine: "",
-    like_table: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                },
+                data_type: String,
+                nullable: false,
+                default_value: None,
+            },
+        ],
+    ),
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -187,32 +191,34 @@ CreateTable {
         name: "b",
         quote: None,
     },
-    columns: [
-        ColumnDefinition {
-            name: Identifier {
-                name: "c",
-                quote: None,
-            },
-            data_type: Int32,
-            nullable: false,
-            default_value: Some(
-                Number(
-                    "1",
+    source: Columns(
+        [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c",
+                    quote: None,
+                },
+                data_type: Int32,
+                nullable: false,
+                default_value: Some(
+                    Number(
+                        "1",
+                    ),
                 ),
-            ),
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "b",
-                quote: None,
             },
-            data_type: String,
-            nullable: false,
-            default_value: None,
-        },
-    ],
-    engine: "",
-    like_table: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                },
+                data_type: String,
+                nullable: false,
+                default_value: None,
+            },
+        ],
+    ),
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -220,7 +226,7 @@ CreateTable {
 ---------- Input ----------
 create table a.b like c.d;
 ---------- Output ---------
-CREATE TABLE a.b () LIKE c.d
+CREATE TABLE a.b LIKE c.d
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -234,22 +240,20 @@ CreateTable {
         name: "b",
         quote: None,
     },
-    columns: [],
-    engine: "",
-    like_table: Some(
-        (
-            Some(
-                Identifier {
-                    name: "c",
-                    quote: None,
-                },
-            ),
+    source: Like {
+        database: Some(
             Identifier {
-                name: "d",
+                name: "c",
                 quote: None,
             },
         ),
-    ),
+        table: Identifier {
+            name: "d",
+            quote: None,
+        },
+    },
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -257,7 +261,7 @@ CreateTable {
 ---------- Input ----------
 create table t like t2 engine = memory;
 ---------- Output ---------
-CREATE TABLE t () LIKE t2 ENGINE = memory
+CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable {
     if_not_exists: false,
@@ -266,17 +270,15 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    columns: [],
-    engine: "memory",
-    like_table: Some(
-        (
-            None,
-            Identifier {
-                name: "t2",
-                quote: None,
-            },
-        ),
-    ),
+    source: Like {
+        database: None,
+        table: Identifier {
+            name: "t2",
+            quote: None,
+        },
+    },
+    engine: Memory,
+    cluster_by: [],
     options: [],
 }
 
@@ -292,6 +294,7 @@ TruncateTable {
         name: "a",
         quote: None,
     },
+    purge: false,
 }
 
 
@@ -313,6 +316,7 @@ TruncateTable {
         name: "b",
         quote: None,
     },
+    purge: false,
 }
 
 
@@ -379,7 +383,7 @@ CreateDatabase {
         name: "a",
         quote: None,
     },
-    engine: "",
+    engine: Null,
     options: [],
 }
 
@@ -396,34 +400,36 @@ CreateTable {
         name: "c",
         quote: None,
     },
-    columns: [
-        ColumnDefinition {
-            name: Identifier {
-                name: "a",
-                quote: None,
+    source: Columns(
+        [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "a",
+                    quote: None,
+                },
+                data_type: DateTime {
+                    precision: None,
+                },
+                nullable: true,
+                default_value: None,
             },
-            data_type: DateTime {
-                precision: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "b",
+                    quote: None,
+                },
+                data_type: DateTime {
+                    precision: Some(
+                        3,
+                    ),
+                },
+                nullable: false,
+                default_value: None,
             },
-            nullable: true,
-            default_value: None,
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "b",
-                quote: None,
-            },
-            data_type: DateTime {
-                precision: Some(
-                    3,
-                ),
-            },
-            nullable: false,
-            default_value: None,
-        },
-    ],
-    engine: "",
-    like_table: None,
+        ],
+    ),
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -439,6 +445,7 @@ TruncateTable {
         name: "test",
         quote: None,
     },
+    purge: false,
 }
 
 
@@ -458,6 +465,7 @@ TruncateTable {
         name: "test",
         quote: None,
     },
+    purge: false,
 }
 
 
@@ -503,37 +511,39 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    columns: [
-        ColumnDefinition {
-            name: Identifier {
-                name: "c1",
-                quote: None,
+    source: Columns(
+        [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c1",
+                    quote: None,
+                },
+                data_type: Int32,
+                nullable: true,
+                default_value: None,
             },
-            data_type: Int32,
-            nullable: true,
-            default_value: None,
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "c2",
-                quote: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c2",
+                    quote: None,
+                },
+                data_type: Int64,
+                nullable: true,
+                default_value: None,
             },
-            data_type: Int64,
-            nullable: true,
-            default_value: None,
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "c3",
-                quote: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c3",
+                    quote: None,
+                },
+                data_type: String,
+                nullable: true,
+                default_value: None,
             },
-            data_type: String,
-            nullable: true,
-            default_value: None,
-        },
-    ],
-    engine: "",
-    like_table: None,
+        ],
+    ),
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -550,37 +560,39 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    columns: [
-        ColumnDefinition {
-            name: Identifier {
-                name: "c1",
-                quote: None,
+    source: Columns(
+        [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c1",
+                    quote: None,
+                },
+                data_type: Int32,
+                nullable: false,
+                default_value: None,
             },
-            data_type: Int32,
-            nullable: false,
-            default_value: None,
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "c2",
-                quote: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c2",
+                    quote: None,
+                },
+                data_type: Int64,
+                nullable: false,
+                default_value: None,
             },
-            data_type: Int64,
-            nullable: false,
-            default_value: None,
-        },
-        ColumnDefinition {
-            name: Identifier {
-                name: "c3",
-                quote: None,
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c3",
+                    quote: None,
+                },
+                data_type: String,
+                nullable: false,
+                default_value: None,
             },
-            data_type: String,
-            nullable: false,
-            default_value: None,
-        },
-    ],
-    engine: "",
-    like_table: None,
+        ],
+    ),
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -597,23 +609,25 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    columns: [
-        ColumnDefinition {
-            name: Identifier {
-                name: "c1",
-                quote: None,
-            },
-            data_type: Int32,
-            nullable: false,
-            default_value: Some(
-                Number(
-                    "1",
+    source: Columns(
+        [
+            ColumnDefinition {
+                name: Identifier {
+                    name: "c1",
+                    quote: None,
+                },
+                data_type: Int32,
+                nullable: false,
+                default_value: Some(
+                    Number(
+                        "1",
+                    ),
                 ),
-            ),
-        },
-    ],
-    engine: "",
-    like_table: None,
+            },
+        ],
+    ),
+    engine: Null,
+    cluster_by: [],
     options: [],
 }
 
@@ -637,7 +651,7 @@ select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a
 ---------- Output ---------
 SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -759,7 +773,7 @@ select * from t4;
 ---------- Output ---------
 SELECT * FROM t4
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -798,7 +812,7 @@ select * from aa.bb;
 ---------- Output ---------
 SELECT * FROM aa.bb
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -842,7 +856,7 @@ select * from a, b, c;
 ---------- Output ---------
 SELECT * FROM a CROSS JOIN b CROSS JOIN c
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -909,7 +923,7 @@ select * from a join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -992,7 +1006,7 @@ select * from a left outer join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1075,7 +1089,7 @@ select * from a right outer join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1158,7 +1172,7 @@ select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1241,7 +1255,7 @@ select * from a inner join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1324,7 +1338,7 @@ select * from a left outer join b using(a);
 ---------- Output ---------
 SELECT * FROM a LEFT OUTER JOIN b USING(a)
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1384,7 +1398,7 @@ select * from a right outer join b using(a);
 ---------- Output ---------
 SELECT * FROM a RIGHT OUTER JOIN b USING(a)
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1444,7 +1458,7 @@ select * from a full outer join b using(a);
 ---------- Output ---------
 SELECT * FROM a FULL OUTER JOIN b USING(a)
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1504,7 +1518,7 @@ select * from a inner join b using(a);
 ---------- Output ---------
 SELECT * FROM a INNER JOIN b USING(a)
 ---------- AST ------------
-Select(
+Query(
     Query {
         body: Select(
             SelectStmt {
@@ -1639,6 +1653,7 @@ Insert {
             },
         ],
     },
+    overwrite: false,
 }
 
 
@@ -1657,6 +1672,7 @@ Insert {
     source: Streaming {
         format: "json",
     },
+    overwrite: false,
 }
 
 
@@ -1704,6 +1720,7 @@ Insert {
             offset: None,
         },
     },
+    overwrite: false,
 }
 
 

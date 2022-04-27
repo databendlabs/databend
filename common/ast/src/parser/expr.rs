@@ -14,7 +14,6 @@
 
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::combinator::cut;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
@@ -490,7 +489,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let between = map(
         rule! {
-            NOT? ~ BETWEEN ~ #cut(subexpr(BETWEEN_PREC)) ~ AND ~ #cut(subexpr(BETWEEN_PREC))
+            NOT? ~ BETWEEN ~ ^#subexpr(BETWEEN_PREC) ~ AND ~ ^#subexpr(BETWEEN_PREC)
         },
         |(opt_not, _, low, _, high)| ExprElement::Between {
             low: Box::new(low),
@@ -555,8 +554,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             SUBSTRING
             ~ "("
             ~ #subexpr(0)
-            ~ ( ( FROM | "," ) ~ #cut(subexpr(0)) )?
-            ~ ( ( FOR | "," ) ~ #cut(subexpr(0)) )?
+            ~ ( ( FROM | "," ) ~ ^#subexpr(0) )?
+            ~ ( ( FOR | "," ) ~ ^#subexpr(0) )?
             ~ ")"
         },
         |(_, _, expr, opt_substring_from, opt_substring_for, _)| ExprElement::SubString {
@@ -642,7 +641,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         rule! {
             CASE ~ #subexpr(0)?
             ~ ( WHEN ~ #subexpr(0) ~ THEN ~ #subexpr(0) )+
-            ~ ( ELSE ~ #cut(subexpr(0)) )? ~ END
+            ~ ( ELSE ~ ^#subexpr(0) )? ~ END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches
@@ -922,6 +921,14 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         },
         |(_, key, _)| MapAccessor::Bracket { key },
     );
+    let bracket_ident = map(
+        rule! {
+           "[" ~ #ident ~ "]"
+        },
+        |(_, key, _)| MapAccessor::Bracket {
+            key: Literal::String(key.name),
+        },
+    );
     let period = map(
         rule! {
            "." ~ #ident
@@ -937,6 +944,7 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
+        | #bracket_ident
         | #period
         | #colon
     )(i)

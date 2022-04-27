@@ -26,7 +26,7 @@ async-trait = "0.1.53"
 itertools = "0.10"
 logos = "0.12.0"
 nom = "7.1.1"
-nom-rule = "0.2.1"
+nom-rule = "0.2.2"
 pratt = "0.3.0"
 thiserror = "1.0.30"
 

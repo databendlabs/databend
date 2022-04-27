@@ -458,10 +458,10 @@ impl Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal::Number(val) => {
-                write!(f, "{}", val)
+                write!(f, "{val}")
             }
             Literal::String(val) => {
-                write!(f, "\'{}\'", val)
+                write!(f, "\'{val}\'")
             }
             Literal::Boolean(val) => {
                 if *val {
@@ -491,18 +491,18 @@ impl Display for Expr {
                 write_period_separated_list(f, database.iter().chain(table).chain(Some(column)))?;
             }
             Expr::IsNull { expr, not } => {
-                write!(f, "{} IS ", expr)?;
+                write!(f, "{expr} IS")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "NULL")?;
+                write!(f, " NULL")?;
             }
             Expr::InList { expr, list, not } => {
-                write!(f, "{} ", expr)?;
+                write!(f, "{expr}")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "IN(")?;
+                write!(f, " IN(")?;
                 write_comma_separated_list(f, list)?;
                 write!(f, ")")?;
             }
@@ -511,11 +511,11 @@ impl Display for Expr {
                 subquery,
                 not,
             } => {
-                write!(f, "{} ", expr)?;
+                write!(f, "{expr}")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "IN({})", subquery)?;
+                write!(f, " IN({subquery})")?;
             }
             Expr::Between {
                 expr,
@@ -523,17 +523,17 @@ impl Display for Expr {
                 high,
                 not,
             } => {
-                write!(f, "{} ", expr)?;
+                write!(f, "{expr}")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "BETWEEN {} AND {}", low, high)?;
-            }
-            Expr::BinaryOp { op, left, right } => {
-                write!(f, "{} {} {}", left, op, right)?;
+                write!(f, " BETWEEN {low} AND {high}")?;
             }
             Expr::UnaryOp { op, expr } => {
-                write!(f, "{} {}", op, expr)?;
+                write!(f, "{op} {expr}")?;
+            }
+            Expr::BinaryOp { op, left, right } => {
+                write!(f, "{left} {op} {right}")?;
             }
             Expr::Cast {
                 expr,
@@ -541,46 +541,46 @@ impl Display for Expr {
                 pg_style,
             } => {
                 if *pg_style {
-                    write!(f, "{}::{}", expr, target_type)?;
+                    write!(f, "{expr}::{target_type}")?;
                 } else {
-                    write!(f, "CAST({} AS {})", expr, target_type)?;
+                    write!(f, "CAST({expr} AS {target_type})")?;
                 }
             }
             Expr::TryCast { expr, target_type } => {
-                write!(f, "TRY_CAST({} AS {})", expr, target_type)?;
+                write!(f, "TRY_CAST({expr} AS {target_type})")?;
             }
             Expr::Extract { field, expr } => {
-                write!(f, "EXTRACT({} FROM {})", field, expr)?;
+                write!(f, "EXTRACT({field} FROM {expr})")?;
             }
             Expr::Position {
                 substr_expr,
                 str_expr,
             } => {
-                write!(f, "POSITION({} IN {})", substr_expr, str_expr)?;
+                write!(f, "POSITION({substr_expr} IN {str_expr})")?;
             }
             Expr::Substring {
                 expr,
                 substring_from,
                 substring_for,
             } => {
-                write!(f, "SUBSTRING({}", expr)?;
+                write!(f, "SUBSTRING({expr}")?;
                 if let Some(substring_from) = substring_from {
-                    write!(f, " FROM {}", substring_from)?;
+                    write!(f, " FROM {substring_from}")?;
                 }
                 if let Some(substring_for) = substring_for {
-                    write!(f, " FOR {}", substring_for)?;
+                    write!(f, " FOR {substring_for}")?;
                 }
                 write!(f, ")")?;
             }
             Expr::Trim { expr, trim_where } => {
+                write!(f, "TRIM(")?;
                 if let Some((trim_where, trim_str)) = trim_where {
-                    write!(f, "TRIM({} {} FROM {})", trim_where, trim_str, expr)?;
-                } else {
-                    write!(f, "TRIM({})", expr)?;
+                    write!(f, "{trim_where} {trim_str} FROM ")?;
                 }
+                write!(f, "{expr})")?;
             }
             Expr::Literal(lit) => {
-                write!(f, "{}", lit)?;
+                write!(f, "{lit}")?;
             }
             Expr::CountAll => {
                 write!(f, "COUNT(*)")?;
@@ -599,7 +599,7 @@ impl Display for Expr {
                 args,
                 params,
             } => {
-                write!(f, "{}", name)?;
+                write!(f, "{name}")?;
                 if !params.is_empty() {
                     write!(f, "(")?;
                     write_comma_separated_list(f, params)?;
@@ -618,30 +618,30 @@ impl Display for Expr {
                 results,
                 else_result,
             } => {
-                write!(f, "CASE ")?;
+                write!(f, "CASE")?;
                 if let Some(op) = operand {
-                    write!(f, "{} ", op)?;
+                    write!(f, " {op} ")?;
                 }
                 for (cond, res) in conditions.iter().zip(results) {
-                    write!(f, "WHEN {} THEN {} ", cond, res)?;
+                    write!(f, " WHEN {cond} THEN {res}")?;
                 }
                 if let Some(el) = else_result {
-                    write!(f, "ELSE {} ", el)?;
+                    write!(f, " ELSE {el}")?;
                 }
-                write!(f, "END")?;
+                write!(f, " END")?;
             }
             Expr::Exists(subquery) => {
-                write!(f, "EXITS ({})", subquery)?;
+                write!(f, "EXITS ({subquery})")?;
             }
             Expr::Subquery(subquery) => {
-                write!(f, "({})", subquery)?;
+                write!(f, "({subquery})")?;
             }
             Expr::MapAccess { expr, accessor } => {
                 write!(f, "{}", expr)?;
                 match accessor {
-                    MapAccessor::Bracket { key } => write!(f, "[{}]", key)?,
-                    MapAccessor::Period { key } => write!(f, ".{}", key)?,
-                    MapAccessor::Colon { key } => write!(f, ":{}", key)?,
+                    MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
+                    MapAccessor::Period { key } => write!(f, ".{key}")?,
+                    MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }
         }

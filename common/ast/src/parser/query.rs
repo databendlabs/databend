@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use nom::branch::alt;
-use nom::combinator::cut;
 use nom::combinator::map;
 use nom::combinator::value;
 
@@ -27,13 +26,13 @@ pub fn query(i: Input) -> IResult<Query> {
     map(
         rule! {
             SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
-            ~ ( FROM ~ #cut(comma_separated_list1(table_reference)) )?
-            ~ ( WHERE ~ #cut(expr) )?
-            ~ ( GROUP ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(expr)) )?
-            ~ ( HAVING ~ #cut(expr) )?
-            ~ ( ORDER ~ #cut(rule! { BY }) ~ #cut(comma_separated_list1(order_by_expr)) )?
-            ~ ( LIMIT ~ #cut(comma_separated_list1(expr)) )?
-            ~ ( OFFSET ~ #cut(expr) )?
+            ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
+            ~ ( WHERE ~ ^#expr )?
+            ~ ( GROUP ~ ^BY ~ ^#comma_separated_list1(expr) )?
+            ~ ( HAVING ~ ^#expr )?
+            ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
+            ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
+            ~ ( OFFSET ~ ^#expr )?
             : "`SELECT ...`"
         },
         |(

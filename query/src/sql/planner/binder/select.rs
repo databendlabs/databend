@@ -36,8 +36,8 @@ use crate::storages::Table;
 
 impl Binder {
     #[async_recursion]
-    pub(super) async fn bind_query(&mut self, stmt: &Query) -> Result<BindContext> {
-        match &stmt.body {
+    pub(super) async fn bind_query(&mut self, query: &Query) -> Result<BindContext> {
+        match &query.body {
             SetExpr::Select(stmt) => self.bind_select_stmt(stmt).await,
             SetExpr::Query(stmt) => self.bind_query(stmt).await,
             _ => todo!(),

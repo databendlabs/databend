@@ -572,6 +572,35 @@ MapAccess {
 
 
 ---------- Input ----------
+arr[4]["k"]
+---------- Output ---------
+arr[4]['k']
+---------- AST ------------
+MapAccess {
+    expr: MapAccess {
+        expr: ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "arr",
+                quote: None,
+            },
+        },
+        accessor: Bracket {
+            key: Number(
+                "4",
+            ),
+        },
+    },
+    accessor: Bracket {
+        key: String(
+            "k",
+        ),
+    },
+}
+
+
+---------- Input ----------
 a rlike '^11'
 ---------- Output ---------
 a RLIKE '^11'

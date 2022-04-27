@@ -210,47 +210,47 @@ impl Display for TableReference {
             } => {
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
             }
             TableReference::Subquery { subquery, alias } => {
-                write!(f, "({})", subquery)?;
+                write!(f, "({subquery})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
             }
             TableReference::SetReturningFunction { name, param, alias } => {
-                write!(f, "{}({})", name, param)?;
+                write!(f, "{name}({param})")?;
                 if let Some(alias) = alias {
-                    write!(f, " AS {}", alias)?;
+                    write!(f, " AS {alias}")?;
                 }
             }
             TableReference::Join(join) => {
-                write!(f, "{} ", join.left)?;
+                write!(f, "{}", join.left)?;
                 if join.condition == JoinCondition::Natural {
-                    write!(f, "NATURAL ")?;
+                    write!(f, " NATURAL")?;
                 }
                 match join.op {
                     JoinOperator::Inner => {
-                        write!(f, "INNER JOIN ")?;
+                        write!(f, " INNER JOIN")?;
                     }
                     JoinOperator::LeftOuter => {
-                        write!(f, "LEFT OUTER JOIN ")?;
+                        write!(f, " LEFT OUTER JOIN")?;
                     }
                     JoinOperator::RightOuter => {
-                        write!(f, "RIGHT OUTER JOIN ")?;
+                        write!(f, " RIGHT OUTER JOIN")?;
                     }
                     JoinOperator::FullOuter => {
-                        write!(f, "FULL OUTER JOIN ")?;
+                        write!(f, " FULL OUTER JOIN")?;
                     }
                     JoinOperator::CrossJoin => {
-                        write!(f, "CROSS JOIN ")?;
+                        write!(f, " CROSS JOIN")?;
                     }
                 }
-                write!(f, "{}", join.right)?;
+                write!(f, " {}", join.right)?;
                 match &join.condition {
                     JoinCondition::On(expr) => {
-                        write!(f, " ON {}", expr)?;
+                        write!(f, " ON {expr}")?;
                     }
                     JoinCondition::Using(idents) => {
                         write!(f, " USING(")?;
@@ -269,7 +269,7 @@ impl Display for Indirection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Indirection::Identifier(ident) => {
-                write!(f, "{}", ident)?;
+                write!(f, "{ident}")?;
             }
             Indirection::Star => {
                 write!(f, "*")?;
@@ -283,9 +283,9 @@ impl Display for SelectTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SelectTarget::AliasedExpr { expr, alias } => {
-                write!(f, "{}", expr)?;
+                write!(f, "{expr}")?;
                 if let Some(ident) = alias {
-                    write!(f, " AS {}", ident)?;
+                    write!(f, " AS {ident}")?;
                 }
             }
             SelectTarget::QualifiedName(indirections) => {
@@ -307,13 +307,12 @@ impl Display for SelectStmt {
 
         // FROM clause
         if let Some(from) = &self.from {
-            write!(f, " FROM {}", from)?;
+            write!(f, " FROM {from}")?;
         }
 
         // WHERE clause
         if let Some(expr) = &self.selection {
-            write!(f, " WHERE ")?;
-            write!(f, "{}", expr)?;
+            write!(f, " WHERE {expr}")?;
         }
 
         // GROUP BY clause
@@ -324,8 +323,7 @@ impl Display for SelectStmt {
 
         // HAVING clause
         if let Some(having) = &self.having {
-            write!(f, " HAVING ")?;
-            write!(f, "{}", having)?;
+            write!(f, " HAVING {having}")?;
         }
 
         Ok(())
@@ -335,11 +333,11 @@ impl Display for SelectStmt {
 impl Display for SetExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SetExpr::Select(query) => {
-                write!(f, "{}", query)?;
+            SetExpr::Select(select_stmt) => {
+                write!(f, "{select_stmt}")?;
             }
             SetExpr::Query(query) => {
-                write!(f, "({})", query)?;
+                write!(f, "({query})")?;
             }
             SetExpr::SetOperation {
                 op,
@@ -347,22 +345,22 @@ impl Display for SetExpr {
                 left,
                 right,
             } => {
-                write!(f, "{} ", left)?;
+                write!(f, "{left}")?;
                 match op {
                     SetOperator::Union => {
-                        write!(f, "UNION ")?;
+                        write!(f, " UNION ")?;
                     }
                     SetOperator::Except => {
-                        write!(f, "EXCEPT ")?;
+                        write!(f, " EXCEPT")?;
                     }
                     SetOperator::Intersect => {
-                        write!(f, "INTERSECT ")?;
+                        write!(f, " INTERSECT")?;
                     }
                 }
                 if *all {
-                    write!(f, "ALL ")?;
+                    write!(f, " ALL")?;
                 }
-                write!(f, "{}", right)?;
+                write!(f, "{right}")?;
             }
         }
         Ok(())
@@ -388,7 +386,7 @@ impl Display for Query {
 
         // TODO: We should validate if offset exists, limit should be empty or just one element
         if let Some(offset) = &self.offset {
-            write!(f, " OFFSET {}", offset)?;
+            write!(f, " OFFSET {offset}")?;
         }
 
         Ok(())

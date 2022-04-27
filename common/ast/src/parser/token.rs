@@ -176,8 +176,10 @@ pub enum TokenKind {
     LBrace,
     #[token("}")]
     RBrace,
-    #[token("=>")]
+    #[token("->")]
     RArrow,
+    #[token("=>")]
+    FatRArrow,
     #[token("#")]
     Sharp,
     #[token("~")]
@@ -518,6 +520,40 @@ pub enum TokenKind {
     TIMEZONE_MINUTE,
     #[token("XOR", ignore(ascii_case))]
     XOR,
+    #[token("STATUS", ignore(ascii_case))]
+    STATUS,
+    #[token("QUERY", ignore(ascii_case))]
+    QUERY,
+    #[token("CONNECTION", ignore(ascii_case))]
+    CONNECTION,
+    #[token("ALL", ignore(ascii_case))]
+    ALL,
+    #[token("PURGE", ignore(ascii_case))]
+    PURGE,
+    #[token("COMPACT", ignore(ascii_case))]
+    COMPACT,
+    #[token("OPTIMIZE", ignore(ascii_case))]
+    OPTIMIZE,
+    #[token("VIEW", ignore(ascii_case))]
+    VIEW,
+    #[token("FUNCTIONS", ignore(ascii_case))]
+    FUNCTIONS,
+    #[token("METRICS", ignore(ascii_case))]
+    METRICS,
+    #[token("FUNCTION", ignore(ascii_case))]
+    FUNCTION,
+    #[token("PIPELINE", ignore(ascii_case))]
+    PIPELINE,
+    #[token("GRAPH", ignore(ascii_case))]
+    GRAPH,
+    #[token("MEMORY", ignore(ascii_case))]
+    MEMORY,
+    #[token("FUSE", ignore(ascii_case))]
+    FUSE,
+    #[token("GITHUB", ignore(ascii_case))]
+    GITHUB,
+    #[token("CLUSTER", ignore(ascii_case))]
+    CLUSTER,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -560,6 +596,7 @@ impl TokenKind {
                 | LBrace
                 | RBrace
                 | RArrow
+                | FatRArrow
                 | Sharp
                 | Tilde
                 | TildeAsterisk
@@ -715,7 +752,7 @@ impl TokenKind {
             self,
             ANALYZE
             // | ANALYSE
-            // | ALL
+            | ALL
             | AND
             // | ANY
             | ARRAY
