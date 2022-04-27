@@ -20,7 +20,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
-use crate::compatibility::cmd_00000000_20220425::Cmd as LatestVersionCmd;
+use crate::compatibility::cmd_00000000_20220427::Cmd as LatestVersionCmd;
 use crate::CreateDatabaseReq;
 use crate::CreateShareReq;
 use crate::CreateTableReq;
@@ -49,6 +49,11 @@ pub enum Cmd {
     AddNode {
         node_id: NodeId,
         node: Node,
+    },
+
+    /// Remove node
+    RemoveNode {
+        node_id: NodeId,
     },
 
     /// Add a database if absent
@@ -109,6 +114,10 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
+            Cmd::RemoveNode { node_id } => {
+                write!(f, "remove_node:{}", node_id)
+            }
+
             Cmd::CreateDatabase(req) => req.fmt(f),
             Cmd::DropDatabase(req) => req.fmt(f),
             Cmd::CreateTable(req) => req.fmt(f),
@@ -143,6 +152,7 @@ impl<'de> Deserialize<'de> for Cmd {
         let latest = match c {
             LatestVersionCmd::IncrSeq { key } => Cmd::IncrSeq { key },
             LatestVersionCmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
+            LatestVersionCmd::RemoveNode { node_id } => Cmd::RemoveNode { node_id },
             LatestVersionCmd::CreateDatabase {
                 if_not_exists,
                 tenant,
