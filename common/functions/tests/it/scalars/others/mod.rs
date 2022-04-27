@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// mod locate;
-mod locate;
-mod lower;
-mod regexp_instr;
-mod regexp_like;
-mod regexp_replace;
-mod regexp_substr;
-mod substring;
-mod trim;
-mod upper;
+mod humanize;
+mod inet_aton;
+mod inet_ntoa;
+mod running_difference;
+mod type_of;
