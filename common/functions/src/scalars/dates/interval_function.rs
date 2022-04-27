@@ -160,13 +160,15 @@ where
             for x in viewer.iter() {
                 let _ = check_date(x.to_owned_scalar())?;
             }
-        }else if  O::get_type_id() == TypeID::Timestamp {
+        } else if O::get_type_id() == TypeID::Timestamp {
             let viewer = i64::try_create_viewer(&x)?;
             for x in viewer.iter() {
                 let _ = check_timestamp(x.to_owned_scalar())?;
             }
-        }else {
-            return Err(ErrorCode::LogicalError("LogicalDateType only contains Date/Timestamp"))
+        } else {
+            return Err(ErrorCode::LogicalError(
+                "LogicalDateType only contains Date/Timestamp",
+            ));
         }
         Ok(col)
     }
@@ -204,14 +206,12 @@ impl IntervalArithmeticImpl for AddDaysImpl {
     type DateResultType = i32;
 
     fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType {
-        // (l as i64 + r.as_() * ctx.factor) as Self::DateResultType
         (l as i64).wrapping_add(r.as_() * ctx.factor) as Self::DateResultType
     }
 
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * 24 * 3600 * base;
-        // l as i64 + r.as_() * factor
         (l as i64).wrapping_add(r.as_() * factor)
     }
 }
@@ -223,8 +223,6 @@ impl IntervalArithmeticImpl for AddTimesImpl {
     type DateResultType = i64;
 
     fn eval_date(l: i32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> Self::DateResultType {
-        // (l as i64 * 3600 * 24 * 1_000_000 + r.as_() * ctx.factor * 1_000_000)
-        //     as Self::DateResultType
         (l as i64 * 3600 * 24 * 1_000_000).wrapping_add(r.as_() * ctx.factor * 1_000_000)
             as Self::DateResultType
     }
@@ -232,7 +230,6 @@ impl IntervalArithmeticImpl for AddTimesImpl {
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * base;
-        // l as i64 + r.as_() * factor
         (l as i64).wrapping_add(r.as_() * factor)
     }
 }

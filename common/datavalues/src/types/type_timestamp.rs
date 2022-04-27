@@ -20,8 +20,8 @@ use chrono::TimeZone;
 use chrono::Utc;
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::Result;
 use common_exception::ErrorCode;
+use common_exception::Result;
 
 use super::data_type::DataType;
 use super::data_type::ARROW_EXTENSION_META;
@@ -38,9 +38,11 @@ pub const TIMESTAMP_MIN: i64 = -30610224000000000;
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<()> {
     if micros >= TIMESTAMP_MIN && micros <= TIMESTAMP_MAX {
-        return Ok(())
+        return Ok(());
     }
-    Err(ErrorCode::InvalidTimestamp("Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999"))
+    Err(ErrorCode::InvalidTimestamp(
+        "Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999",
+    ))
 }
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
@@ -74,7 +76,7 @@ impl TimestampType {
         let v = v * 10_i64.pow(6 - self.precision as u32);
 
         // ns
-        Utc.timestamp(v / 1_000_000, (v % 1_000_000) as u32)
+        Utc.timestamp(v / 1_000_000, (v % 1_000_000 * 1000) as u32)
     }
 
     #[inline]

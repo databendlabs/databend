@@ -64,8 +64,7 @@ where
                 let ts = reader.read_timestamp_text(&self.tz)?;
                 let micros = uniform(ts.timestamp_micros(), self.precision);
                 let _ = check_timestamp(micros)?;
-                self.builder
-                    .append_value(micros.as_());
+                self.builder.append_value(micros.as_());
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
@@ -78,8 +77,7 @@ where
         let micros = uniform(ts.timestamp_micros(), self.precision);
         let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'\'')?;
-        self.builder
-            .append_value(micros.as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
@@ -89,8 +87,7 @@ where
         let micros = uniform(ts.timestamp_micros(), self.precision);
         let _ = check_timestamp(micros)?;
         reader.must_eof()?;
-        self.builder
-            .append_value(micros.as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
@@ -98,8 +95,7 @@ where
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = uniform(ts.timestamp_micros(), self.precision);
         let _ = check_timestamp(micros)?;
-        self.builder
-            .append_value(micros.as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
@@ -111,8 +107,7 @@ where
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
-        self.builder
-            .append_value(micros.as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
@@ -123,8 +118,7 @@ where
         let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'"')?;
 
-        self.builder
-            .append_value(micros.as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 

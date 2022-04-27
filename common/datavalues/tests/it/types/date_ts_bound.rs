@@ -19,7 +19,9 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_bump_datetime() -> Result<()> {
     use std::ops::Sub;
-    use chrono::{offset::TimeZone, NaiveDate};
+
+    use chrono::offset::TimeZone;
+    use chrono::NaiveDate;
     use chrono_tz::Tz;
     // timestamp microseconds
     {
@@ -36,7 +38,7 @@ fn test_bump_datetime() -> Result<()> {
         let dt = tz.ymd(9999, 12, 31);
         let duration = dt.naive_utc().sub(epoch);
         assert_eq!(duration.num_days(), DATE_MAX as i64);
-        
+
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
         let tz: Tz = "UTC".parse().unwrap();
         let dt = tz.ymd(1000, 1, 1);

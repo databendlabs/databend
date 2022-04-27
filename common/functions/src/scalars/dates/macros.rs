@@ -69,8 +69,10 @@ macro_rules! define_timestamp_add_year_months {
         let precision = $ctx.precision as u32;
         let base = 10_i64.pow(6 - precision);
         let micros = $l * base;
-        let naive =
-            NaiveDateTime::from_timestamp_opt(micros / 1_000_000, (micros % 1_000_000 * 1000) as u32);
+        let naive = NaiveDateTime::from_timestamp_opt(
+            micros / 1_000_000,
+            (micros % 1_000_000 * 1000) as u32,
+        );
         if naive.is_none() {
             $ctx.set_error(ErrorCode::Overflow(format!(
                 "Overflow on datetime with microseconds {}",
