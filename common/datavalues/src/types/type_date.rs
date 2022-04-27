@@ -28,12 +28,11 @@ use crate::prelude::*;
 pub const DATE_MAX: i32 = 2932896;
 pub const DATE_MIN: i32 = -354285;
 
-pub fn check_date(days: Option<i32>) -> Result<i32> {
-    if let Some(days) = days {
+#[inline]
+pub fn check_date(days: i32) -> Result<()> {
         if days >= DATE_MIN && days <= DATE_MAX {
-            return Ok(days)
+            return Ok(())
         }
-    }
     Err(ErrorCode::InvalidDate("Date only ranges from 1000-01-01 to 9999-12-31"))
 }
 

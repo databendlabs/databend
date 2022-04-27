@@ -154,7 +154,12 @@ where
                            let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                             T::to_number(date_time, mode)
                     });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
+                    let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
+                    let viewer = i32::try_create_viewer(&col)?;
+                    for days in viewer.iter() {
+                        let _ = check_date(days)?;
+                    }
+                    Ok(col)
             },
             TypeID::Timestamp => {
                     let ts_dt = columns[0].field().data_type().as_any().downcast_ref::<TimestampType>().unwrap();
@@ -164,10 +169,15 @@ where
                             let date_time = Utc.timestamp(v / to_div, 0_u32);
                             T::to_number(date_time, mode)
                     });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
+                    let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
+                    let viewer = i64::try_create_viewer(&col)?;
+                    for micros in viewer.iter() {
+                        let _ = check_timestamp(micros)?;
+                    }
+                    Ok(col)
             },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                "Illegal type {:?} of argument of function {}.Should be a Date or Timestamp",
                 other,
                 self.name()))),
         }

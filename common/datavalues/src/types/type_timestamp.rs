@@ -35,14 +35,11 @@ use crate::prelude::*;
 pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 pub const TIMESTAMP_MIN: i64 = -30610224000000000;
 
-pub fn check_timestamp(microseconds: Option<i64>) -> Result<i64> {
-    common_tracing::tracing::error!("check timestamp: {:?}", microseconds);
-    if let Some(microseconds) = microseconds {
-        if microseconds >= TIMESTAMP_MIN && microseconds <= TIMESTAMP_MAX {
-            return Ok(microseconds)
-        }
+#[inline]
+pub fn check_timestamp(micros: i64) -> Result<()> {
+    if micros >= TIMESTAMP_MIN && micros <= TIMESTAMP_MAX {
+        return Ok(())
     }
-    common_tracing::tracing::error!("check timestamp: {:?} failed", microseconds);
     Err(ErrorCode::InvalidTimestamp("Timestamp only ranges from 1000-01-01 00:00:00.000000 to 9999-12-31 23:59:59.999999"))
 }
 

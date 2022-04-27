@@ -37,7 +37,7 @@ where
 {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
-        let _ = check_timestamp(Some(value.as_i64()))?;
+        let _ = check_timestamp(value.as_i64())?;
         self.builder.append_value(value);
         Ok(())
     }
@@ -50,7 +50,7 @@ where
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
-            let _ = check_timestamp(Some(value.as_i64()))?;
+            let _ = check_timestamp(value.as_i64())?;
             self.builder.append_value(value);
         }
         Ok(())
@@ -63,7 +63,7 @@ where
                 let mut reader = BufferReader::new(v.as_bytes());
                 let ts = reader.read_timestamp_text(&self.tz)?;
                 let micros = uniform(ts.timestamp_micros(), self.precision);
-                let _ = check_timestamp(Some(micros))?;
+                let _ = check_timestamp(micros)?;
                 self.builder
                     .append_value(micros.as_());
                 Ok(())
@@ -76,7 +76,7 @@ where
         reader.must_ignore_byte(b'\'')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = uniform(ts.timestamp_micros(), self.precision);
-        let _ = check_timestamp(Some(micros))?;
+        let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'\'')?;
         self.builder
             .append_value(micros.as_());
@@ -87,7 +87,7 @@ where
         let mut reader = BufferReader::new(reader);
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = uniform(ts.timestamp_micros(), self.precision);
-        let _ = check_timestamp(Some(micros))?;
+        let _ = check_timestamp(micros)?;
         reader.must_eof()?;
         self.builder
             .append_value(micros.as_());
@@ -97,7 +97,7 @@ where
     fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = uniform(ts.timestamp_micros(), self.precision);
-        let _ = check_timestamp(Some(micros))?;
+        let _ = check_timestamp(micros)?;
         self.builder
             .append_value(micros.as_());
         Ok(())
@@ -107,7 +107,7 @@ where
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = uniform(ts.timestamp_micros(), self.precision);
-        let _ = check_timestamp(Some(micros))?;
+        let _ = check_timestamp(micros)?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
@@ -120,7 +120,7 @@ where
         reader.must_ignore_byte(b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = uniform(ts.timestamp_micros(), self.precision);
-        let _ = check_timestamp(Some(micros))?;
+        let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'"')?;
 
         self.builder
@@ -130,7 +130,7 @@ where
 
     fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let v = value.as_i64()?;
-        let _ = check_timestamp(Some(v))?;
+        let _ = check_timestamp(v)?;
         self.builder.append_value(v.as_());
         Ok(())
     }
