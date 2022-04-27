@@ -37,6 +37,7 @@ where
 {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
+        let _ = check_timestamp(value.as_i64())?;
         self.builder.append_value(value);
         Ok(())
     }
@@ -49,6 +50,7 @@ where
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
+            let _ = check_timestamp(value.as_i64())?;
             self.builder.append_value(value);
         }
         Ok(())
@@ -60,8 +62,9 @@ where
                 let v = v.clone();
                 let mut reader = BufferReader::new(v.as_bytes());
                 let ts = reader.read_timestamp_text(&self.tz)?;
-                self.builder
-                    .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
+                let micros = uniform(ts.timestamp_micros(), self.precision);
+                let _ = check_timestamp(micros)?;
+                self.builder.append_value(micros.as_());
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
@@ -71,52 +74,57 @@ where
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
+        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'\'')?;
-
-        self.builder
-            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let ts = reader.read_timestamp_text(&self.tz)?;
+        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let _ = check_timestamp(micros)?;
         reader.must_eof()?;
-        self.builder
-            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
     fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let ts = reader.read_timestamp_text(&self.tz)?;
-        self.builder
-            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
+        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let _ = check_timestamp(micros)?;
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
     fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
+        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let _ = check_timestamp(micros)?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
-        self.builder
-            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
     fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
+        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'"')?;
 
-        self.builder
-            .append_value(uniform(ts.timestamp_nanos(), self.precision).as_());
+        self.builder.append_value(micros.as_());
         Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let v = value.as_i64()?;
+        let _ = check_timestamp(v)?;
         self.builder.append_value(v.as_());
         Ok(())
     }
@@ -131,11 +139,6 @@ where
 }
 
 #[inline]
-fn uniform(nanos: i64, precision: usize) -> i64 {
-    match precision {
-        0 => nanos as i64 / 1_000_000_000,
-        3 => nanos as i64 / 1_000_000,
-        6 => nanos as i64 / 1_000,
-        _ => nanos as i64,
-    }
+fn uniform(micros: i64, precision: usize) -> i64 {
+    micros / 10_i64.pow(6 - precision as u32)
 }

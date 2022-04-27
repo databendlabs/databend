@@ -135,6 +135,19 @@ pub fn cast_with_type(
         _ => arrow_cast_compute(column, &nonull_from_type, &nonull_data_type, cast_options),
     }?;
 
+    // check date/timestamp bound
+    if nonull_data_type.data_type_id() == TypeID::Date {
+        let viewer = i32::try_create_viewer(&result)?;
+        for x in viewer {
+            let _ = check_date(x)?;
+        }
+    } else if nonull_data_type.data_type_id() == TypeID::Timestamp {
+        let viewer = i64::try_create_viewer(&result)?;
+        for x in viewer {
+            let _ = check_timestamp(x)?;
+        }
+    }
+
     let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
     if data_type.is_nullable() {

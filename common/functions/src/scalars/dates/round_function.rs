@@ -87,6 +87,9 @@ impl Function for RoundFunction {
         let func = |val: i64, _ctx: &mut EvalContext| self.execute(val / to_div);
         let col =
             scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+        for micros in col.iter() {
+            let _ = check_timestamp(*micros)?;
+        }
         Ok(col.arc())
     }
 
