@@ -15,7 +15,6 @@ prost = "0.10.1"
 tonic = { version = "=0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 [build-dependencies]
-common-building = { path = "../building" }
 prost-build = "0.10.1"
 tonic-build = "0.7.0"
 
