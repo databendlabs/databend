@@ -13,20 +13,17 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::borrow::BorrowMut;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
-use float_cmp::approx_eq;
 use pretty_assertions::assert_eq;
 
 static NUM_DROPPED: AtomicUsize = AtomicUsize::new(0);
 static NUM_DROPPED2: AtomicUsize = AtomicUsize::new(0);
 struct CountDrops {
-    id: usize,
     c: CountDrops2,
 }
 
@@ -57,15 +54,13 @@ fn test_aggregate_state_drop() -> Result<()> {
         place = ptr.into();
 
         place.write(|| CountDrops {
-            id: 1,
             c: CountDrops2 {
                 value: vec![1, 2, 3],
             },
         });
 
-        // Leap happens here, the  `CountDrops.value` is never dropped
+        // Leak happens here, the  `CountDrops.value` is never dropped
         place.write(|| CountDrops {
-            id: 1,
             c: CountDrops2 {
                 value: vec![4, 5, 6],
             },
@@ -75,6 +70,8 @@ fn test_aggregate_state_drop() -> Result<()> {
     assert_eq!(NUM_DROPPED2.load(Ordering::SeqCst), 0);
 
     let count_drops = place.get::<CountDrops>();
+
+    assert_eq!(count_drops.c.value, vec![4, 5, 6]);
 
     count_drops.c = CountDrops2 {
         value: vec![7, 8, 9],

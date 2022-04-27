@@ -38,13 +38,17 @@ pub type FinalSingleKeyAggregator = SingleKeyAggregator<true>;
 pub type PartialSingleKeyAggregator = SingleKeyAggregator<false>;
 
 /// SELECT COUNT | SUM FROM table;
+#[allow(dead_code)]
 pub struct SingleKeyAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
     schema: DataSchemaRef,
     arena: Bump,
-    places: Vec<usize>,
+    places: Vec<StateAddr>,
+    // used for deserialization only, so we can reuse it during the loop
+    temp_places: Vec<StateAddr>,
     is_finished: bool,
+    states_dropped: bool,
 }
 
 impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
@@ -53,7 +57,7 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
         let (layout, offsets_aggregate_states) =
             unsafe { get_layout_offsets(&params.aggregate_functions) };
 
-        let places: Vec<usize> = {
+        let get_places = || -> Vec<StateAddr> {
             let place: StateAddr = arena.alloc_layout(layout).into();
             params
                 .aggregate_functions
@@ -62,10 +66,13 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
                 .map(|(idx, func)| {
                     let arg_place = place.next(offsets_aggregate_states[idx]);
                     func.init_state(arg_place);
-                    arg_place.addr()
+                    arg_place
                 })
                 .collect()
         };
+
+        let places = get_places();
+        let temp_places = get_places();
 
         Ok(Self {
             arena,
@@ -73,8 +80,28 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
             funcs: params.aggregate_functions.clone(),
             arg_names: params.aggregate_functions_arguments_name.clone(),
             schema: params.schema.clone(),
+            temp_places,
             is_finished: false,
+            states_dropped: false,
         })
+    }
+
+    fn drop_states(&mut self) {
+        if !self.states_dropped {
+            for (place, func) in self.places.iter().zip(self.funcs.iter()) {
+                if func.need_manual_drop_state() {
+                    unsafe { func.drop_state(*place) }
+                }
+            }
+
+            for (place, func) in self.temp_places.iter().zip(self.funcs.iter()) {
+                if func.need_manual_drop_state() {
+                    unsafe { func.drop_state(*place) }
+                }
+            }
+
+            self.states_dropped = true;
+        }
     }
 }
 
@@ -83,17 +110,14 @@ impl Aggregator for SingleKeyAggregator<true> {
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         for (index, func) in self.funcs.iter().enumerate() {
-            let place = self.places[index].into();
+            let place = self.places[index];
 
             let binary_array = block.column(index);
             let binary_array: &StringColumn = Series::check_get(binary_array)?;
 
             let mut data = binary_array.get_data(0);
-            let s = self.funcs[index].state_layout();
-            let temp = self.arena.alloc_layout(s);
-            let temp_addr = temp.into();
-            self.funcs[index].init_state(temp_addr);
 
+            let temp_addr = self.temp_places[index];
             func.deserialize(temp_addr, &mut data)?;
             func.merge(place, temp_addr)?;
         }
@@ -117,7 +141,7 @@ impl Aggregator for SingleKeyAggregator<true> {
         };
 
         for (index, func) in self.funcs.iter().enumerate() {
-            let place = self.places[index].into();
+            let place = self.places[index];
             let array: &mut dyn MutableColumn = aggr_values[index].borrow_mut();
             let _ = func.merge_result(place, array)?;
         }
@@ -141,7 +165,7 @@ impl Aggregator for SingleKeyAggregator<false> {
             for name in self.arg_names[idx].iter() {
                 arg_columns.push(block.try_column_by_name(name)?.clone());
             }
-            let place = self.places[idx].into();
+            let place = self.places[idx];
             func.accumulate(place, &arg_columns, None, rows)?;
         }
 
@@ -150,6 +174,7 @@ impl Aggregator for SingleKeyAggregator<false> {
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
+            self.drop_states();
             return Ok(None);
         }
 
@@ -158,7 +183,7 @@ impl Aggregator for SingleKeyAggregator<false> {
         let mut bytes = BytesMut::new();
 
         for (idx, func) in self.funcs.iter().enumerate() {
-            let place = self.places[idx].into();
+            let place = self.places[idx];
             func.serialize(place, &mut bytes)?;
             let mut array_builder = MutableStringColumn::with_capacity(4);
             array_builder.append_value(&bytes[..]);
@@ -173,10 +198,6 @@ impl Aggregator for SingleKeyAggregator<false> {
 
 impl<const FINAL: bool> Drop for SingleKeyAggregator<FINAL> {
     fn drop(&mut self) {
-        for (place, func) in self.places.iter().zip(self.funcs.iter()) {
-            if func.need_manual_drop_state() {
-                unsafe { func.drop_state((*place).into()) }
-            }
-        }
+        self.drop_states();
     }
 }

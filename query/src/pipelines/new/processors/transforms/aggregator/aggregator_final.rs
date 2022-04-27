@@ -54,11 +54,15 @@ pub struct FinalAggregator<
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
 > {
     is_generated: bool,
+    states_dropped: bool,
 
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
-    temp_states: Vec<StateAddr>,
+
+    // Row based temp places, size eq to agg function size
+    // used for deserialization only, so we can reuse it during the loop
+    temp_places: Vec<StateAddr>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -66,12 +70,26 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
+
+        let aggregate_functions = &params.aggregate_functions;
+        let offsets_aggregate_states = &params.offsets_aggregate_states;
+
+        let temp_place = state.alloc_layout2(&params);
+        let mut temp_places = Vec::with_capacity(aggregate_functions.len());
+
+        for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+            let state_place = temp_place.next(offsets_aggregate_states[idx]);
+            aggregate_function.init_state(state_place);
+            temp_places.push(state_place);
+        }
+
         Self {
             is_generated: false,
+            states_dropped: false,
             state,
             method,
             params,
-            temp_states: Vec::new(),
+            temp_places,
         }
     }
 }
@@ -117,6 +135,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let keys_column = block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
+        // first state places of current block
         let places = Self::lookup_state(&self.params, &mut self.state, keys_iter.get_slice());
 
         let states_columns = (0..aggregate_function_len)
@@ -133,24 +152,25 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
         for (row, place) in places.iter().enumerate() {
-            let temp_place = self.state.alloc_layout2(&self.params);
             for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let final_place = place.next(offsets_aggregate_states[idx]);
-                let state_place = temp_place.next(offsets_aggregate_states[idx]);
+                let state_place = self.temp_places[idx];
 
                 let mut data = states_binary_columns[idx].get_data(row);
-                aggregate_function.init_state(state_place);
+
                 aggregate_function.deserialize(state_place, &mut data)?;
                 aggregate_function.merge(final_place, state_place)?;
             }
-            self.temp_states.push(temp_place);
         }
         Ok(())
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.state.len() == 0 || self.is_generated {
-            true => Ok(None),
+            true => {
+                self.drop_states();
+                Ok(None)
+            }
             false => {
                 self.is_generated = true;
                 let mut group_columns_builder = self
@@ -233,38 +253,55 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     }
 }
 
+impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
+    FinalAggregator<FINAL, Method>
+{
+    fn drop_states(&mut self) {
+        if !self.states_dropped {
+            let aggregator_params = self.params.as_ref();
+            let aggregate_functions = &aggregator_params.aggregate_functions;
+            let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+
+            let state_offsets = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            let temp_places = self
+                .temp_places
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            for group_entity in self.state.iter() {
+                let place: StateAddr = (*group_entity.get_state_value()).into();
+
+                for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
+            }
+
+            for (place, function) in temp_places.iter().zip(functions.iter()) {
+                unsafe { function.drop_state(*place) }
+            }
+            self.states_dropped = true;
+        }
+    }
+}
+
 impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Drop
     for FinalAggregator<FINAL, Method>
 {
     fn drop(&mut self) {
-        let aggregator_params = self.params.as_ref();
-        let aggregate_functions = &aggregator_params.aggregate_functions;
-        let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
-
-        let functions = aggregate_functions
-            .iter()
-            .filter(|p| p.need_manual_drop_state())
-            .collect::<Vec<_>>();
-
-        let states = offsets_aggregate_states
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
-            .map(|(_, s)| *s)
-            .collect::<Vec<_>>();
-
-        for group_entity in self.state.iter() {
-            let place: StateAddr = (*group_entity.get_state_value()).into();
-
-            for (function, state_offset) in functions.iter().zip(states.iter()) {
-                unsafe { function.drop_state(place.next(*state_offset)) }
-            }
-        }
-
-        for place in self.temp_states.iter() {
-            for (function, state_offset) in functions.iter().zip(states.iter()) {
-                unsafe { function.drop_state(place.next(*state_offset)) }
-            }
-        }
+        self.drop_states();
     }
 }

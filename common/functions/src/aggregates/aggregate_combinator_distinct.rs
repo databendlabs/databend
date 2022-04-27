@@ -38,7 +38,7 @@ use crate::aggregates::AggregateCountFunction;
 struct DataGroupValues(Vec<DataGroupValue>);
 
 pub struct AggregateDistinctState {
-    set: Option<HashSet<DataGroupValues, RandomState>>,
+    set: HashSet<DataGroupValues, RandomState>,
 }
 
 impl AggregateDistinctState {
@@ -121,9 +121,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
     }
 
     fn init_state(&self, place: StateAddr) {
-        println!("init allocate distinct {:?}", place.addr());
         place.write(|| AggregateDistinctState {
-            set: Some(HashSet::new()),
+            set: HashSet::new(),
         });
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -157,7 +156,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
                                 .collect::<Result<Vec<_>>>()?,
                         );
                         let state = place.get::<AggregateDistinctState>();
-                        state.set.as_mut().map(|c| c.insert(data_values));
+                        state.set.insert(data_values);
                     }
                 }
                 None => {
@@ -168,7 +167,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
                             .collect::<Result<Vec<_>>>()?,
                     );
                     let state = place.get::<AggregateDistinctState>();
-                    state.set.as_mut().map(|c| c.insert(data_values));
+                    state.set.insert(data_values);
                 }
             }
         }
@@ -178,15 +177,13 @@ impl AggregateFunction for AggregateDistinctCombinator {
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
         let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
         let state = place.get::<AggregateDistinctState>();
+        state.set.insert(DataGroupValues(
+            values
+                .iter()
+                .map(DataGroupValue::try_from)
+                .collect::<Result<Vec<_>>>()?,
+        ));
 
-        if let Some(c) = state.set.as_mut() {
-            c.insert(DataGroupValues(
-                values
-                    .iter()
-                    .map(DataGroupValue::try_from)
-                    .collect::<Result<Vec<_>>>()?,
-            ));
-        }
         Ok(())
     }
 
@@ -204,12 +201,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         let state = place.get::<AggregateDistinctState>();
         let rhs = rhs.get::<AggregateDistinctState>();
 
-        match &rhs.set {
-            Some(v) => {
-                state.set.as_mut().map(|c| c.extend(v.clone()));
-            }
-            _ => {}
-        }
+        state.set.extend(rhs.set.clone());
         Ok(())
     }
 
@@ -224,50 +216,44 @@ impl AggregateFunction for AggregateDistinctCombinator {
         if self.nested.name() == "AggregateFunctionCount" {
             let mut builder: &mut MutablePrimitiveColumn<u64> =
                 Series::check_get_mutable_column(array)?;
-            let c = state.set.as_ref().map(|s| s.len() as u64).unwrap_or(0);
-            builder.append_value(c);
+            builder.append_value(state.set.len() as u64);
             Ok(())
         } else {
-            let s = state.set.as_mut();
-
-            if let Some(s) = s {
-                if s.is_empty() {
-                    return self.nested.merge_result(netest_place, array);
-                }
-                let mut results = Vec::with_capacity(s.len());
-                s.iter().for_each(|group_values| {
-                    let mut v = Vec::with_capacity(group_values.0.len());
-                    group_values.0.iter().for_each(|group_value| {
-                        v.push(DataValue::from(group_value));
-                    });
-
-                    results.push(v);
-                });
-
-                let results = (0..self.arguments.len())
-                    .map(|i| {
-                        results
-                            .iter()
-                            .map(|inner| inner[i].clone())
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>();
-
-                let columns = results
-                    .iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        let data_type = self.arguments[i].data_type();
-                        data_type.create_column(v)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                self.nested
-                    .accumulate(netest_place, &columns, None, s.len())?;
-                // merge_result
+            if state.set.is_empty() {
                 return self.nested.merge_result(netest_place, array);
             }
-            Ok(())
+            let mut results = Vec::with_capacity(state.set.len());
+            state.set.iter().for_each(|group_values| {
+                let mut v = Vec::with_capacity(group_values.0.len());
+                group_values.0.iter().for_each(|group_value| {
+                    v.push(DataValue::from(group_value));
+                });
+
+                results.push(v);
+            });
+
+            let results = (0..self.arguments.len())
+                .map(|i| {
+                    results
+                        .iter()
+                        .map(|inner| inner[i].clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            let columns = results
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let data_type = self.arguments[i].data_type();
+                    data_type.create_column(v)
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            self.nested
+                .accumulate(netest_place, &columns, None, state.set.len())?;
+            // merge_result
+            self.nested.merge_result(netest_place, array)
         }
     }
 
@@ -276,11 +262,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        println!("drop distinct {:?}", place.addr());
         let state = place.get::<AggregateDistinctState>();
-        let v = state.set.take();
-        drop(v);
-        // std::ptr::drop_in_place(state);
+        std::ptr::drop_in_place(state);
 
         if self.nested.need_manual_drop_state() {
             let layout = Layout::new::<AggregateDistinctState>();
