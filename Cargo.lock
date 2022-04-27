@@ -1774,6 +1774,7 @@ dependencies = [
  "hyper",
  "itertools",
  "jwt-simple",
+ "jwtk",
  "lazy_static",
  "maplit",
  "metrics",
@@ -1786,6 +1787,7 @@ dependencies = [
  "opendal",
  "opensrv-clickhouse",
  "opensrv-mysql",
+ "openssl",
  "paste",
  "petgraph",
  "poem",
@@ -3066,6 +3068,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "jwtk"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ccbb03951ed125446ee19b8210edde61a930d97100430544f08adf319465c4c"
+dependencies = [
+ "base64 0.13.0",
+ "foreign-types",
+ "openssl",
+ "openssl-sys",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tokio",
+]
+
+[[package]]
 name = "k256"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4063,6 +4082,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "111.18.0+1.1.1n"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7897a926e1e8d00219127dc020130eca4292e5ca666dd592480d72c3eca2ff6c"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4071,6 +4099,7 @@ dependencies = [
  "autocfg 1.0.1",
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
