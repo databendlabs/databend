@@ -231,6 +231,25 @@ where
     }
 }
 
+/// A fork of `map_res` from nom, but use `ErrorKind`.
+pub fn map_res<'a, O1, O2, F, G>(
+    mut parser: F,
+    mut f: G,
+) -> impl FnMut(Input<'a>) -> nom::IResult<Input<'a>, O2, Error<'a>>
+where
+    F: nom::Parser<Input<'a>, O1, Error<'a>>,
+    G: FnMut(O1) -> Result<O2, ErrorKind>,
+{
+    move |input| {
+        let i = input.clone();
+        let (input, output) = parser.parse(input)?;
+        match f(output) {
+            Ok(output) => Ok((input, output)),
+            Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! rule {
     ($($tt:tt)*) => { nom_rule::rule!(

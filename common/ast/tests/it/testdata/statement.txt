@@ -151,9 +151,11 @@ CreateTable {
                 },
                 data_type: Int32,
                 nullable: false,
-                default_value: Some(
-                    Number(
-                        "1",
+                default_expr: Some(
+                    Literal(
+                        Number(
+                            "1",
+                        ),
                     ),
                 ),
             },
@@ -164,20 +166,21 @@ CreateTable {
                 },
                 data_type: String,
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             },
         ],
     ),
     engine: Null,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 
 
 ---------- Input ----------
-create table if not exists a.b (c integer default 1 not null, b varchar);
+create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL) AS SELECT * FROM t
 ---------- AST ------------
 CreateTable {
     if_not_exists: true,
@@ -200,9 +203,11 @@ CreateTable {
                 },
                 data_type: Int32,
                 nullable: false,
-                default_value: Some(
-                    Number(
-                        "1",
+                default_expr: Some(
+                    Literal(
+                        Number(
+                            "1",
+                        ),
                     ),
                 ),
             },
@@ -213,12 +218,44 @@ CreateTable {
                 },
                 data_type: String,
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             },
         ],
     ),
     engine: Null,
     cluster_by: [],
+    as_query: Some(
+        Query {
+            body: Select(
+                SelectStmt {
+                    distinct: false,
+                    select_list: [
+                        QualifiedName(
+                            [
+                                Star,
+                            ],
+                        ),
+                    ],
+                    from: Some(
+                        Table {
+                            database: None,
+                            table: Identifier {
+                                name: "t",
+                                quote: None,
+                            },
+                            alias: None,
+                        },
+                    ),
+                    selection: None,
+                    group_by: [],
+                    having: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+        },
+    ),
     options: [],
 }
 
@@ -254,6 +291,7 @@ CreateTable {
     },
     engine: Null,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 
@@ -279,6 +317,7 @@ CreateTable {
     },
     engine: Memory,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 
@@ -411,7 +450,7 @@ CreateTable {
                     precision: None,
                 },
                 nullable: true,
-                default_value: None,
+                default_expr: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -424,12 +463,13 @@ CreateTable {
                     ),
                 },
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             },
         ],
     ),
     engine: Null,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 
@@ -520,7 +560,7 @@ CreateTable {
                 },
                 data_type: Int32,
                 nullable: true,
-                default_value: None,
+                default_expr: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -529,7 +569,7 @@ CreateTable {
                 },
                 data_type: Int64,
                 nullable: true,
-                default_value: None,
+                default_expr: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -538,12 +578,13 @@ CreateTable {
                 },
                 data_type: String,
                 nullable: true,
-                default_value: None,
+                default_expr: None,
             },
         ],
     ),
     engine: Null,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 
@@ -569,7 +610,7 @@ CreateTable {
                 },
                 data_type: Int32,
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -578,7 +619,7 @@ CreateTable {
                 },
                 data_type: Int64,
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -587,12 +628,13 @@ CreateTable {
                 },
                 data_type: String,
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             },
         ],
     ),
     engine: Null,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 
@@ -618,9 +660,11 @@ CreateTable {
                 },
                 data_type: Int32,
                 nullable: false,
-                default_value: Some(
-                    Number(
-                        "1",
+                default_expr: Some(
+                    Literal(
+                        Number(
+                            "1",
+                        ),
                     ),
                 ),
             },
@@ -628,6 +672,7 @@ CreateTable {
     ),
     engine: Null,
     cluster_by: [],
+    as_query: None,
     options: [],
 }
 

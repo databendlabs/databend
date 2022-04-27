@@ -101,8 +101,8 @@ pub enum TokenKind {
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
 
-    #[regex(r#""[_a-zA-Z][_$a-zA-Z0-9]*""#)]
-    #[regex(r#"`[_a-zA-Z][_$a-zA-Z0-9]*`"#)]
+    #[regex(r#""[_$a-zA-Z0-9]*""#)]
+    #[regex(r#"`[_$a-zA-Z0-9]*`"#)]
     QuotedIdent,
 
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -312,6 +312,8 @@ pub enum TokenKind {
     DATABASE,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
+    #[token("SCHEMAS", ignore(ascii_case))]
+    SCHEMAS,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
     #[token("URL", ignore(ascii_case))]
@@ -554,6 +556,8 @@ pub enum TokenKind {
     GITHUB,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
+    #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
+    CURRENT_TIMESTAMP,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -644,7 +648,7 @@ impl TokenKind {
             // | CURRENT_DATE
             // | CURRENT_ROLE
             // | CURRENT_TIME
-            // | CURRENT_TIMESTAMP
+            | CURRENT_TIMESTAMP
             // | CURRENT_USER
             // | DEC
             // | DECIMAL
@@ -777,7 +781,7 @@ impl TokenKind {
             // | CURRENT_ROLE
             // | CURRENT_SCHEMA
             // | CURRENT_TIME
-            // | CURRENT_TIMESTAMP
+            | CURRENT_TIMESTAMP
             // | CURRENT_USER
             | DEFAULT
             // | DEFERRABLE

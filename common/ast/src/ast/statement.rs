@@ -76,6 +76,7 @@ pub enum Statement<'a> {
         source: CreateTableSource,
         engine: Engine,
         cluster_by: Vec<Expr>,
+        as_query: Option<Box<Query>>,
         options: Vec<SQLProperty>,
     },
     // Describe schema of a table
@@ -186,7 +187,6 @@ pub enum InsertSource<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource {
     Columns(Vec<ColumnDefinition>),
-    Query(Box<Query>),
     Like {
         database: Option<Identifier>,
         table: Identifier,
@@ -219,7 +219,7 @@ pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub nullable: bool,
-    pub default_value: Option<Literal>,
+    pub default_expr: Option<Box<Expr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -258,8 +258,8 @@ impl Display for ColumnDefinition {
         } else {
             write!(f, " NOT NULL")?;
         }
-        if let Some(default_value) = &self.default_value {
-            write!(f, " DEFAULT {default_value}")?;
+        if let Some(default_expr) = &self.default_expr {
+            write!(f, " DEFAULT {default_expr}")?;
         }
         Ok(())
     }
@@ -375,6 +375,7 @@ impl<'a> Display for Statement<'a> {
                 table,
                 source,
                 engine,
+                as_query,
                 ..
             } => {
                 write!(f, "CREATE TABLE ")?;
@@ -388,9 +389,6 @@ impl<'a> Display for Statement<'a> {
                         write_comma_separated_list(f, columns)?;
                         write!(f, ")")?;
                     }
-                    CreateTableSource::Query(query) => {
-                        write!(f, " AS {query}")?;
-                    }
                     CreateTableSource::Like { database, table } => {
                         write!(f, " LIKE ")?;
                         write_period_separated_list(f, database.iter().chain(Some(table)))?;
@@ -398,6 +396,9 @@ impl<'a> Display for Statement<'a> {
                 }
                 if *engine != Engine::Null {
                     write!(f, " ENGINE = {}", engine)?;
+                }
+                if let Some(as_query) = as_query {
+                    write!(f, " AS {}", as_query)?;
                 }
                 // TODO(leiysky): display options
             }

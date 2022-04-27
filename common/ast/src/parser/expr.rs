@@ -31,7 +31,8 @@ use crate::parser::token::*;
 use crate::parser::util::*;
 use crate::rule;
 
-const BETWEEN_PREC: u32 = 20;
+pub const BETWEEN_PREC: u32 = 20;
+pub const NOT_PREC: u32 = 15;
 
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
@@ -102,8 +103,8 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             .map_err(nom::Err::Error)?;
 
         if let Some(elem) = iter.next() {
-            dbg!(&elem);
-            dbg!(&expr_elements);
+            // dbg!(&elem);
+            // dbg!(&expr_elements);
             return Err(nom::Err::Error(Error::from_error_kind(
                 elem.span,
                 ErrorKind::Other("unable to parse rest of the expression"),
@@ -266,7 +267,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
             ExprElement::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::UnaryOp { op } => match op {
-                UnaryOperator::Not => Affix::Prefix(Precedence(15)),
+                UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
 
                 UnaryOperator::Plus => Affix::Prefix(Precedence(30)),
                 UnaryOperator::Minus => Affix::Prefix(Precedence(30)),
@@ -784,6 +785,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         },
         |(_, value, field)| Literal::Interval(Interval { value, field }),
     );
+    let current_timestamp = value(Literal::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
     let null = value(Literal::Null, rule! { NULL });
 
     rule!(
@@ -791,6 +793,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         | #number
         | #boolean
         | #interval : "`INTERVAL '...' (YEAR | MONTH | DAY | ...)`"
+        | #current_timestamp
         | #null
     )(i)
 }

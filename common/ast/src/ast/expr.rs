@@ -134,6 +134,7 @@ pub enum Literal {
     String(String),
     Boolean(bool),
     Interval(Interval),
+    CurrentTimestamp,
     Null,
 }
 
@@ -470,11 +471,14 @@ impl Display for Literal {
                     write!(f, "FALSE")
                 }
             }
-            Literal::Null => {
-                write!(f, "NULL")
+            Literal::CurrentTimestamp => {
+                write!(f, "CURRENT_TIMESTAMP")
             }
             Literal::Interval(interval) => {
                 write!(f, "INTERVAL {} {}", interval.value, interval.field)
+            }
+            Literal::Null => {
+                write!(f, "NULL")
             }
         }
     }

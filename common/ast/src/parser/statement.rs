@@ -52,19 +52,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let show_databases = map(
         rule! {
-            SHOW ~ DATABASES ~ #show_limit?
+            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
         },
         |(_, _, limit)| Statement::ShowDatabases { limit },
     );
     let show_create_database = map(
         rule! {
-            SHOW ~ CREATE ~ DATABASE ~ #ident
+            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #ident
         },
         |(_, _, _, database)| Statement::ShowCreateDatabase { database },
     );
     let create_database = map(
         rule! {
-            CREATE ~ DATABASE ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #engine?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #engine?
         },
         |(_, _, opt_if_not_exists, database, opt_engine)| Statement::CreateDatabase {
             if_not_exists: opt_if_not_exists.is_some(),
@@ -75,7 +75,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let drop_database = map(
         rule! {
-            DROP ~ DATABASE ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #ident
         },
         |(_, _, opt_if_exists, database)| Statement::DropDatabase {
             if_exists: opt_if_exists.is_some(),
@@ -123,8 +123,19 @@ pub fn statement(i: Input) -> IResult<Statement> {
             ~ #create_table_source
             ~ #engine?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
+            ~ ( AS ~ ^#query )?
         },
-        |(_, _, opt_if_not_exists, opt_database, table, source, opt_engine, opt_cluster_by)| {
+        |(
+            _,
+            _,
+            opt_if_not_exists,
+            opt_database,
+            table,
+            source,
+            opt_engine,
+            opt_cluster_by,
+            opt_as_query,
+        )| {
             Statement::CreateTable {
                 if_not_exists: opt_if_not_exists.is_some(),
                 database: opt_database.map(|(name, _)| name),
@@ -134,13 +145,14 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
+                as_query: opt_as_query.map(|(_, query)| Box::new(query)),
                 options: vec![],
             }
         },
     );
     let describe = map(
         rule! {
-            DESCRIBE ~ ( #ident ~ "." )? ~ #ident
+            ( DESC | DESCRIBE ) ~ ( #ident ~ "." )? ~ #ident
         },
         |(_, opt_database, table)| Statement::Describe {
             database: opt_database.map(|(database, _)| database),
@@ -359,22 +371,25 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
     enum ColumnConstraint {
         Nullable(bool),
-        DefaultValue(Literal),
+        DefaultExpr(Box<Expr>),
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
-        value(ColumnConstraint::Nullable(false), rule! { NOT ~ NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
-    let default_value = map(rule! { DEFAULT ~ #literal }, |(_, default_value)| {
-        ColumnConstraint::DefaultValue(default_value)
-    });
+    let default_expr = map(
+        rule! {
+            DEFAULT ~ ^#subexpr(NOT_PREC)
+        },
+        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+    );
 
     map(
         rule! {
             ( #ident | #lit_string_ident )
             ~ #type_name
-            ~ ( #nullable | #default_value )*
+            ~ ( #nullable | #default_expr )*
             : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
         },
         |(name, data_type, constraints)| {
@@ -382,13 +397,13 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 name,
                 data_type,
                 nullable: false,
-                default_value: None,
+                default_expr: None,
             };
             for constraint in constraints {
                 match constraint {
                     ColumnConstraint::Nullable(nullable) => def.nullable = nullable,
-                    ColumnConstraint::DefaultValue(default_value) => {
-                        def.default_value = Some(default_value)
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.default_expr = Some(default_expr)
                     }
                 }
             }
@@ -426,14 +441,13 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     let columns = map(
         rule! {
-            "(" ~ #comma_separated_list1(column_def) ~ ")"
+            "(" ~ ^#comma_separated_list1(column_def) ~ ^")"
         },
         |(_, columns, _)| CreateTableSource::Columns(columns),
     );
-    let query = map(query, |query| CreateTableSource::Query(Box::new(query)));
     let like = map(
         rule! {
-            LIKE ~ ( #ident ~ "." )? ~ #ident
+            LIKE ~ ( #ident ~ "." )? ~ ^#ident
         },
         |(_, opt_database, table)| CreateTableSource::Like {
             database: opt_database.map(|(database, _)| database),
@@ -443,7 +457,6 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
 
     rule!(
         #columns
-        | #query
         | #like
     )(i)
 }
@@ -509,7 +522,7 @@ pub fn engine(i: Input) -> IResult<Engine> {
 
     map(
         rule! {
-            ENGINE ~ "=" ~ #engine
+            ENGINE ~ ^"=" ~ ^#engine
         },
         |(_, _, engine)| engine,
     )(i)
