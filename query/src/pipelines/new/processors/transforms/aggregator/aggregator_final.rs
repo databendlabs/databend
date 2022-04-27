@@ -60,9 +60,8 @@ pub struct FinalAggregator<
     state: Method::State,
     params: Arc<AggregatorParams>,
 
-    // Row based temp places, size eq to agg function size
     // used for deserialization only, so we can reuse it during the loop
-    temp_places: Vec<StateAddr>,
+    temp_place: StateAddr,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -70,18 +69,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
-
-        let aggregate_functions = &params.aggregate_functions;
-        let offsets_aggregate_states = &params.offsets_aggregate_states;
-
-        let temp_place = state.alloc_layout2(&params);
-        let mut temp_places = Vec::with_capacity(aggregate_functions.len());
-
-        for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-            let state_place = temp_place.next(offsets_aggregate_states[idx]);
-            aggregate_function.init_state(state_place);
-            temp_places.push(state_place);
-        }
+        let temp_place = if params.aggregate_functions.is_empty() {
+            0.into()
+        } else {
+            state.alloc_layout2(&params)
+        };
 
         Self {
             is_generated: false,
@@ -89,7 +81,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             state,
             method,
             params,
-            temp_places,
+            temp_place,
         }
     }
 }
@@ -154,7 +146,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         for (row, place) in places.iter().enumerate() {
             for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let final_place = place.next(offsets_aggregate_states[idx]);
-                let state_place = self.temp_places[idx];
+                let state_place = self.temp_place.next(offsets_aggregate_states[idx]);
 
                 let mut data = states_binary_columns[idx].get_data(row);
 
@@ -274,14 +266,6 @@ impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Sen
                 .map(|(_, s)| *s)
                 .collect::<Vec<_>>();
 
-            let temp_places = self
-                .temp_places
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
-                .map(|(_, s)| *s)
-                .collect::<Vec<_>>();
-
             for group_entity in self.state.iter() {
                 let place: StateAddr = (*group_entity.get_state_value()).into();
 
@@ -290,8 +274,9 @@ impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Sen
                 }
             }
 
-            for (place, function) in temp_places.iter().zip(functions.iter()) {
-                unsafe { function.drop_state(*place) }
+            for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
+                let place = self.temp_place.next(*state_offset);
+                unsafe { function.drop_state(place) }
             }
             self.states_dropped = true;
         }
