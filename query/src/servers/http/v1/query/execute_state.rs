@@ -33,6 +33,7 @@ use ExecuteState::*;
 use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterQueryLog;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -141,7 +142,13 @@ impl ExecuteState {
         let start_time = Instant::now();
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(sql);
-        let plan = PlanParser::parse(ctx.clone(), sql).await?;
+        let plan = match PlanParser::parse(ctx.clone(), sql).await {
+            Ok(p) => p,
+            Err(e) => {
+                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                return Err(e);
+            }
+        };
 
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.

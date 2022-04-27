@@ -99,7 +99,9 @@ async fn test_simple_sql() -> Result<()> {
 
 #[tokio::test]
 async fn test_bad_sql() -> Result<()> {
-    let (status, result) = post_sql("bad sql", 1).await?;
+    let sql = "bad sql";
+    let ep = create_endpoint();
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_some());
     assert_eq!(result.data.len(), 0);
@@ -107,6 +109,34 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Failed);
     assert!(result.stats.scan_progress.is_none());
     assert!(result.schema.is_none());
+
+    let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=3";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert_eq!(
+        result.data[0][0].as_str().unwrap(),
+        "bad sql",
+        "{:?}",
+        result
+    );
+    assert_eq!(
+        result.data[0][1].as_u64().unwrap(),
+        ErrorCode::SyntaxException("").code().to_u64().unwrap(),
+        "{:?}",
+        result
+    );
+
+    assert!(
+        result.data[0][2]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("bad"),
+        "{:?}",
+        result
+    );
+
     Ok(())
 }
 
