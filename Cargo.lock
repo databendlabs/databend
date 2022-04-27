@@ -1250,7 +1250,6 @@ dependencies = [
 name = "common-protos"
 version = "0.1.0"
 dependencies = [
- "common-building",
  "prost 0.10.1",
  "prost-build 0.10.1",
  "tonic",
