@@ -213,7 +213,7 @@ async fn test_bloom_f64_serialization() -> Result<()> {
 
 // A helper function to create a bloom filter, with the same bits and hashes as other.
 async fn create_bloom(
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     column: ColumnRef,
     other: &BloomFilter,
 ) -> Result<BloomFilter> {

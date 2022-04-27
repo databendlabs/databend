@@ -20,6 +20,7 @@ use bytes::BytesMut;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
 use common_datavalues::ScalarColumn;

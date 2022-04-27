@@ -23,6 +23,7 @@ use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
 use common_datablocks::HashMethodSingleString;
+use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::ScalarColumn;
 use common_datavalues::Series;

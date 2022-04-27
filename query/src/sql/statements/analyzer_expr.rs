@@ -331,7 +331,7 @@ impl ExpressionAnalyzer {
 
     fn analyze_cast(
         &self,
-        data_type: &DataTypePtr,
+        data_type: &DataTypeImpl,
         pg_style: bool,
         args: &mut Vec<Expression>,
     ) -> Result<()> {
@@ -448,7 +448,7 @@ enum ExprRPNItem {
     Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
-    Cast(DataTypePtr, bool),
+    Cast(DataTypeImpl, bool),
     Between(bool),
     InList(InListInfo),
     MapAccess(Vec<Value>),

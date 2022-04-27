@@ -15,7 +15,7 @@
 use std::any::Any;
 
 use common_datavalues::BooleanType;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 
 use crate::sql::planner::binder::ScalarExpr;
 use crate::sql::planner::binder::ScalarExprRef;
@@ -24,7 +24,7 @@ use crate::sql::IndexType;
 pub enum Scalar {
     ColumnRef {
         index: IndexType,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
     },
     Equal {
@@ -34,7 +34,7 @@ pub enum Scalar {
 }
 
 impl ScalarExpr for Scalar {
-    fn data_type(&self) -> (DataTypePtr, bool) {
+    fn data_type(&self) -> (DataTypeImpl, bool) {
         match &self {
             Scalar::ColumnRef {
                 data_type,

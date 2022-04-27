@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataSchema;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;

@@ -18,6 +18,7 @@ use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
 use common_datavalues::TimestampType;

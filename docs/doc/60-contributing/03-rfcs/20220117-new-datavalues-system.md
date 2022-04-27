@@ -92,7 +92,7 @@ Nullable is a special case of `DataType`, it's a wrapper of `DataType`.
 
 ```rust
 
-pub struct DataTypeNull {inner: DataTypePtr}
+pub struct DataTypeNull {inner: DataTypeImpl}
 ```
 
 ### Simplify `DataValue`
@@ -116,7 +116,7 @@ pub enum DataValue {
 
 ```rust
 // convert to minialized data type
-    pub fn data_type(&self) -> DataTypePtr {
+    pub fn data_type(&self) -> DataTypeImpl {
         match self {
             DataValue::Null => Arc::new(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
@@ -143,7 +143,7 @@ pub trait Column: Send + Sync {
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
-    fn data_type(&self) -> DataTypePtr;
+    fn data_type(&self) -> DataTypeImpl;
 
     fn is_nullable(&self) -> bool {
         false
