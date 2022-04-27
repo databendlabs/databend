@@ -217,12 +217,16 @@ impl Expression {
                 pg_style,
             } => {
                 if *pg_style {
-                    format!("{}::{:?}", expr.column_name(), data_type)
+                    format!("{}::{}", expr.column_name(), data_type.name())
                 } else if data_type.is_nullable() {
                     let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
-                    format!("try_cast({} as {:?})", expr.column_name(), ty.inner_type())
+                    format!(
+                        "try_cast({} as {})",
+                        expr.column_name(),
+                        ty.inner_type().name()
+                    )
                 } else {
-                    format!("cast({} as {:?})", expr.column_name(), data_type)
+                    format!("cast({} as {})", expr.column_name(), data_type.name())
                 }
             }
             Expression::Subquery { name, .. } => name.clone(),
@@ -425,12 +429,12 @@ impl fmt::Debug for Expression {
                 pg_style,
             } => {
                 if *pg_style {
-                    write!(f, "{:?}::{:?}", expr, data_type)
+                    write!(f, "{:?}::{}", expr, data_type.name())
                 } else if data_type.is_nullable() {
                     let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
-                    write!(f, "try_cast({:?} as {:?})", expr, ty.inner_type())
+                    write!(f, "try_cast({:?} as {})", expr, ty.inner_type().name())
                 } else {
-                    write!(f, "cast({:?} as {:?})", expr, data_type)
+                    write!(f, "cast({:?} as {})", expr, data_type.name())
                 }
             }
             Expression::MapAccess { name, .. } => write!(f, "{}", name),

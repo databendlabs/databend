@@ -115,7 +115,7 @@ impl std::fmt::Debug for DataField {
         let remove_nullable = remove_nullable(self.data_type());
         debug_struct
             .field("name", &self.name)
-            .field("data_type", &remove_nullable)
+            .field("data_type", &remove_nullable.data_type_id())
             .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
             debug_struct.field(

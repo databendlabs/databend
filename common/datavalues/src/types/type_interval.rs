@@ -86,7 +86,7 @@ impl DataType for IntervalType {
     }
 
     fn name(&self) -> String {
-        "Interval".to_string()
+        format!("Interval({})", self.kind)
     }
 
     fn default_value(&self) -> DataValue {

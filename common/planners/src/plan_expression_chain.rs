@@ -200,7 +200,7 @@ impl ExpressionChain {
             } => {
                 let func_name = "cast".to_string();
                 let return_type = data_type.clone();
-                let type_name = format!("{:?}", data_type);
+                let type_name = data_type.name();
 
                 let func = if data_type.is_nullable() {
                     CastFunction::create_try(&func_name, &type_name)
