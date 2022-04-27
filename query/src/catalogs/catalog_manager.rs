@@ -34,19 +34,13 @@ pub struct CatalogManager {
 
 impl CatalogManager {
     pub async fn new(conf: &Config) -> Result<CatalogManager> {
-        let mut catalogs = HashMap::new();
+        let catalogs = HashMap::new();
+        let mut manager = CatalogManager { catalogs };
 
-        // register the build-in "default" catalog
-        let default_catalog: Arc<dyn Catalog> =
-            Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
-        catalogs.insert(CATALOG_DEFAULT.to_owned(), default_catalog);
+        manager.register_build_in_catalogs(conf).await?;
+        manager.register_external_catalogs(conf)?;
 
-        // register hive catalog
-        let hive_catalog: Arc<dyn Catalog> =
-            Arc::new(HiveCatalog::try_create_with_config(conf.clone())?);
-        catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
-
-        Ok(CatalogManager { catalogs })
+        Ok(manager)
     }
 
     pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
@@ -54,5 +48,24 @@ impl CatalogManager {
             .get(catalog_name)
             .cloned()
             .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
+    }
+
+    async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {
+        let default_catalog: Arc<dyn Catalog> =
+            Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
+        self.catalogs
+            .insert(CATALOG_DEFAULT.to_owned(), default_catalog);
+        Ok(())
+    }
+
+    fn register_external_catalogs(&mut self, conf: &Config) -> Result<()> {
+        let hms_address = &conf.catalog.meta_store_address;
+        if !hms_address.is_empty() {
+            // register hive catalog
+            let hive_catalog: Arc<dyn Catalog> =
+                Arc::new(HiveCatalog::try_create_with_config(hms_address)?);
+            self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
+        }
+        Ok(())
     }
 }

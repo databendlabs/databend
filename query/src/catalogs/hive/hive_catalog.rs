@@ -25,7 +25,6 @@ use super::hive_meta_store::TThriftHiveMetastoreSyncClient;
 use super::hive_meta_store::ThriftHiveMetastoreSyncClient;
 use crate::catalogs::hive::HiveTable;
 use crate::catalogs::Catalog;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -38,10 +37,9 @@ pub struct HiveCatalog {
 }
 
 impl HiveCatalog {
-    pub fn try_create_with_config(_conf: Config) -> Result<HiveCatalog> {
+    pub fn try_create_with_config(hms_address: impl Into<String>) -> Result<HiveCatalog> {
         Ok(HiveCatalog {
-            // TODO hard coded
-            client_address: "127.0.0.1:9083".to_owned(),
+            client_address: hms_address.into(),
         })
     }
 

@@ -25,6 +25,7 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
+use crate::configs::HiveCatalogConfig;
 use crate::configs::LogConfig;
 use crate::configs::MetaConfig;
 use crate::configs::QueryConfig;
@@ -69,6 +70,10 @@ pub struct Config {
     // Storage backend config.
     #[clap(flatten)]
     pub storage: StorageConfig,
+
+    // external catalog config.
+    #[clap(flatten)]
+    pub catalog: HiveCatalogConfig,
 }
 
 impl Config {
