@@ -34,7 +34,7 @@ pub struct ArithmeticModuloFunction;
 impl ArithmeticModuloFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
             with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
@@ -74,7 +74,7 @@ where
         "ModuloFunctionImpl"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         O::to_data_type()
     }
 

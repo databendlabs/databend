@@ -171,7 +171,7 @@ where
         "AggregateWindowFunnelFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(u8::to_data_type())
     }
 

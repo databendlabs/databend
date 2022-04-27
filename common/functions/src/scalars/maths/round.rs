@@ -85,7 +85,7 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Float64Type::arc()
     }
 
@@ -172,7 +172,7 @@ pub struct RoundingFunction<const IS_TRUNC: bool> {
 }
 
 impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
             assert_numeric(*arg)?;
         }

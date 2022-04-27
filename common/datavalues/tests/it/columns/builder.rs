@@ -124,7 +124,7 @@ fn test_builder() -> Result<()> {
 fn test_pop_data_value() -> Result<()> {
     struct Test {
         name: &'static str,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         column: ColumnRef,
         expected_err: &'static str,
     }
@@ -203,7 +203,7 @@ fn test_pop_data_value() -> Result<()> {
 fn test_nullable_pop() -> Result<()> {
     struct Test {
         name: &'static str,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         values_vec: Vec<DataValue>,
     }
 

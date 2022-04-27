@@ -58,7 +58,7 @@ pub trait NumberOperator<R> {
         None
     }
 
-    fn return_type() -> Option<DataTypePtr> {
+    fn return_type() -> Option<DataTypeImpl> {
         None
     }
 }
@@ -112,7 +112,7 @@ impl NumberOperator<i32> for ToStartOfYear {
         get_day(end) as i32
     }
 
-    fn return_type() -> Option<DataTypePtr> {
+    fn return_type() -> Option<DataTypeImpl> {
         Some(DateType::arc())
     }
 }
@@ -133,7 +133,7 @@ impl NumberOperator<i32> for ToStartOfISOYear {
         get_day(end) as i32
     }
 
-    fn return_type() -> Option<DataTypePtr> {
+    fn return_type() -> Option<DataTypeImpl> {
         Some(DateType::arc())
     }
 }
@@ -150,7 +150,7 @@ impl NumberOperator<i32> for ToStartOfQuarter {
         get_day(date) as i32
     }
 
-    fn return_type() -> Option<DataTypePtr> {
+    fn return_type() -> Option<DataTypeImpl> {
         Some(DateType::arc())
     }
 }
@@ -166,7 +166,7 @@ impl NumberOperator<i32> for ToStartOfMonth {
         get_day(date) as i32
     }
 
-    fn return_type() -> Option<DataTypePtr> {
+    fn return_type() -> Option<DataTypeImpl> {
         Some(DateType::arc())
     }
 }
@@ -352,7 +352,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         match T::return_type() {
             None => R::to_data_type(),
             Some(v) => v,

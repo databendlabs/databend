@@ -21,7 +21,7 @@ pub struct SQLCommon;
 
 impl SQLCommon {
     /// Maps the SQL type to the corresponding Arrow `DataType`
-    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypePtr> {
+    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypeImpl> {
         match sql_type {
             SQLDataType::TinyInt(_) => Ok(i8::to_data_type()),
             SQLDataType::UnsignedTinyInt(_) => Ok(u8::to_data_type()),

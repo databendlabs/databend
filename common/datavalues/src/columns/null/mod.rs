@@ -51,8 +51,8 @@ impl Column for NullColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
-        Arc::new(NullType {})
+    fn data_type(&self) -> DataTypeImpl {
+        DataTypeImpl::Null(NullType {})
     }
 
     fn column_type_name(&self) -> String {

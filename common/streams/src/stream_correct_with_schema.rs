@@ -16,6 +16,7 @@ use std::pin::Pin;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::Result;
 use futures::task::Context;
 use futures::task::Poll;

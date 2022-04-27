@@ -18,7 +18,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::DFTryFrom;
-use crate::DataTypePtr;
+use crate::DataTypeImpl;
 use crate::DataValue;
 use crate::DateType;
 use crate::Scalar;
@@ -102,17 +102,17 @@ impl LogicalDateType for i64 {
 }
 
 pub trait ToDateType {
-    fn to_date_type() -> DataTypePtr;
+    fn to_date_type() -> DataTypeImpl;
 }
 
 impl ToDateType for i32 {
-    fn to_date_type() -> DataTypePtr {
+    fn to_date_type() -> DataTypeImpl {
         DateType::arc()
     }
 }
 
 impl ToDateType for i64 {
-    fn to_date_type() -> DataTypePtr {
+    fn to_date_type() -> DataTypeImpl {
         TimestampType::arc(6, None)
     }
 }
@@ -130,11 +130,11 @@ pub trait ObjectType:
     + Default
     + Scalar
 {
-    fn data_type() -> DataTypePtr;
+    fn data_type() -> DataTypeImpl;
 }
 
 impl ObjectType for VariantValue {
-    fn data_type() -> DataTypePtr {
+    fn data_type() -> DataTypeImpl {
         VariantType::arc()
     }
 }

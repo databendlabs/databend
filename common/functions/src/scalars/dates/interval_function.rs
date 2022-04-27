@@ -47,7 +47,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
     pub fn try_create_func(
         display_name: &str,
         factor: i64,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         let left_type = args[0].data_type_id();
         let right_type = args[1].data_type_id();
@@ -92,7 +92,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 #[derive(Clone)]
 pub struct IntervalFunction<L: LogicalDateType, R: PrimitiveType, O: LogicalDateType, F> {
     display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
     func: F,
     factor: i64,
     precision: usize,
@@ -108,7 +108,7 @@ where
 {
     pub fn try_create_func(
         display_name: &str,
-        result_type: DataTypePtr,
+        result_type: DataTypeImpl,
         func: F,
         factor: i64,
         precision: usize,
@@ -135,7 +135,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

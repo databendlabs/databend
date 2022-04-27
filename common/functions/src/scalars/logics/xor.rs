@@ -49,7 +49,7 @@ impl LogicExpression for LogicXorExpression {
 pub struct LogicXorFunction;
 
 impl LogicXorFunction {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         LogicFunctionImpl::<LogicXorExpression>::try_create(LogicOperator::Xor, args)
     }
 

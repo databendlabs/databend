@@ -21,7 +21,7 @@ use crate::prelude::*;
 #[derive(Clone)]
 pub struct StructColumn {
     values: Vec<ColumnRef>,
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl From<StructArray> for StructColumn {
@@ -53,7 +53,7 @@ impl StructColumn {
         )
     }
 
-    pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypePtr) -> Self {
+    pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypeImpl) -> Self {
         Self { values, data_type }
     }
 
@@ -67,7 +67,7 @@ impl Column for StructColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 

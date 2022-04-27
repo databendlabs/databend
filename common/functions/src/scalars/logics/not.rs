@@ -45,7 +45,7 @@ impl LogicExpression for LogicNotExpression {
 pub struct LogicNotFunction;
 
 impl LogicNotFunction {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         LogicFunctionImpl::<LogicNotExpression>::try_create(LogicOperator::Not, args)
     }
 

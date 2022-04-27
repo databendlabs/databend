@@ -56,7 +56,7 @@ pub struct ExpressionMonotonicityVisitor {
     // variable_right: the variable range right.
     variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
 
-    stack: Vec<(DataTypePtr, Monotonicity)>,
+    stack: Vec<(DataTypeImpl, Monotonicity)>,
 
     single_point: bool,
 }
@@ -89,7 +89,7 @@ impl ExpressionMonotonicityVisitor {
 
     fn try_calculate_boundary(
         func: &dyn Function,
-        result_type: &DataTypePtr,
+        result_type: &DataTypeImpl,
         args: Vec<Option<ColumnWithField>>,
     ) -> Result<Option<ColumnWithField>> {
         if args.iter().any(|col| col.is_none()) {
@@ -132,7 +132,7 @@ impl ExpressionMonotonicityVisitor {
 
         let instance = FunctionFactory::instance();
 
-        let arg_types: Vec<&DataTypePtr> = arg_types.iter().collect();
+        let arg_types: Vec<&DataTypeImpl> = arg_types.iter().collect();
         let func = instance.get(op, &arg_types)?;
 
         let return_type = func.return_type();

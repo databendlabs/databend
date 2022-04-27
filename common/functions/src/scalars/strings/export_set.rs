@@ -34,7 +34,7 @@ pub struct ExportSetFunction {
 }
 
 impl ExportSetFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         assert_string(args[1])?;
         assert_string(args[2])?;
@@ -66,7 +66,7 @@ impl Function for ExportSetFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Vu8::to_data_type()
     }
 

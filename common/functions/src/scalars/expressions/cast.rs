@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -26,7 +25,7 @@ use crate::scalars::FunctionContext;
 pub struct CastFunction {
     _display_name: String,
     /// The data type to cast to
-    cast_type: DataTypePtr,
+    cast_type: DataTypeImpl,
 }
 
 impl CastFunction {
@@ -54,7 +53,7 @@ impl CastFunction {
         let nullable_type = NullableType::create(data_type.clone());
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
-            cast_type: Arc::new(nullable_type),
+            cast_type: DataTypeImpl::Nullable(nullable_type),
         }))
     }
 }
@@ -64,7 +63,7 @@ impl Function for CastFunction {
         "CastFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.cast_type.clone()
     }
 

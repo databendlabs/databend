@@ -79,7 +79,7 @@ where
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(f64::to_data_type())
     }
 

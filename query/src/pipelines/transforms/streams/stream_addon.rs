@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;

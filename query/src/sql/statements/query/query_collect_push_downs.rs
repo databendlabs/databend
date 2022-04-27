@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::Extras;

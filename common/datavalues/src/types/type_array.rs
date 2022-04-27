@@ -20,26 +20,27 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::data_type::DataType;
-use super::data_type::DataTypePtr;
+use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
-    inner: DataTypePtr,
+    inner: Box<DataTypeImpl>,
 }
 
 impl ArrayType {
-    pub fn create(inner: DataTypePtr) -> Self {
-        ArrayType { inner }
+    pub fn create(inner: DataTypeImpl) -> Self {
+        ArrayType {
+            inner: Box::new(inner),
+        }
     }
 
-    pub fn inner_type(&self) -> &DataTypePtr {
+    pub fn inner_type(&self) -> &DataTypeImpl {
         &self.inner
     }
 }
 
-#[typetag::serde]
 impl DataType for ArrayType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Array
@@ -67,7 +68,7 @@ impl DataType for ArrayType {
             let inner_column = self.inner.create_column(value)?;
             let offsets = vec![0, value.len() as i64];
             let column = Arc::new(ArrayColumn::from_data(
-                Arc::new(self.clone()),
+                DataTypeImpl::Array(self.clone()),
                 offsets.into(),
                 inner_column,
             ));
@@ -99,7 +100,7 @@ impl DataType for ArrayType {
         let inner_column = self.inner.create_column(&values)?;
 
         Ok(Arc::new(ArrayColumn::from_data(
-            Arc::new(self.clone()),
+            DataTypeImpl::Array(self.clone()),
             offsets.into(),
             inner_column,
         )))
@@ -113,7 +114,7 @@ impl DataType for ArrayType {
     fn create_serializer(&self) -> TypeSerializerImpl {
         ArraySerializer {
             inner: Box::new(self.inner.create_serializer()),
-            typ: self.inner.clone(),
+            typ: *self.inner.clone(),
         }
         .into()
     }

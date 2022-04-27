@@ -41,7 +41,7 @@ pub trait AngleConvertFunction {
 impl<T> AngleFunction<T>
 where T: AngleConvertFunction + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         Ok(Box::new(AngleFunction::<T> {
             _display_name: display_name.to_string(),
@@ -62,7 +62,7 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         "AngleFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Float64Type::arc()
     }
 

@@ -27,12 +27,11 @@ use crate::prelude::*;
 pub struct VariantArrayType {}
 
 impl VariantArrayType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::VariantArray(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for VariantArrayType {
     fn data_type_id(&self) -> TypeID {
         TypeID::VariantArray

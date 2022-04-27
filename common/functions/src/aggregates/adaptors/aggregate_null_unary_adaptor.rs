@@ -84,7 +84,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         "AggregateNullUnaryAdaptor"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         match NULLABLE_RESULT {
             true => Ok(wrap_nullable(&self.nested.return_type()?)),
             false => Ok(self.nested.return_type()?),

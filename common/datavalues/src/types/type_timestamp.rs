@@ -59,8 +59,8 @@ impl TimestampType {
         TimestampType { precision, tz }
     }
 
-    pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
-        Arc::new(TimestampType { precision, tz })
+    pub fn arc(precision: usize, tz: Option<String>) -> DataTypeImpl {
+        DataTypeImpl::Timestamp(TimestampType { precision, tz })
     }
 
     pub fn tz(&self) -> Option<&String> {
@@ -99,7 +99,6 @@ impl TimestampType {
     }
 }
 
-#[typetag::serde]
 impl DataType for TimestampType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Timestamp
