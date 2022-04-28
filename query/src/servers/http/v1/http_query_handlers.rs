@@ -214,7 +214,10 @@ pub(crate) async fn query_handler(
                 resp,
             )))
         }
-        Err(e) => Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e))),
+        Err(e) => {
+            tracing::error!("Fail to start sql, Error: {:?}", e);
+            Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e)))
+        }
     }
 }
 
