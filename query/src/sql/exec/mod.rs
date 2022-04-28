@@ -27,6 +27,7 @@ use common_planners::Expression;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
+use super::plans::BasePlan;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::NewPipeline;
@@ -123,18 +124,18 @@ impl PipelineBuilder {
 
         match plan.plan_type() {
             PlanType::PhysicalScan => {
-                let physical_scan = plan.as_any().downcast_ref::<PhysicalScan>().unwrap();
-                self.build_physical_scan(physical_scan)
+                let physical_scan: PhysicalScan = plan.try_into()?;
+                self.build_physical_scan(&physical_scan)
             }
             PlanType::Project => {
-                let project = plan.as_any().downcast_ref::<ProjectPlan>().unwrap();
+                let project: ProjectPlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_project(project, input_schema)
+                self.build_project(&project, input_schema)
             }
             PlanType::Filter => {
-                let filter = plan.as_any().downcast_ref::<FilterPlan>().unwrap();
+                let filter: FilterPlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_filter(filter, input_schema)
+                self.build_filter(&filter, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }

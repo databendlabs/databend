@@ -21,6 +21,7 @@ mod scalar;
 
 use std::any::Any;
 
+use enum_dispatch::enum_dispatch;
 pub use filter::FilterPlan;
 pub use logical_get::LogicalGet;
 pub use pattern::PatternPlan;
@@ -33,8 +34,7 @@ use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
 
-pub type BasePlanRef = std::sync::Arc<dyn BasePlan>;
-
+#[enum_dispatch]
 pub trait BasePlan: Any {
     fn plan_type(&self) -> PlanType;
 
@@ -76,4 +76,14 @@ pub enum PlanType {
 
     // Pattern
     Pattern,
+}
+
+#[enum_dispatch(BasePlan)]
+#[derive(Clone, PartialEq, Debug)]
+pub enum BasePlanImpl {
+    LogicalGet(LogicalGet),
+    PhysicalScan(PhysicalScan),
+    Project(ProjectPlan),
+    Filter(FilterPlan),
+    Pattern(PatternPlan),
 }

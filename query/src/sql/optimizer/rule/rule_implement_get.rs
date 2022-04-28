@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 
 use crate::sql::optimizer::rule::transform_state::TransformState;
@@ -34,9 +32,12 @@ impl RuleImplementGet {
     pub fn create() -> Self {
         RuleImplementGet {
             id: RuleID::ImplementGet,
-            pattern: SExpr::create_leaf(Arc::new(PatternPlan {
-                plan_type: PlanType::LogicalGet,
-            })),
+            pattern: SExpr::create_leaf(
+                PatternPlan {
+                    plan_type: PlanType::LogicalGet,
+                }
+                .into(),
+            ),
         }
     }
 }
@@ -48,11 +49,15 @@ impl Rule for RuleImplementGet {
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
         let plan = expression.plan().clone();
-        let logical_get = plan.as_any().downcast_ref::<LogicalGet>().unwrap();
-        let result = SExpr::create_leaf(Arc::new(PhysicalScan {
-            table_index: logical_get.table_index,
-            columns: logical_get.columns.clone(),
-        }));
+        let logical_get: LogicalGet = plan.try_into()?;
+
+        let result = SExpr::create_leaf(
+            PhysicalScan {
+                table_index: logical_get.table_index,
+                columns: logical_get.columns.clone(),
+            }
+            .into(),
+        );
         state.add_result(result);
 
         Ok(())

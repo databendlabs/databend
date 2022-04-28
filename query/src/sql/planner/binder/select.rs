@@ -119,10 +119,13 @@ impl Binder {
             };
             bind_context.add_column_binding(column_binding);
         }
-        bind_context.expression = Some(SExpr::create_leaf(Arc::new(LogicalGet {
-            table_index,
-            columns: columns.into_iter().map(|col| col.column_index).collect(),
-        })));
+        bind_context.expression = Some(SExpr::create_leaf(
+            LogicalGet {
+                table_index,
+                columns: columns.into_iter().map(|col| col.column_index).collect(),
+            }
+            .into(),
+        ));
 
         Ok(bind_context)
     }
@@ -131,10 +134,8 @@ impl Binder {
         let scalar_binder = ScalarBinder::new();
         let scalar = scalar_binder.bind_expr(expr, bind_context)?;
         let filter_plan = FilterPlan { predicate: scalar };
-        let new_expr = SExpr::create_unary(
-            Arc::new(filter_plan),
-            bind_context.expression.clone().unwrap(),
-        );
+        let new_expr =
+            SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
         bind_context.expression = Some(new_expr);
         Ok(())
     }
