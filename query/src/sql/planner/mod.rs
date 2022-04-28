@@ -28,7 +28,7 @@ use crate::sql::optimizer::OptimizeContext;
 pub use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 
-mod binder;
+pub(crate) mod binder;
 mod metadata;
 pub mod plans;
 
