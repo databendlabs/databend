@@ -97,7 +97,7 @@ impl PatternExtractor {
                 children.push(candidates[index][*cursor].clone());
             }
             results.push(SExpr::create(
-                m_expr.plan().clone(),
+                m_expr.plan(),
                 children,
                 Some(m_expr.group_index()),
             ));

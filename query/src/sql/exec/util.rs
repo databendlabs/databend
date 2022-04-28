@@ -18,6 +18,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::BasePlan;
 use crate::sql::IndexType;
 
 // Check if all plans in an expression are physical plans

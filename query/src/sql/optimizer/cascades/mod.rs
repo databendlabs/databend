@@ -29,6 +29,7 @@ use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::BasePlan;
 use crate::sql::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
@@ -166,7 +167,7 @@ impl CascadesOptimizer {
     fn optimize_group(&self, group: &Group, required_prop: &RequiredProperty) -> Result<SExpr> {
         for m_expr in group.iter() {
             if m_expr.plan().is_physical() {
-                let plan = m_expr.plan().clone();
+                let plan = m_expr.plan();
 
                 // TODO: Check properties
                 // let physical = plan.as_physical_plan().unwrap();
