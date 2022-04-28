@@ -627,12 +627,14 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, cond))]
     fn txn_execute_one_condition(
         &self,
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
     ) -> MetaStorageResult<bool> {
+        tracing::debug!(cond = display(cond), "txn_execute_one_condition");
+
         let key = cond.key.clone();
 
         let sub_tree = txn_tree.key_space::<GenericKV>();
@@ -667,13 +669,15 @@ impl StateMachine {
         Ok(false)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, condition))]
     fn txn_execute_condition(
         &self,
         txn_tree: &TransactionSledTree,
         condition: &Vec<TxnCondition>,
     ) -> MetaStorageResult<bool> {
         for cond in condition {
+            tracing::debug!(condition = display(cond), "txn_execute_condition");
+
             if !self.txn_execute_one_condition(txn_tree, cond)? {
                 return Ok(false);
             }
@@ -768,13 +772,14 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, op, resp))]
     fn txn_execute_operation(
         &self,
         txn_tree: &TransactionSledTree,
         op: &TxnOp,
         resp: &mut TxnReply,
     ) -> MetaStorageResult<()> {
+        tracing::debug!(op = display(op), "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
@@ -791,12 +796,14 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, req))]
     fn apply_txn_cmd(
         &self,
         req: &TxnRequest,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
+        tracing::debug!(txn = display(req), "apply txn cmd");
+
         let condition = &req.condition;
 
         let ops: &Vec<TxnOp>;

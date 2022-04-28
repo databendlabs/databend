@@ -52,6 +52,7 @@ mod user_stage;
 pub(crate) mod compatibility;
 pub mod error_context;
 mod principal_identity;
+mod proto_display;
 mod share;
 mod warehouse_meta;
 
@@ -81,6 +82,7 @@ pub use database::DatabaseIdent;
 pub use database::DatabaseInfo;
 pub use database::DatabaseMeta;
 pub use database::DatabaseNameIdent;
+pub use database::DatabaseTenantIdIdent;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
