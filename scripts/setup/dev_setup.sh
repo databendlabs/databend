@@ -427,8 +427,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg llvm "$PACKAGE_MANAGER"
 
 	install_toolchain "$RUST_TOOLCHAIN"
-
-	install_pkg thrift "$PACKAGE_MANAGER"
 fi
 
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
