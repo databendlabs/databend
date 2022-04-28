@@ -79,7 +79,7 @@ pub enum PlanType {
 }
 
 #[enum_dispatch(BasePlan)]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone)]
 pub enum BasePlanImpl {
     LogicalGet(LogicalGet),
     PhysicalScan(PhysicalScan),

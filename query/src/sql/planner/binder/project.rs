@@ -23,7 +23,6 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
-use crate::sql::planner::plans::BasePlan;
 use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
