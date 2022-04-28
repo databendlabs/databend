@@ -30,7 +30,6 @@ pub mod metrics;
 pub mod optimizers;
 pub mod pipelines;
 pub mod procedures;
-pub mod protos;
 pub mod servers;
 pub mod sessions;
 pub mod sql;
