@@ -21,6 +21,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::exit_scope;
 
 use super::AggregateFunctionFactory;
 
@@ -89,16 +90,23 @@ pub fn eval_aggr(
     let cols: Vec<ColumnRef> = columns.iter().map(|c| c.column().clone()).collect();
 
     let func = factory.get(name, params, arguments)?;
+    let data_type = func.return_type()?;
 
     let arena = Bump::new();
     let place = arena.alloc_layout(func.state_layout());
     let addr = place.into();
     func.init_state(addr);
-    func.accumulate(addr, &cols, None, rows)?;
 
-    let data_type = func.return_type()?;
+    let f = func.clone();
+    exit_scope! {
+        {
+            if f.need_manual_drop_state() {
+                unsafe { f.drop_state(addr); }
+            }
+        }
+    }
+    func.accumulate(addr, &cols, None, rows)?;
     let mut builder = data_type.create_mutable(1024);
     func.merge_result(addr, builder.as_mut())?;
-
     Ok(builder.to_column())
 }

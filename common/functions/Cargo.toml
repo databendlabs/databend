@@ -16,6 +16,7 @@ common-arrow = { path = "../arrow" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
+common-infallible = { path = "../infallible" }
 common-io = { path = "../io" }
 
 # Crates.io dependencies

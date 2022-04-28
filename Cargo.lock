@@ -975,6 +975,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-infallible",
  "common-io",
  "crc32fast",
  "dyn-clone",
