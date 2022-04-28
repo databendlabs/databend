@@ -21,14 +21,14 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-mysql> select timeslot(now());
+SELECT timeslot(now());
 +---------------------+
 | timeslot(now())     |
 +---------------------+
 | 2022-03-29 06:30:00 |
 +---------------------+
 
-mysql> select timeslot(toDateTime(1630812366));
+SELECT timeslot(toDateTime(1630812366));
 +----------------------------------+
 | timeslot(toDateTime(1630812366)) |
 +----------------------------------+

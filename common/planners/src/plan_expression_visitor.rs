@@ -88,6 +88,11 @@ pub trait ExpressionVisitor: Sized {
                                 Expression::Sort { expr, .. } => {
                                     stack.push(RecursionProcessing::Call(expr));
                                 }
+                                Expression::MapAccess { args, .. } => {
+                                    for arg in args {
+                                        stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                }
                                 _ => {}
                             };
 

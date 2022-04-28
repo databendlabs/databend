@@ -31,11 +31,11 @@ We will bootstrap a minio server on kubernetes, with the following configuration
 
 ```shell title="minio-server-config"
 STORAGE_TYPE=s3
-S3_STORAGE_BUCKET=sample-storage
-S3_STORAGE_REGION=us-east-1
-S3_STORAGE_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
-S3_STORAGE_ACCESS_KEY_ID=minio
-S3_STORAGE_SECRET_ACCESS_KEY=minio123
+STORAGE_S3_BUCKET=sample-storage
+STORAGE_S3_REGION=us-east-1
+STORAGE_S3_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
+STORAGE_S3_ACCESS_KEY_ID=minio
+STORAGE_S3_SECRET_ACCESS_KEY=minio123
 ```
 
 The following configuration shall be applied to the target kubernetes cluster, it would create a bucket named `sample-storage` with `10Gi` storage space
@@ -79,11 +79,10 @@ nohup kubectl port-forward -n tenant1 svc/query-service 3308:3307 &
 mysql -h127.0.0.1 -uroot -P3308
 ```
 
-```shell title='mysql>'
-select * from system.clusters
+```sql
+SELECT * FROM system.clusters
 ```
-
-```text
+```
 +----------------------+------------+------+
 | name                 | host       | port |
 +----------------------+------------+------+
@@ -95,11 +94,8 @@ select * from system.clusters
 
 ## Step 4. Distributed query
 
-```shell title='mysql>'
-explain select max(number), sum(number) from numbers_mt(10000000000) group by number % 3, number % 4, number % 5 limit 10;
-```
-
-```shell
+```text
+EXPLAIN SELECT max(number), sum(number) FROM numbers_mt(10000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10;
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | explain                                                                                                                                                                                                           |
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -117,22 +113,20 @@ explain select max(number), sum(number) from numbers_mt(10000000000) group by nu
 The distributed query works, the cluster will efficiently transfer data through `flight_api_address`.
 
 ## Step 4.1. Upload the data to the cluster
-```shell title='mysql>'
-CREATE TABLE t1(i int, j int);
+```sql
+CREATE TABLE t1(i INT, j INT);
 ```
 
-```shell title='mysql>'
-insert into t1 select number, number + 300 from numbers(10000000);
+```sql
+INSERT INTO t1 SELECT number, number + 300 from numbers(10000000);
 ```
-```shell title='mysql>'
+```sql
 SELECT count(*) FROM t1;
 ```
-```shell
+```
 +----------+
 | count()  |
 +----------+
 | 10000000 |
 +----------+
-1 row in set (0.02 sec)
-Read 1 rows, 1 B in 0.001 sec., 749.34 rows/sec., 749.34 B/sec.
 ```

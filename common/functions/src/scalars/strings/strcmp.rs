@@ -59,9 +59,9 @@ impl Function for StrcmpFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, i8, _>(
             columns[0].column(),

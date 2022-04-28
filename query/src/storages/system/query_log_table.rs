@@ -48,7 +48,7 @@ pub struct QueryLogTable {
 }
 
 impl QueryLogTable {
-    pub fn create(table_id: u64) -> Self {
+    pub fn create(table_id: u64, max_rows: i32) -> Self {
         let schema = DataSchemaRefExt::create(vec![
             // Type.
             DataField::new("log_type", i8::to_data_type()),
@@ -63,8 +63,8 @@ impl QueryLogTable {
             DataField::new("query_id", Vu8::to_data_type()),
             DataField::new("query_kind", Vu8::to_data_type()),
             DataField::new("query_text", Vu8::to_data_type()),
-            DataField::new("event_date", Date32Type::arc()),
-            DataField::new("event_time", DateTime64Type::arc(3, None)),
+            DataField::new("event_date", DateType::arc()),
+            DataField::new("event_time", TimestampType::arc(3, None)),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),
             DataField::new("databases", Vu8::to_data_type()),
@@ -114,14 +114,9 @@ impl QueryLogTable {
 
         QueryLogTable {
             table_info,
-            max_rows: 200000,
+            max_rows,
             data: Arc::new(RwLock::new(VecDeque::new())),
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn set_max_rows(&mut self, max: i32) {
-        self.max_rows = max;
     }
 }
 

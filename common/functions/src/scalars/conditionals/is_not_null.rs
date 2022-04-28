@@ -41,7 +41,7 @@ impl IsNotNullFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("isNull")
+                .negative_function("is_null")
                 .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
@@ -60,9 +60,9 @@ impl Function for IsNotNullFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let (all_null, validity) = columns[0].column().validity();
         if all_null {
@@ -78,6 +78,6 @@ impl Function for IsNotNullFunction {
 
 impl std::fmt::Display for IsNotNullFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "isNotNull")
+        write!(f, "is_not_null")
     }
 }

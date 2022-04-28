@@ -1,5 +1,5 @@
 ---
-title: List files in a stage
+title: LIST FILES IN STAGE
 ---
 
 
@@ -20,10 +20,8 @@ Where:
 
 ## Examples
 
-```sql title='mysql>'
+```sql
 list @named_external_stage PATTERN = 'ontime.*parquet';
-```
-```
 +-----------------------+
 | file_name             |
 +-----------------------+

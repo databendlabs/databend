@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::combine_validities;
 use common_datavalues::combine_validities_2;
 use common_datavalues::remove_nullable;
@@ -101,9 +101,9 @@ impl Function for FunctionAdapter {
 
     fn eval(
         &self,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if self.inner.is_none() {
             return Ok(Arc::new(NullColumn::new(input_rows)));
@@ -111,7 +111,7 @@ impl Function for FunctionAdapter {
 
         let inner = self.inner.as_ref().unwrap();
         if columns.is_empty() {
-            return inner.eval(columns, input_rows, func_ctx);
+            return inner.eval(func_ctx, columns, input_rows);
         }
 
         // is there nullable constant? Did not consider this case
@@ -127,7 +127,7 @@ impl Function for FunctionAdapter {
                 })
                 .collect::<Vec<_>>();
 
-            let col = self.eval(&columns, 1, func_ctx)?;
+            let col = self.eval(func_ctx, &columns, 1)?;
             let col = if col.is_const() && col.len() != input_rows {
                 col.replicate(&[input_rows])
             } else if col.is_null() {
@@ -163,7 +163,7 @@ impl Function for FunctionAdapter {
                 input.push(col);
             }
 
-            let col = self.eval(&input, input_rows, func_ctx)?;
+            let col = self.eval(func_ctx, &input, input_rows)?;
 
             // The'try' series functions always return Null when they failed the try.
             // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
@@ -190,7 +190,7 @@ impl Function for FunctionAdapter {
             return Ok(col);
         }
 
-        inner.eval(columns, input_rows, func_ctx)
+        inner.eval(func_ctx, columns, input_rows)
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {

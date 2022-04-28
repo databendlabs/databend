@@ -1,4 +1,7 @@
 DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t4;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
 SELECT COUNT(1) from system.tables where name = 't' and database = 'default';
@@ -12,6 +15,9 @@ insert into t2 values(1,1),(2,2);
 select a+b from t2;
 
 create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
+
+create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
+
 
 create table t3(`a` int) ENGINE = Null;
 create table t4('a' int) ENGINE = Null;
@@ -49,9 +55,15 @@ SELECT a FROM db2.test5;
 SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
 
 
+SELECT '====TIMESTAMP====';
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); -- {ErrorCode 1006}
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); -- {ErrorCode 1006}
 create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
+
+
+SELECT '====CREATE ALL DATA TYPE TABLE====';
+create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, array ARRAY, obj OBJECT, variant VARIANT);
+desc db2.test7;
 
 
 -- clean up test databases
@@ -59,4 +71,6 @@ DROP DATABASE db1;
 DROP DATABASE db2;
 
 CREATE TABLE system.test; -- {ErrorCode 1002}
+
+
 

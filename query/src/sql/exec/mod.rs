@@ -12,124 +12,191 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_schema_helper;
+mod data_schema_builder;
 mod expression_builder;
 mod util;
 
 use std::sync::Arc;
 
-use async_recursion::async_recursion;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
+pub use util::decode_field_name;
+pub use util::format_field_name;
 
-use crate::pipelines::processors::Pipeline;
-use crate::pipelines::transforms::ProjectionTransform;
-use crate::pipelines::transforms::SourceTransform;
+use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::sql::exec::data_schema_helper::DataSchemaHelper;
+use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::PhysicalScan;
+use crate::sql::plans::PlanType;
+use crate::sql::plans::ProjectPlan;
+use crate::sql::plans::Scalar;
+use crate::sql::IndexType;
 use crate::sql::Metadata;
-use crate::sql::PhysicalProject;
-use crate::sql::PhysicalScan;
-use crate::sql::Plan;
 
 /// Helper to build a `Pipeline` from `SExpr`
-pub struct Executor {
+pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
     metadata: Metadata,
+    result_columns: Vec<(IndexType, String)>,
+    expression: SExpr,
+    pipeline: NewPipeline,
 }
 
-impl Executor {
-    pub fn create(ctx: Arc<QueryContext>, metadata: Metadata) -> Self {
-        Executor { ctx, metadata }
+impl PipelineBuilder {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        result_columns: Vec<(IndexType, String)>,
+        metadata: Metadata,
+        expression: SExpr,
+    ) -> Self {
+        PipelineBuilder {
+            ctx,
+            metadata,
+            result_columns,
+            expression,
+            pipeline: NewPipeline::create(),
+        }
     }
 
-    #[async_recursion(? Send)]
-    pub async fn build_pipeline(&self, expression: &SExpr) -> Result<Pipeline> {
+    pub fn spawn(mut self) -> Result<NewPipeline> {
+        let expr = self.expression.clone();
+        let schema = self.build_pipeline(&expr)?;
+        self.align_data_schema(schema)?;
+        let settings = self.ctx.get_settings();
+        self.pipeline
+            .set_max_threads(settings.get_max_threads()? as usize);
+        Ok(self.pipeline)
+    }
+
+    fn align_data_schema(&mut self, input_schema: DataSchemaRef) -> Result<()> {
+        let mut projections = Vec::with_capacity(self.result_columns.len());
+        let mut output_fields = Vec::with_capacity(self.result_columns.len());
+        for (index, name) in self.result_columns.iter() {
+            let column_entry = self.metadata.column(*index);
+            let field_name = &column_entry.name;
+            projections.push(Expression::Alias(
+                name.clone(),
+                Box::new(Expression::Column(format_field_name(
+                    field_name.as_str(),
+                    *index,
+                ))),
+            ));
+            let field = if column_entry.nullable {
+                DataField::new_nullable(name.as_str(), column_entry.data_type.clone())
+            } else {
+                DataField::new(name.as_str(), column_entry.data_type.clone())
+            };
+            output_fields.push(field);
+        }
+        let output_schema = Arc::new(DataSchema::new(output_fields));
+
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ProjectionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    input_schema.clone(),
+                    output_schema.clone(),
+                    projections.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        Ok(())
+    }
+
+    fn build_pipeline(&mut self, expression: &SExpr) -> Result<DataSchemaRef> {
         if !check_physical(expression) {
-            return Err(ErrorCode::LogicalError(format!(
-                "Invalid physical plan: {:?}",
-                expression
-            )));
+            return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
 
-        match expression.plan().as_ref() {
-            Plan::PhysicalScan(scan) => self.build_table_scan(scan).await,
-            Plan::PhysicalProject(project) => {
-                self.build_project(project, expression.children().as_slice())
-                    .await
+        let plan = expression.plan().clone();
+
+        match plan.plan_type() {
+            PlanType::PhysicalScan => {
+                let physical_scan = plan.as_any().downcast_ref::<PhysicalScan>().unwrap();
+                self.build_physical_scan(physical_scan)
             }
-            _ => Err(ErrorCode::LogicalError(format!(
-                "Invalid physical plan: {:?}",
-                expression
-            ))),
+            PlanType::Project => {
+                let project = plan.as_any().downcast_ref::<ProjectPlan>().unwrap();
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_project(project, input_schema)
+            }
+            _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
     }
 
-    async fn build_project(
-        &self,
-        project: &PhysicalProject,
-        children: &[SExpr],
-    ) -> Result<Pipeline> {
-        let child = &children[0];
-        let input_schema = Arc::new(DataSchemaHelper::build(child, &self.metadata)?);
-        let output_schema = Arc::new(DataSchemaHelper::build_project(
-            project,
-            child,
-            &self.metadata,
-        )?);
+    fn build_project(
+        &mut self,
+        project: &ProjectPlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let output_schema = schema_builder.build_project(project, input_schema.clone())?;
 
-        let mut exprs = vec![];
-        for item in project.items.iter() {
-            let alias = self.metadata.column(item.index).name.clone();
-            let builder = ExpressionBuilder::create(&self.metadata);
-            let expr = builder.build(&item.expr)?;
-            let expr = Expression::Alias(alias, Box::new(expr));
-            exprs.push(expr);
+        let mut expressions = Vec::with_capacity(project.items.len());
+        let expr_builder = ExpressionBuilder::create(&self.metadata);
+        for expr in project.items.iter() {
+            let scalar = expr.expr.as_any().downcast_ref::<Scalar>().unwrap();
+            let expression = expr_builder.build(scalar)?;
+            expressions.push(expression);
         }
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ProjectionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    input_schema.clone(),
+                    output_schema.clone(),
+                    expressions.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
 
-        let mut pipeline = self.build_pipeline(child).await?;
-        pipeline.add_simple_transform(|| {
-            Ok(Box::new(ProjectionTransform::try_create(
-                input_schema.clone(),
-                output_schema.clone(),
-                exprs.clone(),
-                self.ctx.clone(),
-            )?))
-        })?;
-        Ok(pipeline)
+        Ok(output_schema)
     }
 
-    async fn build_table_scan(&self, scan: &PhysicalScan) -> Result<Pipeline> {
-        let table = self.metadata.table(scan.table_index).table.clone();
-        let (statistics, parts) = table.read_partitions(self.ctx.clone(), None).await?;
-        let plan = ReadDataSourcePlan {
-            source_info: SourceInfo::TableSource(table.get_table_info().clone()),
-            scan_fields: None,
-            parts,
-            statistics,
-            description: "".to_string(),
-            tbl_args: table.table_args(),
-            push_downs: None,
-        };
+    fn build_physical_scan(&mut self, scan: &PhysicalScan) -> Result<DataSchemaRef> {
+        let table_entry = self.metadata.table(scan.table_index);
+        let plan = table_entry.source.clone();
 
-        // Bind plan partitions to context.
+        let table = self.ctx.build_table_from_source_plan(&plan)?;
         self.ctx.try_set_partitions(plan.parts.clone())?;
+        table.read2(self.ctx.clone(), &plan, &mut self.pipeline)?;
+        let columns: Vec<IndexType> = scan.columns.iter().cloned().collect();
+        let projections: Vec<Expression> = columns
+            .iter()
+            .map(|index| {
+                let column_entry = self.metadata.column(*index);
+                Expression::Alias(
+                    format_field_name(column_entry.name.as_str(), column_entry.column_index),
+                    Box::new(Expression::Column(column_entry.name.clone())),
+                )
+            })
+            .collect();
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let input_schema = schema_builder.build_canonical_schema(&columns);
+        let output_schema = schema_builder.build_physical_scan(scan)?;
 
-        let mut pipeline = Pipeline::create(self.ctx.clone());
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(max_threads, plan.parts.len());
-        let workers = std::cmp::max(max_threads, 1);
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ProjectionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    input_schema.clone(),
+                    output_schema.clone(),
+                    projections.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
 
-        for _ in 0..workers {
-            let source = SourceTransform::try_create(self.ctx.clone(), plan.clone())?;
-            pipeline.add_source(Arc::new(source))?;
-        }
-        Ok(pipeline)
+        Ok(output_schema)
     }
 }

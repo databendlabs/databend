@@ -38,8 +38,8 @@ impl From<DropTablePlan> for DropTableReq {
         DropTableReq {
             if_exists: p.if_exists,
             tenant: p.tenant,
-            db: p.db,
-            table: p.table,
+            db_name: p.db,
+            table_name: p.table,
         }
     }
 }

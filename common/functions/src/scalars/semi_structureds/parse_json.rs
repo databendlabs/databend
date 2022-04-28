@@ -17,7 +17,6 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
@@ -83,9 +82,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         if data_type.data_type_id() == TypeID::Null {
@@ -94,18 +93,18 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
 
         let column = columns[0].column();
         if SUPPRESS_PARSE_ERROR {
-            let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
+            let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
                 || data_type.data_type_id().is_string()
+                || data_type.data_type_id().is_variant()
                 || data_type.data_type_id() == TypeID::Boolean
-                || data_type.data_type_id() == TypeID::Variant
             {
                 let serializer = data_type.create_serializer();
                 match serializer.serialize_json_object_suppress_error(column) {
                     Ok(values) => {
                         for v in values {
                             match v {
-                                Some(v) => builder.append(&v, true),
+                                Some(v) => builder.append(&VariantValue::from(v), true),
                                 None => builder.append_null(),
                             }
                         }
@@ -126,11 +125,11 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             let column = nullable_column.inner();
             let data_type = remove_nullable(data_type);
 
-            let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
+            let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
                 || data_type.data_type_id().is_string()
+                || data_type.data_type_id().is_variant()
                 || data_type.data_type_id() == TypeID::Boolean
-                || data_type.data_type_id() == TypeID::Variant
             {
                 let serializer = data_type.create_serializer();
                 match serializer.serialize_json_object(column, valids) {
@@ -142,7 +141,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
                                     continue;
                                 }
                             }
-                            builder.append(v, true);
+                            builder.append(&VariantValue::from(v), true);
                         }
                     }
                     Err(e) => return Err(e),
@@ -156,17 +155,17 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             return Ok(builder.build(input_rows));
         }
 
-        let mut builder = ColumnBuilder::<JsonValue>::with_capacity(input_rows);
+        let mut builder = ColumnBuilder::<VariantValue>::with_capacity(input_rows);
         if data_type.data_type_id().is_numeric()
             || data_type.data_type_id().is_string()
+            || data_type.data_type_id().is_variant()
             || data_type.data_type_id() == TypeID::Boolean
-            || data_type.data_type_id() == TypeID::Variant
         {
             let serializer = data_type.create_serializer();
             match serializer.serialize_json_object(column, None) {
                 Ok(values) => {
                     for v in values {
-                        builder.append(&v);
+                        builder.append(&VariantValue::from(v));
                     }
                 }
                 Err(e) => return Err(e),

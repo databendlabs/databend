@@ -76,9 +76,9 @@ impl Function for ReplaceFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let view0 = Vu8::try_create_viewer(columns[0].column())?;
         let view1 = Vu8::try_create_viewer(columns[1].column())?;

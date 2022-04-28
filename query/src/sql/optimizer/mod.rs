@@ -24,6 +24,7 @@ mod rule;
 mod s_expr;
 
 use common_exception::Result;
+pub use heuristic::HeuristicOptimizer;
 pub use m_expr::MExpr;
 pub use memo::Memo;
 pub use optimize_context::OptimizeContext;
@@ -34,14 +35,15 @@ pub use property::RelationalProperty;
 pub use property::RequiredProperty;
 pub use s_expr::SExpr;
 
-use crate::sql::optimizer::cascades::CascadesOptimizer;
-use crate::sql::optimizer::heuristic::HeuristicOptimizer;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RuleSet;
 
-pub fn optimize(expression: SExpr, ctx: OptimizeContext) -> Result<SExpr> {
+pub fn optimize(expression: SExpr, _ctx: OptimizeContext) -> Result<SExpr> {
     let mut heuristic = HeuristicOptimizer::create()?;
-    let expression = heuristic.optimize(expression)?;
-    let mut cascades = CascadesOptimizer::create(ctx);
-    cascades.optimize(expression)
+    let s_expr = heuristic.optimize(expression)?;
+    // TODO: enable cascades optimizer
+    // let mut cascades = CascadesOptimizer::create(ctx);
+    // cascades.optimize(s_expr)
+
+    Ok(s_expr)
 }

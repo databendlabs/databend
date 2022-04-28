@@ -57,8 +57,8 @@ impl RepoIssuesTable {
         let req = CreateTableReq {
             if_not_exists: false,
             tenant: tenant.to_string(),
-            db: options.owner.clone(),
-            table: format!("{}_{}", options.repo.clone(), "issues"),
+            db_name: options.owner.clone(),
+            table_name: format!("{}_{}", options.repo.clone(), "issues"),
             table_meta: TableMeta {
                 schema: RepoIssuesTable::schema(),
                 engine: "GITHUB".into(),
@@ -79,9 +79,9 @@ impl RepoIssuesTable {
             DataField::new(LABELS, Vu8::to_data_type()),
             DataField::new(ASSIGNESS, Vu8::to_data_type()),
             DataField::new(COMMENTS, u32::to_data_type()),
-            DataField::new(CREATED_AT, DateTime32Type::arc(None)),
-            DataField::new(UPDATED_AT, DateTime32Type::arc(None)),
-            DataField::new_nullable(CLOSED_AT, DateTime32Type::arc(None)),
+            DataField::new(CREATED_AT, TimestampType::arc(0, None)),
+            DataField::new(UPDATED_AT, TimestampType::arc(0, None)),
+            DataField::new_nullable(CLOSED_AT, TimestampType::arc(0, None)),
         ];
 
         Arc::new(DataSchema::new(fields))

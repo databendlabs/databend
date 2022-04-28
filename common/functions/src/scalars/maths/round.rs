@@ -91,9 +91,9 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         match IS_TRUNC {
             false => eval_round(columns),

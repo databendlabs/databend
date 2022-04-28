@@ -1,13 +1,13 @@
 ---
-title: argMax
+title: ARG_MAX
 ---
 
-Calculates the `arg` value for a maximum `val` value. If there are several different values of `arg` for maximum values of `val`, returns the first of these values encountered.
+Calculates the `arg` value for a maximum `val` value. If there are several values of `arg` for maximum values of `val`, returns the first of these values encountered.
 
 ## Syntax
 
 ```
-argMax(arg, val)
+ARG_MAX(arg, val)
 ```
 
 ## Arguments
@@ -32,7 +32,7 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 Input table:
 
 ```sql
-mysql> SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC;
+SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user ORDER BY salary ASC;
 +----------+------+
 | salary   | user |
 +----------+------+
@@ -43,13 +43,13 @@ mysql> SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GRO
 ```
 
 ```sql
-mysql> SELECT argMax(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
+SELECT arg_max(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
 
-+----------------------+
-| argMax(user, salary) |
-+----------------------+
-|                    0 |
-+----------------------+
++-----------------------+
+| arg_max(user, salary) |
++-----------------------+
+|                     0 |
++-----------------------+
 
 ```
 

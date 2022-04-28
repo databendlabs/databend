@@ -59,9 +59,9 @@ impl Function for CharFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let column_count = columns.len();
         let mut values: Vec<u8> = vec![0; input_rows * column_count];

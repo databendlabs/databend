@@ -14,6 +14,7 @@
 
 mod check_json;
 mod get;
+mod json_extract_path_text;
 mod parse_json;
 mod semi_structured;
 
@@ -21,6 +22,7 @@ pub use check_json::CheckJsonFunction;
 pub use get::GetFunction;
 pub use get::GetIgnoreCaseFunction;
 pub use get::GetPathFunction;
+pub use json_extract_path_text::JsonExtractPathTextFunction;
 pub use parse_json::ParseJsonFunction;
 pub use parse_json::TryParseJsonFunction;
 pub use semi_structured::SemiStructuredFunction;

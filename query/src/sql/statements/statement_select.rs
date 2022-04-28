@@ -49,6 +49,7 @@ use crate::storages::ToReadDataSourcePlan;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
+    pub distinct: bool,
     pub from: Vec<TableWithJoins>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
@@ -67,20 +68,15 @@ impl AnalyzableStatement for DfQueryStatement {
         let mut joined_schema = analyzer.analyze(self).await?;
 
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
-        tracing::debug!("\nQueryASTIR after normalize:\n{:?}", ir);
 
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
-        tracing::debug!("\nQueryASTIR after qualified rewrite:\n{:?}", ir);
 
         let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
-        tracing::debug!("\nQueryASTIR after push downs:\n{:?}", ir);
 
         // todo collect window_functions @doki
 
         let analyze_state = self.analyze_query(ir).await?;
-        tracing::debug!("\nQueryAnalyzeState:\n{:?}", analyze_state);
-
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
     }
@@ -168,6 +164,10 @@ impl DfQueryStatement {
             Self::analyze_window(&ir.window_expressions, &mut analyze_state)?;
         }
 
+        if ir.distinct {
+            Self::analyze_distinct(&ir.projection_expressions, &mut analyze_state)?;
+        }
+
         Ok(analyze_state)
     }
 
@@ -184,6 +184,27 @@ impl DfQueryStatement {
             state
                 .aggregate_expressions
                 .push(rebase_expr(aggr_expression, base_exprs)?);
+        }
+
+        Ok(())
+    }
+
+    fn analyze_distinct(
+        projection_exprs: &[Expression],
+        state: &mut QueryAnalyzeState,
+    ) -> Result<()> {
+        for item in projection_exprs {
+            let distinct_expr = match item {
+                Expression::Alias(_, expr) => *expr.clone(),
+                _ => item.clone(),
+            };
+
+            // support select distinct aggr_func()...
+            // todo may need before_distinct_expressions @doki
+            let distinct_expr = rebase_expr(&distinct_expr, &state.group_by_expressions)?;
+            let distinct_expr = rebase_expr(&distinct_expr, &state.aggregate_expressions)?;
+            let distinct_expr = rebase_expr(&distinct_expr, &state.window_expressions)?;
+            state.distinct_expressions.push(distinct_expr);
         }
 
         Ok(())

@@ -54,9 +54,9 @@ impl Function for UnhexFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 

@@ -61,7 +61,7 @@ impl JwkKey {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct JwkKeys {
     pub keys: Vec<JwkKey>,
 }

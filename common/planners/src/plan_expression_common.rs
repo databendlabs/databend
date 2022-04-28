@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 
+use crate::validate_function_arg;
 use crate::Expression;
 use crate::ExpressionVisitor;
 use crate::Recursion;
@@ -352,11 +353,19 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
             Expression::Cast {
                 expr: nested_expr,
                 data_type,
+                pg_style,
             } => Ok(Expression::Cast {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 data_type: data_type.clone(),
+                pg_style: *pg_style,
             }),
-
+            Expression::MapAccess { name, args } => Ok(Expression::MapAccess {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|e| clone_with_replacement(e, replacement_fn))
+                    .collect::<Result<Vec<Expression>>>()?,
+            }),
             Expression::Column(_)
             | Expression::QualifiedColumn(_)
             | Expression::Literal { .. }
@@ -430,6 +439,14 @@ impl ExpressionDataTypeVisitor {
     }
 
     fn visit_function(mut self, op: &str, args_size: usize) -> Result<ExpressionDataTypeVisitor> {
+        let features = FunctionFactory::instance().get_features(op)?;
+        validate_function_arg(
+            op,
+            args_size,
+            features.variadic_arguments,
+            features.num_arguments,
+        )?;
+
         let mut arguments = Vec::with_capacity(args_size);
         for index in 0..args_size {
             arguments.push(match self.stack.pop() {
@@ -524,6 +541,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 self.stack.push(inner_type.clone());
                 Ok(self)
             }
+            Expression::MapAccess { args, .. } => self.visit_function("get_path", args.len()),
             Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
         }
     }

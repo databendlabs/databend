@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -105,8 +106,10 @@ pub struct TableInfo {
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
-    pub engine_options: HashMap<String, String>,
-    pub options: HashMap<String, String>,
+    pub engine_options: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
+    // TODO(sundy): Save this as AST format
+    pub order_keys: Option<Vec<u8>>,
     pub created_on: DateTime<Utc>,
 }
 
@@ -137,7 +140,7 @@ impl TableInfo {
         self.meta.schema.clone()
     }
 
-    pub fn options(&self) -> &HashMap<String, String> {
+    pub fn options(&self) -> &BTreeMap<String, String> {
         &self.meta.options
     }
 
@@ -145,7 +148,7 @@ impl TableInfo {
         &self.meta.engine
     }
 
-    pub fn engine_options(&self) -> &HashMap<String, String> {
+    pub fn engine_options(&self) -> &BTreeMap<String, String> {
         &self.meta.engine_options
     }
 
@@ -161,9 +164,10 @@ impl Default for TableMeta {
         TableMeta {
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
-            engine_options: HashMap::new(),
-            options: HashMap::new(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
             created_on: Utc::now(),
+            order_keys: None,
         }
     }
 }
@@ -192,9 +196,19 @@ impl Display for TableInfo {
 pub struct CreateTableReq {
     pub if_not_exists: bool,
     pub tenant: String,
-    pub db: String,
-    pub table: String,
+    pub db_name: String,
+    pub table_name: String,
     pub table_meta: TableMeta,
+}
+
+impl Display for CreateTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "create_table(if_not_exists={}):{}/{}-{}={}",
+            self.if_not_exists, self.tenant, self.db_name, self.table_name, self.table_meta
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -206,8 +220,18 @@ pub struct CreateTableReply {
 pub struct DropTableReq {
     pub if_exists: bool,
     pub tenant: String,
-    pub db: String,
-    pub table: String,
+    pub db_name: String,
+    pub table_name: String,
+}
+
+impl Display for DropTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "drop_table(if_exists={}):{}/{}-{}",
+            self.if_exists, self.tenant, self.db_name, self.table_name
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -217,10 +241,20 @@ pub struct DropTableReply {}
 pub struct RenameTableReq {
     pub if_exists: bool,
     pub tenant: String,
-    pub db: String,
+    pub db_name: String,
     pub table_name: String,
-    pub new_db: String,
+    pub new_db_name: String,
     pub new_table_name: String,
+}
+
+impl Display for RenameTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "rename_table:{}/{}-{}=>{}-{}",
+            self.tenant, self.db_name, self.table_name, self.new_db_name, self.new_table_name
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -251,6 +285,16 @@ impl UpsertTableOptionReq {
             seq: MatchSeq::Exact(table_ident.version),
             options: hashmap! {key.into() => Some(value.into())},
         }
+    }
+}
+
+impl Display for UpsertTableOptionReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "upsert-table-options: table-id:{}({:?}) = {:?}",
+            self.table_id, self.seq, self.options
+        )
     }
 }
 

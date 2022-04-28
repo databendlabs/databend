@@ -163,7 +163,7 @@ impl AggregateFunction for AggregateIfCombinator {
 
 impl fmt::Display for AggregateIfCombinator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}if", self.nested_name)
+        write!(f, "{}_if", self.nested_name)
     }
 }
 

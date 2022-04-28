@@ -38,9 +38,10 @@ fn create_table() -> Result<()> {
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", None, DataType::Int(None))],
         engine: "Fuse".to_string(),
-        options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
+        options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -50,9 +51,10 @@ fn create_table() -> Result<()> {
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", Some('`'), DataType::Int(None))],
         engine: "Fuse".to_string(),
-        options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
+        options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -62,9 +64,10 @@ fn create_table() -> Result<()> {
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", Some('\''), DataType::Int(None))],
         engine: "Fuse".to_string(),
-        options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
+        options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -80,12 +83,13 @@ fn create_table() -> Result<()> {
         ],
         engine: "Fuse".to_string(),
 
-        options: maplit::hashmap! {
+        options: maplit::btreemap! {
             "location".into() => "foo.parquet".into(),
             "comment".into() => "foo".into(),
         },
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -97,9 +101,10 @@ fn create_table() -> Result<()> {
         columns: vec![],
         engine: "Parquet".to_string(),
 
-        options: maplit::hashmap! {"location".into() => "batcave".into()},
+        options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -114,9 +119,10 @@ fn create_table() -> Result<()> {
         ],
         engine: "Parquet".to_string(),
 
-        options: maplit::hashmap! {"location".into() => "batcave".into()},
+        options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: None,
         query: Some(Box::new(DfQueryStatement {
+            distinct: false,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
                     name: ObjectName(vec![Ident::new("t2")]),
@@ -134,6 +140,7 @@ fn create_table() -> Result<()> {
             limit: None,
             offset: None,
         })),
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
     Ok(())
@@ -148,9 +155,10 @@ fn create_table_select() -> Result<()> {
             name: ObjectName(vec![Ident::new("foo")]),
             columns: vec![],
             engine: "FUSE".to_string(),
-            options: maplit::hashmap! {},
+            options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+            order_keys: vec![],
         }),
     )?;
 
@@ -161,9 +169,10 @@ fn create_table_select() -> Result<()> {
             name: ObjectName(vec![Ident::new("foo")]),
             columns: vec![make_column_def("a", None, DataType::Int(None))],
             engine: "FUSE".to_string(),
-            options: maplit::hashmap! {},
+            options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+            order_keys: vec![],
         }),
     )?;
 

@@ -18,9 +18,9 @@ use common_meta_types::UserDefinedFunction;
 #[test]
 fn test_udf() -> Result<()> {
     let udf = UserDefinedFunction::new(
-        "isnotnull",
+        "is_not_null",
         vec!["p".to_string()],
-        "not(isnull(p))",
+        "not(is_null(p))",
         "this is a description",
     );
     let ser = serde_json::to_string(&udf)?;

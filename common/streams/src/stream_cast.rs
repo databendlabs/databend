@@ -58,7 +58,7 @@ impl CastStream {
         for ((cast_func, input_field), column) in iter {
             let column = ColumnWithField::new(column.clone(), input_field.clone());
             // TODO(veeupup): we nned to use the real function context here
-            columns.push(cast_func.eval(&[column], rows, self.func_ctx.clone())?);
+            columns.push(cast_func.eval(self.func_ctx.clone(), &[column], rows)?);
         }
 
         Ok(DataBlock::create(self.output_schema.clone(), columns))

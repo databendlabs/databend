@@ -21,12 +21,13 @@ use common_planners::Expression;
 // Intermediate representation for query AST(after normalize)
 pub struct QueryASTIR {
     pub filter_predicate: Option<Expression>,
-    pub group_by_expressions: Vec<Expression>,
     pub having_predicate: Option<Expression>,
+    pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
     pub window_expressions: Vec<Expression>,
-    pub order_by_expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
+    pub distinct: bool,
+    pub order_by_expressions: Vec<Expression>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
@@ -100,6 +101,13 @@ pub trait QueryASTIRVisitor<Data> {
                 Self::visit_recursive_expr(origin_expr, data)
             }
             Expression::Cast { expr, .. } => Self::visit_recursive_expr(expr, data),
+            Expression::MapAccess { args, .. } => {
+                for arg in args {
+                    Self::visit_recursive_expr(arg, data)?;
+                }
+
+                Ok(())
+            }
             _ => Self::visit_expr(expr, data),
         }
     }
@@ -175,6 +183,10 @@ impl Debug for QueryASTIR {
 
         if !self.window_expressions.is_empty() {
             debug_struct.field("window", &self.window_expressions);
+        }
+
+        if self.distinct {
+            debug_struct.field("distinct", &true);
         }
 
         if !self.order_by_expressions.is_empty() {

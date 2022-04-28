@@ -189,7 +189,7 @@ FROM a, b NATURAL JOIN c, d;
 Query { 
     with: None, 
     body: Select(
-        Select { 
+        SELECT { 
             projection: [Wildcard], 
             from: [
                 TableWithJoins { 
@@ -400,8 +400,8 @@ In vetorized execution, we can use a bit map to indicate whether a row should be
 For example, assume we have following SQL query:
 
 ```SQL
-CREATE TABLE t(a int, b int);
-CREATE TABLE t1(b int, c int);
+CREATE TABLE t(a INT, b INT);
+CREATE TABLE t1(b INT, c INT);
 -- insert some rows
 SELECT a, b, c FROM t INNER JOIN t1 ON t.b = t1.b;
 ```

@@ -21,14 +21,14 @@ Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 ## Examples
 
 ```sql
-mysql> select toStartOfDay(now());
+SELECT toStartOfDay(now());
 +---------------------+
 | toStartOfDay(now()) |
 +---------------------+
 | 2022-03-29 00:00:00 |
 +---------------------+
 
-mysql> select toStartOfDay(toDateTime(1630812366));
+SELECT toStartOfDay(toDateTime(1630812366));
 +--------------------------------------+
 | toStartOfDay(toDateTime(1630812366)) |
 +--------------------------------------+

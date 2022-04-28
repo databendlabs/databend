@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
 // both id and name will not change after created
 // id used to distinguish share with same name (but never the same time)
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -44,6 +48,16 @@ pub struct CreateShareReq {
     pub share_name: String,
 }
 
+impl Display for CreateShareReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "create_share(if_not_exists={}):{}/{}",
+            self.if_not_exists, self.tenant, self.share_name
+        )
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateShareReply {
     pub share_id: u64,
@@ -54,6 +68,12 @@ pub struct DropShareReq {
     pub if_exists: bool,
     pub tenant: String,
     pub share_name: String,
+}
+
+impl Display for DropShareReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "drop_share:{}/{}", self.tenant, self.share_name)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

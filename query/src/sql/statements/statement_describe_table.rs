@@ -66,6 +66,7 @@ impl DfDescribeTable {
             DataField::new("Type", Vu8::to_data_type()),
             DataField::new("Null", Vu8::to_data_type()),
             DataField::new("Default", Vu8::to_data_type()),
+            DataField::new("Extra", Vu8::to_data_type()),
         ])
     }
 }

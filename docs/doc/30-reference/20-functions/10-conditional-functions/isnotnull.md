@@ -1,6 +1,6 @@
 ---
-title: isNotNull
-description: isNotNull(expr1) function
+title: IS_NOT_NULL
+description: 'is_not_null( <expr> ) function'
 ---
 
 Checks whether a value is not NULL.
@@ -8,34 +8,31 @@ Checks whether a value is not NULL.
 ## Syntax
 
 ```sql
-isNotNull(x)
+IS_NOT_NULL( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| x | A value with non-compound data type. |
+| `<expr>` | Any general expression which will be evaluated as the value.
 
 ## Return Type
 
-If x is not NULL, isNotNull() returns 1, otherwise it returns 0.
+If x is not NULL, is_not_null() returns 1, otherwise it returns 0.
 
 ## Examples
 
 ```sql
-mysql> CREATE TABLE nullable_test (a UInt32, b UInt32) engine=Memory;
-Query OK, 0 rows affected (3.19 sec)
+CREATE TABLE nullable_test (a INT NULL, b INT UNSIGNED NULL);
 
-mysql> INSERT INTO nullable_test VALUES(1, Null), (Null, 2), (3, 3);
-Query OK, 0 rows affected (0.02 sec)
+INSERT INTO nullable_test VALUES(1, NULL), (NULL, 2), (3, 3);
 
-mysql> SELECT a FROM nullable_test WHERE isNotNull(a);
+SELECT a FROM nullable_test WHERE is_not_null(a);
 +------+
 | a    |
 +------+
 |    1 |
 |    3 |
 +------+
-2 rows in set (0.01 sec)
 ```

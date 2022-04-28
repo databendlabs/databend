@@ -111,8 +111,11 @@ impl ClickHouseSession for InteractiveWorker {
             Ok(c) => {
                 let user_info_auth = c.get_auth_manager().auth(&credential).await;
                 match user_info_auth {
-                    Ok(user_info) => {
+                    Ok((tenant_id, user_info)) => {
                         self.session.set_current_user(user_info);
+                        if let Some(tenant_id) = tenant_id {
+                            self.session.set_current_tenant(tenant_id);
+                        }
                         true
                     }
                     Err(failure) => {

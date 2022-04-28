@@ -78,7 +78,7 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
-        let local_mode = conf.meta.meta_address.is_empty();
+        let local_mode = conf.meta.address.is_empty();
 
         let meta: Arc<dyn MetaApi> = if local_mode {
             tracing::info!("use embedded meta");
@@ -101,7 +101,7 @@ impl MutableCatalog {
         let req = CreateDatabaseReq {
             if_not_exists: true,
             tenant,
-            db: "default".to_string(),
+            db_name: "default".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -163,12 +163,12 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
-        tracing::error!("db name: {}, engine: {}", &req.db, &req.meta.engine);
+        tracing::error!("db name: {}, engine: {}", &req.db_name, &req.meta.engine);
 
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
             database_id: res.database_id,
-            db: req.db.clone(),
+            db: req.db_name.clone(),
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;

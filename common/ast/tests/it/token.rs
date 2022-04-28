@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::error::Error;
 use common_ast::parser::token::*;
+use common_exception::Result;
 use logos::Span;
 use pretty_assertions::assert_eq;
 
@@ -69,21 +69,28 @@ fn test_lexer() {
 
 #[test]
 fn test_lexer_error() {
-    assert_eq!(
-        tokenise("select †∑∂ from t;").unwrap_err(),
-        Error::UnrecognisedToken {
-            rest: "†∑∂ from t;".to_string(),
-            position: 7
-        }
-    );
+    match Tokenizer::new("select †∑∂ from t;").collect::<Result<Vec<_>>>() {
+        Err(err) => assert_eq!(
+            err.message().trim(),
+            "
+error: 
+  --> SQL:1:8
+  |
+1 | select †∑∂ from t;
+  |        ^^^^^^^^^^^ unable to recognize the rest tokens
+"
+            .trim()
+        ),
+        _ => unreachable!(),
+    }
 }
 
 fn assert_lex<'a>(source: &'a str, expected_tokens: &[(TokenKind, &'a str, Span)]) {
-    let tokens = tokenise(source).unwrap();
+    let tokens = Tokenizer::new(source).collect::<Result<Vec<_>>>().unwrap();
 
     let tuples: Vec<_> = tokens
         .into_iter()
-        .map(|token| (token.kind, token.text, token.span))
+        .map(|token| (token.kind, token.text(), token.span))
         .collect();
 
     assert_eq!(tuples, expected_tokens);

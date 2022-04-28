@@ -53,9 +53,9 @@ impl Function for CheckJsonFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
         let column = columns[0].column();
@@ -77,10 +77,10 @@ impl Function for CheckJsonFunction {
                     Err(e) => builder.append(e.to_string().as_bytes(), true),
                 }
             }
-        } else if data_type.data_type_id() == TypeID::Variant {
-            let c: &ObjectColumn<JsonValue> = Series::check_get(column)?;
+        } else if data_type.data_type_id().is_variant() {
+            let c: &VariantColumn = Series::check_get(column)?;
             for v in c.iter() {
-                if let JsonValue::String(s) = v {
+                if let JsonValue::String(s) = v.as_ref() {
                     match serde_json::from_str::<JsonValue>(s.as_str()) {
                         Ok(_v) => builder.append_null(),
                         Err(e) => builder.append(e.to_string().as_bytes(), true),

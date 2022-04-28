@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::Cell;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
@@ -24,16 +25,21 @@ use crate::ErrorCode;
 pub static ABORT_SESSION: u16 = 1042;
 pub static ABORT_QUERY: u16 = 1043;
 
+thread_local! {
+    pub static ENABLE_BACKTRACE: Cell<bool> = Cell::new(true);
+}
+
 macro_rules! build_exceptions {
     ($($body:ident($code:expr)),*$(,)*) => {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
+                    let bt = ENABLE_BACKTRACE.with(|v| v.get()).then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new())));
                     ErrorCode::create(
                         $code,
                         display_text.into(),
                         None,
-                        Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new())))
+                        bt,
                     )
                 }
                 paste::item! {
@@ -119,6 +125,7 @@ build_exceptions! {
     UnmarshalError(1064),
     SemanticError(1065),
     InvalidAuthInfo(1066),
+    InvalidTimezone(1067),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -182,6 +189,7 @@ build_exceptions! {
     // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
+    UnsupportedEngineParams(2703),
 
     // Share error codes.
     ShareAlreadyExists(2705),

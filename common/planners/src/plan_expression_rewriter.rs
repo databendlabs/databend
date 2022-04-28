@@ -146,11 +146,13 @@ pub trait ExpressionRewriter: Sized {
         &mut self,
         typ: &DataTypePtr,
         expr: Expression,
+        pg_style: bool,
         _origin_expr: &Expression,
     ) -> Result<Expression> {
         Ok(Expression::Cast {
             expr: Box::new(expr),
             data_type: typ.clone(),
+            pg_style,
         })
     }
 
@@ -197,6 +199,18 @@ pub trait ExpressionRewriter: Sized {
             asc,
             nulls_first,
             origin_expr: Box::new(origin_expr.clone()),
+        })
+    }
+
+    fn mutate_map_access(
+        &mut self,
+        name: &str,
+        args: Vec<Expression>,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::MapAccess {
+            name: name.to_string(),
+            args,
         })
     }
 
@@ -357,13 +371,19 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 self.stack.push(new_expr);
                 Ok(self)
             }
-            Expression::Cast { data_type, .. } => match self.stack.pop() {
+            Expression::Cast {
+                data_type,
+                pg_style,
+                ..
+            } => match self.stack.pop() {
                 None => Err(ErrorCode::LogicalError(
                     "Cast expr expected 1 parameters, actual 0.",
                 )),
                 Some(new_expr) => {
-                    self.stack
-                        .push(self.inner.mutate_cast(data_type, new_expr, expr)?);
+                    self.stack.push(
+                        self.inner
+                            .mutate_cast(data_type, new_expr, *pg_style, expr)?,
+                    );
                     Ok(self)
                 }
             },
@@ -427,6 +447,25 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
             Expression::QualifiedColumn(names) => {
                 let new_expr = self.inner.mutate_qualified_column(names, expr)?;
                 self.stack.push(new_expr);
+                Ok(self)
+            }
+            Expression::MapAccess { name, args } => {
+                let mut args_expr = Vec::with_capacity(args.len());
+                for index in 0..args.len() {
+                    match self.stack.pop() {
+                        None => {
+                            return Err(ErrorCode::LogicalError(format!(
+                                "Expected {} arguments, actual {}.",
+                                args.len(),
+                                index
+                            )));
+                        }
+                        Some(arg_type) => args_expr.push(arg_type),
+                    };
+                }
+
+                self.stack
+                    .push(self.inner.mutate_map_access(name, args_expr, expr)?);
                 Ok(self)
             }
         }

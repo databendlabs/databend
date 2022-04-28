@@ -70,9 +70,9 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         if SUPPRESS_CAST_ERROR {
             let cast_to: DataTypePtr = NullableType::arc(UInt32Type::arc());

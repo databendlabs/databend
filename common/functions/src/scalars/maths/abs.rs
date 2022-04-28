@@ -98,9 +98,9 @@ impl Function for AbsFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::Int8 => impl_abs_function!(columns[0], i8, i64, u8),

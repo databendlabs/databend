@@ -78,13 +78,13 @@ fn test_expression_validate() -> Result<()> {
 
     let cases = vec![
         Test {
-            desc: "toTypeName-not-pass",
+            desc: "typeof-not-pass",
             expression: Expression::ScalarFunction {
-                op: "toTypeName".to_string(),
+                op: "typeof".to_string(),
                 args: vec![],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
-                "Function `toTypeName` expect to have 1 arguments, but got 0",
+                "Function `typeof` expect to have 1 arguments, but got 0",
             )),
         },
         Test {

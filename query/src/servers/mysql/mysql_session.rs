@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
 use opensrv_mysql::AsyncMysqlIntermediary;
+use opensrv_mysql::IntermediaryOptions;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;
@@ -41,7 +42,15 @@ impl MySQLConnection {
             let join_handle = query_executor.spawn(async move {
                 let client_addr = non_blocking_stream.peer_addr().unwrap().to_string();
                 let interactive_worker = InteractiveWorker::create(session, client_addr);
-                AsyncMysqlIntermediary::run_on(interactive_worker, non_blocking_stream).await
+                let opts = IntermediaryOptions {
+                    process_use_statement_on_query: true,
+                };
+                AsyncMysqlIntermediary::run_with_options(
+                    interactive_worker,
+                    non_blocking_stream,
+                    &opts,
+                )
+                .await
             });
             let _ = futures::executor::block_on(join_handle);
         });

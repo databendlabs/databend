@@ -2,10 +2,10 @@
 title: system.configs
 ---
 
-Contains information about databend server configs.
+Contains information about Databend server configs.
 
 ```sql
-mysql> select * from  configs;
+SELECT * FROM system.configs;
 +--------------------------------------+------------------+-------+-------------+
 | name                                 | value            | group | description |
 +--------------------------------------+------------------+-------+-------------+

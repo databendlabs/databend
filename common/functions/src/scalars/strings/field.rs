@@ -58,9 +58,9 @@ impl Function for FieldFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<ColumnRef> {
         let basic_viewer = Vu8::try_create_viewer(columns[0].column())?;
 

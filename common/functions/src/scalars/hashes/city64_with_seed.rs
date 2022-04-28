@@ -74,10 +74,8 @@ impl City64WithSeedFunction {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::Timestamp
                 | TypeID::Interval
                 | TypeID::String
         ) {
@@ -116,9 +114,9 @@ impl Function for City64WithSeedFunction {
 
     fn eval(
         &self,
+        _func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-        _func_ctx: FunctionContext,
     ) -> Result<common_datavalues::ColumnRef> {
         let column = columns[0].column();
         let physical_data_type = columns[0].data_type().data_type_id().to_physical_type();

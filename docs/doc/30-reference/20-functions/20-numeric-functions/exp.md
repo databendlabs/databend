@@ -25,27 +25,24 @@ A Float64 data type value.
 ## Examples
 
 ```sql
-mysql> SELECT EXP(2);
+SELECT EXP(2);
 +------------------+
 | EXP(2)           |
 +------------------+
 | 7.38905609893065 |
 +------------------+
-1 row in set (0.00 sec)
 
-mysql> SELECT EXP(-2);
+SELECT EXP(-2);
 +--------------------+
 | EXP((- 2))         |
 +--------------------+
 | 0.1353352832366127 |
 +--------------------+
-1 row in set (0.00 sec)
 
-mysql> SELECT EXP(0);
+SELECT EXP(0);
 +--------+
 | EXP(0) |
 +--------+
 |      1 |
 +--------+
-1 row in set (0.01 sec)
 ```

@@ -12,37 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod ast;
+pub mod error;
 pub mod expr;
-pub mod rule;
+pub mod query;
+pub mod statement;
 pub mod token;
-pub mod transformer;
+pub mod util;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::parser::ast::Statement;
-use crate::parser::transformer::AstTransformer;
-use crate::parser::transformer::AstTransformerFactory;
+use crate::ast::Statement;
+use crate::parser::error::pretty_print_error;
+use crate::parser::statement::statements;
+use crate::parser::token::Token;
+use crate::parser::token::TokenKind;
+use crate::parser::token::Tokenizer;
 
-pub struct Parser;
+pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
+    Tokenizer::new(sql).collect::<Result<Vec<_>>>()
+}
 
-impl Parser {
-    // Parse a SQL string into `Statement`s.
-    #[allow(unused)]
-    pub fn parse_sql(&self, _: &str) -> Result<Vec<Statement>> {
-        todo!()
-    }
-
-    #[allow(unused)]
-    pub fn parse_with_sqlparser(&self, sql: &str) -> Result<Vec<Statement>> {
-        let stmts =
-            sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::PostgreSqlDialect {}, sql)?;
-        stmts
-            .into_iter()
-            .map(|stmt| {
-                let transformer = AstTransformerFactory::new_sqlparser_transformer(stmt);
-                transformer.transform()
-            })
-            .collect::<Result<_>>()
+/// Parse a SQL string into `Statement`s.
+pub fn parse_sql<'a>(sql_tokens: &'a [Token<'a>]) -> Result<Vec<Statement<'a>>> {
+    match statements(sql_tokens) {
+        Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
+        Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(
+            sql_tokens[0].source,
+            vec![(
+                rest[0].span.clone(),
+                "unable to parse rest of the sql".to_owned(),
+            )],
+        ))),
+        Err(nom::Err::Error(err) | nom::Err::Failure(err)) => Err(ErrorCode::SyntaxException(
+            pretty_print_error(sql_tokens[0].source, err.to_labels()),
+        )),
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
 }

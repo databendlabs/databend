@@ -49,6 +49,7 @@ pub struct StageSource {
     initialized: bool,
     source: Option<Box<dyn Source>>,
     files: Arc<Mutex<VecDeque<String>>>,
+    current_file: Option<String>,
 }
 
 impl StageSource {
@@ -66,6 +67,7 @@ impl StageSource {
             initialized: false,
             source: None,
             files,
+            current_file: None,
         })
     }
 
@@ -215,6 +217,7 @@ impl StageSource {
             ))),
         }?;
         self.source = Some(source);
+        self.current_file = Some(path.clone());
 
         Ok(())
     }
@@ -226,23 +229,32 @@ impl AsyncSource for StageSource {
     type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
     fn generate(&mut self) -> Self::BlockFuture<'_> {
-        let mut files_guard = self.files.lock();
-        let file_name = files_guard.pop_front();
-        drop(files_guard);
+        let file_name = if !self.initialized {
+            let mut files_guard = self.files.lock();
+            let file_name = files_guard.pop_front();
+            drop(files_guard);
+
+            file_name
+        } else {
+            self.current_file.clone()
+        };
+
         async move {
             if !self.initialized {
+                if file_name.is_none() {
+                    return Ok(None);
+                }
+                self.initialize(file_name.unwrap()).await?;
                 self.initialized = true;
             }
-
-            if file_name.is_none() {
-                return Ok(None);
-            }
-            self.initialize(file_name.unwrap()).await?;
 
             match &mut self.source {
                 None => Err(ErrorCode::LogicalError("Please init source first!")),
                 Some(source) => match source.read().await? {
-                    None => Ok(None),
+                    None => {
+                        self.initialized = false;
+                        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
+                    }
                     Some(data) => Ok(Some(data)),
                 },
             }

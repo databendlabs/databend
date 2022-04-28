@@ -73,18 +73,12 @@ use crate::executor::ActionHandler;
 #[async_trait::async_trait]
 impl RequestHandler<CreateDatabaseReq> for ActionHandler {
     async fn handle(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let db_meta = &req.meta;
+        let db_name = req.db_name.clone();
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
-            cmd: CreateDatabase {
-                tenant,
-                name: db_name.clone(),
-                meta: db_meta.clone(),
-            },
+            cmd: CreateDatabase(req),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -122,15 +116,11 @@ impl RequestHandler<GetDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropDatabaseReq> for ActionHandler {
     async fn handle(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
+        let db_name = req.db_name.clone();
         let if_exists = req.if_exists;
         let cr = LogEntry {
             txid: None,
-            cmd: DropDatabase {
-                tenant,
-                name: db_name.clone(),
-            },
+            cmd: DropDatabase(req),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -156,23 +146,15 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableReq> for ActionHandler {
     async fn handle(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table;
+        let db_name = req.db_name.clone();
+        let table_name = req.table_name.clone();
         let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let table_meta = req.table_meta;
-
         let cr = LogEntry {
             txid: None,
-            cmd: CreateTable {
-                tenant,
-                db_name: db_name.clone(),
-                table_name: table_name.clone(),
-                table_meta,
-            },
+            cmd: CreateTable(req),
         };
 
         let rst = self.meta_node.write(cr).await?;
@@ -200,18 +182,12 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropTableReq> for ActionHandler {
     async fn handle(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table;
+        let table_name = req.table_name.clone();
         let if_exists = req.if_exists;
 
         let cr = LogEntry {
             txid: None,
-            cmd: DropTable {
-                tenant,
-                db_name: db_name.clone(),
-                table_name: table_name.clone(),
-            },
+            cmd: DropTable(req),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -235,21 +211,10 @@ impl RequestHandler<DropTableReq> for ActionHandler {
 impl RequestHandler<RenameTableReq> for ActionHandler {
     async fn handle(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
         let if_exists = req.if_exists;
-        let tenant = req.tenant;
-        let db_name = &req.db;
-        let table_name = &req.table_name;
-        let new_db_name = &req.new_db;
-        let new_table_name = &req.new_table_name;
 
         let cr = LogEntry {
             txid: None,
-            cmd: RenameTable {
-                tenant,
-                db_name: db_name.clone(),
-                table_name: table_name.clone(),
-                new_db_name: new_db_name.clone(),
-                new_table_name: new_table_name.clone(),
-            },
+            cmd: RenameTable(req),
         };
 
         let res = self.meta_node.write(cr).await;
@@ -353,16 +318,12 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<CreateShareReq> for ActionHandler {
     async fn handle(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
-        let tenant = req.tenant;
         let share_name = &req.share_name;
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
-            cmd: CreateShare {
-                tenant,
-                share_name: share_name.clone(),
-            },
+            cmd: CreateShare(req.clone()),
         };
 
         let res = self.meta_node.write(cr).await?;
@@ -389,15 +350,11 @@ impl RequestHandler<CreateShareReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropShareReq> for ActionHandler {
     async fn handle(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
-        let tenant = req.tenant;
-        let share_name = &req.share_name;
+        let share_name = req.share_name.clone();
         let if_exists = req.if_exists;
         let cr = LogEntry {
             txid: None,
-            cmd: DropShare {
-                tenant,
-                share_name: share_name.clone(),
-            },
+            cmd: DropShare(req),
         };
 
         let res = self.meta_node.write(cr).await?;

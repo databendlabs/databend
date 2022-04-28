@@ -162,6 +162,7 @@ impl Config {
         load_field_from_env!(cfg.grpc_api_address, String, METASRV_GRPC_API_ADDRESS);
         load_field_from_env!(cfg.grpc_tls_server_cert, String, GRPC_TLS_SERVER_CERT);
         load_field_from_env!(cfg.grpc_tls_server_key, String, GRPC_TLS_SERVER_KEY);
+
         load_field_from_env!(
             cfg.raft_config.raft_listen_host,
             String,
@@ -198,6 +199,7 @@ impl Config {
             u64,
             raft_config::KVSRV_INSTALL_SNAPSHOT_TIMEOUT
         );
+
         load_field_from_env!(cfg.raft_config.single, bool, raft_config::KVSRV_SINGLE);
         load_field_from_env!(cfg.raft_config.id, u64, raft_config::KVSRV_ID);
     }

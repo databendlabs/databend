@@ -29,7 +29,7 @@ use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
-    let conf = Config::load_from_args();
+    let conf = Config::load()?;
     let session_ctx = SessionContext::try_create(conf)?;
 
     // Abort status.
@@ -58,7 +58,7 @@ async fn test_session_context() -> Result<()> {
 
     // Current user.
     {
-        let user_info = UserInfo::new_no_auth("user1".to_string(), "".to_string());
+        let user_info = UserInfo::new_no_auth("user1", "");
         session_ctx.set_current_user(user_info);
 
         let val = session_ctx.get_current_user().unwrap();

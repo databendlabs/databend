@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use super::type_array::ArrayType;
-use super::type_datetime64::DateTime64Type;
 use super::type_nullable::NullableType;
 use super::type_struct::StructType;
+use super::type_timestamp::TimestampType;
 use super::DataType;
 
 impl Eq for dyn DataType + '_ {}
@@ -48,12 +48,13 @@ pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
     use crate::prelude::TypeID::*;
     match lhs.data_type_id() {
         Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64 | Float32
-        | Float64 | String | Date16 | Date32 | Interval | DateTime32 | Null | Variant
-        | VariantArray | VariantObject => true,
+        | Float64 | String | Date | Interval | Null | Variant | VariantArray | VariantObject => {
+            true
+        }
 
-        DateTime64 => {
-            let lhs: &DateTime64Type = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &DateTime64Type = rhs.as_any().downcast_ref().unwrap();
+        Timestamp => {
+            let lhs: &TimestampType = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &TimestampType = rhs.as_any().downcast_ref().unwrap();
 
             lhs.precision() == rhs.precision()
         }

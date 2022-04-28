@@ -133,6 +133,8 @@ pub enum Expression {
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
         data_type: DataTypePtr,
+        /// The PostgreSQL style cast `expr::datatype`
+        pg_style: bool,
     },
 
     /// Scalar sub query. such as `SELECT (SELECT 1)`
@@ -145,6 +147,9 @@ pub enum Expression {
         name: String,
         query_plan: Arc<PlanNode>,
     },
+
+    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
+    MapAccess { name: String, args: Vec<Expression> },
 }
 
 impl Expression {
@@ -222,9 +227,13 @@ impl Expression {
             }
             Expression::Sort { expr, .. } => expr.column_name(),
             Expression::Cast {
-                expr, data_type, ..
+                expr,
+                data_type,
+                pg_style,
             } => {
-                if data_type.is_nullable() {
+                if *pg_style {
+                    format!("{}::{:?}", expr.column_name(), data_type)
+                } else if data_type.is_nullable() {
                     let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
                     format!("try_cast({} as {:?})", expr.column_name(), ty.inner_type())
                 } else {
@@ -233,6 +242,7 @@ impl Expression {
             }
             Expression::Subquery { name, .. } => name.clone(),
             Expression::ScalarSubquery { name, .. } => name.clone(),
+            Expression::MapAccess { name, .. } => name.clone(),
             _ => format!("{:?}", self),
         }
     }
@@ -318,7 +328,7 @@ impl Expression {
             } => {
                 let mut func_name = op.clone();
                 if *distinct {
-                    func_name += "Distinct";
+                    func_name += "_distinct";
                 }
 
                 let mut fields = Vec::with_capacity(args.len());
@@ -467,10 +477,20 @@ impl fmt::Debug for Expression {
             Expression::Sort { expr, .. } => write!(f, "{:?}", expr),
             Expression::Wildcard => write!(f, "*"),
             Expression::Cast {
-                expr, data_type, ..
+                expr,
+                data_type,
+                pg_style,
             } => {
-                write!(f, "cast({:?} as {:?})", expr, data_type)
+                if *pg_style {
+                    write!(f, "{:?}::{:?}", expr, data_type)
+                } else if data_type.is_nullable() {
+                    let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
+                    write!(f, "try_cast({:?} as {:?})", expr, ty.inner_type())
+                } else {
+                    write!(f, "cast({:?} as {:?})", expr, data_type)
+                }
             }
+            Expression::MapAccess { name, .. } => write!(f, "{}", name),
         }
     }
 }

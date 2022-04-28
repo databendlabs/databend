@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 
 use super::data_type::DataType;
@@ -27,7 +27,6 @@ use crate::prelude::*;
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: DataTypePtr,
-    name: String,
 }
 
 impl NullableType {
@@ -37,10 +36,7 @@ impl NullableType {
 
     pub fn create(inner: DataTypePtr) -> Self {
         debug_assert!(inner.can_inside_nullable());
-        NullableType {
-            name: format!("Nullable({})", inner.name()),
-            inner,
-        }
+        NullableType { inner }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -59,8 +55,8 @@ impl DataType for NullableType {
         self
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> String {
+        format!("Nullable({})", self.inner.name())
     }
 
     fn is_nullable(&self) -> bool {
@@ -83,17 +79,19 @@ impl DataType for NullableType {
         self.inner.custom_arrow_meta()
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(NullableSerializer {
-            inner: self.inner.create_serializer(),
-        })
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        NullableSerializer {
+            inner: Box::new(self.inner.create_serializer()),
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(NullableDeserializer {
-            inner: self.inner.create_deserializer(capacity),
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        NullableDeserializer {
+            inner: Box::new(self.inner.create_deserializer(capacity)),
             bitmap: MutableBitmap::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
