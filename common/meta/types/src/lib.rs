@@ -100,6 +100,7 @@ pub use message::ForwardRequest;
 pub use message::ForwardRequestBody;
 pub use message::ForwardResponse;
 pub use message::JoinRequest;
+pub use message::LeaveRequest;
 pub use meta_errors::MetaError;
 pub use meta_errors::MetaResult;
 pub use meta_errors_into::ToMetaError;
