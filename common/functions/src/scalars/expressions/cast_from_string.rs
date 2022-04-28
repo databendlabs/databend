@@ -53,12 +53,11 @@ pub fn cast_from_string(
 
         TypeID::Timestamp => {
             let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
 
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_timestamp(v) {
                     Some(d) => {
-                        builder.append(ts.from_micro_seconds(d.timestamp_micros()));
+                        builder.append(d.timestamp_micros());
                     }
                     None => bitmap.set(row, false),
                 }

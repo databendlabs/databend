@@ -143,7 +143,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz: Tz = tz.parse().unwrap();
 
                                     row_writer.write_col(
-                                        v.to_date_time64(data_type.precision(), &tz)
+                                        v.to_timestamp(&tz)
                                             .naive_local()
                                             .format(data_type.format_string().as_str())
                                             .to_string(),

@@ -73,21 +73,12 @@ impl TimestampType {
 
     #[inline]
     pub fn utc_timestamp(&self, v: i64) -> DateTime<Utc> {
-        let v = v * 10_i64.pow(6 - self.precision as u32);
-
-        // ns
         Utc.timestamp(v / 1_000_000, (v % 1_000_000 * 1000) as u32)
     }
 
     #[inline]
     pub fn to_seconds(&self, v: i64) -> i64 {
-        let v = v * 10_i64.pow(6 - self.precision as u32);
         v / 1_000_000
-    }
-
-    #[inline]
-    pub fn from_micro_seconds(&self, v: i64) -> i64 {
-        v / 10_i64.pow(6 - self.precision as u32)
     }
 
     pub fn format_string(&self) -> String {
@@ -163,7 +154,7 @@ impl DataType for TimestampType {
     fn create_serializer(&self) -> TypeSerializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
 
-        TimestampSerializer::<i64>::create(tz.parse::<Tz>().unwrap(), self.precision as u32).into()
+        TimestampSerializer::create(tz.parse::<Tz>().unwrap()).into()
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
