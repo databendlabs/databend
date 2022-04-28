@@ -234,7 +234,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        self.nested.drop_state(place)
+        self.nested.drop_state(self.nested_place(place))
     }
 
     fn convert_const_to_full(&self) -> bool {

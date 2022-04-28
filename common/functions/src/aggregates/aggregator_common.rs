@@ -21,7 +21,6 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::exit_scope;
 
 use super::AggregateFunctionFactory;
 
@@ -98,15 +97,22 @@ pub fn eval_aggr(
     func.init_state(addr);
 
     let f = func.clone();
-    exit_scope! {
-        {
-            if f.need_manual_drop_state() {
-                unsafe { f.drop_state(addr); }
-            }
+    // we need a temporary function to catch the errors
+    let apply = || -> Result<ColumnRef> {
+        func.accumulate(addr, &cols, None, rows)?;
+        let mut builder = data_type.create_mutable(1024);
+        func.merge_result(addr, builder.as_mut())?;
+
+        Ok(builder.to_column())
+    };
+
+    let result = apply();
+
+    if f.need_manual_drop_state() {
+        unsafe {
+            f.drop_state(addr);
         }
     }
-    func.accumulate(addr, &cols, None, rows)?;
-    let mut builder = data_type.create_mutable(1024);
-    func.merge_result(addr, builder.as_mut())?;
-    Ok(builder.to_column())
+    drop(arena);
+    result
 }
