@@ -163,7 +163,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     ]);
 
     let blocks = DataBlock::create(schema.clone(), vec![
-        Series::from_data(vec![dt_to_seconds("2020-02-29T23:59:59Z") as u32]),
+        Series::from_data(vec![dt_to_seconds("2020-02-29T23:59:59Z")]),
         Series::from_data(vec![1_u8]),
         Series::from_data(vec![1_u16]),
         Series::from_data(vec![1_u32]),
@@ -200,7 +200,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     ];
 
     {
-        let mut expects: Vec<u32> = Vec::new();
+        let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("addSeconds", 1, &[
@@ -214,24 +214,24 @@ fn test_add_subtract_seconds() -> Result<()> {
             )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
-            expects.push(col.get_u64(0)? as u32);
+            expects.push(col.get_i64(0)?);
         }
         assert_eq!(expects, vec![
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
         ]);
     }
 
     {
-        let mut expects: Vec<u32> = Vec::new();
+        let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("subtractSeconds", -1, &[
@@ -245,19 +245,19 @@ fn test_add_subtract_seconds() -> Result<()> {
             )?;
             assert_eq!(col.len(), 1);
             assert_eq!(col.data_type().data_type_id(), TypeID::Int64);
-            expects.push(col.get_u64(0)? as u32);
+            expects.push(col.get_i64(0)?);
         }
         assert_eq!(expects, vec![
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
-            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
-            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
+            dt_to_seconds("2020-02-29T23:59:58Z"),
+            dt_to_seconds("2020-03-01T00:00:00Z"),
         ]);
     }
 
