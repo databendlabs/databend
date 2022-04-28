@@ -117,6 +117,18 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
         self.inner
             .get_own_null_adaptor(nested_function, params, arguments)
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        self.inner.need_manual_drop_state()
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        self.inner.drop_state(place)
+    }
+
+    fn convert_const_to_full(&self) -> bool {
+        self.inner.convert_const_to_full()
+    }
 }
 impl fmt::Display for AggregateFunctionBasicAdaptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

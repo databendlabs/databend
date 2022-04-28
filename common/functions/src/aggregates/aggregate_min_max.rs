@@ -129,6 +129,15 @@ where
         state.merge_result(array)?;
         Ok(())
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        <S::RefType<'_>>::has_alloc_beyond_bump()
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<State>();
+        std::ptr::drop_in_place(state);
+    }
 }
 
 impl<S, C, State> fmt::Display for AggregateMinMaxFunction<S, C, State> {

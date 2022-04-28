@@ -241,6 +241,18 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
             self.nested.merge_result(self.nested_place(place), column)
         }
     }
+
+    fn need_manual_drop_state(&self) -> bool {
+        self.nested.need_manual_drop_state()
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        self.nested.drop_state(place)
+    }
+
+    fn convert_const_to_full(&self) -> bool {
+        self.nested.convert_const_to_full()
+    }
 }
 
 impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> fmt::Display
