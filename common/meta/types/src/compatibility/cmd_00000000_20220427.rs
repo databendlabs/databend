@@ -24,6 +24,7 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::TableMeta;
+use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
 /// Compatible with latest changes made in 34e89c99 on 20220413
@@ -48,6 +49,11 @@ pub enum Cmd {
     AddNode {
         node_id: NodeId,
         node: Node,
+    },
+
+    /// Remove node, 20220427
+    RemoveNode {
+        node_id: NodeId,
     },
 
     CreateDatabase {
@@ -110,4 +116,7 @@ pub enum Cmd {
         value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
     },
+
+    // 20220425
+    Transaction(TxnRequest),
 }

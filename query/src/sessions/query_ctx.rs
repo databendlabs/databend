@@ -29,6 +29,7 @@ use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
 use common_meta_types::TableInfo;
@@ -159,6 +160,19 @@ impl QueryContext {
 
     pub fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
+    }
+
+    pub fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>> {
+        self.shared.error.clone()
+    }
+
+    pub fn get_error_value(&self) -> Option<ErrorCode> {
+        let error = self.shared.error.lock();
+        error.clone()
+    }
+
+    pub fn set_error(&self, err: ErrorCode) {
+        self.shared.set_error(err);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.

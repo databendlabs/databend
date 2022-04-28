@@ -19,6 +19,8 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaError;
 use common_meta_types::PrefixListReply;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
@@ -44,5 +46,10 @@ impl KVApi for MetaEmbedded {
     async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.prefix_list_kv(prefix).await
+    }
+
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+        let sm = self.inner.lock().await;
+        sm.transaction(txn).await
     }
 }

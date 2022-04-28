@@ -20,31 +20,32 @@ use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 
 use super::data_type::DataType;
-use super::data_type::DataTypePtr;
+use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
-    inner: DataTypePtr,
+    inner: Box<DataTypeImpl>,
 }
 
 impl NullableType {
-    pub fn arc(inner: DataTypePtr) -> DataTypePtr {
-        Arc::new(Self::create(inner))
+    pub fn arc(inner: DataTypeImpl) -> DataTypeImpl {
+        DataTypeImpl::Nullable(Self::create(inner))
     }
 
-    pub fn create(inner: DataTypePtr) -> Self {
+    pub fn create(inner: DataTypeImpl) -> Self {
         debug_assert!(inner.can_inside_nullable());
-        NullableType { inner }
+        NullableType {
+            inner: Box::new(inner),
+        }
     }
 
-    pub fn inner_type(&self) -> &DataTypePtr {
+    pub fn inner_type(&self) -> &DataTypeImpl {
         &self.inner
     }
 }
 
-#[typetag::serde]
 impl DataType for NullableType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Nullable
@@ -97,7 +98,7 @@ impl DataType for NullableType {
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutableNullableColumn::new(
             self.inner.create_mutable(capacity),
-            Arc::new(self.clone()),
+            DataTypeImpl::Nullable(self.clone()),
         ))
     }
 

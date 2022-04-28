@@ -39,7 +39,7 @@ pub struct LocatingFunction<const T: u8> {
 }
 
 impl<const T: u8> LocatingFunction<T> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_string(args[0])?;
         assert_string(args[1])?;
         if args.len() > 2 {
@@ -67,7 +67,7 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         u64::to_data_type()
     }
 

@@ -637,8 +637,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chrono"
 version = "0.4.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
+source = "git+https://github.com/datafuse-extras/chrono?rev=279f590#279f5907879c9618767e5501ac01f79d5b7a4b38"
 dependencies = [
  "libc",
  "num-integer",
@@ -946,7 +945,6 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
- "typetag",
 ]
 
 [[package]]
@@ -1162,6 +1160,7 @@ dependencies = [
  "derive_more",
  "hostname",
  "maplit",
+ "num",
  "once_cell",
  "pretty_assertions",
  "rand 0.8.5",
@@ -1201,6 +1200,9 @@ dependencies = [
  "hex",
  "maplit",
  "nanoid",
+ "num",
+ "num-derive",
+ "num-traits",
  "once_cell",
  "openraft",
  "prost",
@@ -1264,6 +1266,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "common-io",
  "common-tracing",
  "csv-async",
@@ -1768,12 +1771,14 @@ dependencies = [
  "common-tracing",
  "criterion",
  "dyn-clone",
+ "enum_dispatch",
  "futures",
  "headers",
  "http",
  "hyper",
  "itertools",
  "jwt-simple",
+ "jwtk",
  "lazy_static",
  "maplit",
  "metrics",
@@ -1786,6 +1791,7 @@ dependencies = [
  "opendal",
  "opensrv-clickhouse",
  "opensrv-mysql",
+ "openssl",
  "paste",
  "petgraph",
  "poem",
@@ -3066,6 +3072,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "jwtk"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ccbb03951ed125446ee19b8210edde61a930d97100430544f08adf319465c4c"
+dependencies = [
+ "base64 0.13.0",
+ "foreign-types",
+ "openssl",
+ "openssl-sys",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tokio",
+]
+
+[[package]]
 name = "k256"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3817,6 +3840,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "num-format"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4052,6 +4086,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "111.18.0+1.1.1n"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7897a926e1e8d00219127dc020130eca4292e5ca666dd592480d72c3eca2ff6c"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4060,6 +4103,7 @@ dependencies = [
  "autocfg 1.0.1",
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]

@@ -19,6 +19,7 @@ use std::fmt::Display;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
+use common_datavalues::DataType;
 
 use crate::plan_node_display_indent::PlanNodeIndentFormatDisplay;
 use crate::PlanNode;
@@ -59,9 +60,9 @@ impl PlanNode {
                     let nullable_str = if field.is_nullable() { ";N" } else { "" };
                     write!(
                         f,
-                        "{}:{:?}{}",
+                        "{}:{}{}",
                         field.name(),
-                        field.data_type(),
+                        field.data_type().name(),
                         nullable_str
                     )?;
                 }
@@ -82,8 +83,8 @@ impl PlanNode {
                         write!(f, ", ")?;
                     }
                     let nullable_str = if field.is_nullable() { ";N" } else { "" };
-                    let not_null_type = remove_nullable(field.data_type());
-                    write!(f, "{}:{:?}{}", field.name(), not_null_type, nullable_str)?;
+                    let not_null_type = remove_nullable(field.data_type()).name();
+                    write!(f, "{}:{}{}", field.name(), not_null_type, nullable_str)?;
                 }
                 write!(f, "]")
             }

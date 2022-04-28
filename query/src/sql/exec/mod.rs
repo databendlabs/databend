@@ -27,13 +27,16 @@ use common_planners::Expression;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
+use super::plans::BasePlan;
 use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::FilterPlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
@@ -117,17 +120,22 @@ impl PipelineBuilder {
             return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
 
-        let plan = expression.plan().clone();
+        let plan = expression.plan();
 
         match plan.plan_type() {
             PlanType::PhysicalScan => {
-                let physical_scan = plan.as_any().downcast_ref::<PhysicalScan>().unwrap();
-                self.build_physical_scan(physical_scan)
+                let physical_scan: PhysicalScan = plan.try_into()?;
+                self.build_physical_scan(&physical_scan)
             }
             PlanType::Project => {
-                let project = plan.as_any().downcast_ref::<ProjectPlan>().unwrap();
+                let project: ProjectPlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_project(project, input_schema)
+                self.build_project(&project, input_schema)
+            }
+            PlanType::Filter => {
+                let filter: FilterPlan = plan.try_into()?;
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_filter(&filter, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -160,6 +168,28 @@ impl PipelineBuilder {
                 )
             })?;
 
+        Ok(output_schema)
+    }
+
+    fn build_filter(
+        &mut self,
+        filter: &FilterPlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let output_schema = input_schema.clone();
+        let eb = ExpressionBuilder::create(&self.metadata);
+        let scalar = filter.predicate.as_any().downcast_ref::<Scalar>().unwrap();
+        let pred = eb.build(scalar)?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformFilter::try_create(
+                    input_schema.clone(),
+                    pred.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    self.ctx.clone(),
+                )
+            })?;
         Ok(output_schema)
     }
 

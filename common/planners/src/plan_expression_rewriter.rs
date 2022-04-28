@@ -126,7 +126,7 @@ pub trait ExpressionRewriter: Sized {
 
     fn mutate_cast(
         &mut self,
-        typ: &DataTypePtr,
+        typ: &DataTypeImpl,
         expr: Expression,
         pg_style: bool,
         _origin_expr: &Expression,
@@ -151,7 +151,7 @@ pub trait ExpressionRewriter: Sized {
         &mut self,
         value: &DataValue,
         column_name: &Option<String>,
-        data_type: &DataTypePtr,
+        data_type: &DataTypeImpl,
         _origin_expr: &Expression,
     ) -> Result<Expression> {
         Ok(Expression::Literal {

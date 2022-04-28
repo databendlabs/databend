@@ -20,7 +20,7 @@ use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::BooleanType;
-use crate::types::DataTypePtr;
+use crate::types::DataTypeImpl;
 use crate::BooleanColumn;
 use crate::ColumnRef;
 use crate::DataValue;
@@ -28,7 +28,7 @@ use crate::ScalarColumnBuilder;
 
 pub struct MutableBooleanColumn {
     pub(crate) values: MutableBitmap,
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl MutableColumn for MutableBooleanColumn {
@@ -40,7 +40,7 @@ impl MutableColumn for MutableBooleanColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 

@@ -65,7 +65,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         "AggregateRetentionFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(VariantValue::to_data_type())
     }
 

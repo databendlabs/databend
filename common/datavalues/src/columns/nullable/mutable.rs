@@ -17,7 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
-use crate::types::DataTypePtr;
+use crate::types::DataTypeImpl;
 use crate::ColumnRef;
 use crate::DataValue;
 use crate::NullableColumn;
@@ -25,7 +25,7 @@ use crate::NullableColumn;
 pub struct MutableNullableColumn {
     values: MutableBitmap,
     inner: Box<dyn MutableColumn>,
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl MutableColumn for MutableNullableColumn {
@@ -37,7 +37,7 @@ impl MutableColumn for MutableNullableColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 
@@ -80,7 +80,7 @@ impl MutableColumn for MutableNullableColumn {
 }
 
 impl MutableNullableColumn {
-    pub fn new(inner: Box<dyn MutableColumn>, data_type: DataTypePtr) -> Self {
+    pub fn new(inner: Box<dyn MutableColumn>, data_type: DataTypeImpl) -> Self {
         Self {
             inner,
             values: MutableBitmap::with_capacity(0),

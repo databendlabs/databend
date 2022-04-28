@@ -89,9 +89,9 @@ impl DataValue {
     }
 
     /// Get the minimal memory sized data type.
-    pub fn data_type(&self) -> DataTypePtr {
+    pub fn data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
@@ -125,21 +125,21 @@ impl DataValue {
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
             DataValue::Variant(_) => VariantType::arc(),
         }
     }
 
     /// Get the maximum memory sized data type
-    pub fn max_data_type(&self) -> DataTypePtr {
+    pub fn max_data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
             DataValue::Int64(_) => Int64Type::arc(),
             DataValue::UInt64(_) => UInt64Type::arc(),
@@ -151,12 +151,12 @@ impl DataValue {
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
             DataValue::Variant(_) => VariantType::arc(),
         }
@@ -235,7 +235,7 @@ impl DataValue {
         }
     }
 
-    pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
+    pub fn as_const_column(&self, data_type: &DataTypeImpl, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
     }
 

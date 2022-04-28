@@ -29,7 +29,7 @@ pub struct FieldFunction {
 }
 
 impl FieldFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
             assert_string(*arg)?;
         }
@@ -52,7 +52,7 @@ impl Function for FieldFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         u64::to_data_type()
     }
 

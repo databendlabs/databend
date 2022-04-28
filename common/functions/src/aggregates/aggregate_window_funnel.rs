@@ -171,7 +171,7 @@ where
         "AggregateWindowFunnelFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(u8::to_data_type())
     }
 
@@ -289,6 +289,15 @@ where
         let result = self.get_event_level(place);
         column.append_value(result);
         Ok(())
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<AggregateWindowFunnelState<T>>();
+        std::ptr::drop_in_place(state);
     }
 
     fn get_own_null_adaptor(

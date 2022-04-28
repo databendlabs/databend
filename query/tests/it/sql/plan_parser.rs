@@ -170,7 +170,7 @@ async fn test_plan_parser() -> Result<()> {
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1' year, INTERVAL '1' month, INTERVAL '1' day, INTERVAL '1' hour, INTERVAL '1' minute, INTERVAL '1' second",
-            expect: "Projection: 1:Interval(Year), 1:Interval(Year), 1:Interval(Year), 1:Interval(Year), 1:Interval(Year), 1:Interval(Year)\n  Expression: 1:Interval(Year) (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            expect: "Projection: 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR), 1:Interval(YEAR)\n  Expression: 1:Interval(YEAR) (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {

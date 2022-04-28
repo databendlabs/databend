@@ -15,9 +15,9 @@
 use common_base::tokio;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
-use common_meta_types::protobuf::event::SeqV;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
+use common_meta_types::protobuf::SeqV;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;

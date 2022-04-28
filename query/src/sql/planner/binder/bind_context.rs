@@ -30,7 +30,7 @@ pub struct ColumnBinding {
     // Column index of ColumnBinding
     pub index: IndexType,
 
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
     pub nullable: bool,
 
     // Scalar expression the ColumnBinding refers to(if exists).

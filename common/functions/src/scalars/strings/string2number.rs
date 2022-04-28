@@ -43,7 +43,7 @@ where
     T: NumberOperator<R>,
     R: PrimitiveType + Clone + ToDataType,
 {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_string(args[0])?;
 
         Ok(Box::new(Self {
@@ -79,7 +79,7 @@ where
         &self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         R::to_data_type()
     }
 

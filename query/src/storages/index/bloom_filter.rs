@@ -172,7 +172,7 @@ impl BloomFilterIndexer {
         &self,
         column_name: &str,
         target: DataValue,
-        typ: DataTypePtr,
+        typ: DataTypeImpl,
         ctx: Arc<QueryContext>,
     ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
@@ -433,7 +433,7 @@ impl BloomFilter {
     ///
     /// Nulls are not added to the Bloom
     /// filter, so any null related filter requires reading the data file. "
-    pub fn is_supported_type(data_type: &DataTypePtr) -> bool {
+    pub fn is_supported_type(data_type: &DataTypeImpl) -> bool {
         // we support nullable column but Nulls are not added into the bloom filter.
         let inner_type = remove_nullable(data_type);
         let data_type_id = inner_type.data_type_id();
@@ -591,7 +591,7 @@ impl BloomFilter {
     fn compute_data_value_double_hashes(
         &self,
         data_value: DataValue,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         ctx: Arc<QueryContext>,
     ) -> Result<(u64, u64)> {
         let col = data_value.as_const_column(&data_type, 1)?;
@@ -624,7 +624,7 @@ impl BloomFilter {
     ///     let not_exist = BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     ///
     /// ```
-    pub fn find(&self, val: DataValue, typ: DataTypePtr, ctx: Arc<QueryContext>) -> Result<bool> {
+    pub fn find(&self, val: DataValue, typ: DataTypeImpl, ctx: Arc<QueryContext>) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {:?} ",

@@ -147,7 +147,7 @@ fn test_check_json_function() -> Result<()> {
         ScalarFunctionTest {
             name: "check_json_array",
             columns: vec![Arc::new(ArrayColumn::from_data(
-                Arc::new(ArrayType::create(StringType::arc())),
+                DataTypeImpl::Array(ArrayType::create(StringType::arc())),
                 vec![0, 1, 3, 6].into(),
                 Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
             ))],
@@ -161,7 +161,7 @@ fn test_check_json_function() -> Result<()> {
                     Series::from_data(vec![18869i32, 18948i32, 1]),
                     Series::from_data(vec![1i8, 2i8, 3]),
                 ],
-                Arc::new(StructType::create(
+                DataTypeImpl::Struct(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
                     vec![DateType::arc(), Int8Type::arc()],
                 )),

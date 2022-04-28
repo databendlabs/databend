@@ -22,7 +22,7 @@ use serde_json::Value as JsonValue;
 fn test_create_constant() -> Result<()> {
     struct Test {
         name: &'static str,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         value: DataValue,
         size: usize,
         column_expected: ColumnRef,
