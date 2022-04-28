@@ -1,16 +1,15 @@
 ---
-title: Backup and Restore Databend Meta Service
-sidebar_label: Backup and Restore Meta Service
+title: Back Up and Restore Databend Meta Service Cluster
+sidebar_label: Back Up and Restore Databend Meta Service Cluster
 ---
 
-This guideline will introduce how to backup and restore the databend-meta datas.
+This guideline will introduce how to back up and restore the meta service cluster data.
 
-## Export data from metasrv
+## Export Data From Meta Service
 
-Shut down the metasrv.
+Shutdown the `databend-meta` service.
 
-Then export sled DB from the dir(`<your_meta_dir>`) in which the metasrv
-stores meta to a local file `output_fn`, in multi-line JSON format.
+Then export sled DB from the dir(`<your_meta_dir>`) in which the `databend-meta` stores meta to a local file `output_fn`, in multi-line JSON format.
 E.g., every line in the output file is a JSON of an exported key-value record.
 
 ```sh
@@ -26,10 +25,10 @@ E.g., every line in the output file is a JSON of an exported key-value record.
 # ...
 ```
 
-##  Restore a metasrv
+##  Restore a databend-meta
 
-The following command rebuild a metasrv db in `<your_meta_dir>` from
-exported meta data:
+The following command rebuild a meta service db in `<your_meta_dir>` from
+exported metadata:
 
 ```sh
 cat "<output_fn>" | ./target/debug/databend-metactl --import --raft-dir "<your_meta_dir>"
