@@ -112,9 +112,18 @@ impl Executor {
                 .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 progress,
-                reason,
+                reason: reason.clone(),
                 stop_time: Instant::now(),
             });
+
+            if let Err(e) = reason {
+                if e.code() != ErrorCode::aborted_session_code()
+                    && e.code() != ErrorCode::aborted_query_code()
+                {
+                    // query state can be pulled multi times, only log it once
+                    tracing::error!("Query Error: {:?}", e);
+                }
+            }
         };
     }
 }

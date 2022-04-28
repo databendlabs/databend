@@ -51,6 +51,11 @@ pub enum Cmd {
         node: Node,
     },
 
+    /// Remove node, 20220427
+    RemoveNode {
+        node_id: NodeId,
+    },
+
     CreateDatabase {
         // latest add
         if_not_exists: Option<bool>,

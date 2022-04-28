@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_ast::ast::Expr;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
@@ -48,7 +46,7 @@ impl Binder {
             let child = output_context.expression.clone().unwrap();
             let project_plan = ProjectPlan { items: projections };
 
-            let new_expr = SExpr::create_unary(Arc::new(project_plan), child);
+            let new_expr = SExpr::create_unary(project_plan.into(), child);
             output_context.expression = Some(new_expr);
         }
 
