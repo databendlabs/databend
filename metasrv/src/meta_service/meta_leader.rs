@@ -184,10 +184,11 @@ impl<'a> MetaLeader<'a> {
             txid: None,
             cmd: Cmd::RemoveNode { node_id },
         };
-
-        self.write(ent.clone()).await?;
-
-        self.change_membership(membership).await
+        self.change_membership(membership).await?;
+        match self.write(ent.clone()).await {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err),
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
