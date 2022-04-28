@@ -21,6 +21,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_datavalues as dv;
+use common_datavalues::DataTypeImpl;
 use common_meta_types as mt;
 use common_protos::pb;
 use common_protos::pb::data_type::Dt;
@@ -287,7 +288,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
 
         let v = dv::DataField::new(
             &p.name,
-            Arc::<dyn dv::DataType>::from_pb(p.data_type.ok_or_else(|| Incompatible {
+            dv::DataTypeImpl::from_pb(p.data_type.ok_or_else(|| Incompatible {
                 reason: "DataField.data_type can not be None".to_string(),
             })?)?,
         )
@@ -306,7 +307,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
     }
 }
 
-impl FromToProto<pb::DataType> for Arc<dyn dv::DataType> {
+impl FromToProto<pb::DataType> for dv::DataTypeImpl {
     fn from_pb(p: pb::DataType) -> Result<Self, Incompatible> {
         check_ver(p.ver)?;
 
@@ -320,202 +321,179 @@ impl FromToProto<pb::DataType> for Arc<dyn dv::DataType> {
         };
 
         match dt {
-            Dt::NullableType(x) => Ok(Arc::new(dv::NullableType::from_pb(x.as_ref().clone())?)),
-            Dt::BoolType(_) => Ok(Arc::new(dv::BooleanType {})),
-            Dt::Int8Type(_) => Ok(Arc::new(dv::Int8Type::default())),
-            Dt::Int16Type(_) => Ok(Arc::new(dv::Int16Type::default())),
-            Dt::Int32Type(_) => Ok(Arc::new(dv::Int32Type::default())),
-            Dt::Int64Type(_) => Ok(Arc::new(dv::Int64Type::default())),
-            Dt::Uint8Type(_) => Ok(Arc::new(dv::UInt8Type::default())),
-            Dt::Uint16Type(_) => Ok(Arc::new(dv::UInt16Type::default())),
-            Dt::Uint32Type(_) => Ok(Arc::new(dv::UInt32Type::default())),
-            Dt::Uint64Type(_) => Ok(Arc::new(dv::UInt64Type::default())),
-            Dt::Float32Type(_) => Ok(Arc::new(dv::Float32Type::default())),
-            Dt::Float64Type(_) => Ok(Arc::new(dv::Float64Type::default())),
-            Dt::DateType(_) => Ok(Arc::new(dv::DateType {})),
-            Dt::TimestampType(x) => Ok(Arc::new(dv::TimestampType::from_pb(x)?)),
-            Dt::StringType(_) => Ok(Arc::new(dv::StringType {})),
-            Dt::StructType(x) => Ok(Arc::new(dv::StructType::from_pb(x)?)),
-            Dt::ArrayType(x) => Ok(Arc::new(dv::ArrayType::from_pb(x.as_ref().clone())?)),
-            Dt::VariantType(_) => Ok(Arc::new(dv::VariantType {})),
+            Dt::NullableType(x) => Ok(dv::DataTypeImpl::Nullable(dv::NullableType::from_pb(
+                x.as_ref().clone(),
+            )?)),
+            Dt::BoolType(_) => Ok(dv::DataTypeImpl::Boolean(dv::BooleanType {})),
+            Dt::Int8Type(_) => Ok(dv::DataTypeImpl::Int8(dv::Int8Type::default())),
+            Dt::Int16Type(_) => Ok(dv::DataTypeImpl::Int16(dv::Int16Type::default())),
+            Dt::Int32Type(_) => Ok(dv::DataTypeImpl::Int32(dv::Int32Type::default())),
+            Dt::Int64Type(_) => Ok(dv::DataTypeImpl::Int64(dv::Int64Type::default())),
+            Dt::Uint8Type(_) => Ok(dv::DataTypeImpl::UInt8(dv::UInt8Type::default())),
+            Dt::Uint16Type(_) => Ok(dv::DataTypeImpl::UInt16(dv::UInt16Type::default())),
+            Dt::Uint32Type(_) => Ok(dv::DataTypeImpl::UInt32(dv::UInt32Type::default())),
+            Dt::Uint64Type(_) => Ok(dv::DataTypeImpl::UInt64(dv::UInt64Type::default())),
+            Dt::Float32Type(_) => Ok(dv::DataTypeImpl::Float32(dv::Float32Type::default())),
+            Dt::Float64Type(_) => Ok(dv::DataTypeImpl::Float64(dv::Float64Type::default())),
+            Dt::DateType(_) => Ok(dv::DataTypeImpl::Date(dv::DateType {})),
+            Dt::TimestampType(x) => Ok(dv::DataTypeImpl::Timestamp(dv::TimestampType::from_pb(x)?)),
+            Dt::StringType(_) => Ok(dv::DataTypeImpl::String(dv::StringType {})),
+            Dt::StructType(x) => Ok(dv::DataTypeImpl::Struct(dv::StructType::from_pb(x)?)),
+            Dt::ArrayType(x) => Ok(dv::DataTypeImpl::Array(dv::ArrayType::from_pb(
+                x.as_ref().clone(),
+            )?)),
+            Dt::VariantType(_) => Ok(dv::DataTypeImpl::Variant(dv::VariantType {})),
         }
     }
 
     fn to_pb(&self) -> Result<pb::DataType, Incompatible> {
-        let typ = self.data_type_id();
-        match typ {
-            dv::TypeID::Null => {
+        match self {
+            DataTypeImpl::Null(_) => {
                 todo!()
             }
-            dv::TypeID::Nullable => {
-                let n: &dv::NullableType =
-                    self.as_any().downcast_ref().ok_or_else(|| Incompatible {
-                        reason: "not Nullable".to_string(),
-                    })?;
-                let inner = n.inner_type();
-                let inner_pb_type = inner.to_pb()?;
+            DataTypeImpl::Nullable(x) => {
+                let inn = x.to_pb()?;
 
                 let v = pb::DataType {
                     ver: VER,
-                    dt: Some(Dt::NullableType(Box::new(pb::NullableType {
-                        ver: VER,
-                        inner: Some(Box::new(inner_pb_type)),
-                    }))),
+                    dt: Some(Dt::NullableType(Box::new(inn))),
                 };
                 Ok(v)
             }
-            dv::TypeID::Boolean => {
+            DataTypeImpl::Boolean(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::BoolType(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::UInt8 => {
-                let v = pb::DataType {
-                    ver: VER,
-                    dt: Some(Dt::Uint8Type(pb::Empty {})),
-                };
-                Ok(v)
-            }
-            dv::TypeID::UInt16 => {
-                let v = pb::DataType {
-                    ver: VER,
-                    dt: Some(Dt::Uint16Type(pb::Empty {})),
-                };
-                Ok(v)
-            }
-            dv::TypeID::UInt32 => {
-                let v = pb::DataType {
-                    ver: VER,
-                    dt: Some(Dt::Uint32Type(pb::Empty {})),
-                };
-                Ok(v)
-            }
-            dv::TypeID::UInt64 => {
-                let v = pb::DataType {
-                    ver: VER,
-                    dt: Some(Dt::Uint64Type(pb::Empty {})),
-                };
-                Ok(v)
-            }
-            dv::TypeID::Int8 => {
+            DataTypeImpl::Int8(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int8Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::Int16 => {
+            DataTypeImpl::Int16(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int16Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::Int32 => {
+            DataTypeImpl::Int32(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int32Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::Int64 => {
+            DataTypeImpl::Int64(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int64Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::Float32 => {
+            DataTypeImpl::UInt8(_) => {
+                let v = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::Uint8Type(pb::Empty {})),
+                };
+                Ok(v)
+            }
+            DataTypeImpl::UInt16(_) => {
+                let v = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::Uint16Type(pb::Empty {})),
+                };
+                Ok(v)
+            }
+            DataTypeImpl::UInt32(_) => {
+                let v = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::Uint32Type(pb::Empty {})),
+                };
+                Ok(v)
+            }
+            DataTypeImpl::UInt64(_) => {
+                let v = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::Uint64Type(pb::Empty {})),
+                };
+                Ok(v)
+            }
+            DataTypeImpl::Float32(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Float32Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::Float64 => {
+            DataTypeImpl::Float64(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Float64Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::String => {
-                let v = pb::DataType {
-                    ver: VER,
-                    dt: Some(Dt::StringType(pb::Empty {})),
-                };
-                Ok(v)
-            }
-            dv::TypeID::Date => {
+            DataTypeImpl::Date(_x) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::DateType(pb::Empty {})),
                 };
                 Ok(v)
             }
-            dv::TypeID::Timestamp => {
-                let n: &dv::TimestampType =
-                    self.as_any().downcast_ref().ok_or_else(|| Incompatible {
-                        reason: "not TimestampType".to_string(),
-                    })?;
+            DataTypeImpl::Timestamp(x) => {
+                let inn = x.to_pb()?;
 
                 let v = pb::DataType {
                     ver: VER,
-                    dt: Some(Dt::TimestampType(n.to_pb()?)),
+                    dt: Some(Dt::TimestampType(inn)),
                 };
                 Ok(v)
             }
-            dv::TypeID::Interval => {
-                todo!()
+            DataTypeImpl::String(_x) => {
+                let v = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::StringType(pb::Empty {})),
+                };
+                Ok(v)
             }
-            dv::TypeID::Array => {
-                let n: &dv::ArrayType =
-                    self.as_any().downcast_ref().ok_or_else(|| Incompatible {
-                        reason: "not ArrayType".to_string(),
-                    })?;
-
-                let pb_arr = n.to_pb()?;
+            DataTypeImpl::Struct(x) => {
+                let inn = x.to_pb()?;
 
                 let v = pb::DataType {
                     ver: VER,
-                    dt: Some(Dt::ArrayType(Box::new(pb_arr))),
+                    dt: Some(Dt::StructType(inn)),
                 };
                 Ok(v)
             }
-            dv::TypeID::Struct => {
-                let n: &dv::StructType =
-                    self.as_any().downcast_ref().ok_or_else(|| Incompatible {
-                        reason: "not StructType".to_string(),
-                    })?;
-
-                let mut types = Vec::with_capacity(n.types().len());
-                for t in n.types().iter() {
-                    types.push(t.to_pb()?);
-                }
+            DataTypeImpl::Array(x) => {
+                let inn = x.to_pb()?;
 
                 let v = pb::DataType {
                     ver: VER,
-                    dt: Some(Dt::StructType(pb::Struct {
-                        ver: VER,
-                        names: n.names().clone(),
-                        types,
-                    })),
+                    dt: Some(Dt::ArrayType(Box::new(inn))),
                 };
                 Ok(v)
             }
-            dv::TypeID::Variant => {
+            DataTypeImpl::Variant(x) => {
+                let inn = x.to_pb()?;
+
                 let p = pb::DataType {
                     ver: VER,
-                    dt: Some(Dt::VariantType(pb::Variant { ver: VER })),
+                    dt: Some(Dt::VariantType(inn)),
                 };
                 Ok(p)
             }
-            dv::TypeID::VariantArray => {
+            DataTypeImpl::VariantArray(_x) => {
                 todo!()
             }
-            dv::TypeID::VariantObject => {
+            DataTypeImpl::VariantObject(_x) => {
+                todo!()
+            }
+            DataTypeImpl::Interval(_x) => {
                 todo!()
             }
         }
@@ -531,7 +509,7 @@ impl FromToProto<pb::NullableType> for dv::NullableType {
             reason: "NullableType.inner can not be None".to_string(),
         })?;
 
-        let inner_dt = Arc::<dyn dv::DataType>::from_pb(inner.as_ref().clone())?;
+        let inner_dt = dv::DataTypeImpl::from_pb(inner.as_ref().clone())?;
 
         Ok(dv::NullableType::create(inner_dt))
     }
@@ -576,7 +554,7 @@ impl FromToProto<pb::Struct> for dv::StructType {
 
         let mut types = Vec::with_capacity(p.types.len());
         for t in p.types.into_iter() {
-            types.push(Arc::<dyn dv::DataType>::from_pb(t)?);
+            types.push(dv::DataTypeImpl::from_pb(t)?);
         }
 
         Ok(dv::StructType::create(names, types))
@@ -611,7 +589,7 @@ impl FromToProto<pb::Array> for dv::ArrayType {
             reason: "Array.inner can not be None".to_string(),
         })?;
 
-        let inner_dt = Arc::<dyn dv::DataType>::from_pb(inner.as_ref().clone())?;
+        let inner_dt = dv::DataTypeImpl::from_pb(inner.as_ref().clone())?;
 
         Ok(dv::ArrayType::create(inner_dt))
     }
