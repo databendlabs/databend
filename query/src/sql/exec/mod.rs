@@ -120,7 +120,7 @@ impl PipelineBuilder {
             return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
 
-        let plan = expression.plan().clone();
+        let plan = expression.plan();
 
         match plan.plan_type() {
             PlanType::PhysicalScan => {

@@ -48,13 +48,13 @@ impl Rule for RuleImplementGet {
     }
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let plan = expression.plan().clone();
+        let plan = expression.plan();
         let logical_get: LogicalGet = plan.try_into()?;
 
         let result = SExpr::create_leaf(
             PhysicalScan {
                 table_index: logical_get.table_index,
-                columns: logical_get.columns.clone(),
+                columns: logical_get.columns,
             }
             .into(),
         );

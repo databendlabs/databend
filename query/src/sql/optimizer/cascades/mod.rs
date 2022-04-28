@@ -167,7 +167,7 @@ impl CascadesOptimizer {
     fn optimize_group(&self, group: &Group, required_prop: &RequiredProperty) -> Result<SExpr> {
         for m_expr in group.iter() {
             if m_expr.plan().is_physical() {
-                let plan = m_expr.plan().clone();
+                let plan = m_expr.plan();
 
                 // TODO: Check properties
                 // let physical = plan.as_physical_plan().unwrap();
