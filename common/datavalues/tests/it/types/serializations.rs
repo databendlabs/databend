@@ -50,8 +50,8 @@ fn test_serializers() -> Result<()> {
         Test {
             name: "datetime32",
             data_type: TimestampType::arc(0, None),
-            value: DataValue::UInt64(1630320462),
-            column: Series::from_data(vec![1630320462i64, 1637117572i64, 1]),
+            value: DataValue::UInt64(1630320462000000),
+            column: Series::from_data(vec![1630320462000000i64, 1637117572000000i64, 1000000]),
             val_str: "2021-08-30 10:47:42",
             col_str: vec![
                 "2021-08-30 10:47:42".to_owned(),

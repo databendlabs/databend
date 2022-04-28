@@ -47,11 +47,11 @@ fn create_u8(d: u8) -> Option<ColumnWithField> {
     Some(ColumnWithField::new(col, data_field))
 }
 
-fn create_datetime(d: u32) -> Option<ColumnWithField> {
+fn create_datetime(d: i64) -> Option<ColumnWithField> {
     let data_field = DataField::new("x", TimestampType::arc(0, None));
     let col = data_field
         .data_type()
-        .create_constant_column(&DataValue::UInt64(d as u64), 1)
+        .create_constant_column(&DataValue::Int64(d), 1)
         .unwrap();
 
     Some(ColumnWithField::new(col, data_field))
@@ -499,8 +499,8 @@ fn test_dates_function() -> Result<()> {
             name: "f(z) = toSecond(z)",
             expr: Expression::create_scalar_function("toSecond", vec![col("z")]),
             column: "z",
-            left: create_datetime(1638288000),
-            right: create_datetime(1638288059),
+            left: create_datetime(1638288000000000),
+            right: create_datetime(1638288059000000),
             expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
@@ -514,8 +514,8 @@ fn test_dates_function() -> Result<()> {
             name: "f(z) = toDayOfYear(z)",
             expr: Expression::create_scalar_function("toDayOfYear", vec![col("z")]),
             column: "z",
-            left: create_datetime(1606752119),
-            right: create_datetime(1638288059),
+            left: create_datetime(1606752119000000),
+            right: create_datetime(1638288059000000),
             expect_mono: Monotonicity::default(),
         },
         Test {

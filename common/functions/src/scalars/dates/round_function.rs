@@ -58,7 +58,7 @@ impl RoundFunction {
     #[inline]
     fn execute(&self, time: i64) -> i64 {
         let round = self.round as i64;
-        (time / 1_000_000) / round * round * 1_000_000
+        time / MICROSECONDS / round * round * MICROSECONDS
     }
 }
 

@@ -93,7 +93,7 @@ pub enum TypeDeserializerImpl {
 
     Date(DateDeserializer<i32>),
     Interval(DateDeserializer<i64>),
-    Timestamp(TimestampDeserializer<i64>),
+    Timestamp(TimestampDeserializer),
     String(StringDeserializer),
     // TODO
     // Array(ArrayDeserializer),

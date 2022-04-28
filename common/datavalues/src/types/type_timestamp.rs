@@ -34,6 +34,7 @@ use crate::prelude::*;
 /// any timestamp not in the range will be invalid
 pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+pub const MICROSECONDS: i64 = 1_000_000;
 
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<()> {
@@ -159,7 +160,7 @@ impl DataType for TimestampType {
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        TimestampDeserializer::<i64> {
+        TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
             precision: self.precision,

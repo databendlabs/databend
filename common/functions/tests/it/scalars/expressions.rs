@@ -108,7 +108,7 @@ fn test_datetime_cast_function() -> Result<()> {
         ("toString", ScalarFunctionWithFieldTest {
             name: "cast-datetime-to-string-passed",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1614906061i64, 1635070210]),
+                Series::from_data(vec![1614906061000000i64, 1635070210000000]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
@@ -514,22 +514,22 @@ fn test_variant_cast_function() -> Result<()> {
             expect: Series::from_data(vec![18691i32, 18924]),
             error: "Cast error happens in casting from Variant to Date",
         }),
-        ("toDateTime", ScalarFunctionTest {
+        ("toTimestamp", ScalarFunctionTest {
             name: "cast-variant-to-datetime-passed",
             columns: vec![Series::from_data(vec![
                 VariantValue::from(json!("2021-03-05 01:01:01")),
                 VariantValue::from(json!("2021-10-24 10:10:10")),
             ])],
-            expect: Series::from_data(vec![1614906061i64, 1635070210]),
+            expect: Series::from_data(vec![1614906061000000i64, 1635070210000000]),
             error: "",
         }),
-        ("toDateTime", ScalarFunctionTest {
+        ("toTimestamp", ScalarFunctionTest {
             name: "cast-variant-to-datetime-error",
             columns: vec![Series::from_data(vec![
                 VariantValue::from(json!("a2021-03-05 01:01:01")),
                 VariantValue::from(json!("2021-10-24 10:10:10")),
             ])],
-            expect: Series::from_data(vec![1614906061i64, 1635070210]),
+            expect: Series::from_data(vec![1614906061000000i64, 1635070210000000]),
             error: "Cast error happens in casting from Variant to Timestamp(6)",
         }),
     ];

@@ -107,7 +107,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_toyyyymmdd_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1630833797i64]),
+                Series::from_data(vec![1630833797000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![20210905u32]),
@@ -134,7 +134,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_toyyyymmdd_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1630833797i64]),
+                Series::from_data(vec![1630833797000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![20210905u32]),
@@ -161,7 +161,10 @@ fn test_to_yyyymmdd_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_toyyyymmdd_constant_datetime",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1630833797i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1630833797000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![20210905u32]),
@@ -196,7 +199,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_toyyyymmddhhmmss_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1630833797i64]),
+                Series::from_data(vec![1630833797000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![20210905092317u64]),
@@ -223,7 +226,10 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_toyyyymmddhhmmss_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1630833797i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1630833797000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![20210905092317u64]),
@@ -258,7 +264,7 @@ fn test_tomonth_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tomonth_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1633081817i64]),
+                Series::from_data(vec![1633081817000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![10u8]),
@@ -285,7 +291,10 @@ fn test_tomonth_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tomonth_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1633081817i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1633081817000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![10u8]),
@@ -320,7 +329,7 @@ fn test_todayofyear_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_todayofyear_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1633173324i64]),
+                Series::from_data(vec![1633173324000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![275u16]),
@@ -347,7 +356,10 @@ fn test_todayofyear_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_todayofyear_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1633173324i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1633173324000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![275u16]),
@@ -359,7 +371,7 @@ fn test_todayofyear_function() -> Result<()> {
 }
 
 #[test]
-fn test_todatofweek_function() -> Result<()> {
+fn test_todatefweek_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionWithFieldTest {
             name: "test_todayofweek_date16",
@@ -382,7 +394,7 @@ fn test_todatofweek_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_todayofweek_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1633173324i64]),
+                Series::from_data(vec![1633173324000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![6u8]),
@@ -409,7 +421,10 @@ fn test_todatofweek_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_todayofweek_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1633173324i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1633173324000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![6u8]),
@@ -444,7 +459,7 @@ fn test_todayofmonth_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_todayofmonth_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1633173324i64]),
+                Series::from_data(vec![1633173324000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![2u8]),
@@ -471,7 +486,10 @@ fn test_todayofmonth_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_todayofmonth_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1633173324i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1633173324000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![2u8]),
@@ -506,7 +524,7 @@ fn test_tohour_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tohour_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1634551542i64]),
+                Series::from_data(vec![1634551542000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![10u8]),
@@ -533,7 +551,10 @@ fn test_tohour_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tohour_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1634551542i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1634551542000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![10u8]),
@@ -568,7 +589,7 @@ fn test_tominute_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tominute_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1634551542i64]),
+                Series::from_data(vec![1634551542000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![5u8]),
@@ -595,7 +616,10 @@ fn test_tominute_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tominute_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1634551542i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1634551542000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![5u8]),
@@ -630,7 +654,7 @@ fn test_tosecond_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tosecond_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1634551542i64]),
+                Series::from_data(vec![1634551542000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![42u8]),
@@ -657,7 +681,10 @@ fn test_tosecond_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tosecond_datetime_constant",
             columns: vec![ColumnWithField::new(
-                Arc::new(ConstColumn::new(Series::from_data(vec![1634551542i64]), 1)),
+                Arc::new(ConstColumn::new(
+                    Series::from_data(vec![1634551542000000i64]),
+                    1,
+                )),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![42u8]),
@@ -692,7 +719,7 @@ fn test_tomonday_function() -> Result<()> {
         ScalarFunctionWithFieldTest {
             name: "test_tomonday_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1634614318i64]),
+                Series::from_data(vec![1634614318000000i64]),
                 DataField::new("dummy_1", TimestampType::arc(0, None)),
             )],
             expect: Series::from_data(vec![18918u16]),
