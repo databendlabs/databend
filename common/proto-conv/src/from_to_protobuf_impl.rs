@@ -18,17 +18,17 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
 use common_datavalues as dv;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_datavalues::DataTypeImpl;
 use common_meta_types as mt;
 use common_protos::pb;
 use common_protos::pb::data_type::Dt;
 use common_protos::pb::Variant;
 
-use crate::protos::from_to_protobuf::FromToProto;
-use crate::protos::from_to_protobuf::Incompatible;
+use crate::FromToProto;
+use crate::Incompatible;
 
 const VER: u64 = 1;
 const OLDEST_COMPATIBLE_VER: u64 = 1;

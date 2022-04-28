@@ -15,14 +15,13 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use chrono::TimeZone;
-use chrono::Utc;
 use common_datavalues as dv;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Utc;
 use common_meta_types as mt;
+use common_proto_conv::FromToProto;
+use common_proto_conv::Incompatible;
 use common_protos::pb;
-use databend_query::protos::FromToProto;
-use databend_query::protos::Incompatible;
-use jwt_simple::reexports::anyhow;
 use maplit::btreemap;
 
 fn s(ss: impl ToString) -> String {

@@ -1247,6 +1247,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-proto-conv"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common-datavalues",
+ "common-meta-types",
+ "common-protos",
+ "maplit",
+ "thiserror",
+]
+
+[[package]]
 name = "common-protos"
 version = "0.1.0"
 dependencies = [
@@ -1773,7 +1785,6 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-planners",
- "common-protos",
  "common-streams",
  "common-tracing",
  "criterion",
