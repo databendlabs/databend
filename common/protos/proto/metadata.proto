@@ -64,13 +64,13 @@ message DatabaseMeta {
   // Database options.
   map<string, string> options = 4;
 
-  // The time table created.
+  // The time database created.
   string created_on = 20;
 
-  // The time table updated.
+  // The time database updated.
   string updated_on = 21;
 
-  // Comment about this table.
+  // Comment about this database.
   string comment = 22;
 }
 
@@ -146,6 +146,12 @@ message TableMeta {
 
   // The time table created.
   string created_on = 20;
+
+  // The time table updated.
+  string updated_on = 21;
+
+  // Comment about this table.
+  string comment = 22;
 }
 
 // The schema of a table, such as column data types and other meta info.

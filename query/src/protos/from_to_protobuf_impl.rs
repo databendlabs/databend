@@ -236,6 +236,8 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             options: p.options,
             order_keys: p.order_keys,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
+            updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
+            comment: p.comment,
         };
         Ok(v)
     }
@@ -249,6 +251,8 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             options: self.options.clone(),
             order_keys: self.order_keys.clone(),
             created_on: self.created_on.to_pb()?,
+            updated_on: self.updated_on.to_pb()?,
+            comment: self.comment.clone(),
         };
         Ok(p)
     }
@@ -624,7 +628,7 @@ impl FromToProto<pb::Variant> for dv::VariantType {
 impl FromToProto<String> for DateTime<Utc> {
     fn from_pb(p: String) -> Result<Self, Incompatible> {
         let v = DateTime::<Utc>::from_str(&p).map_err(|e| Incompatible {
-            reason: e.to_string(),
+            reason: format!("DateTime error: {}", e),
         })?;
         Ok(v)
     }

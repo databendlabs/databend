@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -101,6 +102,8 @@ fn new_table_info() -> mt::TableInfo {
             options: btreemap! {s("xyz") => s("foo")},
             order_keys: Some(b"a>2".to_vec()),
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+            updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
+            comment: s("table_comment"),
         },
     }
 }
@@ -179,8 +182,10 @@ fn test_load_old() -> anyhow::Result<()> {
             84, 67, 178, 1, 7, 102, 111, 111, 32, 98, 97, 114, 160, 6, 1, 160, 6, 1,
         ];
 
-        let p: pb::DatabaseInfo = common_protos::prost::Message::decode(db_info_v1.as_slice())?;
-        let got = mt::DatabaseInfo::from_pb(p)?;
+        let p: pb::DatabaseInfo =
+            common_protos::prost::Message::decode(db_info_v1.as_slice()).map_err(print_err)?;
+
+        let got = mt::DatabaseInfo::from_pb(p).map_err(print_err)?;
 
         let want = mt::DatabaseInfo {
             database_id: 1,
@@ -197,9 +202,10 @@ fn test_load_old() -> anyhow::Result<()> {
         assert_eq!(want, got);
     }
 
+    // TableInfo is loadable
     {
         let tbl_info_v1: Vec<u8> = vec![
-            10, 7, 8, 5, 16, 6, 160, 6, 1, 18, 3, 102, 111, 111, 26, 3, 98, 97, 114, 34, 245, 3,
+            10, 7, 8, 5, 16, 6, 160, 6, 1, 18, 3, 102, 111, 111, 26, 3, 98, 97, 114, 34, 159, 4,
             10, 180, 3, 10, 36, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 4, 97, 61, 61, 98,
             26, 15, 10, 10, 10, 5, 26, 0, 160, 6, 1, 160, 6, 1, 160, 6, 1, 160, 6, 1, 10, 16, 10,
             4, 98, 111, 111, 108, 26, 5, 18, 0, 160, 6, 1, 160, 6, 1, 10, 16, 10, 4, 105, 110, 116,
@@ -222,11 +228,15 @@ fn test_load_old() -> anyhow::Result<()> {
             9, 146, 1, 3, 160, 6, 1, 160, 6, 1, 160, 6, 1, 18, 6, 10, 1, 97, 18, 1, 98, 160, 6, 1,
             42, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97,
             98, 99, 18, 3, 100, 101, 102, 74, 3, 97, 62, 50, 162, 1, 23, 50, 48, 49, 52, 45, 49,
-            49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 1, 160, 6,
-            1,
+            49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48,
+            49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67,
+            178, 1, 13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116, 160, 6, 1,
+            160, 6, 1,
         ];
-        let p: pb::TableInfo = common_protos::prost::Message::decode(tbl_info_v1.as_slice())?;
-        let got = mt::TableInfo::from_pb(p)?;
+        let p: pb::TableInfo =
+            common_protos::prost::Message::decode(tbl_info_v1.as_slice()).map_err(print_err)?;
+
+        let got = mt::TableInfo::from_pb(p).map_err(print_err)?;
 
         let want = mt::TableInfo {
             ident: mt::TableIdent {
@@ -282,10 +292,17 @@ fn test_load_old() -> anyhow::Result<()> {
                 options: btreemap! {s("xyz") => s("foo")},
                 order_keys: Some(b"a>2".to_vec()),
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
+                updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
+                comment: s("table_comment"),
             },
         };
         assert_eq!(want, got);
     }
 
     Ok(())
+}
+
+fn print_err<T: Debug>(e: T) -> T {
+    eprintln!("Error: {:?}", e);
+    e
 }
