@@ -15,6 +15,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_meta_types::AuthType;
+use common_meta_types::UserIdentity;
+
 use super::Expr;
 use crate::ast::expr::Literal;
 use crate::ast::expr::TypeName;
@@ -73,11 +76,11 @@ pub enum Statement<'a> {
         if_not_exists: bool,
         database: Option<Identifier>,
         table: Identifier,
-        source: CreateTableSource,
+        source: Option<CreateTableSource>,
         engine: Engine,
         cluster_by: Vec<Expr>,
         as_query: Option<Box<Query>>,
-        options: Vec<SQLProperty>,
+        comment: Option<String>,
     },
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
@@ -109,12 +112,17 @@ pub enum Statement<'a> {
     OptimizeTable {
         database: Option<Identifier>,
         table: Identifier,
-        action: OptimizeTableAction,
+        action: Option<OptimizeTableAction>,
     },
 
     // Views
     CreateView {
         if_not_exists: bool,
+        database: Option<Identifier>,
+        view: Identifier,
+        query: Box<Query>,
+    },
+    AlterView {
         database: Option<Identifier>,
         view: Identifier,
         query: Box<Query>,
@@ -148,6 +156,25 @@ pub enum Statement<'a> {
         columns: Vec<Identifier>,
         source: InsertSource<'a>,
         overwrite: bool,
+    },
+
+    // User
+    CreateUser {
+        if_not_exists: bool,
+        user: UserIdentity,
+        auth_option: AuthOption,
+        role_options: Vec<RoleOption>,
+    },
+    AlterUser {
+        // None means current user
+        user: Option<UserIdentity>,
+        // None means no change to make
+        auth_option: Option<AuthOption>,
+        role_options: Vec<RoleOption>,
+    },
+    DropUser {
+        if_exists: bool,
+        user: UserIdentity,
     },
 
     // UDF
@@ -241,6 +268,20 @@ pub enum KillTarget {
     Connection,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AuthOption {
+    pub auth_type: Option<AuthType>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RoleOption {
+    TenantSetting,
+    NoTenantSetting,
+    ConfigReload,
+    NoConfigReload,
+}
+
 impl Display for ShowLimit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -286,6 +327,17 @@ impl Display for KillTarget {
     }
 }
 
+impl Display for RoleOption {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            RoleOption::TenantSetting => write!(f, "TENANTSETTING"),
+            RoleOption::NoTenantSetting => write!(f, "NOTENANTSETTING"),
+            RoleOption::ConfigReload => write!(f, "CONFIGRELOAD"),
+            RoleOption::NoConfigReload => write!(f, "NOCONFIGRELOAD"),
+        }
+    }
+}
+
 impl<'a> Display for Statement<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -296,10 +348,10 @@ impl<'a> Display for Statement<'a> {
                     ExplainKind::Graph => write!(f, " GRAPH")?,
                     ExplainKind::Pipeline => write!(f, " PIPELINE")?,
                 }
-                write!(f, " {}", &query)?;
+                write!(f, " {query}")?;
             }
             Statement::Query(query) => {
-                write!(f, "{}", &query)?;
+                write!(f, "{query}")?;
             }
             Statement::ShowDatabases { limit } => {
                 write!(f, "SHOW DATABASES")?;
@@ -320,9 +372,9 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " {}", database)?;
+                write!(f, " {database}")?;
                 if *engine != Engine::Null {
-                    write!(f, " ENGINE = {}", engine)?;
+                    write!(f, " ENGINE = {engine}")?;
                 }
                 // TODO(leiysky): display rest information
             }
@@ -337,7 +389,7 @@ impl<'a> Display for Statement<'a> {
                 write!(f, " {database}")?;
             }
             Statement::UseDatabase { database } => {
-                write!(f, "USE {}", database)?;
+                write!(f, "USE {database}")?;
             }
             Statement::ShowTables {
                 database,
@@ -375,8 +427,9 @@ impl<'a> Display for Statement<'a> {
                 table,
                 source,
                 engine,
+                comment,
+                cluster_by,
                 as_query,
-                ..
             } => {
                 write!(f, "CREATE TABLE ")?;
                 if *if_not_exists {
@@ -384,23 +437,30 @@ impl<'a> Display for Statement<'a> {
                 }
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
                 match source {
-                    CreateTableSource::Columns(columns) => {
+                    Some(CreateTableSource::Columns(columns)) => {
                         write!(f, " (")?;
                         write_comma_separated_list(f, columns)?;
                         write!(f, ")")?;
                     }
-                    CreateTableSource::Like { database, table } => {
+                    Some(CreateTableSource::Like { database, table }) => {
                         write!(f, " LIKE ")?;
                         write_period_separated_list(f, database.iter().chain(Some(table)))?;
                     }
+                    None => (),
                 }
                 if *engine != Engine::Null {
-                    write!(f, " ENGINE = {}", engine)?;
+                    write!(f, " ENGINE = {engine}")?;
+                }
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT = {comment}")?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " CLUSTER BY ")?;
+                    write_comma_separated_list(f, cluster_by)?;
                 }
                 if let Some(as_query) = as_query {
-                    write!(f, " AS {}", as_query)?;
+                    write!(f, " AS {as_query}")?;
                 }
-                // TODO(leiysky): display options
             }
             Statement::Describe { database, table } => {
                 write!(f, "DESCRIBE ")?;
@@ -461,10 +521,12 @@ impl<'a> Display for Statement<'a> {
             } => {
                 write!(f, "OPTIMIZE TABLE ")?;
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
-                match action {
-                    OptimizeTableAction::All => write!(f, " ALL")?,
-                    OptimizeTableAction::Purge => write!(f, " PURGE")?,
-                    OptimizeTableAction::Compact => write!(f, " COMPACT")?,
+                if let Some(action) = action {
+                    match action {
+                        OptimizeTableAction::All => write!(f, " ALL")?,
+                        OptimizeTableAction::Purge => write!(f, " PURGE")?,
+                        OptimizeTableAction::Compact => write!(f, " COMPACT")?,
+                    }
                 }
             }
             Statement::CreateView {
@@ -477,6 +539,15 @@ impl<'a> Display for Statement<'a> {
                 if *if_not_exists {
                     write!(f, "IF NOT EXISTS ")?;
                 }
+                write_period_separated_list(f, database.iter().chain(Some(view)))?;
+                write!(f, " AS {query}")?;
+            }
+            Statement::AlterView {
+                database,
+                view,
+                query,
+            } => {
+                write!(f, "ALTER VIEW ")?;
                 write_period_separated_list(f, database.iter().chain(Some(view)))?;
                 write!(f, " AS {query}")?;
             }
@@ -549,6 +620,64 @@ impl<'a> Display for Statement<'a> {
                     )?,
                     InsertSource::Select { query } => write!(f, " {query}")?,
                 }
+            }
+            Statement::CreateUser {
+                if_not_exists,
+                user,
+                auth_option,
+                role_options,
+            } => {
+                write!(f, "CREATE USER")?;
+                if *if_not_exists {
+                    write!(f, " IF NOT EXISTS")?;
+                }
+                write!(f, " {user} IDENTIFIED")?;
+                if let Some(auth_type) = &auth_option.auth_type {
+                    write!(f, " WITH {}", auth_type.to_str())?;
+                }
+                if let Some(password) = &auth_option.password {
+                    write!(f, " BY '{password}'")?;
+                }
+                if !role_options.is_empty() {
+                    write!(f, " WITH")?;
+                    for role_option in role_options {
+                        write!(f, " {role_option}")?;
+                    }
+                }
+            }
+            Statement::AlterUser {
+                user,
+                auth_option,
+                role_options,
+            } => {
+                write!(f, "ALTER USER")?;
+                if let Some(user) = user {
+                    write!(f, " {user}")?;
+                } else {
+                    write!(f, " USER()")?;
+                }
+                if let Some(auth_option) = &auth_option {
+                    write!(f, " IDENTIFIED")?;
+                    if let Some(auth_type) = &auth_option.auth_type {
+                        write!(f, " WITH {}", auth_type.to_str())?;
+                    }
+                    if let Some(password) = &auth_option.password {
+                        write!(f, " BY '{password}'", password = password)?;
+                    }
+                }
+                if !role_options.is_empty() {
+                    write!(f, " WITH")?;
+                    for with_option in role_options {
+                        write!(f, " {with_option}", with_option = with_option)?;
+                    }
+                }
+            }
+            Statement::DropUser { if_exists, user } => {
+                write!(f, "DROP USER")?;
+                if *if_exists {
+                    write!(f, " IF EXISTS")?;
+                }
+                write!(f, " {user}")?;
             }
             Statement::CreateUDF {
                 if_not_exists,

@@ -142,38 +142,40 @@ CreateTable {
         name: "b",
         quote: None,
     },
-    source: Columns(
-        [
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c",
-                    quote: None,
-                },
-                data_type: Int32,
-                nullable: false,
-                default_expr: Some(
-                    Literal(
-                        Number(
-                            "1",
+    source: Some(
+        Columns(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c",
+                        quote: None,
+                    },
+                    data_type: Int32,
+                    nullable: false,
+                    default_expr: Some(
+                        Literal(
+                            Number(
+                                "1",
+                            ),
                         ),
                     ),
-                ),
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "b",
-                    quote: None,
                 },
-                data_type: String,
-                nullable: false,
-                default_expr: None,
-            },
-        ],
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "b",
+                        quote: None,
+                    },
+                    data_type: String,
+                    nullable: false,
+                    default_expr: None,
+                },
+            ],
+        ),
     ),
     engine: Null,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 
@@ -194,33 +196,35 @@ CreateTable {
         name: "b",
         quote: None,
     },
-    source: Columns(
-        [
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c",
-                    quote: None,
-                },
-                data_type: Int32,
-                nullable: false,
-                default_expr: Some(
-                    Literal(
-                        Number(
-                            "1",
+    source: Some(
+        Columns(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c",
+                        quote: None,
+                    },
+                    data_type: Int32,
+                    nullable: false,
+                    default_expr: Some(
+                        Literal(
+                            Number(
+                                "1",
+                            ),
                         ),
                     ),
-                ),
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "b",
-                    quote: None,
                 },
-                data_type: String,
-                nullable: false,
-                default_expr: None,
-            },
-        ],
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "b",
+                        quote: None,
+                    },
+                    data_type: String,
+                    nullable: false,
+                    default_expr: None,
+                },
+            ],
+        ),
     ),
     engine: Null,
     cluster_by: [],
@@ -256,7 +260,7 @@ CreateTable {
             offset: None,
         },
     ),
-    options: [],
+    comment: None,
 }
 
 
@@ -277,22 +281,24 @@ CreateTable {
         name: "b",
         quote: None,
     },
-    source: Like {
-        database: Some(
-            Identifier {
-                name: "c",
+    source: Some(
+        Like {
+            database: Some(
+                Identifier {
+                    name: "c",
+                    quote: None,
+                },
+            ),
+            table: Identifier {
+                name: "d",
                 quote: None,
             },
-        ),
-        table: Identifier {
-            name: "d",
-            quote: None,
         },
-    },
+    ),
     engine: Null,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 
@@ -308,17 +314,19 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    source: Like {
-        database: None,
-        table: Identifier {
-            name: "t2",
-            quote: None,
+    source: Some(
+        Like {
+            database: None,
+            table: Identifier {
+                name: "t2",
+                quote: None,
+            },
         },
-    },
+    ),
     engine: Memory,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 
@@ -439,38 +447,40 @@ CreateTable {
         name: "c",
         quote: None,
     },
-    source: Columns(
-        [
-            ColumnDefinition {
-                name: Identifier {
-                    name: "a",
-                    quote: None,
+    source: Some(
+        Columns(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "a",
+                        quote: None,
+                    },
+                    data_type: DateTime {
+                        precision: None,
+                    },
+                    nullable: true,
+                    default_expr: None,
                 },
-                data_type: DateTime {
-                    precision: None,
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "b",
+                        quote: None,
+                    },
+                    data_type: DateTime {
+                        precision: Some(
+                            3,
+                        ),
+                    },
+                    nullable: false,
+                    default_expr: None,
                 },
-                nullable: true,
-                default_expr: None,
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "b",
-                    quote: None,
-                },
-                data_type: DateTime {
-                    precision: Some(
-                        3,
-                    ),
-                },
-                nullable: false,
-                default_expr: None,
-            },
-        ],
+            ],
+        ),
     ),
     engine: Null,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 
@@ -551,41 +561,43 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    source: Columns(
-        [
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c1",
-                    quote: None,
+    source: Some(
+        Columns(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c1",
+                        quote: None,
+                    },
+                    data_type: Int32,
+                    nullable: true,
+                    default_expr: None,
                 },
-                data_type: Int32,
-                nullable: true,
-                default_expr: None,
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c2",
-                    quote: None,
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c2",
+                        quote: None,
+                    },
+                    data_type: Int64,
+                    nullable: true,
+                    default_expr: None,
                 },
-                data_type: Int64,
-                nullable: true,
-                default_expr: None,
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c3",
-                    quote: None,
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c3",
+                        quote: None,
+                    },
+                    data_type: String,
+                    nullable: true,
+                    default_expr: None,
                 },
-                data_type: String,
-                nullable: true,
-                default_expr: None,
-            },
-        ],
+            ],
+        ),
     ),
     engine: Null,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 
@@ -601,41 +613,43 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    source: Columns(
-        [
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c1",
-                    quote: None,
+    source: Some(
+        Columns(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c1",
+                        quote: None,
+                    },
+                    data_type: Int32,
+                    nullable: false,
+                    default_expr: None,
                 },
-                data_type: Int32,
-                nullable: false,
-                default_expr: None,
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c2",
-                    quote: None,
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c2",
+                        quote: None,
+                    },
+                    data_type: Int64,
+                    nullable: false,
+                    default_expr: None,
                 },
-                data_type: Int64,
-                nullable: false,
-                default_expr: None,
-            },
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c3",
-                    quote: None,
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c3",
+                        quote: None,
+                    },
+                    data_type: String,
+                    nullable: false,
+                    default_expr: None,
                 },
-                data_type: String,
-                nullable: false,
-                default_expr: None,
-            },
-        ],
+            ],
+        ),
     ),
     engine: Null,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 
@@ -651,29 +665,31 @@ CreateTable {
         name: "t",
         quote: None,
     },
-    source: Columns(
-        [
-            ColumnDefinition {
-                name: Identifier {
-                    name: "c1",
-                    quote: None,
-                },
-                data_type: Int32,
-                nullable: false,
-                default_expr: Some(
-                    Literal(
-                        Number(
-                            "1",
+    source: Some(
+        Columns(
+            [
+                ColumnDefinition {
+                    name: Identifier {
+                        name: "c1",
+                        quote: None,
+                    },
+                    data_type: Int32,
+                    nullable: false,
+                    default_expr: Some(
+                        Literal(
+                            Number(
+                                "1",
+                            ),
                         ),
                     ),
-                ),
-            },
-        ],
+                },
+            ],
+        ),
     ),
     engine: Null,
     cluster_by: [],
     as_query: None,
-    options: [],
+    comment: None,
 }
 
 

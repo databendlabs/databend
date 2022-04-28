@@ -7,7 +7,7 @@ error:
 1 | create table a.b (c integer not null 1, b varchar(10))
   | ------                               ^ expected token ")"
   | |                                     
-  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> <source> [ENGINE = <engine>]`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
@@ -19,7 +19,7 @@ error:
 1 | create table a (c varchar(10))
   | ------                   ^ expected token ")"
   | |                         
-  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> <source> [ENGINE = <engine>]`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
@@ -34,7 +34,7 @@ error:
   | |               | expected keyword `BOOLEAN`
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
-  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> <source> [ENGINE = <engine>]`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------

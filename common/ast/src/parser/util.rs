@@ -43,6 +43,15 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     }
 }
 
+#[macro_export]
+macro_rules! rule {
+    ($($tt:tt)*) => { nom_rule::rule!(
+        $crate::parser::util::match_text,
+        $crate::parser::util::match_token,
+        $($tt)*)
+    }
+}
+
 pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident())(i)
 }
@@ -64,16 +73,13 @@ fn non_reserved_identifier(
     move |i| {
         alt((
             map(
-                alt((
-                    match_token(TokenKind::Ident),
-                    non_reserved_keyword(is_reserved_keyword),
-                )),
+                alt((rule! { Ident }, non_reserved_keyword(is_reserved_keyword))),
                 |token| Identifier {
                     name: token.text().to_string(),
                     quote: None,
                 },
             ),
-            map(match_token(TokenKind::QuotedIdent), |token| Identifier {
+            map(rule! { QuotedIdent }, |token| Identifier {
                 name: token.text()[1..token.text().len() - 1].to_string(),
                 quote: Some(token.text().chars().next().unwrap()),
             }),
@@ -97,13 +103,16 @@ fn non_reserved_keyword(
 }
 
 pub fn literal_string(i: Input) -> IResult<String> {
-    map(match_token(LiteralString), |token| {
-        token.text()[1..token.text().len() - 1].to_string()
-    })(i)
+    map(
+        rule! {
+            QuotedIdent
+        },
+        |token| token.text()[1..token.text().len() - 1].to_string(),
+    )(i)
 }
 
 pub fn literal_u64(i: Input) -> IResult<u64> {
-    match_token(LiteralNumber)(i).and_then(|(i2, token)| {
+    rule!(LiteralNumber)(i).and_then(|(i2, token)| {
         token.text().parse().map(|num| (i2, num)).map_err(|err| {
             nom::Err::Error(Error::from_error_kind(i, ErrorKind::ParseIntError(err)))
         })
@@ -228,33 +237,5 @@ where
                 }
             }
         }
-    }
-}
-
-/// A fork of `map_res` from nom, but use `ErrorKind`.
-pub fn map_res<'a, O1, O2, F, G>(
-    mut parser: F,
-    mut f: G,
-) -> impl FnMut(Input<'a>) -> nom::IResult<Input<'a>, O2, Error<'a>>
-where
-    F: nom::Parser<Input<'a>, O1, Error<'a>>,
-    G: FnMut(O1) -> Result<O2, ErrorKind>,
-{
-    move |input| {
-        let i = input.clone();
-        let (input, output) = parser.parse(input)?;
-        match f(output) {
-            Ok(output) => Ok((input, output)),
-            Err(e) => Err(nom::Err::Error(Error::from_error_kind(i, e))),
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! rule {
-    ($($tt:tt)*) => { nom_rule::rule!(
-        $crate::parser::util::match_text,
-        $crate::parser::util::match_token,
-        $($tt)*)
     }
 }

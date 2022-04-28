@@ -140,12 +140,15 @@ fn test_statements_in_legacy_suites() {
             .replace_all(&file_str, "")
             .into_owned();
 
+        // TODO(andylokandy): support all cases eventually
+        // Remove currently unimplemented cases
+        let file_str = regex::Regex::new("(?i).*(FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES).*\n")
+            .unwrap()
+            .replace_all(&file_str, "")
+            .into_owned();
+
         let tokens = tokenize_sql(&file_str).unwrap();
         parse_sql(&tokens).unwrap();
-        // for sql in file_str.split_inclusive(';').map(str::trim) {
-        //     if !sql.is_empty() {
-        //     }
-        // }
     }
 }
 

@@ -101,12 +101,10 @@ pub enum TokenKind {
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
 
-    #[regex(r#""[_$a-zA-Z0-9]*""#)]
-    #[regex(r#"`[_$a-zA-Z0-9]*`"#)]
-    QuotedIdent,
-
+    #[regex(r#""([^"\\]|\\.|"")*""#)]
+    #[regex(r#"`([^`\\]|\\.|``)*`"#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
-    LiteralString,
+    QuotedIdent,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     LiteralHex,
@@ -558,6 +556,30 @@ pub enum TokenKind {
     CLUSTER,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
     CURRENT_TIMESTAMP,
+    #[token("USER", ignore(ascii_case))]
+    USER,
+    #[token("IDENTIFIED", ignore(ascii_case))]
+    IDENTIFIED,
+    #[token("WITH", ignore(ascii_case))]
+    WITH,
+    #[token("TENANTSETTING", ignore(ascii_case))]
+    TENANTSETTING,
+    #[token("NOTENANTSETTING", ignore(ascii_case))]
+    NOTENANTSETTING,
+    #[token("CONFIGRELOAD", ignore(ascii_case))]
+    CONFIGRELOAD,
+    #[token("NOCONFIGRELOAD", ignore(ascii_case))]
+    NOCONFIGRELOAD,
+    #[token("NO_PASSWORD", ignore(ascii_case))]
+    NO_PASSWORD,
+    #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
+    PLAINTEXT_PASSWORD,
+    #[token("SHA256_PASSWORD", ignore(ascii_case))]
+    SHA256_PASSWORD,
+    #[token("DOUBLE_SHA1_PASSWORD", ignore(ascii_case))]
+    DOUBLE_SHA1_PASSWORD,
+    #[token("JWT", ignore(ascii_case))]
+    JWT,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -567,7 +589,6 @@ impl TokenKind {
             self,
             Ident
                 | QuotedIdent
-                | LiteralString
                 | LiteralHex
                 | LiteralNumber
                 | DoubleEq
@@ -728,14 +749,14 @@ impl TokenKind {
             | TRUE
             // | UNION
             // | UNIQUE
-            // | USER
+            | USER
             | USING
             | VALUES
             | VARCHAR
             // | VARIADIC
             | WHEN
             // | WINDOW
-            // | WITH
+            | WITH
             // | XMLATTRIBUTES
             // | XMLCONCAT
             // | XMLELEMENT
@@ -783,7 +804,6 @@ impl TokenKind {
             // | CURRENT_TIME
             | CURRENT_TIMESTAMP
             // | CURRENT_USER
-            | DEFAULT
             // | DEFERRABLE
             | DESC
             | DISTINCT
@@ -846,13 +866,13 @@ impl TokenKind {
             | TRUE
             // | UNION
             // | UNIQUE
-            // | USER
+            | USER
             | USING
             // | VARIADIC
             // | VERBOSE
             | WHEN
             // | WINDOW
-            // | WITH
+            | WITH
             | WHERE
         )
     }

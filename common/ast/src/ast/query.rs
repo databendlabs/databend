@@ -128,7 +128,7 @@ pub enum TableReference {
     // `TABLE(expr)[ AS alias ]`
     SetReturningFunction {
         name: Identifier,
-        param: Expr,
+        params: Vec<Expr>,
         alias: Option<TableAlias>,
     },
     Join(Join),
@@ -219,8 +219,14 @@ impl Display for TableReference {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::SetReturningFunction { name, param, alias } => {
-                write!(f, "{name}({param})")?;
+            TableReference::SetReturningFunction {
+                name,
+                params,
+                alias,
+            } => {
+                write!(f, "{name}(")?;
+                write_comma_separated_list(f, params)?;
+                write!(f, ")")?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

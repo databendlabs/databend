@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_types::AuthType;
+use common_meta_types::UserIdentity;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
@@ -120,8 +122,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #ident ~ "." )? ~ #ident
-            ~ #create_table_source
+            ~ #create_table_source?
             ~ #engine?
+            ~ ( COMMENT ~ "=" ~ #literal_string )?
             ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" )?
             ~ ( AS ~ ^#query )?
         },
@@ -133,20 +136,21 @@ pub fn statement(i: Input) -> IResult<Statement> {
             table,
             source,
             opt_engine,
+            opt_comment,
             opt_cluster_by,
             opt_as_query,
         )| {
             Statement::CreateTable {
                 if_not_exists: opt_if_not_exists.is_some(),
-                database: opt_database.map(|(name, _)| name),
+                database: opt_database.map(|(database, _)| database),
                 table,
                 source,
                 engine: opt_engine.unwrap_or(Engine::Null),
+                comment: opt_comment.map(|(_, _, comment)| comment),
                 cluster_by: opt_cluster_by
                     .map(|(_, _, _, exprs, _)| exprs)
                     .unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
-                options: vec![],
             }
         },
     );
@@ -165,7 +169,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, _, opt_if_exists, opt_database, table)| Statement::DropTable {
             if_exists: opt_if_exists.is_some(),
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
             table,
         },
     );
@@ -175,7 +179,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, _, opt_if_exists, opt_database, table, action)| Statement::AlterTable {
             if_exists: opt_if_exists.is_some(),
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
             table,
             action,
         },
@@ -185,7 +189,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             RENAME ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ TO ~ #ident
         },
         |(_, _, opt_database, table, _, new_table)| Statement::RenameTable {
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
             table,
             new_table,
         },
@@ -195,17 +199,17 @@ pub fn statement(i: Input) -> IResult<Statement> {
             TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ PURGE?
         },
         |(_, _, opt_database, table, opt_purge)| Statement::TruncateTable {
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
             table,
             purge: opt_purge.is_some(),
         },
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ #optimize_table_action
+            OPTIMIZE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ #optimize_table_action?
         },
         |(_, _, opt_database, table, action)| Statement::OptimizeTable {
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
             table,
             action,
         },
@@ -213,11 +217,24 @@ pub fn statement(i: Input) -> IResult<Statement> {
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
-            ~ ( #ident ~ "." )? ~ #ident ~ AS ~ #query
+            ~ ( #ident ~ "." )? ~ #ident
+            ~ AS ~ #query
         },
         |(_, _, opt_if_not_exists, opt_database, view, _, query)| Statement::CreateView {
             if_not_exists: opt_if_not_exists.is_some(),
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
+            view,
+            query: Box::new(query),
+        },
+    );
+    let alter_view = map(
+        rule! {
+            ALTER ~ VIEW
+            ~ ( #ident ~ "." )? ~ #ident
+            ~ AS ~ #query
+        },
+        |(_, _, opt_database, view, _, query)| Statement::AlterView {
+            database: opt_database.map(|(database, _)| database),
             view,
             query: Box::new(query),
         },
@@ -228,7 +245,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
         },
         |(_, _, opt_if_exists, opt_database, view)| Statement::DropView {
             if_exists: opt_if_exists.is_some(),
-            database: opt_database.map(|(name, _)| name),
+            database: opt_database.map(|(database, _)| database),
             view,
         },
     );
@@ -271,6 +288,53 @@ pub fn statement(i: Input) -> IResult<Statement> {
                 .unwrap_or_default(),
             source,
             overwrite: overwrite.kind == OVERWRITE,
+        },
+    );
+    let create_user = map(
+        rule! {
+            CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #user_identity
+            ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
+            ~ ( WITH ~ ^#role_option+ )?
+        },
+        |(_, _, opt_if_not_exists, user, _, opt_auth_type, opt_password, opt_role_options)| {
+            Statement::CreateUser {
+                if_not_exists: opt_if_not_exists.is_some(),
+                user,
+                auth_option: AuthOption {
+                    auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
+                    password: opt_password.map(|(_, password)| password),
+                },
+                role_options: opt_role_options
+                    .map(|(_, role_options)| role_options)
+                    .unwrap_or_default(),
+            }
+        },
+    );
+    let alter_user = map(
+        rule! {
+            ALTER ~ USER ~ ( #map(rule! { USER ~ "(" ~ ")" }, |_| None) | #map(user_identity, Some) )
+            ~ ( IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )? )?
+            ~ ( WITH ~ ^#role_option+ )?
+        },
+        |(_, _, user, opt_auth_option, opt_role_options)| Statement::AlterUser {
+            user,
+            auth_option: opt_auth_option.map(|(_, opt_auth_type, opt_password)| AuthOption {
+                auth_type: opt_auth_type.map(|(_, auth_type)| auth_type),
+                password: opt_password.map(|(_, password)| password),
+            }),
+            role_options: opt_role_options
+                .map(|(_, role_options)| role_options)
+                .unwrap_or_default(),
+        },
+    );
+    let drop_user = map(
+        rule! {
+            DROP ~ USER ~ ( IF ~ EXISTS )? ~ #user_identity
+        },
+        |(_, _, opt_if_exists, user)| Statement::DropUser {
+            if_exists: opt_if_exists.is_some(),
+            user,
         },
     );
     let create_udf = map(
@@ -334,15 +398,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule!(
             #explain : "`EXPLAIN [ANALYZE] <statement>`"
             | #map(query, |query| Statement::Query(Box::new(query)))
-            | #show_databases : "`SHOW DATABASES [<show limit>]`"
+            | #show_databases : "`SHOW DATABASES [<show_limit>]`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #use_database : "`USE <database>`"
-            | #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show limit>]`"
+            | #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
-            | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show limit>]`"
-            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> <source> [ENGINE = <engine>]`"
+            | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
+            | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`"
             | #describe : "`DESCRIBE [<database>.]<table>`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
@@ -353,16 +417,20 @@ pub fn statement(i: Input) -> IResult<Statement> {
         rule!(
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
+            | #alter_view : "`ALTER VIEW [<database>.]<view> AS SELECT ...`"
             | #show_settings : "`SHOW SETTINGS`"
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
-            | #show_functions : "`SHOW FUNCTIONS [<show limit>]`"
+            | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_variable : "`SET <variable> = <value>`"
             | #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <role_option> ...]`"
+            | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <role_option> ...]`"
+            | #drop_user : "`DROP USER [IF EXISTS] '<username>'@'hostname'`"
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
         ),
     ))(i)
 }
@@ -535,4 +603,37 @@ pub fn values_tokens(i: Input) -> IResult<Input> {
         .unwrap_or(i.len() - 1);
     let (value_tokens, rest_tokens) = i.split_at(semicolon_pos);
     Ok((rest_tokens, value_tokens))
+}
+
+pub fn role_option(i: Input) -> IResult<RoleOption> {
+    alt((
+        value(RoleOption::TenantSetting, rule! { TENANTSETTING }),
+        value(RoleOption::NoTenantSetting, rule! { NOTENANTSETTING }),
+        value(RoleOption::ConfigReload, rule! { CONFIGRELOAD }),
+        value(RoleOption::NoConfigReload, rule! { NOCONFIGRELOAD }),
+    ))(i)
+}
+
+pub fn user_identity(i: Input) -> IResult<UserIdentity> {
+    map(
+        rule! {
+            #literal_string ~ ( "@" ~ #literal_string )?
+        },
+        |(username, opt_hostname)| UserIdentity {
+            username,
+            hostname: opt_hostname
+                .map(|(_, hostname)| hostname)
+                .unwrap_or_else(|| "%".to_string()),
+        },
+    )(i)
+}
+
+pub fn auth_type(i: Input) -> IResult<AuthType> {
+    alt((
+        value(AuthType::NoPassword, rule! { NO_PASSWORD }),
+        value(AuthType::PlaintextPassword, rule! { PLAINTEXT_PASSWORD }),
+        value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
+        value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
+        value(AuthType::JWT, rule! { JWT }),
+    ))(i)
 }

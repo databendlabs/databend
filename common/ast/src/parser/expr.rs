@@ -762,12 +762,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
-    let string = map(
-        rule! {
-            LiteralString
-        },
-        |quoted| Literal::String(quoted.text()[1..quoted.text().len() - 1].to_string()),
-    );
+    let string = map(literal_string, Literal::String);
     // TODO(andylokandy): handle hex numbers in parser
     let number = map(
         rule! {

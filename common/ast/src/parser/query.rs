@@ -158,11 +158,11 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
 pub fn set_returning_function(i: Input) -> IResult<TableReference> {
     map(
         rule! {
-            #ident ~ "(" ~ #expr ~ ")" ~ ( AS? ~ #table_alias )?
+            #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ ( AS? ~ #table_alias )?
         },
-        |(name, _, param, _, alias)| TableReference::SetReturningFunction {
+        |(name, _, params, _, alias)| TableReference::SetReturningFunction {
             name,
-            param,
+            params,
             alias: alias.map(|(_, alias)| alias),
         },
     )(i)
