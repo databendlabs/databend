@@ -1,6 +1,6 @@
 ---
-title: Deploy Databend Meta Service
-sidebar_label: Deploy Meta Service
+title: Deploy a Databend Meta Service Cluster
+sidebar_label: Deploy a Databend Meta Service Cluster
 description:
   How to deploy Databend Meta Service Cluster.
 ---

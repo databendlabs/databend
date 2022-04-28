@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -80,7 +80,7 @@ pub type ScalarExprRef = Arc<dyn ScalarExpr>;
 
 pub trait ScalarExpr: Any {
     /// Get return type and nullability
-    fn data_type(&self) -> (DataTypePtr, bool);
+    fn data_type(&self) -> (DataTypeImpl, bool);
 
     // TODO: implement this in the future
     // fn used_columns(&self) -> ColumnSet;

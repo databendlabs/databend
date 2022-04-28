@@ -3,6 +3,14 @@ SELECT now() >= 1630295616;
 select  toDateTime(1630320462000000), toInt64(toDateTime(1630320462000000))  = 1630320462000000;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
 select  toDateTime(1640019661000000), toInt64(toDateTime(1640019661000000))  = 1640019661000000;
+select  toDate('1000-01-01');
+select  toDate('9999-12-31');
+select  toDate('10000-12-31'); -- {ErrorCode 1010}
+select  toDate('0999-12-31'); -- {ErrorCode 1068}
+select  toDateTime('1000-01-01 00:00:00');
+select  toDateTime('9999-12-31 23:59:59');
+select  toDateTime('10000-01-01 00:00:00'); -- {ErrorCode 1010}
+select  toDateTime('0999-12-31 23:59:59'); -- {ErrorCode 1069}
 
 select typeof(today() + 3) = 'DATE';
 select typeof(today() - 3) = 'DATE';
@@ -83,6 +91,8 @@ select toStartOfWeek(toDate(18769), 6);
 select toStartOfWeek(toDate(18769), 7);
 select toStartOfWeek(toDate(18769), 8);
 select toStartOfWeek(toDate(18769), 9);
+select toStartOfWeek(toDate('1000-01-01')); -- {ErrorCode 1068}
+select toStartOfWeek(toDateTime('1000-01-01 00:00:00')); -- {ErrorCode 1068}
 select '===toStartOf===';
 
 select '===addYears===';
@@ -96,6 +106,8 @@ select addYears(toDate(18321), cast(-1, INT32));
 select addYears(toDate(18321), cast(-1, INT64));
 select addYears(toDateTime(1582970400000000), cast(50, INT8)); -- 2020-2-29T10:00:00 + 50 years
 select addYears(toDateTime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10:00:00 - 50 years
+select addYears(toDate('9999-12-31'), 1); -- {ErrorCode 1068}
+select addYears(toDateTime('9999-12-31 23:59:59'), 1); -- {ErrorCode 1069}
 select '===addYears===';
 
 select '===subtractMonths===';
@@ -104,6 +116,8 @@ select toDate(18321) -  interval '13' month;
 
 select subtractMonths(toDateTime(1582970400000000), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
 select toDateTime(1582970400000000) -  interval '122' month;
+select subtractMonths(toDate('1000-01-01'), 1); -- {ErrorCode 1068}
+select subtractMonths(toDateTime('1000-01-01 00:00:00'), 1); -- {ErrorCode 1069}
 select '===subtractMonths===';
 
 select '===addDays===';
@@ -112,16 +126,22 @@ select toDate(18321) + interval '1' day;
 
 select addDays(toDateTime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
 select toDateTime(1582970400000000) + interval '-1' day;
+select addDays(toDate('9999-12-31'), 1); -- {ErrorCode 1068}
+select addDays(toDateTime('9999-12-31 23:59:59'), 1); -- {ErrorCode 1069}
 select '===addDays===';
 
 select '===addHours===';
 select addHours(toDateTime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
 select toDateTime(1582970400000000) + interval '25' hour;
 select addHours(toDate(18321), cast(1.2, Float32));
+select addHours(toDate('9999-12-31'), 24); -- {ErrorCode 1069}
+select addHours(toDateTime('9999-12-31 23:59:59'), 1); -- {ErrorCode 1069}
 select '===addHours===';
 
 select '===subtractMinutes===';
 select subtractMinutes(toDateTime(1582970400000000), cast(1, INT32)); -- 2020-2-29T10:00:00 - 1 minutes
+select subtractMinutes(toDate('1000-01-01'), 1); -- {ErrorCode 1069}
+select subtractMinutes(toDateTime('1000-01-01 00:00:00'), 1); -- {ErrorCode 1069}
 select '===subtractMinutes===';
 
 select '===addSeconds===';
@@ -193,16 +213,20 @@ select toDateTime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
 
 select '===INSERT===';
 drop table if exists ts;
-create table ts(a DateTime(9), b DateTime, c Date);
+create table ts(a DateTime(6), b DateTime, c Date);
 insert into ts values(now(), now(), today());
 select toDateTime(a) = toDateTime(b) from ts;
 drop table if exists ts;
 
 
-create table t(d32 datetime, d64 DateTime(3));
+create table t(a datetime, b DateTime(3), c Date);
 
-insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28');
-insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221');
+insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01');
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999-12-31');
+insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '2020-10-10'); -- {ErrorCode 1069}
+insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); -- {ErrorCode 1010}
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999-10-10'); -- {ErrorCode 1068}
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); -- {ErrorCode 1010}
 
-select * from t order by d64;
+select * from t order by b;
 drop table t;

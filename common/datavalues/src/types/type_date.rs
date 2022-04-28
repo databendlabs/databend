@@ -16,22 +16,38 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
+/// date ranges from 1000-01-01 to 9999-12-31
+/// date_max and date_min means days offset from 1970-01-01
+/// any date not in the range will be invalid
+pub const DATE_MAX: i32 = 2932896;
+pub const DATE_MIN: i32 = -354285;
+
+#[inline]
+pub fn check_date(days: i32) -> Result<()> {
+    if days >= DATE_MIN && days <= DATE_MAX {
+        return Ok(());
+    }
+    Err(ErrorCode::InvalidDate(
+        "Date only ranges from 1000-01-01 to 9999-12-31",
+    ))
+}
+
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateType {}
 
 impl DateType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::Date(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for DateType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Date

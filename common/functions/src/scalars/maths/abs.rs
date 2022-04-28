@@ -30,11 +30,11 @@ use crate::scalars::Monotonicity;
 #[derive(Clone)]
 pub struct AbsFunction {
     _display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 impl AbsFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         let result_type = match args[0].data_type_id() {
             TypeID::Int8 => u8::to_data_type(),
@@ -92,7 +92,7 @@ impl Function for AbsFunction {
         "abs"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

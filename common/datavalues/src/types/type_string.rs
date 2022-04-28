@@ -24,12 +24,11 @@ use crate::prelude::*;
 pub struct StringType {}
 
 impl StringType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::String(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for StringType {
     fn data_type_id(&self) -> TypeID {
         TypeID::String

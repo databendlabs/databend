@@ -32,7 +32,7 @@ pub struct RepeatFunction {
 }
 
 impl RepeatFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_string() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 1 is string, but got {}",
@@ -63,7 +63,7 @@ impl Function for RepeatFunction {
         "repeat"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

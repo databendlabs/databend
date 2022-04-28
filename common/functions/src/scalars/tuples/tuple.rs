@@ -15,7 +15,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::StructColumn;
 use common_datavalues::StructType;
 use common_exception::Result;
@@ -28,19 +28,19 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct TupleFunction {
     _display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 impl TupleFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         let names = (0..args.len())
             .map(|i| format!("item_{}", i))
             .collect::<Vec<_>>();
         let types = args.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
-        let result_type = Arc::new(StructType::create(names, types));
+        let result_type = DataTypeImpl::Struct(StructType::create(names, types));
 
         Ok(Box::new(TupleFunction {
             _display_name: "tuple".to_string(),
@@ -63,7 +63,7 @@ impl Function for TupleFunction {
         "TupleFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

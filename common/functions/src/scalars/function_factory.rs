@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
@@ -39,7 +39,7 @@ use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
 pub type FactoryCreator =
-    Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function>> + Send + Sync>;
+    Box<dyn Fn(&str, &[&DataTypeImpl]) -> Result<Box<dyn Function>> + Send + Sync>;
 
 pub struct FunctionDescription {
     pub(crate) features: FunctionFeatures,
@@ -102,7 +102,7 @@ impl FunctionFactory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 

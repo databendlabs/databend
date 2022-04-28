@@ -23,7 +23,7 @@ use serde_json::json;
 fn test_serializers() -> Result<()> {
     struct Test {
         name: &'static str,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         value: DataValue,
         column: ColumnRef,
         val_str: &'static str,
@@ -81,13 +81,13 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "array",
-            data_type: Arc::new(ArrayType::create(StringType::arc())),
+            data_type: DataTypeImpl::Array(ArrayType::create(StringType::arc())),
             value: DataValue::Array(vec![
                 DataValue::String("data".as_bytes().to_vec()),
                 DataValue::String("bend".as_bytes().to_vec()),
             ]),
             column: Arc::new(ArrayColumn::from_data(
-                Arc::new(ArrayType::create(StringType::arc())),
+                DataTypeImpl::Array(ArrayType::create(StringType::arc())),
                 vec![0, 1, 3, 6].into(),
                 Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
             )),
@@ -100,7 +100,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "struct",
-            data_type: Arc::new(StructType::create(
+            data_type: DataTypeImpl::Struct(StructType::create(
                 vec!["date".to_owned(), "integer".to_owned()],
                 vec![DateType::arc(), Int8Type::arc()],
             )),
@@ -110,7 +110,7 @@ fn test_serializers() -> Result<()> {
                     Series::from_data(vec![18869i32, 18948i32, 1]),
                     Series::from_data(vec![1i8, 2i8, 3]),
                 ],
-                Arc::new(StructType::create(
+                DataTypeImpl::Struct(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
                     vec![DateType::arc(), Int8Type::arc()],
                 )),

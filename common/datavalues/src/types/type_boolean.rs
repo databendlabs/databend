@@ -25,12 +25,11 @@ pub use crate::prelude::*;
 pub struct BooleanType {}
 
 impl BooleanType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::Boolean(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for BooleanType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Boolean

@@ -33,7 +33,7 @@ pub struct RoundFunction {
 impl RoundFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
         round: u32,
     ) -> Result<Box<dyn Function>> {
         if args[0].data_type_id() != TypeID::Timestamp {
@@ -67,7 +67,7 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         TimestampType::arc(0, None)
     }
 
@@ -87,6 +87,9 @@ impl Function for RoundFunction {
         let func = |val: i64, _ctx: &mut EvalContext| self.execute(val / to_div);
         let col =
             scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+        for micros in col.iter() {
+            let _ = check_timestamp(*micros)?;
+        }
         Ok(col.arc())
     }
 

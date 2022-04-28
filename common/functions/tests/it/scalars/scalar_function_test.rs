@@ -116,7 +116,7 @@ pub fn test_eval_with_type(
     op: &str,
     rows_size: usize,
     arguments: &[ColumnWithField],
-    arguments_type: &[&DataTypePtr],
+    arguments_type: &[&DataTypeImpl],
 ) -> Result<ColumnRef> {
     let func = FunctionFactory::instance().get(op, arguments_type)?;
     func.return_type();

@@ -1,4 +1,4 @@
 ---
-title: Upgrade Databend Meta Service
-sidebar_label: Upgrade Meta Service
+title: Upgrade a Databend Meta Service Cluster
+sidebar_label: Upgrade a Databend Meta Service Cluster
 ---

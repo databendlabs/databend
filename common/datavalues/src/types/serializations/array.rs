@@ -21,7 +21,7 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub struct ArraySerializer {
     pub inner: Box<TypeSerializerImpl>,
-    pub typ: DataTypePtr,
+    pub typ: DataTypeImpl,
 }
 
 impl TypeSerializer for ArraySerializer {

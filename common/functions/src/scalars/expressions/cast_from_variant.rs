@@ -27,7 +27,7 @@ use super::cast_with_type::new_mutable_bitmap;
 
 pub fn cast_from_variant(
     column: &ColumnRef,
-    data_type: &DataTypePtr,
+    data_type: &DataTypeImpl,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let json_column: &VariantColumn = if column.is_const() {
@@ -141,7 +141,7 @@ pub fn cast_from_variant(
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
                             if let Some(d) = string_to_timestamp(v) {
-                                builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
+                                builder.append(datetime.from_micro_seconds(d.timestamp_micros()));
                             } else {
                                 bitmap.set(row, false);
                             }

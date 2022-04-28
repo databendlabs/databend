@@ -43,7 +43,7 @@ pub struct ArithmeticNegateFunction;
 impl ArithmeticNegateFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         let op = DataValueUnaryOperator::Negate;
 

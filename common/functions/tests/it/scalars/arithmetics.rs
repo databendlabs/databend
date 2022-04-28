@@ -116,7 +116,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
 
     let to_microseconds = |y: i32, m: u32, d: u32, h: u32, min: u32, sec: u32, micro: u32| -> i64 {
         let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms_micro(h, min, sec, micro);
-        date_time.timestamp_nanos() / 1000
+        date_time.timestamp_micros()
     };
 
     let tests = vec![
