@@ -26,8 +26,10 @@ use common_base::Runtime;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
 use common_meta_types::TableInfo;
@@ -68,6 +70,7 @@ pub struct QueryContext {
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
+    precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl QueryContext {
@@ -85,6 +88,7 @@ impl QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
             shared,
+            precommit_blocks: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -156,6 +160,19 @@ impl QueryContext {
 
     pub fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
+    }
+
+    pub fn get_error(&self) -> Arc<Mutex<Option<ErrorCode>>> {
+        self.shared.error.clone()
+    }
+
+    pub fn get_error_value(&self) -> Option<ErrorCode> {
+        let error = self.shared.error.lock();
+        error.clone()
+    }
+
+    pub fn set_error(&self, err: ErrorCode) {
+        self.shared.set_error(err);
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -364,6 +381,18 @@ impl QueryContext {
 
     pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.shared.session.session_mgr.get_query_logger()
+    }
+
+    pub fn push_precommit_block(&self, block: DataBlock) {
+        let mut blocks = self.precommit_blocks.write();
+        blocks.push(block);
+    }
+
+    pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
+        let mut blocks = self.precommit_blocks.write();
+        let result = blocks.clone();
+        blocks.clear();
+        result
     }
 }
 

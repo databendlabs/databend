@@ -37,6 +37,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use crate::sql::SQLCommon;
 use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
@@ -60,6 +61,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) write_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
+    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -91,6 +93,7 @@ impl QueryContextShared {
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
+            error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),
@@ -106,7 +109,16 @@ impl QueryContextShared {
         }))
     }
 
+    pub fn set_error(&self, err: ErrorCode) {
+        let mut guard = self.error.lock();
+        *guard = Some(err);
+    }
+
     pub fn kill(&self) {
+        self.set_error(ErrorCode::AbortedQuery(
+            "Aborted query, because the server is shutting down or the query was killed",
+        ));
+
         let mut sources_abort_handle = self.sources_abort_handle.write();
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
@@ -137,8 +149,12 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
+    pub fn set_current_tenant(&self, tenant: String) {
+        self.session.set_current_tenant(tenant);
+    }
+
     pub fn get_tenant(&self) -> String {
-        self.session.get_tenant()
+        self.session.get_current_tenant()
     }
 
     pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
@@ -217,7 +233,7 @@ impl QueryContextShared {
 
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
-        *running_query = Some(query.to_string());
+        *running_query = Some(SQLCommon::short_sql(query));
     }
 
     pub fn get_query_str(&self) -> String {

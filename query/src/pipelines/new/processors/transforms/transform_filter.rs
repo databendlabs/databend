@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
 

@@ -116,7 +116,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         self.nested.return_type()
     }
 
@@ -254,6 +254,21 @@ impl AggregateFunction for AggregateDistinctCombinator {
                 .accumulate(netest_place, &columns, None, state.set.len())?;
             // merge_result
             self.nested.merge_result(netest_place, array)
+        }
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<AggregateDistinctState>();
+        std::ptr::drop_in_place(state);
+
+        if self.nested.need_manual_drop_state() {
+            let layout = Layout::new::<AggregateDistinctState>();
+            let netest_place = place.next(layout.size());
+            self.nested.drop_state(netest_place);
         }
     }
 }

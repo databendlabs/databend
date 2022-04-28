@@ -43,6 +43,7 @@ use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::claims::NoCustomClaims;
 use jwt_simple::prelude::Clock;
+use num::ToPrimitive;
 use poem::http::Method;
 use poem::http::StatusCode;
 use poem::Endpoint;
@@ -98,7 +99,9 @@ async fn test_simple_sql() -> Result<()> {
 
 #[tokio::test]
 async fn test_bad_sql() -> Result<()> {
-    let (status, result) = post_sql("bad sql", 1).await?;
+    let sql = "bad sql";
+    let ep = create_endpoint();
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_some());
     assert_eq!(result.data.len(), 0);
@@ -106,6 +109,34 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Failed);
     assert!(result.stats.scan_progress.is_none());
     assert!(result.schema.is_none());
+
+    let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=3";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert_eq!(
+        result.data[0][0].as_str().unwrap(),
+        "bad sql",
+        "{:?}",
+        result
+    );
+    assert_eq!(
+        result.data[0][1].as_u64().unwrap(),
+        ErrorCode::SyntaxException("").code().to_u64().unwrap(),
+        "{:?}",
+        result
+    );
+
+    assert!(
+        result.data[0][2]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("bad"),
+        "{:?}",
+        result
+    );
+
     Ok(())
 }
 
@@ -349,6 +380,98 @@ async fn test_insert() -> Result<()> {
         assert_eq!(result.data.len(), data_len);
         assert_eq!(result.state, ExecuteStateKind::Succeeded);
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_log() -> Result<()> {
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let sql = "create table t1(a int)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert!(result.data.is_empty(), "{:?}", result);
+
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_some(), "{:?}", result);
+
+    let sql = "select query_text, exception_code, exception_text, stack_trace  from system.query_log where log_type=3";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert!(
+        result.data[0][0].as_str().unwrap().contains("create table"),
+        "{:?}",
+        result
+    );
+    assert!(
+        result.data[0][2]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("exist"),
+        "{:?}",
+        result
+    );
+    assert_eq!(
+        result.data[0][1].as_u64().unwrap(),
+        ErrorCode::TableAlreadyExists("").code().to_u64().unwrap(),
+        "{:?}",
+        result
+    );
+    assert!(
+        result.data[0][3]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("backtrace"),
+        "{:?}",
+        result
+    );
+
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let sql = "select sleep(2)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none());
+
+    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert!(
+        result.data[0][0].as_str().unwrap().contains("sleep"),
+        "{:?}",
+        result
+    );
+    assert!(
+        result.data[0][2]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("aborted"),
+        "{:?}",
+        result
+    );
+    assert_eq!(
+        result.data[0][1].as_u64().unwrap(),
+        ErrorCode::AbortedQuery("").code().to_u64().unwrap(),
+        "{:?}",
+        result
+    );
     Ok(())
 }
 
@@ -596,9 +719,8 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         subject: Some(user_name.to_string()),
         nonce: None,
         custom: CustomClaims {
-            ensure_user: Some(EnsureUser {
-                ..Default::default()
-            }),
+            tenant_id: None,
+            ensure_user: Some(EnsureUser::default()),
         },
     };
 

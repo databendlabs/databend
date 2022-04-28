@@ -17,7 +17,6 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 use sqlparser::ast::Value;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -40,7 +39,7 @@ pub struct GetFunctionImpl<const BY_PATH: bool, const IGNORE_CASE: bool> {
 }
 
 impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNORE_CASE> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let data_type = args[0];
         let path_type = args[1];
 
@@ -57,8 +56,8 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNO
             return Err(ErrorCode::IllegalDataType(format!(
                 "Invalid argument types for function '{}': ({:?}, {:?})",
                 display_name.to_uppercase(),
-                data_type,
-                path_type
+                data_type.data_type_id(),
+                path_type.data_type_id()
             )));
         }
 
@@ -80,7 +79,7 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         NullableType::arc(VariantType::arc())
     }
 
@@ -108,7 +107,7 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> fmt::Display
     }
 }
 
-fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
+pub fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     let column: &StringColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         Series::check_get(const_column.inner())?
@@ -165,7 +164,7 @@ fn parse_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     Ok(path_keys)
 }
 
-fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
+pub fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         return build_path_keys(const_column.inner());
@@ -178,20 +177,20 @@ fn build_path_keys(column: &ColumnRef) -> Result<Vec<Vec<DataValue>>> {
     Ok(path_keys)
 }
 
-fn extract_value_by_path(
+pub fn extract_value_by_path(
     column: &ColumnRef,
     path_keys: Vec<Vec<DataValue>>,
     input_rows: usize,
     ignore_case: bool,
 ) -> Result<ColumnRef> {
-    let column: &JsonColumn = if column.is_const() {
+    let column: &VariantColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         Series::check_get(const_column.inner())?
     } else {
         Series::check_get(column)?
     };
 
-    let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
+    let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
     for path_key in path_keys.iter() {
         if path_key.is_empty() {
             for _ in 0..column.len() {
@@ -201,7 +200,7 @@ fn extract_value_by_path(
         }
         for v in column.iter() {
             let mut found_value = true;
-            let mut value = v;
+            let mut value = v.as_ref();
             for key in path_key.iter() {
                 match key {
                     DataValue::UInt64(k) => match value.get(*k as usize) {
@@ -246,7 +245,7 @@ fn extract_value_by_path(
                 }
             }
             if found_value {
-                builder.append(value, true);
+                builder.append(&VariantValue::from(value), true);
             } else {
                 builder.append_null();
             }

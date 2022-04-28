@@ -16,19 +16,23 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_planners::PlanNode;
+use common_streams::ErrorStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
+    source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
 }
 
 impl InterceptorInterpreter {
@@ -36,7 +40,8 @@ impl InterceptorInterpreter {
         InterceptorInterpreter {
             ctx: ctx.clone(),
             inner,
-            query_log: InterpreterQueryLog::create(ctx, plan),
+            query_log: InterpreterQueryLog::create(ctx, Some(plan)),
+            source_pipe_builder: Mutex::new(None),
         }
     }
 }
@@ -51,9 +56,20 @@ impl Interpreter for InterceptorInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let result_stream = self.inner.execute(input_stream).await?;
+        let _ = self
+            .inner
+            .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
+        let result_stream = match self.inner.execute(input_stream).await {
+            Ok(s) => s,
+            Err(e) => {
+                self.ctx.set_error(e.clone());
+                return Err(e);
+            }
+        };
+
+        let error_stream = ErrorStream::create(result_stream, self.ctx.get_error());
         let metric_stream =
-            ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
+            ProgressStream::try_create(Box::pin(error_stream), self.ctx.get_result_progress())?;
         Ok(Box::pin(metric_stream))
     }
 
@@ -67,7 +83,7 @@ impl Interpreter for InterceptorInterpreter {
                 .write()
                 .query_start(now);
         }
-        self.query_log.log_start(now).await
+        self.query_log.log_start(now, None).await
     }
 
     async fn finish(&self) -> Result<()> {
@@ -81,6 +97,13 @@ impl Interpreter for InterceptorInterpreter {
                 .write()
                 .query_finish(now)
         }
-        self.query_log.log_finish(now).await
+        let error = self.ctx.get_error_value();
+        self.query_log.log_finish(now, error).await
+    }
+
+    fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {
+        let mut guard = self.source_pipe_builder.lock();
+        *guard = builder;
+        Ok(())
     }
 }

@@ -30,7 +30,7 @@ pub struct CheckJsonFunction {
 }
 
 impl CheckJsonFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(CheckJsonFunction {
             display_name: display_name.to_string(),
         }))
@@ -47,7 +47,7 @@ impl Function for CheckJsonFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         NullableType::arc(StringType::arc())
     }
 
@@ -77,10 +77,10 @@ impl Function for CheckJsonFunction {
                     Err(e) => builder.append(e.to_string().as_bytes(), true),
                 }
             }
-        } else if data_type.data_type_id() == TypeID::Variant {
-            let c: &ObjectColumn<JsonValue> = Series::check_get(column)?;
+        } else if data_type.data_type_id().is_variant() {
+            let c: &VariantColumn = Series::check_get(column)?;
             for v in c.iter() {
-                if let JsonValue::String(s) = v {
+                if let JsonValue::String(s) = v.as_ref() {
                     match serde_json::from_str::<JsonValue>(s.as_str()) {
                         Ok(_v) => builder.append_null(),
                         Err(e) => builder.append(e.to_string().as_bytes(), true),

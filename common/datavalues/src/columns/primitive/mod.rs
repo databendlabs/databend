@@ -90,6 +90,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                         .expect("primitive cast should be ok");
                     Self::from_arrow_array(array.as_ref())
                 }
+                // TODO(veeupup): it seems buggy because we do not support store date as i64
                 ArrowDataType::Date64 => {
                     let array = cast::cast(array, &ArrowDataType::Int64, cast_options)
                         .expect("primitive cast should be ok");
@@ -152,7 +153,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         create_primitive_datatype::<T>()
     }
 

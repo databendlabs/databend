@@ -59,7 +59,7 @@ impl SyncSystemTable for SettingsTable {
                 // Desc.
                 descs.push(format!("{:?}", vals[4]));
                 // Types.
-                types.push(format!("{:?}", vals[2].max_data_type()));
+                types.push(vals[2].max_data_type().name());
             }
         }
 

@@ -28,24 +28,23 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {
     display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 impl RunningDifferenceFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
         let dt = remove_nullable(args[0]);
 
         let output_type = match dt.data_type_id() {
             TypeID::Int8 | TypeID::UInt8 => Ok(type_primitive::Int16Type::arc()),
-            TypeID::Int16 | TypeID::UInt16 | TypeID::Date16 => Ok(type_primitive::Int32Type::arc()),
+            TypeID::Int16 | TypeID::UInt16 => Ok(type_primitive::Int32Type::arc()),
             TypeID::Int32
             | TypeID::UInt32
             | TypeID::Int64
             | TypeID::UInt64
-            | TypeID::Date32
-            | TypeID::DateTime32
-            | TypeID::DateTime64
+            | TypeID::Date
+            | TypeID::Timestamp
             | TypeID::Interval => Ok(type_primitive::Int64Type::arc()),
             TypeID::Float32 | TypeID::Float64 => Ok(type_primitive::Float64Type::arc()),
             _ => Err(ErrorCode::IllegalDataType(
@@ -83,7 +82,7 @@ impl Function for RunningDifferenceFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 
@@ -99,10 +98,10 @@ impl Function for RunningDifferenceFunction {
             TypeID::Int8 => compute_i8(col, input_rows),
             TypeID::UInt8 => compute_u8(col, input_rows),
             TypeID::Int16 => compute_i16(col, input_rows),
-            TypeID::UInt16 | TypeID::Date16 => compute_u16(col, input_rows),
-            TypeID::Int32 | TypeID::Date32 => compute_i32(col, input_rows),
-            TypeID::UInt32 | TypeID::DateTime32 => compute_u32(col, input_rows),
-            TypeID::Int64 | TypeID::Interval | TypeID::DateTime64 => compute_i64(col, input_rows),
+            TypeID::UInt16 => compute_u16(col, input_rows),
+            TypeID::Int32 | TypeID::Date => compute_i32(col, input_rows),
+            TypeID::UInt32 => compute_u32(col, input_rows),
+            TypeID::Int64 | TypeID::Interval | TypeID::Timestamp => compute_i64(col, input_rows),
             TypeID::UInt64 => compute_u64(col, input_rows),
             TypeID::Float32 => compute_f32(col, input_rows),
             TypeID::Float64 => compute_f64(col, input_rows),

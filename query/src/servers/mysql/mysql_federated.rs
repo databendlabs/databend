@@ -203,14 +203,24 @@ impl MySQLFederated {
             // Txn.
             ("(?i)^(ROLLBACK(.*))", None),
             ("(?i)^(COMMIT(.*))", None),
+            ("(?i)^(START(.*))", None),
             // Set.
             ("(?i)^(SET NAMES(.*))", None),
             ("(?i)^(SET character_set_results(.*))", None),
             ("(?i)^(SET FOREIGN_KEY_CHECKS(.*))", None),
             ("(?i)^(SET AUTOCOMMIT(.*))", None),
+            ("(?i)^(SET SQL_LOG_BIN(.*))", None),
             ("(?i)^(SET sql_mode(.*))", None),
             ("(?i)^(SET @@(.*))", None),
-            ("(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))", None),
+            // mysqldump.
+            ("(?i)^(SET SESSION(.*))", None),
+            ("(?i)^(SET SQL_QUOTE_SHOW_CREATE(.*))", None),
+            ("(?i)^(LOCK TABLES(.*))", None),
+            ("(?i)^(UNLOCK TABLES(.*))", None),
+            ("(?i)^(SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA FROM INFORMATION_SCHEMA.FILES(.*))", None),
+            // mydumper.
+            ("(?i)^(SHOW MASTER STATUS)", None),
+            ("(?i)^(SHOW ALL SLAVES STATUS)", None),
             // DBeaver.
             ("(?i)^(SHOW WARNINGS)", None),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)", None),
@@ -229,6 +239,7 @@ impl MySQLFederated {
                 None,
             ),
             ("(?i)^(/\\* ApplicationName=(.*)SHOW VARIABLES(.*))", None),
+
         ];
 
         self.block_match_rule(query, rules)

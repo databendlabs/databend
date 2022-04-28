@@ -33,12 +33,12 @@ pub struct RoundFunction {
 impl RoundFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
         round: u32,
     ) -> Result<Box<dyn Function>> {
-        if args[0].data_type_id() != TypeID::DateTime32 {
+        if args[0].data_type_id() != TypeID::Timestamp {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Function {} must have a DateTime type as argument, but got {}",
+                "Function {} must have a Timestamp type as argument, but got {}",
                 display_name,
                 args[0].name(),
             )));
@@ -56,8 +56,9 @@ impl RoundFunction {
     // Consider about the timezones/offsets
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
-    fn execute(&self, time: u32) -> u32 {
-        time / self.round * self.round
+    fn execute(&self, time: i64) -> i64 {
+        let round = self.round as i64;
+        time / round * round
     }
 }
 
@@ -66,8 +67,8 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        DateTime32Type::arc(None)
+    fn return_type(&self) -> DataTypeImpl {
+        TimestampType::arc(0, None)
     }
 
     fn eval(
@@ -76,9 +77,19 @@ impl Function for RoundFunction {
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let func = |val: u32, _ctx: &mut EvalContext| self.execute(val);
+        let ts_dt = columns[0]
+            .field()
+            .data_type()
+            .as_any()
+            .downcast_ref::<TimestampType>()
+            .unwrap();
+        let to_div = 10_i64.pow(ts_dt.precision() as u32);
+        let func = |val: i64, _ctx: &mut EvalContext| self.execute(val / to_div);
         let col =
-            scalar_unary_op::<u32, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+            scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+        for micros in col.iter() {
+            let _ = check_timestamp(*micros)?;
+        }
         Ok(col.arc())
     }
 

@@ -33,7 +33,7 @@ impl_logic_expression!(LogicOrExpression, |, |lhs: bool, rhs: bool, lhs_v: bool,
 pub struct LogicOrFunction;
 
 impl LogicOrFunction {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         LogicFunctionImpl::<LogicOrExpression>::try_create(LogicOperator::Or, args)
     }
 

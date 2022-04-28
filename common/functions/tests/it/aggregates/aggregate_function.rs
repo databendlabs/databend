@@ -34,7 +34,7 @@ fn test_aggregate_function() -> Result<()> {
         error: &'static str,
         func_name: &'static str,
         input_array: Box<dyn MutableColumn>,
-        expect_array: Box<dyn MutableColumn>,
+        expect_array: ColumnRef,
     }
 
     let arrays: Vec<ColumnRef> = vec![
@@ -45,16 +45,18 @@ fn test_aggregate_function() -> Result<()> {
         Series::from_data(vec![true, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
+        Series::from_data(vec!["x", "y", "a", "b"]),
     ];
 
     let args = vec![
         DataField::new("a", i64::to_data_type()),
         DataField::new("b", i64::to_data_type()),
         // args for window funnel function
-        DataField::new("dt", DateTime32Type::arc(None)),
+        DataField::new("dt", TimestampType::arc(0, None)),
         DataField::new("event = 1001", bool::to_data_type()),
         DataField::new("event = 1002", bool::to_data_type()),
         DataField::new("event = 1003", bool::to_data_type()),
+        DataField::new("str", Vu8::to_data_type()),
     ];
 
     let tests = vec![
@@ -68,10 +70,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
-                u64::to_data_type(),
-                Vec::from([4u64]),
-            )),
+            expect_array: Series::from_data([4u64]),
         },
         Test {
             name: "max-passed",
@@ -83,10 +82,19 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
-                i64::to_data_type(),
-                Vec::from([4i64]),
-            )),
+            expect_array: Series::from_data([4i64]),
+        },
+        Test {
+            name: "max2-passed",
+            eval_nums: 2,
+            params: vec![],
+            args: vec![args[6].clone()],
+            display: "max",
+            func_name: "max",
+            arrays: vec![arrays[6].clone()],
+            error: "",
+            input_array: Box::new(MutableStringColumn::default()),
+            expect_array: Series::from_data(["y"]),
         },
         Test {
             name: "min-passed",
@@ -98,10 +106,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
-                i64::to_data_type(),
-                Vec::from([1i64]),
-            )),
+            expect_array: Series::from_data([1i64]),
         },
         Test {
             name: "avg-passed",
@@ -113,10 +118,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
-                f64::to_data_type(),
-                Vec::from([2.5f64]),
-            )),
+            expect_array: Series::from_data([2.5f64]),
         },
         Test {
             name: "sum-passed",
@@ -128,10 +130,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
-                i64::to_data_type(),
-                Vec::from([10i64]),
-            )),
+            expect_array: Series::from_data([10i64]),
         },
         Test {
             name: "arg-max-passed",
@@ -143,10 +142,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
-                i64::to_data_type(),
-                Vec::from([1i64]),
-            )),
+            expect_array: Series::from_data([1i64]),
         },
         Test {
             name: "arg-min-passed",
@@ -158,10 +154,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
-                i64::to_data_type(),
-                Vec::from([4i64]),
-            )),
+            expect_array: Series::from_data([4i64]),
         },
         Test {
             name: "arg-min-notpassed",
@@ -173,10 +166,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: arrays.clone(),
             error: "Code: 1028, displayText = arg_min expect to have two arguments, but got 1.",
             input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
-                i64::to_data_type(),
-                Vec::from([4i64]),
-            )),
+            expect_array: Series::from_data([4i64]),
         },
         Test {
             name: "uniq-passed",
@@ -188,10 +178,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
-                u64::to_data_type(),
-                Vec::from([4u64]),
-            )),
+            expect_array: Series::from_data([4u64]),
         },
         Test {
             name: "std-passed",
@@ -203,10 +190,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
-                f64::to_data_type(),
-                Vec::from([1.118033988749895f64]),
-            )),
+            expect_array: Series::from_data([1.118033988749895f64]),
         },
         Test {
             name: "stddev-passed",
@@ -218,10 +202,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
-                f64::to_data_type(),
-                Vec::from([1.118033988749895f64]),
-            )),
+            expect_array: Series::from_data([1.118033988749895f64]),
         },
         Test {
             name: "stddev-pop-passed",
@@ -233,10 +214,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
-                f64::to_data_type(),
-                Vec::from([1.118033988749895f64]),
-            )),
+            expect_array: Series::from_data([1.118033988749895f64]),
         },
         Test {
             name: "covar-sample-passed",
@@ -248,10 +226,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
-                f64::to_data_type(),
-                Vec::from([-1.6666666666666667f64]),
-            )),
+            expect_array: Series::from_data([-1.6666666666666667f64]),
         },
         Test {
             name: "covar-pop-passed",
@@ -263,10 +238,7 @@ fn test_aggregate_function() -> Result<()> {
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
-                f64::to_data_type(),
-                Vec::from([-1.25000f64]),
-            )),
+            expect_array: Series::from_data([-1.25000f64]),
         },
         Test {
             name: "window-funnel-passed",
@@ -288,10 +260,7 @@ fn test_aggregate_function() -> Result<()> {
             ],
             error: "",
             input_array: Box::new(MutablePrimitiveColumn::<u8>::default()),
-            expect_array: Box::new(MutablePrimitiveColumn::<u8>::from_data(
-                u8::to_data_type(),
-                Vec::from([1u8]),
-            )),
+            expect_array: Series::from_data([1u8]),
         },
     ];
 
@@ -323,26 +292,8 @@ fn test_aggregate_function() -> Result<()> {
                 let _ = func.merge_result(addr1.into(), array)?;
             }
 
-            let datatype = t.input_array.data_type();
-            with_match_primitive_type_id!(datatype.data_type_id(), |$T| {
-                let array = t
-                        .input_array
-                        .as_mut_any()
-                        .downcast_ref::<MutablePrimitiveColumn<$T>>()
-                        .unwrap();
-                let expect = t
-                        .expect_array
-                        .as_mut_any()
-                        .downcast_ref::<MutablePrimitiveColumn<$T>>()
-                        .unwrap();
-
-                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-                assert_eq!(array.values(), expect.values(), "{}", t.name);
-            },
-            {
-                panic!("shoud never reach this way");
-            });
-
+            let res_col = t.input_array.to_column();
+            assert_eq!(res_col, t.expect_array);
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
         };
@@ -385,7 +336,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         DataField::new("b", i64::to_data_type()),
         DataField::new("c", Vu8::to_data_type()),
         // args for window funnel function
-        DataField::new("dt", DateTime32Type::arc(None)),
+        DataField::new("dt", TimestampType::arc(0, None)),
         DataField::new("event = 1001", bool::to_data_type()),
         DataField::new("event = 1002", bool::to_data_type()),
     ];

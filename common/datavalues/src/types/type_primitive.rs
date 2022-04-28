@@ -32,20 +32,20 @@ pub struct PrimitiveDataType<
 }
 
 // typetag did not support generic impls, so we have to do this
-pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn DataType> {
+pub fn create_primitive_datatype<T: PrimitiveType>() -> DataTypeImpl {
     match (T::SIGN, T::FLOATING, T::SIZE) {
-        (false, false, 1) => Arc::new(UInt8Type { _t: PhantomData }),
-        (false, false, 2) => Arc::new(UInt16Type { _t: PhantomData }),
-        (false, false, 4) => Arc::new(UInt32Type { _t: PhantomData }),
-        (false, false, 8) => Arc::new(UInt64Type { _t: PhantomData }),
+        (false, false, 1) => DataTypeImpl::UInt8(UInt8Type { _t: PhantomData }),
+        (false, false, 2) => DataTypeImpl::UInt16(UInt16Type { _t: PhantomData }),
+        (false, false, 4) => DataTypeImpl::UInt32(UInt32Type { _t: PhantomData }),
+        (false, false, 8) => DataTypeImpl::UInt64(UInt64Type { _t: PhantomData }),
 
-        (true, false, 1) => Arc::new(Int8Type { _t: PhantomData }),
-        (true, false, 2) => Arc::new(Int16Type { _t: PhantomData }),
-        (true, false, 4) => Arc::new(Int32Type { _t: PhantomData }),
-        (true, false, 8) => Arc::new(Int64Type { _t: PhantomData }),
+        (true, false, 1) => DataTypeImpl::Int8(Int8Type { _t: PhantomData }),
+        (true, false, 2) => DataTypeImpl::Int16(Int16Type { _t: PhantomData }),
+        (true, false, 4) => DataTypeImpl::Int32(Int32Type { _t: PhantomData }),
+        (true, false, 8) => DataTypeImpl::Int64(Int64Type { _t: PhantomData }),
 
-        (true, true, 4) => Arc::new(Float32Type { _t: PhantomData }),
-        (true, true, 8) => Arc::new(Float64Type { _t: PhantomData }),
+        (true, true, 4) => DataTypeImpl::Float32(Float32Type { _t: PhantomData }),
+        (true, true, 8) => DataTypeImpl::Float64(Float64Type { _t: PhantomData }),
 
         _ => unimplemented!(),
     }
@@ -54,8 +54,8 @@ pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn DataType> {
 macro_rules! impl_numeric {
     ($ty:ident, $tname:ident, $name: expr, $sql_name:expr, $alias: expr) => {
         impl PrimitiveDataType<$ty> {
-            pub fn arc() -> DataTypePtr {
-                Arc::new(Self { _t: PhantomData })
+            pub fn arc() -> DataTypeImpl {
+                DataTypeImpl::$tname(Self { _t: PhantomData })
             }
 
             pub fn new() -> Self {
@@ -73,14 +73,13 @@ macro_rules! impl_numeric {
                 self
             }
 
-            fn name(&self) -> &str {
-                $name
+            fn name(&self) -> String {
+                $name.to_string()
             }
 
             fn sql_name(&self) -> String {
                 $sql_name.to_uppercase()
             }
-
 
             fn aliases(&self) -> &[&str] {
                 $alias
@@ -109,35 +108,24 @@ macro_rules! impl_numeric {
                 ArrowType::$tname
             }
 
-            fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-                Box::new(NumberSerializer::<$ty>::default())
+            fn create_serializer(&self) -> TypeSerializerImpl {
+                NumberSerializer::<$ty>::default().into()
             }
 
-            fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-                Box::new(NumberDeserializer::<$ty> {
+            fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+                NumberDeserializer::<$ty> {
                     builder: MutablePrimitiveColumn::<$ty>::with_capacity(capacity),
-                })
+                }
+                .into()
             }
 
             fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
                 Box::new(MutablePrimitiveColumn::<$ty>::with_capacity(capacity))
             }
-
-            #[doc(hidden)]
-            fn typetag_name(&self) -> &'static str {
-                concat!($name, "Type")
-            }
-
-            #[doc(hidden)]
-            fn typetag_deserialize(&self) {}
         }
 
-        paste::paste!{
+        paste::paste! {
             pub type [<$tname Type>] = PrimitiveDataType<$ty>;
-        }
-
-        typetag::inventory::submit! {
-            <dyn DataType> ::typetag_register(concat!($name, "Type"),(|deserializer|std::result::Result::Ok(std::boxed::Box::new(typetag::erased_serde::deserialize:: <PrimitiveDataType<$ty>>(deserializer)?),))as typetag::DeserializeFn<<dyn DataType as typetag::Strictest> ::Object> ,)
         }
 
         impl std::fmt::Debug for PrimitiveDataType<$ty> {

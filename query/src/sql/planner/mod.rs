@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
-use common_ast::parser::Parser;
+pub use binder::ScalarExpr;
+pub use binder::ScalarExprRef;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -44,10 +47,10 @@ impl Planner {
         Planner { context }
     }
 
-    pub async fn plan_sql(&mut self, sql: &str) -> Result<NewPipeline> {
+    pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<NewPipeline> {
         // Step 1: parse SQL text into AST
-        let parser = Parser {};
-        let stmts = parser.parse_with_sqlparser(sql)?;
+        let tokens = tokenize_sql(sql)?;
+        let stmts = parse_sql(&tokens)?;
         if stmts.len() > 1 {
             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
         }
@@ -61,7 +64,13 @@ impl Planner {
         let optimized_expr = optimize(bind_result.s_expr().clone(), optimize_context)?;
 
         // Step 4: build executable Pipeline with SExpr
-        let pb = PipelineBuilder::new(self.context.clone(), bind_result.metadata, optimized_expr);
+        let result_columns = bind_result.bind_context.result_columns();
+        let pb = PipelineBuilder::new(
+            self.context.clone(),
+            result_columns,
+            bind_result.metadata,
+            optimized_expr,
+        );
         let pipeline = pb.spawn()?;
 
         Ok(pipeline)

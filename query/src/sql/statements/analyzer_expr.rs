@@ -16,9 +16,9 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_ast::parser::expr::ExprTraverser;
-use common_ast::parser::expr::ExprVisitor;
 use common_ast::udfs::UDFDefinition;
+use common_ast::udfs::UDFExprTraverser;
+use common_ast::udfs::UDFExprVisitor;
 use common_ast::udfs::UDFFetcher;
 use common_ast::udfs::UDFParser;
 use common_ast::udfs::UDFTransformer;
@@ -331,7 +331,7 @@ impl ExpressionAnalyzer {
 
     fn analyze_cast(
         &self,
-        data_type: &DataTypePtr,
+        data_type: &DataTypeImpl,
         pg_style: bool,
         args: &mut Vec<Expression>,
     ) -> Result<()> {
@@ -448,7 +448,7 @@ enum ExprRPNItem {
     Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
-    Cast(DataTypePtr, bool),
+    Cast(DataTypeImpl, bool),
     Between(bool),
     InList(InListInfo),
     MapAccess(Vec<Value>),
@@ -497,7 +497,7 @@ impl ExprRPNBuilder {
             context,
             rpn: Vec::new(),
         };
-        ExprTraverser::accept(expr, &mut builder).await?;
+        UDFExprTraverser::accept(expr, &mut builder).await?;
         Ok(builder.rpn)
     }
 
@@ -665,7 +665,7 @@ impl UDFFetcher for ExprRPNBuilder {
 }
 
 #[async_trait]
-impl ExprVisitor for ExprRPNBuilder {
+impl UDFExprVisitor for ExprRPNBuilder {
     async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
             if !is_builtin_function(&function.name.to_string()) {

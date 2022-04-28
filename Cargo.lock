@@ -637,8 +637,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chrono"
 version = "0.4.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
+source = "git+https://github.com/datafuse-extras/chrono?rev=279f590#279f5907879c9618767e5501ac01f79d5b7a4b38"
 dependencies = [
  "libc",
  "num-integer",
@@ -942,7 +941,6 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
- "typetag",
 ]
 
 [[package]]
@@ -1081,7 +1079,9 @@ dependencies = [
  "common-base",
  "common-infallible",
  "common-macros",
+ "libc",
  "parking_lot 0.12.0",
+ "tikv-jemalloc-ctl",
  "tikv-jemalloc-sys",
 ]
 
@@ -1156,6 +1156,7 @@ dependencies = [
  "derive_more",
  "hostname",
  "maplit",
+ "num",
  "once_cell",
  "pretty_assertions",
  "rand 0.8.5",
@@ -1195,6 +1196,9 @@ dependencies = [
  "hex",
  "maplit",
  "nanoid",
+ "num",
+ "num-derive",
+ "num-traits",
  "once_cell",
  "openraft",
  "prost",
@@ -1258,6 +1262,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-infallible",
  "common-io",
  "common-tracing",
  "csv-async",
@@ -1762,12 +1767,14 @@ dependencies = [
  "common-tracing",
  "criterion",
  "dyn-clone",
+ "enum_dispatch",
  "futures",
  "headers",
  "http",
  "hyper",
  "itertools",
  "jwt-simple",
+ "jwtk",
  "lazy_static",
  "maplit",
  "metrics",
@@ -1780,6 +1787,7 @@ dependencies = [
  "opendal",
  "opensrv-clickhouse",
  "opensrv-mysql",
+ "openssl",
  "paste",
  "petgraph",
  "poem",
@@ -1790,10 +1798,13 @@ dependencies = [
  "reqwest",
  "rsa",
  "serde",
+ "serde-bridge",
  "serde_json",
+ "serfig",
  "sha1",
  "sha2 0.10.2",
  "sqlparser",
+ "temp-env",
  "tempfile",
  "threadpool",
  "time 0.3.9",
@@ -2887,9 +2898,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
+checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg 1.0.1",
  "hashbrown 0.11.2",
@@ -3054,6 +3065,23 @@ dependencies = [
  "serde_json",
  "thiserror",
  "zeroize",
+]
+
+[[package]]
+name = "jwtk"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ccbb03951ed125446ee19b8210edde61a930d97100430544f08adf319465c4c"
+dependencies = [
+ "base64 0.13.0",
+ "foreign-types",
+ "openssl",
+ "openssl-sys",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tokio",
 ]
 
 [[package]]
@@ -3808,6 +3836,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "num-format"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4043,6 +4082,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "111.18.0+1.1.1n"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7897a926e1e8d00219127dc020130eca4292e5ca666dd592480d72c3eca2ff6c"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4051,6 +4099,7 @@ dependencies = [
  "autocfg 1.0.1",
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -5365,6 +5414,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-bridge"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f68e451f87e0f0a51c565c907017f033ecce23a1aef9eb3faee0dfd6e578d84"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "serde",
+]
+
+[[package]]
+name = "serde-env"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e25cbc2db78bdf2b85ae2bb9894106e14092f87e2c47191dc3d704d7dca78be"
+dependencies = [
+ "anyhow",
+ "log",
+ "serde",
+]
+
+[[package]]
 name = "serde_cbor"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5439,6 +5510,21 @@ dependencies = [
  "ryu",
  "serde",
  "yaml-rust",
+]
+
+[[package]]
+name = "serfig"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfe138b57b8dea13fbe1d1b7007be08322bd60a76eb938f89113d3d82dcc480a"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "log",
+ "serde",
+ "serde-bridge",
+ "serde-env",
+ "toml",
 ]
 
 [[package]]
@@ -5691,7 +5777,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=818c0f9#818c0f96a2dcc81537fbfe6c6ee9584600ebcb44"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=fee0056#fee00567b17af62cfe43bc8e9cfe528084a3ab76"
 dependencies = [
  "hashbrown 0.12.0",
  "log",
@@ -5844,6 +5930,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "temp-env"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45107136c2ddf8c4b87453c02294fd0adf41751796e81e8ba3f7fd951977ab57"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5936,6 +6031,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "tikv-jemalloc-ctl"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb833c46ecbf8b6daeccb347cefcabf9c1beb5c9b0f853e1cec45632d9963e69"
+dependencies = [
+ "libc",
+ "paste",
+ "tikv-jemalloc-sys",
 ]
 
 [[package]]
@@ -6119,9 +6225,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.5.8"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
+checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
 dependencies = [
  "serde",
 ]

@@ -35,6 +35,7 @@ where
 {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
+        let _ = check_date(value.as_i32())?;
         self.builder.append_value(value);
         Ok(())
     }
@@ -47,6 +48,7 @@ where
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
+            let _ = check_date(value.as_i32())?;
             self.builder.append_value(value);
         }
         Ok(())
@@ -57,7 +59,9 @@ where
             serde_json::Value::String(v) => {
                 let mut reader = BufferReader::new(v.as_bytes());
                 let date = reader.read_date_text()?;
-                self.builder.append_value(uniform(date));
+                let days = uniform(date);
+                let _ = check_date(days.as_i32())?;
+                self.builder.append_value(days);
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
@@ -67,49 +71,64 @@ where
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let date = reader.read_date_text()?;
+        let days = uniform(date);
+        let _ = check_date(days.as_i32())?;
         reader.must_eof()?;
-        self.builder.append_value(uniform(date));
+        self.builder.append_value(days);
         Ok(())
     }
 
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let date = reader.read_date_text()?;
+        let days = uniform(date);
+        let _ = check_date(days.as_i32())?;
         reader.must_ignore_byte(b'\'')?;
 
-        self.builder.append_value(uniform(date));
+        self.builder.append_value(days);
         Ok(())
     }
 
     fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let date = reader.read_date_text()?;
-        self.builder.append_value(uniform(date));
+        let days = uniform(date);
+        let _ = check_date(days.as_i32())?;
+        self.builder.append_value(days);
         Ok(())
     }
 
     fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let date = reader.read_date_text()?;
+        let days = uniform(date);
+        let _ = check_date(days.as_i32())?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
-        self.builder.append_value(uniform(date));
+        self.builder.append_value(days);
         Ok(())
     }
 
     fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let date = reader.read_date_text()?;
+        let days = uniform(date);
+        let _ = check_date(days.as_i32())?;
         reader.must_ignore_byte(b'"')?;
 
-        self.builder.append_value(uniform(date));
+        self.builder.append_value(days);
         Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let v = value.as_i64()? as i32;
+        let _ = check_date(v)?;
         self.builder.append_value(v.as_());
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        self.builder.pop_data_value()
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

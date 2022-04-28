@@ -32,9 +32,11 @@ pub struct SelectInterpreterV2 {
 }
 
 impl SelectInterpreterV2 {
-    #[allow(dead_code)]
-    pub fn try_create(ctx: Arc<QueryContext>, query: String) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SelectInterpreterV2 { ctx, query }))
+    pub fn try_create(ctx: Arc<QueryContext>, query: &str) -> Result<InterpreterPtr> {
+        Ok(Arc::new(SelectInterpreterV2 {
+            ctx,
+            query: query.to_string(),
+        }))
     }
 }
 
@@ -55,5 +57,13 @@ impl Interpreter for SelectInterpreterV2 {
         let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
         let executor_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
         Ok(Box::pin(self.ctx.try_create_abortable(executor_stream)?))
+    }
+
+    async fn start(&self) -> Result<()> {
+        Ok(())
+    }
+
+    async fn finish(&self) -> Result<()> {
+        Ok(())
     }
 }

@@ -57,7 +57,7 @@ where
     H: Hasher + Default + Clone + Sync + Send + 'static,
     R: Scalar + Clone + FromPrimitive + ToDataType + Sync + Send,
 {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(BaseHashFunction::<H, R> {
             display_name: display_name.to_string(),
             h: PhantomData,
@@ -80,7 +80,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         R::to_data_type()
     }
 
@@ -149,5 +149,14 @@ impl<'a> DFHash for &'a [u8] {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash_slice(self, state);
+    }
+}
+
+impl<'a> DFHash for &'a VariantValue {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let v = self.as_ref().to_string();
+        let u = v.as_bytes();
+        Hash::hash(&u, state);
     }
 }

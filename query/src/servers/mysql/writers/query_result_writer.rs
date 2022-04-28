@@ -18,10 +18,11 @@ use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::DateTime32Type;
-use common_datavalues::DateTime64Type;
+use common_datavalues::TimestampType;
+use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
@@ -78,9 +79,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                TypeID::Date16 | TypeID::Date32 => Ok(ColumnType::MYSQL_TYPE_DATE),
-                TypeID::DateTime32 => Ok(ColumnType::MYSQL_TYPE_DATETIME),
-                TypeID::DateTime64 => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
+                TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -131,22 +131,12 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (TypeID::Boolean, DataValue::Boolean(v)) => {
                                     row_writer.write_col(v as i8)?
                                 }
-                                (TypeID::Date16, DataValue::UInt64(v)) => {
+                                (TypeID::Date, DataValue::Int64(v)) => {
+                                    let v = v as i32;
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (TypeID::Date32, DataValue::Int64(v)) => {
-                                    row_writer.write_col(v.to_date(&utc).naive_local())?
-                                }
-                                (TypeID::DateTime32, DataValue::UInt64(v)) => {
-                                    let data_type: &DateTime32Type =
-                                        data_type.as_any().downcast_ref().unwrap();
-                                    let tz = data_type.tz();
-                                    let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
-                                    let tz: Tz = tz.parse().unwrap();
-                                    row_writer.write_col(v.to_date_time(&tz).naive_local())?
-                                }
-                                (TypeID::DateTime64, DataValue::Int64(v)) => {
-                                    let data_type: &DateTime64Type =
+                                (TypeID::Timestamp, DataValue::Int64(v)) => {
+                                    let data_type: &TimestampType =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
@@ -166,15 +156,15 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
-                                (TypeID::Variant, DataValue::Json(_)) => {
+                                (TypeID::Variant, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
-                                (TypeID::VariantArray, DataValue::Json(_)) => {
+                                (TypeID::VariantArray, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
-                                (TypeID::VariantObject, DataValue::Json(_)) => {
+                                (TypeID::VariantObject, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }

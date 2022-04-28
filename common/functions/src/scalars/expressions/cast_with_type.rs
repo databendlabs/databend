@@ -16,20 +16,17 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
+use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
-use super::cast_from_datetimes::cast_from_date16;
-use super::cast_from_datetimes::cast_from_date32;
+use super::cast_from_datetimes::cast_from_date;
 use super::cast_from_string::cast_from_string;
 use super::cast_from_variant::cast_from_variant;
-use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime32;
-use crate::scalars::expressions::cast_from_datetimes::cast_from_datetime64;
+use crate::scalars::expressions::cast_from_datetimes::cast_from_timestamp;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CastOptions {
@@ -67,7 +64,7 @@ impl CastOptions {
 
 pub fn cast_column_field(
     column_with_field: &ColumnWithField,
-    data_type: &DataTypePtr,
+    data_type: &DataTypeImpl,
 ) -> Result<ColumnRef> {
     cast_with_type(
         column_with_field.column(),
@@ -79,7 +76,7 @@ pub fn cast_column_field(
 
 // No logical type is specified
 // Use Default options
-pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Result<ColumnRef> {
+pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
     cast_with_type(
         column,
         &column.data_type(),
@@ -90,8 +87,8 @@ pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Resul
 
 pub fn cast_with_type(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<ColumnRef> {
     // they are pyhsically the same type
@@ -127,17 +124,9 @@ pub fn cast_with_type(
         TypeID::String => {
             cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
-        TypeID::Date16 => {
-            cast_from_date16(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::Date32 => {
-            cast_from_date32(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::DateTime32 => {
-            cast_from_datetime32(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::DateTime64 => {
-            cast_from_datetime64(column, &nonull_from_type, &nonull_data_type, cast_options)
+        TypeID::Date => cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options),
+        TypeID::Timestamp => {
+            cast_from_timestamp(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
             cast_from_variant(column, &nonull_data_type)
@@ -145,6 +134,19 @@ pub fn cast_with_type(
         // TypeID::Interval => arrow_cast_compute(column, &nonull_data_type, cast_options),
         _ => arrow_cast_compute(column, &nonull_from_type, &nonull_data_type, cast_options),
     }?;
+
+    // check date/timestamp bound
+    if nonull_data_type.data_type_id() == TypeID::Date {
+        let viewer = i32::try_create_viewer(&result)?;
+        for x in viewer {
+            let _ = check_date(x)?;
+        }
+    } else if nonull_data_type.data_type_id() == TypeID::Timestamp {
+        let viewer = i64::try_create_viewer(&result)?;
+        for x in viewer {
+            let _ = check_timestamp(x)?;
+        }
+    }
 
     let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
@@ -178,8 +180,8 @@ pub fn cast_with_type(
 
 pub fn cast_to_variant(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let size = column.len();
@@ -195,13 +197,13 @@ pub fn cast_to_variant(
             from_type.data_type_id()
         )));
     }
-    let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+    let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
         let serializer = from_type.create_serializer();
         match serializer.serialize_json_object(&column, None) {
             Ok(values) => {
                 for v in values {
-                    builder.append(&v);
+                    builder.append(&VariantValue::from(v));
                 }
             }
             Err(e) => return Err(e),
@@ -218,8 +220,8 @@ pub fn cast_to_variant(
 // cast using arrow's cast compute
 pub fn arrow_cast_compute(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     if data_type.data_type_id().is_variant() {

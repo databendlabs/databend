@@ -66,8 +66,8 @@ impl From<String> for IntervalKind {
 }
 
 impl IntervalType {
-    pub fn arc(kind: IntervalKind) -> DataTypePtr {
-        Arc::new(Self { kind })
+    pub fn arc(kind: IntervalKind) -> DataTypeImpl {
+        DataTypeImpl::Interval(Self { kind })
     }
 
     pub fn kind(&self) -> &IntervalKind {
@@ -75,7 +75,6 @@ impl IntervalType {
     }
 }
 
-#[typetag::serde]
 impl DataType for IntervalType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Interval
@@ -86,8 +85,8 @@ impl DataType for IntervalType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Interval"
+    fn name(&self) -> String {
+        format!("Interval({})", self.kind)
     }
 
     fn default_value(&self) -> DataValue {
@@ -120,14 +119,15 @@ impl DataType for IntervalType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateSerializer::<i64>::default())
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        DateSerializer::<i64>::default().into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(DateDeserializer::<i64> {
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        DateDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

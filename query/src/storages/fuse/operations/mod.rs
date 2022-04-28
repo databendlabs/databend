@@ -14,11 +14,13 @@
 
 mod append;
 mod commit;
+mod fuse_sink;
 mod operation_log;
 mod optimize;
 mod read;
 mod read_partitions;
 mod truncate;
 
+pub use fuse_sink::FuseSink;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;

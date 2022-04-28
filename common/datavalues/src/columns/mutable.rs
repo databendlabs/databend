@@ -14,13 +14,13 @@
 
 use std::any::Any;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
 use crate::prelude::*;
 
 pub trait MutableColumn {
-    fn data_type(&self) -> DataTypePtr;
+    fn data_type(&self) -> DataTypeImpl;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -31,6 +31,7 @@ pub trait MutableColumn {
 
     fn append_default(&mut self);
     fn append_data_value(&mut self, value: DataValue) -> Result<()>;
+    fn pop_data_value(&mut self) -> Result<DataValue>;
 
     fn validity(&self) -> Option<&MutableBitmap> {
         None

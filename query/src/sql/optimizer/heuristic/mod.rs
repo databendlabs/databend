@@ -43,10 +43,12 @@ impl HeuristicOptimizer {
     }
 
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut result = s_expr.clone();
+        let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
-            result = self.apply_transform_rules(expr, &self.rules)?;
+            optimized_children.push(self.optimize_expression(expr)?);
         }
+        let optimized_expr = SExpr::create(s_expr.plan(), optimized_children, None);
+        let result = self.apply_transform_rules(&optimized_expr, &self.rules)?;
 
         Ok(result)
     }

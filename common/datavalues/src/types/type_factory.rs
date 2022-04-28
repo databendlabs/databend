@@ -22,7 +22,7 @@ use once_cell::sync::Lazy;
 use crate::prelude::*;
 
 pub struct TypeFactory {
-    case_insensitive_types: HashMap<String, DataTypePtr>,
+    case_insensitive_types: HashMap<String, DataTypeImpl>,
 }
 
 static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
@@ -45,18 +45,16 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     type_factory.register(Float32Type::arc());
     type_factory.register(Float64Type::arc());
 
-    type_factory.register(Date16Type::arc());
-    type_factory.register(Date32Type::arc());
-    type_factory.register(DateTime32Type::arc(None));
+    type_factory.register(DateType::arc());
     type_factory.register(VariantType::arc());
     type_factory.register(VariantArrayType::arc());
     type_factory.register(VariantObjectType::arc());
 
-    // DateTime64 is a special case
+    // Timestamp is a special case
     {
-        type_factory.register(DateTime64Type::arc(3, None));
-        type_factory.register(DateTime64Type::arc(6, None));
-        type_factory.register(DateTime64Type::arc(9, None));
+        for precision in 0..7 {
+            type_factory.register(TimestampType::arc(precision, None));
+        }
     }
 
     type_factory.add_array_wrapper();
@@ -76,7 +74,7 @@ impl TypeFactory {
         TYPE_FACTORY.as_ref()
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Result<&DataTypePtr> {
+    pub fn get(&self, name: impl AsRef<str>) -> Result<&DataTypeImpl> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         self.case_insensitive_types
@@ -86,11 +84,11 @@ impl TypeFactory {
             })
     }
 
-    pub fn register(&mut self, data_type: DataTypePtr) {
+    pub fn register(&mut self, data_type: DataTypeImpl) {
         let mut names = vec![data_type.name()];
 
         for alias in data_type.aliases() {
-            names.push(alias);
+            names.push(alias.to_string());
         }
         for name in names {
             self.case_insensitive_types
@@ -101,7 +99,7 @@ impl TypeFactory {
     pub fn add_array_wrapper(&mut self) {
         let mut arrays = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
-            let data_type: DataTypePtr = Arc::new(ArrayType::create(v.clone()));
+            let data_type: DataTypeImpl = DataTypeImpl::Array(ArrayType::create(v.clone()));
             arrays.insert(
                 format!("Array({})", k).to_ascii_lowercase(),
                 data_type.clone(),
@@ -114,7 +112,7 @@ impl TypeFactory {
         let mut nulls = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
             if v.can_inside_nullable() {
-                let data_type: DataTypePtr = NullableType::arc(v.clone());
+                let data_type: DataTypeImpl = NullableType::arc(v.clone());
                 nulls.insert(
                     format!("Nullable({})", k).to_ascii_lowercase(),
                     data_type.clone(),

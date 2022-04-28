@@ -16,17 +16,16 @@ use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
 use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use crate::DFTryFrom;
-use crate::DataTypePtr;
+use crate::DataTypeImpl;
 use crate::DataValue;
-use crate::Date16Type;
-use crate::Date32Type;
-use crate::DateTime32Type;
-use crate::DateTime64Type;
+use crate::DateType;
 use crate::Scalar;
+use crate::TimestampType;
+use crate::TypeID;
 use crate::VariantType;
+use crate::VariantValue;
 
 pub trait PrimitiveType:
     NativeArithmetics
@@ -88,37 +87,33 @@ pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
 
-pub trait DateType: PrimitiveType {}
-impl DateType for u16 {}
-impl DateType for i32 {}
-impl DateType for u32 {}
-impl DateType for i64 {}
-
-pub trait ToDateType {
-    fn to_date_type() -> DataTypePtr;
+pub trait LogicalDateType: PrimitiveType {
+    fn get_type_id() -> TypeID;
+}
+impl LogicalDateType for i32 {
+    fn get_type_id() -> TypeID {
+        TypeID::Date
+    }
+}
+impl LogicalDateType for i64 {
+    fn get_type_id() -> TypeID {
+        TypeID::Timestamp
+    }
 }
 
-impl ToDateType for u16 {
-    fn to_date_type() -> DataTypePtr {
-        Date16Type::arc()
-    }
+pub trait ToDateType {
+    fn to_date_type() -> DataTypeImpl;
 }
 
 impl ToDateType for i32 {
-    fn to_date_type() -> DataTypePtr {
-        Date32Type::arc()
-    }
-}
-
-impl ToDateType for u32 {
-    fn to_date_type() -> DataTypePtr {
-        DateTime32Type::arc(None)
+    fn to_date_type() -> DataTypeImpl {
+        DateType::arc()
     }
 }
 
 impl ToDateType for i64 {
-    fn to_date_type() -> DataTypePtr {
-        DateTime64Type::arc(0, None)
+    fn to_date_type() -> DataTypeImpl {
+        TimestampType::arc(6, None)
     }
 }
 
@@ -135,11 +130,11 @@ pub trait ObjectType:
     + Default
     + Scalar
 {
-    fn data_type() -> DataTypePtr;
+    fn data_type() -> DataTypeImpl;
 }
 
-impl ObjectType for JsonValue {
-    fn data_type() -> DataTypePtr {
+impl ObjectType for VariantValue {
+    fn data_type() -> DataTypeImpl {
         VariantType::arc()
     }
 }

@@ -42,7 +42,7 @@ impl PartialEq<dyn Column> for Box<dyn Column + '_> {
 }
 
 pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
-    if lhs.data_type() != rhs.data_type() || lhs.len() != lhs.len() {
+    if lhs.data_type_id() != rhs.data_type_id() || lhs.len() != lhs.len() {
         return false;
     }
 
@@ -97,8 +97,8 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
             lhs.values() == rhs.values()
         }
         Variant => {
-            let lhs: &JsonColumn = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &JsonColumn = rhs.as_any().downcast_ref().unwrap();
+            let lhs: &VariantColumn = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &VariantColumn = rhs.as_any().downcast_ref().unwrap();
 
             lhs.values() == rhs.values()
         }

@@ -18,9 +18,10 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+#[derive(Debug, Clone)]
 pub struct ArraySerializer {
-    pub inner: Box<dyn TypeSerializer>,
-    pub typ: DataTypePtr,
+    pub inner: Box<TypeSerializerImpl>,
+    pub typ: DataTypeImpl,
 }
 
 impl TypeSerializer for ArraySerializer {

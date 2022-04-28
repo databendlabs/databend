@@ -1,13 +1,11 @@
 empty_as_default	1	1	SESSION	Format empty_as_default, default value: 1	UInt64
 enable_new_processor_framework	1	1	SESSION	Enable new processor framework if value != 0, default value: 1	UInt64
+enable_planner_v2	0	0	SESSION	Enable planner v2 by setting this variable to 1, default value: 0	UInt64
 field_delimiter	,	,	SESSION	Format field delimiter, default value: ,	String
 flight_client_timeout	60	60	SESSION	Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds	UInt64
 max_block_size	10000	10000	SESSION	Maximum block size for reading	UInt64
 max_threads	11	16	SESSION	The maximum number of threads to execute the request. By default, it is determined automatically.	UInt64
 record_delimiter	\n	\n	SESSION	Format record_delimiter, default value: \n	String
 skip_header	0	0	SESSION	Whether to skip the input header, default value: 0	UInt64
-storage_occ_backoff_init_delay_ms	5	5	SESSION	The initial retry delay in millisecond. By default, it is 5 ms.	UInt64
-storage_occ_backoff_max_delay_ms	20000	20000	SESSION	The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.	UInt64
-storage_occ_backoff_max_elapsed_ms	120000	120000	SESSION	The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.	UInt64
 storage_read_buffer_size	1048576	1048576	SESSION	The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.	UInt64
 timezone	UTC	UTC	SESSION	Timezone, default value: UTC,	String

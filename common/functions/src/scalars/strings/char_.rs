@@ -30,7 +30,7 @@ pub struct CharFunction {
 }
 
 impl CharFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
             assert_numeric(*arg)?;
         }
@@ -53,7 +53,7 @@ impl Function for CharFunction {
         "char"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Vu8::to_data_type()
     }
 

@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
@@ -25,14 +26,14 @@ use crate::types::create_primitive_datatype;
 pub struct MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     pub(crate) values: Vec<T>,
 }
 
 impl<T> MutableColumn for MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 
@@ -67,10 +68,19 @@ where T: PrimitiveType
         })
     }
 
-    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let t: T = DFTryFrom::try_from(value)?;
         self.append_value(t);
         Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<DataValue> {
+        let t = self.pop_value().ok_or_else(|| {
+            ErrorCode::BadDataArrayLength("Primitive column array is empty when pop data value")
+        })?;
+
+        let data_value = DataValue::try_from(t)?;
+        Ok(data_value)
     }
 }
 
@@ -87,12 +97,16 @@ where T: PrimitiveType
 impl<T> MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    pub fn from_data(data_type: DataTypePtr, values: Vec<T>) -> Self {
+    pub fn from_data(data_type: DataTypeImpl, values: Vec<T>) -> Self {
         Self { data_type, values }
     }
 
     pub fn append_value(&mut self, val: T) {
         self.values.push(val);
+    }
+
+    pub fn pop_value(&mut self) -> Option<T> {
+        self.values.pop()
     }
 
     pub fn values(&self) -> &Vec<T> {

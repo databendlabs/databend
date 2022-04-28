@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::plans::BasePlanRef;
+use crate::sql::plans::BasePlan;
+use crate::sql::plans::BasePlanImpl;
 use crate::sql::plans::PlanType;
 use crate::sql::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone)]
 pub struct SExpr {
-    plan: BasePlanRef,
+    plan: BasePlanImpl,
     children: Vec<SExpr>,
 
     original_group: Option<IndexType>,
@@ -27,7 +28,7 @@ pub struct SExpr {
 
 impl SExpr {
     pub fn create(
-        plan: BasePlanRef,
+        plan: BasePlanImpl,
         children: Vec<SExpr>,
         original_group: Option<IndexType>,
     ) -> Self {
@@ -38,19 +39,19 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: BasePlanRef, child: SExpr) -> Self {
+    pub fn create_unary(plan: BasePlanImpl, child: SExpr) -> Self {
         Self::create(plan, vec![child], None)
     }
 
-    pub fn create_binary(plan: BasePlanRef, left_child: SExpr, right_child: SExpr) -> Self {
+    pub fn create_binary(plan: BasePlanImpl, left_child: SExpr, right_child: SExpr) -> Self {
         Self::create(plan, vec![left_child, right_child], None)
     }
 
-    pub fn create_leaf(plan: BasePlanRef) -> Self {
+    pub fn create_leaf(plan: BasePlanImpl) -> Self {
         Self::create(plan, vec![], None)
     }
 
-    pub fn plan(&self) -> BasePlanRef {
+    pub fn plan(&self) -> BasePlanImpl {
         self.plan.clone()
     }
 
@@ -73,7 +74,7 @@ impl SExpr {
     pub fn match_pattern(&self, pattern: &SExpr) -> bool {
         if pattern.plan.plan_type() != PlanType::Pattern {
             // Pattern is plan
-            if self.plan.plan_type() == pattern.plan.plan_type() {
+            if self.plan.plan_type() != pattern.plan.plan_type() {
                 return false;
             }
 

@@ -25,52 +25,12 @@ use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::CastOptions;
 
 const DATE_FMT: &str = "%Y-%m-%d";
-const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+// const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
-pub fn cast_from_date16(
+pub fn cast_from_date(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
-    cast_options: &CastOptions,
-) -> Result<(ColumnRef, Option<Bitmap>)> {
-    let c = Series::remove_nullable(column);
-    let c: &UInt16Column = Series::check_get(&c)?;
-    let size = c.len();
-
-    match data_type.data_type_id() {
-        TypeID::String => {
-            let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
-
-            for v in c.iter() {
-                let s = datetime_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
-                builder.append(s.as_bytes());
-            }
-            Ok((builder.build(size), None))
-        }
-
-        TypeID::DateTime32 => {
-            let it = c.iter().map(|v| *v as u32 * 24 * 3600);
-            let result = Arc::new(UInt32Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        TypeID::DateTime64 => {
-            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
-            let it = c
-                .iter()
-                .map(|v| datetime.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
-            let result = Arc::new(Int64Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
-    }
-}
-
-pub fn cast_from_date32(
-    column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
@@ -82,23 +42,17 @@ pub fn cast_from_date32(
             let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
 
             for v in c.iter() {
-                let s = datetime_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
+                let s = timestamp_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
                 builder.append(s.as_bytes());
             }
             Ok((builder.build(size), None))
         }
 
-        TypeID::DateTime32 => {
-            let it = c.iter().map(|v| *v as u32 * 24 * 3600);
-            let result = Arc::new(UInt32Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        TypeID::DateTime64 => {
-            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+        TypeID::Timestamp => {
+            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
             let it = c
                 .iter()
-                .map(|v| datetime.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
+                .map(|v| ts.from_micro_seconds(*v as i64 * 24 * 3600 * 1_000_000));
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -107,69 +61,23 @@ pub fn cast_from_date32(
     }
 }
 
-pub fn cast_from_datetime32(
+pub fn cast_from_timestamp(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
-    cast_options: &CastOptions,
-) -> Result<(ColumnRef, Option<Bitmap>)> {
-    let c = Series::remove_nullable(column);
-    let c: &UInt32Column = Series::check_get(&c)?;
-    let size = c.len();
-
-    match data_type.data_type_id() {
-        TypeID::String => {
-            let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
-
-            for v in c.iter() {
-                let s = datetime_to_string(Utc.timestamp(*v as i64, 0_u32), TIME_FMT);
-                builder.append(s.as_bytes());
-            }
-            Ok((builder.build(size), None))
-        }
-
-        TypeID::Date16 => {
-            let it = c.iter().map(|v| (*v as i64 / 24 / 3600) as u16);
-            let result = Arc::new(UInt16Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        TypeID::Date32 => {
-            let it = c.iter().map(|v| (*v as i64 / 24 / 3600) as i32);
-            let result = Arc::new(Int32Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        TypeID::DateTime64 => {
-            let datetime = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
-            let it = c
-                .iter()
-                .map(|v| datetime.from_nano_seconds(*v as i64 * 1_000_000_000));
-            let result = Arc::new(Int64Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
-    }
-}
-
-pub fn cast_from_datetime64(
-    column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
     let c: &Int64Column = Series::check_get(&c)?;
     let size = c.len();
 
-    let date_time64 = from_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+    let date_time64 = from_type.as_any().downcast_ref::<TimestampType>().unwrap();
 
     match data_type.data_type_id() {
         TypeID::String => {
             let mut builder = MutableStringColumn::with_capacity(size);
             for v in c.iter() {
-                let s = datetime_to_string(
+                let s = timestamp_to_string(
                     date_time64.utc_timestamp(*v),
                     date_time64.format_string().as_str(),
                 );
@@ -178,15 +86,7 @@ pub fn cast_from_datetime64(
             Ok((builder.to_column(), None))
         }
 
-        TypeID::Date16 => {
-            let it = c
-                .iter()
-                .map(|v| (date_time64.to_seconds(*v) / 24 / 3600) as u16);
-            let result = Arc::new(UInt16Column::from_iterator(it));
-            Ok((result, None))
-        }
-
-        TypeID::Date32 => {
+        TypeID::Date => {
             let it = c
                 .iter()
                 .map(|v| (date_time64.to_seconds(*v) / 24 / 3600) as i32);
@@ -194,9 +94,18 @@ pub fn cast_from_datetime64(
             Ok((result, None))
         }
 
-        TypeID::DateTime32 => {
-            let it = c.iter().map(|v| date_time64.to_seconds(*v) as u32);
-            let result = Arc::new(UInt32Column::from_iterator(it));
+        TypeID::Timestamp => {
+            // TODO(veeupup): optimize convert different precisions, will be done in next pr
+            let to_precision = data_type
+                .as_any()
+                .downcast_ref::<TimestampType>()
+                .unwrap()
+                .precision();
+            let x = 10_i64.pow(6 - to_precision as u32);
+            let it = c
+                .iter()
+                .map(|v| date_time64.utc_timestamp(*v).timestamp_micros() / x);
+            let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -205,6 +114,6 @@ pub fn cast_from_datetime64(
 }
 
 #[inline]
-fn datetime_to_string(date: DateTime<Utc>, fmt: &str) -> String {
+fn timestamp_to_string(date: DateTime<Utc>, fmt: &str) -> String {
     date.format(fmt).to_string()
 }

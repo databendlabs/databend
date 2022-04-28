@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use serde_json::json;
-use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 
@@ -42,7 +41,7 @@ pub enum DataValue {
     Struct(Vec<DataValue>),
 
     // Custom type.
-    Json(JsonValue),
+    Variant(VariantValue),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
@@ -55,7 +54,7 @@ pub enum ValueType {
     String,
     Array,
     Struct,
-    Json,
+    Variant,
 }
 
 pub type DataValueRef = Arc<DataValue>;
@@ -85,14 +84,14 @@ impl DataValue {
             DataValue::String(_) => ValueType::String,
             DataValue::Array(_) => ValueType::Array,
             DataValue::Struct(_) => ValueType::Struct,
-            DataValue::Json(_) => ValueType::Json,
+            DataValue::Variant(_) => ValueType::Variant,
         }
     }
 
     /// Get the minimal memory sized data type.
-    pub fn data_type(&self) -> DataTypePtr {
+    pub fn data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
@@ -126,21 +125,21 @@ impl DataValue {
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Json(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::arc(),
         }
     }
 
     /// Get the maximum memory sized data type
-    pub fn max_data_type(&self) -> DataTypePtr {
+    pub fn max_data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
             DataValue::Int64(_) => Int64Type::arc(),
             DataValue::UInt64(_) => UInt64Type::arc(),
@@ -152,14 +151,14 @@ impl DataValue {
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Json(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::arc(),
         }
     }
 
@@ -228,7 +227,7 @@ impl DataValue {
             DataValue::UInt64(v) => Ok(Vec::<u8>::from((*v).to_string())),
             DataValue::Float64(v) => Ok(Vec::<u8>::from((*v).to_string())),
             DataValue::String(v) => Ok(v.to_owned()),
-            DataValue::Json(v) => Ok(v.to_string().into_bytes()),
+            DataValue::Variant(v) => Ok(v.to_string().into_bytes()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get string",
                 other.value_type()
@@ -236,7 +235,7 @@ impl DataValue {
         }
     }
 
-    pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
+    pub fn as_const_column(&self, data_type: &DataTypeImpl, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
     }
 
@@ -278,34 +277,36 @@ impl DFTryFrom<DataValue> for Vec<u8> {
     }
 }
 
-impl DFTryFrom<DataValue> for JsonValue {
+impl DFTryFrom<DataValue> for VariantValue {
     fn try_from(value: DataValue) -> Result<Self> {
         match value {
-            DataValue::Null => Ok(JsonValue::Null),
-            DataValue::Boolean(v) => Ok(v.into()),
-            DataValue::Int64(v) => Ok(v.into()),
-            DataValue::UInt64(v) => Ok(v.into()),
-            DataValue::Float64(v) => Ok(v.into()),
-            DataValue::String(v) => Ok(v.into()),
-            DataValue::Array(v) => Ok(json!(v)),
-            DataValue::Struct(v) => Ok(json!(v)),
-            DataValue::Json(v) => Ok(v),
+            DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
+            DataValue::Boolean(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Int64(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::UInt64(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Float64(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::String(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Array(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Struct(v) => Ok(VariantValue::from(json!(v))),
+            DataValue::Variant(v) => Ok(v),
         }
     }
 }
 
-impl DFTryFrom<&DataValue> for JsonValue {
+impl DFTryFrom<&DataValue> for VariantValue {
     fn try_from(value: &DataValue) -> Result<Self> {
         match value {
-            DataValue::Null => Ok(JsonValue::Null),
-            DataValue::Boolean(v) => Ok((*v as bool).into()),
-            DataValue::Int64(v) => Ok((*v as i64).into()),
-            DataValue::UInt64(v) => Ok((*v as u64).into()),
-            DataValue::Float64(v) => Ok((*v as f64).into()),
-            DataValue::String(v) => Ok(String::from_utf8(v.to_vec()).unwrap().into()),
-            DataValue::Array(v) => Ok(json!(*v)),
-            DataValue::Struct(v) => Ok(json!(*v)),
-            DataValue::Json(v) => Ok(v.to_owned()),
+            DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
+            DataValue::Boolean(v) => Ok(VariantValue::from(json!(*v as bool))),
+            DataValue::Int64(v) => Ok(VariantValue::from(json!(*v as i64))),
+            DataValue::UInt64(v) => Ok(VariantValue::from(json!(*v as u64))),
+            DataValue::Float64(v) => Ok(VariantValue::from(json!(*v as f64))),
+            DataValue::String(v) => Ok(VariantValue::from(json!(
+                String::from_utf8(v.to_vec()).unwrap()
+            ))),
+            DataValue::Array(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::Struct(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::Variant(v) => Ok(v.to_owned()),
         }
     }
 }
@@ -364,9 +365,9 @@ impl From<Option<Vec<u8>>> for DataValue {
     }
 }
 
-impl From<JsonValue> for DataValue {
-    fn from(x: JsonValue) -> Self {
-        DataValue::Json(x)
+impl From<VariantValue> for DataValue {
+    fn from(x: VariantValue) -> Self {
+        DataValue::Variant(x)
     }
 }
 
@@ -398,7 +399,7 @@ impl fmt::Display for DataValue {
                 )
             }
             DataValue::Struct(v) => write!(f, "{:?}", v),
-            DataValue::Json(v) => write!(f, "{:#}", v),
+            DataValue::Variant(v) => write!(f, "{:#}", v),
         }
     }
 }
@@ -414,7 +415,7 @@ impl fmt::Debug for DataValue {
             DataValue::String(_) => write!(f, "{}", self),
             DataValue::Array(_) => write!(f, "{}", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
-            DataValue::Json(v) => write!(f, "{:#?}", v),
+            DataValue::Variant(v) => write!(f, "{:#?}", v),
         }
     }
 }
@@ -422,7 +423,7 @@ impl fmt::Debug for DataValue {
 /// SQL style format
 pub fn format_datavalue_sql(value: &DataValue) -> String {
     match value {
-        DataValue::String(_) | DataValue::Json(_) => format!("'{}'", value),
+        DataValue::String(_) | DataValue::Variant(_) => format!("'{}'", value),
         _ => format!("{}", value),
     }
 }

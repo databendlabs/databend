@@ -53,7 +53,7 @@ impl TableEntry {
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
     pub nullable: bool,
 
     // Table index of column entry. None if column is derived from a subquery.
@@ -63,7 +63,7 @@ pub struct ColumnEntry {
 impl ColumnEntry {
     pub fn new(
         name: String,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
         column_index: IndexType,
         table_index: Option<IndexType>,
@@ -120,7 +120,7 @@ impl Metadata {
     pub fn add_column(
         &mut self,
         name: String,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
         table_index: Option<IndexType>,
     ) -> IndexType {

@@ -13,11 +13,14 @@
 // limitations under the License.
 
 mod udf_definition;
+mod udf_expr_visitor;
 mod udf_fetcher;
 mod udf_parser;
 mod udf_transformer;
 
 pub use udf_definition::UDFDefinition;
+pub use udf_expr_visitor::UDFExprTraverser;
+pub use udf_expr_visitor::UDFExprVisitor;
 pub use udf_fetcher::UDFFetcher;
 pub use udf_parser::UDFParser;
 pub use udf_transformer::UDFTransformer;

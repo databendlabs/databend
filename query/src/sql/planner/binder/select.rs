@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use common_ast::parser::ast::Expr;
-use common_ast::parser::ast::Query;
-use common_ast::parser::ast::SelectStmt;
-use common_ast::parser::ast::SetExpr;
-use common_ast::parser::ast::TableReference;
+use common_ast::ast::Expr;
+use common_ast::ast::Query;
+use common_ast::ast::SelectStmt;
+use common_ast::ast::SetExpr;
+use common_ast::ast::TableReference;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -112,17 +112,20 @@ impl Binder {
             let column_binding = ColumnBinding {
                 table_name: Some(table.name.clone()),
                 column_name: column.name.clone(),
-                index: Some(column.column_index),
+                index: column.column_index,
                 data_type: column.data_type.clone(),
                 nullable: column.nullable,
                 scalar: None,
             };
             bind_context.add_column_binding(column_binding);
         }
-        bind_context.expression = Some(SExpr::create_leaf(Arc::new(LogicalGet {
-            table_index,
-            columns: columns.into_iter().map(|col| col.column_index).collect(),
-        })));
+        bind_context.expression = Some(SExpr::create_leaf(
+            LogicalGet {
+                table_index,
+                columns: columns.into_iter().map(|col| col.column_index).collect(),
+            }
+            .into(),
+        ));
 
         Ok(bind_context)
     }
@@ -131,10 +134,8 @@ impl Binder {
         let scalar_binder = ScalarBinder::new();
         let scalar = scalar_binder.bind_expr(expr, bind_context)?;
         let filter_plan = FilterPlan { predicate: scalar };
-        let new_expr = SExpr::create_unary(
-            Arc::new(filter_plan),
-            bind_context.expression.clone().unwrap(),
-        );
+        let new_expr =
+            SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
         bind_context.expression = Some(new_expr);
         Ok(())
     }

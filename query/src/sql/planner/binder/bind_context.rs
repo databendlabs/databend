@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::parser::ast::TableAlias;
+use common_ast::ast::TableAlias;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,9 +28,9 @@ pub struct ColumnBinding {
     // Column name of this `ColumnBinding` in current context
     pub column_name: String,
     // Column index of ColumnBinding
-    pub index: Option<IndexType>,
+    pub index: IndexType,
 
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
     pub nullable: bool,
 
     // Scalar expression the ColumnBinding refers to(if exists).
@@ -133,5 +133,18 @@ impl BindContext {
         } else {
             Ok(result.remove(0))
         }
+    }
+
+    /// Get result columns of current context in order.
+    /// For example, a query `SELECT b, a AS b FROM t` has `[(index_of(b), "b"), index_of(a), "b"]` as
+    /// its result columns.
+    ///
+    /// This method is used to retrieve the physical representation of result set of
+    /// a query.
+    pub fn result_columns(&self) -> Vec<(IndexType, String)> {
+        self.columns
+            .iter()
+            .map(|col| (col.index, col.column_name.clone()))
+            .collect()
     }
 }

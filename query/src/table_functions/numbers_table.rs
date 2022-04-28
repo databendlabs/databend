@@ -163,7 +163,12 @@ impl Table for NumbersTable {
             fake_partitions as usize,
         );
 
-        let parts = generate_numbers_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
+        let mut worker_num = ctx.get_settings().get_max_threads()?;
+        if worker_num > fake_partitions {
+            worker_num = fake_partitions;
+        }
+
+        let parts = generate_numbers_parts(0, worker_num, total);
         Ok((statistics, parts))
     }
 

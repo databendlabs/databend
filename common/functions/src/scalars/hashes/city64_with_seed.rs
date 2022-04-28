@@ -61,7 +61,7 @@ pub struct City64WithSeedFunction {
 
 // CityHash64WithSeed(value, seed)
 impl City64WithSeedFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if !matches!(
             args[0].data_type_id(),
             TypeID::UInt8
@@ -74,10 +74,8 @@ impl City64WithSeedFunction {
                 | TypeID::Int64
                 | TypeID::Float32
                 | TypeID::Float64
-                | TypeID::Date16
-                | TypeID::Date32
-                | TypeID::DateTime32
-                | TypeID::DateTime64
+                | TypeID::Date
+                | TypeID::Timestamp
                 | TypeID::Interval
                 | TypeID::String
         ) {
@@ -110,7 +108,7 @@ impl Function for City64WithSeedFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         UInt64Type::arc()
     }
 

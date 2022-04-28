@@ -25,7 +25,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::assert_date_or_datetime;
+use crate::scalars::assert_date_or_timestamp;
 use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
@@ -44,7 +44,7 @@ pub struct WeekFunction<T, R> {
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> DataTypePtr;
+    fn return_type() -> DataTypeImpl;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
     fn factor_function() -> Option<Box<dyn Function>> {
         None
@@ -54,13 +54,13 @@ pub trait WeekResultFunction<R> {
 #[derive(Clone)]
 pub struct ToStartOfWeek;
 
-impl WeekResultFunction<u32> for ToStartOfWeek {
+impl WeekResultFunction<i32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> DataTypePtr {
-        Date16Type::arc()
+    fn return_type() -> DataTypeImpl {
+        DateType::arc()
     }
-    fn to_number(value: DateTime<Utc>, week_mode: u64) -> u32 {
+    fn to_number(value: DateTime<Utc>, week_mode: u64) -> i32 {
         let mut weekday = value.weekday().number_from_sunday();
         if week_mode & 1 == 1 {
             weekday = value.weekday().number_from_monday();
@@ -80,8 +80,8 @@ where
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        assert_date_or_datetime(args[0])?;
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
+        assert_date_or_timestamp(args[0])?;
         if args.len() > 1 {
             assert_numeric(args[1])?;
         }
@@ -118,7 +118,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         T::return_type()
     }
 
@@ -148,44 +148,44 @@ where
         }
 
         match columns[0].data_type().data_type_id() {
-            TypeID::Date16 => {
-
-                    let col: &UInt16Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
-            TypeID::Date32 => {
-                    let col: &Int32Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                           let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
-            TypeID::DateTime32 => {
-                    let col: &UInt32Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
-
-            TypeID::DateTime64 => {
-                    let col: &Int64Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
+            TypeID::Date => {
+                let col: &Int32Column = Series::check_get(columns[0].column())?;
+                let iter = col.scalar_iter().map(|v| {
+                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
+                    T::to_number(date_time, mode)
+                });
+                let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
+                let viewer = i32::try_create_viewer(&col)?;
+                for days in viewer.iter() {
+                    let _ = check_date(days)?;
+                }
+                Ok(col)
+            }
+            TypeID::Timestamp => {
+                let ts_dt = columns[0]
+                    .field()
+                    .data_type()
+                    .as_any()
+                    .downcast_ref::<TimestampType>()
+                    .unwrap();
+                let to_div = 10_i64.pow(ts_dt.precision() as u32);
+                let col: &Int64Column = Series::check_get(columns[0].column())?;
+                let iter = col.scalar_iter().map(|v| {
+                    let date_time = Utc.timestamp(v / to_div, 0_u32);
+                    T::to_number(date_time, mode)
+                });
+                let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
+                let viewer = i32::try_create_viewer(&col)?;
+                for days in viewer.iter() {
+                    let _ = check_date(days)?;
+                }
+                Ok(col)
+            }
             other => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                "Illegal type {:?} of argument of function {}.Should be a Date or Timestamp",
                 other,
-                self.name()))),
+                self.name()
+            ))),
         }
     }
 
@@ -229,10 +229,10 @@ impl<T, R> fmt::Display for WeekFunction<T, R> {
     }
 }
 
-fn get_day(date: DateTime<Utc>) -> u32 {
+fn get_day(date: DateTime<Utc>) -> i32 {
     let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
     let duration = date.signed_duration_since(start);
-    duration.num_days() as u32
+    duration.num_days() as i32
 }
 
-pub type ToStartOfWeekFunction = WeekFunction<ToStartOfWeek, u32>;
+pub type ToStartOfWeekFunction = WeekFunction<ToStartOfWeek, i32>;
