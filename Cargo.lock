@@ -1767,6 +1767,7 @@ dependencies = [
  "common-tracing",
  "criterion",
  "dyn-clone",
+ "enum_dispatch",
  "futures",
  "headers",
  "http",
