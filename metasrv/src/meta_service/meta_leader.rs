@@ -180,11 +180,11 @@ impl<'a> MetaLeader<'a> {
 
         membership.remove(&node_id);
 
+        self.change_membership(membership).await?;
         let ent = LogEntry {
             txid: None,
             cmd: Cmd::RemoveNode { node_id },
         };
-        self.change_membership(membership).await?;
         self.write(ent).await?;
         Ok(())
     }
