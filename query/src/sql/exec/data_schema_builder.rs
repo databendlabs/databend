@@ -22,6 +22,7 @@ use common_exception::Result;
 use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::ProjectPlan;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
 
@@ -34,6 +35,28 @@ impl<'a> DataSchemaBuilder<'a> {
         DataSchemaBuilder { metadata }
     }
 
+    pub fn build_aggregate(
+        &self,
+        data_fields: Vec<DataField>,
+        input_schema: &DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let mut new_data_fields = Vec::with_capacity(data_fields.len());
+        for data_field in data_fields {
+            if input_schema.has_field(data_field.name()) {
+                new_data_fields.push(data_field);
+                continue;
+            }
+            let idx = self
+                .metadata
+                .column_idx_by_column_name(data_field.name().as_str())?;
+            new_data_fields.push(DataField::new(
+                &*format_field_name(data_field.name().as_str(), idx),
+                data_field.data_type().clone(),
+            ));
+        }
+        Ok(Arc::new(DataSchema::new(new_data_fields)))
+    }
+
     pub fn build_project(
         &self,
         plan: &ProjectPlan,
@@ -41,6 +64,12 @@ impl<'a> DataSchemaBuilder<'a> {
     ) -> Result<DataSchemaRef> {
         let mut fields = input_schema.fields().clone();
         for item in plan.items.iter() {
+            if let Some(Scalar::AggregateFunction { .. }) =
+                item.expr.as_any().downcast_ref::<Scalar>()
+            {
+                continue;
+            }
+
             let index = item.index;
             let column_entry = self.metadata.column(index);
             let field_name = format_field_name(column_entry.name.as_str(), index);

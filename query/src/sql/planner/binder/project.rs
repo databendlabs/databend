@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
+use std::sync::Arc;
+
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
@@ -109,9 +111,9 @@ impl Binder {
                     let (data_type, nullable) = bound_expr.data_type();
 
                     // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name = match alias {
+                    let mut expr_name = match alias {
                         Some(alias) => alias.name.clone(),
-                        None => get_expr_display_string(expr)?,
+                        None => self.metadata.get_expr_display_string(expr, true)?,
                     };
 
                     // If expr is a ColumnRef, then it's a pass-through column. There is no need to
@@ -138,6 +140,7 @@ impl Binder {
                             }
                         }
                         _ => {
+                            expr_name = self.metadata.get_expr_display_string(expr, true)?;
                             let index = self.metadata.add_column(
                                 expr_name.clone(),
                                 data_type.clone(),
@@ -160,32 +163,5 @@ impl Binder {
         }
 
         Ok(output_context)
-    }
-}
-
-fn create_function_display_name(fun: &str, distinct: &bool, args: &[Expr]) -> Result<String> {
-    let names: Vec<String> = args
-        .iter()
-        .map(get_expr_display_string)
-        .collect::<Result<_>>()?;
-    let distinct_str = match distinct {
-        true => "distinct ",
-        false => "",
-    };
-    Ok(format!("{}({}{})", fun, distinct_str, names.join(",")))
-}
-
-pub fn get_expr_display_string(expr: &Expr) -> Result<String> {
-    match expr {
-        Expr::ColumnRef { column, .. } => Ok(column.name.clone()),
-        Expr::FunctionCall {
-            name,
-            distinct,
-            args,
-            ..
-        } => create_function_display_name(name.as_str(), distinct, args),
-        _ => Err(ErrorCode::LogicalError(
-            "{expr} doesn't implement get_expr_display_string",
-        )),
     }
 }

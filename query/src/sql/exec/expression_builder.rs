@@ -78,7 +78,7 @@ impl<'a> ExpressionBuilder<'a> {
     ) -> Result<Expression> {
         let mut arg_exprs = Vec::with_capacity(args.len());
         for arg in args.iter() {
-            arg_exprs.push(self.build(arg).unwrap());
+            arg_exprs.push(self.build(arg)?);
         }
         Ok(Expression::AggregateFunction {
             op,

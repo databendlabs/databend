@@ -163,7 +163,14 @@ impl PipelineBuilder {
         for expr in project.items.iter() {
             let scalar = expr.expr.as_any().downcast_ref::<Scalar>().unwrap();
             let expression = expr_builder.build(scalar)?;
-            expressions.push(expression);
+            expressions.push(match expression {
+                Expression::Column(_) => expression.clone(),
+                _ => {
+                    let col_name = expression.column_name();
+                    let idx = self.metadata.column_idx_by_column_name(col_name.as_str())?;
+                    Expression::Column(format_field_name(col_name.as_str(), idx))
+                }
+            });
         }
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
@@ -251,10 +258,11 @@ impl PipelineBuilder {
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
-        let partial_schema = Arc::new(DataSchema::new(RewriteHelper::exprs_to_fields(
-            agg_expressions.as_slice(),
-            &input_schema,
-        )?));
+
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let partial_data_fields =
+            RewriteHelper::exprs_to_fields(agg_expressions.as_slice(), &input_schema)?;
+        let partial_schema = schema_builder.build_aggregate(partial_data_fields, &input_schema)?;
 
         let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
         for scalar_expr in aggregate.group_expr.iter() {
@@ -264,10 +272,9 @@ impl PipelineBuilder {
         }
         let mut final_exprs = agg_expressions.to_owned();
         final_exprs.extend_from_slice(group_expressions.as_slice());
-        let final_schema = Arc::new(DataSchema::new(RewriteHelper::exprs_to_fields(
-            final_exprs.as_slice(),
-            &input_schema,
-        )?));
+        let final_data_fields =
+            RewriteHelper::exprs_to_fields(final_exprs.as_slice(), &input_schema)?;
+        let final_schema = schema_builder.build_aggregate(final_data_fields, &input_schema)?;
 
         let partial_aggr_params = AggregatorParams::try_create_v2(
             &agg_expressions,
