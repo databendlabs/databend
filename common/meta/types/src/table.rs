@@ -169,8 +169,8 @@ impl Default for TableMeta {
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
             order_keys: None,
-            created_on: Utc::now(),
-            updated_on: Utc::now(),
+            created_on: Default::default(),
+            updated_on: Default::default(),
             comment: "".to_string(),
         }
     }
