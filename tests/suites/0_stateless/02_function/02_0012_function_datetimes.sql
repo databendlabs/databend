@@ -2,12 +2,20 @@ SELECT today() >= 18869;
 SELECT now() >= 1630295616;
 select  toDateTime(1630320462000000), toInt64(toDateTime(1630320462000000))  = 1630320462000000;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
-select  toDateTime(1640019661), toInt64(toDateTime(1640019661))  = 1640019661;
+select  toDateTime(1640019661000000), toInt64(toDateTime(1640019661000000))  = 1640019661000000;
+select  toDate('1000-01-01');
+select  toDate('9999-12-31');
+select  toDate('10000-12-31'); -- {ErrorCode 1010}
+select  toDate('0999-12-31'); -- {ErrorCode 1068}
+select  toDateTime('1000-01-01 00:00:00');
+select  toDateTime('9999-12-31 23:59:59');
+select  toDateTime('10000-01-01 00:00:00'); -- {ErrorCode 1010}
+select  toDateTime('0999-12-31 23:59:59'); -- {ErrorCode 1069}
 
-select toTypeName(today() + 3) = 'Date';
-select toTypeName(today() - 3) = 'Date';
-select toTypeName(now() - 3) = 'DateTime(0)';
-select toTypeName(toDateTime(1640019661)) = 'DateTime(0)';
+select typeof(today() + 3) = 'DATE';
+select typeof(today() - 3) = 'DATE';
+select typeof(now() - 3) = 'TIMESTAMP(6)';
+select typeof(toDateTime(1640019661000000)) = 'TIMESTAMP(6)';
 select today() + 1 - today() = 1;
 
 select typeof(today() - today()) = 'INT';
