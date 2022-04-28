@@ -16,7 +16,6 @@ use std::any::Any;
 
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::DataTypePtr;
 use common_datavalues::DataValue;
 
 use crate::sql::planner::binder::ScalarExpr;
@@ -38,7 +37,7 @@ pub enum Scalar {
         distinct: bool,
         params: Vec<DataValue>,
         args: Vec<Scalar>,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
     },
 }

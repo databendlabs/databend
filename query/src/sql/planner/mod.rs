@@ -65,7 +65,6 @@ impl Planner {
 
         // Step 4: build executable Pipeline with SExpr
         let result_columns = bind_result.bind_context.result_columns();
-        dbg!(result_columns.clone());
         let pb = PipelineBuilder::new(
             self.context.clone(),
             result_columns,

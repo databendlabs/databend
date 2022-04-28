@@ -143,9 +143,9 @@ impl PipelineBuilder {
                 self.build_filter(&filter, input_schema)
             }
             PlanType::Aggregate => {
-                let aggregate = plan.as_any().downcast_ref::<AggregatePlan>().unwrap();
+                let aggregate: AggregatePlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_aggregate(aggregate, input_schema)
+                self.build_aggregate(&aggregate, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }

@@ -22,8 +22,8 @@ mod scalar;
 
 use std::any::Any;
 
-use enum_dispatch::enum_dispatch;
 pub use aggregate::AggregatePlan;
+use enum_dispatch::enum_dispatch;
 pub use filter::FilterPlan;
 pub use logical_get::LogicalGet;
 pub use pattern::PatternPlan;
@@ -88,5 +88,6 @@ pub enum BasePlanImpl {
     PhysicalScan(PhysicalScan),
     Project(ProjectPlan),
     Filter(FilterPlan),
+    Aggregate(AggregatePlan),
     Pattern(PatternPlan),
 }

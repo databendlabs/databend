@@ -17,10 +17,9 @@ use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
-use common_datavalues::DataTypeImpl;
 use common_ast::ast::Literal;
 use common_datavalues::DataField;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;

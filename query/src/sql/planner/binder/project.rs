@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Expr;
-use std::sync::Arc;
-
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;

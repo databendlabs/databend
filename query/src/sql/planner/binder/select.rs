@@ -194,15 +194,15 @@ impl Binder {
         let scalar_binder = ScalarBinder::new();
         let group_expr = group_by_expr
             .iter()
-            .map(|expr| scalar_binder.bind_expr(expr, input_context).unwrap())
-            .collect::<Vec<ScalarExprRef>>();
+            .map(|expr| scalar_binder.bind_expr(expr, input_context))
+            .collect::<Result<Vec<ScalarExprRef>>>();
 
         let aggregate_plan = AggregatePlan {
-            group_expr,
+            group_expr: group_expr?,
             agg_expr: input_context.agg_scalar_exprs.as_ref().unwrap().clone(),
         };
         let new_expr = SExpr::create_unary(
-            Arc::new(aggregate_plan),
+            aggregate_plan.into(),
             input_context.expression.clone().unwrap(),
         );
         input_context.expression = Some(new_expr);
