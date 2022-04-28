@@ -52,8 +52,6 @@ pub fn make_final_uri(query_id: &str) -> String {
 pub struct QueryError {
     pub code: u16,
     pub message: String,
-    pub backtrace: Option<String>,
-    // TODO(youngsofun): add other info more friendly to client
 }
 
 impl QueryError {
@@ -61,7 +59,6 @@ impl QueryError {
         QueryError {
             code: e.code(),
             message: e.message(),
-            backtrace: e.backtrace().map(|b| b.to_string()),
         }
     }
 }
