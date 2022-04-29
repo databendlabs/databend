@@ -101,7 +101,10 @@ impl MetaApi for StateMachine {
         assert!(res.result().is_none());
 
         if res.prev().is_none() && !req.if_exists {
-            let ae = AppError::from(UnknownDatabase::new(req.db_name, "drop database"));
+            let ae = AppError::from(UnknownDatabase::new(
+                req.name_ident.db_name,
+                "drop database",
+            ));
             return Err(MetaError::from(ae));
         }
 

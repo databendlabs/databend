@@ -72,11 +72,11 @@ pub enum Cmd {
     DropDatabase {
         // latest add
         if_exists: Option<bool>,
-        tenant: String,
+        // latest add
+        name_ident: Option<DatabaseNameIdent>,
+        tenant: Option<String>,
         // 20220413
         name: Option<String>,
-        // latest add
-        db_name: Option<String>,
     },
 
     CreateTable {

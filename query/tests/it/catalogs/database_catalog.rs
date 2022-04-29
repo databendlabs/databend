@@ -93,8 +93,10 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let mut req = DropDatabaseReq {
             if_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "db1".to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "db1".to_string(),
+            },
         };
         let res = catalog.drop_database(req.clone()).await;
         assert!(res.is_ok());
@@ -103,7 +105,7 @@ async fn test_catalogs_database() -> Result<()> {
         assert_eq!(db_list_drop.len(), db_count);
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.drop_database(req).await;
         assert!(res.is_err());
     }

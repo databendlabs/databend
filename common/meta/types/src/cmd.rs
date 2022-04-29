@@ -182,23 +182,24 @@ impl<'de> Deserialize<'de> for Cmd {
             }
             LatestVersionCmd::DropDatabase {
                 if_exists,
+                name_ident,
                 tenant,
                 name,
-                db_name,
             } => {
                 if let Some(x) = if_exists {
                     // latest
                     Cmd::DropDatabase(DropDatabaseReq {
                         if_exists: x,
-                        tenant,
-                        db_name: db_name.unwrap(),
+                        name_ident: name_ident.unwrap(),
                     })
                 } else {
                     // 20220413
                     Cmd::DropDatabase(DropDatabaseReq {
                         if_exists: false,
-                        tenant,
-                        db_name: name.unwrap(),
+                        name_ident: DatabaseNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: name.unwrap(),
+                        },
                     })
                 }
             }
