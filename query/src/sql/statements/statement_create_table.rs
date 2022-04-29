@@ -252,7 +252,7 @@ impl DfCreateTable {
             let db = catalog
                 .get_database(ctx.get_tenant().as_str(), database_name)
                 .await?;
-            let db_id = db.get_db_info().database_id;
+            let db_id = db.get_db_info().ident.db_id;
             meta.options
                 .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
