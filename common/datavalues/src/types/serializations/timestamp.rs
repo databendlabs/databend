@@ -26,11 +26,14 @@ pub struct TimestampSerializer {
     tz: Tz,
 }
 
-impl TimestampSerializer {
-    pub fn create(tz: Tz) -> Self {
+impl Default for TimestampSerializer {
+    fn default() -> Self {
+        let tz = "UTC".parse::<Tz>().unwrap();
         Self { tz }
     }
+}
 
+impl TimestampSerializer {
     pub fn to_timestamp(&self, value: &i64) -> DateTime<Tz> {
         value.to_timestamp(&self.tz)
     }

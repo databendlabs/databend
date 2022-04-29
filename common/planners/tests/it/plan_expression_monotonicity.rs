@@ -48,7 +48,7 @@ fn create_u8(d: u8) -> Option<ColumnWithField> {
 }
 
 fn create_datetime(d: i64) -> Option<ColumnWithField> {
-    let data_field = DataField::new("x", TimestampType::arc(0, None));
+    let data_field = DataField::new("x", TimestampType::arc(0));
     let col = data_field
         .data_type()
         .create_constant_column(&DataValue::Int64(d), 1)
@@ -61,7 +61,7 @@ fn verify_test(t: Test) -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("x", f64::to_data_type()),
         DataField::new("y", i64::to_data_type()),
-        DataField::new("z", TimestampType::arc(0, None)),
+        DataField::new("z", TimestampType::arc(0)),
     ]);
 
     let mut variables = HashMap::new();

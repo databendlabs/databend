@@ -153,9 +153,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {
             DataTypeImpl::String(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => {
-            DataTypeImpl::Timestamp(TimestampType::create(0, tz.clone()))
-        }
+        ArrowType::Timestamp(_, _) => DataTypeImpl::Timestamp(TimestampType::create(0)),
         ArrowType::Date32 | ArrowType::Date64 => DataTypeImpl::Date(DateType::default()),
 
         ArrowType::Struct(fields) => {
@@ -187,10 +185,9 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
                 Some(meta) => {
                     let mut chars = meta.chars();
                     let precision = chars.next().unwrap().to_digit(10).unwrap();
-                    let tz = chars.collect::<String>();
-                    return TimestampType::arc(precision as usize, Some(tz));
+                    return TimestampType::arc(precision as usize);
                 }
-                None => return TimestampType::arc(0, None),
+                None => return TimestampType::arc(0),
             },
             "Interval" => return IntervalType::arc(metadata.unwrap().into()),
             "Variant" => return VariantType::arc(),

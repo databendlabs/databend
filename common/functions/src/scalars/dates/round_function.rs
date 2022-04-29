@@ -68,7 +68,7 @@ impl Function for RoundFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        TimestampType::arc(0, None)
+        TimestampType::arc(0)
     }
 
     fn eval(
