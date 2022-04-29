@@ -16,7 +16,7 @@ use std::fmt;
 
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnsWithField;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
@@ -51,7 +51,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self) -> DataTypePtr;
+    fn return_type(&self) -> DataTypeImpl;
 
     /// Evaluate the function, e.g. run/execute the function.
     fn eval(

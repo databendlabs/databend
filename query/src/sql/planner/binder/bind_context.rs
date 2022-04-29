@@ -30,7 +30,7 @@ pub struct ColumnBinding {
     // Column index of ColumnBinding
     pub index: IndexType,
 
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
     pub nullable: bool,
 
     // Scalar expression the ColumnBinding refers to(if exists).
@@ -46,6 +46,9 @@ pub struct BindContext {
 
     /// The relational operator in current context
     pub expression: Option<SExpr>,
+
+    /// Aggregation scalar expression
+    pub agg_scalar_exprs: Option<Vec<ScalarExprRef>>,
 }
 
 impl BindContext {
@@ -58,6 +61,7 @@ impl BindContext {
             _parent: Some(parent),
             columns: vec![],
             expression: None,
+            agg_scalar_exprs: None,
         }
     }
 

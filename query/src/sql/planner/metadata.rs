@@ -14,10 +14,14 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Expr;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 
 use crate::sql::common::IndexType;
+use crate::sql::exec::format_field_name;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -56,7 +60,7 @@ impl TableEntry {
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
     pub nullable: bool,
 
     // Table index of column entry. None if column is derived from a subquery.
@@ -66,7 +70,7 @@ pub struct ColumnEntry {
 impl ColumnEntry {
     pub fn new(
         name: String,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
         column_index: IndexType,
         table_index: Option<IndexType>,
@@ -120,10 +124,58 @@ impl Metadata {
         result
     }
 
+    pub fn column_idx_by_column_name(&self, col_name: &str) -> Result<IndexType> {
+        for col in self.columns.iter() {
+            if col.name == col_name {
+                return Ok(col.column_index);
+            }
+        }
+        Err(ErrorCode::LogicalError(format!(
+            "Can't find column {col_name} in metadata"
+        )))
+    }
+
+    fn create_function_display_name(
+        &self,
+        fun: &str,
+        distinct: &bool,
+        args: &[Expr],
+    ) -> Result<String> {
+        let names: Vec<String> = args
+            .iter()
+            .map(|arg| self.get_expr_display_string(arg, false))
+            .collect::<Result<_>>()?;
+        Ok(match distinct {
+            true => format!("{}({}{})", fun, "distinct ", names.join(",")),
+            false => format!("{}({}{})", fun, "", names.join(",")),
+        })
+    }
+
+    pub fn get_expr_display_string(&self, expr: &Expr, is_first_expr: bool) -> Result<String> {
+        match expr {
+            Expr::ColumnRef { column, .. } => {
+                if is_first_expr {
+                    return Ok(column.name.clone());
+                }
+                let idx = self.column_idx_by_column_name(column.name.as_str())?;
+                Ok(format_field_name(column.name.as_str(), idx))
+            }
+            Expr::FunctionCall {
+                name,
+                distinct,
+                args,
+                ..
+            } => self.create_function_display_name(name.as_str(), distinct, args),
+            _ => Err(ErrorCode::LogicalError(
+                "{expr} doesn't implement get_expr_display_string",
+            )),
+        }
+    }
+
     pub fn add_column(
         &mut self,
         name: String,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
         table_index: Option<IndexType>,
     ) -> IndexType {

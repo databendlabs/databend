@@ -27,8 +27,8 @@ use super::cast_with_type::CastOptions;
 
 pub fn cast_from_string(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let str_column = Series::remove_nullable(column);
@@ -53,12 +53,11 @@ pub fn cast_from_string(
 
         TypeID::Timestamp => {
             let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
 
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_timestamp(v) {
                     Some(d) => {
-                        builder.append(ts.from_nano_seconds(d.timestamp_nanos()));
+                        builder.append(d.timestamp_micros());
                     }
                     None => bitmap.set(row, false),
                 }

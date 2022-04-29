@@ -23,7 +23,7 @@ use serde_json::json;
 fn test_serializers() -> Result<()> {
     struct Test {
         name: &'static str,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         value: DataValue,
         column: ColumnRef,
         val_str: &'static str,
@@ -49,9 +49,9 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: TimestampType::arc(0, None),
-            value: DataValue::UInt64(1630320462),
-            column: Series::from_data(vec![1630320462i64, 1637117572i64, 1]),
+            data_type: TimestampType::arc(0),
+            value: DataValue::UInt64(1630320462000000),
+            column: Series::from_data(vec![1630320462000000i64, 1637117572000000i64, 1000000]),
             val_str: "2021-08-30 10:47:42",
             col_str: vec![
                 "2021-08-30 10:47:42".to_owned(),
@@ -81,13 +81,13 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "array",
-            data_type: Arc::new(ArrayType::create(StringType::arc())),
+            data_type: DataTypeImpl::Array(ArrayType::create(StringType::arc())),
             value: DataValue::Array(vec![
                 DataValue::String("data".as_bytes().to_vec()),
                 DataValue::String("bend".as_bytes().to_vec()),
             ]),
             column: Arc::new(ArrayColumn::from_data(
-                Arc::new(ArrayType::create(StringType::arc())),
+                DataTypeImpl::Array(ArrayType::create(StringType::arc())),
                 vec![0, 1, 3, 6].into(),
                 Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
             )),
@@ -100,7 +100,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "struct",
-            data_type: Arc::new(StructType::create(
+            data_type: DataTypeImpl::Struct(StructType::create(
                 vec!["date".to_owned(), "integer".to_owned()],
                 vec![DateType::arc(), Int8Type::arc()],
             )),
@@ -110,7 +110,7 @@ fn test_serializers() -> Result<()> {
                     Series::from_data(vec![18869i32, 18948i32, 1]),
                     Series::from_data(vec![1i8, 2i8, 3]),
                 ],
-                Arc::new(StructType::create(
+                DataTypeImpl::Struct(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
                     vec![DateType::arc(), Int8Type::arc()],
                 )),
@@ -185,7 +185,7 @@ fn test_serializers() -> Result<()> {
 
 #[test]
 fn test_convert_arrow() {
-    let t = TimestampType::arc(0, None);
+    let t = TimestampType::arc(0);
     let arrow_y = t.to_arrow_field("x");
     let new_t = from_arrow_field(&arrow_y);
 

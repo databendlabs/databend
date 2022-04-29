@@ -54,7 +54,7 @@ pub struct ArithmeticMinusFunction;
 impl ArithmeticMinusFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Minus;
         let left_type = args[0].data_type_id();

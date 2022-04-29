@@ -36,7 +36,7 @@ pub struct RegexpInStrFunction {
 }
 
 impl RegexpInStrFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for (i, arg) in args.iter().enumerate() {
             if arg.is_null() {
                 continue;
@@ -73,7 +73,7 @@ impl Function for RegexpInStrFunction {
         &self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         NullableType::arc(u64::to_data_type())
     }
 

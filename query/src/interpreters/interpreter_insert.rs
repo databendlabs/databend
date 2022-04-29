@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
@@ -108,7 +109,7 @@ impl InsertInterpreter {
         if need_cast_schema {
             let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
             for field in self.plan.schema().fields() {
-                let name = format!("{:?}", field.data_type());
+                let name = field.data_type().name();
                 let cast_function = CastFunction::create("cast", &name).unwrap();
                 functions.push(cast_function);
             }

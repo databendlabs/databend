@@ -30,6 +30,8 @@ use crate::storages::Table;
 mod bind_context;
 mod project;
 mod scalar;
+mod scalar_common;
+mod scalar_visitor;
 mod select;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.

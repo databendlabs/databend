@@ -22,7 +22,7 @@ use serde_json::Value as JsonValue;
 fn test_create_constant() -> Result<()> {
     struct Test {
         name: &'static str,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         value: DataValue,
         size: usize,
         column_expected: ColumnRef,
@@ -45,14 +45,14 @@ fn test_create_constant() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: TimestampType::arc(0, None),
+            data_type: TimestampType::arc(0),
             value: DataValue::UInt64(1630320462),
             size: 2,
             column_expected: Series::from_data(vec![1630320462i64, 1630320462]),
         },
         Test {
             name: "datetime64",
-            data_type: TimestampType::arc(3, None),
+            data_type: TimestampType::arc(3),
             value: DataValue::Int64(1630320462),
             size: 2,
             column_expected: Series::from_data(vec![1630320462i64, 1630320462]),

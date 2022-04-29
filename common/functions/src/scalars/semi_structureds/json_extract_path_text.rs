@@ -31,7 +31,7 @@ pub struct JsonExtractPathTextFunction {
 }
 
 impl JsonExtractPathTextFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let data_type = args[0];
         let path_type = args[1];
 
@@ -39,8 +39,8 @@ impl JsonExtractPathTextFunction {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Invalid argument types for function '{}': ({:?}, {:?})",
                 display_name.to_uppercase(),
-                data_type,
-                path_type
+                data_type.data_type_id(),
+                path_type.data_type_id()
             )));
         }
 
@@ -60,7 +60,7 @@ impl Function for JsonExtractPathTextFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         NullableType::arc(StringType::arc())
     }
 

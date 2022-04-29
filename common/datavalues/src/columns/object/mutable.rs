@@ -31,7 +31,7 @@ where T: ObjectType
 impl<T> MutableColumn for MutableObjectColumn<T>
 where T: ObjectType
 {
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         T::data_type()
     }
 

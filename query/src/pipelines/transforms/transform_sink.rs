@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
@@ -90,7 +91,7 @@ impl Processor for SinkTransform {
         if let Some(cast_schema) = &self.cast_schema {
             let mut functions = Vec::with_capacity(cast_schema.fields().len());
             for field in cast_schema.fields() {
-                let name = format!("{:?}", field.data_type());
+                let name = field.data_type().name();
                 let cast_function = CastFunction::create("cast", &name).unwrap();
                 functions.push(cast_function);
             }

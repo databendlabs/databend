@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -19,7 +20,6 @@ use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
-use crate::sql::ScalarExprRef;
 
 pub struct ExpressionBuilder<'a> {
     metadata: &'a Metadata,
@@ -34,8 +34,15 @@ impl<'a> ExpressionBuilder<'a> {
         match scalar {
             Scalar::ColumnRef { index, .. } => self.build_column_ref(*index),
             Scalar::Equal { left, right } => {
-                self.build_binary_operator(left.clone(), right.clone(), "=".to_string())
+                self.build_binary_operator(left, right, "=".to_string())
             }
+            Scalar::AggregateFunction {
+                func_name,
+                distinct,
+                params,
+                args,
+                ..
+            } => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
         }
     }
 
@@ -49,16 +56,35 @@ impl<'a> ExpressionBuilder<'a> {
 
     pub fn build_binary_operator(
         &self,
-        left: ScalarExprRef,
-        right: ScalarExprRef,
+        left: &Scalar,
+        right: &Scalar,
         op: String,
     ) -> Result<Expression> {
-        let left_child = self.build(left.as_any().downcast_ref::<Scalar>().unwrap())?;
-        let right_child = self.build(right.as_any().downcast_ref::<Scalar>().unwrap())?;
+        let left_child = self.build(left)?;
+        let right_child = self.build(right)?;
         Ok(Expression::BinaryExpression {
             left: Box::new(left_child),
             op,
             right: Box::new(right_child),
+        })
+    }
+
+    pub fn build_aggr_function(
+        &self,
+        op: String,
+        distinct: bool,
+        params: Vec<DataValue>,
+        args: &Vec<Scalar>,
+    ) -> Result<Expression> {
+        let mut arg_exprs = Vec::with_capacity(args.len());
+        for arg in args.iter() {
+            arg_exprs.push(self.build(arg)?);
+        }
+        Ok(Expression::AggregateFunction {
+            op,
+            distinct,
+            params,
+            args: arg_exprs,
         })
     }
 }

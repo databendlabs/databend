@@ -58,4 +58,36 @@ select obj:c[0] from t3;
 select obj["c"][0] from t3;
 select obj["c"][3] from t3;
 
+select '==Json==';
+
+CREATE TABLE IF NOT EXISTS t4(id Int null, j Json null) Engine = Memory;
+
+INSERT INTO t4 (id, j) VALUES(1, null),
+                            (2, true),
+                            (3, false),
+                            (4, 1),
+                            (5, -1),
+                            (6, 1000),
+                            (7, -1000),
+                            (8, 9223372036854775807),
+                            (9, -9223372036854775808),
+                            (10, 18446744073709551615),
+                            (11, 0.12345679),
+                            (12, 0.12345678912121212);
+
+INSERT INTO t4 SELECT 13, parse_json('"abcd"');
+INSERT INTO t4 SELECT 14, parse_json('[1,2,3]');
+INSERT INTO t4 SELECT 15, parse_json('{"k":"v"}');
+
+select * from t4 order by id asc;
+
+select '==Map==';
+
+CREATE TABLE IF NOT EXISTS t5(id Int null, m Map null) Engine = Memory;
+
+INSERT INTO t5 SELECT 1, parse_json('["a","b","c"]');  -- {ErrorCode 1010}
+INSERT INTO t5 SELECT 1, parse_json('{"a":1,"b":{"k":2},"c":[10,11,12]}');
+
+select * from t5;
+
 DROP DATABASE db1;

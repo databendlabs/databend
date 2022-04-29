@@ -104,19 +104,9 @@ fn test_arithmetic_date_interval() -> Result<()> {
         d.num_days() as i32
     };
 
-    let to_seconds = |y: i32, m: u32, d: u32, h: u32, min: u32, s: u32| -> i64 {
-        let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms(h, min, s);
-        date_time.timestamp()
-    };
-
-    let to_milliseconds = |y: i32, m: u32, d: u32, h: u32, min: u32, sec: u32, milli: u32| -> i64 {
-        let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms_milli(h, min, sec, milli);
-        date_time.timestamp_millis()
-    };
-
     let to_microseconds = |y: i32, m: u32, d: u32, h: u32, min: u32, sec: u32, micro: u32| -> i64 {
         let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms_micro(h, min, sec, micro);
-        date_time.timestamp_nanos() / 1000
+        date_time.timestamp_micros()
     };
 
     let tests = vec![
@@ -167,10 +157,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
-                        to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28 10:30:00 */
+                        to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
+                        to_microseconds(2021, 2, 28, 10, 30, 00, 00), /* 2021-2-28 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(0, None)),
+                    DataField::new("dummy_0", TimestampType::arc(0)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -1]),
@@ -178,8 +168,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28 10:30:00 */
-                to_seconds(2020, 2, 28, 10, 30, 00), /* 2020-2-28 10:30:00 */
+                to_microseconds(2021, 2, 28, 10, 30, 00, 00), /* 2021-2-28 10:30:00 */
+                to_microseconds(2020, 2, 28, 10, 30, 00, 00), /* 2020-2-28 10:30:00 */
             ]),
             error: "",
         }),
@@ -188,10 +178,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_milliseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
-                        to_milliseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
+                        to_microseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
+                        to_microseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(3, None)),
+                    DataField::new("dummy_0", TimestampType::arc(3)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -4]),
@@ -199,8 +189,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_milliseconds(2019, 2, 28, 10, 30, 00, 000), /* 2019-2-28 10:30:00.000 */
-                to_milliseconds(1964, 2, 29, 10, 30, 00, 000), /* 1964-2-29 10:30:00.000 */
+                to_microseconds(2019, 2, 28, 10, 30, 00, 000), /* 2019-2-28 10:30:00.000 */
+                to_microseconds(1964, 2, 29, 10, 30, 00, 000), /* 1964-2-29 10:30:00.000 */
             ]),
             error: "",
         }),
@@ -230,10 +220,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_seconds(2020, 3, 31, 10, 30, 00), /* 2020-3-31 10:30:00 */
-                        to_seconds(2000, 1, 31, 10, 30, 00), /* 2000-1-31 10:30:00 */
+                        to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
+                        to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(0, None)),
+                    DataField::new("dummy_0", TimestampType::arc(0)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-1i64, 241]),
@@ -241,8 +231,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
-                to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
+                to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
+                to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
             ]),
             error: "",
         }),
@@ -272,10 +262,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             columns: vec![
                 ColumnWithField::new(
                     Series::from_data(vec![
-                        to_milliseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
-                        to_milliseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
+                        to_microseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
+                        to_microseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(3, None)),
+                    DataField::new("dummy_0", TimestampType::arc(6)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-30i64, 30]),
@@ -283,8 +273,8 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 ),
             ],
             expect: Series::from_data(vec![
-                to_milliseconds(2020, 1, 30, 10, 30, 00, 000), /* 2020-1-30 10:30:00.000 */
-                to_milliseconds(1960, 3, 30, 10, 30, 00, 000), /* 1960-3-30 10:30:00.000 */
+                to_microseconds(2020, 1, 30, 10, 30, 00, 000), /* 2020-1-30 10:30:00.000 */
+                to_microseconds(1960, 3, 30, 10, 30, 00, 000), /* 1960-3-30 10:30:00.000 */
             ]),
             error: "",
         }),
@@ -338,7 +328,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
                         to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(6, None)),
+                    DataField::new("dummy_0", TimestampType::arc(6)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-120i64, 23]),

@@ -16,6 +16,7 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
+use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
 use common_datavalues::PrimitiveType;

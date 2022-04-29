@@ -27,7 +27,7 @@ use crate::scalars::FunctionFeatures;
 pub struct ExistsFunction;
 
 impl ExistsFunction {
-    pub fn try_create(_display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(ExistsFunction {}))
     }
 
@@ -42,7 +42,7 @@ impl Function for ExistsFunction {
         "ExistsFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         bool::to_data_type()
     }
 

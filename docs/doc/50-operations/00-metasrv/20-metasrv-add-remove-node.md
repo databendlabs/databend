@@ -1,6 +1,6 @@
 ---
-title: Databend Meta Service Cluster Management
-sidebar_label: Meta Service Cluster Management
+title: Manage a Databend Meta Service Cluster
+sidebar_label: Manage a Databend Meta Service Cluster
 ---
 
 :::tip

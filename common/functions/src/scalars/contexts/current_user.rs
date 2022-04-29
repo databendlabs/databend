@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::StringType;
 use common_exception::Result;
 
@@ -27,7 +27,7 @@ use crate::scalars::FunctionFeatures;
 pub struct CurrentUserFunction {}
 
 impl CurrentUserFunction {
-    pub fn try_create(_display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(CurrentUserFunction {}))
     }
 
@@ -45,7 +45,7 @@ impl Function for CurrentUserFunction {
         "CurrentUserFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

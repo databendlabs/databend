@@ -82,7 +82,10 @@ impl MetaApi for StateMachine {
         assert!(result.is_some());
 
         if prev.is_some() && !req.if_not_exists {
-            let ae = AppError::from(DatabaseAlreadyExists::new(req.db_name, "create database"));
+            let ae = AppError::from(DatabaseAlreadyExists::new(
+                req.name_ident.db_name,
+                "create database",
+            ));
             return Err(MetaError::from(ae));
         }
 

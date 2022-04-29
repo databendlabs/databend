@@ -111,7 +111,7 @@ impl ConstantFoldingImpl {
     fn convert_to_expression(
         column_name: String,
         data_block: DataBlock,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
     ) -> Result<Expression> {
         debug_assert!(data_block.num_rows() == 1);
         debug_assert!(data_block.num_columns() == 1);
@@ -190,7 +190,7 @@ impl PlanRewriter for ConstantFoldingImpl {
 
             fn mutate_cast(
                 &mut self,
-                typ: &DataTypePtr,
+                typ: &DataTypeImpl,
                 expr: Expression,
                 pg_style: bool,
                 origin_expr: &Expression,

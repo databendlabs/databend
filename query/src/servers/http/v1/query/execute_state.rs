@@ -33,6 +33,7 @@ use ExecuteState::*;
 use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterQueryLog;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -111,9 +112,18 @@ impl Executor {
                 .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 progress,
-                reason,
+                reason: reason.clone(),
                 stop_time: Instant::now(),
             });
+
+            if let Err(e) = reason {
+                if e.code() != ErrorCode::aborted_session_code()
+                    && e.code() != ErrorCode::aborted_query_code()
+                {
+                    // query state can be pulled multi times, only log it once
+                    tracing::error!("Query Error: {:?}", e);
+                }
+            }
         };
     }
 }
@@ -141,7 +151,13 @@ impl ExecuteState {
         let start_time = Instant::now();
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(sql);
-        let plan = PlanParser::parse(ctx.clone(), sql).await?;
+        let plan = match PlanParser::parse(ctx.clone(), sql).await {
+            Ok(p) => p,
+            Err(e) => {
+                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                return Err(e);
+            }
+        };
 
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.

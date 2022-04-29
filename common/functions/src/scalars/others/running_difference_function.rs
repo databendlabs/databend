@@ -28,11 +28,11 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {
     display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 impl RunningDifferenceFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
         let dt = remove_nullable(args[0]);
 
@@ -82,7 +82,7 @@ impl Function for RunningDifferenceFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

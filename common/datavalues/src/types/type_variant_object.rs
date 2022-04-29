@@ -27,12 +27,11 @@ use crate::prelude::*;
 pub struct VariantObjectType {}
 
 impl VariantObjectType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::VariantObject(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for VariantObjectType {
     fn data_type_id(&self) -> TypeID {
         TypeID::VariantObject
@@ -45,6 +44,10 @@ impl DataType for VariantObjectType {
 
     fn name(&self) -> String {
         "Object".to_string()
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["Map"]
     }
 
     fn default_value(&self) -> DataValue {

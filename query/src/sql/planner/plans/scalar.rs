@@ -15,26 +15,35 @@
 use std::any::Any;
 
 use common_datavalues::BooleanType;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 
 use crate::sql::planner::binder::ScalarExpr;
-use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::IndexType;
 
+#[derive(PartialEq, Clone)]
 pub enum Scalar {
     ColumnRef {
         index: IndexType,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
         nullable: bool,
     },
     Equal {
-        left: ScalarExprRef,
-        right: ScalarExprRef,
+        left: Box<Scalar>,
+        right: Box<Scalar>,
+    },
+    AggregateFunction {
+        func_name: String,
+        distinct: bool,
+        params: Vec<DataValue>,
+        args: Vec<Scalar>,
+        data_type: DataTypeImpl,
+        nullable: bool,
     },
 }
 
 impl ScalarExpr for Scalar {
-    fn data_type(&self) -> (DataTypePtr, bool) {
+    fn data_type(&self) -> (DataTypeImpl, bool) {
         match &self {
             Scalar::ColumnRef {
                 data_type,
@@ -42,6 +51,11 @@ impl ScalarExpr for Scalar {
                 ..
             } => (data_type.clone(), *nullable),
             Scalar::Equal { .. } => (BooleanType::arc(), false),
+            Scalar::AggregateFunction {
+                data_type,
+                nullable,
+                ..
+            } => (data_type.clone(), *nullable),
         }
     }
 

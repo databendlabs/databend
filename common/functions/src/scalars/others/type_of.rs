@@ -28,7 +28,7 @@ pub struct TypeOfFunction {
 }
 
 impl TypeOfFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(TypeOfFunction {
             _display_name: display_name.to_string(),
         }))
@@ -49,7 +49,7 @@ impl Function for TypeOfFunction {
         "TypeOfFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

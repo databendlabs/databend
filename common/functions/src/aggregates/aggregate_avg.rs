@@ -79,7 +79,7 @@ where
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(f64::to_data_type())
     }
 
@@ -177,6 +177,10 @@ where
         let val = v / state.count as f64;
         builder.append_value(val);
         Ok(())
+    }
+
+    fn convert_const_to_full(&self) -> bool {
+        true
     }
 }
 
