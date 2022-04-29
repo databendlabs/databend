@@ -381,8 +381,8 @@ impl StateMachine {
         req: &CreateDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let tenant = &req.tenant;
-        let name = &req.db_name;
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
         let meta = &req.meta;
 
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
