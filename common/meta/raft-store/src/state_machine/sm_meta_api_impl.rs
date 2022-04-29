@@ -27,8 +27,10 @@ use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseAlreadyExists;
+use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReply;
@@ -116,8 +118,14 @@ impl MetaApi for StateMachine {
         let seq_meta = self.get_database_meta_by_id(&db_id)?;
 
         let dbi = DatabaseInfo {
-            database_id: db_id,
-            db: req.db_name.clone(),
+            ident: DatabaseIdent {
+                db_id,
+                seq: seq_meta.seq,
+            },
+            name_ident: DatabaseNameIdent {
+                tenant: req.tenant.clone(),
+                db_name: req.db_name.clone(),
+            },
             meta: seq_meta.data,
         };
         Ok(Arc::new(dbi))
@@ -131,15 +139,21 @@ impl MetaApi for StateMachine {
 
         let it = self
             .database_lookup()
-            .scan_prefix(&DatabaseLookupKey::new(req.tenant, "".to_string()))?;
+            .scan_prefix(&DatabaseLookupKey::new(req.tenant.clone(), "".to_string()))?;
 
         for r in it {
             let (db_lookup_key, seq_id) = r;
             let seq_meta = self.get_database_meta_by_id(&seq_id.data)?;
 
             let db_info = DatabaseInfo {
-                database_id: seq_id.data,
-                db: db_lookup_key.get_database_name(),
+                ident: DatabaseIdent {
+                    db_id: seq_id.data,
+                    seq: seq_meta.seq,
+                },
+                name_ident: DatabaseNameIdent {
+                    tenant: req.tenant.clone(),
+                    db_name: db_lookup_key.get_database_name(),
+                },
                 meta: seq_meta.data,
             };
             res.push(Arc::new(db_info));

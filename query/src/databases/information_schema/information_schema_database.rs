@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -48,8 +50,14 @@ impl InformationSchemaDatabase {
         }
 
         let db_info = DatabaseInfo {
-            database_id: sys_db_meta.next_db_id(),
-            db: db.to_string(),
+            ident: DatabaseIdent {
+                db_id: sys_db_meta.next_db_id(),
+                seq: 0,
+            },
+            name_ident: DatabaseNameIdent {
+                tenant: "".to_string(),
+                db_name: db.to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "SYSTEM".to_string(),
                 ..Default::default()
