@@ -21,6 +21,7 @@ use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
@@ -174,8 +175,11 @@ impl Catalog for MutableCatalog {
 
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
-            database_id: res.database_id,
-            db: req.name_ident.db_name.clone(),
+            ident: DatabaseIdent {
+                db_id: res.database_id,
+                seq: 0, // TODO
+            },
+            name_ident: req.name_ident.clone(),
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
