@@ -41,10 +41,7 @@ impl FromStr for ThriftProtocol {
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
     pub meta_store_address: String,
-    #[clap(
-        long = "hive-thrift-protocol",
-        default_value = "ThriftProtocol::Binary"
-    )]
+    #[clap(long = "hive-thrift-protocol", default_value = "Binary")]
     pub protocol: ThriftProtocol,
 }
 
