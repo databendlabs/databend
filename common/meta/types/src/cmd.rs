@@ -24,6 +24,7 @@ use crate::compatibility::cmd_00000000_20220427::Cmd as LatestVersionCmd;
 use crate::CreateDatabaseReq;
 use crate::CreateShareReq;
 use crate::CreateTableReq;
+use crate::DatabaseNameIdent;
 use crate::DropDatabaseReq;
 use crate::DropShareReq;
 use crate::DropTableReq;
@@ -155,25 +156,26 @@ impl<'de> Deserialize<'de> for Cmd {
             LatestVersionCmd::RemoveNode { node_id } => Cmd::RemoveNode { node_id },
             LatestVersionCmd::CreateDatabase {
                 if_not_exists,
-                tenant,
+                name_ident,
                 name,
-                db_name,
+                tenant,
                 meta,
             } => {
                 if let Some(x) = if_not_exists {
                     // latest
                     Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: x,
-                        tenant,
-                        db_name: db_name.unwrap(),
+                        name_ident: name_ident.unwrap(),
                         meta,
                     })
                 } else {
                     // 20220413
                     Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: false,
-                        tenant,
-                        db_name: name.unwrap(),
+                        name_ident: DatabaseNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: name.unwrap(),
+                        },
                         meta,
                     })
                 }
