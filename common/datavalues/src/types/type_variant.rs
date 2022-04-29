@@ -46,6 +46,10 @@ impl DataType for VariantType {
         "Variant".to_string()
     }
 
+    fn aliases(&self) -> &[&str] {
+        &["Json"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::Variant(VariantValue::from(serde_json::Value::Null))
     }
