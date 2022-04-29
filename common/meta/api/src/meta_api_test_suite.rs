@@ -167,8 +167,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -187,8 +189,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -301,8 +305,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -321,8 +327,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }

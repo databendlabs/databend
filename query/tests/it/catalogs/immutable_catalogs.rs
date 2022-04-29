@@ -54,8 +54,10 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
     let drop_db_req = DropDatabaseReq {
         if_exists: false,
-        tenant: tenant.to_string(),
-        db_name: "system".to_string(),
+        name_ident: DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: "system".to_string(),
+        },
     };
     let drop_db_req = catalog.drop_database(drop_db_req).await;
     assert!(drop_db_req.is_err());

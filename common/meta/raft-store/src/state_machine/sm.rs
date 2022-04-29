@@ -446,8 +446,8 @@ impl StateMachine {
         req: &DropDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let tenant = &req.tenant;
-        let name = &req.db_name;
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
