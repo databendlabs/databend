@@ -14,14 +14,21 @@
 
 use std::cmp;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_arrow::arrow::compute::sort as arrow_sort;
+use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
+use common_planners::ExpressionMonotonicityVisitor;
+use common_planners::Expressions;
+use common_planners::RequireColumnsVisitor;
 
 use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::index::range_filter::check_maybe_monotonic;
 
 #[derive(Clone)]
 pub struct Points {
@@ -33,54 +40,130 @@ pub struct Points {
     //statis: Vec<Statis>,
 }
 
-fn gather_parts(blocks: Vec<BlockMeta>, keys: Vec<u32>, schema: DataSchemaRef) -> Result<Points> {
-    // 入参， Vec<BlockMeta>, Vec<u32>
-    // 所有的blocks.
-    // 获取其cluster key的minmax统计信息。 min： Vec<DataValue>, max: Vec<DataValue>.需要知道cluster key的index. Vec<u32>,
-    let mut const_blocks = Vec::new();
+fn gather_parts(
+    schema: DataSchemaRef,
+    blocks: Vec<BlockMeta>,
+    args: Expressions,
+) -> Result<Points> {
+    // The cluster key value need store in the block meta.
+    let mut keys = Vec::new();
+    let mut is_columns = Vec::new();
+    for arg in &args {
+        if !check_maybe_monotonic(arg)? {
+            return Err(ErrorCode::UnknownException(
+                "Only support the monotonic expression",
+            ));
+        }
+        let cols = RequireColumnsVisitor::collect_columns_from_expr(arg)?;
+        let key = cols
+            .iter()
+            .map(|v| schema.column_with_name(v).unwrap())
+            .collect::<Vec<_>>();
+        keys.push(key);
+        is_columns.push(matches!(arg, Expression::Column(_)));
+    }
+
     let mut points_map: HashMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> = HashMap::new();
-    let size = keys.len();
-    for (idx, block) in blocks.iter().enumerate() {
-        let mut min = Vec::with_capacity(size);
-        let mut max = Vec::with_capacity(size);
-        for key in &keys {
-            let stat = block.col_stats.get(key).ok_or_else(|| {
-                ErrorCode::UnknownException(format!(
-                    "Unable to get the colStats by ColumnId: {}",
-                    key
-                ))
-            })?;
-            min.push(stat.min.clone());
-            max.push(stat.max.clone());
+    let mut const_blocks = Vec::new();
+    for (b_i, block) in blocks.iter().enumerate() {
+        let mut is_positive = true;
+        let mut min_vec = Vec::with_capacity(args.len());
+        let mut max_vec = Vec::with_capacity(args.len());
+        for (k_i, key) in keys.clone().into_iter().enumerate() {
+            if is_columns[k_i] {
+                let stat = block.col_stats.get(&(key[0].0 as u32)).ok_or_else(|| {
+                    ErrorCode::UnknownException(format!(
+                        "Unable to get the colStats by ColumnId: {}",
+                        key[0].0
+                    ))
+                })?;
+                min_vec.push(stat.min.clone());
+                max_vec.push(stat.max.clone());
+                continue;
+            }
+
+            let mut variables = HashMap::with_capacity(keys.len());
+            for (f_i, field) in key {
+                let stat = block.col_stats.get(&(f_i as u32)).ok_or_else(|| {
+                    ErrorCode::UnknownException(format!(
+                        "Unable to get the colStats by ColumnId: {}",
+                        f_i
+                    ))
+                })?;
+
+                let min_col = field.data_type().create_constant_column(&stat.min, 1)?;
+                let variable_left = Some(ColumnWithField::new(min_col, field.clone()));
+
+                let max_col = field.data_type().create_constant_column(&stat.max, 1)?;
+                let variable_right = Some(ColumnWithField::new(max_col, field.clone()));
+                variables.insert(field.name().clone(), (variable_left, variable_right));
+            }
+
+            let monotonicity = ExpressionMonotonicityVisitor::check_expression(
+                schema.clone(),
+                &args[k_i],
+                variables,
+                false,
+            );
+            if !monotonicity.is_monotonic {
+                return Err(ErrorCode::UnknownException(
+                    "Only support the monotonic expression",
+                ));
+            }
+
+            if k_i == 0 {
+                is_positive = monotonicity.is_positive;
+            } else if is_positive != monotonicity.is_positive {
+                return Err(ErrorCode::UnknownException(
+                    "Only support the same monotonic expressions",
+                ));
+            }
+
+            let (min, max) = if is_positive {
+                (
+                    monotonicity.left.unwrap().column().get(0),
+                    monotonicity.right.unwrap().column().get(0),
+                )
+            } else {
+                (
+                    monotonicity.right.unwrap().column().get(0),
+                    monotonicity.left.unwrap().column().get(0),
+                )
+            };
+
+            min_vec.push(min);
+            max_vec.push(max);
         }
 
-        if min.eq(&max) {
-            const_blocks.push(idx);
+        if min_vec.eq(&max_vec) {
+            const_blocks.push(b_i);
             continue;
         }
 
-        match points_map.get_mut(&min) {
+        match points_map.get_mut(&min_vec) {
             None => {
-                points_map.insert(min, (vec![idx], vec![]));
+                points_map.insert(min_vec, (vec![b_i], vec![]));
             }
             Some((v, _)) => {
-                v.push(idx);
+                v.push(b_i);
             }
         };
 
-        match points_map.get_mut(&max) {
+        match points_map.get_mut(&max_vec) {
             None => {
-                points_map.insert(max, (vec![], vec![idx]));
+                points_map.insert(max_vec, (vec![], vec![b_i]));
             }
             Some((_, v)) => {
-                v.push(idx);
+                v.push(b_i);
             }
         };
     }
-    let fields = keys
+
+    let fields = args
         .iter()
-        .map(|key| schema.field(*key as usize).clone())
-        .collect::<Vec<_>>();
+        .map(|arg| arg.to_data_field(&schema))
+        .collect::<Result<Vec<_>>>()?;
+
     Ok(Points {
         blocks,
         points_map,
