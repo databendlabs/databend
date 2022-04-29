@@ -99,11 +99,11 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
     );
     let projection = map(
         rule! {
-            #expr ~ ( AS ~ #ident )?
+            #expr ~ ( AS ~ #ident_after_as )?
         },
-        |(expr, opt_alias)| SelectTarget::AliasedExpr {
+        |(expr, alias)| SelectTarget::AliasedExpr {
             expr,
-            alias: opt_alias.map(|(_, name)| name),
+            alias: alias.map(|(_, name)| name),
         },
     );
 
@@ -124,16 +124,11 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 }
 
 pub fn aliased_table(i: Input) -> IResult<TableReference> {
-    let table_alias = map(rule! { #ident }, |name| TableAlias {
-        name,
-        columns: vec![],
-    });
-
     map(
         rule! {
-            #ident ~ ( "." ~ #ident )? ~ ( AS? ~ #table_alias )?
+            #ident ~ ( "." ~ #ident )? ~ #table_alias?
         },
-        |(fst, snd, opt_alias)| {
+        |(fst, snd, alias)| {
             let (database, table) = match (fst, snd) {
                 (database, Some((_, table))) => (Some(database), table),
                 (table, None) => (None, table),
@@ -142,28 +137,31 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
             TableReference::Table {
                 database,
                 table,
-                alias: opt_alias.map(|(_, alias)| alias),
+                alias,
             }
         },
     )(i)
 }
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
-    map(rule! { #ident }, |name| TableAlias {
-        name,
-        columns: vec![],
-    })(i)
+    map(
+        rule! { #ident | #map(rule! { AS ~ #ident_after_as }, |(_, name)| name) },
+        |name| TableAlias {
+            name,
+            columns: vec![],
+        },
+    )(i)
 }
 
 pub fn set_returning_function(i: Input) -> IResult<TableReference> {
     map(
         rule! {
-            #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ ( AS? ~ #table_alias )?
+            #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ #table_alias?
         },
         |(name, _, params, _, alias)| TableReference::SetReturningFunction {
             name,
             params,
-            alias: alias.map(|(_, alias)| alias),
+            alias,
         },
     )(i)
 }
@@ -171,11 +169,11 @@ pub fn set_returning_function(i: Input) -> IResult<TableReference> {
 pub fn subquery(i: Input) -> IResult<TableReference> {
     map(
         rule! {
-            ( #parenthesized_query | #query ) ~ ( AS? ~ #table_alias )?
+            ( #parenthesized_query | #query ) ~ #table_alias?
         },
-        |(subquery, opt_alias)| TableReference::Subquery {
+        |(subquery, alias)| TableReference::Subquery {
             subquery: Box::new(subquery),
-            alias: opt_alias.map(|(_, alias)| alias),
+            alias,
         },
     )(i)
 }

@@ -101,8 +101,8 @@ pub enum TokenKind {
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
 
+    #[regex(r#"`[_\-$a-zA-Z0-9]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
-    #[regex(r#"`([^`\\]|\\.|``)*`"#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedIdent,
 
@@ -638,242 +638,245 @@ impl TokenKind {
         )
     }
 
-    pub fn is_reserved_function_name(&self) -> bool {
-        matches!(
-            self,
-            ANALYZE
-            // | ANALYSE
-            // | ALL
-            | AND
-            // | ANY
-            | ARRAY
-            | AS
-            | ASC
-            // | ASYMMETRIC
-            | BETWEEN
-            | BIGINT
-            // | BIT
-            | BOOLEAN
-            | BOTH
-            | CASE
-            | CAST
-            // | CHAR
-            // | CHARACTER
-            // | CHECK
-            // | COALESCE
-            // | COLLATE
-            // | COLUMN
-            // | CONSTRAINT
-            | CREATE
-            // | CURRENT_CATALOG
-            // | CURRENT_DATE
-            // | CURRENT_ROLE
-            // | CURRENT_TIME
-            | CURRENT_TIMESTAMP
-            // | CURRENT_USER
-            // | DEC
-            // | DECIMAL
-            | DEFAULT
-            // | DEFERRABLE
-            | DESC
-            | DISTINCT
-            // | DO
-            | ELSE
-            | END
-            // | EXCEPT
-            | EXISTS
-            | EXTRACT
-            | FALSE
-            // | FETCH
-            | FLOAT
-            | FOR
-            // | FOREIGN
-            | FROM
-            // | GRANT
-            // | GREATEST
-            | GROUP
-            // | GROUPING
-            | HAVING
-            | IN
-            // | INITIALLY
-            // | INOUT
-            | INT
-            | INTEGER
-            // | INTERSECT
-            | INTERVAL
-            | INTO
-            // | LATERAL
-            | LEADING
-            // | LEAST
-            | LIMIT
-            // | LOCALTIME
-            // | LOCALTIMESTAMP
-            // | NATIONAL
-            // | NCHAR
-            // | NONE
-            // | NORMALIZE
-            | NOT
-            | NULL
-            // | NULLIF
-            // | NUMERIC
-            | OFFSET
-            | ON
-            // | ONLY
-            | OR
-            | ORDER
-            // | OUT
-            // | OVERLAY
-            // | PLACING
-            // | POSITION
-            // | PRECISION
-            // | PRIMARY
-            // | REAL
-            // | REFERENCES
-            // | RETURNING
-            // | ROW
-            | SELECT
-            // | SESSION_USER
-            // | SETOF
-            | SMALLINT
-            // | SOME
-            | SUBSTRING
-            // | SYMMETRIC
-            | TABLE
-            | THEN
-            // | TIME
-            | TIMESTAMP
-            | TO
-            | TRAILING
-            // | TREAT
-            | TRIM
-            | TRUE
-            // | UNION
-            // | UNIQUE
-            | USER
-            | USING
-            | VALUES
-            | VARCHAR
-            // | VARIADIC
-            | WHEN
-            // | WINDOW
-            | WITH
-            // | XMLATTRIBUTES
-            // | XMLCONCAT
-            // | XMLELEMENT
-            // | XMLEXISTS
-            // | XMLFOREST
-            // | XMLNAMESPACES
-            // | XMLPARSE
-            // | XMLPI
-            // | XMLROOT
-            // | XMLSERIALIZE
-            // | XMLTABLE
-            | WHERE
-        )
+    pub fn is_reserved_function_name(&self, after_as: bool) -> bool {
+        match self {
+            | TokenKind::ALL
+            // | TokenKind::ANALYSE
+            | TokenKind::ANALYZE
+            | TokenKind::AND
+            // | TokenKind::ANY
+            | TokenKind::ASC
+            // | TokenKind::ASYMMETRIC
+            | TokenKind::BETWEEN
+            | TokenKind::BIGINT
+            // | TokenKind::BIT
+            | TokenKind::BOOLEAN
+            | TokenKind::BOTH
+            | TokenKind::CASE
+            | TokenKind::CAST
+            // | TokenKind::CHECK
+            // | TokenKind::COALESCE
+            // | TokenKind::COLLATE
+            // | TokenKind::COLUMN
+            // | TokenKind::CONSTRAINT
+            // | TokenKind::CURRENT_CATALOG
+            // | TokenKind::CURRENT_DATE
+            // | TokenKind::CURRENT_ROLE
+            // | TokenKind::CURRENT_TIME
+            | TokenKind::CURRENT_TIMESTAMP
+            // | TokenKind::CURRENT_USER
+            // | TokenKind::DEC
+            // | TokenKind::DECIMAL
+            | TokenKind::DEFAULT
+            // | TokenKind::DEFERRABLE
+            | TokenKind::DESC
+            | TokenKind::DISTINCT
+            // | TokenKind::DO
+            | TokenKind::ELSE
+            | TokenKind::END
+            | TokenKind::EXISTS
+            | TokenKind::EXTRACT
+            | TokenKind::FALSE
+            | TokenKind::FLOAT
+            // | TokenKind::FOREIGN
+            // | TokenKind::GREATEST
+            // | TokenKind::GROUPING
+            | TokenKind::IN
+            // | TokenKind::INITIALLY
+            // | TokenKind::INOUT
+            | TokenKind::INT
+            | TokenKind::INTEGER
+            | TokenKind::INTERVAL
+            // | TokenKind::LATERAL
+            | TokenKind::LEADING
+            // | TokenKind::LEAST
+            // | TokenKind::LOCALTIME
+            // | TokenKind::LOCALTIMESTAMP
+            // | TokenKind::NATIONAL
+            // | TokenKind::NCHAR
+            // | TokenKind::NONE
+            // | TokenKind::NORMALIZE
+            | TokenKind::NOT
+            | TokenKind::NULL
+            // | TokenKind::NULLIF
+            // | TokenKind::NUMERIC
+            // | TokenKind::ONLY
+            | TokenKind::OR
+            // | TokenKind::OUT
+            // | TokenKind::OVERLAY
+            // | TokenKind::PLACING
+            | TokenKind::POSITION
+            // | TokenKind::PRIMARY
+            // | TokenKind::REAL
+            // | TokenKind::REFERENCES
+            // | TokenKind::ROW
+            | TokenKind::SELECT
+            // | TokenKind::SESSION_USER
+            // | TokenKind::SETOF
+            | TokenKind::SMALLINT
+            // | TokenKind::SOME
+            | TokenKind::SUBSTRING
+            // | TokenKind::SYMMETRIC
+            | TokenKind::TABLE
+            | TokenKind::THEN
+            // | TokenKind::TIME
+            | TokenKind::TIMESTAMP
+            | TokenKind::TRAILING
+            // | TokenKind::TREAT
+            | TokenKind::TRIM
+            | TokenKind::TRUE
+            | TokenKind::TRY_CAST
+            // | TokenKind::UNIQUE
+            | TokenKind::USER
+            | TokenKind::USING
+            | TokenKind::VALUES
+            | TokenKind::VARCHAR
+            // | TokenKind::VARIADIC
+            // | TokenKind::XMLATTRIBUTES
+            // | TokenKind::XMLCONCAT
+            // | TokenKind::XMLELEMENT
+            // | TokenKind::XMLEXISTS
+            // | TokenKind::XMLFOREST
+            // | TokenKind::XMLNAMESPACES
+            // | TokenKind::XMLPARSE
+            // | TokenKind::XMLPI
+            // | TokenKind::XMLROOT
+            // | TokenKind::XMLSERIALIZE
+            // | TokenKind::XMLTABLE
+            | TokenKind::WHEN => true,
+            | TokenKind::ARRAY
+            | TokenKind::AS
+            // | TokenKind::CHAR
+            // | TokenKind::CHARACTER
+            | TokenKind::CREATE
+            // | TokenKind::EXCEPT
+            // | TokenKind::FETCH
+            | TokenKind::FOR
+            | TokenKind::FROM
+            // | TokenKind::GRANT
+            | TokenKind::GROUP
+            | TokenKind::HAVING
+            // | TokenKind::INTERSECT
+            | TokenKind::INTO
+            | TokenKind::LIMIT
+            | TokenKind::OFFSET
+            | TokenKind::ON
+            | TokenKind::ORDER
+            // | TokenKind::PRECISION
+            // | TokenKind::RETURNING
+            | TokenKind::TO
+            // | TokenKind::UNION
+            | TokenKind::WHERE
+            // | TokenKind::WINDOW
+            | TokenKind::WITH if !after_as => true,
+            _ => false
+        }
     }
 
-    pub fn is_reserved_ident(&self) -> bool {
-        matches!(
-            self,
-            ANALYZE
-            // | ANALYSE
-            | ALL
-            | AND
-            // | ANY
-            | ARRAY
-            | AS
-            | ASC
-            // | ASYMMETRIC
-            // | AUTHORIZATION
-            // | BINARY
-            | BOTH
-            | CASE
-            | CAST
-            // | CHECK
-            // | COLLATE
-            // | COLLATION
-            // | COLUMN
-            // | CONCURRENTLY
-            // | CONSTRAINT
-            | CREATE
-            // | CROSS
-            // | CURRENT_CATALOG
-            // | CURRENT_DATE
-            // | CURRENT_ROLE
-            // | CURRENT_SCHEMA
-            // | CURRENT_TIME
-            | CURRENT_TIMESTAMP
-            // | CURRENT_USER
-            // | DEFERRABLE
-            | DESC
-            | DISTINCT
-            // | DO
-            | ELSE
-            | END
-            // | EXCEPT
-            | FALSE
-            // | FETCH
-            | FOR
-            // | FOREIGN
-            // | FREEZE
-            | FROM
-            | FULL
-            // | GRANT
-            | GROUP
-            | HAVING
-            // | ILIKE
-            | IN
-                // | INITIALLY
-            | INNER
-            // | INTERSECT
-            | INTO
-            | IS
-            // | ISNULL
-            | JOIN
-            // | LATERAL
-            | LEADING
-            | LEFT
-            | LIKE
-            | LIMIT
-            // | LOCALTIME
-            // | LOCALTIMESTAMP
-            | NATURAL
-            | NOT
-            // | NOTNULL
-            | NULL
-            | OFFSET
-            | ON
-            // | ONLY
-            | OR
-            | ORDER
-            | OUTER
-            // | OVERLAPS
-            // | PLACING
-            // | PRIMARY
-            // | REFERENCES
-            // | RETURNING
-            | RIGHT
-            | SELECT
-            // | SESSION_USER
-            // | SIMILAR
-            // | SOME
-            // | SYMMETRIC
-            | TABLE
-            // | TABLESAMPLE
-            | THEN
-            | TO
-            | TRAILING
-            | TRUE
-            // | UNION
-            // | UNIQUE
-            | USER
-            | USING
-            // | VARIADIC
-            // | VERBOSE
-            | WHEN
-            // | WINDOW
-            | WITH
-            | WHERE
-        )
+    pub fn is_reserved_ident(&self, after_as: bool) -> bool {
+        match self {
+            | TokenKind::ALL
+            // | TokenKind::ANALYSE
+            | TokenKind::ANALYZE
+            | TokenKind::AND
+            // | TokenKind::ANY
+            | TokenKind::ASC
+            // | TokenKind::ASYMMETRIC
+            // | TokenKind::AUTHORIZATION
+            // | TokenKind::BINARY
+            | TokenKind::BOTH
+            | TokenKind::CASE
+            | TokenKind::CAST
+            // | TokenKind::CHECK
+            // | TokenKind::COLLATE
+            // | TokenKind::COLLATION
+            // | TokenKind::COLUMN
+            // | TokenKind::CONCURRENTLY
+            // | TokenKind::CONSTRAINT
+            // | TokenKind::CROSS
+            // | TokenKind::CURRENT_CATALOG
+            // | TokenKind::CURRENT_DATE
+            // | TokenKind::CURRENT_ROLE
+            // | TokenKind::CURRENT_SCHEMA
+            // | TokenKind::CURRENT_TIME
+            | TokenKind::CURRENT_TIMESTAMP
+            // | TokenKind::CURRENT_USER
+            | TokenKind::DEFAULT
+            // | TokenKind::DEFERRABLE
+            | TokenKind::DESC
+            | TokenKind::DISTINCT
+            // | TokenKind::DO
+            | TokenKind::ELSE
+            | TokenKind::END
+            | TokenKind::FALSE
+            // | TokenKind::FOREIGN
+            // | TokenKind::FREEZE
+            | TokenKind::FULL
+            // | TokenKind::ILIKE
+            | TokenKind::IN
+            // | TokenKind::INITIALLY
+            | TokenKind::INNER
+            | TokenKind::IS
+            | TokenKind::JOIN
+            // | TokenKind::LATERAL
+            | TokenKind::LEADING
+            | TokenKind::LEFT
+            | TokenKind::LIKE
+            // | TokenKind::LOCALTIME
+            // | TokenKind::LOCALTIMESTAMP
+            | TokenKind::NATURAL
+            | TokenKind::NOT
+            | TokenKind::NULL
+            // | TokenKind::ONLY
+            | TokenKind::OR
+            | TokenKind::OUTER
+            // | TokenKind::PLACING
+            // | TokenKind::PRIMARY
+            // | TokenKind::REFERENCES
+            | TokenKind::RIGHT
+            | TokenKind::SELECT
+            // | TokenKind::SESSION_USER
+            // | TokenKind::SIMILAR
+            // | TokenKind::SOME
+            // | TokenKind::SYMMETRIC
+            | TokenKind::TABLE
+            // | TokenKind::TABLESAMPLE
+            | TokenKind::THEN
+            | TokenKind::TRAILING
+            | TokenKind::TRUE
+            // | TokenKind::UNIQUE
+            | TokenKind::USER
+            | TokenKind::USING
+            // | TokenKind::VARIADIC
+            // | TokenKind::VERBOSE
+            | TokenKind::WHEN => true,
+            | TokenKind::ARRAY
+            | TokenKind::AS
+            | TokenKind::CREATE
+            // | TokenKind::EXCEPT
+            // | TokenKind::FETCH
+            | TokenKind::FOR
+            | TokenKind::FROM
+            // | TokenKind::GRANT
+            | TokenKind::GROUP
+            | TokenKind::HAVING
+            // | TokenKind::INTERSECT
+            | TokenKind::INTO
+            // | TokenKind::ISNULL
+            | TokenKind::LIMIT
+            // | TokenKind::NOTNULL
+            | TokenKind::OFFSET
+            | TokenKind::ON
+            | TokenKind::ORDER
+            // | TokenKind::OVERLAPS 
+            // | TokenKind::RETURNING
+            | TokenKind::TO
+            // | TokenKind::UNION
+            | TokenKind::WHERE
+            // | TokenKind::WINDOW
+            | TokenKind::WITH
+            if !after_as => true,
+            _ => false
+        }
     }
 }

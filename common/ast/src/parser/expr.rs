@@ -103,8 +103,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             .map_err(nom::Err::Error)?;
 
         if let Some(elem) = iter.next() {
-            // dbg!(&elem);
-            // dbg!(&expr_elements);
+            dbg!(expr_elements);
             return Err(nom::Err::Error(Error::from_error_kind(
                 elem.span,
                 ErrorKind::Other("unable to parse rest of the expression"),

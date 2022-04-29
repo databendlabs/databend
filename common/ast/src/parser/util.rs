@@ -53,18 +53,19 @@ macro_rules! rule {
 }
 
 pub fn ident(i: Input) -> IResult<Identifier> {
-    non_reserved_identifier(|token| token.is_reserved_ident())(i)
+    non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
 
-pub fn lit_string_ident(i: Input) -> IResult<Identifier> {
-    map(literal_string, |name| Identifier {
-        name,
-        quote: Some('\''),
-    })(i)
+pub fn ident_after_as(i: Input) -> IResult<Identifier> {
+    non_reserved_identifier(|token| token.is_reserved_ident(true))(i)
 }
 
 pub fn function_name(i: Input) -> IResult<Identifier> {
-    non_reserved_identifier(|token| token.is_reserved_function_name())(i)
+    non_reserved_identifier(|token| token.is_reserved_function_name(false))(i)
+}
+
+pub fn function_name_after_as(i: Input) -> IResult<Identifier> {
+    non_reserved_identifier(|token| token.is_reserved_function_name(true))(i)
 }
 
 fn non_reserved_identifier(

@@ -19,7 +19,7 @@ SHOW TABLES WHERE table_name = 't%' AND 1 = 0;
 SHOW TABLES WHERE table_name = 't2' OR 1 = 1;
 SHOW TABLES WHERE table_name = 't2' AND 1 = 1;
 
-USE default;
+USE default_db;
 SHOW TABLES FROM showtables WHERE table_name LIKE 't%';
 SHOW TABLES FROM showtables WHERE table_name = "t%" AND 1 = 0;
 SHOW TABLES FROM showtables WHERE table_name = 't2' OR 1 = 1;

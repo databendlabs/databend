@@ -455,7 +455,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
 
     map(
         rule! {
-            ( #ident | #lit_string_ident )
+            #ident
             ~ #type_name
             ~ ( #nullable | #default_expr )*
             : "`<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`"
