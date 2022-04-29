@@ -46,6 +46,10 @@ impl DataType for VariantObjectType {
         "Object".to_string()
     }
 
+    fn aliases(&self) -> &[&str] {
+        &["Map"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::Variant(VariantValue::from(serde_json::Value::Object(
             serde_json::Map::new(),

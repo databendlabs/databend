@@ -359,6 +359,23 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_remove_node_cmd(
+        &self,
+        node_id: &u64,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let sm_nodes = txn_tree.key_space::<Nodes>();
+
+        let prev = sm_nodes.get(node_id)?;
+
+        if prev.is_some() {
+            tracing::info!("applied RemoveNode: {}={:?}", node_id, prev);
+            sm_nodes.remove(node_id)?;
+        }
+        Ok((prev, None).into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_database_cmd(
         &self,
         req: &CreateDatabaseReq,
@@ -874,6 +891,8 @@ impl StateMachine {
                 ref node_id,
                 ref node,
             } => self.apply_add_node_cmd(node_id, node, txn_tree),
+
+            Cmd::RemoveNode { ref node_id } => self.apply_remove_node_cmd(node_id, txn_tree),
 
             Cmd::CreateDatabase(req) => self.apply_create_database_cmd(req, txn_tree),
 

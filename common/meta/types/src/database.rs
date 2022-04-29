@@ -35,12 +35,20 @@ pub struct DatabaseInfo {
     pub meta: DatabaseMeta,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseIdent {
+    pub db_id: u64,
+    pub seq: u64,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
     pub created_on: DateTime<Utc>,
+    pub updated_on: DateTime<Utc>,
+    pub comment: String,
 }
 
 impl Default for DatabaseMeta {
@@ -50,6 +58,8 @@ impl Default for DatabaseMeta {
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
             created_on: Utc::now(),
+            updated_on: Utc::now(),
+            comment: "".to_string(),
         }
     }
 }

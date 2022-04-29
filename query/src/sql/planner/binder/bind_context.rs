@@ -46,6 +46,9 @@ pub struct BindContext {
 
     /// The relational operator in current context
     pub expression: Option<SExpr>,
+
+    /// Aggregation scalar expression
+    pub agg_scalar_exprs: Option<Vec<ScalarExprRef>>,
 }
 
 impl BindContext {
@@ -58,6 +61,7 @@ impl BindContext {
             _parent: Some(parent),
             columns: vec![],
             expression: None,
+            agg_scalar_exprs: None,
         }
     }
 

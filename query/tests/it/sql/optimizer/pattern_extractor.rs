@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_query::sql::optimizer::MExpr;
 use databend_query::sql::optimizer::Memo;
 use databend_query::sql::optimizer::PatternExtractor;
 use databend_query::sql::optimizer::SExpr;
+use databend_query::sql::plans::BasePlan;
 use databend_query::sql::plans::PatternPlan;
 use databend_query::sql::plans::PlanType;
 
@@ -42,22 +41,26 @@ fn test_unary_expression() {
     // \
     //  LogicalGet
     let expr = SExpr::create_unary(
-        Arc::new(PatternPlan {
+        PatternPlan {
             plan_type: PlanType::Project,
-        }),
-        SExpr::create_leaf(Arc::new(PatternPlan {
-            plan_type: PlanType::LogicalGet,
-        })),
+        }
+        .into(),
+        SExpr::create_leaf(
+            PatternPlan {
+                plan_type: PlanType::LogicalGet,
+            }
+            .into(),
+        ),
     );
 
     // Project
     // \
     //  Pattern
     let pattern = SExpr::create_unary(
-        Arc::new(PatternPlan {
+        From::from(PatternPlan {
             plan_type: PlanType::Project,
         }),
-        SExpr::create_leaf(Arc::new(PatternPlan {
+        SExpr::create_leaf(From::from(PatternPlan {
             plan_type: PlanType::Pattern,
         })),
     );
@@ -77,11 +80,11 @@ fn test_unary_expression() {
     let result = pattern_extractor.extract(&memo, &group_expression, &pattern);
 
     let expected = vec![SExpr::create(
-        Arc::new(PatternPlan {
+        From::from(PatternPlan {
             plan_type: PlanType::Project,
         }),
         vec![SExpr::create(
-            Arc::new(PatternPlan {
+            From::from(PatternPlan {
                 plan_type: PlanType::LogicalGet,
             }),
             vec![],
@@ -98,10 +101,10 @@ fn test_multiple_expression() {
     // \
     //  LogicalGet
     let expr = SExpr::create_unary(
-        Arc::new(PatternPlan {
+        From::from(PatternPlan {
             plan_type: PlanType::Project,
         }),
-        SExpr::create_leaf(Arc::new(PatternPlan {
+        SExpr::create_leaf(From::from(PatternPlan {
             plan_type: PlanType::LogicalGet,
         })),
     );
@@ -110,12 +113,16 @@ fn test_multiple_expression() {
     // \
     //  LogicalGet
     let pattern = SExpr::create_unary(
-        Arc::new(PatternPlan {
+        PatternPlan {
             plan_type: PlanType::Project,
-        }),
-        SExpr::create_leaf(Arc::new(PatternPlan {
-            plan_type: PlanType::LogicalGet,
-        })),
+        }
+        .into(),
+        SExpr::create_leaf(
+            PatternPlan {
+                plan_type: PlanType::LogicalGet,
+            }
+            .into(),
+        ),
     );
 
     let mut pattern_extractor = PatternExtractor::create();
@@ -126,9 +133,10 @@ fn test_multiple_expression() {
         0,
         MExpr::create(
             0,
-            Arc::new(PatternPlan {
+            PatternPlan {
                 plan_type: PlanType::LogicalGet,
-            }),
+            }
+            .into(),
             vec![],
         ),
     )
@@ -145,13 +153,15 @@ fn test_multiple_expression() {
     let result = pattern_extractor.extract(&memo, &group_expression, &pattern);
 
     let expected_expr = SExpr::create(
-        Arc::new(PatternPlan {
+        PatternPlan {
             plan_type: PlanType::Project,
-        }),
+        }
+        .into(),
         vec![SExpr::create(
-            Arc::new(PatternPlan {
+            PatternPlan {
                 plan_type: PlanType::LogicalGet,
-            }),
+            }
+            .into(),
             vec![],
             Some(0),
         )],
