@@ -12,9 +12,6 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../base" }
-common-exception = { path = "../exception" }
-common-tracing = { path = "../tracing" }
 
 # Github dependencies
 
