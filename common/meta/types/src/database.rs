@@ -105,8 +105,7 @@ pub struct CreateDatabaseReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
+    pub name_ident: DatabaseNameIdent,
 }
 
 impl Display for DropDatabaseReq {
@@ -114,7 +113,7 @@ impl Display for DropDatabaseReq {
         write!(
             f,
             "drop_db(if_exists={}):{}/{}",
-            self.if_exists, self.tenant, self.db_name
+            self.if_exists, self.name_ident.tenant, self.name_ident.db_name
         )
     }
 }

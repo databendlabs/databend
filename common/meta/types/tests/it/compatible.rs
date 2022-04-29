@@ -60,7 +60,11 @@ fn test_load_entry_compatibility() -> anyhow::Result<()> {
         let ent: Entry<LogEntry> = serde_json::from_str(entries_before_20220413[2])?;
         match ent.payload {
             EntryPayload::Normal(LogEntry {
-                cmd: Cmd::DropDatabase(DropDatabaseReq { db_name, .. }),
+                cmd:
+                    Cmd::DropDatabase(DropDatabaseReq {
+                        name_ident: DatabaseNameIdent { db_name, .. },
+                        ..
+                    }),
                 ..
             }) => {
                 assert_eq!("db1", db_name);
@@ -108,7 +112,11 @@ fn test_load_entry_compatibility() -> anyhow::Result<()> {
         let ent: Entry<LogEntry> = serde_json::from_str(entries_since_20220403[2])?;
         match ent.payload {
             EntryPayload::Normal(LogEntry {
-                cmd: Cmd::DropDatabase(DropDatabaseReq { db_name, .. }),
+                cmd:
+                    Cmd::DropDatabase(DropDatabaseReq {
+                        name_ident: DatabaseNameIdent { db_name, .. },
+                        ..
+                    }),
                 ..
             }) => {
                 assert_eq!("db1", db_name);
