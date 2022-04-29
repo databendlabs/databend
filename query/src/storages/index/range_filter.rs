@@ -620,7 +620,7 @@ fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
     Ok(true)
 }
 
-fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
+pub fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
     match expr {
         Expression::Literal { .. } => Ok(true),
         Expression::Column { .. } => Ok(true),
