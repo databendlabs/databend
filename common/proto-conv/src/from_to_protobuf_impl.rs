@@ -535,7 +535,7 @@ impl FromToProto<pb::Timestamp> for dv::TimestampType {
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver)?;
-        let v = dv::TimestampType::create(p.precision as usize, p.tz);
+        let v = dv::TimestampType::create(p.precision as usize);
         Ok(v)
     }
 
@@ -543,7 +543,7 @@ impl FromToProto<pb::Timestamp> for dv::TimestampType {
         let p = pb::Timestamp {
             ver: VER,
             precision: self.precision() as u64,
-            tz: self.tz().cloned(),
+            // tz: self.tz().cloned(),
         };
 
         Ok(p)

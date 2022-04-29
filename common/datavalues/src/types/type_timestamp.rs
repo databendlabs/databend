@@ -34,6 +34,7 @@ use crate::prelude::*;
 /// any timestamp not in the range will be invalid
 pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+pub const MICROSECONDS: i64 = 1_000_000;
 
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<()> {
@@ -45,26 +46,21 @@ pub fn check_timestamp(micros: i64) -> Result<()> {
     ))
 }
 
+/// Timestamp type only stores UTC time in microseconds
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct TimestampType {
     /// The time resolution is determined by the precision parameter, range from 0 to 9
     /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds)
     precision: usize,
-    /// tz indicates the timezone, if it's None, it's UTC.
-    tz: Option<String>,
 }
 
 impl TimestampType {
-    pub fn create(precision: usize, tz: Option<String>) -> Self {
-        TimestampType { precision, tz }
+    pub fn create(precision: usize) -> Self {
+        TimestampType { precision }
     }
 
-    pub fn arc(precision: usize, tz: Option<String>) -> DataTypeImpl {
-        DataTypeImpl::Timestamp(TimestampType { precision, tz })
-    }
-
-    pub fn tz(&self) -> Option<&String> {
-        self.tz.as_ref()
+    pub fn arc(precision: usize) -> DataTypeImpl {
+        DataTypeImpl::Timestamp(TimestampType { precision })
     }
 
     pub fn precision(&self) -> usize {
@@ -73,21 +69,12 @@ impl TimestampType {
 
     #[inline]
     pub fn utc_timestamp(&self, v: i64) -> DateTime<Utc> {
-        let v = v * 10_i64.pow(6 - self.precision as u32);
-
-        // ns
         Utc.timestamp(v / 1_000_000, (v % 1_000_000 * 1000) as u32)
     }
 
     #[inline]
     pub fn to_seconds(&self, v: i64) -> i64 {
-        let v = v * 10_i64.pow(6 - self.precision as u32);
         v / 1_000_000
-    }
-
-    #[inline]
-    pub fn from_micro_seconds(&self, v: i64) -> i64 {
-        v / 10_i64.pow(6 - self.precision as u32)
     }
 
     pub fn format_string(&self) -> String {
@@ -152,25 +139,22 @@ impl DataType for TimestampType {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
         mp.insert(ARROW_EXTENSION_NAME.to_string(), "Timestamp".to_string());
-        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         mp.insert(
             ARROW_EXTENSION_META.to_string(),
-            format!("{}{}", self.precision, tz),
+            format!("{}", self.precision),
         );
         Some(mp)
     }
 
     fn create_serializer(&self) -> TypeSerializerImpl {
-        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-
-        TimestampSerializer::<i64>::create(tz.parse::<Tz>().unwrap(), self.precision as u32).into()
+        TimestampSerializer::default().into()
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        TimestampDeserializer::<i64> {
+        let tz = "UTC".parse::<Tz>().unwrap();
+        TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-            tz: tz.parse::<Tz>().unwrap(),
+            tz,
             precision: self.precision,
         }
         .into()

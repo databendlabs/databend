@@ -72,10 +72,7 @@ fn new_table_info() -> mt::TableInfo {
                     dv::DataField::new("float32", dv::Float32Type::default().into()),
                     dv::DataField::new("float64", dv::Float64Type::default().into()),
                     dv::DataField::new("date", dv::DateType::default().into()),
-                    dv::DataField::new(
-                        "timestamp",
-                        dv::TimestampType::create(5, Some(s("SH"))).into(),
-                    ),
+                    dv::DataField::new("timestamp", dv::TimestampType::create(5).into()),
                     dv::DataField::new("string", dv::StringType::default().into()),
                     dv::DataField::new(
                         "struct",
@@ -265,10 +262,7 @@ fn test_load_old() -> anyhow::Result<()> {
                         dv::DataField::new("float32", dv::Float32Type::default().into()),
                         dv::DataField::new("float64", dv::Float64Type::default().into()),
                         dv::DataField::new("date", dv::DateType::default().into()),
-                        dv::DataField::new(
-                            "timestamp",
-                            dv::TimestampType::create(5, Some(s("SH"))).into(),
-                        ),
+                        dv::DataField::new("timestamp", dv::TimestampType::create(5).into()),
                         dv::DataField::new("string", dv::StringType::default().into()),
                         dv::DataField::new(
                             "struct",
