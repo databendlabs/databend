@@ -115,14 +115,14 @@ error:
 
 
 ---------- Input ----------
-select number + 5 as a, cast(number as varchar(255))
+select number + 5 as a, cast(number as float(255))
 ---------- Output ---------
 error: 
-  --> SQL:1:47
+  --> SQL:1:45
   |
-1 | select number + 5 as a, cast(number as varchar(255))
-  | ------                  ----                  ^ expected token ")"
-  | |                       |                      
+1 | select number + 5 as a, cast(number as float(255))
+  | ------                  ----                ^ expected token ")"
+  | |                       |                    
   | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression
   | while parsing `SELECT ...`

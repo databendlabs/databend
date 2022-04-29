@@ -160,8 +160,8 @@ fn test_statement_error() {
     let mut file = mint.new_goldenfile("statement-error.txt").unwrap();
 
     let cases = &[
-        r#"create table a.b (c integer not null 1, b varchar(10))"#,
-        r#"create table a (c varchar(10))"#,
+        r#"create table a.b (c integer not null 1, b float(10))"#,
+        r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
@@ -216,7 +216,7 @@ fn test_query_error() {
         r#"select * from join customer"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
-        r#"select number + 5 as a, cast(number as varchar(255))"#,
+        r#"select number + 5 as a, cast(number as float(255))"#,
     ];
 
     for case in cases {

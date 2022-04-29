@@ -15,7 +15,7 @@ conn = engine.connect()
 conn.execute("create database if not exists book_db")
 conn.execute("use book_db")
 conn.execute(
-    "create table if not exists books(title varchar, author varchar, date varchar)"
+    "create table if not exists books(title varchar(255), author varchar(255), date varchar(255))"
 )
 conn.execute("insert into books values('mybook', 'author', '2022')")
 results = conn.execute('select * from books').fetchall()

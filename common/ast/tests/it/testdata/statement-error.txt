@@ -1,24 +1,24 @@
 ---------- Input ----------
-create table a.b (c integer not null 1, b varchar(10))
+create table a.b (c integer not null 1, b float(10))
 ---------- Output ---------
 error: 
   --> SQL:1:38
   |
-1 | create table a.b (c integer not null 1, b varchar(10))
+1 | create table a.b (c integer not null 1, b float(10))
   | ------                               ^ expected token ")"
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
-create table a (c varchar(10))
+create table a (c float(10))
 ---------- Output ---------
 error: 
-  --> SQL:1:26
+  --> SQL:1:24
   |
-1 | create table a (c varchar(10))
-  | ------                   ^ expected token ")"
-  | |                         
+1 | create table a (c float(10))
+  | ------                 ^ expected token ")"
+  | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 

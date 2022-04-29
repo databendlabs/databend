@@ -796,24 +796,36 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN });
     let ty_uint8 = value(
         TypeName::UInt8,
-        rule! { UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) },
+        rule! { ( UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ #literal_u64 ~ ")" )?  },
     );
     let ty_uint16 = value(
         TypeName::UInt16,
-        rule! { UINT16 | #map(rule! { SMALLINT ~ UNSIGNED }, |(t, _)| t) },
+        rule! { ( UINT16 | #map(rule! { SMALLINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
     let ty_uint32 = value(
         TypeName::UInt32,
-        rule! { UINT32 | #map(rule! { ( INT | INTEGER ) ~ UNSIGNED }, |(t, _)| t) },
+        rule! { ( UINT32 | #map(rule! { ( INT | INTEGER ) ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
     let ty_uint64 = value(
         TypeName::UInt64,
-        rule! { UINT64 | UNSIGNED | #map(rule! { BIGINT ~ UNSIGNED }, |(t, _)| t) },
+        rule! { ( UINT64 | UNSIGNED | #map(rule! { BIGINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
-    let ty_int8 = value(TypeName::Int8, rule! { INT8 | TINYINT });
-    let ty_int16 = value(TypeName::Int16, rule! { INT16 | SMALLINT });
-    let ty_int32 = value(TypeName::Int32, rule! { INT32 | ( INT | INTEGER ) });
-    let ty_int64 = value(TypeName::Int64, rule! { INT64 | SIGNED | BIGINT });
+    let ty_int8 = value(
+        TypeName::Int8,
+        rule! { ( INT8 | TINYINT ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+    );
+    let ty_int16 = value(
+        TypeName::Int16,
+        rule! { ( INT16 | SMALLINT ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+    );
+    let ty_int32 = value(
+        TypeName::Int32,
+        rule! { ( INT32 | INT | INTEGER ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+    );
+    let ty_int64 = value(
+        TypeName::Int64,
+        rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+    );
     let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
     let ty_float64 = value(TypeName::Float64, rule! { FLOAT64 | DOUBLE });
     let ty_array = map(
@@ -830,7 +842,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_timestamp = value(TypeName::Timestamp, rule! { TIMESTAMP });
-    let ty_string = value(TypeName::String, rule! { STRING | VARCHAR });
+    let ty_string = value(
+        TypeName::String,
+        rule! { ( STRING | VARCHAR ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
+    );
     let ty_object = value(TypeName::Object, rule! { OBJECT });
     let ty_variant = value(TypeName::Variant, rule! { VARIANT });
 
