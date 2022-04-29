@@ -19,45 +19,89 @@ use crate::scalars::scalar_function_test::test_scalar_functions;
 use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
-fn test_humanize_function() -> Result<()> {
+fn test_humanize_size_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
-            name: "humanize(1000)",
+            name: "humanize_size(1000)",
             columns: vec![Series::from_data(vec![1000_u32])],
             expect: Series::from_data(vec!["1 KB"]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "humanize(-1000)",
+            name: "humanize_size(-1000)",
             columns: vec![Series::from_data(vec![-1000_i32])],
             expect: Series::from_data(vec!["-1 KB"]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "humanize('abc')",
+            name: "humanize_size('abc')",
             columns: vec![Series::from_data(vec!["abc"])],
             expect: Series::from_data(vec!["-1 KB"]),
             error: "Expected a numeric type, but got String",
         },
         ScalarFunctionTest {
-            name: "humanize(true)",
+            name: "humanize_size(true)",
             columns: vec![Series::from_data(vec![true])],
             expect: Series::from_data(vec!["-1 KB"]),
             error: "Expected a numeric type, but got Boolean",
         },
     ];
 
-    test_scalar_functions("humanize", &tests)
+    test_scalar_functions("humanize_size", &tests)
 }
 
 #[test]
-fn test_humanize_nullable() -> Result<()> {
+fn test_humanize_size_nullable() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
-        name: "humanize(null)",
+        name: "humanize_size(null)",
         columns: vec![Series::from_data(vec![Some(1_000_000_i32), None])],
         expect: Series::from_data(vec![Some("1 MB"), None]),
         error: "",
     }];
 
-    test_scalar_functions("humanize", &tests)
+    test_scalar_functions("humanize_size", &tests)
+}
+
+#[test]
+fn test_humanize_number_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "humanize_number(1000)",
+            columns: vec![Series::from_data(vec![1000_u32])],
+            expect: Series::from_data(vec!["1 thousand"]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "humanize_number(-1000)",
+            columns: vec![Series::from_data(vec![-1000_i32])],
+            expect: Series::from_data(vec!["-1 thousand"]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "humanize_number('abc')",
+            columns: vec![Series::from_data(vec!["abc"])],
+            expect: Series::from_data(vec!["-1 thousand"]),
+            error: "Expected a numeric type, but got String",
+        },
+        ScalarFunctionTest {
+            name: "humanize_number(true)",
+            columns: vec![Series::from_data(vec![true])],
+            expect: Series::from_data(vec!["-1 thousand"]),
+            error: "Expected a numeric type, but got Boolean",
+        },
+    ];
+
+    test_scalar_functions("humanize_number", &tests)
+}
+
+#[test]
+fn test_humanize_number_nullable() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "humanize_number(null)",
+        columns: vec![Series::from_data(vec![Some(1_000_000_i32), None])],
+        expect: Series::from_data(vec![Some("1 million"), None]),
+        error: "",
+    }];
+
+    test_scalar_functions("humanize_number", &tests)
 }

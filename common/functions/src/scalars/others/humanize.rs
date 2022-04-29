@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::fmt;
+use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_type_id;
-use common_datavalues::DataTypePtr;
 use common_exception::Result;
-use common_io::prelude::convert_byte_size;
+use common_io::prelude::*;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
@@ -29,15 +29,23 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct HumanizeFunction {
+pub struct GenericHumanizeFunction<T> {
     display_name: String,
+    t: PhantomData<T>,
 }
 
-impl HumanizeFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+pub trait HumanizeConvertFunction: Send + Sync + Clone + 'static {
+    fn convert(v: impl AsPrimitive<f64>, _ctx: &mut EvalContext) -> Vec<u8>;
+}
+
+impl<T> GenericHumanizeFunction<T>
+where T: HumanizeConvertFunction
+{
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
-        Ok(Box::new(HumanizeFunction {
+        Ok(Box::new(GenericHumanizeFunction::<T> {
             display_name: display_name.to_string(),
+            t: PhantomData,
         }))
     }
 
@@ -47,17 +55,14 @@ impl HumanizeFunction {
     }
 }
 
-fn humanize<S>(value: S, _ctx: &mut EvalContext) -> Vec<u8>
-where S: AsPrimitive<f64> {
-    Vec::from(convert_byte_size(value.as_()))
-}
-
-impl Function for HumanizeFunction {
+impl<T> Function for GenericHumanizeFunction<T>
+where T: HumanizeConvertFunction
+{
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Vu8::to_data_type()
     }
 
@@ -68,7 +73,7 @@ impl Function for HumanizeFunction {
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
-            let col = scalar_unary_op::<$F, Vu8, _>(columns[0].column(), humanize, &mut EvalContext::default())?;
+            let col = scalar_unary_op::<$F, Vu8, _>(columns[0].column(), T::convert, &mut EvalContext::default())?;
             Ok(col.arc())
         },{
             unreachable!()
@@ -76,8 +81,29 @@ impl Function for HumanizeFunction {
     }
 }
 
-impl fmt::Display for HumanizeFunction {
+impl<T> fmt::Display for GenericHumanizeFunction<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
+
+#[derive(Clone)]
+pub struct HumanizeSizeConvertFunction;
+
+impl HumanizeConvertFunction for HumanizeSizeConvertFunction {
+    fn convert(v: impl AsPrimitive<f64>, _: &mut EvalContext) -> Vec<u8> {
+        Vec::from(convert_byte_size(v.as_()))
+    }
+}
+
+#[derive(Clone)]
+pub struct HumanizeNumberConvertFunction;
+
+impl HumanizeConvertFunction for HumanizeNumberConvertFunction {
+    fn convert(v: impl AsPrimitive<f64>, _: &mut EvalContext) -> Vec<u8> {
+        Vec::from(convert_number_size(v.as_()))
+    }
+}
+
+pub type HumanizeSizeFunction = GenericHumanizeFunction<HumanizeSizeConvertFunction>;
+pub type HumanizeNumberFunction = GenericHumanizeFunction<HumanizeNumberConvertFunction>;

@@ -1,5 +1,5 @@
 ---
-title: HUMANIZE
+title: HUMANIZE_SIZE
 ---
 
 Returns the readable size with a suffix(KB, MB, etc).
@@ -7,7 +7,7 @@ Returns the readable size with a suffix(KB, MB, etc).
 ## Syntax
 
 ```sql
-HUMANIZE(x);
+HUMANIZE_SIZE(x);
 ```
 
 ## Arguments
@@ -24,9 +24,9 @@ String.
 ## Examples
 
 ```sql
-SELECT HUMANIZE(1000 * 1000)
+SELECT HUMANIZE_SIZE(1000 * 1000)
 +-------------------------+
-| HUMANIZE((1000 * 1000)) |
+| HUMANIZE_SIZE((1000 * 1000)) |
 +-------------------------+
 | 1 MB                    |
 +-------------------------+

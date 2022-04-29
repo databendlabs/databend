@@ -23,7 +23,8 @@ mod sleep;
 mod type_of;
 
 pub use exists::ExistsFunction;
-pub use humanize::HumanizeFunction;
+pub use humanize::HumanizeNumberFunction;
+pub use humanize::HumanizeSizeFunction;
 pub use ignore::IgnoreFunction;
 pub use inet_aton::InetAtonFunction;
 pub use inet_aton::TryInetAtonFunction;
