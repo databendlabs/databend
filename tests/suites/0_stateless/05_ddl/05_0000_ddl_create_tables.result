@@ -40,6 +40,6 @@ datetime	TIMESTAMP(6)	NO	0
 ts	TIMESTAMP(6)	NO	0	
 str	VARCHAR	NO	3	
 bool	BOOLEAN	NO	false	
-array	ARRAY	NO	[]	
+arr	ARRAY	NO	[]	
 obj	OBJECT	NO	{}	
 variant	VARIANT	NO	null	

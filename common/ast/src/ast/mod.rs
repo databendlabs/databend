@@ -28,6 +28,7 @@ pub use statement::*;
 pub struct Identifier {
     pub name: String,
     pub quote: Option<char>,
+    // TODO(andylokandy): add span or token
 }
 
 impl Display for Identifier {
