@@ -396,7 +396,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
 
     alt((
         rule!(
-            #explain : "`EXPLAIN [ANALYZE] <statement>`"
+            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #map(query, |query| Statement::Query(Box::new(query)))
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"

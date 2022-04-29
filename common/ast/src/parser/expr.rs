@@ -88,7 +88,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        let mut iter = expr_elements.iter().cloned();
+        let mut iter = expr_elements.into_iter();
         let expr = ExprParser
             .parse(&mut iter)
             .map_err(|err| {
@@ -103,7 +103,6 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             .map_err(nom::Err::Error)?;
 
         if let Some(elem) = iter.next() {
-            dbg!(expr_elements);
             return Err(nom::Err::Error(Error::from_error_kind(
                 elem.span,
                 ErrorKind::Other("unable to parse rest of the expression"),
@@ -471,7 +470,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
+            NOT? ~ IN ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ^")"
         },
         |(opt_not, _, _, list, _)| ExprElement::InList {
             list,
@@ -480,7 +479,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let in_subquery = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #query  ~ ")"
+            NOT? ~ IN ~ "(" ~ #query  ~ ^")"
         },
         |(opt_not, _, _, subquery, _)| ExprElement::InSubquery {
             subquery: Box::new(subquery),
@@ -489,7 +488,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let between = map(
         rule! {
-            NOT? ~ BETWEEN ~ ^#subexpr(BETWEEN_PREC) ~ AND ~ ^#subexpr(BETWEEN_PREC)
+            NOT? ~ BETWEEN ~ ^#subexpr(BETWEEN_PREC) ~ ^AND ~ ^#subexpr(BETWEEN_PREC)
         },
         |(opt_not, _, low, _, high)| ExprElement::Between {
             low: Box::new(low),
@@ -501,10 +500,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         rule! {
             ( CAST | TRY_CAST )
             ~ "("
-            ~ #subexpr(0)
-            ~ ( AS | "," )
-            ~ #type_name
-            ~ ")"
+            ~ ^#subexpr(0)
+            ~ ^( AS | "," )
+            ~ ^#type_name
+            ~ ^")"
         },
         |(cast, _, expr, _, target_type, _)| {
             if cast.kind == CAST {
@@ -522,13 +521,13 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let pg_cast = map(
         rule! {
-            "::" ~ #type_name
+            "::" ~ ^#type_name
         },
         |(_, target_type)| ExprElement::PgCast { target_type },
     );
     let extract = map(
         rule! {
-            EXTRACT ~ "(" ~ #date_time_field ~ FROM ~ #subexpr(0) ~ ")"
+            EXTRACT ~ ^"(" ~ ^#date_time_field ~ ^FROM ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::Extract {
             field,
@@ -538,11 +537,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let position = map(
         rule! {
             POSITION
-            ~ "("
-            ~ #subexpr(BETWEEN_PREC)
-            ~ IN
-            ~ #subexpr(0)
-            ~ ")"
+            ~ ^"("
+            ~ ^#subexpr(BETWEEN_PREC)
+            ~ ^IN
+            ~ ^#subexpr(0)
+            ~ ^")"
         },
         |(_, _, substr_expr, _, str_expr, _)| ExprElement::Position {
             substr_expr: Box::new(substr_expr),
@@ -552,11 +551,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let substring = map(
         rule! {
             SUBSTRING
-            ~ "("
-            ~ #subexpr(0)
+            ~ ^"("
+            ~ ^#subexpr(0)
             ~ ( ( FROM | "," ) ~ ^#subexpr(0) )?
             ~ ( ( FOR | "," ) ~ ^#subexpr(0) )?
-            ~ ")"
+            ~ ^")"
         },
         |(_, _, expr, opt_substring_from, opt_substring_for, _)| ExprElement::SubString {
             expr: Box::new(expr),
@@ -572,9 +571,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let trim = map(
         rule! {
             TRIM
-            ~ "("
+            ~ ^"("
             ~ #subexpr(0)
-            ~ ")"
+            ~ ^")"
         },
         |(_, _, expr, _)| ExprElement::Trim {
             expr: Box::new(expr),
@@ -584,12 +583,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let trim_from = map(
         rule! {
             TRIM
-            ~ "("
+            ~ ^"("
             ~ #trim_where
-            ~ #subexpr(0)
-            ~ FROM
-            ~ #subexpr(0)
-            ~ ")"
+            ~ ^#subexpr(0)
+            ~ ^FROM
+            ~ ^#subexpr(0)
+            ~ ^")"
         },
         |(_, _, trim_where, trim_str, _, expr, _)| ExprElement::Trim {
             expr: Box::new(expr),
@@ -597,11 +596,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         },
     );
     let count_all = value(ExprElement::CountAll, rule! {
-        COUNT ~ "(" ~ "*" ~ ")"
+        COUNT ~ "(" ~ "*" ~ ^")"
     });
     let tuple = map(
         rule! {
-            "(" ~ #subexpr(0) ~ "," ~ #comma_separated_list1_allow_trailling(subexpr(0))? ~ ","? ~ ")"
+            "(" ~ #subexpr(0) ~ "," ~ #comma_separated_list1_allow_trailling(subexpr(0))? ~ ","? ~ ^")"
         },
         |(_, head, _, opt_tail, _, _)| {
             let mut exprs = opt_tail.unwrap_or_default();
@@ -640,8 +639,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let case = map(
         rule! {
             CASE ~ #subexpr(0)?
-            ~ ( WHEN ~ #subexpr(0) ~ THEN ~ #subexpr(0) )+
-            ~ ( ELSE ~ ^#subexpr(0) )? ~ END
+            ~ ( WHEN ~ ^#subexpr(0) ~ ^THEN ~ ^#subexpr(0) )+
+            ~ ( ELSE ~ ^#subexpr(0) )? ~ ^END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches
@@ -658,22 +657,22 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         },
     );
     let exists = map(
-        rule! { EXISTS ~ "(" ~ #query ~ ")" },
+        rule! { EXISTS ~ ^"(" ~ ^#query ~ ^")" },
         |(_, _, subquery, _)| ExprElement::Exists(subquery),
     );
     let subquery = map(
         rule! {
             "("
             ~ #query
-            ~ ")"
+            ~ ^")"
         },
         |(_, subquery, _)| ExprElement::Subquery(subquery),
     );
     let group = map(
         rule! {
            "("
-           ~ #subexpr(0)
-           ~ ")"
+           ~ ^#subexpr(0)
+           ~ ^")"
         },
         |(_, expr, _)| ExprElement::Group(expr),
     );
@@ -701,9 +700,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         rule!(
             #count_all : "COUNT(*)"
             | #tuple : "`(<expr>, ...)`"
-            | #literal : "<literal>"
             | #function_call_with_param : "<function>"
             | #function_call : "<function>"
+            | #literal : "<literal>"
             | #case : "`CASE ... END`"
             | #exists : "`EXISTS (SELECT ...)`"
             | #subquery : "`(SELECT ...)`"

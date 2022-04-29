@@ -275,15 +275,19 @@ FunctionCall {
 ---------- Input ----------
 "random"()
 ---------- Output ---------
-'random'
+"random"()
 ---------- AST ------------
-Literal(
-    String(
-        "random",
-    ),
-)
----------- REST -----------
-()
+FunctionCall {
+    distinct: false,
+    name: Identifier {
+        name: "random",
+        quote: Some(
+            '"',
+        ),
+    },
+    args: [],
+    params: [],
+}
 
 
 ---------- Input ----------
