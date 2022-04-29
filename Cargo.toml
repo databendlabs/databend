@@ -18,6 +18,8 @@ members = [
     "common/management",
     "common/mem-allocator",
     "common/planners",
+    "common/proto-conv",
+    "common/protos",
     "common/meta/api",
     "common/meta/embedded",
     "common/meta/raft-store",

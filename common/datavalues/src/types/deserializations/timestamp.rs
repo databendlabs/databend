@@ -15,42 +15,34 @@
 use chrono_tz::Tz;
 use common_exception::*;
 use common_io::prelude::*;
-use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 
 use crate::columns::MutableColumn;
 use crate::prelude::*;
 
-pub struct TimestampDeserializer<T: PrimitiveType> {
-    pub builder: MutablePrimitiveColumn<T>,
+pub struct TimestampDeserializer {
+    pub builder: MutablePrimitiveColumn<i64>,
     pub tz: Tz,
     pub precision: usize,
 }
 
-impl<T> TypeDeserializer for TimestampDeserializer<T>
-where
-    i64: AsPrimitive<T>,
-    T: PrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-    for<'a> T:
-        opensrv_clickhouse::types::column::iter::Iterable<'a, opensrv_clickhouse::types::Simple>,
-{
+impl TypeDeserializer for TimestampDeserializer {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: T = reader.read_scalar()?;
-        let _ = check_timestamp(value.as_i64())?;
+        let value: i64 = reader.read_scalar()?;
+        let _ = check_timestamp(value)?;
         self.builder.append_value(value);
         Ok(())
     }
 
     fn de_default(&mut self) {
-        self.builder.append_value(T::default());
+        self.builder.append_value(i64::default());
     }
 
     fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
-            let value: T = reader.read_scalar()?;
-            let _ = check_timestamp(value.as_i64())?;
+            let value: i64 = reader.read_scalar()?;
+            let _ = check_timestamp(value)?;
             self.builder.append_value(value);
         }
         Ok(())
@@ -62,7 +54,8 @@ where
                 let v = v.clone();
                 let mut reader = BufferReader::new(v.as_bytes());
                 let ts = reader.read_timestamp_text(&self.tz)?;
-                let micros = uniform(ts.timestamp_micros(), self.precision);
+
+                let micros = ts.timestamp_micros();
                 let _ = check_timestamp(micros)?;
                 self.builder.append_value(micros.as_());
                 Ok(())
@@ -74,7 +67,7 @@ where
     fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
-        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let micros = ts.timestamp_micros();
         let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'\'')?;
         self.builder.append_value(micros.as_());
@@ -84,7 +77,7 @@ where
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let ts = reader.read_timestamp_text(&self.tz)?;
-        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let micros = ts.timestamp_micros();
         let _ = check_timestamp(micros)?;
         reader.must_eof()?;
         self.builder.append_value(micros.as_());
@@ -93,7 +86,7 @@ where
 
     fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let ts = reader.read_timestamp_text(&self.tz)?;
-        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let micros = ts.timestamp_micros();
         let _ = check_timestamp(micros)?;
         self.builder.append_value(micros.as_());
         Ok(())
@@ -102,7 +95,7 @@ where
     fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
-        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let micros = ts.timestamp_micros();
         let _ = check_timestamp(micros)?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
@@ -114,7 +107,7 @@ where
     fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
-        let micros = uniform(ts.timestamp_micros(), self.precision);
+        let micros = ts.timestamp_micros();
         let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'"')?;
 
@@ -136,9 +129,4 @@ where
     fn finish_to_column(&mut self) -> ColumnRef {
         self.builder.to_column()
     }
-}
-
-#[inline]
-fn uniform(micros: i64, precision: usize) -> i64 {
-    micros / 10_i64.pow(6 - precision as u32)
 }

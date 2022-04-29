@@ -276,7 +276,7 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
                 let lhs: &TimestampType = lhs_type.as_any().downcast_ref().unwrap();
                 let rhs: &TimestampType = rhs_type.as_any().downcast_ref().unwrap();
                 let precision = cmp::max(lhs.precision(), rhs.precision());
-                Ok(TimestampType::arc(precision, None))
+                Ok(TimestampType::arc(precision))
             }
             _ => unreachable!(),
         };

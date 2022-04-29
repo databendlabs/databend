@@ -113,7 +113,7 @@ impl ToDateType for i32 {
 
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypeImpl {
-        TimestampType::arc(6, None)
+        TimestampType::arc(6)
     }
 }
 

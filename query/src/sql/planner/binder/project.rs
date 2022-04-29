@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::ast::Expr;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
@@ -77,7 +76,6 @@ impl Binder {
     ) -> Result<BindContext> {
         let mut output_context = BindContext::create();
         output_context.expression = input_context.expression.clone();
-
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName(names) => {
@@ -110,9 +108,9 @@ impl Binder {
                     let (data_type, nullable) = bound_expr.data_type();
 
                     // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name = match alias {
+                    let mut expr_name = match alias {
                         Some(alias) => alias.name.clone(),
-                        None => get_expr_display_string(expr),
+                        None => self.metadata.get_expr_display_string(expr, true)?,
                     };
 
                     // If expr is a ColumnRef, then it's a pass-through column. There is no need to
@@ -139,6 +137,7 @@ impl Binder {
                             }
                         }
                         _ => {
+                            expr_name = self.metadata.get_expr_display_string(expr, true)?;
                             let index = self.metadata.add_column(
                                 expr_name.clone(),
                                 data_type.clone(),
@@ -161,15 +160,5 @@ impl Binder {
         }
 
         Ok(output_context)
-    }
-}
-
-pub fn get_expr_display_string(expr: &Expr) -> String {
-    match expr {
-        Expr::ColumnRef { column, .. } => column.name.clone(),
-        _ => {
-            // TODO: this is Postgres style name for anonymous select item
-            "?column?".to_string()
-        }
     }
 }

@@ -162,16 +162,9 @@ where
                 Ok(col)
             }
             TypeID::Timestamp => {
-                let ts_dt = columns[0]
-                    .field()
-                    .data_type()
-                    .as_any()
-                    .downcast_ref::<TimestampType>()
-                    .unwrap();
-                let to_div = 10_i64.pow(ts_dt.precision() as u32);
                 let col: &Int64Column = Series::check_get(columns[0].column())?;
                 let iter = col.scalar_iter().map(|v| {
-                    let date_time = Utc.timestamp(v / to_div, 0_u32);
+                    let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
                     T::to_number(date_time, mode)
                 });
                 let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
