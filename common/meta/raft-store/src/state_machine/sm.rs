@@ -640,26 +640,29 @@ impl StateMachine {
 
         tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
 
-        if let Some(sv) = sv {
-            if let Some(target) = &cond.target {
-                match target {
-                    txn_condition::Target::Seq(target_seq) => {
-                        return Ok(self.return_seq_condition_result(
-                            cond.expected,
-                            target_seq,
-                            &sv,
-                        ));
-                    }
-                    txn_condition::Target::Value(target_value) => {
+        if let Some(target) = &cond.target {
+            match target {
+                txn_condition::Target::Seq(target_seq) => {
+                    return Ok(self.return_seq_condition_result(
+                        cond.expected,
+                        target_seq,
+                        // seq is 0 if the record does not exist.
+                        &sv.unwrap_or_default(),
+                    ));
+                }
+                txn_condition::Target::Value(target_value) => {
+                    if let Some(sv) = sv {
                         return Ok(self.return_value_condition_result(
                             cond.expected,
                             target_value,
                             &sv,
                         ));
+                    } else {
+                        return Ok(false);
                     }
                 }
-            };
-        }
+            }
+        };
 
         Ok(false)
     }
