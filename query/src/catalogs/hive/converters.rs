@@ -33,8 +33,11 @@ impl From<hms::Database> for HiveDatabase {
     fn from(hms_database: hms::Database) -> Self {
         HiveDatabase {
             database_info: DatabaseInfo {
-                database_id: 0,
-                db: hms_database.name.unwrap_or_default(),
+                ident: DatabaseIdent { db_id: 0, seq: 0 },
+                name_ident: DatabaseNameIdent {
+                    tenant: "TODO".to_owned(),
+                    db_name: hms_database.name.unwrap_or_default(),
+                },
                 meta: DatabaseMeta {
                     engine: HIVE_DATABASE_ENGIE.to_owned(),
                     created_on: Utc::now(),
