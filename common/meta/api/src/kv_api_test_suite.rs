@@ -58,6 +58,7 @@ impl KVApiTestSuite {
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
         self.kv_mget(&builder.build().await).await?;
+        self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
 
         // Run cross node test on every 2 adjacent nodes
@@ -562,7 +563,48 @@ impl KVApiTestSuite {
         }
     }
 
-    //#[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_txn_absent_seq_0<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- Absent record should has seq as 0");
+
+        let k1 = "txn_0_absent";
+
+        let txn_key = k1.to_string();
+        let conditions = vec![TxnCondition {
+            key: txn_key.clone(),
+            expected: ConditionResult::Eq as i32,
+            target: Some(txn_condition::Target::Seq(0)),
+        }];
+
+        let if_then: Vec<TxnOp> = vec![TxnOp {
+            request: Some(txn_op::Request::Put(TxnPutRequest {
+                key: txn_key.clone(),
+                value: b"new_v1".to_vec(),
+                prev_value: true,
+            })),
+        }];
+
+        let else_then: Vec<TxnOp> = vec![];
+
+        let txn = TxnRequest {
+            condition: conditions,
+            if_then,
+            else_then,
+        };
+
+        let resp = kv.transaction(txn).await?;
+
+        let expected: Vec<TxnOpResponse> = vec![TxnOpResponse {
+            response: Some(txn_op_response::Response::Put(TxnPutResponse {
+                key: txn_key.clone(),
+                prev_value: None,
+            })),
+        }];
+
+        self.check_transaction_responses(&resp, &expected);
+
+        Ok(())
+    }
+
     pub async fn kv_transaction<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // first case: get and set one key transaction
         {
