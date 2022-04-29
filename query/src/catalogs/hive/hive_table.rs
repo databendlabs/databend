@@ -38,6 +38,8 @@ use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::storages::TableStatistics;
 
+///! Dummy implementation for HIVE TABLE
+
 pub const HIVE_TABLE_ENGIE: &str = "hive";
 
 pub struct HiveTable {

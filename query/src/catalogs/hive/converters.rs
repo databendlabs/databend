@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use common_datavalues::chrono::Utc;
+use common_datavalues::type_primitive::Int32Type;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
-use common_datavalues::UInt8Type;
+use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hive_meta_store as hms;
 use common_meta_types::*;
@@ -26,6 +28,7 @@ use super::hive_database::HiveDatabase;
 use super::hive_database::HIVE_DATABASE_ENGIE;
 use super::hive_table::HIVE_TABLE_ENGIE;
 
+///! Skeleton of mappers
 impl From<hms::Database> for HiveDatabase {
     fn from(hms_database: hms::Database) -> Self {
         HiveDatabase {
@@ -67,16 +70,26 @@ pub fn try_into_table_info(
     Ok(table_info)
 }
 
-fn try_into_schema(fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
-    for field in fields {
-        eprintln!("{:?}", field);
-    }
-
+fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
     let mut fields = Vec::new();
-    let field = DataField::new("c1", Arc::new(UInt8Type::default()));
-    fields.push(field);
+    for field in hive_fields {
+        let name = field.name.unwrap_or_default();
+        let type_name = field.type_.unwrap_or_default();
+        let field = DataField::new(&name, try_from_filed_type_name(type_name)?);
+        fields.push(field);
+    }
+    Ok(DataSchema::new(fields))
+}
 
-    let schema = DataSchema::new(fields);
-
-    Ok(schema)
+fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataTypeImpl> {
+    let name = type_name.as_ref();
+    // TODO more mappings goes here
+    // https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types
+    match name.to_uppercase().as_str() {
+        "INT" => Ok(DataTypeImpl::Int32(Int32Type::default())),
+        _ => Err(ErrorCode::IllegalDataType(format!(
+            "unknown hive data type [{}]",
+            name
+        ))),
+    }
 }

@@ -28,9 +28,9 @@ impl FromStr for ThriftProtocol {
     type Err = &'static str;
 
     fn from_str(s: &str) -> std::result::Result<ThriftProtocol, &'static str> {
-        let s = s.to_lowercase();
+        let s = s.to_uppercase();
         match s.as_str() {
-            "binary" => Ok(ThriftProtocol::Binary),
+            "BINARY" => Ok(ThriftProtocol::Binary),
             _ => Err("invalid thrift protocol spec"),
         }
     }
@@ -41,7 +41,10 @@ impl FromStr for ThriftProtocol {
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
     pub meta_store_address: String,
-    #[clap(long = "hive-thrift-protocol")]
+    #[clap(
+        long = "hive-thrift-protocol",
+        default_value = "ThriftProtocol::Binary"
+    )]
     pub protocol: ThriftProtocol,
 }
 

@@ -72,6 +72,8 @@ pub struct Config {
     pub storage: StorageConfig,
 
     // external catalog config.
+    // - Later, catalog information SHOULD be kept in KV Service
+    // - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
 }
