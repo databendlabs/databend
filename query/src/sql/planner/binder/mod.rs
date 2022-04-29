@@ -63,8 +63,8 @@ impl Binder {
 
     async fn bind_statement<'a>(&mut self, stmt: &Statement<'a>) -> Result<BindContext> {
         match stmt {
-            Statement::Select(stmt) => {
-                let bind_context = self.bind_query(stmt).await?;
+            Statement::Query(query) => {
+                let bind_context = self.bind_query(query).await?;
                 Ok(bind_context)
             }
             _ => todo!(),

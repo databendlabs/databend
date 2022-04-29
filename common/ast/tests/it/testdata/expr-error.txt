@@ -5,9 +5,8 @@ error:
   --> SQL:1:12
   |
 1 | 5 * (a and ) 1
-  | -   -      ^ unexpected end of expression
-  | |   |       
-  | |   while parsing expression between `(...)`
+  | -          ^ expected more tokens for expression
+  | |           
   | while parsing expression
 
 
@@ -15,11 +14,39 @@ error:
 a + +
 ---------- Output ---------
 error: 
-  --> SQL:1:5
+  --> SQL:1:6
   |
 1 | a + +
-  | -   ^ unable to parse the binary operator
+  | -    ^ expected more tokens for expression
   | |    
+  | while parsing expression
+
+
+---------- Input ----------
+CAST(col1 AS foo)
+---------- Output ---------
+error: 
+  --> SQL:1:14
+  |
+1 | CAST(col1 AS foo)
+  | ----         ^^^
+  | |            |
+  | |            expected keyword `BOOLEAN`
+  | |            while parsing type name
+  | while parsing `CAST(... AS ...)`
+  | while parsing expression
+
+
+---------- Input ----------
+CAST(col1)
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | CAST(col1)
+  | ----     ^ expected keyword `AS`
+  | |         
+  | while parsing `CAST(... AS ...)`
   | while parsing expression
 
 
@@ -36,6 +63,6 @@ error:
 2 |             col1 NOT BETWEEN col2 AND
   |                  --- while parsing `[NOT] BETWEEN ... AND ...`
 3 |                 AND 1 + col3 DIV sum(col4)
-  |                 ^^^ unexpected end of expression
+  |                 ^^^ expected more tokens for expression
 
 
