@@ -35,16 +35,15 @@ use common_functions::aggregates::StateAddr;
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::new::processors::AggregatorParams;
 
-pub type FinalSingleKeyAggregator = SingleKeyAggregator<true>;
-pub type PartialSingleKeyAggregator = SingleKeyAggregator<false>;
+pub type FinalSingleStateAggregator = SingleStateAggregator<true>;
+pub type PartialSingleStateAggregator = SingleStateAggregator<false>;
 
 /// SELECT COUNT | SUM FROM table;
-#[allow(dead_code)]
-pub struct SingleKeyAggregator<const FINAL: bool> {
+pub struct SingleStateAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
     schema: DataSchemaRef,
-    arena: Bump,
+    _arena: Bump,
     places: Vec<StateAddr>,
     // used for deserialization only, so we can reuse it during the loop
     temp_places: Vec<StateAddr>,
@@ -52,7 +51,7 @@ pub struct SingleKeyAggregator<const FINAL: bool> {
     states_dropped: bool,
 }
 
-impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
+impl<const FINAL: bool> SingleStateAggregator<FINAL> {
     pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
         let arena = Bump::new();
         let (layout, offsets_aggregate_states) =
@@ -76,7 +75,7 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
         let temp_places = get_places();
 
         Ok(Self {
-            arena,
+            _arena: arena,
             places,
             funcs: params.aggregate_functions.clone(),
             arg_names: params.aggregate_functions_arguments_name.clone(),
@@ -106,8 +105,8 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
     }
 }
 
-impl Aggregator for SingleKeyAggregator<true> {
-    const NAME: &'static str = "FinalSingleKeyAggregator";
+impl Aggregator for SingleStateAggregator<true> {
+    const NAME: &'static str = "FinalSingleStateAggregator";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         for (index, func) in self.funcs.iter().enumerate() {
@@ -156,8 +155,8 @@ impl Aggregator for SingleKeyAggregator<true> {
     }
 }
 
-impl Aggregator for SingleKeyAggregator<false> {
-    const NAME: &'static str = "PartialSingleKeyAggregator";
+impl Aggregator for SingleStateAggregator<false> {
+    const NAME: &'static str = "PartialSingleStateAggregator";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let rows = block.num_rows();
@@ -197,7 +196,7 @@ impl Aggregator for SingleKeyAggregator<false> {
     }
 }
 
-impl<const FINAL: bool> Drop for SingleKeyAggregator<FINAL> {
+impl<const FINAL: bool> Drop for SingleStateAggregator<FINAL> {
     fn drop(&mut self) {
         self.drop_states();
     }

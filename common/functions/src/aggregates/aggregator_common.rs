@@ -23,6 +23,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::AggregateFunctionFactory;
+use super::AggregateFunctionRef;
+use super::StateAddr;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -78,6 +80,33 @@ pub fn assert_variadic_arguments<D: Display>(
     Ok(())
 }
 
+struct EvalAggr {
+    addr: StateAddr,
+    _arena: Bump,
+    func: AggregateFunctionRef,
+}
+
+impl EvalAggr {
+    fn new(func: AggregateFunctionRef) -> Self {
+        let _arena = Bump::new();
+        let place = _arena.alloc_layout(func.state_layout());
+        let addr = place.into();
+        func.init_state(addr);
+
+        Self { _arena, func, addr }
+    }
+}
+
+impl Drop for EvalAggr {
+    fn drop(&mut self) {
+        if self.func.need_manual_drop_state() {
+            unsafe {
+                self.func.drop_state(self.addr);
+            }
+        }
+    }
+}
+
 pub fn eval_aggr(
     name: &str,
     params: Vec<DataValue>,
@@ -91,28 +120,9 @@ pub fn eval_aggr(
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
 
-    let arena = Bump::new();
-    let place = arena.alloc_layout(func.state_layout());
-    let addr = place.into();
-    func.init_state(addr);
-
-    let f = func.clone();
-    // we need a temporary function to catch the errors
-    let apply = || -> Result<ColumnRef> {
-        func.accumulate(addr, &cols, None, rows)?;
-        let mut builder = data_type.create_mutable(1024);
-        func.merge_result(addr, builder.as_mut())?;
-
-        Ok(builder.to_column())
-    };
-
-    let result = apply();
-
-    if f.need_manual_drop_state() {
-        unsafe {
-            f.drop_state(addr);
-        }
-    }
-    drop(arena);
-    result
+    let eval = EvalAggr::new(func.clone());
+    func.accumulate(eval.addr, &cols, None, rows)?;
+    let mut builder = data_type.create_mutable(1024);
+    func.merge_result(eval.addr, builder.as_mut())?;
+    Ok(builder.to_column())
 }
