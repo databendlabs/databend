@@ -27,6 +27,7 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
@@ -212,8 +213,10 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: false,
-                        tenant: tenant.to_string(),
-                        db_name: name.to_string(),
+                        name_ident: DatabaseNameIdent {
+                            tenant: tenant.to_string(),
+                            db_name: name.to_string(),
+                        },
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
                             ..Default::default()

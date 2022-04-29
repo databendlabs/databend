@@ -22,6 +22,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReq;
@@ -53,8 +54,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -71,8 +74,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..Default::default()
@@ -92,8 +97,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: true,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -119,8 +126,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -197,8 +206,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -215,8 +226,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -233,8 +246,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant2.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant2.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -467,8 +482,10 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -701,8 +718,10 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -852,8 +871,10 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: new_db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: new_db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -1103,8 +1124,10 @@ impl MetaApiTestSuite {
 
         let req = CreateDatabaseReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -1131,8 +1154,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1188,8 +1213,10 @@ impl MetaApiTestSuite {
             for db_name in dbs {
                 let req = CreateDatabaseReq {
                     if_not_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
+                    name_ident: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
                     meta: DatabaseMeta {
                         engine: "github".to_string(),
                         ..Default::default()
@@ -1232,8 +1259,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1296,8 +1325,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()

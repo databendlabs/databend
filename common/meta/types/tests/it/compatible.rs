@@ -14,6 +14,7 @@
 
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::LogEntry;
 use openraft::raft::Entry;
@@ -42,7 +43,11 @@ fn test_load_entry_compatibility() -> anyhow::Result<()> {
         let ent: Entry<LogEntry> = serde_json::from_str(entries_before_20220413[1])?;
         match ent.payload {
             EntryPayload::Normal(LogEntry {
-                cmd: Cmd::CreateDatabase(CreateDatabaseReq { db_name, .. }),
+                cmd:
+                    Cmd::CreateDatabase(CreateDatabaseReq {
+                        name_ident: DatabaseNameIdent { db_name, .. },
+                        ..
+                    }),
                 ..
             }) => {
                 assert_eq!("default", db_name);
@@ -86,7 +91,11 @@ fn test_load_entry_compatibility() -> anyhow::Result<()> {
         let ent: Entry<LogEntry> = serde_json::from_str(entries_since_20220403[1])?;
         match ent.payload {
             EntryPayload::Normal(LogEntry {
-                cmd: Cmd::CreateDatabase(CreateDatabaseReq { db_name, .. }),
+                cmd:
+                    Cmd::CreateDatabase(CreateDatabaseReq {
+                        name_ident: DatabaseNameIdent { db_name, .. },
+                        ..
+                    }),
                 ..
             }) => {
                 assert_eq!("default", db_name);

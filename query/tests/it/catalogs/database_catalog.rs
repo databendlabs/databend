@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::TableMeta;
@@ -67,8 +68,10 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let mut req = CreateDatabaseReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "db1".to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "db1".to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -81,7 +84,7 @@ async fn test_catalogs_database() -> Result<()> {
         assert_eq!(db_list_1.len(), db_count + 1);
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.create_database(req).await;
         assert!(res.is_err());
     }
