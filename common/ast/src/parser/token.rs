@@ -811,7 +811,6 @@ impl TokenKind {
             // | TokenKind::CURRENT_TIME
             | TokenKind::CURRENT_TIMESTAMP
             // | TokenKind::CURRENT_USER
-            | TokenKind::DEFAULT
             // | TokenKind::DEFERRABLE
             | TokenKind::DESC
             | TokenKind::DISTINCT

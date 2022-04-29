@@ -16,7 +16,7 @@ SHOW TABLE STATUS WHERE Name = 't%' AND 1 = 0;
 SHOW TABLE STATUS WHERE Name = 't2' OR 1 = 1;
 SHOW TABLE STATUS WHERE Name = 't2' AND 1 = 1;
 
-USE default_db;
+USE default;
 SHOW TABLE STATUS FROM showtabstat WHERE Name LIKE 't%';
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't%' AND 1 = 0;
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't2' OR 1 = 1;

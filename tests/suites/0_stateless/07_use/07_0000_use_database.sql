@@ -2,7 +2,7 @@
 USE not_exists_db;
 USE ``;
 USE ` `;
-USE default_db;
+USE default;
 USE system;
 select database();
 create database `rust-lang`;
