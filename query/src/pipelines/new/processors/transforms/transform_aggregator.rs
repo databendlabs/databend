@@ -41,7 +41,7 @@ impl TransformAggregator {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
-                FinalSingleKeyAggregator::try_create(&aggregator_params)?,
+                FinalSingleStateAggregator::try_create(&aggregator_params)?,
             );
         }
 
@@ -124,7 +124,7 @@ impl TransformAggregator {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
-                PartialSingleKeyAggregator::try_create(&aggregator_params)?,
+                PartialSingleStateAggregator::try_create(&aggregator_params)?,
             );
         }
 
