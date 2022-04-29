@@ -3096,9 +3096,9 @@ dependencies = [
 
 [[package]]
 name = "jwtk"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ccbb03951ed125446ee19b8210edde61a930d97100430544f08adf319465c4c"
+checksum = "7da77b2478b6a031c2978740dc35428b9bf1eaa92e7631baccf5107174c160dd"
 dependencies = [
  "base64 0.13.0",
  "foreign-types",

@@ -63,8 +63,9 @@ impl JwtAuthenticator {
         if cfg.query.jwt_key_file.is_empty() {
             return Ok(None);
         }
-        let verifier =
+        let mut verifier =
             RemoteJwksVerifier::new(cfg.query.jwt_key_file, None, Duration::from_secs(15 * 60));
+        verifier.set_require_kid(false);
         Ok(Some(JwtAuthenticator { verifier }))
     }
 
