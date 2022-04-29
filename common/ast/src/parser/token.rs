@@ -101,7 +101,7 @@ pub enum TokenKind {
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
 
-    #[regex(r#"`[_\-$a-zA-Z0-9]*`"#)]
+    #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedIdent,
@@ -214,372 +214,382 @@ pub enum TokenKind {
     PGCubeRoot,
 
     // Keywords
-    #[token("SELECT", ignore(ascii_case))]
-    SELECT,
-    #[token("DISTINCT", ignore(ascii_case))]
-    DISTINCT,
-    #[token("FROM", ignore(ascii_case))]
-    FROM,
-    #[token("IS", ignore(ascii_case))]
-    IS,
-    #[token("AS", ignore(ascii_case))]
-    AS,
-    #[token("WHERE", ignore(ascii_case))]
-    WHERE,
-    #[token("GROUP", ignore(ascii_case))]
-    GROUP,
-    #[token("BY", ignore(ascii_case))]
-    BY,
-    #[token("HAVING", ignore(ascii_case))]
-    HAVING,
-    #[token("ORDER", ignore(ascii_case))]
-    ORDER,
-    #[token("LIMIT", ignore(ascii_case))]
-    LIMIT,
-    #[token("ASC", ignore(ascii_case))]
-    ASC,
-    #[token("DESC", ignore(ascii_case))]
-    DESC,
-    #[token("INNER", ignore(ascii_case))]
-    INNER,
-    #[token("LEFT", ignore(ascii_case))]
-    LEFT,
-    #[token("RIGHT", ignore(ascii_case))]
-    RIGHT,
-    #[token("FULL", ignore(ascii_case))]
-    FULL,
-    #[token("OUTER", ignore(ascii_case))]
-    OUTER,
-    #[token("JOIN", ignore(ascii_case))]
-    JOIN,
-    #[token("ON", ignore(ascii_case))]
-    ON,
-    #[token("USING", ignore(ascii_case))]
-    USING,
-    #[token("NATURAL", ignore(ascii_case))]
-    NATURAL,
-    #[token("CREATE", ignore(ascii_case))]
-    CREATE,
-    #[token("TABLE", ignore(ascii_case))]
-    TABLE,
-    #[token("IF", ignore(ascii_case))]
-    IF,
-    #[token("IN", ignore(ascii_case))]
-    IN,
-    #[token("NOT", ignore(ascii_case))]
-    NOT,
-    #[token("EXISTS", ignore(ascii_case))]
-    EXISTS,
-    #[token("BOOLEAN", ignore(ascii_case))]
-    BOOLEAN,
-    #[token("TINYINT", ignore(ascii_case))]
-    TINYINT,
-    #[token("SMALLINT", ignore(ascii_case))]
-    SMALLINT,
-    #[token("INT", ignore(ascii_case))]
-    INT,
-    #[token("BIGINT", ignore(ascii_case))]
-    BIGINT,
-    #[token("FLOAT", ignore(ascii_case))]
-    FLOAT,
-    #[token("DOUBLE", ignore(ascii_case))]
-    DOUBLE,
-    #[token("DATE", ignore(ascii_case))]
-    DATE,
-    #[token("TIMESTAMP", ignore(ascii_case))]
-    TIMESTAMP,
-    #[token("VARCHAR", ignore(ascii_case))]
-    VARCHAR,
-    #[token("ARRAY", ignore(ascii_case))]
-    ARRAY,
-    #[token("OBJECT", ignore(ascii_case))]
-    OBJECT,
-    #[token("NULL", ignore(ascii_case))]
-    NULL,
-    #[token("DEFAULT", ignore(ascii_case))]
-    DEFAULT,
+    //
+    // Steps to add keyword:
+    // 1. Add the keyword to token kind variants by alphabetical order.
+    // 2. Search in this file to see if the new keyword is a commented
+    //    out reserverd keyword. If so, uncomment the keyword in the
+    //    reserved list.
+    #[token("ALL", ignore(ascii_case))]
+    ALL,
     #[token("ALTER", ignore(ascii_case))]
     ALTER,
-    #[token("RENAME", ignore(ascii_case))]
-    RENAME,
-    #[token("TO", ignore(ascii_case))]
-    TO,
-    #[token("DROP", ignore(ascii_case))]
-    DROP,
-    #[token("DATABASE", ignore(ascii_case))]
-    DATABASE,
-    #[token("SCHEMA", ignore(ascii_case))]
-    SCHEMA,
-    #[token("SCHEMAS", ignore(ascii_case))]
-    SCHEMAS,
-    #[token("STAGE", ignore(ascii_case))]
-    STAGE,
-    #[token("URL", ignore(ascii_case))]
-    URL,
-    #[token("CREDENTIALS", ignore(ascii_case))]
-    CREDENTIALS,
+    #[token("ANALYZE", ignore(ascii_case))]
+    ANALYZE,
+    #[token("AND", ignore(ascii_case))]
+    AND,
+    #[token("ARRAY", ignore(ascii_case))]
+    ARRAY,
+    #[token("AS", ignore(ascii_case))]
+    AS,
+    #[token("ASC", ignore(ascii_case))]
+    ASC,
     #[token("AWS_KEY_ID", ignore(ascii_case))]
     AWS_KEY_ID,
     #[token("AWS_SECRET_KEY", ignore(ascii_case))]
     AWS_SECRET_KEY,
-    #[token("ENDPOINT_URL", ignore(ascii_case))]
-    ENDPOINT_URL,
-    #[token("FILE_FORMAT", ignore(ascii_case))]
-    FILE_FORMAT,
-    #[token("TYPE", ignore(ascii_case))]
-    TYPE,
-    #[token("CSV", ignore(ascii_case))]
-    CSV,
-    #[token("PARQUET", ignore(ascii_case))]
-    PARQUET,
-    #[token("RECORD_DELIMITER", ignore(ascii_case))]
-    RECORD_DELIMITER,
-    #[token("FIELD_DELIMITER", ignore(ascii_case))]
-    FIELD_DELIMITER,
-    #[token("SKIP_HEADER", ignore(ascii_case))]
-    SKIP_HEADER,
-    #[token("COPY_OPTIONS", ignore(ascii_case))]
-    COPY_OPTIONS,
-    #[token("SIZE_LIMIT", ignore(ascii_case))]
-    SIZE_LIMIT,
-    #[token("COMMENT", ignore(ascii_case))]
-    COMMENT,
-    #[token("LIST", ignore(ascii_case))]
-    LIST,
-    #[token("PATTERN", ignore(ascii_case))]
-    PATTERN,
-    #[token("INSERT", ignore(ascii_case))]
-    INSERT,
-    #[token("OVERWRITE", ignore(ascii_case))]
-    OVERWRITE,
-    #[token("VALUES", ignore(ascii_case))]
-    VALUES,
-    #[token("COPY", ignore(ascii_case))]
-    COPY,
-    #[token("FILES", ignore(ascii_case))]
-    FILES,
-    #[token("CASE", ignore(ascii_case))]
-    CASE,
-    #[token("WHEN", ignore(ascii_case))]
-    WHEN,
-    #[token("THEN", ignore(ascii_case))]
-    THEN,
-    #[token("INTERVAL", ignore(ascii_case))]
-    INTERVAL,
-    #[token("YEAR", ignore(ascii_case))]
-    YEAR,
-    #[token("MONTH", ignore(ascii_case))]
-    MONTH,
-    #[token("DAY", ignore(ascii_case))]
-    DAY,
     #[token("BETWEEN", ignore(ascii_case))]
     BETWEEN,
-    #[token("AND", ignore(ascii_case))]
-    AND,
+    #[token("BIGINT", ignore(ascii_case))]
+    BIGINT,
+    #[token("BOOLEAN", ignore(ascii_case))]
+    BOOLEAN,
+    #[token("BOTH", ignore(ascii_case))]
+    BOTH,
+    #[token("BY", ignore(ascii_case))]
+    BY,
+    #[token("CASE", ignore(ascii_case))]
+    CASE,
     #[token("CAST", ignore(ascii_case))]
     CAST,
-    #[token("TRY_CAST", ignore(ascii_case))]
-    TRY_CAST,
+    #[token("CENTURY", ignore(ascii_case))]
+    CENTURY,
+    #[token("CLUSTER", ignore(ascii_case))]
+    CLUSTER,
+    #[token("COMMENT", ignore(ascii_case))]
+    COMMENT,
+    #[token("COMPACT", ignore(ascii_case))]
+    COMPACT,
+    #[token("CONFIGRELOAD", ignore(ascii_case))]
+    CONFIGRELOAD,
+    #[token("CONNECTION", ignore(ascii_case))]
+    CONNECTION,
+    #[token("COPY_OPTIONS", ignore(ascii_case))]
+    COPY_OPTIONS,
+    #[token("COPY", ignore(ascii_case))]
+    COPY,
     #[token("COUNT", ignore(ascii_case))]
     COUNT,
+    #[token("CREATE", ignore(ascii_case))]
+    CREATE,
+    #[token("CREDENTIALS", ignore(ascii_case))]
+    CREDENTIALS,
+    #[token("CSV", ignore(ascii_case))]
+    CSV,
+    #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
+    CURRENT_TIMESTAMP,
+    #[token("DATABASE", ignore(ascii_case))]
+    DATABASE,
+    #[token("DATABASES", ignore(ascii_case))]
+    DATABASES,
+    #[token("DATE", ignore(ascii_case))]
+    DATE,
+    #[token("DATETIME", ignore(ascii_case))]
+    DATETIME,
+    #[token("DAY", ignore(ascii_case))]
+    DAY,
+    #[token("DECADE", ignore(ascii_case))]
+    DECADE,
+    #[token("DEFAULT", ignore(ascii_case))]
+    DEFAULT,
+    #[token("DESC", ignore(ascii_case))]
+    DESC,
+    #[token("DESCRIBE", ignore(ascii_case))]
+    DESCRIBE,
+    #[token("DISTINCT", ignore(ascii_case))]
+    DISTINCT,
+    #[token("DIV", ignore(ascii_case))]
+    DIV,
+    #[token("DOUBLE_SHA1_PASSWORD", ignore(ascii_case))]
+    DOUBLE_SHA1_PASSWORD,
+    #[token("DOUBLE", ignore(ascii_case))]
+    DOUBLE,
+    #[token("DOW", ignore(ascii_case))]
+    DOW,
+    #[token("DOY", ignore(ascii_case))]
+    DOY,
+    #[token("DROP", ignore(ascii_case))]
+    DROP,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
     #[token("END", ignore(ascii_case))]
     END,
-    #[token("DIV", ignore(ascii_case))]
-    DIV,
-    #[token("LIKE", ignore(ascii_case))]
-    LIKE,
-    #[token("OR", ignore(ascii_case))]
-    OR,
-    #[token("TRUE", ignore(ascii_case))]
-    TRUE,
-    #[token("FALSE", ignore(ascii_case))]
-    FALSE,
-    #[token("INTEGER", ignore(ascii_case))]
-    INTEGER,
-    #[token("STRING", ignore(ascii_case))]
-    STRING,
-    #[token("OFFSET", ignore(ascii_case))]
-    OFFSET,
-    #[token("SHOW", ignore(ascii_case))]
-    SHOW,
-    #[token("TABLES", ignore(ascii_case))]
-    TABLES,
-    #[token("SET", ignore(ascii_case))]
-    SET,
+    #[token("ENDPOINT_URL", ignore(ascii_case))]
+    ENDPOINT_URL,
+    #[token("ENGINE", ignore(ascii_case))]
+    ENGINE,
+    #[token("EPOCH", ignore(ascii_case))]
+    EPOCH,
+    #[token("EXISTS", ignore(ascii_case))]
+    EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
     EXPLAIN,
-    #[token("ANALYZE", ignore(ascii_case))]
-    ANALYZE,
-    #[token("DESCRIBE", ignore(ascii_case))]
-    DESCRIBE,
-    #[token("TRUNCATE", ignore(ascii_case))]
-    TRUNCATE,
-    #[token("INTO", ignore(ascii_case))]
-    INTO,
+    #[token("EXTRACT", ignore(ascii_case))]
+    EXTRACT,
+    #[token("FALSE", ignore(ascii_case))]
+    FALSE,
+    #[token("FIELD_DELIMITER", ignore(ascii_case))]
+    FIELD_DELIMITER,
+    #[token("FILE_FORMAT", ignore(ascii_case))]
+    FILE_FORMAT,
+    #[token("FILES", ignore(ascii_case))]
+    FILES,
+    #[token("FLOAT", ignore(ascii_case))]
+    FLOAT,
+    #[token("FLOAT32", ignore(ascii_case))]
+    FLOAT32,
+    #[token("FLOAT64", ignore(ascii_case))]
+    FLOAT64,
+    #[token("FOR", ignore(ascii_case))]
+    FOR,
     #[token("FORMAT", ignore(ascii_case))]
     FORMAT,
-    #[token("RLIKE", ignore(ascii_case))]
-    RLIKE,
-    #[token("REGEXP", ignore(ascii_case))]
-    REGEXP,
-    #[token("DATABASES", ignore(ascii_case))]
-    DATABASES,
-    #[token("SETTINGS", ignore(ascii_case))]
-    SETTINGS,
-    #[token("PROCESSLIST", ignore(ascii_case))]
-    PROCESSLIST,
-    #[token("KILL", ignore(ascii_case))]
-    KILL,
-    #[token("USE", ignore(ascii_case))]
-    USE,
-    #[token("UNSIGNED", ignore(ascii_case))]
-    UNSIGNED,
-    #[token("SIGNED", ignore(ascii_case))]
-    SIGNED,
-    #[token("DATETIME", ignore(ascii_case))]
-    DATETIME,
-    #[token("VARIANT", ignore(ascii_case))]
-    VARIANT,
-    #[token("UINT8", ignore(ascii_case))]
-    UINT8,
-    #[token("UINT16", ignore(ascii_case))]
-    UINT16,
-    #[token("UINT32", ignore(ascii_case))]
-    UINT32,
-    #[token("UINT64", ignore(ascii_case))]
-    UINT64,
-    #[token("INT8", ignore(ascii_case))]
-    INT8,
+    #[token("FROM", ignore(ascii_case))]
+    FROM,
+    #[token("FULL", ignore(ascii_case))]
+    FULL,
+    #[token("FUNCTION", ignore(ascii_case))]
+    FUNCTION,
+    #[token("FUNCTIONS", ignore(ascii_case))]
+    FUNCTIONS,
+    #[token("FUSE", ignore(ascii_case))]
+    FUSE,
+    #[token("GITHUB", ignore(ascii_case))]
+    GITHUB,
+    #[token("GRAPH", ignore(ascii_case))]
+    GRAPH,
+    #[token("GROUP", ignore(ascii_case))]
+    GROUP,
+    #[token("HAVING", ignore(ascii_case))]
+    HAVING,
+    #[token("HOUR", ignore(ascii_case))]
+    HOUR,
+    #[token("IDENTIFIED", ignore(ascii_case))]
+    IDENTIFIED,
+    #[token("IF", ignore(ascii_case))]
+    IF,
+    #[token("IN", ignore(ascii_case))]
+    IN,
+    #[token("INNER", ignore(ascii_case))]
+    INNER,
+    #[token("INSERT", ignore(ascii_case))]
+    INSERT,
+    #[token("INT", ignore(ascii_case))]
+    INT,
     #[token("INT16", ignore(ascii_case))]
     INT16,
     #[token("INT32", ignore(ascii_case))]
     INT32,
     #[token("INT64", ignore(ascii_case))]
     INT64,
-    #[token("FLOAT32", ignore(ascii_case))]
-    FLOAT32,
-    #[token("FLOAT64", ignore(ascii_case))]
-    FLOAT64,
-    #[token("HOUR", ignore(ascii_case))]
-    HOUR,
-    #[token("MINUTE", ignore(ascii_case))]
-    MINUTE,
-    #[token("SECOND", ignore(ascii_case))]
-    SECOND,
-    #[token("TRIM", ignore(ascii_case))]
-    TRIM,
-    #[token("SUBSTRING", ignore(ascii_case))]
-    SUBSTRING,
-    #[token("EXTRACT", ignore(ascii_case))]
-    EXTRACT,
-    #[token("POSITION", ignore(ascii_case))]
-    POSITION,
-    #[token("FOR", ignore(ascii_case))]
-    FOR,
-    #[token("BOTH", ignore(ascii_case))]
-    BOTH,
-    #[token("LEADING", ignore(ascii_case))]
-    LEADING,
-    #[token("TRAILING", ignore(ascii_case))]
-    TRAILING,
-    #[token("ENGINE", ignore(ascii_case))]
-    ENGINE,
-    #[token("CENTURY", ignore(ascii_case))]
-    CENTURY,
-    #[token("DECADE", ignore(ascii_case))]
-    DECADE,
-    #[token("DOY", ignore(ascii_case))]
-    DOY,
-    #[token("WEEK", ignore(ascii_case))]
-    WEEK,
-    #[token("DOW", ignore(ascii_case))]
-    DOW,
-    #[token("EPOCH", ignore(ascii_case))]
-    EPOCH,
+    #[token("INT8", ignore(ascii_case))]
+    INT8,
+    #[token("INTEGER", ignore(ascii_case))]
+    INTEGER,
+    #[token("INTERVAL", ignore(ascii_case))]
+    INTERVAL,
+    #[token("INTO", ignore(ascii_case))]
+    INTO,
+    #[token("IS", ignore(ascii_case))]
+    IS,
     #[token("ISODOW", ignore(ascii_case))]
     ISODOW,
     #[token("ISOYEAR", ignore(ascii_case))]
     ISOYEAR,
+    #[token("JOIN", ignore(ascii_case))]
+    JOIN,
+    #[token("JSON", ignore(ascii_case))]
+    JSON,
     #[token("JULIAN", ignore(ascii_case))]
     JULIAN,
+    #[token("JWT", ignore(ascii_case))]
+    JWT,
+    #[token("KILL", ignore(ascii_case))]
+    KILL,
+    #[token("LEADING", ignore(ascii_case))]
+    LEADING,
+    #[token("LEFT", ignore(ascii_case))]
+    LEFT,
+    #[token("LIKE", ignore(ascii_case))]
+    LIKE,
+    #[token("LIMIT", ignore(ascii_case))]
+    LIMIT,
+    #[token("LIST", ignore(ascii_case))]
+    LIST,
+    #[token("MAP", ignore(ascii_case))]
+    MAP,
+    #[token("MEMORY", ignore(ascii_case))]
+    MEMORY,
+    #[token("METRICS", ignore(ascii_case))]
+    METRICS,
     #[token("MICROSECONDS", ignore(ascii_case))]
     MICROSECONDS,
     #[token("MILLENIUM", ignore(ascii_case))]
     MILLENIUM,
     #[token("MILLISECONDS", ignore(ascii_case))]
     MILLISECONDS,
+    #[token("MINUTE", ignore(ascii_case))]
+    MINUTE,
+    #[token("MONTH", ignore(ascii_case))]
+    MONTH,
+    #[token("NATURAL", ignore(ascii_case))]
+    NATURAL,
+    #[token("NO_PASSWORD", ignore(ascii_case))]
+    NO_PASSWORD,
+    #[token("NOCONFIGRELOAD", ignore(ascii_case))]
+    NOCONFIGRELOAD,
+    #[token("NOT", ignore(ascii_case))]
+    NOT,
+    #[token("NOTENANTSETTING", ignore(ascii_case))]
+    NOTENANTSETTING,
+    #[token("NULL", ignore(ascii_case))]
+    NULL,
+    #[token("OBJECT", ignore(ascii_case))]
+    OBJECT,
+    #[token("OFFSET", ignore(ascii_case))]
+    OFFSET,
+    #[token("ON", ignore(ascii_case))]
+    ON,
+    #[token("OPTIMIZE", ignore(ascii_case))]
+    OPTIMIZE,
+    #[token("OR", ignore(ascii_case))]
+    OR,
+    #[token("ORDER", ignore(ascii_case))]
+    ORDER,
+    #[token("OUTER", ignore(ascii_case))]
+    OUTER,
+    #[token("OVERWRITE", ignore(ascii_case))]
+    OVERWRITE,
+    #[token("PARQUET", ignore(ascii_case))]
+    PARQUET,
+    #[token("PATTERN", ignore(ascii_case))]
+    PATTERN,
+    #[token("PIPELINE", ignore(ascii_case))]
+    PIPELINE,
+    #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
+    PLAINTEXT_PASSWORD,
+    #[token("POSITION", ignore(ascii_case))]
+    POSITION,
+    #[token("PROCESSLIST", ignore(ascii_case))]
+    PROCESSLIST,
+    #[token("PURGE", ignore(ascii_case))]
+    PURGE,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
-    #[token("TIMEZONE", ignore(ascii_case))]
-    TIMEZONE,
+    #[token("QUERY", ignore(ascii_case))]
+    QUERY,
+    #[token("RECORD_DELIMITER", ignore(ascii_case))]
+    RECORD_DELIMITER,
+    #[token("REGEXP", ignore(ascii_case))]
+    REGEXP,
+    #[token("RENAME", ignore(ascii_case))]
+    RENAME,
+    #[token("RIGHT", ignore(ascii_case))]
+    RIGHT,
+    #[token("RLIKE", ignore(ascii_case))]
+    RLIKE,
+    #[token("SCHEMA", ignore(ascii_case))]
+    SCHEMA,
+    #[token("SCHEMAS", ignore(ascii_case))]
+    SCHEMAS,
+    #[token("SECOND", ignore(ascii_case))]
+    SECOND,
+    #[token("SELECT", ignore(ascii_case))]
+    SELECT,
+    #[token("SET", ignore(ascii_case))]
+    SET,
+    #[token("SETTINGS", ignore(ascii_case))]
+    SETTINGS,
+    #[token("SHA256_PASSWORD", ignore(ascii_case))]
+    SHA256_PASSWORD,
+    #[token("SHOW", ignore(ascii_case))]
+    SHOW,
+    #[token("SIGNED", ignore(ascii_case))]
+    SIGNED,
+    #[token("SIZE_LIMIT", ignore(ascii_case))]
+    SIZE_LIMIT,
+    #[token("SKIP_HEADER", ignore(ascii_case))]
+    SKIP_HEADER,
+    #[token("SMALLINT", ignore(ascii_case))]
+    SMALLINT,
+    #[token("STAGE", ignore(ascii_case))]
+    STAGE,
+    #[token("STATUS", ignore(ascii_case))]
+    STATUS,
+    #[token("STRING", ignore(ascii_case))]
+    STRING,
+    #[token("SUBSTRING", ignore(ascii_case))]
+    SUBSTRING,
+    #[token("TABLE", ignore(ascii_case))]
+    TABLE,
+    #[token("TABLES", ignore(ascii_case))]
+    TABLES,
+    #[token("TENANTSETTING", ignore(ascii_case))]
+    TENANTSETTING,
+    #[token("THEN", ignore(ascii_case))]
+    THEN,
+    #[token("TIMESTAMP", ignore(ascii_case))]
+    TIMESTAMP,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
     TIMEZONE_HOUR,
     #[token("TIMEZONE_MINUTE", ignore(ascii_case))]
     TIMEZONE_MINUTE,
-    #[token("XOR", ignore(ascii_case))]
-    XOR,
-    #[token("STATUS", ignore(ascii_case))]
-    STATUS,
-    #[token("QUERY", ignore(ascii_case))]
-    QUERY,
-    #[token("CONNECTION", ignore(ascii_case))]
-    CONNECTION,
-    #[token("ALL", ignore(ascii_case))]
-    ALL,
-    #[token("PURGE", ignore(ascii_case))]
-    PURGE,
-    #[token("COMPACT", ignore(ascii_case))]
-    COMPACT,
-    #[token("OPTIMIZE", ignore(ascii_case))]
-    OPTIMIZE,
-    #[token("VIEW", ignore(ascii_case))]
-    VIEW,
-    #[token("FUNCTIONS", ignore(ascii_case))]
-    FUNCTIONS,
-    #[token("METRICS", ignore(ascii_case))]
-    METRICS,
-    #[token("FUNCTION", ignore(ascii_case))]
-    FUNCTION,
-    #[token("PIPELINE", ignore(ascii_case))]
-    PIPELINE,
-    #[token("GRAPH", ignore(ascii_case))]
-    GRAPH,
-    #[token("MEMORY", ignore(ascii_case))]
-    MEMORY,
-    #[token("FUSE", ignore(ascii_case))]
-    FUSE,
-    #[token("GITHUB", ignore(ascii_case))]
-    GITHUB,
-    #[token("CLUSTER", ignore(ascii_case))]
-    CLUSTER,
-    #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
-    CURRENT_TIMESTAMP,
+    #[token("TIMEZONE", ignore(ascii_case))]
+    TIMEZONE,
+    #[token("TINYINT", ignore(ascii_case))]
+    TINYINT,
+    #[token("TO", ignore(ascii_case))]
+    TO,
+    #[token("TRAILING", ignore(ascii_case))]
+    TRAILING,
+    #[token("TRIM", ignore(ascii_case))]
+    TRIM,
+    #[token("TRUE", ignore(ascii_case))]
+    TRUE,
+    #[token("TRUNCATE", ignore(ascii_case))]
+    TRUNCATE,
+    #[token("TRY_CAST", ignore(ascii_case))]
+    TRY_CAST,
+    #[token("TYPE", ignore(ascii_case))]
+    TYPE,
+    #[token("UINT16", ignore(ascii_case))]
+    UINT16,
+    #[token("UINT32", ignore(ascii_case))]
+    UINT32,
+    #[token("UINT64", ignore(ascii_case))]
+    UINT64,
+    #[token("UINT8", ignore(ascii_case))]
+    UINT8,
+    #[token("UNSIGNED", ignore(ascii_case))]
+    UNSIGNED,
+    #[token("URL", ignore(ascii_case))]
+    URL,
+    #[token("USE", ignore(ascii_case))]
+    USE,
     #[token("USER", ignore(ascii_case))]
     USER,
-    #[token("IDENTIFIED", ignore(ascii_case))]
-    IDENTIFIED,
+    #[token("USING", ignore(ascii_case))]
+    USING,
+    #[token("VALUES", ignore(ascii_case))]
+    VALUES,
+    #[token("VARCHAR", ignore(ascii_case))]
+    VARCHAR,
+    #[token("VARIANT", ignore(ascii_case))]
+    VARIANT,
+    #[token("VIEW", ignore(ascii_case))]
+    VIEW,
+    #[token("WEEK", ignore(ascii_case))]
+    WEEK,
+    #[token("WHEN", ignore(ascii_case))]
+    WHEN,
+    #[token("WHERE", ignore(ascii_case))]
+    WHERE,
     #[token("WITH", ignore(ascii_case))]
     WITH,
-    #[token("TENANTSETTING", ignore(ascii_case))]
-    TENANTSETTING,
-    #[token("NOTENANTSETTING", ignore(ascii_case))]
-    NOTENANTSETTING,
-    #[token("CONFIGRELOAD", ignore(ascii_case))]
-    CONFIGRELOAD,
-    #[token("NOCONFIGRELOAD", ignore(ascii_case))]
-    NOCONFIGRELOAD,
-    #[token("NO_PASSWORD", ignore(ascii_case))]
-    NO_PASSWORD,
-    #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
-    PLAINTEXT_PASSWORD,
-    #[token("SHA256_PASSWORD", ignore(ascii_case))]
-    SHA256_PASSWORD,
-    #[token("DOUBLE_SHA1_PASSWORD", ignore(ascii_case))]
-    DOUBLE_SHA1_PASSWORD,
-    #[token("JWT", ignore(ascii_case))]
-    JWT,
+    #[token("XOR", ignore(ascii_case))]
+    XOR,
+    #[token("YEAR", ignore(ascii_case))]
+    YEAR,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

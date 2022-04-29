@@ -846,8 +846,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         TypeName::String,
         rule! { ( STRING | VARCHAR ) ~ ( "(" ~ #literal_u64 ~ ")" )? },
     );
-    let ty_object = value(TypeName::Object, rule! { OBJECT });
-    let ty_variant = value(TypeName::Variant, rule! { VARIANT });
+    let ty_object = value(TypeName::Object, rule! { OBJECT | MAP });
+    let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
 
     rule!(
         ( #ty_boolean
