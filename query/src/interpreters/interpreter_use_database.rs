@@ -46,7 +46,7 @@ impl Interpreter for UseDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        if self.plan.db.is_empty() {
+        if self.plan.db.trim().is_empty() {
             return Err(ErrorCode::UnknownDatabase("No database selected"));
         }
         self.ctx.set_current_database(self.plan.db.clone()).await?;
