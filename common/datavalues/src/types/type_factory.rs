@@ -80,7 +80,7 @@ impl TypeFactory {
         self.case_insensitive_types
             .get(&lowercase_name)
             .ok_or_else(|| {
-                ErrorCode::IllegalDataType(format!("Unsupported data_type: {}", origin_name))
+                ErrorCode::IllegalDataType(format!("Unsupported data type: {}", origin_name))
             })
     }
 
