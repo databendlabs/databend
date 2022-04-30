@@ -25,7 +25,7 @@ runs:
 
     - shell: bash
       if: "contains(inputs.target, 'apple')"
-      run: brew install thrift 
+      run: brew install thrift
 
     - name: Setup Build Tool
       if: "contains(inputs.target, 'linux')"
