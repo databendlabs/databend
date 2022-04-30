@@ -50,7 +50,7 @@ impl ScalarExpr for Scalar {
                 nullable,
                 ..
             } => (data_type.clone(), *nullable),
-            Scalar::Equal { .. } => (BooleanType::arc(), false),
+            Scalar::Equal { .. } => (BooleanType::new_impl(), false),
             Scalar::AggregateFunction {
                 data_type,
                 nullable,

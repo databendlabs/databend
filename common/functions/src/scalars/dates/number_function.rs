@@ -112,7 +112,7 @@ impl NumberOperator<i32> for ToStartOfYear {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -133,7 +133,7 @@ impl NumberOperator<i32> for ToStartOfISOYear {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -150,7 +150,7 @@ impl NumberOperator<i32> for ToStartOfQuarter {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -166,7 +166,7 @@ impl NumberOperator<i32> for ToStartOfMonth {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -249,7 +249,7 @@ impl NumberOperator<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Option<Box<dyn Function>> {
-        let type_name = DateType::arc().name();
+        let type_name = DateType::new_impl().name();
         Some(CastFunction::create("toDate", type_name.as_str()).unwrap())
     }
 }
@@ -267,7 +267,7 @@ impl NumberOperator<u8> for ToMinute {
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfHour", &[&TimestampType::arc(0)], 60 * 60).unwrap(),
+            RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], 60 * 60).unwrap(),
         )
     }
 }
@@ -284,7 +284,7 @@ impl NumberOperator<u8> for ToSecond {
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(RoundFunction::try_create("toStartOfMinute", &[&TimestampType::arc(0)], 60).unwrap())
+        Some(RoundFunction::try_create("toStartOfMinute", &[&TimestampType::new_impl(0)], 60).unwrap())
     }
 }
 

@@ -294,7 +294,7 @@ fn test_cityhash64_with_seed_u8() -> Result<()> {
         let hashed = cityhash64_with_seed(&[*v], seed);
         expected_result.push(hashed);
     }
-    let data_type = UInt64Type::arc();
+    let data_type = UInt64Type::new_impl();
     let data_value = DataValue::UInt64(seed);
     let seed_column = data_type.create_constant_column(&data_value, to_hash.len())?;
     let test1 = ScalarFunctionTest {
@@ -344,7 +344,7 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
             None => expected_result.push(None),
         }
     }
-    let data_type = UInt64Type::arc();
+    let data_type = UInt64Type::new_impl();
     let data_value = DataValue::UInt64(seed);
     let seed_column = data_type.create_constant_column(&data_value, to_hash.len())?;
     let test1 = ScalarFunctionTest {

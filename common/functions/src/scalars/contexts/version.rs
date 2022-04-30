@@ -50,7 +50,7 @@ impl Function for VersionFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(

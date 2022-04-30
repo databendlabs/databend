@@ -61,7 +61,7 @@ impl Function for JsonExtractPathTextFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::arc(StringType::arc())
+        NullableType::new_impl(StringType::new_impl())
     }
 
     fn eval(

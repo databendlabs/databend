@@ -111,7 +111,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         if self.is_null {
             return NullType::arc();
         }
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn eval(

@@ -58,7 +58,7 @@ impl WeekResultFunction<i32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
     fn return_type() -> DataTypeImpl {
-        DateType::arc()
+        DateType::new_impl()
     }
     fn to_number(value: DateTime<Utc>, week_mode: u64) -> i32 {
         let mut weekday = value.weekday().number_from_sunday();

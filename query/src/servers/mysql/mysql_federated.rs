@@ -43,7 +43,7 @@ impl MySQLFederated {
         Some(DataBlock::create(
             DataSchemaRefExt::create(vec![DataField::new(
                 &format!("@@{}", name),
-                StringType::arc(),
+                StringType::new_impl(),
             )]),
             vec![Series::from_data(vec![value])],
         ))
@@ -56,8 +56,8 @@ impl MySQLFederated {
     fn show_variables_block(name: &str, value: &str) -> Option<DataBlock> {
         Some(DataBlock::create(
             DataSchemaRefExt::create(vec![
-                DataField::new("Variable_name", StringType::arc()),
-                DataField::new("Value", StringType::arc()),
+                DataField::new("Variable_name", StringType::new_impl()),
+                DataField::new("Value", StringType::new_impl()),
             ]),
             vec![
                 Series::from_data(vec![name]),
@@ -138,7 +138,7 @@ impl MySQLFederated {
                     // @@cc as yy:
                     // var_as is 'yy' as the field name.
                     let var_as = vars_as[1];
-                    fields.push(DataField::new(var_as, StringType::arc()));
+                    fields.push(DataField::new(var_as, StringType::new_impl()));
 
                     // var is 'cc'.
                     let var = vars_as[0];
@@ -147,7 +147,7 @@ impl MySQLFederated {
                 } else {
                     // @@aa
                     // var is 'aa'
-                    fields.push(DataField::new(&format!("@@{}", var), StringType::arc()));
+                    fields.push(DataField::new(&format!("@@{}", var), StringType::new_impl()));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
                     values.push(Series::from_data(vec![value]));

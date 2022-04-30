@@ -562,7 +562,7 @@ impl ExprRPNBuilder {
             Expr::TryCast { data_type, .. } => {
                 let mut ty = SQLCommon::make_data_type(data_type)?;
                 if ty.can_inside_nullable() {
-                    ty = NullableType::arc(ty)
+                    ty = NullableType::new_impl(ty)
                 }
                 self.rpn.push(ExprRPNItem::Cast(ty, false));
             }

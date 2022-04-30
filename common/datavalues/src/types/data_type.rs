@@ -180,19 +180,19 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
     if let Some(custom_name) = f.metadata.get(ARROW_EXTENSION_NAME) {
         let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
         match custom_name.as_str() {
-            "Date" => return DateType::arc(),
+            "Date" => return DateType::new_impl(),
             "Timestamp" => match metadata {
                 Some(meta) => {
                     let mut chars = meta.chars();
                     let precision = chars.next().unwrap().to_digit(10).unwrap();
-                    return TimestampType::arc(precision as usize);
+                    return TimestampType::new_impl(precision as usize);
                 }
-                None => return TimestampType::arc(0),
+                None => return TimestampType::new_impl(0),
             },
-            "Interval" => return IntervalType::arc(metadata.unwrap().into()),
-            "Variant" => return VariantType::arc(),
-            "VariantArray" => return VariantArrayType::arc(),
-            "VariantObject" => return VariantObjectType::arc(),
+            "Interval" => return IntervalType::new_impl(metadata.unwrap().into()),
+            "Variant" => return VariantType::new_impl(),
+            "VariantArray" => return VariantArrayType::new_impl(),
+            "VariantObject" => return VariantObjectType::new_impl(),
             _ => {}
         }
     }
@@ -202,7 +202,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
 
     let is_nullable = f.is_nullable;
     if is_nullable && ty.can_inside_nullable() {
-        NullableType::arc(ty)
+        NullableType::new_impl(ty)
     } else {
         ty
     }
@@ -218,7 +218,7 @@ macro_rules! impl_to_data_type {
             paste::paste!{
                 impl ToDataType for $S {
                     fn to_data_type() -> DataTypeImpl {
-                        [<$TY Type>]::arc()
+                        [<$TY Type>]::new_impl()
                     }
                 }
             }
@@ -232,7 +232,7 @@ pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if !data_type.can_inside_nullable() {
         return data_type.clone();
     }
-    NullableType::arc(data_type.clone())
+    NullableType::new_impl(data_type.clone())
 }
 
 pub fn remove_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {

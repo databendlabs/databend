@@ -66,7 +66,7 @@ impl Function for Sha2HashFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(
@@ -124,7 +124,7 @@ impl Function for Sha2HashFunction {
 
             Ok(Arc::new(col))
         } else {
-            let l = cast_column_field(&columns[1], &UInt16Type::arc())?;
+            let l = cast_column_field(&columns[1], &UInt16Type::new_impl())?;
             let l_viewer = u16::try_create_viewer(&l)?;
 
             let mut col_builder = MutableStringColumn::with_capacity(l.len());

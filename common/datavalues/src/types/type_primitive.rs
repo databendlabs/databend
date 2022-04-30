@@ -54,7 +54,7 @@ pub fn create_primitive_datatype<T: PrimitiveType>() -> DataTypeImpl {
 macro_rules! impl_numeric {
     ($ty:ident, $tname:ident, $name: expr, $sql_name:expr, $alias: expr) => {
         impl PrimitiveDataType<$ty> {
-            pub fn arc() -> DataTypeImpl {
+            pub fn new_impl() -> DataTypeImpl {
                 DataTypeImpl::$tname(Self { _t: PhantomData })
             }
 

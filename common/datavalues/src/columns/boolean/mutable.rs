@@ -82,7 +82,7 @@ impl MutableBooleanColumn {
     pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
         }
     }
 
@@ -103,7 +103,7 @@ impl ScalarColumnBuilder for MutableBooleanColumn {
     fn with_capacity(capacity: usize) -> Self {
         Self {
             values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
         }
     }
 

@@ -72,7 +72,7 @@ impl Function for SubstringFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(
@@ -81,16 +81,16 @@ impl Function for SubstringFunction {
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let s_column = cast_column_field(&columns[0], &StringType::arc())?;
+        let s_column = cast_column_field(&columns[0], &StringType::new_impl())?;
         let s_viewer = Vu8::try_create_viewer(&s_column)?;
 
-        let p_column = cast_column_field(&columns[1], &Int64Type::arc())?;
+        let p_column = cast_column_field(&columns[1], &Int64Type::new_impl())?;
         let p_viewer = i64::try_create_viewer(&p_column)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
 
         if columns.len() > 2 {
-            let p2_column = cast_column_field(&columns[2], &UInt64Type::arc())?;
+            let p2_column = cast_column_field(&columns[2], &UInt64Type::new_impl())?;
             let p2_viewer = u64::try_create_viewer(&p2_column)?;
 
             let iter = izip!(s_viewer, p_viewer, p2_viewer);

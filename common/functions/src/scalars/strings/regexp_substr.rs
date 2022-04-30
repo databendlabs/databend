@@ -75,7 +75,7 @@ impl Function for RegexpSubStrFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::arc(StringType::arc())
+        NullableType::new_impl(StringType::new_impl())
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
@@ -96,14 +96,23 @@ impl Function for RegexpSubStrFunction {
 
         for i in 2..columns.len() {
             match i {
-                2 => pos = cast_column_field(&columns[2], &NullableType::arc(Int64Type::arc()))?,
+                2 => {
+                    pos = cast_column_field(
+                        &columns[2],
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                    )?
+                }
                 3 => {
-                    occurrence =
-                        cast_column_field(&columns[3], &NullableType::arc(Int64Type::arc()))?
+                    occurrence = cast_column_field(
+                        &columns[3],
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                    )?
                 }
                 _ => {
-                    match_type =
-                        cast_column_field(&columns[4], &NullableType::arc(StringType::arc()))?
+                    match_type = cast_column_field(
+                        &columns[4],
+                        &NullableType::new_impl(StringType::new_impl()),
+                    )?
                 }
             }
         }

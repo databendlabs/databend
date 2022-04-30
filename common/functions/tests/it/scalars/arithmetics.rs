@@ -118,11 +118,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_day32(2020, 2, 29), /* 2020-2-29 */
                         to_day32(2016, 2, 29), /* 2016-2-29 */
                     ]),
-                    DataField::new("dummy_0", DateType::arc()),
+                    DataField::new("dummy_0", DateType::new_impl()),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-1i64, 4]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Year)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Year)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -139,11 +139,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_day32(2400, 2, 29), /* 2400-2-29 */
                         to_day32(1960, 2, 29), /* 1960-2-29 */
                     ]),
-                    DataField::new("dummy_0", DateType::arc()),
+                    DataField::new("dummy_0", DateType::new_impl()),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -4]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Year)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Year)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -160,11 +160,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_microseconds(2020, 2, 29, 10, 30, 00, 00), /* 2020-2-29 10:30:00 */
                         to_microseconds(2021, 2, 28, 10, 30, 00, 00), /* 2021-2-28 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(0)),
+                    DataField::new("dummy_0", TimestampType::new_impl(0)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -1]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Year)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Year)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -181,11 +181,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_microseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
                         to_microseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(3)),
+                    DataField::new("dummy_0", TimestampType::new_impl(3)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![1i64, -4]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Year)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Year)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -202,11 +202,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_day32(2020, 3, 31), /* 2020-3-31 */
                         to_day32(2000, 1, 31), /* 2000-1-31 */
                     ]),
-                    DataField::new("dummy_0", DateType::arc()),
+                    DataField::new("dummy_0", DateType::new_impl()),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-1i64, 241]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Month)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Month)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -223,11 +223,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
                         to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(0)),
+                    DataField::new("dummy_0", TimestampType::new_impl(0)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-1i64, 241]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Month)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Month)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -244,11 +244,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_day32(2400, 2, 29), /* 2400-2-29 */
                         to_day32(1960, 2, 29), /* 1960-2-29 */
                     ]),
-                    DataField::new("dummy_0", DateType::arc()),
+                    DataField::new("dummy_0", DateType::new_impl()),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![30i64, -30]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Day)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Day)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -265,11 +265,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_microseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
                         to_microseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(6)),
+                    DataField::new("dummy_0", TimestampType::new_impl(6)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-30i64, 30]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Day)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Day)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -286,11 +286,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_day32(2020, 3, 1),  /* 2020-3-31 */
                         to_day32(2000, 1, 31), /* 2000-1-31 */
                     ]),
-                    DataField::new("dummy_0", DateType::arc()),
+                    DataField::new("dummy_0", DateType::new_impl()),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-1i64, 1]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Hour)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Hour)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -307,11 +307,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_day32(2100, 2, 28), /* 2400-2-29 */
                         to_day32(1960, 2, 29), /* 1960-2-29 */
                     ]),
-                    DataField::new("dummy_0", DateType::arc()),
+                    DataField::new("dummy_0", DateType::new_impl()),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![61i64, -30]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Minute)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Minute)),
                 ),
             ],
             expect: Series::from_data(vec![
@@ -328,11 +328,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         to_microseconds(2020, 3, 31, 10, 30, 00, 00), /* 2020-3-31 10:30:00 */
                         to_microseconds(2000, 1, 31, 10, 30, 00, 00), /* 2000-1-31 10:30:00 */
                     ]),
-                    DataField::new("dummy_0", TimestampType::arc(6)),
+                    DataField::new("dummy_0", TimestampType::new_impl(6)),
                 ),
                 ColumnWithField::new(
                     Series::from_data(vec![-120i64, 23]),
-                    DataField::new("dummy_1", IntervalType::arc(IntervalKind::Second)),
+                    DataField::new("dummy_1", IntervalType::new_impl(IntervalKind::Second)),
                 ),
             ],
             expect: Series::from_data(vec![

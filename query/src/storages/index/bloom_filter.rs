@@ -154,7 +154,7 @@ impl BloomFilterIndexer {
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
                 let bloom_value = DataValue::String(serialized_bytes);
-                let bloom_column: ColumnRef = bloom_value.as_const_column(&StringType::arc(), 1)?;
+                let bloom_column: ColumnRef = bloom_value.as_const_column(&StringType::new_impl(), 1)?;
                 bloom_columns.push(bloom_column);
             }
         }
@@ -495,14 +495,14 @@ impl BloomFilter {
         let input_schema = Arc::new(DataSchema::new(vec![input_field]));
         let args = vec![
             Expression::Column(String::from(input_column)),
-            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::arc()),
+            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::new_impl()),
         ];
 
         let output_column = "output";
         let output_data_type = if column.is_nullable() {
-            wrap_nullable(&UInt64Type::arc())
+            wrap_nullable(&UInt64Type::new_impl())
         } else {
-            UInt64Type::arc()
+            UInt64Type::new_impl()
         };
         let output_field = DataField::new(output_column, output_data_type);
         let output_schema = DataSchemaRefExt::create(vec![output_field]);
