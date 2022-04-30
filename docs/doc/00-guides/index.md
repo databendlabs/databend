@@ -75,4 +75,4 @@ title: How-to Guides
 
 ## Performance
 
-* [How to Do Benchmark With Databend](../90-learn/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
+* [How to Do Benchmark Databend](../90-learn/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
