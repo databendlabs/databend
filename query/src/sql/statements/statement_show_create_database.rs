@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowCreateDatabasePlan;
@@ -33,7 +32,7 @@ pub struct DfShowCreateDatabase {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowCreateDatabase {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db) = Self::resolve_database(&ctx, &self.name)?;
+        let (catalog, db) = super::resolve_database(&ctx, &self.name, "SHOW CREATE DATABASE")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::ShowCreateDatabase(ShowCreateDatabasePlan {
                 catalog,
@@ -50,17 +49,5 @@ impl DfShowCreateDatabase {
             DataField::new("Database", Vu8::to_data_type()),
             DataField::new("Create Database", Vu8::to_data_type()),
         ])
-    }
-
-    pub fn resolve_database(ctx: &QueryContext, name: &ObjectName) -> Result<(String, String)> {
-        let idents = &name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("database name is empty")),
-            1 => Ok((ctx.get_current_catalog(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "database name must be [`catalog`].db`",
-            )),
-        }
     }
 }

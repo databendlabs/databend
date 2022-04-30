@@ -29,6 +29,7 @@ use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -99,7 +100,7 @@ impl JoinedSchemaAnalyzer {
 
     async fn table(&self, item: &TableRPNItem) -> Result<JoinedSchema> {
         // TODO(Winter): await query_context.get_table
-        let (catalog, database, table) = self.resolve_table(&item.name)?;
+        let (catalog, database, table) = resolve_table(&self.ctx, &item.name, "SELECT")?;
         let read_table = self.ctx.get_table(&catalog, &database, &table).await?;
         let tbl_info = read_table.get_table_info();
 
@@ -163,32 +164,6 @@ impl JoinedSchemaAnalyzer {
                 let name_prefix = vec![table_alias.name.value.clone()];
                 JoinedSchema::from_table(table_function.as_table(), name_prefix)
             }
-        }
-    }
-
-    fn resolve_table(&self, name: &ObjectName) -> Result<(String, String, String)> {
-        let ctx = &self.ctx;
-        match name.0.len() {
-            0 => Err(ErrorCode::SyntaxException("Table name is empty")),
-            1 => Ok((
-                ctx.get_current_catalog(),
-                ctx.get_current_database(),
-                name.0[0].value.clone(),
-            )),
-            2 => Ok((
-                ctx.get_current_catalog(),
-                name.0[0].value.clone(),
-                name.0[1].value.clone(),
-            )),
-
-            3 => Ok((
-                name.0[0].value.clone(),
-                name.0[1].value.clone(),
-                name.0[2].value.clone(),
-            )),
-            _ => Err(ErrorCode::SyntaxException(
-                "Table name must be [`catalog`].[`db`].`table`",
-            )),
         }
     }
 }

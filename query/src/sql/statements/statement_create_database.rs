@@ -23,6 +23,7 @@ use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_database;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -40,7 +41,7 @@ impl AnalyzableStatement for DfCreateDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (catalog, db) = super::resolve_database(&ctx, &self.name)?;
+        let (catalog, db) = resolve_database(&ctx, &self.name, "CREATE DATABASE")?;
         let if_not_exists = self.if_not_exists;
         let meta = self.database_meta()?;
 

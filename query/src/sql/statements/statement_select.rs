@@ -263,7 +263,7 @@ impl DfQueryStatement {
     // TODO (dantengsky) refine this, looks weird
     fn resolve_catalog(ctx: &QueryContext, idents: &[String]) -> Result<String> {
         match idents.len() {
-            0 | 1 | 2 => Ok(ctx.get_current_catalog()),
+            1 | 2 => Ok(ctx.get_current_catalog()),
             3 => Ok(idents[0].clone()),
             _ => Err(ErrorCode::SyntaxException(
                 "table name should be [`catalog`].[`db`].`table` in statement",

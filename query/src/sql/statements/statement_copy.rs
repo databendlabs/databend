@@ -36,6 +36,7 @@ use super::location_to_stage_path;
 use super::parse_copy_file_format_options;
 use super::parse_stage_storage;
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -57,7 +58,7 @@ pub struct DfCopy {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCopy {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog_name, db_name, tbl_name) = Self::resolve_table(&ctx, &self.name, "Copy")?;
+        let (catalog_name, db_name, tbl_name) = resolve_table(&ctx, &self.name, "COPY")?;
         let table = ctx.get_table(&catalog_name, &db_name, &tbl_name).await?;
         let mut schema = table.schema();
         let tbl_id = table.get_id();
@@ -178,40 +179,5 @@ impl DfCopy {
             ..Default::default()
         };
         Ok((stage, path))
-    }
-
-    // TODO duplicated code (lots of)
-
-    pub fn resolve_table(
-        ctx: &QueryContext,
-        table_name: &ObjectName,
-        table_type: &str,
-    ) -> Result<(String, String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException(format!(
-                "{} name is empty",
-                table_type
-            ))),
-            1 => Ok((
-                ctx.get_current_catalog(),
-                ctx.get_current_database(),
-                idents[0].value.clone(),
-            )),
-            2 => Ok((
-                ctx.get_current_catalog(),
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-            )),
-            3 => Ok((
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-                idents[2].value.clone(),
-            )),
-            _ => Err(ErrorCode::SyntaxException(format!(
-                "{} name must be [`catalog`].[`db`].`{}`",
-                table_type, table_type
-            ))),
-        }
     }
 }

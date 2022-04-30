@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowCreateTablePlan;
@@ -36,7 +35,7 @@ impl AnalyzableStatement for DfShowCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let schema = Self::schema();
-        let (catalog, db, table) = self.resolve_table(ctx)?;
+        let (catalog, db, table) = super::resolve_table(&ctx, &self.name, "SHOW CREATE TABLE")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::ShowCreateTable(ShowCreateTablePlan {
                 catalog,
@@ -54,33 +53,5 @@ impl DfShowCreateTable {
             DataField::new("Table", Vu8::to_data_type()),
             DataField::new("Create Table", Vu8::to_data_type()),
         ])
-    }
-
-    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String, String)> {
-        let DfShowCreateTable {
-            name: ObjectName(idents),
-        } = &self;
-
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Show table name is empty")),
-            1 => Ok((
-                ctx.get_current_catalog(),
-                ctx.get_current_database(),
-                idents[0].value.clone(),
-            )),
-            2 => Ok((
-                ctx.get_current_catalog(),
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-            )),
-            3 => Ok((
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-                idents[2].value.clone(),
-            )),
-            _ => Err(ErrorCode::SyntaxException(
-                "Show table name must be [`catalog`].[`db`].`table`",
-            )),
-        }
     }
 }

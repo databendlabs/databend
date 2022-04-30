@@ -20,8 +20,8 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
-use super::DfShowCreateDatabase;
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_database;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -35,7 +35,7 @@ pub struct DfDropDatabase {
 impl AnalyzableStatement for DfDropDatabase {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db) = DfShowCreateDatabase::resolve_database(&ctx, &self.name)?;
+        let (catalog, db) = resolve_database(&ctx, &self.name, "DROP DATABASE")?;
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
 

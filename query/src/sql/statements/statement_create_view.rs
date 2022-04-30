@@ -22,9 +22,9 @@ use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfQueryStatement;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,8 +47,7 @@ impl AnalyzableStatement for DfCreateView {
         let if_not_exists = self.if_not_exists;
         let subquery = self.subquery.clone();
         let tenant = ctx.get_tenant();
-        let (catalog, db, viewname) =
-            DfCreateTable::resolve_table(ctx.clone(), &self.name, "View")?;
+        let (catalog, db, viewname) = resolve_table(&ctx, &self.name, "CREATE VIEW")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateView(
             CreateViewPlan {
                 if_not_exists,

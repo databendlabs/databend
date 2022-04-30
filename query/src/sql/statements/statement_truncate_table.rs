@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::TruncateTablePlan;
@@ -35,7 +34,7 @@ pub struct DfTruncateTable {
 impl AnalyzableStatement for DfTruncateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db, table) = self.resolve_table(ctx)?;
+        let (catalog, db, table) = super::resolve_table(&ctx, &self.name, "TRUNCATE TABLE")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::TruncateTable(TruncateTablePlan {
                 catalog,
@@ -44,35 +43,5 @@ impl AnalyzableStatement for DfTruncateTable {
                 purge: self.purge,
             }),
         )))
-    }
-}
-
-impl DfTruncateTable {
-    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String, String)> {
-        let DfTruncateTable {
-            name: ObjectName(idents),
-            ..
-        } = self;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Truncate table name is empty")),
-            1 => Ok((
-                ctx.get_current_catalog(),
-                ctx.get_current_database(),
-                idents[0].value.clone(),
-            )),
-            2 => Ok((
-                ctx.get_current_catalog(),
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-            )),
-            3 => Ok((
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-                idents[2].value.clone(),
-            )),
-            _ => Err(ErrorCode::SyntaxException(
-                "Truncate table name must be [`db`].`table`",
-            )),
-        }
     }
 }

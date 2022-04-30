@@ -21,9 +21,9 @@ use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfQueryStatement;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,8 +44,7 @@ impl AnalyzableStatement for DfAlterView {
         let _ = self.query.analyze(ctx.clone()).await?;
         let subquery = self.subquery.clone();
         let tenant = ctx.get_tenant();
-        let (catalog, db, viewname) =
-            DfCreateTable::resolve_table(ctx.clone(), &self.name, "View")?;
+        let (catalog, db, viewname) = resolve_table(&ctx, &self.name, "ALTER VIEW")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterView(
             AlterViewPlan {
                 tenant,

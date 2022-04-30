@@ -198,14 +198,22 @@ pub fn resolve_table(
     }
 }
 
-pub fn resolve_database(ctx: &QueryContext, name: &ObjectName) -> Result<(String, String)> {
+pub fn resolve_database(
+    ctx: &QueryContext,
+    name: &ObjectName,
+    statement_name: &str,
+) -> Result<(String, String)> {
     let idents = &name.0;
     match idents.len() {
-        0 => Err(ErrorCode::SyntaxException("database name is empty")),
+        0 => Err(ErrorCode::SyntaxException(format!(
+            "database name must be specified in statement `{}`",
+            statement_name
+        ))),
         1 => Ok((ctx.get_current_catalog(), idents[0].value.clone())),
         2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-        _ => Err(ErrorCode::SyntaxException(
-            "database name must be [`catalog`].db`",
-        )),
+        _ => Err(ErrorCode::SyntaxException(format!(
+            "database name should be [`catalog`].`db` in statement {}",
+            statement_name
+        ))),
     }
 }

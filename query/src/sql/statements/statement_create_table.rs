@@ -35,6 +35,7 @@ use sqlparser::ast::ObjectName;
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
 use crate::sql::is_reserved_opt_key;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -64,7 +65,7 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, db, table) = Self::resolve_table(ctx.clone(), &self.name, "Table")?;
+        let (catalog, db, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
         let mut table_meta = self
             .table_meta(ctx.clone(), catalog.as_str(), db.as_str())
             .await?;
@@ -124,39 +125,6 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    pub fn resolve_table(
-        ctx: Arc<QueryContext>,
-        table_name: &ObjectName,
-        table_type: &str,
-    ) -> Result<(String, String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException(format!(
-                "{} name is empty",
-                table_type
-            ))),
-            1 => Ok((
-                ctx.get_current_catalog(),
-                ctx.get_current_database(),
-                idents[0].value.clone(),
-            )),
-            2 => Ok((
-                ctx.get_current_catalog(),
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-            )),
-            3 => Ok((
-                idents[0].value.clone(),
-                idents[1].value.clone(),
-                idents[2].value.clone(),
-            )),
-            _ => Err(ErrorCode::SyntaxException(format!(
-                "{} name must be [`catalog`].[`db`].`{}`",
-                table_type, table_type
-            ))),
-        }
-    }
-
     async fn table_meta(
         &self,
         ctx: Arc<QueryContext>,
@@ -186,7 +154,7 @@ impl DfCreateTable {
             Some(like_table_name) => {
                 // resolve database and table name from 'like statement'
                 let (origin_catalog_name, origin_db_name, origin_table_name) =
-                    Self::resolve_table(ctx.clone(), like_table_name, "Table")?;
+                    resolve_table(&ctx, like_table_name, "Table")?;
 
                 // use the origin table's schema for the table to create
                 let origin_table = ctx

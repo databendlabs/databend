@@ -35,7 +35,7 @@ pub struct DfOptimizeTable {
 impl AnalyzableStatement for DfOptimizeTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog, database, table) = super::resolve_table(&ctx, &self.name, "Optimize")?;
+        let (catalog, database, table) = super::resolve_table(&ctx, &self.name, "OPTIMIZE TABLE")?;
         let plan_node = OptimizeTablePlan {
             catalog,
             database,

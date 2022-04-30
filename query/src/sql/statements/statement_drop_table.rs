@@ -21,6 +21,7 @@ use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -36,7 +37,7 @@ impl AnalyzableStatement for DfDropTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
-        let (catalog, db, table) = super::resolve_table(&ctx, &self.name, "Drop Table")?;
+        let (catalog, db, table) = resolve_table(&ctx, &self.name, "DROP TABLE")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropTable(
             DropTablePlan {

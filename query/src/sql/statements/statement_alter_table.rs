@@ -43,20 +43,21 @@ impl AnalyzableStatement for DfAlterTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (catalog, db, table_name) = super::resolve_table(&ctx, &self.table_name, "Alter")?;
+        let (catalog_name, database_name, table_name) =
+            super::resolve_table(&ctx, &self.table_name, "ALTER TABLE")?;
 
         match &self.action {
             AlterTableAction::RenameTable(o) => {
                 let mut entities = Vec::new();
                 // TODO check catalog and new_catalog, cross catalogs operation not allowed
-                let (_new_catalog, new_db, new_table_name) =
-                    super::resolve_table(&ctx, o, "Alter")?;
+                let (_new_catalog, new_database_name, new_table_name) =
+                    super::resolve_table(&ctx, o, "ALTER TABLE")?;
                 entities.push(RenameTableEntity {
                     if_exists: self.if_exists,
-                    catalog,
-                    db,
+                    catalog_name,
+                    database_name,
                     table_name,
-                    new_db,
+                    new_database_name,
                     new_table_name,
                 });
 
