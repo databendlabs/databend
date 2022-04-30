@@ -66,7 +66,8 @@ impl Binder {
 
         self.analyze_aggregate(&output_context, &mut input_context)?;
 
-        if !stmt.group_by.is_empty() {
+        if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
+        {
             self.bind_group_by(&stmt.group_by, &mut input_context)?;
             output_context.expression = input_context.expression.clone();
         }

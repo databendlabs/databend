@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::sql::planner::binder::BindContext;
+use crate::sql::planner::metadata::optimize_remove_count_args;
 use crate::sql::plans::Scalar;
 
 /// Helper for binding scalar expression with `BindContext`.
@@ -49,6 +50,20 @@ impl ScalarBinder {
                     nullable: column_binding.nullable,
                 }))
             }
+            Expr::Literal(literal) => Ok(match literal {
+                Literal::Number(val) => Arc::new(Scalar::Literal {
+                    data_value: DataValue::try_from_literal(val, None)?,
+                }),
+                Literal::String(val) => Arc::new(Scalar::Literal {
+                    data_value: DataValue::String(val.clone().into_bytes()),
+                }),
+                Literal::Boolean(val) => Arc::new(Scalar::Literal {
+                    data_value: DataValue::Boolean(*val),
+                }),
+                Literal::Null => Arc::new(Scalar::Literal {
+                    data_value: DataValue::Null,
+                }),
+            }),
             Expr::BinaryOp { op, left, right } => {
                 self.bind_binary_op(op, left.as_ref(), right.as_ref(), bind_context)
             }
@@ -107,15 +122,26 @@ impl ScalarBinder {
                             data_values.clone(),
                             fields,
                         )?;
-
-                        Ok(Arc::new(Scalar::AggregateFunction {
-                            func_name: name.name.clone(),
-                            distinct: *distinct,
-                            params: data_values,
-                            args: scalar_exprs,
-                            data_type: agg_func_ref.return_type()?,
-                            nullable: false,
-                        }))
+                        let agg_scalar = if optimize_remove_count_args(name, *distinct, args) {
+                            Scalar::AggregateFunction {
+                                func_name: name.clone(),
+                                distinct: *distinct,
+                                params: data_values,
+                                args: vec![],
+                                data_type: agg_func_ref.return_type()?,
+                                nullable: false,
+                            }
+                        } else {
+                            Scalar::AggregateFunction {
+                                func_name: name.clone(),
+                                distinct: *distinct,
+                                params: data_values,
+                                args: scalar_exprs,
+                                data_type: agg_func_ref.return_type()?,
+                                nullable: false,
+                            }
+                        };
+                        Ok(Arc::new(agg_scalar))
                     }
                     false => Err(ErrorCode::UnImplement(format!(
                         "Unsupported function: {name}"
