@@ -16,6 +16,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::Column;
+use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NewColumn;
@@ -96,9 +97,9 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        _columns: &common_datavalues::ColumnsWithField,
+        _columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    ) -> Result<ColumnRef> {
         let uuid = T::create();
         let col = StringColumn::new_from_slice(vec![uuid.to_string()]);
 

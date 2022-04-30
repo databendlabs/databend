@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_datavalues::BooleanColumn;
 use common_datavalues::BooleanType;
+use common_datavalues::ColumnRef;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::Scalar;
@@ -122,11 +123,11 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    ) -> Result<ColumnRef> {
         let result_column = if columns[0].data_type().data_type_id() == TypeID::String {
-            let viewer = Vu8::try_create_viewer(columns[0].column())?;
+            let viewer = Vu8::try_create_viewer(&columns[0])?;
             BooleanColumn::from_iterator(viewer.iter().map(|uuid_bytes| {
                 if let Ok(uuid_str) = str::from_utf8(uuid_bytes) {
                     if let Ok(uuid) = Uuid::parse_str(uuid_str) {

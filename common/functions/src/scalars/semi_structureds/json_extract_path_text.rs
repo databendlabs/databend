@@ -67,12 +67,12 @@ impl Function for JsonExtractPathTextFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let path_keys = parse_path_keys(columns[1].column())?;
+        let path_keys = parse_path_keys(&columns[1])?;
 
-        let data_type = columns[0].field().data_type();
+        let data_type = columns[0].data_type();
         if !data_type.data_type_id().is_string() && !data_type.data_type_id().is_variant() {
             let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
             for _ in 0..input_rows {
@@ -83,7 +83,7 @@ impl Function for JsonExtractPathTextFunction {
 
         let mut builder = ColumnBuilder::<VariantValue>::with_capacity(input_rows);
         let serializer = data_type.create_serializer();
-        match serializer.serialize_json_object(columns[0].column(), None) {
+        match serializer.serialize_json_object(&columns[0], None) {
             Ok(values) => {
                 for v in values {
                     builder.append(&VariantValue::from(v));

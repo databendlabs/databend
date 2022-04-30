@@ -78,11 +78,7 @@ macro_rules! impl_abs_function {
             }
             $super::abs(s) as $target
         };
-        let col = scalar_unary_op::<$type, $target, _>(
-            $column.column(),
-            func,
-            &mut EvalContext::default(),
-        )?;
+        let col = scalar_unary_op::<$type, $target, _>($column, func, &mut EvalContext::default())?;
         Ok(col.arc())
     }};
 }
@@ -99,17 +95,17 @@ impl Function for AbsFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
-            TypeID::Int8 => impl_abs_function!(columns[0], i8, i64, u8),
-            TypeID::Int16 => impl_abs_function!(columns[0], i16, i64, u16),
-            TypeID::Int32 => impl_abs_function!(columns[0], i32, i64, u32),
-            TypeID::Int64 => impl_abs_function!(columns[0], i64, i64, u64),
-            TypeID::Float32 => impl_abs_function!(columns[0], f32, f64, f32),
-            TypeID::Float64 => impl_abs_function!(columns[0], f64, f64, f64),
-            _ => Ok(columns[0].column().clone()),
+            TypeID::Int8 => impl_abs_function!(&columns[0], i8, i64, u8),
+            TypeID::Int16 => impl_abs_function!(&columns[0], i16, i64, u16),
+            TypeID::Int32 => impl_abs_function!(&columns[0], i32, i64, u32),
+            TypeID::Int64 => impl_abs_function!(&columns[0], i64, i64, u64),
+            TypeID::Float32 => impl_abs_function!(&columns[0], f32, f64, f32),
+            TypeID::Float64 => impl_abs_function!(&columns[0], f64, f64, f64),
+            _ => Ok(columns[0].clone()),
         }
     }
 

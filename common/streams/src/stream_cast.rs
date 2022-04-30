@@ -49,16 +49,11 @@ impl CastStream {
 
     fn cast(&self, data_block: &DataBlock) -> Result<DataBlock> {
         let rows = data_block.num_rows();
-        let iter = self
-            .functions
-            .iter()
-            .zip(data_block.schema().fields())
-            .zip(data_block.columns());
+        let iter = self.functions.iter().zip(data_block.columns());
         let mut columns = Vec::with_capacity(data_block.num_columns());
-        for ((cast_func, input_field), column) in iter {
-            let column = ColumnWithField::new(column.clone(), input_field.clone());
+        for (cast_func, column) in iter {
             // TODO(veeupup): we nned to use the real function context here
-            columns.push(cast_func.eval(self.func_ctx.clone(), &[column], rows)?);
+            columns.push(cast_func.eval(self.func_ctx.clone(), &[column.clone()], rows)?);
         }
 
         Ok(DataBlock::create(self.output_schema.clone(), columns))

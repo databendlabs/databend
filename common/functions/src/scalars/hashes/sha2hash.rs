@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use sha2::Digest;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -72,11 +72,11 @@ impl Function for Sha2HashFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let col_viewer = Vu8::try_create_viewer(columns[0].column())?;
-        let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());
+    ) -> Result<ColumnRef> {
+        let col_viewer = Vu8::try_create_viewer(&columns[0])?;
+        let const_col: Result<&ConstColumn> = Series::check_get(&columns[1]);
 
         if let Ok(col) = const_col {
             let l = col.get_u64(0)?;
@@ -124,7 +124,7 @@ impl Function for Sha2HashFunction {
 
             Ok(Arc::new(col))
         } else {
-            let l = cast_column_field(&columns[1], &UInt16Type::arc())?;
+            let l = cast_column(&columns[1], &UInt16Type::arc())?;
             let l_viewer = u16::try_create_viewer(&l)?;
 
             let mut col_builder = MutableStringColumn::with_capacity(l.len());

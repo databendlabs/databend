@@ -20,7 +20,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -63,18 +63,18 @@ impl Function for HexFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = cast_column(&columns[0], &UInt64Type::arc())?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 let iter = col.iter().map(|val| format!("{:x}", val).into_bytes());
                 Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = cast_column(&columns[0], &Int64Type::arc())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 let iter = col.iter().map(|val| match val.cmp(&0) {
                     Ordering::Less => format!("-{:x}", val.unsigned_abs()).into_bytes(),
@@ -83,7 +83,7 @@ impl Function for HexFunction {
                 Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::String => {
-                let col = cast_column_field(&columns[0], &StringType::arc())?;
+                let col = cast_column(&columns[0], &StringType::arc())?;
                 let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
                 let iter = col.iter().map(|val| {
                     let mut buffer = vec![0u8; val.len() * 2];

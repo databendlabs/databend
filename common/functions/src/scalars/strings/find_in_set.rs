@@ -57,12 +57,12 @@ impl Function for FindInSetFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, u64, _>(
-            columns[0].column(),
-            columns[1].column(),
+            &columns[0],
+            &columns[1],
             find_in_set,
             &mut EvalContext::default(),
         )?;

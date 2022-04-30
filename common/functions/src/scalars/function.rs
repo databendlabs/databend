@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_datavalues::ColumnRef;
-use common_datavalues::ColumnsWithField;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use dyn_clone::DynClone;
@@ -57,7 +56,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        _columns: &ColumnsWithField,
+        _columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef>;
 

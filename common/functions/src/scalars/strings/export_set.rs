@@ -73,17 +73,17 @@ impl Function for ExportSetFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let sep_col = if columns.len() >= 4 {
-            columns[3].column().clone()
+            columns[3].clone()
         } else {
             ConstColumn::new(Series::from_data(vec![","]), input_rows).arc()
         };
 
         let number_bits_column = if columns.len() >= 5 {
-            columns[4].column().clone()
+            columns[4].clone()
         } else {
             ConstColumn::new(Series::from_data(vec![64u64]), input_rows).arc()
         };
@@ -97,8 +97,8 @@ impl Function for ExportSetFunction {
         )?;
 
         let bits_column = cast_with_type(
-            columns[0].column(),
-            &columns[0].column().data_type(),
+            &columns[0],
+            &columns[0].data_type(),
             &t,
             &DEFAULT_CAST_OPTIONS,
         )?;
@@ -116,8 +116,8 @@ impl Function for ExportSetFunction {
         let n = std::cmp::min(n, 64) as usize;
         let s = sep_col.get_string(0)?;
 
-        let on_viewer = Vu8::try_create_viewer(columns[1].column())?;
-        let off_viewer = Vu8::try_create_viewer(columns[2].column())?;
+        let on_viewer = Vu8::try_create_viewer(&columns[1])?;
+        let off_viewer = Vu8::try_create_viewer(&columns[2])?;
         let sep_viewer = Vu8::try_create_viewer(&sep_col)?;
 
         let values_capacity =

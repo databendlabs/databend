@@ -114,13 +114,13 @@ impl<T: Base> Function for GenericLogFunction<T> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         if columns.len() == 1 {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), Self::log, &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(&columns[0], Self::log, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -128,7 +128,7 @@ impl<T: Base> Function for GenericLogFunction<T> {
         } else {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                    let col = scalar_binary_op::<$S, $T, f64, _>(columns[0].column(), columns[1].column(), Self::log_with_base, &mut ctx)?;
+                    let col = scalar_binary_op::<$S, $T, f64, _>(&columns[0], &columns[1], Self::log_with_base, &mut ctx)?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

@@ -17,7 +17,6 @@ use std::str;
 
 use common_datavalues::BooleanType;
 use common_datavalues::ColumnRef;
-use common_datavalues::ColumnsWithField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -72,7 +71,7 @@ impl Function for IgnoreFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        _columns: &ColumnsWithField,
+        _columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let return_type = BooleanType::arc();

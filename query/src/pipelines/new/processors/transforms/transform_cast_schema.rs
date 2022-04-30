@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnWithField;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::Function;
@@ -56,15 +55,10 @@ impl Transform for TransformCastSchema {
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let rows = data.num_rows();
-        let iter = self
-            .functions
-            .iter()
-            .zip(data.schema().fields())
-            .zip(data.columns());
+        let iter = self.functions.iter().zip(data.columns());
         let mut columns = Vec::with_capacity(data.num_columns());
-        for ((cast_func, input_field), column) in iter {
-            let column = ColumnWithField::new(column.clone(), input_field.clone());
-            columns.push(cast_func.eval(self.func_ctx.clone(), &[column], rows)?);
+        for (cast_func, column) in iter {
+            columns.push(cast_func.eval(self.func_ctx.clone(), &[column.clone()], rows)?);
         }
         Ok(DataBlock::create(self.output_schema.clone(), columns))
     }

@@ -20,7 +20,7 @@ use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
 use crate::calcute;
 use crate::impl_logic_expression;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;

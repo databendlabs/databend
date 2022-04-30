@@ -80,7 +80,7 @@ impl Function for TrigonometricFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
@@ -90,38 +90,38 @@ impl Function for TrigonometricFunction {
                    match self.t {
                         Trigonometric::COS => {
                             let func = |v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).cos();
-                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                             Ok(Arc::new(col))
                         },
                         Trigonometric::SIN => {
                             let func = |v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).sin();
-                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                             Ok(Arc::new(col))
                         },
                         Trigonometric::COT => {
                             let func = |v: $S, _ctx: &mut EvalContext| 1.0 /  AsPrimitive::<f64>::as_(v).tan();
-                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                             Ok(Arc::new(col))
                         },
                         Trigonometric::TAN => {
                             let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).tan();
-                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                             Ok(Arc::new(col))
                         },
                         // the range [0, pi] or NaN if the number is outside the range
                         Trigonometric::ACOS => {
                             let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).acos();
-                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                             Ok(Arc::new(col))
                         },
                         Trigonometric::ASIN => {
                             let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).asin();
-                           let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                           let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::ATAN => {
                             let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).atan();
-                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            let col = scalar_unary_op::<$S, f64, _>(&columns[0], func, &mut ctx)?;
                             Ok(Arc::new(col))
                         },
                         _ => unreachable!(),
@@ -135,7 +135,7 @@ impl Function for TrigonometricFunction {
             _ => {
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                     with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                        let col = scalar_binary_op::<$S, $T, f64, _>(columns[0].column(), columns[1].column(), scalar_atan2,&mut EvalContext::default())?;
+                        let col = scalar_binary_op::<$S, $T, f64, _>(&columns[0], &columns[1], scalar_atan2,&mut EvalContext::default())?;
                         Ok(Arc::new(col))
                     }, {
                         unreachable!()

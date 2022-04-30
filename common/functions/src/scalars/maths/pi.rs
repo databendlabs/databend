@@ -53,7 +53,7 @@ impl Function for PiFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        _columns: &ColumnsWithField,
+        _columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())

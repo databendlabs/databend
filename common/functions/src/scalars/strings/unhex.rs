@@ -55,16 +55,12 @@ impl Function for UnhexFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 
-        let col = columns[0]
-            .column()
-            .as_any()
-            .downcast_ref::<StringColumn>()
-            .unwrap();
+        let col = columns[0].as_any().downcast_ref::<StringColumn>().unwrap();
 
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
@@ -81,7 +77,7 @@ impl Function for UnhexFunction {
                             "{} can not unhex because: {}",
                             String::from_utf8_lossy(val),
                             err
-                        )))
+                        )));
                     }
                 }
             } else {

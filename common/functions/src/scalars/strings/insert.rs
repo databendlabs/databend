@@ -86,11 +86,11 @@ impl Function for InsertFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let s_viewer = Vu8::try_create_viewer(columns[0].column())?;
-        let ss_viewer = Vu8::try_create_viewer(columns[3].column())?;
+        let s_viewer = Vu8::try_create_viewer(&columns[0])?;
+        let ss_viewer = Vu8::try_create_viewer(&columns[3])?;
 
         let mut values = Vec::with_capacity(s_viewer.value_at(0).len() * input_rows);
         let mut offsets = Vec::with_capacity(input_rows + 1);
@@ -98,8 +98,8 @@ impl Function for InsertFunction {
 
         with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
             with_match_primitive_type_id!(columns[2].data_type().data_type_id(), |$T| {
-                let p_viewer = $S::try_create_viewer(columns[1].column())?;
-                let l_viewer = $T::try_create_viewer(columns[2].column())?;
+                let p_viewer = $S::try_create_viewer(&columns[1])?;
+                let l_viewer = $T::try_create_viewer(&columns[2])?;
 
                 for row in 0..input_rows {
                     apply_insert(

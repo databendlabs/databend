@@ -53,7 +53,7 @@ pub struct LogicFunctionImpl<F> {
 }
 
 pub trait LogicExpression: Sync + Send {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef>;
+    fn eval(columns: &[ColumnRef], input_rows: usize, nullable: bool) -> Result<ColumnRef>;
 }
 
 impl<F> LogicFunctionImpl<F>
@@ -98,7 +98,7 @@ where F: LogicExpression + Clone
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         F::eval(columns, input_rows, self.nullable)

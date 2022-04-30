@@ -62,7 +62,7 @@ impl Function for RandomFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         match columns.len() {
@@ -76,7 +76,7 @@ impl Function for RandomFunction {
             _ => {
                 let mut ctx = EvalContext::default();
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$T| {
-                    let col = scalar_unary_op::<$T, f64, _>(columns[0].column(), rand_seed, &mut ctx)?;
+                    let col = scalar_unary_op::<$T, f64, _>(&columns[0], rand_seed, &mut ctx)?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

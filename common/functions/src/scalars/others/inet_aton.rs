@@ -68,10 +68,10 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let viewer = Vu8::try_create_viewer(columns[0].column())?;
+        let viewer = Vu8::try_create_viewer(&columns[0])?;
         let viewer_iter = viewer.iter();
 
         if SUPPRESS_PARSE_ERROR {

@@ -61,10 +61,10 @@ impl Function for IsNullFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let (all_null, validity) = columns[0].column().validity();
+        let (all_null, validity) = columns[0].validity();
         if all_null {
             return Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc());
         }

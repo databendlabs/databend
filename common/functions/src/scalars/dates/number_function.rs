@@ -357,10 +357,10 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let type_id = columns[0].field().data_type().data_type_id();
+    ) -> Result<ColumnRef> {
+        let type_id = columns[0].data_type().data_type_id();
 
         let number_array = match type_id {
             TypeID::Date => {
@@ -368,11 +368,8 @@ where
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
                 };
-                let col = scalar_unary_op::<i32, R, _>(
-                    columns[0].column(),
-                    func,
-                    &mut EvalContext::default(),
-                )?;
+                let col =
+                    scalar_unary_op::<i32, R, _>(&columns[0], func, &mut EvalContext::default())?;
                 Ok(col.arc())
             }
             TypeID::Timestamp => {
@@ -380,11 +377,8 @@ where
                     let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
                     T::to_number(date_time)
                 };
-                let col = scalar_unary_op::<i64, R, _>(
-                    columns[0].column(),
-                    func,
-                    &mut EvalContext::default(),
-                )?;
+                let col =
+                    scalar_unary_op::<i64, R, _>(&columns[0], func, &mut EvalContext::default())?;
                 Ok(col.arc())
             }
             other => Result::Err(ErrorCode::IllegalDataType(format!(

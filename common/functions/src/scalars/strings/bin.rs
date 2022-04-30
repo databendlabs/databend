@@ -19,7 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::assert_numeric;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -56,28 +56,28 @@ impl Function for BinFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = cast_column(&columns[0], &UInt64Type::arc())?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(format!("{:b}", val).as_bytes());
                 }
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = cast_column(&columns[0], &Int64Type::arc())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(format!("{:b}", val).as_bytes());
                 }
             }
             TypeID::Float32 | TypeID::Float64 => {
-                let col = cast_column_field(&columns[0], &Float64Type::arc())?;
+                let col = cast_column(&columns[0], &Float64Type::arc())?;
                 let col = col.as_any().downcast_ref::<Float64Column>().unwrap();
                 for val in col.iter() {
                     let val = if val.ge(&0f64) {

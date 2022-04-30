@@ -60,12 +60,12 @@ impl Function for StrcmpFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op::<Vu8, Vu8, i8, _>(
-            columns[0].column(),
-            columns[1].column(),
+            &columns[0],
+            &columns[1],
             strcmp,
             &mut EvalContext::default(),
         )?;

@@ -28,15 +28,15 @@ macro_rules! impl_logic_expression {
         pub struct $name;
 
         impl LogicExpression for $name {
-            fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef> {
+            fn eval(columns: &[ColumnRef], input_rows: usize, nullable: bool) -> Result<ColumnRef> {
                 let dt = if nullable {
                     NullableType::arc(BooleanType::arc())
                 } else {
                     BooleanType::arc()
                 };
 
-                let lhs = cast_column_field(&columns[0], &dt)?;
-                let rhs = cast_column_field(&columns[1], &dt)?;
+                let lhs = cast_column(&columns[0], &dt)?;
+                let rhs = cast_column(&columns[1], &dt)?;
 
                 if nullable {
                     let lhs_viewer = bool::try_create_viewer(&lhs)?;

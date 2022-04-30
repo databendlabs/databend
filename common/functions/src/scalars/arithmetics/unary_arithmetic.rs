@@ -72,14 +72,10 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        let col = scalar_unary_op(
-            columns[0].column(),
-            self.func.clone(),
-            &mut EvalContext::default(),
-        )?;
+        let col = scalar_unary_op(&columns[0], self.func.clone(), &mut EvalContext::default())?;
         Ok(Arc::new(col))
     }
 

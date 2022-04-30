@@ -68,14 +68,14 @@ impl Function for RegexpLikeFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let lhs = columns[0].column();
-        let rhs = columns[1].column();
+        let lhs = &columns[0];
+        let rhs = &columns[1];
         let mut match_type = &ConstColumn::new(Series::from_data(vec![""]), input_rows).arc();
         if columns.len() == 3 {
-            match_type = columns[2].column();
+            match_type = &columns[2];
         }
 
         if rhs.is_const() && match_type.is_const() {

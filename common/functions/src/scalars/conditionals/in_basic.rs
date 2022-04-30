@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -63,7 +63,7 @@ macro_rules! scalar_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col = cast_column(col, &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0).to_owned_scalar();
@@ -85,7 +85,7 @@ macro_rules! float_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col = cast_column(col, &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
@@ -117,7 +117,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if self.is_null {
@@ -125,20 +125,15 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             return Ok(col);
         }
 
-        let types: Vec<DataTypeImpl> = columns.iter().map(|col| col.column().data_type()).collect();
+        let types: Vec<DataTypeImpl> = columns.iter().map(|col| col.data_type()).collect();
 
-        let least_super_dt = if columns[0]
-            .field()
-            .data_type()
-            .data_type_id()
-            .is_date_or_date_time()
-        {
+        let least_super_dt = if columns[0].data_type().data_type_id().is_date_or_date_time() {
             match columns[1..]
                 .iter()
-                .map(|column| column.field().data_type().data_type_id())
+                .map(|column| column.data_type().data_type_id())
                 .all(|t| t.is_string() || t.is_date_or_date_time())
             {
-                true => columns[0].field().data_type().clone(),
+                true => columns[0].data_type().clone(),
                 false => {
                     return Result::Err(ErrorCode::BadDataValueType("test"));
                 }
@@ -148,7 +143,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         };
 
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
-        let input_col = cast_column_field(&columns[0], &least_super_dt)?;
+        let input_col = cast_column(&columns[0], &least_super_dt)?;
 
         match least_super_type_id {
             TypeID::Boolean => {

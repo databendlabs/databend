@@ -22,10 +22,7 @@ use common_datavalues::remove_nullable;
 use common_datavalues::wrap_nullable;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::ColumnWithField;
-use common_datavalues::ColumnsWithField;
 use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::NullColumn;
@@ -103,7 +100,7 @@ impl Function for FunctionAdapter {
     fn eval(
         &self,
         func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if self.inner.is_none() {
@@ -117,14 +114,13 @@ impl Function for FunctionAdapter {
 
         // is there nullable constant? Did not consider this case
         // unwrap constant
-        if self.passthrough_constant() && columns.iter().all(|v| v.column().is_const()) {
+        if self.passthrough_constant() && columns.iter().all(|v| v.is_const()) {
             let columns = columns
                 .iter()
-                .map(|v| {
-                    let c = v.column();
+                .map(|c| {
                     let c: &ConstColumn = unsafe { Series::static_cast(c) };
 
-                    ColumnWithField::new(c.inner().clone(), v.field().clone())
+                    c.inner().clone()
                 })
                 .collect::<Vec<_>>();
 
@@ -145,7 +141,7 @@ impl Function for FunctionAdapter {
 
             let mut input = Vec::with_capacity(columns.len());
             for v in columns.iter() {
-                let (is_all_null, valid) = v.column().validity();
+                let (is_all_null, valid) = v.validity();
                 if is_all_null {
                     // If only null, return null directly.
                     let inner_type = remove_nullable(&inner.return_type());
@@ -157,10 +153,7 @@ impl Function for FunctionAdapter {
                 }
                 validity = combine_validities_2(validity.clone(), valid.cloned());
 
-                let ty = remove_nullable(v.data_type());
-                let f = v.field();
-                let col = Series::remove_nullable(v.column());
-                let col = ColumnWithField::new(col, DataField::new(f.name(), ty));
+                let col = Series::remove_nullable(v);
                 input.push(col);
             }
 

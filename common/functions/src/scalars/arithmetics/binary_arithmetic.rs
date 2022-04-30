@@ -77,12 +77,12 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let col = scalar_binary_op(
-            columns[0].column(),
-            columns[1].column(),
+            &columns[0],
+            &columns[1],
             self.func.clone(),
             &mut EvalContext::default(),
         )?;

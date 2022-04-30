@@ -19,7 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -73,16 +73,16 @@ impl Function for SubstringIndexFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let s_column = cast_column_field(&columns[0], &StringType::arc())?;
+        let s_column = cast_column(&columns[0], &StringType::arc())?;
         let s_viewer = Vu8::try_create_viewer(&s_column)?;
 
-        let d_column = cast_column_field(&columns[1], &StringType::arc())?;
+        let d_column = cast_column(&columns[1], &StringType::arc())?;
         let d_viewer = Vu8::try_create_viewer(&d_column)?;
 
-        let c_column = cast_column_field(&columns[2], &Int64Type::arc())?;
+        let c_column = cast_column(&columns[2], &Int64Type::arc())?;
         let c_viewer = i64::try_create_viewer(&c_column)?;
 
         let iter = izip!(s_viewer, d_viewer, c_viewer);

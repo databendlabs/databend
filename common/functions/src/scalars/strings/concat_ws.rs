@@ -65,12 +65,12 @@ impl ConcatWsFunction {
 
     fn concat_column_with_constant_seperator(
         sep: &[u8],
-        columns: &[ColumnWithField],
+        columns: &[ColumnRef],
         rows: usize,
     ) -> Result<ColumnRef> {
         let viewers = columns
             .iter()
-            .map(|column| Vu8::try_create_viewer(column.column()))
+            .map(|column| Vu8::try_create_viewer(&column))
             .collect::<Result<Vec<_>>>()?;
 
         let mut builder = MutableStringColumn::with_capacity(rows);
@@ -92,14 +92,14 @@ impl ConcatWsFunction {
     }
 
     fn concat_column_nonull(
-        sep_column: &ColumnWithField,
-        columns: &[ColumnWithField],
+        sep_column: &ColumnRef,
+        columns: &[ColumnRef],
         rows: usize,
     ) -> Result<ColumnRef> {
-        let sep_c = Series::check_get_scalar::<Vu8>(sep_column.column())?;
+        let sep_c = Series::check_get_scalar::<Vu8>(&sep_column)?;
         let viewers = columns
             .iter()
-            .map(|column| Vu8::try_create_viewer(column.column()))
+            .map(|column| Vu8::try_create_viewer(&column))
             .collect::<Result<Vec<_>>>()?;
 
         let mut builder = MutableStringColumn::with_capacity(rows);
@@ -122,14 +122,14 @@ impl ConcatWsFunction {
     }
 
     fn concat_column_null(
-        sep_column: &ColumnWithField,
-        columns: &[ColumnWithField],
+        sep_column: &ColumnRef,
+        columns: &[ColumnRef],
         rows: usize,
     ) -> Result<ColumnRef> {
-        let sep_viewer = Vu8::try_create_viewer(sep_column.column())?;
+        let sep_viewer = Vu8::try_create_viewer(&sep_column)?;
         let viewers = columns
             .iter()
-            .map(|column| Vu8::try_create_viewer(column.column()))
+            .map(|column| Vu8::try_create_viewer(&column))
             .collect::<Result<Vec<_>>>()?;
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(rows);
@@ -171,7 +171,7 @@ impl Function for ConcatWsFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if self.result_type.is_null() {
@@ -181,14 +181,14 @@ impl Function for ConcatWsFunction {
         let seperator = &columns[0];
 
         // remove other null columns
-        let cols: Vec<ColumnWithField> = columns[1..]
+        let cols: Vec<ColumnRef> = columns[1..]
             .iter()
             .filter(|c| !c.data_type().is_null())
             .cloned()
             .collect();
 
-        let viewer = Vu8::try_create_viewer(columns[0].column())?;
-        if seperator.column().is_const() {
+        let viewer = Vu8::try_create_viewer(&columns[0])?;
+        if seperator.is_const() {
             if viewer.null_at(0) {
                 return Ok(NullColumn::new(input_rows).arc());
             }

@@ -56,10 +56,10 @@ impl Function for TypeOfFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let non_null_type = remove_nullable(columns[0].data_type());
+    ) -> Result<ColumnRef> {
+        let non_null_type = remove_nullable(&columns[0].data_type());
         let type_name = format_data_type_sql(&non_null_type);
         let value = DataValue::String(type_name.as_bytes().to_vec());
         let data_type = StringType::arc();

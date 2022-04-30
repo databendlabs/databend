@@ -15,6 +15,7 @@
 use std::fmt;
 use std::time::Duration;
 
+use common_datavalues::ColumnRef;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -59,10 +60,10 @@ impl Function for SleepFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let c = columns[0].column();
+    ) -> Result<ColumnRef> {
+        let c = &columns[0];
         if c.len() != 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "The argument of function {} must be constant.",

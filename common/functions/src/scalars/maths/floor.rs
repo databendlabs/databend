@@ -69,12 +69,12 @@ impl Function for FloorFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-             let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), floor::<$S>, &mut ctx)?;
+             let col = scalar_unary_op::<$S, f64, _>(&columns[0], floor::<$S>, &mut ctx)?;
              Ok(col.arc())
         },{
             unreachable!()

@@ -28,7 +28,7 @@ use num::traits::AsPrimitive;
 
 use super::utils::*;
 use crate::scalars::assert_string;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::primitive_simd_op_boolean;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::ComparisonEqFunction;
@@ -94,7 +94,7 @@ impl Function for ComparisonFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let col = self.func.eval(&columns[0], &columns[1])?;
@@ -236,7 +236,7 @@ pub trait ComparisonImpl: Sync + Send + Clone + 'static {
 }
 
 pub trait ComparisonExpression: Sync + Send {
-    fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn>;
+    fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<BooleanColumn>;
 }
 
 pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
@@ -261,13 +261,8 @@ where
     R: Scalar + Send + Sync + Clone,
     F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool + Send + Sync + Clone,
 {
-    fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        scalar_binary_op(
-            l.column(),
-            r.column(),
-            self.func.clone(),
-            &mut EvalContext::default(),
-        )
+    fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<BooleanColumn> {
+        scalar_binary_op(l, r, self.func.clone(), &mut EvalContext::default())
     }
 }
 
@@ -298,17 +293,17 @@ where
     T: PrimitiveType + comparison::Simd8 + Send + Sync + Clone,
     F: Fn(T::Simd, T::Simd) -> u8 + Send + Sync + Clone,
 {
-    fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, &self.least_supertype)?
+    fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<BooleanColumn> {
+        let lhs = if self.need_cast && l.data_type() != self.least_supertype {
+            cast_column(l, &self.least_supertype)?
         } else {
-            l.column().clone()
+            l.clone()
         };
 
-        let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, &self.least_supertype)?
+        let rhs = if self.need_cast && r.data_type() != self.least_supertype {
+            cast_column(r, &self.least_supertype)?
         } else {
-            r.column().clone()
+            r.clone()
         };
         primitive_simd_op_boolean::<T, F>(&lhs, &rhs, self.func.clone())
     }
@@ -327,9 +322,7 @@ impl<F: BooleanSimdImpl> ComparisonBooleanImpl<F> {
 }
 
 impl<F: BooleanSimdImpl> ComparisonExpression for ComparisonBooleanImpl<F> {
-    fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        let lhs = l.column();
-        let rhs = r.column();
+    fn eval(&self, lhs: &ColumnRef, rhs: &ColumnRef) -> Result<BooleanColumn> {
         let res = match (lhs.is_const(), rhs.is_const()) {
             (false, false) => {
                 let lhs: &BooleanColumn = Series::check_get(lhs)?;
@@ -369,9 +362,7 @@ impl<T: StringSearchImpl> ComparisonStringImpl<T> {
 }
 
 impl<T: StringSearchImpl> ComparisonExpression for ComparisonStringImpl<T> {
-    fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        let lhs = l.column();
-        let rhs = r.column();
+    fn eval(&self, lhs: &ColumnRef, rhs: &ColumnRef) -> Result<BooleanColumn> {
         let res = match rhs.is_const() {
             true => {
                 let lhs: &StringColumn = Series::check_get(lhs)?;

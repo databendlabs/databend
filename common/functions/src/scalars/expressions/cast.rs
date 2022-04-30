@@ -17,7 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use super::cast_with_type::cast_column_field;
+use super::cast_with_type::cast_column;
 use crate::scalars::function::Function;
 use crate::scalars::FunctionContext;
 
@@ -70,10 +70,10 @@ impl Function for CastFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        cast_column_field(&columns[0], &self.cast_type)
+        cast_column(&columns[0], &self.cast_type)
     }
 }
 

@@ -125,19 +125,19 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut mode = 0;
         if columns.len() > 1 {
-            if input_rows != 1 && !columns[1].column().is_const() {
+            if input_rows != 1 && !columns[1].is_const() {
                 return Err(ErrorCode::BadArguments(
                     "Expected constant column for the second argument, a constant mode from 0-9"
                         .to_string(),
                 ));
             }
 
-            let week_mode = columns[1].column().get_u64(0)?;
+            let week_mode = columns[1].get_u64(0)?;
             if !(0..=9).contains(&week_mode) {
                 return Err(ErrorCode::BadArguments(format!(
                     "The parameter:{} range is abnormal, it should be between 0-9",
@@ -149,7 +149,7 @@ where
 
         match columns[0].data_type().data_type_id() {
             TypeID::Date => {
-                let col: &Int32Column = Series::check_get(columns[0].column())?;
+                let col: &Int32Column = Series::check_get(&columns[0])?;
                 let iter = col.scalar_iter().map(|v| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time, mode)
@@ -162,7 +162,7 @@ where
                 Ok(col)
             }
             TypeID::Timestamp => {
-                let col: &Int64Column = Series::check_get(columns[0].column())?;
+                let col: &Int64Column = Series::check_get(&columns[0])?;
                 let iter = col.scalar_iter().map(|v| {
                     let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
                     T::to_number(date_time, mode)

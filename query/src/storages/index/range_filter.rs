@@ -252,7 +252,7 @@ impl StatColumn {
             return Ok(None);
         }
 
-        let column_with_field_opt = match self.stat_type {
+        let column = match self.stat_type {
             StatType::Min => {
                 if monotonicity.is_positive {
                     monotonicity.left
@@ -270,7 +270,7 @@ impl StatColumn {
             _ => unreachable!(),
         };
 
-        Ok(column_with_field_opt.map(|v| v.column().slice(0, 1)))
+        Ok(column.map(|v| v.slice(0, 1)))
     }
 }
 

@@ -86,11 +86,11 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    ) -> Result<ColumnRef> {
         let mut op = T::default();
-        let column: &StringColumn = Series::check_get(columns[0].column())?;
+        let column: &StringColumn = Series::check_get(&columns[0])?;
         let mut array = Vec::with_capacity(input_rows);
         for x in column.iter() {
             let r = op.apply(x);

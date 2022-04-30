@@ -92,7 +92,7 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         match IS_TRUNC {
@@ -102,12 +102,12 @@ impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
     }
 }
 
-fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
+fn eval_round(columns: &[ColumnRef]) -> Result<ColumnRef> {
     let mut ctx = EvalContext::default();
     match columns.len() {
         1 => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), round, &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(&columns[0], round, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -118,8 +118,8 @@ fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
                     let col = scalar_binary_op::<$S, $T, f64, _>(
-                        columns[0].column(),
-                        columns[1].column(),
+                        &columns[0],
+                        &columns[1],
                         round_to,
                         &mut ctx
                     )?;
@@ -134,12 +134,12 @@ fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
     }
 }
 
-fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
+fn eval_trunc(columns: &[ColumnRef]) -> Result<ColumnRef> {
     let mut ctx = EvalContext::default();
     match columns.len() {
         1 => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), trunc, &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(&columns[0], trunc, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -150,8 +150,8 @@ fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
                     let col = scalar_binary_op::<$S, $T, f64, _>(
-                        columns[0].column(),
-                        columns[1].column(),
+                        &columns[0],
+                        &columns[1],
                         trunc_to,
                         &mut ctx,
                     )?;
