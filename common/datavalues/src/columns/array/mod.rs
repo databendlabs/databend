@@ -25,7 +25,7 @@ type LargeListArray = ListArray<i64>;
 
 #[derive(Clone)]
 pub struct ArrayColumn {
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     offsets: Buffer<i64>,
     values: ColumnRef,
 }
@@ -36,7 +36,7 @@ impl ArrayColumn {
 
         let data_type = if let ArrowType::LargeList(f) = ty {
             let ty = from_arrow_field(f);
-            Arc::new(ArrayType::create(ty))
+            DataTypeImpl::Array(ArrayType::create(ty))
         } else {
             unreachable!()
         };
@@ -58,7 +58,7 @@ impl ArrayColumn {
         )
     }
 
-    pub fn from_data(data_type: DataTypePtr, offsets: Buffer<i64>, values: ColumnRef) -> Self {
+    pub fn from_data(data_type: DataTypeImpl, offsets: Buffer<i64>, values: ColumnRef) -> Self {
         Self {
             data_type,
             offsets,
@@ -87,7 +87,7 @@ impl Column for ArrayColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 

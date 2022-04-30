@@ -1,0 +1,3 @@
+SELECT 1::BOOLEAN;
+-- Alias
+SELECT 1::BOOL;

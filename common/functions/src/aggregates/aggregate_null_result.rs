@@ -26,11 +26,11 @@ use super::StateAddr;
 
 #[derive(Clone)]
 pub struct AggregateNullResultFunction {
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
 }
 
 impl AggregateNullResultFunction {
-    pub fn try_create(data_type: DataTypePtr) -> Result<Arc<dyn AggregateFunction>> {
+    pub fn try_create(data_type: DataTypeImpl) -> Result<Arc<dyn AggregateFunction>> {
         Ok(Arc::new(AggregateNullResultFunction { data_type }))
     }
 }
@@ -40,7 +40,7 @@ impl AggregateFunction for AggregateNullResultFunction {
         "AggregateNullResultFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(self.data_type.clone())
     }
 

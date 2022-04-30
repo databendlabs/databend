@@ -23,6 +23,8 @@ use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::TxnReply;
+use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use futures::Stream;
@@ -82,6 +84,13 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
+        todo!()
+    }
+
+    async fn transaction(
+        &self,
+        _request: Request<TxnRequest>,
+    ) -> Result<Response<TxnReply>, Status> {
         todo!()
     }
 }

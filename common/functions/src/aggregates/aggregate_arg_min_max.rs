@@ -186,7 +186,7 @@ where
         "AggregateArgMinMaxFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(self.arguments[0].data_type().clone())
     }
 
@@ -253,6 +253,15 @@ where
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(array)
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<State>();
+        std::ptr::drop_in_place(state);
     }
 }
 

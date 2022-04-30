@@ -57,11 +57,18 @@ pub struct JoinRequest {
     pub endpoint: Endpoint,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LeaveRequest {
+    pub node_id: NodeId,
+}
+
 #[derive(
     Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
 )]
 pub enum ForwardRequestBody {
     Join(JoinRequest),
+    Leave(LeaveRequest),
+
     Write(LogEntry),
 
     ListDatabase(ListDatabaseReq),
@@ -95,6 +102,7 @@ impl ForwardRequest {
 #[allow(clippy::large_enum_variant)]
 pub enum ForwardResponse {
     Join(()),
+    Leave(()),
     AppliedState(AppliedState),
     ListDatabase(Vec<Arc<DatabaseInfo>>),
     DatabaseInfo(Arc<DatabaseInfo>),

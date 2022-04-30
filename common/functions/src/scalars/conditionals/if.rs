@@ -29,11 +29,11 @@ use crate::scalars::FunctionFeatures;
 #[derive(Clone, Debug)]
 pub struct IfFunction {
     display_name: String,
-    least_supertype: DataTypePtr,
+    least_supertype: DataTypeImpl,
 }
 
 impl IfFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let dts = vec![args[1].clone(), args[2].clone()];
         let least_supertype = aggregate_types(dts.as_slice())?;
 
@@ -250,7 +250,7 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.least_supertype.clone()
     }
 

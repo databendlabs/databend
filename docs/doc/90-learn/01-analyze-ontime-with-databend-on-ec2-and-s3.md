@@ -1,5 +1,5 @@
 ---
-title: Analyzing OnTime with Databend on Object Storage
+title: Analyzing OnTime With Databend on Object Storage
 sidebar_label: Analyzing OnTime Dataset
 ---
 
@@ -14,6 +14,7 @@ Make sure you have installed Databend, if not please see:
 * [How to Deploy Databend with Alibaba OSS](../10-deploy/03-oss.md)
 * [How to Deploy Databend with Wasabi](../10-deploy/05-wasabi.md)
 * [How to Deploy Databend with Scaleway OS](../10-deploy/06-scw.md)
+* [How to Deploy Databend with QingCloud QingStore](../10-deploy/07-qingstore.md)
 
 ## Step 2. Load OnTime Datasets
 

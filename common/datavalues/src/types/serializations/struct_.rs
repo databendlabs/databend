@@ -27,7 +27,7 @@ use crate::prelude::*;
 pub struct StructSerializer {
     pub names: Vec<String>,
     pub inners: Vec<Box<TypeSerializerImpl>>,
-    pub types: Vec<DataTypePtr>,
+    pub types: Vec<DataTypeImpl>,
 }
 
 impl TypeSerializer for StructSerializer {

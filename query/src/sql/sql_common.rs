@@ -21,7 +21,7 @@ pub struct SQLCommon;
 
 impl SQLCommon {
     /// Maps the SQL type to the corresponding Arrow `DataType`
-    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypePtr> {
+    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypeImpl> {
         match sql_type {
             SQLDataType::TinyInt(_) => Ok(i8::to_data_type()),
             SQLDataType::UnsignedTinyInt(_) => Ok(u8::to_data_type()),
@@ -42,25 +42,23 @@ impl SQLCommon {
             SQLDataType::Boolean => Ok(bool::to_data_type()),
             SQLDataType::Date => Ok(DateType::arc()),
             // default precision is 6, microseconds
-            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => {
-                Ok(TimestampType::arc(6, None))
-            }
+            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => Ok(TimestampType::arc(6)),
             SQLDataType::Timestamp(Some(precision)) => {
-                if *precision <= 9 {
-                    Ok(TimestampType::arc(*precision as usize, None))
+                if *precision <= 6 {
+                    Ok(TimestampType::arc(*precision as usize))
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type TIMESTAMP(n), n only ranges from 0~9, {} is invalid",
+                        "The SQL data type TIMESTAMP(n), n only ranges from 0~6, {} is invalid",
                         precision
                     )))
                 }
             }
             SQLDataType::DateTime(Some(precision)) => {
-                if *precision <= 9 {
-                    Ok(TimestampType::arc(*precision as usize, None))
+                if *precision <= 6 {
+                    Ok(TimestampType::arc(*precision as usize))
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type DATETIME(n), n only ranges from 0~9, {} is invalid",
+                        "The SQL data type DATETIME(n), n only ranges from 0~6, {} is invalid",
                         precision
                     )))
                 }

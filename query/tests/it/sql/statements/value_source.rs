@@ -29,7 +29,7 @@ async fn test_parse_value_source() -> Result<()> {
         DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", u8::to_data_type()),
         DataField::new("country", Vu8::to_data_type()),
-        DataField::new("born_time", TimestampType::arc(0, None)),
+        DataField::new("born_time", TimestampType::arc(0)),
     ]);
 
     let parser = ValueSource::new(ctx, schema);
@@ -45,14 +45,14 @@ async fn test_parse_value_source() -> Result<()> {
 
     common_datablocks::assert_blocks_sorted_eq(
         vec![
-            "+------+-----+----------+-----------+",
-            "| name | age | country  | born_time |",
-            "+------+-----+----------+-----------+",
-            "| ABC  | 30  | China    | 700617600 |",
-            "| XYZ  | 31  | Japen    | 668995200 |",
-            "| UVW  | 32  | American | 637459200 |",
-            "| GHJ  | 32  | American | 637459200 |",
-            "+------+-----+----------+-----------+",
+            "+------+-----+----------+-----------------+",
+            "| name | age | country  | born_time       |",
+            "+------+-----+----------+-----------------+",
+            "| ABC  | 30  | China    | 700617600000000 |",
+            "| GHJ  | 32  | American | 637459200000000 |",
+            "| UVW  | 32  | American | 637459200000000 |",
+            "| XYZ  | 31  | Japen    | 668995200000000 |",
+            "+------+-----+----------+-----------------+",
         ],
         &[block],
     );

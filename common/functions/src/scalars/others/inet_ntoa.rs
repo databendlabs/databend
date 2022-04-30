@@ -41,7 +41,7 @@ pub struct InetNtoaFunctionImpl<const SUPPRESS_CAST_ERROR: bool> {
 }
 
 impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
 
         Ok(Box::new(InetNtoaFunctionImpl::<SUPPRESS_CAST_ERROR> {
@@ -60,7 +60,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         if SUPPRESS_CAST_ERROR {
             NullableType::arc(StringType::arc())
         } else {
@@ -75,7 +75,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if SUPPRESS_CAST_ERROR {
-            let cast_to: DataTypePtr = NullableType::arc(UInt32Type::arc());
+            let cast_to: DataTypeImpl = NullableType::arc(UInt32Type::arc());
             let cast_options = CastOptions {
                 // we allow cast failure
                 exception_mode: ExceptionMode::Zero,
@@ -99,7 +99,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
             }
             Ok(builder.build(input_rows))
         } else {
-            let cast_to: DataTypePtr = UInt32Type::arc();
+            let cast_to: DataTypeImpl = UInt32Type::arc();
             let cast_options = CastOptions {
                 exception_mode: ExceptionMode::Throw,
                 parsing_mode: ParsingMode::Strict,

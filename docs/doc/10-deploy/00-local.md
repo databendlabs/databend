@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With Local FS (for Test)
+title: Deploy Databend With Local FS (For Test)
 sidebar_label: With Local FS (Test)
 description:
-  How to deploy Databend with Local FS (for Test).
+  How to deploy Databend with local FS (For Test).
 ---
 
 This guideline will deploy Databend(standalone) with local fs step by step.
@@ -32,14 +32,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +47,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-aarch64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +57,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.26-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.7.32-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,7 +72,7 @@ tar xzvf databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.26-nightly-aarch64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.32-nightly-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -148,9 +148,9 @@ cluster_id = "cluster1"
 
 [meta]
 # databend-meta grpc api address. 
-meta_address = "127.0.0.1:9101"
-meta_username = "root"
-meta_password = "root"
+address = "127.0.0.1:9101"
+username = "root"
+password = "root"
 
 [storage]
 # fs|s3

@@ -7,9 +7,9 @@ The BOOLEAN type represents a statement of truth (`true` or `false`).
 
 ## Boolean Data Types
 
-| Name     | Storage Size | Description
-| -------- | ------------ |-----------
-| BOOLEAN  | 1 byte       | Logical boolean (true/false)
+| Name      |  Aliases     | Storage Size | Min Value                   | Max Value                       | Description
+|-----------|--------------| -------------| --------------------------- | ------------------------------- | -------
+| BOOLEAN   |  BOOL        | 1 byte       |                             |                                 | Logical boolean (true/false)
 
 ## Implicit Conversion
 

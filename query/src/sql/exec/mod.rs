@@ -24,16 +24,24 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
+use common_planners::RewriteHelper;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
+use super::plans::BasePlan;
+use crate::pipelines::new::processors::AggregatorParams;
+use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::TransformAggregator;
+use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::FilterPlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
@@ -117,17 +125,27 @@ impl PipelineBuilder {
             return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
 
-        let plan = expression.plan().clone();
+        let plan = expression.plan();
 
         match plan.plan_type() {
             PlanType::PhysicalScan => {
-                let physical_scan = plan.as_any().downcast_ref::<PhysicalScan>().unwrap();
-                self.build_physical_scan(physical_scan)
+                let physical_scan: PhysicalScan = plan.try_into()?;
+                self.build_physical_scan(&physical_scan)
             }
             PlanType::Project => {
-                let project = plan.as_any().downcast_ref::<ProjectPlan>().unwrap();
+                let project: ProjectPlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_project(project, input_schema)
+                self.build_project(&project, input_schema)
+            }
+            PlanType::Filter => {
+                let filter: FilterPlan = plan.try_into()?;
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_filter(&filter, input_schema)
+            }
+            PlanType::Aggregate => {
+                let aggregate: AggregatePlan = plan.try_into()?;
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_aggregate(&aggregate, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -140,13 +158,19 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
-
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for expr in project.items.iter() {
             let scalar = expr.expr.as_any().downcast_ref::<Scalar>().unwrap();
             let expression = expr_builder.build(scalar)?;
-            expressions.push(expression);
+            expressions.push(match expression {
+                Expression::Column(_) => expression.clone(),
+                _ => {
+                    let col_name = expression.column_name();
+                    let idx = self.metadata.column_idx_by_column_name(col_name.as_str())?;
+                    Expression::Column(format_field_name(col_name.as_str(), idx))
+                }
+            });
         }
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
@@ -160,6 +184,28 @@ impl PipelineBuilder {
                 )
             })?;
 
+        Ok(output_schema)
+    }
+
+    fn build_filter(
+        &mut self,
+        filter: &FilterPlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let output_schema = input_schema.clone();
+        let eb = ExpressionBuilder::create(&self.metadata);
+        let scalar = filter.predicate.as_any().downcast_ref::<Scalar>().unwrap();
+        let pred = eb.build(scalar)?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformFilter::try_create(
+                    input_schema.clone(),
+                    pred.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    self.ctx.clone(),
+                )
+            })?;
         Ok(output_schema)
     }
 
@@ -198,5 +244,77 @@ impl PipelineBuilder {
             })?;
 
         Ok(output_schema)
+    }
+
+    fn build_aggregate(
+        &mut self,
+        aggregate: &AggregatePlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
+        let expr_builder = ExpressionBuilder::create(&self.metadata);
+        for scalar_expr in aggregate.agg_expr.iter() {
+            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+            let expr = expr_builder.build(scalar)?;
+            agg_expressions.push(expr);
+        }
+
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let partial_data_fields =
+            RewriteHelper::exprs_to_fields(agg_expressions.as_slice(), &input_schema)?;
+        let partial_schema = schema_builder.build_aggregate(partial_data_fields, &input_schema)?;
+
+        let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
+        for scalar_expr in aggregate.group_expr.iter() {
+            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+            let expr = expr_builder.build(scalar)?;
+            group_expressions.push(expr);
+        }
+        let mut final_exprs = agg_expressions.to_owned();
+        final_exprs.extend_from_slice(group_expressions.as_slice());
+        let final_data_fields =
+            RewriteHelper::exprs_to_fields(final_exprs.as_slice(), &input_schema)?;
+        let final_schema = schema_builder.build_aggregate(final_data_fields, &input_schema)?;
+
+        let partial_aggr_params = AggregatorParams::try_create_v2(
+            &agg_expressions,
+            &group_expressions,
+            &input_schema,
+            &partial_schema,
+        )?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAggregator::try_create_partial(
+                    transform_input_port.clone(),
+                    transform_output_port.clone(),
+                    AggregatorTransformParams::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        &partial_aggr_params,
+                    )?,
+                )
+            })?;
+
+        let final_aggr_params = AggregatorParams::try_create_v2(
+            &agg_expressions,
+            &group_expressions,
+            &input_schema,
+            &final_schema,
+        )?;
+
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAggregator::try_create_final(
+                    transform_input_port.clone(),
+                    transform_output_port.clone(),
+                    AggregatorTransformParams::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        &final_aggr_params,
+                    )?,
+                )
+            })?;
+
+        Ok(final_schema)
     }
 }

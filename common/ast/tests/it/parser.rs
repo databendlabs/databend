@@ -69,14 +69,16 @@ fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("statement.txt").unwrap();
     let cases = &[
-        r#"show tables;"#,
+        r#"show tables"#,
         r#"show processlist;"#,
         r#"show create table a.b;"#,
-        r#"explain analyze select a from b;"#,
+        r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
+        r#"describe a; describe b"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
-        r#"create table if not exists a.b (c integer default 1 not null, b varchar);"#,
+        r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table a.b like c.d;"#,
+        r#"create table t like t2 engine = memory;"#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
@@ -91,7 +93,10 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);"#,
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
+        r#"DROP database if exists db1;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
+        r#"select * from t4;"#,
+        r#"select * from aa.bb;"#,
         r#"select * from a, b, c;"#,
         r#"select * from a join b on a.a = b.a;"#,
         r#"select * from a left outer join b on a.a = b.a;"#,
@@ -110,14 +115,42 @@ fn test_statement() {
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
         let stmts = parse_sql(&tokens).unwrap();
-        assert_eq!(stmts.len(), 1);
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
-        writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{}", stmts[0]).unwrap();
-        writeln!(file, "---------- AST ------------").unwrap();
-        writeln!(file, "{:#?}", stmts[0]).unwrap();
-        writeln!(file, "\n").unwrap();
+        for stmt in stmts {
+            writeln!(file, "---------- Output ---------").unwrap();
+            writeln!(file, "{}", stmt).unwrap();
+            writeln!(file, "---------- AST ------------").unwrap();
+            writeln!(file, "{:#?}", stmt).unwrap();
+            writeln!(file, "\n").unwrap();
+        }
+    }
+}
+
+// TODO(andylokandy): remove this test once the new optimizer has been being tested on suites
+#[test]
+fn test_statements_in_legacy_suites() {
+    for entry in glob::glob("../../tests/suites/**/*.sql").unwrap() {
+        let file_content = std::fs::read(entry.unwrap()).unwrap();
+        let file_str = String::from_utf8_lossy(&file_content).into_owned();
+
+        // Remove error cases
+        let file_str = regex::Regex::new(".+ErrorCode.+\n")
+            .unwrap()
+            .replace_all(&file_str, "")
+            .into_owned();
+
+        // TODO(andylokandy): support all cases eventually
+        // Remove currently unimplemented cases
+        let file_str = regex::Regex::new(
+            "(?i).*(SLAVE|MASTER|COMMIT|START|ROLLBACK|FIELDS|GRANT|COPY|ROLE|STAGE|ENGINES).*\n",
+        )
+        .unwrap()
+        .replace_all(&file_str, "")
+        .into_owned();
+
+        let tokens = tokenize_sql(&file_str).unwrap();
+        parse_sql(&tokens).unwrap();
     }
 }
 
@@ -127,8 +160,8 @@ fn test_statement_error() {
     let mut file = mint.new_goldenfile("statement-error.txt").unwrap();
 
     let cases = &[
-        r#"create table a.b (c integer not null 1, b varchar(10))"#,
-        r#"create table a (c varchar(10))"#,
+        r#"create table a.b (c integer not null 1, b float(10))"#,
+        r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
@@ -147,6 +180,10 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
+        r#"select * from customer inner join orders on a = b limit 1"#,
+        r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
+        r#"select * from customer natural full join orders"#,
+        r#"select * from customer natural join orders left outer join detail using (id)"#,
         r#"select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
             from customer, orders ODS,
                 (
@@ -163,10 +200,6 @@ fn test_query() {
             group by c_count
             order by custdist desc, c_count asc, totacctbal
             limit 10, totacctbal"#,
-        r#"select * from customer inner join orders on a = b limit 1"#,
-        r#"select * from customer inner join orders on a = b limit 2 offset 3"#,
-        r#"select * from customer natural full join orders"#,
-        r#"select * from customer natural join orders left outer join detail using (id)"#,
     ];
 
     for case in cases {
@@ -179,9 +212,11 @@ fn test_query_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query-error.txt").unwrap();
     let cases = &[
-        "select * from customer join where a = b",
-        "select * from join customer",
-        "select * from customer natural inner join orders on a = b",
+        r#"select * from customer join where a = b"#,
+        r#"select * from join customer"#,
+        r#"select * from customer natural inner join orders on a = b"#,
+        r#"select * order a"#,
+        r#"select number + 5 as a, cast(number as float(255))"#,
     ];
 
     for case in cases {
@@ -196,12 +231,30 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"-1"#,
+        r#"(1,)"#,
+        r#"(1,2)"#,
+        r#"(1,2,)"#,
+        r#"typeof(1 + 2)"#,
+        r#"- - + + - 1 + + - 2"#,
         r#"1 + a * c.d"#,
+        r#"number % 2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
-        r#"rand()"#,
-        r#"rand(distinct)"#,
+        r#""random"()"#,
+        r#"random(distinct)"#,
+        r#"covar_samp(number, number)"#,
         r#"CAST(col1 AS BIGINT UNSIGNED)"#,
+        r#"TRY_CAST(col1 AS BIGINT UNSIGNED)"#,
+        r#"trim(leading 'abc' from 'def')"#,
+        r#"extract(year from d)"#,
+        r#"position('a' in str)"#,
+        r#"substring(a from b for c)"#,
+        r#"substring(a, b, c)"#,
+        r#"col1::UInt8"#,
+        r#"(arr[0]:a).b"#,
+        r#"arr[4]["k"]"#,
+        r#"a rlike '^11'"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
         r#"p_partkey = l_partkey
@@ -226,6 +279,8 @@ fn test_expr_error() {
     let cases = &[
         r#"5 * (a and ) 1"#,
         r#"a + +"#,
+        r#"CAST(col1 AS foo)"#,
+        r#"CAST(col1)"#,
         r#"G.E.B IS NOT NULL AND
             col1 NOT BETWEEN col2 AND
                 AND 1 + col3 DIV sum(col4)"#,

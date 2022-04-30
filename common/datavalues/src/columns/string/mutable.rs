@@ -87,7 +87,7 @@ impl Default for MutableStringColumn {
 }
 
 impl MutableColumn for MutableStringColumn {
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

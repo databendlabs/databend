@@ -19,6 +19,7 @@ use std::time::UNIX_EPOCH;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -32,6 +33,7 @@ pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
+    Aborted = 4,
 }
 
 #[derive(Clone, Serialize)]
@@ -101,11 +103,34 @@ pub struct LogEvent {
 #[derive(Clone)]
 pub struct InterpreterQueryLog {
     ctx: Arc<QueryContext>,
-    plan: PlanNode,
+    plan: Option<PlanNode>,
+}
+
+fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, String, String) {
+    match err {
+        None => (log_type, 0, "".to_string(), "".to_string()),
+        Some(e) => {
+            if e.code() == ErrorCode::AbortedQuery("").code() {
+                (
+                    LogType::Aborted,
+                    e.code().into(),
+                    e.to_string(),
+                    e.backtrace_str(),
+                )
+            } else {
+                (
+                    LogType::Error,
+                    e.code().into(),
+                    e.to_string(),
+                    e.backtrace_str(),
+                )
+            }
+        }
+    }
 }
 
 impl InterpreterQueryLog {
-    pub fn create(ctx: Arc<QueryContext>, plan: PlanNode) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, plan: Option<PlanNode>) -> Self {
         InterpreterQueryLog { ctx, plan }
     }
 
@@ -183,7 +208,15 @@ impl InterpreterQueryLog {
         Ok(())
     }
 
-    pub async fn log_start(&self, now: SystemTime) -> Result<()> {
+    pub async fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
+        ctx.set_error(err.clone());
+        InterpreterQueryLog::create(ctx, None)
+            .log_start(SystemTime::now(), Some(err))
+            .await
+            .unwrap_or_else(|e| tracing::error!("fail to write query_log {:?}", e));
+    }
+
+    pub async fn log_start(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_tenant();
@@ -195,7 +228,11 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_kind = self.plan.name().to_string();
+        let query_kind = self
+            .plan
+            .as_ref()
+            .map(|p| p.name().to_string())
+            .unwrap_or_else(|| "".to_string());
         let query_text = self.ctx.get_query_str();
         // Schema.
         let current_database = self.ctx.get_current_database();
@@ -240,8 +277,11 @@ impl InterpreterQueryLog {
         }
         session_settings.push_str("scope: SESSION");
 
+        // Error
+        let (log_type, exception_code, exception, stack_trace) = error_fields(LogType::Start, err);
+
         let log_event = LogEvent {
-            log_type: LogType::Start,
+            log_type,
             handler_type,
             tenant_id,
             cluster_id,
@@ -275,9 +315,9 @@ impl InterpreterQueryLog {
             client_info: "".to_string(),
             client_address,
 
-            exception_code: 0,
-            exception: "".to_string(),
-            stack_trace: "".to_string(),
+            exception_code,
+            exception,
+            stack_trace,
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),
@@ -286,7 +326,7 @@ impl InterpreterQueryLog {
         self.write_log(&log_event).await
     }
 
-    pub async fn log_finish(&self, now: SystemTime) -> Result<()> {
+    pub async fn log_finish(&self, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_config().query.tenant_id;
@@ -298,7 +338,12 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_kind = self.plan.name().to_string();
+        let query_kind = self
+            .plan
+            .as_ref()
+            .map(|p| p.name())
+            .unwrap_or("")
+            .to_string();
         let query_text = self.ctx.get_query_str();
 
         // Stats.
@@ -349,8 +394,11 @@ impl InterpreterQueryLog {
         }
         session_settings.push_str("scope: SESSION");
 
+        // Error
+        let (log_type, exception_code, exception, stack_trace) = error_fields(LogType::Finish, err);
+
         let log_event = LogEvent {
-            log_type: LogType::Finish,
+            log_type,
             handler_type,
             tenant_id,
             cluster_id,
@@ -384,9 +432,9 @@ impl InterpreterQueryLog {
             client_address,
             current_database,
 
-            exception_code: 0,
-            exception: "".to_string(),
-            stack_trace: "".to_string(),
+            exception_code,
+            exception,
+            stack_trace,
             server_version: "".to_string(),
             session_settings,
             extra: "".to_string(),

@@ -29,7 +29,7 @@ pub struct PiFunction {
 }
 
 impl PiFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(PiFunction {
             display_name: display_name.to_string(),
         }))
@@ -46,7 +46,7 @@ impl Function for PiFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Float64Type::arc()
     }
 

@@ -31,7 +31,7 @@ pub struct SubstringIndexFunction {
 }
 
 impl SubstringIndexFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
@@ -66,7 +66,7 @@ impl Function for SubstringIndexFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

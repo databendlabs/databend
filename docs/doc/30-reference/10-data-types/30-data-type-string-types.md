@@ -7,9 +7,9 @@ description: Basic String data type.
 
 In Databend, strings can be stored in the VARCHAR field, the storage size is variable.
 
-| Name     | Storage Size
-| -------- | ------------
-| VARCHAR  | variable
+| Name     | Aliases     | Storage Size
+| -------- | ------------|---------------
+| VARCHAR  | STRING      |  variable
 
 ## Functions
 

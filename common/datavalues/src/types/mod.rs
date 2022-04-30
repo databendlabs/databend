@@ -14,7 +14,6 @@
 
 pub mod arithmetics_type;
 pub mod data_type;
-pub mod data_type_impl;
 pub mod type_array;
 pub mod type_boolean;
 pub mod type_coercion;
@@ -41,7 +40,6 @@ mod type_factory;
 
 pub use arithmetics_type::*;
 pub use data_type::*;
-pub use data_type_impl::DataTypeImpl;
 pub use date_converter::*;
 pub use date_converter::*;
 pub use deserializations::*;

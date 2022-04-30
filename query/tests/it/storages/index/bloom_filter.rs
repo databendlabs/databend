@@ -213,7 +213,7 @@ async fn test_bloom_f64_serialization() -> Result<()> {
 
 // A helper function to create a bloom filter, with the same bits and hashes as other.
 async fn create_bloom(
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     column: ColumnRef,
     other: &BloomFilter,
 ) -> Result<BloomFilter> {
@@ -241,8 +241,8 @@ fn create_blocks() -> Vec<DataBlock> {
         DataField::new_nullable("ColumnFloat64", f64::to_data_type()),
         DataField::new_nullable("ColumnDate16", DateType::arc()),
         DataField::new_nullable("ColumnDate32", DateType::arc()),
-        DataField::new_nullable("ColumnDateTime32", TimestampType::arc(0, None)),
-        DataField::new_nullable("ColumnDateTime64", TimestampType::arc(3, None)),
+        DataField::new_nullable("ColumnDateTime32", TimestampType::arc(0)),
+        DataField::new_nullable("ColumnDateTime64", TimestampType::arc(3)),
         DataField::new_nullable("ColumnIntervalDays", IntervalType::arc(IntervalKind::Day)),
         DataField::new_nullable("ColumnString", Vu8::to_data_type()),
     ]);

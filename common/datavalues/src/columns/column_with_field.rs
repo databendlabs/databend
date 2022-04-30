@@ -14,7 +14,7 @@
 
 use crate::ColumnRef;
 use crate::DataField;
-use crate::DataTypePtr;
+use crate::DataTypeImpl;
 
 #[derive(Clone, Debug)]
 pub struct ColumnWithField {
@@ -31,7 +31,7 @@ impl ColumnWithField {
     pub fn field(&self) -> &DataField {
         &self.field
     }
-    pub fn data_type(&self) -> &DataTypePtr {
+    pub fn data_type(&self) -> &DataTypeImpl {
         self.field.data_type()
     }
 }

@@ -111,6 +111,8 @@ pub struct TableMeta {
     // TODO(sundy): Save this as AST format
     pub order_keys: Option<Vec<u8>>,
     pub created_on: DateTime<Utc>,
+    pub updated_on: DateTime<Utc>,
+    pub comment: String,
 }
 
 impl TableInfo {
@@ -166,8 +168,10 @@ impl Default for TableMeta {
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
-            created_on: Utc::now(),
             order_keys: None,
+            created_on: Default::default(),
+            updated_on: Default::default(),
+            comment: "".to_string(),
         }
     }
 }

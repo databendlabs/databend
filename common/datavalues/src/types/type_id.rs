@@ -51,7 +51,7 @@ pub enum TypeID {
     Date,
 
     /// A 64-bit timestamp representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in nanoseconds, it's physical type is Int64
+    /// in microseconds, it's physical type is Int64
     /// store UTC timestamp
     Timestamp,
 

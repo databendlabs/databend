@@ -22,6 +22,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReq;
@@ -53,8 +54,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -71,8 +74,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..Default::default()
@@ -92,8 +97,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: true,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -111,16 +118,18 @@ impl MetaApiTestSuite {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db1")).await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- create db2");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -139,7 +148,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- get db2");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db2")).await?;
-            assert_eq!("db2".to_string(), res.db, "db1.db is db1");
+            assert_eq!("db2".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- get absent db");
@@ -158,8 +167,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -178,8 +189,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -197,8 +210,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -215,8 +230,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -233,8 +250,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant2.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant2.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -252,8 +271,8 @@ impl MetaApiTestSuite {
             let res = mt.get_database(GetDatabaseReq::new(tenant1, "db1")).await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- tenant1 get absent db");
@@ -286,8 +305,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -306,8 +327,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -334,7 +357,7 @@ impl MetaApiTestSuite {
                 })
                 .await?;
             let want: Vec<u64> = vec![1, 2];
-            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
+            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
 
@@ -366,7 +389,7 @@ impl MetaApiTestSuite {
                 })
                 .await?;
             let want: Vec<u64> = vec![1, 2];
-            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
+            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
 
@@ -378,7 +401,7 @@ impl MetaApiTestSuite {
                 })
                 .await?;
             let want: Vec<u64> = vec![3];
-            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
+            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
 
@@ -467,8 +490,10 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -701,8 +726,10 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -852,8 +879,10 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: new_db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: new_db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -1103,8 +1132,10 @@ impl MetaApiTestSuite {
 
         let req = CreateDatabaseReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -1131,8 +1162,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1152,8 +1185,8 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1", res.db, "db1.db is db1");
+            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!("db1", res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- get nonexistent-db on node_b, expect correct error");
@@ -1188,8 +1221,10 @@ impl MetaApiTestSuite {
             for db_name in dbs {
                 let req = CreateDatabaseReq {
                     if_not_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
+                    name_ident: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
                     meta: DatabaseMeta {
                         engine: "github".to_string(),
                         ..Default::default()
@@ -1211,10 +1246,10 @@ impl MetaApiTestSuite {
             tracing::debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(1, res[0].database_id, "db1 id is 1");
-            assert_eq!("db1", res[0].db, "db1.name is db1");
-            assert_eq!(2, res[1].database_id, "db3 id is 2");
-            assert_eq!("db3", res[1].db, "db3.name is db3");
+            assert_eq!(1, res[0].ident.db_id, "db1 id is 1");
+            assert_eq!("db1", res[0].name_ident.db_name, "db1.name is db1");
+            assert_eq!(2, res[1].ident.db_id, "db3 id is 2");
+            assert_eq!("db3", res[1].name_ident.db_name, "db3.name is db3");
         }
 
         Ok(())
@@ -1232,8 +1267,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1296,8 +1333,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()

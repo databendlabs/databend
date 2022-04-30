@@ -15,6 +15,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use common_datavalues::DataType;
+
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::BroadcastPlan;
@@ -134,9 +136,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             }
             write!(
                 f,
-                "{:?}:{:?}",
+                "{:?}:{}",
                 plan.expr[i],
-                plan.expr[i].to_data_type(&plan.input.schema()).unwrap()
+                plan.expr[i]
+                    .to_data_type(&plan.input.schema())
+                    .unwrap()
+                    .name()
             )?;
         }
 
@@ -151,9 +156,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             }
             write!(
                 f,
-                "{:?}:{:?}",
+                "{:?}:{}",
                 plan.exprs[i],
-                plan.exprs[i].to_data_type(&plan.input.schema()).unwrap()
+                plan.exprs[i]
+                    .to_data_type(&plan.input.schema())
+                    .unwrap()
+                    .name()
             )?;
         }
 
@@ -185,9 +193,9 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             let expr = plan.order_by[i].clone();
             write!(
                 f,
-                "{:?}:{:?}",
+                "{:?}:{}",
                 expr,
-                expr.to_data_type(&plan.schema()).unwrap()
+                expr.to_data_type(&plan.schema()).unwrap().name()
             )?;
         }
 

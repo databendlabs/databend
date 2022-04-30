@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+pub use binder::ScalarExpr;
+pub use binder::ScalarExprRef;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
@@ -26,7 +28,7 @@ use crate::sql::optimizer::OptimizeContext;
 pub use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 
-mod binder;
+pub(crate) mod binder;
 mod metadata;
 pub mod plans;
 

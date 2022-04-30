@@ -18,12 +18,14 @@ use serde::Serialize;
 
 use crate::CreateShareReq;
 use crate::DatabaseMeta;
+use crate::DatabaseNameIdent;
 use crate::DropShareReq;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::TableMeta;
+use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
 /// Compatible with latest changes made in 34e89c99 on 20220413
@@ -50,25 +52,31 @@ pub enum Cmd {
         node: Node,
     },
 
+    /// Remove node, 20220427
+    RemoveNode {
+        node_id: NodeId,
+    },
+
     CreateDatabase {
         // latest add
         if_not_exists: Option<bool>,
-        tenant: String,
+        // latest add
+        name_ident: Option<DatabaseNameIdent>,
+        // latest remove
+        tenant: Option<String>,
         // 20220413
         name: Option<String>,
-        // latest add
-        db_name: Option<String>,
         meta: DatabaseMeta,
     },
 
     DropDatabase {
         // latest add
         if_exists: Option<bool>,
-        tenant: String,
+        // latest add
+        name_ident: Option<DatabaseNameIdent>,
+        tenant: Option<String>,
         // 20220413
         name: Option<String>,
-        // latest add
-        db_name: Option<String>,
     },
 
     CreateTable {
@@ -110,4 +118,7 @@ pub enum Cmd {
         value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
     },
+
+    // 20220425
+    Transaction(TxnRequest),
 }

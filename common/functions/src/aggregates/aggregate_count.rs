@@ -67,7 +67,7 @@ impl AggregateFunction for AggregateCountFunction {
         "AggregateCountFunction"
     }
 
-    fn return_type(&self) -> Result<DataTypePtr> {
+    fn return_type(&self) -> Result<DataTypeImpl> {
         Ok(u64::to_data_type())
     }
 

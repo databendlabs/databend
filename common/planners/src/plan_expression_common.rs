@@ -271,7 +271,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
         // descend further.
         Some(replacement) => Ok(replacement),
         // No replacement was provided, clone the node and recursively call
-        // clone_with_replacement() on any nested Expressionessions.
+        // clone_with_replacement() on any nested Expressions.
         None => match expr {
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Alias(alias_name, nested_expr) => Ok(Expression::Alias(
@@ -417,7 +417,7 @@ pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
 }
 
 pub struct ExpressionDataTypeVisitor {
-    stack: Vec<DataTypePtr>,
+    stack: Vec<DataTypeImpl>,
     input_schema: DataSchemaRef,
 }
 
@@ -429,7 +429,7 @@ impl ExpressionDataTypeVisitor {
         }
     }
 
-    pub fn finalize(mut self) -> Result<DataTypePtr> {
+    pub fn finalize(mut self) -> Result<DataTypeImpl> {
         match self.stack.len() {
             1 => Ok(self.stack.remove(0)),
             _ => Err(ErrorCode::LogicalError(
@@ -458,7 +458,7 @@ impl ExpressionDataTypeVisitor {
             }?);
         }
 
-        let arguments: Vec<&DataTypePtr> = arguments.iter().collect();
+        let arguments: Vec<&DataTypeImpl> = arguments.iter().collect();
 
         let function = FunctionFactory::instance().get(op, &arguments)?;
         let return_type = function.return_type();

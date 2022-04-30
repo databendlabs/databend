@@ -32,7 +32,7 @@ pub struct NowFunction {
 }
 
 impl NowFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(NowFunction {
             display_name: display_name.to_string(),
         }))
@@ -48,8 +48,8 @@ impl Function for NowFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        TimestampType::arc(6, None)
+    fn return_type(&self) -> DataTypeImpl {
+        TimestampType::arc(6)
     }
 
     fn eval(
@@ -59,7 +59,7 @@ impl Function for NowFunction {
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
-        let value = utc.timestamp_nanos() / 1000;
+        let value = utc.timestamp_micros();
         let column = Series::from_data(&[value]);
         Ok(Arc::new(ConstColumn::new(column, input_rows)))
     }

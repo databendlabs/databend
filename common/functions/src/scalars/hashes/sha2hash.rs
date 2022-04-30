@@ -34,7 +34,7 @@ pub struct Sha2HashFunction {
 }
 
 impl Sha2HashFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if args[0].data_type_id() != TypeID::String {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected first arg as string type, but got {:?}",
@@ -65,7 +65,7 @@ impl Function for Sha2HashFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         StringType::arc()
     }
 

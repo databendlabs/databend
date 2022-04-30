@@ -25,7 +25,7 @@ fn test_lexer() {
         &[
             (LiteralHex, "x'deadbeef'", 0..11),
             (
-                LiteralString,
+                QuotedIdent,
                 "'a string literal\n escape quote by '' or \\'. '",
                 29..75,
             ),
@@ -33,8 +33,8 @@ fn test_lexer() {
         ],
     );
     assert_lex("'中文' '日本語'", &[
-        (LiteralString, "'中文'", 0..8),
-        (LiteralString, "'日本語'", 9..20),
+        (QuotedIdent, "'中文'", 0..8),
+        (QuotedIdent, "'日本語'", 9..20),
         (EOI, "", 20..20),
     ]);
     assert_lex("42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01", &[

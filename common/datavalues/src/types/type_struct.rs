@@ -19,18 +19,18 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::data_type::DataType;
-use super::data_type::DataTypePtr;
+use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
     names: Vec<String>,
-    types: Vec<DataTypePtr>,
+    types: Vec<DataTypeImpl>,
 }
 
 impl StructType {
-    pub fn create(names: Vec<String>, types: Vec<DataTypePtr>) -> Self {
+    pub fn create(names: Vec<String>, types: Vec<DataTypeImpl>) -> Self {
         debug_assert!(names.len() == types.len());
         StructType { names, types }
     }
@@ -39,12 +39,11 @@ impl StructType {
         &self.names
     }
 
-    pub fn types(&self) -> &Vec<DataTypePtr> {
+    pub fn types(&self) -> &Vec<DataTypeImpl> {
         &self.types
     }
 }
 
-#[typetag::serde]
 impl DataType for StructType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Struct
@@ -77,7 +76,7 @@ impl DataType for StructType {
                 .zip(self.types.iter())
                 .map(|(v, typ)| typ.create_constant_column(v, size))
                 .collect::<Result<Vec<_>>>()?;
-            let struct_column = StructColumn::from_data(cols, Arc::new(self.clone()));
+            let struct_column = StructColumn::from_data(cols, DataTypeImpl::Struct(self.clone()));
             return Ok(Arc::new(ConstColumn::new(Arc::new(struct_column), size)));
         }
         return Result::Err(ErrorCode::BadDataValueType(format!(
@@ -144,7 +143,7 @@ impl DataType for StructType {
             columns.push(self.types[idx].create_column(value)?);
         }
 
-        Ok(StructColumn::from_data(columns, Arc::new(self.clone())).arc())
+        Ok(StructColumn::from_data(columns, DataTypeImpl::Struct(self.clone())).arc())
     }
 }
 
