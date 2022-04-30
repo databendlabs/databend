@@ -105,6 +105,10 @@ impl ExpressionEvaluator {
                 "Unsupported AggregateFunction scalar expression",
             )),
 
+            Expression::WindowFunction { .. } => Err(ErrorCode::LogicalError(
+                "Unsupported WindowFunction scalar expression",
+            )),
+
             Expression::Sort { .. } => Err(ErrorCode::LogicalError(
                 "Unsupported Sort scalar expression",
             )),
