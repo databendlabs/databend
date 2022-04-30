@@ -41,7 +41,7 @@ fn test_aggregate_function() -> Result<()> {
         Series::from_data(vec![4i64, 3, 2, 1]),
         Series::from_data(vec![1i64, 2, 3, 4]),
         // arrays for window funnel function
-        Series::from_data(vec![1, 0u32, 2, 3]),
+        Series::from_data(vec![1, 0i64, 2, 3]),
         Series::from_data(vec![true, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
@@ -306,7 +306,7 @@ fn test_aggregate_function() -> Result<()> {
 }
 
 #[test]
-fn test_aggregate_function_with_grpup_by() -> Result<()> {
+fn test_aggregate_function_with_group_by() -> Result<()> {
     struct Test {
         name: &'static str,
         eval_nums: usize,
@@ -325,7 +325,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         Series::from_data(vec![1i64, 2, 3, 4]),
         Series::from_data(vec!["a", "b", "c", "d"]),
         // arrays for window funnel function
-        Series::from_data(vec![0u32, 2, 1, 3]),
+        Series::from_data(vec![0i64, 2, 1, 3]),
         Series::from_data(vec![true, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
@@ -339,6 +339,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         DataField::new("dt", TimestampType::arc(0)),
         DataField::new("event = 1001", bool::to_data_type()),
         DataField::new("event = 1002", bool::to_data_type()),
+        DataField::new("event = 1003", bool::to_data_type()),
     ];
 
     let tests = vec![
@@ -660,7 +661,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
 
     let arrays: Vec<ColumnRef> = vec![
         Int64Column::from_slice(&[]).arc(),
-        BooleanColumn::from_slice(&[]).arc(),
+        Int64Column::from_slice(&[]).arc(),
     ];
 
     let args = vec![
@@ -879,7 +880,7 @@ fn test_covariance_with_comparable_data_sets() -> Result<()> {
     let arrays: Vec<ColumnRef> = vec![Series::from_data(v0), Series::from_data(v1)];
 
     let args = vec![
-        DataField::new("a", i32::to_data_type()),
+        DataField::new("a", f32::to_data_type()),
         DataField::new("b", i16::to_data_type()),
     ];
 
