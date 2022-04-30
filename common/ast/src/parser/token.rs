@@ -242,6 +242,8 @@ pub enum TokenKind {
     BETWEEN,
     #[token("BIGINT", ignore(ascii_case))]
     BIGINT,
+    #[token("BOOL", ignore(ascii_case))]
+    BOOL,
     #[token("BOOLEAN", ignore(ascii_case))]
     BOOLEAN,
     #[token("BOTH", ignore(ascii_case))]

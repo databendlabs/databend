@@ -792,7 +792,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
-    let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN });
+    let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(
         TypeName::UInt8,
         rule! { ( UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ #literal_u64 ~ ")" )?  },
