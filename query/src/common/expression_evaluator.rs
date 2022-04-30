@@ -25,25 +25,18 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::sessions::QueryContext;
-
 pub struct ExpressionEvaluator;
 
 impl ExpressionEvaluator {
     pub fn eval(
+        func_ctx: FunctionContext,
         expression: &Expression,
         block: &DataBlock,
-        ctx: &QueryContext,
     ) -> Result<ColumnRef> {
-        let func_ctx = FunctionContext {
-            tz: String::from_utf8(ctx.get_settings().get_timezone()?).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-            })?,
-        };
         match expression {
             Expression::Column(name) => block.try_column_by_name(name.as_str()).cloned(),
 
-            Expression::Alias(_, _) => Err(ErrorCode::LogicalError(
+            Expression::Alias(_, _) => Err(ErrorCode::UnImplement(
                 "Unsupported Alias scalar expression",
             )),
 
@@ -56,10 +49,11 @@ impl ExpressionEvaluator {
             } => data_type.create_constant_column(value, block.num_rows()),
 
             Expression::UnaryExpression { op, expr } => {
-                let result = Self::eval(expr, block, ctx)?;
+                let result = Self::eval(func_ctx.clone(), expr, block)?;
                 let arg_types: Vec<DataTypeImpl> = vec![result.data_type()];
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
+
                 let columns = [ColumnWithField::new(
                     result.clone(),
                     DataField::new("", result.data_type()),
@@ -68,12 +62,13 @@ impl ExpressionEvaluator {
             }
 
             Expression::BinaryExpression { left, op, right } => {
-                let left_result = Self::eval(left.as_ref(), block, ctx)?;
-                let right_result = Self::eval(right.as_ref(), block, ctx)?;
+                let left_result = Self::eval(func_ctx.clone(), left.as_ref(), block)?;
+                let right_result = Self::eval(func_ctx.clone(), right.as_ref(), block)?;
                 let arg_types: Vec<DataTypeImpl> =
                     vec![left_result.data_type(), right_result.data_type()];
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
+
                 let columns = [
                     ColumnWithField::new(
                         left_result.clone(),
@@ -90,11 +85,12 @@ impl ExpressionEvaluator {
             Expression::ScalarFunction { op, args } => {
                 let results = args
                     .iter()
-                    .map(|expr| Self::eval(expr, block, ctx))
+                    .map(|expr| Self::eval(func_ctx.clone(), expr, block))
                     .collect::<Result<Vec<ColumnRef>>>()?;
                 let arg_types: Vec<DataTypeImpl> =
                     results.iter().map(|col| col.data_type()).collect();
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
+
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let columns: Vec<ColumnWithField> = results
                     .into_iter()
@@ -116,7 +112,7 @@ impl ExpressionEvaluator {
             Expression::Cast {
                 expr, data_type, ..
             } => {
-                let result = Self::eval(expr, block, ctx)?;
+                let result = Self::eval(func_ctx.clone(), expr, block)?;
                 let func_name = "cast".to_string();
                 let type_name = data_type.name();
 
@@ -137,19 +133,19 @@ impl ExpressionEvaluator {
             Expression::ScalarSubquery { name, .. } => {
                 // Scalar subquery results are ready in the expression input
                 let expr = Expression::Column(name.clone());
-                Self::eval(&expr, block, ctx)
+                Self::eval(func_ctx, &expr, block)
             }
 
             Expression::Subquery { name, .. } => {
                 // Subquery results are ready in the expression input
                 let expr = Expression::Column(name.clone());
-                Self::eval(&expr, block, ctx)
+                Self::eval(func_ctx, &expr, block)
             }
 
             Expression::MapAccess { args, .. } => {
                 let results = args
                     .iter()
-                    .map(|expr| Self::eval(expr, block, ctx))
+                    .map(|expr| Self::eval(func_ctx.clone(), expr, block))
                     .collect::<Result<Vec<ColumnRef>>>()?;
                 let arg_types: Vec<DataTypeImpl> =
                     results.iter().map(|col| col.data_type()).collect();

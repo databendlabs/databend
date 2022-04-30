@@ -72,8 +72,8 @@ async fn test_expression_evaluator() -> Result<()> {
         DataField::new("b", Int32Type::arc()),
     )?;
 
-    let ctx = create_query_context().await?;
-    let result = ExpressionEvaluator::eval(&expr, &block, &ctx)?;
+    let func_ctx = create_query_context().await?.try_get_function_context()?;
+    let result = ExpressionEvaluator::eval(func_ctx, &expr, &block)?;
 
     assert_eq!(
         result.get(0),
