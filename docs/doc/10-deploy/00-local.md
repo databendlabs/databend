@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With Local FS (for Test)
+title: Deploy Databend With Local FS (For Test)
 sidebar_label: With Local FS (Test)
 description:
-  How to deploy Databend with Local FS (for Test).
+  How to deploy Databend with local FS (For Test).
 ---
 
 This guideline will deploy Databend(standalone) with local fs step by step.

@@ -1,5 +1,5 @@
 ---
-title: Databend On Wasabi Performance
+title: Databend on Wasabi Performance
 sidebar_label: On Wasabi Performance
 description:
   Sub-second analytics on Wasabi experience.

@@ -1,8 +1,8 @@
 ---
-title: Load Data from MySQL
+title: Load Data From MySQL
 sidebar_label: From MySQL
 description:
-  Load Data from MySQL.
+  Load data from MySQL.
 ---
 
 Using `mysqldump` to load data from MySQL into Databend.

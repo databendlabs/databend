@@ -1,5 +1,5 @@
 ---
-title: Databend On Amazon S3 Performance
+title: Databend on Amazon S3 Performance
 sidebar_label: On Amazon S3 Performance
 description:
   Sub-second analytics on Amazon S3 experience.
