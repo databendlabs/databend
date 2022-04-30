@@ -50,20 +50,23 @@ impl ScalarBinder {
                     nullable: column_binding.nullable,
                 }))
             }
-            Expr::Literal(literal) => Ok(match literal {
-                Literal::Number(val) => Arc::new(Scalar::Literal {
+            Expr::Literal(literal) => match literal {
+                Literal::Number(val) => Ok(Arc::new(Scalar::Literal {
                     data_value: DataValue::try_from_literal(val, None)?,
-                }),
-                Literal::String(val) => Arc::new(Scalar::Literal {
+                })),
+                Literal::String(val) => Ok(Arc::new(Scalar::Literal {
                     data_value: DataValue::String(val.clone().into_bytes()),
-                }),
-                Literal::Boolean(val) => Arc::new(Scalar::Literal {
+                })),
+                Literal::Boolean(val) => Ok(Arc::new(Scalar::Literal {
                     data_value: DataValue::Boolean(*val),
-                }),
-                Literal::Null => Arc::new(Scalar::Literal {
+                })),
+                Literal::Null => Ok(Arc::new(Scalar::Literal {
                     data_value: DataValue::Null,
-                }),
-            }),
+                })),
+                _ => Err(ErrorCode::UnImplement(format!(
+                    "Unsupported Literal: {literal}"
+                ))),
+            },
             Expr::BinaryOp { op, left, right } => {
                 self.bind_binary_op(op, left.as_ref(), right.as_ref(), bind_context)
             }
@@ -122,25 +125,26 @@ impl ScalarBinder {
                             data_values.clone(),
                             fields,
                         )?;
-                        let agg_scalar = if optimize_remove_count_args(name, *distinct, args) {
-                            Scalar::AggregateFunction {
-                                func_name: name.clone(),
-                                distinct: *distinct,
-                                params: data_values,
-                                args: vec![],
-                                data_type: agg_func_ref.return_type()?,
-                                nullable: false,
-                            }
-                        } else {
-                            Scalar::AggregateFunction {
-                                func_name: name.clone(),
-                                distinct: *distinct,
-                                params: data_values,
-                                args: scalar_exprs,
-                                data_type: agg_func_ref.return_type()?,
-                                nullable: false,
-                            }
-                        };
+                        let agg_scalar =
+                            if optimize_remove_count_args(name.name.as_str(), *distinct, args) {
+                                Scalar::AggregateFunction {
+                                    func_name: name.name.clone(),
+                                    distinct: *distinct,
+                                    params: data_values,
+                                    args: vec![],
+                                    data_type: agg_func_ref.return_type()?,
+                                    nullable: false,
+                                }
+                            } else {
+                                Scalar::AggregateFunction {
+                                    func_name: name.name.clone(),
+                                    distinct: *distinct,
+                                    params: data_values,
+                                    args: scalar_exprs,
+                                    data_type: agg_func_ref.return_type()?,
+                                    nullable: false,
+                                }
+                            };
                         Ok(Arc::new(agg_scalar))
                     }
                     false => Err(ErrorCode::UnImplement(format!(

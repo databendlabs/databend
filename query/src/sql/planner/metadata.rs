@@ -167,7 +167,7 @@ impl Metadata {
                 distinct,
                 args,
                 ..
-            } => self.create_function_display_name(name.as_str(), distinct, args),
+            } => self.create_function_display_name(name.name.as_str(), distinct, args),
             _ => Err(ErrorCode::LogicalError(format!(
                 "{expr} doesn't implement get_expr_display_string"
             ))),
