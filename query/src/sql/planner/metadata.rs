@@ -162,6 +162,7 @@ impl Metadata {
                 Ok(format_field_name(column.name.as_str(), idx))
             }
             Expr::Literal(literal) => Ok(format!("{}", literal)),
+            Expr::CountAll => Ok("count()".to_string()),
             Expr::FunctionCall {
                 name,
                 distinct,
