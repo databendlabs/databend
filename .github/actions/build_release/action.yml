@@ -23,6 +23,10 @@ runs:
       if: "contains(inputs.target, 'apple')"
       run: rustup target add ${{ inputs.target }}
 
+    - shell: bash
+      if: "contains(inputs.target, 'apple')"
+      run: brew install thrift 
+
     - name: Setup Build Tool
       if: "contains(inputs.target, 'linux')"
       uses: ./.github/actions/setup_build_tool
