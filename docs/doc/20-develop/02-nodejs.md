@@ -1,8 +1,8 @@
 ---
-title: How to Work with Databend in Node.js
+title: How to Work With Databend in Node.js
 sidebar_label: Node.js
 description:
-   How to Work with Databend in Node.js.
+   How to work with Databend in Node.js.
 ---
 
 ## Before You Begin

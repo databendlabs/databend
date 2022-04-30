@@ -1,5 +1,5 @@
 ---
-title: Databend On QingCloud QingStore Performance
+title: Databend on QingCloud QingStore Performance
 sidebar_label: On QingCloud QingStore Performance
 description:
   Sub-second analytics on QingCloud QingStore experience.
