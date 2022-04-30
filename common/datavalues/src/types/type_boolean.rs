@@ -44,6 +44,10 @@ impl DataType for BooleanType {
         "Boolean".to_string()
     }
 
+    fn aliases(&self) -> &[&str] {
+        &["Bool"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::Boolean(false)
     }
