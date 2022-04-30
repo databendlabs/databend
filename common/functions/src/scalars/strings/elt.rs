@@ -138,7 +138,7 @@ where
 
     let viewers = columns[1..]
         .iter()
-        .map(|column| Vu8::try_create_viewer(column))
+        .map(Vu8::try_create_viewer)
         .collect::<Result<Vec<_>>>()?;
     match nullable {
         false => {

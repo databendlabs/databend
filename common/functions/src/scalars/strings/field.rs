@@ -67,7 +67,7 @@ impl Function for FieldFunction {
         let viewers = columns
             .iter()
             .skip(1)
-            .map(|c| Vu8::try_create_viewer(c))
+            .map(Vu8::try_create_viewer)
             .collect::<Result<Vec<_>>>()?;
 
         let mut values = Vec::with_capacity(input_rows);

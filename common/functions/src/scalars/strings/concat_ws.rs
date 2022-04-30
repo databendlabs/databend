@@ -70,7 +70,7 @@ impl ConcatWsFunction {
     ) -> Result<ColumnRef> {
         let viewers = columns
             .iter()
-            .map(|column| Vu8::try_create_viewer(&column))
+            .map(Vu8::try_create_viewer)
             .collect::<Result<Vec<_>>>()?;
 
         let mut builder = MutableStringColumn::with_capacity(rows);
@@ -96,10 +96,10 @@ impl ConcatWsFunction {
         columns: &[ColumnRef],
         rows: usize,
     ) -> Result<ColumnRef> {
-        let sep_c = Series::check_get_scalar::<Vu8>(&sep_column)?;
+        let sep_c = Series::check_get_scalar::<Vu8>(sep_column)?;
         let viewers = columns
             .iter()
-            .map(|column| Vu8::try_create_viewer(&column))
+            .map(Vu8::try_create_viewer)
             .collect::<Result<Vec<_>>>()?;
 
         let mut builder = MutableStringColumn::with_capacity(rows);
@@ -126,10 +126,10 @@ impl ConcatWsFunction {
         columns: &[ColumnRef],
         rows: usize,
     ) -> Result<ColumnRef> {
-        let sep_viewer = Vu8::try_create_viewer(&sep_column)?;
+        let sep_viewer = Vu8::try_create_viewer(sep_column)?;
         let viewers = columns
             .iter()
-            .map(|column| Vu8::try_create_viewer(&column))
+            .map(Vu8::try_create_viewer)
             .collect::<Result<Vec<_>>>()?;
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(rows);

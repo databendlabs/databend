@@ -235,10 +235,10 @@ impl StatColumn {
             }
 
             let min_col = v.data_type().create_constant_column(&stat.min, 1)?;
-            let variable_left = Some(ColumnWithField::new(min_col, v.clone()));
+            let variable_left = Some(min_col);
 
             let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
-            let variable_right = Some(ColumnWithField::new(max_col, v.clone()));
+            let variable_right = Some(max_col);
             variables.insert(v.name().clone(), (variable_left, variable_right));
         }
 
@@ -307,7 +307,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     (0, 0) => {
                         return Err(ErrorCode::UnknownException(
                             "Constant expression donot need to be handled",
-                        ))
+                        ));
                     }
                     (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
                     (0, _) => {

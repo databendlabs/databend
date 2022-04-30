@@ -270,7 +270,7 @@ fn test_cast_variant_function() -> Result<()> {
                 name: "cast-float64-to-variant-passed",
                 columns: vec![ColumnWithField::new(
                     Series::from_data(vec![0.12345678912121212f64,
-                        12.345678912,]),
+                                           12.345678912, ]),
                     DataField::new("dummy_1", Float64Type::arc()),
                 )],
                 expect: Series::from_data(vec![
@@ -298,9 +298,10 @@ fn test_cast_variant_function() -> Result<()> {
     ];
 
     for (test_func, test) in tests {
+        let arguments: Vec<ColumnRef> = test.columns.iter().map(|c| c.column().clone()).collect();
         match test_func.eval(
             FunctionContext::default(),
-            &test.columns,
+            &arguments,
             test.columns[0].column().len(),
         ) {
             Ok(v) => {
@@ -595,9 +596,10 @@ fn test_variant_cast_function() -> Result<()> {
     ];
 
     for (test_func, test) in tests {
+        let arguments: Vec<ColumnRef> = test.columns.iter().map(|c| c.column().clone()).collect();
         match test_func.eval(
             FunctionContext::default(),
-            &test.columns,
+            &arguments,
             test.columns[0].column().len(),
         ) {
             Ok(v) => {

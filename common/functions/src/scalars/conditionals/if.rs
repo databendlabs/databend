@@ -58,9 +58,9 @@ impl IfFunction {
         // whether nullable or not, we can use viewer to make it
         let cond_viewer = bool::try_create_viewer(cond_col)?;
         if cond_viewer.value_at(0) {
-            return Ok(columns[0].clone());
+            Ok(columns[0].clone())
         } else {
-            return Ok(columns[1].clone());
+            Ok(columns[1].clone())
         }
     }
 

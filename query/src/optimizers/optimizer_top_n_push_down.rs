@@ -175,8 +175,8 @@ impl TopNPushDownImpl {
                 match ExpressionMonotonicityVisitor::extract_sort_column(
                     schema.clone(),
                     expr,
-                    left,
-                    right,
+                    left.map(|c| c.column().clone()),
+                    right.map(|c| c.column().clone()),
                     column_name,
                 ) {
                     Ok(new_expr) => Ok(new_expr),

@@ -74,7 +74,7 @@ impl Function for TupleFunction {
         columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        let cols = columns.iter().map(|v| v.clone()).collect::<Vec<_>>();
+        let cols = columns.to_vec();
         let arr: StructColumn = StructColumn::from_data(cols, self.result_type.clone());
         Ok(Arc::new(arr))
     }

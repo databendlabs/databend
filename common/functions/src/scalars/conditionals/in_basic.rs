@@ -133,7 +133,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 .map(|column| column.data_type().data_type_id())
                 .all(|t| t.is_string() || t.is_date_or_date_time())
             {
-                true => columns[0].data_type().clone(),
+                true => columns[0].data_type(),
                 false => {
                     return Result::Err(ErrorCode::BadDataValueType("test"));
                 }

@@ -90,7 +90,10 @@ fn test_add_months() -> Result<()> {
                 AddMonthsFunction::try_create_func("addMonths", 1, &[&DateType::arc(), arg])?;
             let col = add_months.eval(
                 FunctionContext::default(),
-                &[column("date"), column(field)],
+                &[
+                    column("date").column().clone(),
+                    column(field).column().clone(),
+                ],
                 1,
             )?;
             assert_eq!(col.len(), 1);
@@ -119,7 +122,10 @@ fn test_add_months() -> Result<()> {
                 AddMonthsFunction::try_create_func("addMonths", 1, &[&TimestampType::arc(0), arg])?;
             let col = add_months.eval(
                 FunctionContext::default(),
-                &[column("datetime"), column(field)],
+                &[
+                    column("datetime").column().clone(),
+                    column(field).column().clone(),
+                ],
                 1,
             )?;
             assert_eq!(col.len(), 1);
@@ -206,7 +212,10 @@ fn test_add_subtract_seconds() -> Result<()> {
                 AddTimesFunction::try_create_func("addSeconds", 1, &[&TimestampType::arc(0), arg])?;
             let col = add_seconds.eval(
                 FunctionContext::default(),
-                &[column("datetime"), column(field)],
+                &[
+                    column("datetime").column().clone(),
+                    column(field).column().clone(),
+                ],
                 1,
             )?;
             assert_eq!(col.len(), 1);
@@ -237,7 +246,10 @@ fn test_add_subtract_seconds() -> Result<()> {
             ])?;
             let col = add_seconds.eval(
                 FunctionContext::default(),
-                &[column("datetime"), column(field)],
+                &[
+                    column("datetime").column().clone(),
+                    column(field).column().clone(),
+                ],
                 1,
             )?;
             assert_eq!(col.len(), 1);

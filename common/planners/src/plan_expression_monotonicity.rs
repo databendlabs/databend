@@ -53,7 +53,7 @@ pub struct ExpressionMonotonicityVisitor {
     // HashMap<column_name, (variable_left, variable_right)>
     // variable_left: the variable range left.
     // variable_right: the variable range right.
-    variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+    variables: HashMap<String, (Option<ColumnRef>, Option<ColumnRef>)>,
 
     stack: Vec<(DataTypeImpl, Monotonicity)>,
 
@@ -63,7 +63,7 @@ pub struct ExpressionMonotonicityVisitor {
 impl ExpressionMonotonicityVisitor {
     fn create(
         input_schema: DataSchemaRef,
-        variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+        variables: HashMap<String, (Option<ColumnRef>, Option<ColumnRef>)>,
         single_point: bool,
     ) -> Self {
         Self {
@@ -164,7 +164,7 @@ impl ExpressionMonotonicityVisitor {
     pub fn check_expression(
         schema: DataSchemaRef,
         expr: &Expression,
-        variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+        variables: HashMap<String, (Option<ColumnRef>, Option<ColumnRef>)>,
         single_point: bool,
     ) -> Monotonicity {
         let visitor = Self::create(schema, variables, single_point);
@@ -179,8 +179,8 @@ impl ExpressionMonotonicityVisitor {
     pub fn extract_sort_column(
         schema: DataSchemaRef,
         sort_expr: &Expression,
-        left: Option<ColumnWithField>,
-        right: Option<ColumnWithField>,
+        left: Option<ColumnRef>,
+        right: Option<ColumnRef>,
         column_name: &str,
     ) -> Result<Expression> {
         if let Expression::Sort {
@@ -232,8 +232,8 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: left.clone().map(|c| c.column().clone()),
-                    right: right.clone().map(|c| c.column().clone()),
+                    left: left.clone(),
+                    right: right.clone(),
                 };
 
                 self.stack.push((return_type.clone(), monotonic));

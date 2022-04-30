@@ -70,7 +70,8 @@ pub fn test_scalar_functions_with_type(
             rows_size = c.column().len();
         }
 
-        match test_eval_with_type(op, rows_size, &test.columns, &arguments_type) {
+        let arguments: Vec<ColumnRef> = test.columns.iter().map(|c| c.column().clone()).collect();
+        match test_eval_with_type(op, rows_size, &arguments, &arguments_type) {
             Ok(v) => {
                 let v = v.convert_full_column();
 
@@ -91,16 +92,11 @@ pub fn test_eval(op: &str, columns: &[ColumnRef]) -> Result<ColumnRef> {
     let mut arguments = Vec::with_capacity(columns.len());
     let mut arguments_type = Vec::with_capacity(columns.len());
 
-    for (index, arg_column) in columns.iter().enumerate() {
-        let f = ColumnWithField::new(
-            arg_column.clone(),
-            DataField::new(&format!("dummy_{}", index), arg_column.data_type()),
-        );
-
+    for arg_column in columns.iter() {
         arguments_type.push(arg_column.data_type());
 
         rows_size = arg_column.len();
-        arguments.push(f);
+        arguments.push(arg_column.clone());
     }
 
     let mut types = Vec::with_capacity(columns.len());
@@ -115,7 +111,7 @@ pub fn test_eval(op: &str, columns: &[ColumnRef]) -> Result<ColumnRef> {
 pub fn test_eval_with_type(
     op: &str,
     rows_size: usize,
-    arguments: &[ColumnWithField],
+    arguments: &[ColumnRef],
     arguments_type: &[&DataTypeImpl],
 ) -> Result<ColumnRef> {
     let func = FunctionFactory::instance().get(op, arguments_type)?;

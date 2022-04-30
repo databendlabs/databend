@@ -23,38 +23,32 @@ struct Test {
     name: &'static str,
     expr: Expression,
     column: &'static str,
-    left: Option<ColumnWithField>,
-    right: Option<ColumnWithField>,
+    left: Option<ColumnRef>,
+    right: Option<ColumnRef>,
     expect_mono: Monotonicity,
 }
 
-fn create_f64(d: f64) -> Option<ColumnWithField> {
-    let data_field = DataField::new("x", f64::to_data_type());
-    let col = data_field
-        .data_type()
+fn create_f64(d: f64) -> Option<ColumnRef> {
+    let col = f64::to_data_type()
         .create_constant_column(&DataValue::Float64(d), 1)
         .unwrap();
-    Some(ColumnWithField::new(col, data_field))
+    Some(col)
 }
 
-fn create_u8(d: u8) -> Option<ColumnWithField> {
-    let data_field = DataField::new("x", u8::to_data_type());
-    let col = data_field
-        .data_type()
+fn create_u8(d: u8) -> Option<ColumnRef> {
+    let col = u8::to_data_type()
         .create_constant_column(&DataValue::UInt64(d as u64), 1)
         .unwrap();
 
-    Some(ColumnWithField::new(col, data_field))
+    Some(col)
 }
 
-fn create_datetime(d: i64) -> Option<ColumnWithField> {
-    let data_field = DataField::new("x", TimestampType::arc(0));
-    let col = data_field
-        .data_type()
+fn create_datetime(d: i64) -> Option<ColumnRef> {
+    let col = TimestampType::arc(0)
         .create_constant_column(&DataValue::Int64(d), 1)
         .unwrap();
 
-    Some(ColumnWithField::new(col, data_field))
+    Some(col)
 }
 
 fn verify_test(t: Test) -> Result<()> {
@@ -69,8 +63,8 @@ fn verify_test(t: Test) -> Result<()> {
 
     let mut single_point = false;
     if t.left.is_some() && t.right.is_some() {
-        let left = t.left.unwrap().column().get_checked(0)?;
-        let right = t.right.unwrap().column().get_checked(0)?;
+        let left = t.left.unwrap().get_checked(0)?;
+        let right = t.right.unwrap().get_checked(0)?;
         if left == right {
             single_point = true;
         }
@@ -108,16 +102,16 @@ fn verify_test(t: Test) -> Result<()> {
         if expected_left.is_none() {
             assert!(left.is_none(), "{} left", t.name);
         } else {
-            let left_val = left.unwrap().column().get_checked(0)?;
-            let expected_left_val = expected_left.unwrap().column().get_checked(0)?;
+            let left_val = left.unwrap().get_checked(0)?;
+            let expected_left_val = expected_left.unwrap().get_checked(0)?;
             assert!(left_val == expected_left_val, "{}", t.name);
         }
 
         if expected_right.is_none() {
             assert!(right.is_none(), "{} right", t.name);
         } else {
-            let right_val = right.unwrap().column().get_checked(0)?;
-            let expected_right_val = expected_right.unwrap().column().get_checked(0)?;
+            let right_val = right.unwrap().get_checked(0)?;
+            let expected_right_val = expected_right.unwrap().get_checked(0)?;
             assert!(right_val == expected_right_val, "{}", t.name);
         }
     }
