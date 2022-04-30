@@ -29,9 +29,8 @@ pub struct DatabaseNameIdent {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
-    // TODO(xp): store the seq AKA version for CAS update
-    pub database_id: u64,
-    pub db: String,
+    pub ident: DatabaseIdent,
+    pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
 
@@ -83,8 +82,7 @@ impl DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
+    pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
 
@@ -93,7 +91,7 @@ impl Display for CreateDatabaseReq {
         write!(
             f,
             "create_db(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.tenant, self.db_name, self.meta
+            self.if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
         )
     }
 }
@@ -106,8 +104,7 @@ pub struct CreateDatabaseReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
+    pub name_ident: DatabaseNameIdent,
 }
 
 impl Display for DropDatabaseReq {
@@ -115,7 +112,7 @@ impl Display for DropDatabaseReq {
         write!(
             f,
             "drop_db(if_exists={}):{}/{}",
-            self.if_exists, self.tenant, self.db_name
+            self.if_exists, self.name_ident.tenant, self.name_ident.db_name
         )
     }
 }

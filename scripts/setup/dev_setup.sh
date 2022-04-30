@@ -127,6 +127,7 @@ function install_openssl {
 		;;
 	esac
 }
+
 function install_protobuf {
 	PACKAGE_MANAGER=$1
 
@@ -153,6 +154,38 @@ function install_protobuf {
 		;;
 	*)
 		echo "Unable to install protobuf with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
+function install_thrift {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing thrift compiler..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+	        install_pkg thrift-compiler "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		install_pkg thrift "$PACKAGE_MANAGER"
+		;;
+
+	apk)
+		install_pkg thrift "$PACKAGE_MANAGER"
+		;;
+	yum)
+		install_pkg thrift "$PACKAGE_MANAGER"
+		;;
+	dnf)
+		install_pkg thrift "$PACKAGE_MANAGER"
+		;;
+	brew)
+		install_pkg thrift "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install thrif with package manager: $PACKAGE_MANAGER"
 		exit 1
 		;;
 	esac
@@ -421,10 +454,12 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg_config "$PACKAGE_MANAGER"
 	install_openssl "$PACKAGE_MANAGER"
 	install_protobuf "$PACKAGE_MANAGER"
+	install_thrift "$PACKAGE_MANAGER"
 
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
+
 
 	install_toolchain "$RUST_TOOLCHAIN"
 fi

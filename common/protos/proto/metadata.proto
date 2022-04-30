@@ -21,8 +21,8 @@ package databend_proto;
 message DatabaseInfo {
   uint64 ver = 100;
 
-  uint64 db_id = 1;
-  string db_name = 2;
+  DatabaseIdent ident = 1;
+  DatabaseNameIdent name_ident = 2;
   DatabaseMeta meta = 3;
 }
 

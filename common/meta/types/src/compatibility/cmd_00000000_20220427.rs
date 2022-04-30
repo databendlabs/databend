@@ -18,6 +18,7 @@ use serde::Serialize;
 
 use crate::CreateShareReq;
 use crate::DatabaseMeta;
+use crate::DatabaseNameIdent;
 use crate::DropShareReq;
 use crate::KVMeta;
 use crate::MatchSeq;
@@ -59,22 +60,23 @@ pub enum Cmd {
     CreateDatabase {
         // latest add
         if_not_exists: Option<bool>,
-        tenant: String,
+        // latest add
+        name_ident: Option<DatabaseNameIdent>,
+        // latest remove
+        tenant: Option<String>,
         // 20220413
         name: Option<String>,
-        // latest add
-        db_name: Option<String>,
         meta: DatabaseMeta,
     },
 
     DropDatabase {
         // latest add
         if_exists: Option<bool>,
-        tenant: String,
+        // latest add
+        name_ident: Option<DatabaseNameIdent>,
+        tenant: Option<String>,
         // 20220413
         name: Option<String>,
-        // latest add
-        db_name: Option<String>,
     },
 
     CreateTable {

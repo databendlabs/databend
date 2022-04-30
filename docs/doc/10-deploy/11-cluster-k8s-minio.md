@@ -1,8 +1,8 @@
 ---
-title: Start a query Cluster on kubernetes
+title: Start a Query Cluster on Kubernetes
 sidebar_label: K8s Cluster
 description:
-  How to Deploy a Databend Query Cluster on kubernetes.
+  How to deploy a Databend query cluster on Kubernetes.
 ---
 
 :::tip

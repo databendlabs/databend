@@ -30,6 +30,7 @@ use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
@@ -162,8 +163,10 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
             Ok(m.apply_cmd(
                 &Cmd::CreateDatabase(CreateDatabaseReq {
                     if_not_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: c.name.to_string(),
+                    name_ident: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: c.name.to_string(),
+                    },
                     meta: DatabaseMeta {
                         engine: c.engine.to_string(),
                         ..Default::default()
@@ -207,8 +210,10 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         Ok(m.apply_cmd(
             &Cmd::CreateDatabase(CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "defeault".to_string(),
                     ..Default::default()

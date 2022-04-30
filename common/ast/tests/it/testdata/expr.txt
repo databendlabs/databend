@@ -14,6 +14,150 @@ ColumnRef {
 
 
 ---------- Input ----------
+-1
+---------- Output ---------
+- 1
+---------- AST ------------
+UnaryOp {
+    op: Minus,
+    expr: Literal(
+        Number(
+            "1",
+        ),
+    ),
+}
+
+
+---------- Input ----------
+(1,)
+---------- Output ---------
+(1,)
+---------- AST ------------
+Tuple {
+    exprs: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+    ],
+}
+
+
+---------- Input ----------
+(1,2)
+---------- Output ---------
+(1, 2)
+---------- AST ------------
+Tuple {
+    exprs: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+        Literal(
+            Number(
+                "2",
+            ),
+        ),
+    ],
+}
+
+
+---------- Input ----------
+(1,2,)
+---------- Output ---------
+(1, 2)
+---------- AST ------------
+Tuple {
+    exprs: [
+        Literal(
+            Number(
+                "1",
+            ),
+        ),
+        Literal(
+            Number(
+                "2",
+            ),
+        ),
+    ],
+}
+
+
+---------- Input ----------
+typeof(1 + 2)
+---------- Output ---------
+typeof(1 + 2)
+---------- AST ------------
+FunctionCall {
+    distinct: false,
+    name: Identifier {
+        name: "typeof",
+        quote: None,
+    },
+    args: [
+        BinaryOp {
+            op: Plus,
+            left: Literal(
+                Number(
+                    "1",
+                ),
+            ),
+            right: Literal(
+                Number(
+                    "2",
+                ),
+            ),
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
+- - + + - 1 + + - 2
+---------- Output ---------
+- - + + - 1 + + - 2
+---------- AST ------------
+UnaryOp {
+    op: Minus,
+    expr: UnaryOp {
+        op: Minus,
+        expr: UnaryOp {
+            op: Plus,
+            expr: UnaryOp {
+                op: Plus,
+                expr: UnaryOp {
+                    op: Minus,
+                    expr: BinaryOp {
+                        op: Plus,
+                        left: Literal(
+                            Number(
+                                "1",
+                            ),
+                        ),
+                        right: UnaryOp {
+                            op: Plus,
+                            expr: UnaryOp {
+                                op: Minus,
+                                expr: Literal(
+                                    Number(
+                                        "2",
+                                    ),
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
 1 + a * c.d
 ---------- Output ---------
 1 + a * c.d
@@ -53,6 +197,29 @@ BinaryOp {
 
 
 ---------- Input ----------
+number % 2
+---------- Output ---------
+number % 2
+---------- AST ------------
+BinaryOp {
+    op: Modulo,
+    left: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "number",
+            quote: None,
+        },
+    },
+    right: Literal(
+        Number(
+            "2",
+        ),
+    ),
+}
+
+
+---------- Input ----------
 col1 not between 1 and 2
 ---------- Output ---------
 col1 NOT BETWEEN 1 AND 2
@@ -87,7 +254,10 @@ sum(col1)
 ---------- AST ------------
 FunctionCall {
     distinct: false,
-    name: "sum",
+    name: Identifier {
+        name: "sum",
+        quote: None,
+    },
     args: [
         ColumnRef {
             database: None,
@@ -103,27 +273,68 @@ FunctionCall {
 
 
 ---------- Input ----------
-rand()
+"random"()
 ---------- Output ---------
-rand()
+"random"()
 ---------- AST ------------
 FunctionCall {
     distinct: false,
-    name: "rand",
+    name: Identifier {
+        name: "random",
+        quote: Some(
+            '"',
+        ),
+    },
     args: [],
     params: [],
 }
 
 
 ---------- Input ----------
-rand(distinct)
+random(distinct)
 ---------- Output ---------
-rand(DISTINCT )
+random(DISTINCT )
 ---------- AST ------------
 FunctionCall {
     distinct: true,
-    name: "rand",
+    name: Identifier {
+        name: "random",
+        quote: None,
+    },
     args: [],
+    params: [],
+}
+
+
+---------- Input ----------
+covar_samp(number, number)
+---------- Output ---------
+covar_samp(number, number)
+---------- AST ------------
+FunctionCall {
+    distinct: false,
+    name: Identifier {
+        name: "covar_samp",
+        quote: None,
+    },
+    args: [
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "number",
+                quote: None,
+            },
+        },
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "number",
+                quote: None,
+            },
+        },
+    ],
     params: [],
 }
 
@@ -131,7 +342,7 @@ FunctionCall {
 ---------- Input ----------
 CAST(col1 AS BIGINT UNSIGNED)
 ---------- Output ---------
-CAST(col1 AS BIGINT UNSIGNED)
+CAST(col1 AS UInt64)
 ---------- AST ------------
 Cast {
     expr: ColumnRef {
@@ -142,10 +353,273 @@ Cast {
             quote: None,
         },
     },
-    target_type: BigInt {
-        unsigned: true,
-    },
+    target_type: UInt64,
     pg_style: false,
+}
+
+
+---------- Input ----------
+TRY_CAST(col1 AS BIGINT UNSIGNED)
+---------- Output ---------
+TRY_CAST(col1 AS UInt64)
+---------- AST ------------
+TryCast {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+        },
+    },
+    target_type: UInt64,
+}
+
+
+---------- Input ----------
+trim(leading 'abc' from 'def')
+---------- Output ---------
+TRIM(LEADING 'abc' FROM 'def')
+---------- AST ------------
+Trim {
+    expr: Literal(
+        String(
+            "def",
+        ),
+    ),
+    trim_where: Some(
+        (
+            Leading,
+            Literal(
+                String(
+                    "abc",
+                ),
+            ),
+        ),
+    ),
+}
+
+
+---------- Input ----------
+extract(year from d)
+---------- Output ---------
+EXTRACT(YEAR FROM d)
+---------- AST ------------
+Extract {
+    field: Year,
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "d",
+            quote: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+position('a' in str)
+---------- Output ---------
+POSITION('a' IN str)
+---------- AST ------------
+Position {
+    substr_expr: Literal(
+        String(
+            "a",
+        ),
+    ),
+    str_expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "str",
+            quote: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+substring(a from b for c)
+---------- Output ---------
+SUBSTRING(a FROM b FOR c)
+---------- AST ------------
+Substring {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+        },
+    },
+    substring_from: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+            },
+        },
+    ),
+    substring_for: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+substring(a, b, c)
+---------- Output ---------
+SUBSTRING(a FROM b FOR c)
+---------- AST ------------
+Substring {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+        },
+    },
+    substring_from: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "b",
+                quote: None,
+            },
+        },
+    ),
+    substring_for: Some(
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "c",
+                quote: None,
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+col1::UInt8
+---------- Output ---------
+col1::UInt8
+---------- AST ------------
+Cast {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+        },
+    },
+    target_type: UInt8,
+    pg_style: true,
+}
+
+
+---------- Input ----------
+(arr[0]:a).b
+---------- Output ---------
+arr[0]:a.b
+---------- AST ------------
+MapAccess {
+    expr: MapAccess {
+        expr: MapAccess {
+            expr: ColumnRef {
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "arr",
+                    quote: None,
+                },
+            },
+            accessor: Bracket {
+                key: Number(
+                    "0",
+                ),
+            },
+        },
+        accessor: Colon {
+            key: Identifier {
+                name: "a",
+                quote: None,
+            },
+        },
+    },
+    accessor: Period {
+        key: Identifier {
+            name: "b",
+            quote: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+arr[4]["k"]
+---------- Output ---------
+arr[4]['k']
+---------- AST ------------
+MapAccess {
+    expr: MapAccess {
+        expr: ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "arr",
+                quote: None,
+            },
+        },
+        accessor: Bracket {
+            key: Number(
+                "4",
+            ),
+        },
+    },
+    accessor: Bracket {
+        key: String(
+            "k",
+        ),
+    },
+}
+
+
+---------- Input ----------
+a rlike '^11'
+---------- Output ---------
+a RLIKE '^11'
+---------- AST ------------
+BinaryOp {
+    op: RLike,
+    left: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "a",
+            quote: None,
+        },
+    },
+    right: Literal(
+        String(
+            "^11",
+        ),
+    ),
 }
 
 
@@ -214,7 +688,10 @@ BinaryOp {
             },
             right: FunctionCall {
                 distinct: false,
-                name: "sum",
+                name: Identifier {
+                    name: "sum",
+                    quote: None,
+                },
                 args: [
                     ColumnRef {
                         database: None,
@@ -242,7 +719,10 @@ BinaryOp {
     op: Divide,
     left: FunctionCall {
         distinct: false,
-        name: "sum",
+        name: Identifier {
+            name: "sum",
+            quote: None,
+        },
         args: [
             Case {
                 operand: None,
@@ -297,7 +777,10 @@ BinaryOp {
                 op: Eq,
                 left: FunctionCall {
                     distinct: false,
-                    name: "sum",
+                    name: Identifier {
+                        name: "sum",
+                        quote: None,
+                    },
                     args: [
                         ColumnRef {
                             database: None,
@@ -327,7 +810,10 @@ BinaryOp {
         else_result: Some(
             FunctionCall {
                 distinct: false,
-                name: "sum",
+                name: Identifier {
+                    name: "sum",
+                    quote: None,
+                },
                 args: [
                     ColumnRef {
                         database: None,
@@ -354,7 +840,7 @@ p_partkey = l_partkey
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- Output ---------
-p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS SMALLINT) AND l_quantity <= CAST(1 + 10 AS SMALLINT) AND p_size BETWEEN CAST(1 AS SMALLINT) AND CAST(5 AS SMALLINT) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS Int16) AND l_quantity <= CAST(1 + 10 AS Int16) AND p_size BETWEEN CAST(1 AS Int16) AND CAST(5 AS Int16) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
 ---------- AST ------------
 BinaryOp {
     op: And,
@@ -456,9 +942,7 @@ BinaryOp {
                                     "1",
                                 ),
                             ),
-                            target_type: SmallInt {
-                                unsigned: false,
-                            },
+                            target_type: Int16,
                             pg_style: false,
                         },
                     },
@@ -487,9 +971,7 @@ BinaryOp {
                                 ),
                             ),
                         },
-                        target_type: SmallInt {
-                            unsigned: false,
-                        },
+                        target_type: Int16,
                         pg_style: false,
                     },
                 },
@@ -509,9 +991,7 @@ BinaryOp {
                             "1",
                         ),
                     ),
-                    target_type: SmallInt {
-                        unsigned: false,
-                    },
+                    target_type: Int16,
                     pg_style: false,
                 },
                 high: Cast {
@@ -520,9 +1000,7 @@ BinaryOp {
                             "5",
                         ),
                     ),
-                    target_type: SmallInt {
-                        unsigned: false,
-                    },
+                    target_type: Int16,
                     pg_style: false,
                 },
                 not: false,

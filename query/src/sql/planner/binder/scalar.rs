@@ -58,7 +58,7 @@ impl ScalarBinder {
                 args,
                 params,
             } => {
-                match AggregateFunctionFactory::instance().check(name) {
+                match AggregateFunctionFactory::instance().check(&name.name) {
                     true => {
                         // Function is aggregate function
                         let mut data_values = Vec::with_capacity(params.len());
@@ -68,6 +68,8 @@ impl ScalarBinder {
                                 Literal::String(val) => DataValue::String(val.clone().into_bytes()),
                                 Literal::Boolean(val) => DataValue::Boolean(*val),
                                 Literal::Null => DataValue::Null,
+                                Literal::Interval(_) => unimplemented!(),
+                                Literal::CurrentTimestamp => unimplemented!(),
                             })
                         }
 
@@ -101,13 +103,13 @@ impl ScalarBinder {
                         }
 
                         let agg_func_ref = AggregateFunctionFactory::instance().get(
-                            name.clone(),
+                            name.name.clone(),
                             data_values.clone(),
                             fields,
                         )?;
 
                         Ok(Arc::new(Scalar::AggregateFunction {
-                            func_name: name.clone(),
+                            func_name: name.name.clone(),
                             distinct: *distinct,
                             params: data_values,
                             args: scalar_exprs,
