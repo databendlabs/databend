@@ -155,7 +155,11 @@ impl ScalarBinder {
 
         let scalar_binder = ScalarBinder::new();
         let mut scalar_exprs = Vec::with_capacity(args.len());
+        let mut arg_col_name = Vec::with_capacity(args.len());
         for arg in args.iter() {
+            if let Expr::ColumnRef { column, .. } = arg {
+                arg_col_name.push(column.clone().name);
+            }
             scalar_exprs.push(
                 scalar_binder
                     .bind_expr(arg, bind_context)?
@@ -170,6 +174,9 @@ impl ScalarBinder {
 
         let mut fields = Vec::with_capacity(col_bindings.len());
         for col_binding in col_bindings.iter() {
+            if !arg_col_name.contains(&col_binding.column_name) {
+                continue;
+            }
             fields.push(DataField::new(
                 col_binding.column_name.as_str(),
                 col_binding.data_type.clone(),
