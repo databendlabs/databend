@@ -55,7 +55,6 @@ pub struct QueryAnalyzeState {
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
 
-    // window functions
     pub window_expressions: Vec<Expression>,
 
     // rebase on projection expressions without aliases, aggregate and group by expressions
