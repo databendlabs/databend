@@ -166,11 +166,7 @@ impl ScalarBinder {
             );
         }
 
-        let col_pairs = bind_context.result_columns();
-        let mut col_bindings = Vec::with_capacity(col_pairs.len());
-        for col_pair in col_pairs.into_iter() {
-            col_bindings.push(bind_context.resolve_column(None, col_pair.1)?);
-        }
+        let col_bindings = bind_context.all_column_bindings();
 
         let mut fields = Vec::with_capacity(col_bindings.len());
         for col_binding in col_bindings.iter() {
@@ -185,26 +181,18 @@ impl ScalarBinder {
             data_values.clone(),
             fields,
         )?;
-        let agg_scalar = if optimize_remove_count_args(func_name.name.as_str(), distinct, args) {
-            Scalar::AggregateFunction {
-                func_name: func_name.name.clone(),
-                distinct,
-                params: data_values,
-                args: vec![],
-                data_type: agg_func_ref.return_type()?,
-                nullable: false,
-            }
-        } else {
-            Scalar::AggregateFunction {
-                func_name: func_name.name.clone(),
-                distinct,
-                params: data_values,
-                args: scalar_exprs,
-                data_type: agg_func_ref.return_type()?,
-                nullable: false,
-            }
-        };
-        Ok(Arc::new(agg_scalar))
+        Ok(Arc::new(Scalar::AggregateFunction {
+            func_name: func_name.name.clone(),
+            distinct,
+            params: data_values,
+            args: if optimize_remove_count_args(func_name.name.as_str(), distinct, args) {
+                vec![]
+            } else {
+                scalar_exprs
+            },
+            data_type: agg_func_ref.return_type()?,
+            nullable: false,
+        }))
     }
 }
 
