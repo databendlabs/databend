@@ -424,6 +424,7 @@ impl fmt::Debug for DataValue {
 pub fn format_datavalue_sql(value: &DataValue) -> String {
     match value {
         DataValue::String(_) | DataValue::Variant(_) => format!("'{}'", value),
+        DataValue::Float64(value) => format!("'{:?}'", value),
         _ => format!("{}", value),
     }
 }
