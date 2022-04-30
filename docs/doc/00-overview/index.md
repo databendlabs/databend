@@ -111,11 +111,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 ## Getting Started
 
-- [Databend Deploy](/doc/deploy)
-- [Databend Develop](/doc/develop)
-- [Databend Contributing](/doc/contributing)
-- [Databend Performance](/doc/performance)
-- [Databend Continuous Benchmarking](https://perf.databend.rs)
+- [Guides](/doc/guides)
 
 ## Community
 
