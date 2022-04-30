@@ -41,7 +41,7 @@ fn test_aggregate_function() -> Result<()> {
         Series::from_data(vec![4i64, 3, 2, 1]),
         Series::from_data(vec![1i64, 2, 3, 4]),
         // arrays for window funnel function
-        Series::from_data(vec![1, 0u32, 2, 3]),
+        Series::from_data(vec![1, 0i64, 2, 3]),
         Series::from_data(vec![true, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
         Series::from_data(vec![false, false, false, false]),
@@ -880,7 +880,7 @@ fn test_covariance_with_comparable_data_sets() -> Result<()> {
     let arrays: Vec<ColumnRef> = vec![Series::from_data(v0), Series::from_data(v1)];
 
     let args = vec![
-        DataField::new("a", i32::to_data_type()),
+        DataField::new("a", f32::to_data_type()),
         DataField::new("b", i16::to_data_type()),
     ];
 
