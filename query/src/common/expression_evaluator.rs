@@ -118,9 +118,9 @@ impl ExpressionEvaluator {
                 let type_name = data_type.name();
 
                 let func = if data_type.is_nullable() {
-                    CastFunction::create_try(&func_name, &type_name, from_type.clone())
+                    CastFunction::create_try(&func_name, &type_name, from_type)
                 } else {
-                    CastFunction::create(&func_name, &type_name, from_type.clone())
+                    CastFunction::create(&func_name, &type_name, from_type)
                 }?;
 
                 let columns = [ColumnWithField::new(
