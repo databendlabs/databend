@@ -114,12 +114,13 @@ impl ExpressionEvaluator {
             } => {
                 let result = Self::eval(func_ctx.clone(), expr, block)?;
                 let func_name = "cast".to_string();
+                let from_type = result.data_type();
                 let type_name = data_type.name();
 
                 let func = if data_type.is_nullable() {
-                    CastFunction::create_try(&func_name, &type_name)
+                    CastFunction::create_try(&func_name, &type_name, from_type.clone())
                 } else {
-                    CastFunction::create(&func_name, &type_name)
+                    CastFunction::create(&func_name, &type_name, from_type.clone())
                 }?;
 
                 let columns = [ColumnWithField::new(

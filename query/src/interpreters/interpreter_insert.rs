@@ -108,9 +108,10 @@ impl InsertInterpreter {
         // cast schema
         if need_cast_schema {
             let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
-            for field in self.plan.schema().fields() {
+            for (i, field) in self.plan.schema().fields().iter().enumerate() {
                 let name = field.data_type().name();
-                let cast_function = CastFunction::create("cast", &name).unwrap();
+                let from_type = plan.schema.field(i).data_type().clone();
+                let cast_function = CastFunction::create("cast", &name, from_type).unwrap();
                 functions.push(cast_function);
             }
             let tz = self.ctx.get_settings().get_timezone()?;
