@@ -281,7 +281,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant", UInt64Type::new_impl())?,
+            CastFunction::create("cast", "variant", StringType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-string-to-variant-error",
                 columns: vec![ColumnWithField::new(
