@@ -220,7 +220,12 @@ impl Interpreter for InsertInterpreter {
 
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
-                let with_plan = InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
+                let with_plan = InsertWithPlan::new(
+                    &self.ctx,
+                    &self.plan.schema,
+                    plan_node,
+                    &plan.catalog_name,
+                );
                 with_plan.execute(table.as_ref()).await
             }
 

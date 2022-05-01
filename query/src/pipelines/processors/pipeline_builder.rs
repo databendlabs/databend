@@ -333,6 +333,7 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(SinkTransform::create(
                 self.ctx.clone(),
+                plan.catalog_name.clone(),
                 plan.table_info.clone(),
                 plan.cast_schema.clone(),
                 plan.input.schema(),
