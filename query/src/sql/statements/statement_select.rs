@@ -260,10 +260,10 @@ impl DfQueryStatement {
         Ok(AnalyzedResult::SelectQuery(Box::new(state)))
     }
 
-    // TODO (dantengsky) refine this, looks weird
     fn resolve_catalog(ctx: &QueryContext, idents: &[String]) -> Result<String> {
         match idents.len() {
-            1 | 2 => Ok(ctx.get_current_catalog()),
+            // for table_functions, idents.len() == 0
+            0 | 1 | 2 => Ok(ctx.get_current_catalog()),
             3 => Ok(idents[0].clone()),
             _ => Err(ErrorCode::SyntaxException(
                 "table name should be [`catalog`].[`db`].`table` in statement",
