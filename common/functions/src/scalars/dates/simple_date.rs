@@ -101,7 +101,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        DateType::arc()
+        DateType::new_impl()
     }
 
     fn eval(

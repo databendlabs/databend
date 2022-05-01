@@ -107,13 +107,13 @@ pub trait ToDateType {
 
 impl ToDateType for i32 {
     fn to_date_type() -> DataTypeImpl {
-        DateType::arc()
+        DateType::new_impl()
     }
 }
 
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypeImpl {
-        TimestampType::arc(6)
+        TimestampType::new_impl(6)
     }
 }
 
@@ -135,6 +135,6 @@ pub trait ObjectType:
 
 impl ObjectType for VariantValue {
     fn data_type() -> DataTypeImpl {
-        VariantType::arc()
+        VariantType::new_impl()
     }
 }

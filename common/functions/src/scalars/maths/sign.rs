@@ -68,7 +68,7 @@ impl Function for SignFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        Int8Type::arc()
+        Int8Type::new_impl()
     }
 
     fn eval(

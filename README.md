@@ -35,7 +35,6 @@
    - [Compute Layer](#compute-layer)
    - [Storage Layer](#storage-layer)
 - [Getting Started](#getting-started)
-- [Use Case](#use-case)
 - [Community](#community)
 - [Roadmap](#roadmap)
 
@@ -149,16 +148,70 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 ## Getting Started
 
-- [Databend Deploy](https://databend.rs/doc/deploy)
-- [Databend Develop](https://databend.rs/doc/develop)
-- [Databend Contributing](https://databend.rs/doc/contributing)
-- [Databend Performance](https://databend.rs/doc/performance)
-- [Databend Continuous Benchmarking](https://perf.databend.rs)
+### Deployment
 
-## Use Case
+- [How to Deploy Databend With MinIO](https://databend.rs/doc/deploy/minio)
+- [How to Deploy Databend With AWS S3](https://databend.rs/doc/deploy/s3)
+- [How to Deploy Databend With Wasabi Object Storage](https://databend.rs/doc/deploy/wasabi)
+- [How to Deploy Databend With Scaleway OS](https://databend.rs/doc/deploy/scw)
+- [How to Deploy Databend With Tencent COS](https://databend.rs/doc/deploy/cos)
+- [How to Deploy Databend With Alibaba OSS](https://databend.rs/doc/deploy/oss)
+- [How to Deploy Databend With QingCloud QingStore](https://databend.rs/doc/deploy/qingstore)
+- [How to Deploy a Databend Local Cluster With MinIO](https://databend.rs/doc/deploy/local)
+- [How to Deploy a Databend K8s Cluster With MinIO](https://databend.rs/doc/deploy/cluster-minio)
+ 
+### Connect
+
+- [How to Connect Databend With MySQL Client](https://databend.rs/doc/reference/api/mysql-handler)
+- [How to Connect Databend With ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler)
+- [How to Connect Databend With DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
+- [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
+- [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
+- [How to Execute Queries in Golang](https://databend.rs/doc/develop/golang)
+- [How to Work With Databend in Node.js](https://databend.rs/doc/develop/nodejs)
+
+
+### Users
+
+- [How to Create a User](https://databend.rs/doc/reference/sql/ddl/user/user-create-user)
+- [How to Grant Privileges to a User](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
+- [How to Revoke Privileges From a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-privileges)
+- [How to Create a Role](https://databend.rs/doc/reference/sql/ddl/user/user-create-role)
+- [How to Grant Privileges to a Role](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
+- [How to Grant Role to a User](https://databend.rs/doc/reference/sql/ddl/user/grant-role)
+- [How to Revoke Role From a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-role)
+ 
+### Tables
+
+- [How to Create a Database](https://databend.rs/doc/reference/sql/ddl/database/ddl-create-database)
+- [How to Drop a Database](https://databend.rs/doc/reference/sql/ddl/database/ddl-drop-database)
+- [How to Create a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table)
+- [How to Drop a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-drop-table)
+- [How to Rename a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-rename-table)
+- [How to Truncate a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-truncate-table)
+
+### Views
+
+- [How to Create a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-create-view)
+- [How to Drop a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-drop-view)
+- [How to Alter a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-alter-view)
+ 
+### Load Data
+
+- [How to Load Data From Local File System](https://databend.rs/doc/load-data/local)
+- [How to Load Data From Amazon S3](https://databend.rs/doc/load-data/s3)
+- [How to Load Data From Databend Stages](https://databend.rs/doc/load-data/stage)
+- [How to Load Data From MySQL](https://databend.rs/doc/load-data/mysql)
+
+### Use Case
 
 - [Analyzing Github Repository with Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
 - [Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
+
+### Performance
+
+- [How to Benchmark Databend](https://databend.rs/doc/learn/analyze-ontime-with-databend-on-ec2-and-s3)
+
 
 ## Community
 

@@ -30,8 +30,8 @@ fn test_add_months() -> Result<()> {
         |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp_micros() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("date", DateType::arc()),
-        DataField::new("datetime", TimestampType::arc(0)),
+        DataField::new("date", DateType::new_impl()),
+        DataField::new("datetime", TimestampType::new_impl(0)),
         DataField::new("u8", u8::to_data_type()),
         DataField::new("u16", u16::to_data_type()),
         DataField::new("u32", u32::to_data_type()),
@@ -70,16 +70,16 @@ fn test_add_months() -> Result<()> {
         "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64",
     ];
     let args = [
-        &UInt8Type::arc(),
-        &UInt16Type::arc(),
-        &UInt32Type::arc(),
-        &UInt64Type::arc(),
-        &Int8Type::arc(),
-        &Int16Type::arc(),
-        &Int32Type::arc(),
-        &Int64Type::arc(),
-        &Float32Type::arc(),
-        &Float64Type::arc(),
+        &UInt8Type::new_impl(),
+        &UInt16Type::new_impl(),
+        &UInt32Type::new_impl(),
+        &UInt64Type::new_impl(),
+        &Int8Type::new_impl(),
+        &Int16Type::new_impl(),
+        &Int32Type::new_impl(),
+        &Int64Type::new_impl(),
+        &Float32Type::new_impl(),
+        &Float64Type::new_impl(),
     ];
 
     {
@@ -87,7 +87,7 @@ fn test_add_months() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_months =
-                AddMonthsFunction::try_create_func("addMonths", 1, &[&DateType::arc(), arg])?;
+                AddMonthsFunction::try_create_func("addMonths", 1, &[&DateType::new_impl(), arg])?;
             let col = add_months.eval(
                 FunctionContext::default(),
                 &[column("date"), column(field)],
@@ -115,8 +115,10 @@ fn test_add_months() -> Result<()> {
         let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
-            let add_months =
-                AddMonthsFunction::try_create_func("addMonths", 1, &[&TimestampType::arc(0), arg])?;
+            let add_months = AddMonthsFunction::try_create_func("addMonths", 1, &[
+                &TimestampType::new_impl(0),
+                arg,
+            ])?;
             let col = add_months.eval(
                 FunctionContext::default(),
                 &[column("datetime"), column(field)],
@@ -148,7 +150,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     let dt_to_seconds = |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("datetime", TimestampType::arc(0)),
+        DataField::new("datetime", TimestampType::new_impl(0)),
         DataField::new("u8", u8::to_data_type()),
         DataField::new("u16", u16::to_data_type()),
         DataField::new("u32", u32::to_data_type()),
@@ -186,24 +188,26 @@ fn test_add_subtract_seconds() -> Result<()> {
         "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64",
     ];
     let args = [
-        &UInt8Type::arc(),
-        &UInt16Type::arc(),
-        &UInt32Type::arc(),
-        &UInt64Type::arc(),
-        &Int8Type::arc(),
-        &Int16Type::arc(),
-        &Int32Type::arc(),
-        &Int64Type::arc(),
-        &Float32Type::arc(),
-        &Float64Type::arc(),
+        &UInt8Type::new_impl(),
+        &UInt16Type::new_impl(),
+        &UInt32Type::new_impl(),
+        &UInt64Type::new_impl(),
+        &Int8Type::new_impl(),
+        &Int16Type::new_impl(),
+        &Int32Type::new_impl(),
+        &Int64Type::new_impl(),
+        &Float32Type::new_impl(),
+        &Float64Type::new_impl(),
     ];
 
     {
         let mut expects: Vec<i64> = Vec::new();
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
-            let add_seconds =
-                AddTimesFunction::try_create_func("addSeconds", 1, &[&TimestampType::arc(0), arg])?;
+            let add_seconds = AddTimesFunction::try_create_func("addSeconds", 1, &[
+                &TimestampType::new_impl(0),
+                arg,
+            ])?;
             let col = add_seconds.eval(
                 FunctionContext::default(),
                 &[column("datetime"), column(field)],
@@ -232,7 +236,7 @@ fn test_add_subtract_seconds() -> Result<()> {
         expects.reserve(10);
         for (field, arg) in fields.iter().zip(args.iter()) {
             let add_seconds = AddTimesFunction::try_create_func("subtractSeconds", -1, &[
-                &TimestampType::arc(0),
+                &TimestampType::new_impl(0),
                 arg,
             ])?;
             let col = add_seconds.eval(

@@ -53,7 +53,7 @@ impl Function for SleepFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        Int8Type::arc()
+        Int8Type::new_impl()
     }
 
     fn eval(
@@ -90,7 +90,7 @@ impl Function for SleepFunction {
             )));
         };
         std::thread::sleep(duration);
-        let t = Int8Type::arc();
+        let t = Int8Type::new_impl();
         t.create_constant_column(&DataValue::UInt64(0), input_rows)
     }
 }

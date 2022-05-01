@@ -2,7 +2,7 @@
 title: Getting and Building Databend From Source
 sidebar_label: Building From Source
 description:
-  Getting and Building Databend From Source
+  Getting and building Databend from Source
 ---
 
 :::note
@@ -32,7 +32,7 @@ make build-release
 `databend-query` and `databend-meta` will be placed in the `target/release` directory.
 
 
-### Build with Docker Image
+### Build With Docker Image
 
 We provide a docker image with full development requirements, currently only on amd64.
 

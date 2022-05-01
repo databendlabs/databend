@@ -1,5 +1,5 @@
 ---
-title: Analyzing Github Repository with Databend
+title: Analyzing Github Repository With Databend
 sidebar_label: Analyzing Github Repository
 ---
 

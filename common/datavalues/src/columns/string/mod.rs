@@ -140,7 +140,7 @@ impl Column for StringColumn {
     }
 
     fn data_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn column_type_name(&self) -> String {

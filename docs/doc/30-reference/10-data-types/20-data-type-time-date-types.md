@@ -5,11 +5,10 @@ description: Basic Date and Time data type.
 
 ## Date and Time Data Types
 
----
-|  Name | Storage Size |  Resolution  | Min Value             | Max Value                     | Description
-|------------| ------- |  ----------- | --------------------- |--------------------------------- | ---------------------- |
-|  DATE      | 4 bytes |  day         | 1000-01-01            | 9999-12-31                       | YYYY-MM-DD             |
-|  TIMESTAMP | 8 bytes |  microsecond | 0001-01-01 00:00:00   | 9999-12-31 23:59:59.999999 UTC   | YYYY-MM-DD hh:mm:ss[.fraction], up to microseconds (6 digits) precision
+|  Name      | Aliases   | Storage Size |  Resolution  | Min Value             | Max Value                      | Description
+|----------- | --------- |  ----------- | -------------|-----------------------| -----------------------------  |
+|  DATE      |           | 4 bytes      |  day         | 1000-01-01            | 9999-12-31                     | YYYY-MM-DD             |
+|  TIMESTAMP |  DATETIME | 8 bytes      |  microsecond | 0001-01-01 00:00:00   | 9999-12-31 23:59:59.999999 UTC | YYYY-MM-DD hh:mm:ss[.fraction], up to microseconds (6 digits) precision
 
 ## Functions
 

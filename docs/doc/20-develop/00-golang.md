@@ -1,8 +1,8 @@
 ---
-title: How to Work with Databend in Golang
+title: How to Work With Databend in Golang
 sidebar_label: Golang
 description:
-   How to Work with Databend in Golang.
+   How to work with Databend in Golang.
 ---
 
 ## Before You Begin

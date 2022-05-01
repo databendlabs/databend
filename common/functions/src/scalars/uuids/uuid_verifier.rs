@@ -116,7 +116,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn eval(

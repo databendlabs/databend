@@ -80,7 +80,7 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> Function
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::arc(VariantType::arc())
+        NullableType::new_impl(VariantType::new_impl())
     }
 
     fn eval(

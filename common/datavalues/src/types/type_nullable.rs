@@ -30,7 +30,7 @@ pub struct NullableType {
 }
 
 impl NullableType {
-    pub fn arc(inner: DataTypeImpl) -> DataTypeImpl {
+    pub fn new_impl(inner: DataTypeImpl) -> DataTypeImpl {
         DataTypeImpl::Nullable(Self::create(inner))
     }
 
