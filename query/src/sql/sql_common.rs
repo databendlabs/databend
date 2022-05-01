@@ -42,7 +42,9 @@ impl SQLCommon {
             SQLDataType::Boolean => Ok(bool::to_data_type()),
             SQLDataType::Date => Ok(DateType::new_impl()),
             // default precision is 6, microseconds
-            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => Ok(TimestampType::new_impl(6)),
+            SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => {
+                Ok(TimestampType::new_impl(6))
+            }
             SQLDataType::Timestamp(Some(precision)) => {
                 if *precision <= 6 {
                     Ok(TimestampType::new_impl(*precision as usize))

@@ -267,7 +267,8 @@ impl NumberOperator<u8> for ToMinute {
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], 60 * 60).unwrap(),
+            RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], 60 * 60)
+                .unwrap(),
         )
     }
 }
@@ -284,7 +285,10 @@ impl NumberOperator<u8> for ToSecond {
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
-        Some(RoundFunction::try_create("toStartOfMinute", &[&TimestampType::new_impl(0)], 60).unwrap())
+        Some(
+            RoundFunction::try_create("toStartOfMinute", &[&TimestampType::new_impl(0)], 60)
+                .unwrap(),
+        )
     }
 }
 

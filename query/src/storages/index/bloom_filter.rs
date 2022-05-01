@@ -154,7 +154,8 @@ impl BloomFilterIndexer {
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
                 let bloom_value = DataValue::String(serialized_bytes);
-                let bloom_column: ColumnRef = bloom_value.as_const_column(&StringType::new_impl(), 1)?;
+                let bloom_column: ColumnRef =
+                    bloom_value.as_const_column(&StringType::new_impl(), 1)?;
                 bloom_columns.push(bloom_column);
             }
         }

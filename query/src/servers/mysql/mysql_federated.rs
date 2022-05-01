@@ -147,7 +147,10 @@ impl MySQLFederated {
                 } else {
                     // @@aa
                     // var is 'aa'
-                    fields.push(DataField::new(&format!("@@{}", var), StringType::new_impl()));
+                    fields.push(DataField::new(
+                        &format!("@@{}", var),
+                        StringType::new_impl(),
+                    ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
                     values.push(Series::from_data(vec![value]));
