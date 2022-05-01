@@ -80,10 +80,10 @@ impl FunctionDocAsset {
         options.insert(Options::ENABLE_HEADING_ATTRIBUTES);
         let parser = Parser::new_ext(data, options);
 
-        let title_regex =
-            TITLE_REGEXP.get_or_init(|| Regex::new(r#"title:\s*(?P<title>\S+)"#).unwrap());
+        let title_regex = TITLE_REGEXP
+            .get_or_init(|| Regex::new(r#"title:\s*(?P<title>(\S+(\s\S+)?))"#).unwrap());
         let title_alias_regexp = TITLE_ALIAS_REGEXP
-            .get_or_init(|| Regex::new(r#"title_includes\s*:\s*(?P<title>\S+)"#).unwrap());
+            .get_or_init(|| Regex::new(r#"title_includes\s*:\s*(?P<title>((\S+\s?)*))"#).unwrap());
 
         let mut stage = MarkdownStage::Title;
         let mut inside_head = false;
@@ -114,7 +114,11 @@ impl FunctionDocAsset {
                                     let title = title.as_str();
                                     keys.push(title.to_lowercase());
                                 }
-                            } else if let Some(caps) = title_alias_regexp.captures(txt) {
+                            }
+                        } else if txt.starts_with("title_includes:") {
+                            stage = MarkdownStage::Title;
+
+                            if let Some(caps) = title_alias_regexp.captures(txt) {
                                 if let Some(aliases) = caps.get(1) {
                                     let aliases = aliases.as_str();
                                     let aliases =
