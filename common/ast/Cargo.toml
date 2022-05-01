@@ -33,7 +33,7 @@ thiserror = "1.0.30"
 
 [dev-dependencies]
 common-base = { path = "../base" }
+glob = "0.3"
 goldenfile = "1.1.0"
 pretty_assertions = "1.2.1"
-glob = "0.3"
 regex = "1.5"

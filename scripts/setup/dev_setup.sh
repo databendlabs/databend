@@ -166,7 +166,7 @@ function install_thrift {
 
 	case "$PACKAGE_MANAGER" in
 	apt-get)
-	        install_pkg thrift-compiler "$PACKAGE_MANAGER"
+		install_pkg thrift-compiler "$PACKAGE_MANAGER"
 		;;
 	pacman)
 		install_pkg thrift "$PACKAGE_MANAGER"
@@ -459,7 +459,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
-
 
 	install_toolchain "$RUST_TOOLCHAIN"
 fi
