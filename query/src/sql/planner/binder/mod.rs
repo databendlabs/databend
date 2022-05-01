@@ -27,6 +27,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
 use crate::storages::Table;
 
+mod aggregate;
 mod bind_context;
 mod project;
 mod scalar;
