@@ -189,6 +189,7 @@ impl<'a> AnalyzableStatement for DfStatement<'a> {
             DfStatement::AlterView(v) => v.analyze(ctx).await,
             DfStatement::DropView(v) => v.analyze(ctx).await,
             DfStatement::ShowTabStat(v) => v.analyze(ctx).await,
+            DfStatement::ShowClusterInfo(v) => v.analyze(ctx).await,
         }
     }
 }

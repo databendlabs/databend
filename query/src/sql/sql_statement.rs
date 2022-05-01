@@ -53,6 +53,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfRevokePrivilegeStatement;
 use crate::sql::statements::DfSetVariable;
+use crate::sql::statements::DfShowClusterInfo;
 use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
@@ -94,6 +95,7 @@ pub enum DfStatement<'a> {
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
     RenameTable(DfRenameTable),
+    ShowClusterInfo(DfShowClusterInfo),
 
     // Views.
     CreateView(DfCreateView),

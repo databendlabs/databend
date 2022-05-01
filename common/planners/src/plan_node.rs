@@ -61,6 +61,7 @@ use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowClusterInfoPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowPlan;
@@ -126,6 +127,7 @@ pub enum PlanNode {
     OptimizeTable(OptimizeTablePlan),
     DescribeTable(DescribeTablePlan),
     ShowCreateTable(ShowCreateTablePlan),
+    ShowClusterInfo(ShowClusterInfoPlan),
 
     // View.
     CreateView(CreateViewPlan),
@@ -222,6 +224,7 @@ impl PlanNode {
             PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
+            PlanNode::ShowClusterInfo(v) => v.schema(),
 
             // View.
             PlanNode::CreateView(v) => v.schema(),
@@ -320,6 +323,7 @@ impl PlanNode {
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
+            PlanNode::ShowClusterInfo(_) => "ShowClusterInfoPlan",
 
             // View.
             PlanNode::CreateView(_) => "CreateViewPlan",

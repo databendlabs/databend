@@ -62,6 +62,7 @@ use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowClusterInfoPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowPlan;
@@ -164,6 +165,7 @@ pub trait PlanVisitor {
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
+            PlanNode::ShowClusterInfo(plan) => self.visit_show_cluster_info(plan),
 
             // View.
             PlanNode::CreateView(v) => self.visit_create_view(v),
@@ -362,6 +364,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_describe_table(&mut self, _: &DescribeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_cluster_info(&mut self, _: &ShowClusterInfoPlan) -> Result<()> {
         Ok(())
     }
 

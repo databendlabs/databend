@@ -16,10 +16,12 @@
 // See notice.md
 
 use sqlparser::keywords::Keyword;
+use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 
 use crate::sql::statements::DfDescribeTable;
+use crate::sql::statements::DfShowClusterInfo;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowKind;
@@ -136,5 +138,30 @@ impl<'a> DfParser<'a> {
         let table_name = self.parser.parse_object_name()?;
         let desc = DfDescribeTable { name: table_name };
         Ok(DfStatement::DescribeTable(desc))
+    }
+
+    // parse `show cluster infromation from` statement
+    pub(crate) fn parse_show_clusters(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        if !self.consume_token("FROM") {
+            self.expect_token("from")?;
+        }
+
+        let table_name = self.parser.parse_object_name()?;
+        let tok = self.parser.next_token();
+        let cluster_key = match &tok {
+            Token::EOF => None,
+            Token::LParen => {
+                let keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+                self.parser.expect_token(&Token::RParen)?;
+                Some(keys)
+            }
+            _ => return self.expected("(", tok),
+        };
+
+        let desc = DfShowClusterInfo {
+            table_name,
+            cluster_key,
+        };
+        Ok(DfStatement::ShowClusterInfo(desc))
     }
 }

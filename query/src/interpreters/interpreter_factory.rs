@@ -56,6 +56,7 @@ use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::RevokeRoleInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
+use crate::interpreters::ShowClusterInfoInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::ShowDatabasesInterpreter;
@@ -135,6 +136,7 @@ impl InterpreterFactory {
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowClusterInfo(v) => ShowClusterInfoInterpreter::try_create(ctx_clone, v),
 
             // View related transforms
             PlanNode::CreateView(v) => CreateViewInterpreter::try_create(ctx_clone, v),

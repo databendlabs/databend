@@ -72,6 +72,7 @@ use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowClusterInfoPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowPlan;
@@ -152,6 +153,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
+            PlanNode::ShowClusterInfo(plan) => self.rewrite_show_cluster_info(plan),
 
             // View.
             PlanNode::CreateView(plan) => self.rewrite_create_view(plan),
@@ -386,6 +388,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_describe_table(&mut self, plan: &DescribeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::DescribeTable(plan.clone()))
+    }
+
+    fn rewrite_show_cluster_info(&mut self, plan: &ShowClusterInfoPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowClusterInfo(plan.clone()))
     }
 
     fn rewrite_describe_user_stage(&mut self, plan: &DescribeUserStagePlan) -> Result<PlanNode> {
