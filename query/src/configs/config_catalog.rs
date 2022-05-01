@@ -39,6 +39,7 @@ impl FromStr for ThriftProtocol {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct HiveCatalogConfig {
+    // TODO(dantengsky) default value should be empty string
     #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
     pub meta_store_address: String,
     #[clap(long = "hive-thrift-protocol", default_value = "Binary")]

@@ -33,7 +33,7 @@ use common_tracing::tracing;
 use uuid::Uuid;
 
 use crate::sessions::QueryContext;
-use crate::sql::OPT_KEY_SNAPSHOT_LOC;
+use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -104,8 +104,7 @@ impl FuseTable {
                             );
                         common_base::tokio::time::sleep(d).await;
 
-                        // TODO catalog name
-                        let catalog = ctx.get_catalog("default")?;
+                        let catalog = ctx.get_catalog(tbl.catalog_name()?.as_str())?;
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                         let table_info: TableInfo = TableInfo {
                             ident,
@@ -325,9 +324,9 @@ mod utils {
         options_of_upsert: &mut HashMap<String, Option<String>>,
     ) {
         let table_options = table_info.options();
-        if table_options.contains_key(OPT_KEY_SNAPSHOT_LOC) {
+        if table_options.contains_key(OPT_KEY_LEGACY_SNAPSHOT_LOC) {
             // remove the option by setting the value of option to None
-            options_of_upsert.insert(OPT_KEY_SNAPSHOT_LOC.to_owned(), None);
+            options_of_upsert.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC.to_owned(), None);
         }
     }
 }

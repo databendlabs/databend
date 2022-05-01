@@ -52,7 +52,7 @@ impl CatalogManager {
 
     async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
-            Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
+            Arc::new(DatabaseCatalog::try_create_with_config(conf.clone(), CATALOG_DEFAULT).await?);
         self.catalogs
             .insert(CATALOG_DEFAULT.to_owned(), default_catalog);
         Ok(())
@@ -63,7 +63,7 @@ impl CatalogManager {
         if !hms_address.is_empty() {
             // register hive catalog
             let hive_catalog: Arc<dyn Catalog> =
-                Arc::new(HiveCatalog::try_create_with_config(hms_address)?);
+                Arc::new(HiveCatalog::try_create(hms_address, CATALOG_HIVE)?);
             self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
         }
         Ok(())

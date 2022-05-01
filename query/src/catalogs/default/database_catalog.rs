@@ -59,7 +59,7 @@ pub struct DatabaseCatalog {
 }
 
 impl DatabaseCatalog {
-    pub fn create(
+    fn create(
         immutable_catalog: Arc<dyn Catalog>,
         mutable_catalog: Arc<dyn Catalog>,
         table_function_factory: Arc<TableFunctionFactory>,
@@ -71,9 +71,13 @@ impl DatabaseCatalog {
         }
     }
 
-    pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
+    pub async fn try_create_with_config(
+        conf: Config,
+        catalog_name: impl Into<String>,
+    ) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
-        let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
+        let mutable_catalog =
+            MutableCatalog::try_create_with_config(conf, catalog_name.into()).await?;
         let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog::create(
             Arc::new(immutable_catalog),

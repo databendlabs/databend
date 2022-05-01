@@ -26,6 +26,7 @@ use common_planners::CreateTablePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
@@ -181,7 +182,7 @@ impl TestFixture {
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
         self.ctx
-            .get_catalog("default")?
+            .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
