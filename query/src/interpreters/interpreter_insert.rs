@@ -74,7 +74,6 @@ impl InsertInterpreter {
 
         let mut pipeline = self.create_new_pipeline()?;
         let mut builder = SourcePipeBuilder::create();
-        let mut need_cast_schema = false;
         match &self.plan.source {
             InsertInputSource::Values(values) => {
                 let blocks = Arc::new(Mutex::new(VecDeque::from_iter(vec![values.block.clone()])));
@@ -96,39 +95,44 @@ impl InsertInterpreter {
                 );
             }
             InsertInputSource::SelectPlan(plan) => {
-                need_cast_schema = self.check_schema_cast(plan)?;
                 let select_interpreter =
                     SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                         input: Arc::new((**plan).clone()),
                     })?;
                 pipeline = select_interpreter.create_new_pipeline()?;
+
+                if self.check_schema_cast(plan)? {
+                    let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
+                    for (target_field, original_field) in self
+                        .plan
+                        .schema()
+                        .fields()
+                        .iter()
+                        .zip(plan.schema().fields().iter())
+                    {
+                        let target_type_name = target_field.data_type().name();
+                        let from_type = original_field.data_type().clone();
+                        let cast_function =
+                            CastFunction::create("cast", &target_type_name, from_type).unwrap();
+                        functions.push(cast_function);
+                    }
+                    let tz = self.ctx.get_settings().get_timezone()?;
+                    let tz = String::from_utf8(tz).map_err(|_| {
+                        ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+                    })?;
+                    let func_ctx = FunctionContext { tz };
+                    pipeline.add_transform(|transform_input_port, transform_output_port| {
+                        TransformCastSchema::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            self.plan.schema(),
+                            functions.clone(),
+                            func_ctx.clone(),
+                        )
+                    })?;
+                }
             }
         };
-
-        // cast schema
-        if need_cast_schema {
-            let mut functions = Vec::with_capacity(self.plan.schema().fields().len());
-            for (i, field) in self.plan.schema().fields().iter().enumerate() {
-                let name = field.data_type().name();
-                let from_type = plan.schema.field(i).data_type().clone();
-                let cast_function = CastFunction::create("cast", &name, from_type).unwrap();
-                functions.push(cast_function);
-            }
-            let tz = self.ctx.get_settings().get_timezone()?;
-            let tz = String::from_utf8(tz).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-            })?;
-            let func_ctx = FunctionContext { tz };
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformCastSchema::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    self.plan.schema(),
-                    functions.clone(),
-                    func_ctx.clone(),
-                )
-            })?;
-        }
 
         let need_fill_missing_columns = table.schema() != plan.schema();
         if need_fill_missing_columns {
