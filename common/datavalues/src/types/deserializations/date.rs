@@ -78,7 +78,7 @@ where
         Ok(())
     }
 
-    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -89,7 +89,7 @@ where
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         let date = reader.read_date_text()?;
         let days = uniform(date);
         let _ = check_date(days.as_i32())?;
@@ -97,7 +97,7 @@ where
         Ok(())
     }
 
-    fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -109,7 +109,7 @@ where
         Ok(())
     }
 
-    fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_json<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);

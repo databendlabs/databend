@@ -66,7 +66,7 @@ impl Function for IgnoreFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -75,7 +75,7 @@ impl Function for IgnoreFunction {
         _columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let return_type = BooleanType::arc();
+        let return_type = BooleanType::new_impl();
         let return_value = DataValue::try_from(false)?;
         return_type.create_constant_column(&return_value, input_rows)
     }

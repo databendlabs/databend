@@ -43,7 +43,7 @@ pub fn check_date(days: i32) -> Result<()> {
 pub struct DateType {}
 
 impl DateType {
-    pub fn arc() -> DataTypeImpl {
+    pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::Date(Self {})
     }
 }

@@ -59,7 +59,7 @@ impl TimestampType {
         TimestampType { precision }
     }
 
-    pub fn arc(precision: usize) -> DataTypeImpl {
+    pub fn new_impl(precision: usize) -> DataTypeImpl {
         DataTypeImpl::Timestamp(TimestampType { precision })
     }
 

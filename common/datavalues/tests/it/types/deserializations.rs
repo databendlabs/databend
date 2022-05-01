@@ -23,7 +23,7 @@ fn test_nullable_deserializer_pop() -> Result<()> {
         DataValue::Boolean(false),
         DataValue::Null,
     ];
-    let data_type = NullableType::arc(BooleanType::arc());
+    let data_type = NullableType::new_impl(BooleanType::new_impl());
     let mut deserializer = data_type.create_deserializer(4);
 
     // Append data value

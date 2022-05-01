@@ -50,7 +50,7 @@ impl Function for BinFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(
@@ -63,21 +63,21 @@ impl Function for BinFunction {
 
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = cast_column_field(&columns[0], &UInt64Type::new_impl())?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(format!("{:b}", val).as_bytes());
                 }
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = cast_column_field(&columns[0], &Int64Type::new_impl())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(format!("{:b}", val).as_bytes());
                 }
             }
             TypeID::Float32 | TypeID::Float64 => {
-                let col = cast_column_field(&columns[0], &Float64Type::arc())?;
+                let col = cast_column_field(&columns[0], &Float64Type::new_impl())?;
                 let col = col.as_any().downcast_ref::<Float64Column>().unwrap();
                 for val in col.iter() {
                     let val = if val.ge(&0f64) {

@@ -89,9 +89,9 @@ where F: LogicExpression + Clone
 
     fn return_type(&self) -> DataTypeImpl {
         if self.nullable {
-            NullableType::arc(BooleanType::arc())
+            NullableType::new_impl(BooleanType::new_impl())
         } else {
-            BooleanType::arc()
+            BooleanType::new_impl()
         }
     }
 

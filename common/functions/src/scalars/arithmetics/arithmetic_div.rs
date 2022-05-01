@@ -42,7 +42,7 @@ impl ArithmeticDivFunction {
             with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     DataValueBinaryOperator::Div,
-                    Float64Type::arc(),
+                    Float64Type::new_impl(),
                     div_scalar
                 )
             })

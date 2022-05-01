@@ -64,7 +64,7 @@ impl Function for RepeatFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(
@@ -75,7 +75,7 @@ impl Function for RepeatFunction {
     ) -> Result<ColumnRef> {
         let col1_viewer = Vu8::try_create_viewer(columns[0].column())?;
 
-        let col2 = cast_column_field(&columns[1], &UInt64Type::arc())?;
+        let col2 = cast_column_field(&columns[1], &UInt64Type::new_impl())?;
         let col2_viewer = u64::try_create_viewer(&col2)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);

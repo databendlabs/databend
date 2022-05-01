@@ -46,12 +46,12 @@ async fn test_expression_evaluator() -> Result<()> {
                     Expression::Literal {
                         value: DataValue::Int64(2),
                         column_name: None,
-                        data_type: Int64Type::arc(),
+                        data_type: Int64Type::new_impl(),
                     },
                 ],
             }),
         }),
-        data_type: StringType::arc(),
+        data_type: StringType::new_impl(),
         pg_style: false,
     };
 
@@ -65,11 +65,11 @@ async fn test_expression_evaluator() -> Result<()> {
     let mut block = DataBlock::empty();
     block = block.add_column(
         PrimitiveColumn::<i32>::new_from_vec(vec![1, 2, 3]).arc(),
-        DataField::new("a", Int32Type::arc()),
+        DataField::new("a", Int32Type::new_impl()),
     )?;
     block = block.add_column(
         PrimitiveColumn::<i32>::new_from_vec(vec![1, 2, 3]).arc(),
-        DataField::new("b", Int32Type::arc()),
+        DataField::new("b", Int32Type::new_impl()),
     )?;
 
     let func_ctx = create_query_context().await?.try_get_function_context()?;

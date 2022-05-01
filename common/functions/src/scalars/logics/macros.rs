@@ -30,9 +30,9 @@ macro_rules! impl_logic_expression {
         impl LogicExpression for $name {
             fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef> {
                 let dt = if nullable {
-                    NullableType::arc(BooleanType::arc())
+                    NullableType::new_impl(BooleanType::new_impl())
                 } else {
-                    BooleanType::arc()
+                    BooleanType::new_impl()
                 };
 
                 let lhs = cast_column_field(&columns[0], &dt)?;

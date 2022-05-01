@@ -78,7 +78,7 @@ where
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         let v: T = if !T::FLOATING {
             reader.read_int_text()
         } else {

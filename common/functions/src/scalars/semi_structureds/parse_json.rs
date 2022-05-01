@@ -49,9 +49,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERRO
         let result_type = if args[0].data_type_id() == TypeID::Null {
             NullType::arc()
         } else if args[0].is_nullable() || SUPPRESS_PARSE_ERROR {
-            NullableType::arc(VariantType::arc())
+            NullableType::new_impl(VariantType::new_impl())
         } else {
-            VariantType::arc()
+            VariantType::new_impl()
         };
 
         Ok(Box::new(ParseJsonFunctionImpl::<SUPPRESS_PARSE_ERROR> {

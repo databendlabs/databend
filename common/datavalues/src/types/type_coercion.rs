@@ -36,25 +36,25 @@ pub fn construct_numeric_type(
     byte_size: usize,
 ) -> Result<DataTypeImpl> {
     match (is_signed, is_floating, byte_size) {
-        (false, false, 1) => Ok(UInt8Type::arc()),
-        (false, false, 2) => Ok(UInt16Type::arc()),
-        (false, false, 4) => Ok(UInt32Type::arc()),
-        (false, false, 8) => Ok(UInt64Type::arc()),
-        (false, true, 4) => Ok(Float32Type::arc()),
-        (false, true, 8) => Ok(Float64Type::arc()),
-        (true, false, 1) => Ok(Int8Type::arc()),
-        (true, false, 2) => Ok(Int16Type::arc()),
-        (true, false, 4) => Ok(Int32Type::arc()),
-        (true, false, 8) => Ok(Int64Type::arc()),
-        (true, true, 1) => Ok(Float32Type::arc()),
-        (true, true, 2) => Ok(Float32Type::arc()),
-        (true, true, 4) => Ok(Float32Type::arc()),
-        (true, true, 8) => Ok(Float64Type::arc()),
+        (false, false, 1) => Ok(UInt8Type::new_impl()),
+        (false, false, 2) => Ok(UInt16Type::new_impl()),
+        (false, false, 4) => Ok(UInt32Type::new_impl()),
+        (false, false, 8) => Ok(UInt64Type::new_impl()),
+        (false, true, 4) => Ok(Float32Type::new_impl()),
+        (false, true, 8) => Ok(Float64Type::new_impl()),
+        (true, false, 1) => Ok(Int8Type::new_impl()),
+        (true, false, 2) => Ok(Int16Type::new_impl()),
+        (true, false, 4) => Ok(Int32Type::new_impl()),
+        (true, false, 8) => Ok(Int64Type::new_impl()),
+        (true, true, 1) => Ok(Float32Type::new_impl()),
+        (true, true, 2) => Ok(Float32Type::new_impl()),
+        (true, true, 4) => Ok(Float32Type::new_impl()),
+        (true, true, 8) => Ok(Float64Type::new_impl()),
 
         // TODO support bigint and decimal types, now we just let's overflow
-        (false, false, d) if d > 8 => Ok(Int64Type::arc()),
-        (true, false, d) if d > 8 => Ok(UInt64Type::arc()),
-        (_, true, d) if d > 8 => Ok(Float64Type::arc()),
+        (false, false, d) if d > 8 => Ok(Int64Type::new_impl()),
+        (true, false, d) if d > 8 => Ok(UInt64Type::new_impl()),
+        (_, true, d) if d > 8 => Ok(Float64Type::new_impl()),
 
         _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
@@ -176,7 +176,7 @@ pub fn numerical_arithmetic_coercion(
 
         DataValueBinaryOperator::Modulo => {
             if has_float {
-                return Ok(Float64Type::arc());
+                return Ok(Float64Type::new_impl());
             }
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
@@ -193,7 +193,7 @@ pub fn numerical_arithmetic_coercion(
         DataValueBinaryOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-        DataValueBinaryOperator::Div => Ok(Float64Type::arc()),
+        DataValueBinaryOperator::Div => Ok(Float64Type::new_impl()),
         DataValueBinaryOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
     }
 }
@@ -254,7 +254,7 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
 
     // one of is String and other is number
     if (lhs_id.is_numeric() && rhs_id.is_string()) || (rhs_id.is_numeric() && lhs_id.is_string()) {
-        return Ok(Float64Type::arc());
+        return Ok(Float64Type::new_impl());
     }
 
     // one of is datetime and other is number or string
@@ -276,7 +276,7 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
                 let lhs: &TimestampType = lhs_type.as_any().downcast_ref().unwrap();
                 let rhs: &TimestampType = rhs_type.as_any().downcast_ref().unwrap();
                 let precision = cmp::max(lhs.precision(), rhs.precision());
-                Ok(TimestampType::arc(precision))
+                Ok(TimestampType::new_impl(precision))
             }
             _ => unreachable!(),
         };

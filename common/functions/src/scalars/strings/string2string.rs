@@ -64,7 +64,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(

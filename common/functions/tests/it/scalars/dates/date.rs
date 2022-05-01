@@ -37,7 +37,7 @@ fn test_round_function() -> Result<()> {
             name: "test-timeSlot-now",
             columns: vec![ColumnWithField::new(
                 Series::from_data(vec![1630812366000000i64, 1630839682000000i64]),
-                DataField::new("dummy_1", TimestampType::arc(0)),
+                DataField::new("dummy_1", TimestampType::new_impl(0)),
             )],
             expect: Series::from_data(vec![
                 1630812366i64 / r * r * MICROSECONDS,
@@ -56,7 +56,7 @@ fn test_to_start_of_function() -> Result<()> {
         name: "test-timeSlot-now",
         columns: vec![ColumnWithField::new(
             Series::from_data(vec![1631705259000000i64]),
-            DataField::new("dummy_1", TimestampType::arc(0)),
+            DataField::new("dummy_1", TimestampType::new_impl(0)),
         )],
         expect: Series::from_data(vec![18809i32]),
         error: "",
