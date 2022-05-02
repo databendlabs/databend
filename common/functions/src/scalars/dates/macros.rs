@@ -66,9 +66,7 @@ macro_rules! define_date_add_year_months {
 macro_rules! define_timestamp_add_year_months {
     ($l: ident, $r: ident, $ctx: ident, $op: expr) => {{
         let factor = $ctx.factor;
-        let precision = $ctx.precision as u32;
-        let base = 10_i64.pow(6 - precision);
-        let micros = $l * base;
+        let micros = $l;
         let naive = NaiveDateTime::from_timestamp_opt(
             micros / 1_000_000,
             (micros % 1_000_000 * 1000) as u32,
@@ -88,7 +86,7 @@ macro_rules! define_timestamp_add_year_months {
                 $ctx.set_error(e);
                 0
             },
-            |d| NaiveDateTime::new(d, date.time()).timestamp_micros() / base,
+            |d| NaiveDateTime::new(d, date.time()).timestamp_micros(),
         )
     }};
 }

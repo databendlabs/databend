@@ -33,7 +33,7 @@ fn test_serializers() -> Result<()> {
     let tests = vec![
         Test {
             name: "boolean",
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
             value: DataValue::Boolean(true),
             column: Series::from_data(vec![true, false, true]),
             val_str: "1",
@@ -41,7 +41,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "int8",
-            data_type: Int8Type::arc(),
+            data_type: Int8Type::new_impl(),
             value: DataValue::Int64(1),
             column: Series::from_data(vec![1i8, 2i8, 1]),
             val_str: "1",
@@ -49,9 +49,9 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: TimestampType::arc(0, None),
-            value: DataValue::UInt64(1630320462),
-            column: Series::from_data(vec![1630320462i64, 1637117572i64, 1]),
+            data_type: TimestampType::new_impl(0),
+            value: DataValue::UInt64(1630320462000000),
+            column: Series::from_data(vec![1630320462000000i64, 1637117572000000i64, 1000000]),
             val_str: "2021-08-30 10:47:42",
             col_str: vec![
                 "2021-08-30 10:47:42".to_owned(),
@@ -61,7 +61,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "date32",
-            data_type: DateType::arc(),
+            data_type: DateType::new_impl(),
             value: DataValue::Int64(18869),
             column: Series::from_data(vec![18869i32, 18948i32, 1]),
             val_str: "2021-08-30",
@@ -73,7 +73,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "string",
-            data_type: StringType::arc(),
+            data_type: StringType::new_impl(),
             value: DataValue::String("hello".as_bytes().to_vec()),
             column: Series::from_data(vec!["hello", "world", "NULL"]),
             val_str: "hello",
@@ -81,13 +81,13 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "array",
-            data_type: DataTypeImpl::Array(ArrayType::create(StringType::arc())),
+            data_type: DataTypeImpl::Array(ArrayType::create(StringType::new_impl())),
             value: DataValue::Array(vec![
                 DataValue::String("data".as_bytes().to_vec()),
                 DataValue::String("bend".as_bytes().to_vec()),
             ]),
             column: Arc::new(ArrayColumn::from_data(
-                DataTypeImpl::Array(ArrayType::create(StringType::arc())),
+                DataTypeImpl::Array(ArrayType::create(StringType::new_impl())),
                 vec![0, 1, 3, 6].into(),
                 Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
             )),
@@ -102,7 +102,7 @@ fn test_serializers() -> Result<()> {
             name: "struct",
             data_type: DataTypeImpl::Struct(StructType::create(
                 vec!["date".to_owned(), "integer".to_owned()],
-                vec![DateType::arc(), Int8Type::arc()],
+                vec![DateType::new_impl(), Int8Type::new_impl()],
             )),
             value: DataValue::Struct(vec![DataValue::Int64(18869), DataValue::Int64(1)]),
             column: Arc::new(StructColumn::from_data(
@@ -112,7 +112,7 @@ fn test_serializers() -> Result<()> {
                 ],
                 DataTypeImpl::Struct(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
-                    vec![DateType::arc(), Int8Type::arc()],
+                    vec![DateType::new_impl(), Int8Type::new_impl()],
                 )),
             )),
             val_str: "('2021-08-30', 1)",
@@ -124,7 +124,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "variant",
-            data_type: VariantType::arc(),
+            data_type: VariantType::new_impl(),
             value: DataValue::Variant(VariantValue::from(json!(true))),
             column: Arc::new(VariantColumn::new_from_vec(vec![
                 VariantValue::from(json!(null)),
@@ -162,10 +162,10 @@ fn test_serializers() -> Result<()> {
                 "item_4".to_owned(),
             ],
             vec![
-                Float64Type::arc(),
-                StringType::arc(),
-                BooleanType::arc(),
-                DateType::arc(),
+                Float64Type::new_impl(),
+                StringType::new_impl(),
+                BooleanType::new_impl(),
+                DateType::new_impl(),
             ],
         );
         let serializer = data_type.create_serializer();
@@ -185,7 +185,7 @@ fn test_serializers() -> Result<()> {
 
 #[test]
 fn test_convert_arrow() {
-    let t = TimestampType::arc(0, None);
+    let t = TimestampType::new_impl(0);
     let arrow_y = t.to_arrow_field("x");
     let new_t = from_arrow_field(&arrow_y);
 

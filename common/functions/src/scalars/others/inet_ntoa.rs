@@ -62,9 +62,9 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
 
     fn return_type(&self) -> DataTypeImpl {
         if SUPPRESS_CAST_ERROR {
-            NullableType::arc(StringType::arc())
+            NullableType::new_impl(StringType::new_impl())
         } else {
-            StringType::arc()
+            StringType::new_impl()
         }
     }
 
@@ -75,7 +75,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if SUPPRESS_CAST_ERROR {
-            let cast_to: DataTypeImpl = NullableType::arc(UInt32Type::arc());
+            let cast_to: DataTypeImpl = NullableType::new_impl(UInt32Type::new_impl());
             let cast_options = CastOptions {
                 // we allow cast failure
                 exception_mode: ExceptionMode::Zero,
@@ -99,7 +99,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
             }
             Ok(builder.build(input_rows))
         } else {
-            let cast_to: DataTypeImpl = UInt32Type::arc();
+            let cast_to: DataTypeImpl = UInt32Type::new_impl();
             let cast_options = CastOptions {
                 exception_mode: ExceptionMode::Throw,
                 parsing_mode: ParsingMode::Strict,

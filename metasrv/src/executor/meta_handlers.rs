@@ -73,7 +73,7 @@ use crate::executor::ActionHandler;
 #[async_trait::async_trait]
 impl RequestHandler<CreateDatabaseReq> for ActionHandler {
     async fn handle(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply, MetaError> {
-        let db_name = req.db_name.clone();
+        let db_name = req.name_ident.db_name.clone();
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
@@ -116,7 +116,7 @@ impl RequestHandler<GetDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropDatabaseReq> for ActionHandler {
     async fn handle(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
-        let db_name = req.db_name.clone();
+        let db_name = req.name_ident.db_name.clone();
         let if_exists = req.if_exists;
         let cr = LogEntry {
             txid: None,

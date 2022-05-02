@@ -74,12 +74,12 @@ impl ArithmeticMinusFunction {
                         let interval = args[1].as_any().downcast_ref::<IntervalType>().unwrap();
                         let kind = interval.kind();
                         let function_name = format!("subtract{}s", kind);
-                        return FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::arc()]);
+                        return FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::new_impl()]);
                     }
                     with_match_date_type_error!(right_type, |$D| {
                         BinaryArithmeticFunction::<$T, $D, i32, _>::try_create_func(
                             op,
-                            Int32Type::arc(),
+                            Int32Type::new_impl(),
                             sub_scalar
                         )
                     })

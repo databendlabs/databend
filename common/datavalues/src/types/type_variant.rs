@@ -27,7 +27,7 @@ use crate::prelude::*;
 pub struct VariantType {}
 
 impl VariantType {
-    pub fn arc() -> DataTypeImpl {
+    pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::Variant(Self {})
     }
 }
@@ -44,6 +44,10 @@ impl DataType for VariantType {
 
     fn name(&self) -> String {
         "Variant".to_string()
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["Json"]
     }
 
     fn default_value(&self) -> DataValue {

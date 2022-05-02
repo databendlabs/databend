@@ -119,10 +119,10 @@ pub enum DataValue {
     pub fn data_type(&self) -> DataTypeImpl {
         match self {
             DataValue::Null => Arc::new(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
-                    return Int8Type::arc();
+                    return Int8Type::new_impl();
                 }
             ...
    }

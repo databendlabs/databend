@@ -29,6 +29,7 @@ use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
@@ -393,6 +394,14 @@ impl QueryContext {
         let result = blocks.clone();
         blocks.clear();
         result
+    }
+
+    pub fn try_get_function_context(&self) -> Result<FunctionContext> {
+        Ok(FunctionContext {
+            tz: String::from_utf8(self.get_settings().get_timezone()?).map_err(|_| {
+                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+            })?,
+        })
     }
 }
 

@@ -106,7 +106,6 @@ pub use plan_call::CallPlan;
 pub use plan_copy::CopyPlan;
 pub use plan_copy::ValidationMode;
 pub use plan_database_create::CreateDatabasePlan;
-pub use plan_database_create::DatabaseOptions;
 pub use plan_database_drop::DropDatabasePlan;
 pub use plan_database_show_create::ShowCreateDatabasePlan;
 pub use plan_empty::EmptyPlan;

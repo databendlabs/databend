@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::type_coercion::aggregate_types;
+use common_datavalues::type_coercion::numerical_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
@@ -63,7 +63,7 @@ macro_rules! scalar_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0).to_owned_scalar();
@@ -85,7 +85,7 @@ macro_rules! float_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
@@ -111,7 +111,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         if self.is_null {
             return NullType::arc();
         }
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -125,30 +125,32 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             return Ok(col);
         }
 
-        let types: Vec<DataTypeImpl> = columns.iter().map(|col| col.column().data_type()).collect();
+        let null_flag = columns[1..]
+            .iter()
+            .any(|column| column.field().data_type().is_null());
 
-        let least_super_dt = if columns[0]
-            .field()
-            .data_type()
-            .data_type_id()
-            .is_date_or_date_time()
-        {
-            match columns[1..]
-                .iter()
-                .map(|column| column.field().data_type().data_type_id())
-                .all(|t| t.is_string() || t.is_date_or_date_time())
-            {
-                true => columns[0].field().data_type().clone(),
-                false => {
-                    return Result::Err(ErrorCode::BadDataValueType("test"));
+        let mut least_super_dt = columns[0].field().data_type().clone();
+        let mut nonull_least_super_dt = remove_nullable(&least_super_dt);
+
+        // avoid precision loss
+        if nonull_least_super_dt.data_type_id().is_numeric() {
+            for column in columns[1..].iter() {
+                if column.data_type().data_type_id().is_numeric() {
+                    nonull_least_super_dt =
+                        numerical_coercion(&nonull_least_super_dt, column.data_type(), false)
+                            .unwrap();
                 }
             }
+        }
+
+        if null_flag || least_super_dt.is_null() {
+            least_super_dt = wrap_nullable(&nonull_least_super_dt);
         } else {
-            aggregate_types(&types)?
-        };
+            least_super_dt = nonull_least_super_dt;
+        }
 
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
-        let input_col = cast_column_field(&columns[0], &least_super_dt)?;
+        let input_col = cast_column_field(&columns[0], columns[0].data_type(), &least_super_dt)?;
 
         match least_super_type_id {
             TypeID::Boolean => {
@@ -182,20 +184,21 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 scalar_contains!(Vu8, input_col, input_rows, columns, least_super_dt)
             }
             TypeID::Float32 => {
-                float_contains!(f32, input_col, input_rows, columns, least_super_dt);
+                float_contains!(f32, input_col, input_rows, columns, least_super_dt)
             }
             TypeID::Float64 => {
-                float_contains!(f64, input_col, input_rows, columns, least_super_dt);
+                float_contains!(f64, input_col, input_rows, columns, least_super_dt)
             }
             TypeID::Date => {
                 scalar_contains!(i32, input_col, input_rows, columns, least_super_dt)
             }
             TypeID::Timestamp => {
-                scalar_contains!(i64, input_col, input_rows, columns, least_super_dt);
+                scalar_contains!(i64, input_col, input_rows, columns, least_super_dt)
             }
-            _ => {
-                unimplemented!()
-            }
+            _ => Result::Err(ErrorCode::BadDataValueType(format!(
+                "{} type is not supported for IN now",
+                least_super_type_id
+            ))),
         }
     }
 }

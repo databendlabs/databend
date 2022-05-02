@@ -23,7 +23,6 @@ use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num_traits::Pow;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
@@ -113,7 +112,7 @@ impl NumberOperator<i32> for ToStartOfYear {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -134,7 +133,7 @@ impl NumberOperator<i32> for ToStartOfISOYear {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -151,7 +150,7 @@ impl NumberOperator<i32> for ToStartOfQuarter {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -167,7 +166,7 @@ impl NumberOperator<i32> for ToStartOfMonth {
     }
 
     fn return_type() -> Option<DataTypeImpl> {
-        Some(DateType::arc())
+        Some(DateType::new_impl())
     }
 }
 
@@ -250,8 +249,8 @@ impl NumberOperator<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Option<Box<dyn Function>> {
-        let type_name = DateType::arc().name();
-        Some(CastFunction::create("toDate", type_name.as_str()).unwrap())
+        let type_name = DateType::new_impl().name();
+        Some(CastFunction::create("toDate", type_name.as_str(), u8::to_data_type()).unwrap())
     }
 }
 
@@ -268,7 +267,7 @@ impl NumberOperator<u8> for ToMinute {
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfHour", &[&TimestampType::arc(0, None)], 60 * 60)
+            RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], 60 * 60)
                 .unwrap(),
         )
     }
@@ -287,7 +286,7 @@ impl NumberOperator<u8> for ToSecond {
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfMinute", &[&TimestampType::arc(0, None)], 60)
+            RoundFunction::try_create("toStartOfMinute", &[&TimestampType::new_impl(0)], 60)
                 .unwrap(),
         )
     }
@@ -381,16 +380,8 @@ where
                 Ok(col.arc())
             }
             TypeID::Timestamp => {
-                let ts_dt = columns[0]
-                    .field()
-                    .data_type()
-                    .as_any()
-                    .downcast_ref::<TimestampType>()
-                    .unwrap();
-                let to_div = 10.pow(ts_dt.precision()) as i64;
-
                 let func = |v: i64, _ctx: &mut EvalContext| {
-                    let date_time = Utc.timestamp(v / to_div, 0_u32);
+                    let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
                     T::to_number(date_time)
                 };
                 let col = scalar_unary_op::<i64, R, _>(

@@ -62,7 +62,7 @@ impl Function for RegexpLikeFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(

@@ -25,7 +25,7 @@ use common_exception::Result;
 
 use crate::pretty_format_blocks;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct DataBlock {
     schema: DataSchemaRef,
     columns: Vec<ColumnRef>,

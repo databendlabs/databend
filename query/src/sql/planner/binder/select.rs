@@ -36,8 +36,8 @@ use crate::storages::Table;
 
 impl Binder {
     #[async_recursion]
-    pub(super) async fn bind_query(&mut self, stmt: &Query) -> Result<BindContext> {
-        match &stmt.body {
+    pub(super) async fn bind_query(&mut self, query: &Query) -> Result<BindContext> {
+        match &query.body {
             SetExpr::Select(stmt) => self.bind_select_stmt(stmt).await,
             SetExpr::Query(stmt) => self.bind_query(stmt).await,
             _ => todo!(),
@@ -46,7 +46,11 @@ impl Binder {
     }
 
     pub(super) async fn bind_select_stmt(&mut self, stmt: &SelectStmt) -> Result<BindContext> {
-        let mut input_context = self.bind_table_reference(&stmt.from).await?;
+        let mut input_context = if let Some(from) = &stmt.from {
+            self.bind_table_reference(from).await?
+        } else {
+            BindContext::create()
+        };
 
         if let Some(expr) = &stmt.selection {
             self.bind_where(expr, &mut input_context)?;
@@ -54,6 +58,14 @@ impl Binder {
 
         // Output of current `SELECT` statement.
         let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
+
+        self.analyze_aggregate(&output_context, &mut input_context)?;
+
+        if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
+        {
+            self.bind_group_by(&stmt.group_by, &mut input_context)?;
+            output_context.expression = input_context.expression.clone();
+        }
 
         self.bind_projection(&mut output_context)?;
 
@@ -70,25 +82,24 @@ impl Binder {
                 let database = database
                     .as_ref()
                     .map(|ident| ident.name.clone())
-                    .unwrap_or_else(|| self.context.get_current_database());
+                    .unwrap_or_else(|| self.ctx.get_current_database());
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
-                let tenant = self.context.get_tenant();
+                let tenant = self.ctx.get_tenant();
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
                     .resolve_data_source(tenant.as_str(), database.as_str(), table.as_str())
                     .await?;
-                let (statistics, parts) = table_meta
-                    .read_partitions(self.context.clone(), None)
-                    .await?;
+                let (statistics, parts) =
+                    table_meta.read_partitions(self.ctx.clone(), None).await?;
                 let source = ReadDataSourcePlan {
                     source_info: SourceInfo::TableSource(table_meta.get_table_info().clone()),
                     scan_fields: None,
                     parts,
                     statistics,
-                    description: "".to_string(),
+                    description: format!("read source from table {table}"),
                     tbl_args: None,
                     push_downs: None,
                 };

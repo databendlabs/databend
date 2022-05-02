@@ -41,9 +41,9 @@ async fn test_transform_filter() -> Result<()> {
         let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(WhereTransform::try_create(
+                ctx.clone(),
                 plan.input.schema(),
                 plan.predicate.clone(),
-                ctx.clone(),
             )?))
         })?;
     }

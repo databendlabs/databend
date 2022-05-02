@@ -85,8 +85,8 @@ impl IfFunction {
             (&columns[1], &columns[0], true)
         };
 
-        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
+        let lhs = cast_column_field(lhs_col, lhs_col.data_type(), &self.least_supertype)?;
+        let rhs = cast_column_field(rhs_col, rhs_col.data_type(), &self.least_supertype)?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
 
@@ -185,8 +185,8 @@ impl IfFunction {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
+        let lhs = cast_column_field(lhs_col, lhs_col.data_type(), &self.least_supertype)?;
+        let rhs = cast_column_field(rhs_col, rhs_col.data_type(), &self.least_supertype)?;
 
         let type_id = remove_nullable(&self.least_supertype).data_type_id();
 
@@ -221,8 +221,8 @@ impl IfFunction {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let lhs = cast_column_field(lhs_col, &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, &self.least_supertype)?;
+        let lhs = cast_column_field(lhs_col, lhs_col.data_type(), &self.least_supertype)?;
+        let rhs = cast_column_field(rhs_col, rhs_col.data_type(), &self.least_supertype)?;
 
         debug_assert!(!self.least_supertype.is_nullable());
         let type_id = self.least_supertype.data_type_id();

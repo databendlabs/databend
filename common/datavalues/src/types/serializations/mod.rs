@@ -88,7 +88,7 @@ pub enum TypeSerializerImpl {
 
     Date(DateSerializer<i32>),
     Interval(DateSerializer<i64>),
-    Timestamp(TimestampSerializer<i64>),
+    Timestamp(TimestampSerializer),
     String(StringSerializer),
     Array(ArraySerializer),
     Struct(StructSerializer),

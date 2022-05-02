@@ -77,9 +77,9 @@ impl RepoPRsTable {
             DataField::new(USER, Vu8::to_data_type()),
             DataField::new(LABELS, Vu8::to_data_type()),
             DataField::new(ASSIGNESS, Vu8::to_data_type()),
-            DataField::new_nullable(CREATED_AT, TimestampType::arc(0, None)),
-            DataField::new_nullable(UPDATED_AT, TimestampType::arc(0, None)),
-            DataField::new_nullable(CLOSED_AT, TimestampType::arc(0, None)),
+            DataField::new_nullable(CREATED_AT, TimestampType::new_impl(0)),
+            DataField::new_nullable(UPDATED_AT, TimestampType::new_impl(0)),
+            DataField::new_nullable(CLOSED_AT, TimestampType::new_impl(0)),
         ];
 
         Arc::new(DataSchema::new(fields))

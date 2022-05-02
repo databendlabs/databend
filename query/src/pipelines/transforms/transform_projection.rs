@@ -42,12 +42,12 @@ impl ProjectionTransform {
         ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(
+            ctx,
             "projection executor",
             input_schema,
             output_schema,
             exprs,
             true,
-            ctx,
         )?;
 
         Ok(ProjectionTransform {

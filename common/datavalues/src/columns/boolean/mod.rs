@@ -72,7 +72,7 @@ impl Column for BooleanColumn {
     }
 
     fn data_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn column_type_name(&self) -> String {

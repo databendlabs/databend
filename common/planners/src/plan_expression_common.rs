@@ -259,7 +259,7 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
         // descend further.
         Some(replacement) => Ok(replacement),
         // No replacement was provided, clone the node and recursively call
-        // clone_with_replacement() on any nested Expressionessions.
+        // clone_with_replacement() on any nested Expressions.
         None => match expr {
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Alias(alias_name, nested_expr) => Ok(Expression::Alias(

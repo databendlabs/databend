@@ -43,10 +43,10 @@ async fn test_transform_expression() -> Result<()> {
         let ctx = create_query_context().await?;
         pipeline.add_simple_transform(move || {
             Ok(Box::new(ExpressionTransform::try_create(
+                ctx.clone(),
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone(),
-                ctx.clone(),
             )?))
         })?;
     }

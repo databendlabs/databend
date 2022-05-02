@@ -88,7 +88,7 @@ impl Function for ComparisonFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -300,13 +300,13 @@ where
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, &self.least_supertype)?
+            cast_column_field(l, l.data_type(), &self.least_supertype)?
         } else {
             l.column().clone()
         };
 
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, &self.least_supertype)?
+            cast_column_field(r, r.data_type(), &self.least_supertype)?
         } else {
             r.column().clone()
         };
