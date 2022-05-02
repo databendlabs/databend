@@ -28,7 +28,11 @@ pub struct LogicNotExpression;
 
 impl LogicExpression for LogicNotExpression {
     fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
-        let col = cast_column_field(&columns[0], &BooleanType::new_impl())?;
+        let col = cast_column_field(
+            &columns[0],
+            columns[0].data_type(),
+            &BooleanType::new_impl(),
+        )?;
 
         let col_viewer = bool::try_create_viewer(&col)?;
 

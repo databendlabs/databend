@@ -63,7 +63,7 @@ macro_rules! scalar_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0).to_owned_scalar();
@@ -85,7 +85,7 @@ macro_rules! float_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
@@ -150,7 +150,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         }
 
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
-        let input_col = cast_column_field(&columns[0], &least_super_dt)?;
+        let input_col = cast_column_field(&columns[0], columns[0].data_type(), &least_super_dt)?;
 
         match least_super_type_id {
             TypeID::Boolean => {

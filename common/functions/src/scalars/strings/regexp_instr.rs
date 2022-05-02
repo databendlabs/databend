@@ -99,24 +99,28 @@ impl Function for RegexpInStrFunction {
                 2 => {
                     pos = cast_column_field(
                         &columns[2],
+                        columns[2].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
                     )?
                 }
                 3 => {
                     occurrence = cast_column_field(
                         &columns[3],
+                        columns[3].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
                     )?
                 }
                 4 => {
                     return_option = cast_column_field(
                         &columns[4],
+                        columns[4].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
                     )?
                 }
                 _ => {
                     match_type = cast_column_field(
                         &columns[5],
+                        columns[5].data_type(),
                         &NullableType::new_impl(StringType::new_impl()),
                     )?
                 }
