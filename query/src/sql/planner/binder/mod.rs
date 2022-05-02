@@ -43,17 +43,17 @@ mod select;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
+    ctx: Arc<QueryContext>,
     catalog: Arc<dyn Catalog>,
     metadata: Metadata,
-    context: Arc<QueryContext>,
 }
 
 impl Binder {
-    pub fn new(catalog: Arc<dyn Catalog>, context: Arc<QueryContext>) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, catalog: Arc<dyn Catalog>) -> Self {
         Binder {
+            ctx,
             catalog,
             metadata: Metadata::create(),
-            context,
         }
     }
 

@@ -48,18 +48,18 @@ pub struct ExpressionTransform {
 
 impl ExpressionTransform {
     pub fn try_create(
+        ctx: Arc<QueryContext>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
-        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let executor = ExpressionExecutor::try_create(
+            ctx,
             "expression executor",
             input_schema,
             output_schema,
             exprs,
             false,
-            ctx,
         )?;
         executor.validate()?;
 

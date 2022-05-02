@@ -46,12 +46,12 @@ where Self: Transform
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let executor = ExpressionExecutor::try_create(
+            ctx,
             "expression executor",
             input_schema,
             output_schema,
             exprs,
             ALIAS_PROJECT,
-            ctx,
         )?;
         executor.validate()?;
 

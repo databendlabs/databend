@@ -66,7 +66,7 @@ pub(crate) struct ExecuteRunning {
     // used to kill query
     session: SessionRef,
     // mainly used to get progress for now
-    context: Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
     interpreter: Arc<dyn Interpreter>,
 }
 
@@ -84,7 +84,7 @@ pub(crate) struct Executor {
 impl Executor {
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
-            Running(r) => Some(r.context.get_scan_progress_value()),
+            Running(r) => Some(r.ctx.get_scan_progress_value()),
             Stopped(f) => f.progress.clone(),
         }
     }
@@ -100,7 +100,7 @@ impl Executor {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
-            let progress = Some(r.context.get_scan_progress_value());
+            let progress = Some(r.ctx.get_scan_progress_value());
             if kill {
                 r.session.force_kill_query();
             }
@@ -173,7 +173,7 @@ impl ExecuteState {
 
         let running_state = ExecuteRunning {
             session,
-            context: ctx.clone(),
+            ctx: ctx.clone(),
             interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
