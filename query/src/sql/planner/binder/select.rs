@@ -23,8 +23,6 @@ use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
 
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -48,7 +46,7 @@ impl Binder {
         bind_context: &BindContext,
     ) -> Result<BindContext> {
         match &query.body {
-            SetExpr::Select(stmt) => self.bind_select_stmt(stmt, &bind_context).await,
+            SetExpr::Select(stmt) => self.bind_select_stmt(stmt, bind_context).await,
             SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
             _ => todo!(),
         }
@@ -161,7 +159,7 @@ impl Binder {
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    result.apply_table_alias(&table.name(), alias)?;
+                    result.apply_table_alias(table.name(), alias)?;
                 }
                 Ok(result)
             }
