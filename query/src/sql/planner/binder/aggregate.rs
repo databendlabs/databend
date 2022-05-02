@@ -23,6 +23,7 @@ use crate::sql::binder::scalar_common::find_aggregate_scalars_from_bind_context;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::ExpressionPlan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 use crate::sql::ScalarExprRef;
@@ -68,17 +69,44 @@ impl Binder {
         input_context: &mut BindContext,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new();
-        let group_expr = group_by_expr
+        let group_exprs = group_by_expr
             .iter()
             .map(|expr| scalar_binder.bind_expr(expr, input_context))
-            .collect::<Result<Vec<ScalarExprRef>>>();
+            .collect::<Result<Vec<ScalarExprRef>>>()?;
+        let mut need_expression_plan = false;
+        for group_expr in group_exprs.iter() {
+            if let Scalar::ColumnRef { .. } = group_expr.safe_cast_to_scalar()? {
+                continue;
+            }
+            need_expression_plan = true;
+        }
+
+        if need_expression_plan {
+            self.bind_expression(group_exprs.clone(), input_context)?;
+        }
 
         let aggregate_plan = AggregatePlan {
-            group_expr: group_expr?,
+            group_expr: group_exprs,
             agg_expr: input_context.agg_scalar_exprs.as_ref().unwrap().clone(),
         };
         let new_expr = SExpr::create_unary(
             aggregate_plan.into(),
+            input_context.expression.clone().unwrap(),
+        );
+        input_context.expression = Some(new_expr);
+        Ok(())
+    }
+
+    pub(super) fn bind_expression(
+        &mut self,
+        scalar_exprs: Vec<ScalarExprRef>,
+        input_context: &mut BindContext,
+    ) -> Result<()> {
+        let expression_plan = ExpressionPlan {
+            items: scalar_exprs,
+        };
+        let new_expr = SExpr::create_unary(
+            expression_plan.into(),
             input_context.expression.clone().unwrap(),
         );
         input_context.expression = Some(new_expr);

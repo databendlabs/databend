@@ -31,6 +31,7 @@ pub use util::format_field_name;
 use super::plans::BasePlan;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
+use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
@@ -42,6 +43,7 @@ use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::ExpressionPlan;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::HavingPlan;
 use crate::sql::plans::PhysicalScan;
@@ -152,6 +154,11 @@ impl PipelineBuilder {
                 let having: HavingPlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
                 self.build_having(&having, input_schema)
+            }
+            PlanType::Expression => {
+                let expression_plan = plan.try_into()?;
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_expression_plan(&expression_plan, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -322,6 +329,35 @@ impl PipelineBuilder {
             })?;
 
         Ok(final_schema)
+    }
+
+    fn build_expression_plan(
+        &mut self,
+        expr_plan: &ExpressionPlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let mut expressions = Vec::with_capacity(expr_plan.items.len());
+        let expr_builder = ExpressionBuilder::create(&self.metadata);
+        for expr in expr_plan.items.iter() {
+            let scalar = expr.safe_cast_to_scalar()?;
+            let expression = expr_builder.build(scalar)?;
+            expressions.push(expression);
+        }
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let output_schema =
+            schema_builder.build_expression_plan(&expressions, input_schema.clone())?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    input_schema.clone(),
+                    output_schema.clone(),
+                    expressions.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        Ok(output_schema)
     }
 
     fn build_having(

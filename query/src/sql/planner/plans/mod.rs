@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate;
+mod expression;
 mod filter;
 mod having;
 mod logical_get;
@@ -25,6 +26,7 @@ use std::any::Any;
 
 pub use aggregate::AggregatePlan;
 use enum_dispatch::enum_dispatch;
+pub use expression::ExpressionPlan;
 pub use filter::FilterPlan;
 pub use having::HavingPlan;
 pub use logical_get::LogicalGet;
@@ -76,6 +78,7 @@ pub enum PlanType {
 
     // Operators that are both logical and physical
     Project,
+    Expression,
     Filter,
     Aggregate,
     Having,
@@ -90,6 +93,7 @@ pub enum BasePlanImpl {
     LogicalGet(LogicalGet),
     PhysicalScan(PhysicalScan),
     Project(ProjectPlan),
+    Expression(ExpressionPlan),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
     Having(HavingPlan),

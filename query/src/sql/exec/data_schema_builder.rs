@@ -18,6 +18,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planners::Expression;
 
 use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::PhysicalScan;
@@ -77,6 +78,27 @@ impl<'a> DataSchemaBuilder<'a> {
             }
         }
 
+        Ok(Arc::new(DataSchema::new(fields)))
+    }
+
+    pub fn build_expression_plan(
+        &self,
+        exprs: &[Expression],
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let mut fields = input_schema.fields().clone();
+        for expr in exprs.iter() {
+            let expr_name = expr.column_name().clone();
+            if input_schema.has_field(expr_name.as_str()) {
+                continue;
+            }
+            let field = if expr.nullable(&input_schema)? {
+                DataField::new_nullable(expr_name.as_str(), expr.to_data_type(&input_schema)?)
+            } else {
+                DataField::new(expr_name.as_str(), expr.to_data_type(&input_schema)?)
+            };
+            fields.push(field);
+        }
         Ok(Arc::new(DataSchema::new(fields)))
     }
 
