@@ -28,6 +28,9 @@ pub enum Scalar {
         data_type: DataTypeImpl,
         nullable: bool,
     },
+    Literal {
+        data_value: DataValue,
+    },
     Equal {
         left: Box<Scalar>,
         right: Box<Scalar>,
@@ -56,6 +59,7 @@ impl ScalarExpr for Scalar {
                 nullable,
                 ..
             } => (data_type.clone(), *nullable),
+            Scalar::Literal { data_value } => (data_value.data_type(), data_value.is_null()),
         }
     }
 

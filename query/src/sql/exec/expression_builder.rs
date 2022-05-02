@@ -33,6 +33,7 @@ impl<'a> ExpressionBuilder<'a> {
     pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
         match scalar {
             Scalar::ColumnRef { index, .. } => self.build_column_ref(*index),
+            Scalar::Literal { data_value } => self.build_literal(data_value),
             Scalar::Equal { left, right } => {
                 self.build_binary_operator(left, right, "=".to_string())
             }
@@ -52,6 +53,10 @@ impl<'a> ExpressionBuilder<'a> {
             column.name.as_str(),
             index,
         )))
+    }
+
+    pub fn build_literal(&self, data_value: &DataValue) -> Result<Expression> {
+        Ok(Expression::create_literal(data_value.clone()))
     }
 
     pub fn build_binary_operator(

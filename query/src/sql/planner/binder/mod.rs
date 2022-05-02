@@ -27,6 +27,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
 use crate::storages::Table;
 
+mod aggregate;
 mod bind_context;
 mod project;
 mod scalar;
@@ -42,17 +43,17 @@ mod select;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
+    ctx: Arc<QueryContext>,
     catalogs: Arc<CatalogManager>,
     metadata: Metadata,
-    context: Arc<QueryContext>,
 }
 
 impl Binder {
-    pub fn new(catalogs: Arc<CatalogManager>, context: Arc<QueryContext>) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, catalogs: Arc<CatalogManager>) -> Self {
         Binder {
+            ctx,
             catalogs,
             metadata: Metadata::create(),
-            context,
         }
     }
 

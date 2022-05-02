@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
+use common_ast::ast::Literal;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -141,10 +142,13 @@ impl Metadata {
         distinct: &bool,
         args: &[Expr],
     ) -> Result<String> {
-        let names: Vec<String> = args
-            .iter()
-            .map(|arg| self.get_expr_display_string(arg, false))
-            .collect::<Result<_>>()?;
+        let mut names = Vec::new();
+        if !optimize_remove_count_args(fun, *distinct, args) {
+            names = args
+                .iter()
+                .map(|arg| self.get_expr_display_string(arg, false))
+                .collect::<Result<Vec<String>>>()?;
+        }
         Ok(match distinct {
             true => format!("{}({}{})", fun, "distinct ", names.join(",")),
             false => format!("{}({}{})", fun, "", names.join(",")),
@@ -160,15 +164,17 @@ impl Metadata {
                 let idx = self.column_idx_by_column_name(column.name.as_str())?;
                 Ok(format_field_name(column.name.as_str(), idx))
             }
+            Expr::Literal(literal) => Ok(format!("{}", literal)),
+            Expr::CountAll => Ok("count()".to_string()),
             Expr::FunctionCall {
                 name,
                 distinct,
                 args,
                 ..
             } => self.create_function_display_name(name.name.as_str(), distinct, args),
-            _ => Err(ErrorCode::LogicalError(
-                "{expr} doesn't implement get_expr_display_string",
-            )),
+            _ => Err(ErrorCode::LogicalError(format!(
+                "{expr} doesn't implement get_expr_display_string"
+            ))),
         }
     }
 
@@ -213,4 +219,12 @@ impl Metadata {
         }
         table_index
     }
+}
+
+pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[Expr]) -> bool {
+    name.eq_ignore_ascii_case("count")
+        && !distinct
+        && args
+            .iter()
+            .all(|expr| matches!(expr, Expr::Literal(literal) if *literal!=Literal::Null))
 }

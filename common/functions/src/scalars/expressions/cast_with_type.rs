@@ -64,12 +64,13 @@ impl CastOptions {
 
 pub fn cast_column_field(
     column_with_field: &ColumnWithField,
-    data_type: &DataTypeImpl,
+    from_type: &DataTypeImpl,
+    target_type: &DataTypeImpl,
 ) -> Result<ColumnRef> {
     cast_with_type(
         column_with_field.column(),
-        column_with_field.data_type(),
-        data_type,
+        from_type,
+        target_type,
         &DEFAULT_CAST_OPTIONS,
     )
 }
@@ -88,22 +89,22 @@ pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Resu
 pub fn cast_with_type(
     column: &ColumnRef,
     from_type: &DataTypeImpl,
-    data_type: &DataTypeImpl,
+    target_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<ColumnRef> {
     // they are pyhsically the same type
-    if &column.data_type() == data_type {
+    if &column.data_type() == target_type {
         return Ok(column.clone());
     }
 
-    if data_type.data_type_id() == TypeID::Null {
+    if target_type.data_type_id() == TypeID::Null {
         return Ok(Arc::new(NullColumn::new(column.len())));
     }
 
     if from_type.data_type_id() == TypeID::Null {
         //all is null
-        if data_type.is_nullable() {
-            return data_type.create_constant_column(&DataValue::Null, column.len());
+        if target_type.is_nullable() {
+            return target_type.create_constant_column(&DataValue::Null, column.len());
         }
         return Err(ErrorCode::BadDataValueType(
             "Can't cast column from null into non-nullable type".to_string(),
@@ -113,12 +114,12 @@ pub fn cast_with_type(
     if column.is_const() {
         let col: &ConstColumn = Series::check_get(column)?;
         let inner = col.inner();
-        let res = cast_with_type(inner, from_type, data_type, cast_options)?;
+        let res = cast_with_type(inner, from_type, target_type, cast_options)?;
         return Ok(ConstColumn::new(res, column.len()).arc());
     }
 
     let nonull_from_type = remove_nullable(from_type);
-    let nonull_data_type = remove_nullable(data_type);
+    let nonull_data_type = remove_nullable(target_type);
 
     let (result, valids) = match nonull_from_type.data_type_id() {
         TypeID::String => {
@@ -150,7 +151,7 @@ pub fn cast_with_type(
 
     let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
-    if data_type.is_nullable() {
+    if target_type.is_nullable() {
         return Ok(NullableColumn::wrap_inner(result, bitmap));
     }
 
@@ -170,7 +171,7 @@ pub fn cast_with_type(
             return Err(ErrorCode::BadDataValueType(format!(
                 "Cast error happens in casting from {} to {}",
                 from_type.name(),
-                data_type.name()
+                target_type.name()
             )));
         }
     }

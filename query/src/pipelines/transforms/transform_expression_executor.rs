@@ -44,12 +44,12 @@ pub struct ExpressionExecutor {
 
 impl ExpressionExecutor {
     pub fn try_create(
+        ctx: Arc<QueryContext>,
         description: &str,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         exprs: Vec<Expression>,
         alias_project: bool,
-        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let chain = ExpressionChain::try_create(input_schema.clone(), &exprs)?;
 

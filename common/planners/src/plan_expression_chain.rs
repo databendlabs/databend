@@ -199,13 +199,14 @@ impl ExpressionChain {
                 ..
             } => {
                 let func_name = "cast".to_string();
+                let from_type = sub_expr.to_data_type(&self.schema)?;
                 let return_type = data_type.clone();
                 let type_name = data_type.name();
 
                 let func = if data_type.is_nullable() {
-                    CastFunction::create_try(&func_name, &type_name)
+                    CastFunction::create_try(&func_name, &type_name, from_type)
                 } else {
-                    CastFunction::create(&func_name, &type_name)
+                    CastFunction::create(&func_name, &type_name, from_type)
                 }?;
 
                 let function = ActionFunction {

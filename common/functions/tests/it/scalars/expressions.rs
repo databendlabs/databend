@@ -127,7 +127,7 @@ fn test_datetime_cast_function() -> Result<()> {
 fn test_cast_variant_function() -> Result<()> {
     let tests = vec![
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", DateType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-date32-to-variant-error",
                 columns: vec![ColumnWithField::new(
@@ -139,7 +139,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", BooleanType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-bool-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -151,7 +151,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", Int8Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-int8-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -163,7 +163,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", Int16Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-int16-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -175,7 +175,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", Int32Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-int32-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -187,7 +187,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", Int64Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-int64-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -205,7 +205,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", UInt8Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-uint8-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -217,7 +217,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", UInt16Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-uint16-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -229,7 +229,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", UInt32Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-uint32-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -241,7 +241,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", UInt64Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-uint64-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -253,7 +253,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", Float32Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-float32-to-variant-passed",
                 columns: vec![ColumnWithField::new(
@@ -265,12 +265,12 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", Float64Type::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-float64-to-variant-passed",
                 columns: vec![ColumnWithField::new(
                     Series::from_data(vec![0.12345678912121212f64,
-                        12.345678912,]),
+                                           12.345678912, ]),
                     DataField::new("dummy_1", Float64Type::new_impl()),
                 )],
                 expect: Series::from_data(vec![
@@ -281,7 +281,7 @@ fn test_cast_variant_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "variant")?,
+            CastFunction::create("cast", "variant", StringType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-string-to-variant-error",
                 columns: vec![ColumnWithField::new(
@@ -540,7 +540,7 @@ fn test_variant_cast_function() -> Result<()> {
 
     let tests = vec![
         (
-            CastFunction::create("cast", "array")?,
+            CastFunction::create("cast", "array", VariantType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-variant-to-array-passed",
                 columns: vec![ColumnWithField::new(
@@ -560,7 +560,7 @@ fn test_variant_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "object")?,
+            CastFunction::create("cast", "object", VariantType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-variant-to-object-passed",
                 columns: vec![ColumnWithField::new(
@@ -578,7 +578,7 @@ fn test_variant_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast", "object")?,
+            CastFunction::create("cast", "object", VariantType::new_impl())?,
             ScalarFunctionWithFieldTest {
                 name: "cast-variant-to-object-error",
                 columns: vec![ColumnWithField::new(

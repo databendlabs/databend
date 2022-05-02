@@ -236,12 +236,12 @@ async fn exprs_to_datavalue(
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
     let one_row_block = DataBlock::create(dummy.clone(), vec![Series::from_data(vec![1u8])]);
     let executor = ExpressionExecutor::try_create(
+        ctx,
         "Insert into from values",
         dummy,
         schema.clone(),
         expressions,
         true,
-        ctx,
     )?;
 
     let res = executor.execute(&one_row_block)?;

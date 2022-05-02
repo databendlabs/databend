@@ -142,10 +142,10 @@ impl PipelineBuilder {
         let mut pipeline = self.visit(&*plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
+                self.ctx.clone(),
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.exprs.clone(),
-                self.ctx.clone(),
             )?))
         })?;
         Ok(pipeline)
@@ -220,9 +220,9 @@ impl PipelineBuilder {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(WhereTransform::try_create(
+                self.ctx.clone(),
                 node.schema(),
                 node.predicate.clone(),
-                self.ctx.clone(),
             )?))
         })?;
         Ok(pipeline)
@@ -232,9 +232,9 @@ impl PipelineBuilder {
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(HavingTransform::try_create(
+                self.ctx.clone(),
                 node.schema(),
                 node.predicate.clone(),
-                self.ctx.clone(),
             )?))
         })?;
         Ok(pipeline)

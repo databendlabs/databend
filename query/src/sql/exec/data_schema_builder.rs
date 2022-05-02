@@ -64,21 +64,17 @@ impl<'a> DataSchemaBuilder<'a> {
     ) -> Result<DataSchemaRef> {
         let mut fields = input_schema.fields().clone();
         for item in plan.items.iter() {
-            if let Some(Scalar::AggregateFunction { .. }) =
-                item.expr.as_any().downcast_ref::<Scalar>()
-            {
-                continue;
+            if let Some(Scalar::ColumnRef { .. }) = item.expr.as_any().downcast_ref::<Scalar>() {
+                let index = item.index;
+                let column_entry = self.metadata.column(index);
+                let field_name = format_field_name(column_entry.name.as_str(), index);
+                let field = if column_entry.nullable {
+                    DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
+                } else {
+                    DataField::new(field_name.as_str(), column_entry.data_type.clone())
+                };
+                fields.push(field);
             }
-
-            let index = item.index;
-            let column_entry = self.metadata.column(index);
-            let field_name = format_field_name(column_entry.name.as_str(), index);
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
-            fields.push(field);
         }
 
         Ok(Arc::new(DataSchema::new(fields)))

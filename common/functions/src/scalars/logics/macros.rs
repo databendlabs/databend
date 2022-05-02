@@ -35,8 +35,8 @@ macro_rules! impl_logic_expression {
                     BooleanType::new_impl()
                 };
 
-                let lhs = cast_column_field(&columns[0], &dt)?;
-                let rhs = cast_column_field(&columns[1], &dt)?;
+                let lhs = cast_column_field(&columns[0], columns[0].data_type(), &dt)?;
+                let rhs = cast_column_field(&columns[1], columns[1].data_type(), &dt)?;
 
                 if nullable {
                     let lhs_viewer = bool::try_create_viewer(&lhs)?;

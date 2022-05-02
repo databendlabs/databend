@@ -92,9 +92,10 @@ impl Processor for SinkTransform {
 
         if let Some(cast_schema) = &self.cast_schema {
             let mut functions = Vec::with_capacity(cast_schema.fields().len());
-            for field in cast_schema.fields() {
+            for (i, field) in cast_schema.fields().iter().enumerate() {
                 let name = field.data_type().name();
-                let cast_function = CastFunction::create("cast", &name).unwrap();
+                let from_type = self.input_schema.field(i).data_type().clone();
+                let cast_function = CastFunction::create("cast", &name, from_type).unwrap();
                 functions.push(cast_function);
             }
             let tz = self.ctx.get_settings().get_timezone()?;

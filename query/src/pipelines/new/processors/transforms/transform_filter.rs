@@ -64,12 +64,12 @@ where Self: Transform
         let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
         ExpressionExecutor::try_create(
+            ctx,
             "filter expression executor",
             schema.clone(),
             expr_schema,
             vec![expr.clone()],
             false,
-            ctx,
         )
     }
 
