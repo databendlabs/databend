@@ -203,9 +203,9 @@ To be a good engineer, don't forget to test your codes, please add unit tests an
 
 ```sql
 
-SELECT sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( toUInt64(3) ), sqrt(null) ;
+SELECT sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( to_uint64(3) ), sqrt(null) ;
 +----------+--------------------+---------+--------------------+--------------------+------------+
-| sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(toUInt64(3))  | sqrt(NULL) |
+| sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(to_uint64(3)) | sqrt(NULL) |
 +----------+--------------------+---------+--------------------+--------------------+------------+
 |      NaN | 1.7320508075688772 |       0 | 1.7320508075688772 | 1.7320508075688772 |       NULL |
 +----------+--------------------+---------+--------------------+--------------------+------------+

@@ -24,16 +24,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-SELECT toStartOfQuarter(toDate(18869));
+SELECT toStartOfQuarter(to_date(18869));
 +---------------------------------+
-| toStartOfQuarter(toDate(18869)) |
+| toStartOfQuarter(to_date(18869)) |
 +---------------------------------+
 | 2021-07-01                      |
 +---------------------------------+
 
-SELECT toStartOfQuarter(toDateTime(1630812366));
+SELECT toStartOfQuarter(to_datetime(1630812366));
 +------------------------------------------+
-| toStartOfQuarter(toDateTime(1630812366)) |
+| toStartOfQuarter(to_datetime(1630812366)) |
 +------------------------------------------+
 | 2021-07-01                               |
 +------------------------------------------+

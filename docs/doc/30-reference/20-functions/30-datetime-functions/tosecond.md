@@ -29,9 +29,9 @@ SELECT toSecond(now());
 |              14 |
 +-----------------+
 
-SELECT toSecond(toDateTime(1630812366));
+SELECT toSecond(to_datetime(1630812366));
 +----------------------------------+
-| toSecond(toDateTime(1630812366)) |
+| toSecond(to_datetime(1630812366)) |
 +----------------------------------+
 |                                6 |
 +----------------------------------+

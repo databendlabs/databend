@@ -17,16 +17,16 @@ UInt32, returns in `YYYYMM` format.
 ## Examples
 
 ```sql
-SELECT toDate(18875);
+SELECT to_date(18875);
 +---------------+
-| toDate(18875) |
+| to_date(18875) |
 +---------------+
 | 2021-09-05    |
 +---------------+
 
-SELECT toYYYYMM(toDate(18875));
+SELECT toYYYYMM(to_date(18875));
 +-------------------------+
-| toYYYYMM(toDate(18875)) |
+| toYYYYMM(to_date(18875)) |
 +-------------------------+
 |                  202109 |
 +-------------------------+

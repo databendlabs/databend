@@ -21,16 +21,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```
-SELECT toStartOfYear(toDate(18869));
+SELECT toStartOfYear(to_date(18869));
 +------------------------------+
-| toStartOfYear(toDate(18869)) |
+| toStartOfYear(to_date(18869)) |
 +------------------------------+
 | 2021-01-01                   |
 +------------------------------+
 
-SELECT toStartOfYear(toDateTime(1630812366));
+SELECT toStartOfYear(to_datetime(1630812366));
 +---------------------------------------+
-| toStartOfYear(toDateTime(1630812366)) |
+| toStartOfYear(to_datetime(1630812366)) |
 +---------------------------------------+
 | 2021-01-01                            |
 +---------------------------------------+
