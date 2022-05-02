@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use opensrv_clickhouse::types::column::NullableColumnData;
@@ -30,16 +31,24 @@ pub struct NullSerializer {}
 const NULL_STR: &str = "NULL";
 
 impl TypeSerializer for NullSerializer {
-    fn serialize_value(&self, _value: &DataValue) -> Result<String> {
+    fn serialize_value(&self, _value: &DataValue, _format: Arc<FormatSettings>) -> Result<String> {
         Ok(NULL_STR.to_owned())
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+    fn serialize_column(
+        &self,
+        column: &ColumnRef,
+        _format: Arc<FormatSettings>,
+    ) -> Result<Vec<String>> {
         let result: Vec<String> = vec![NULL_STR.to_owned(); column.len()];
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+    fn serialize_json(
+        &self,
+        column: &ColumnRef,
+        _format: Arc<FormatSettings>,
+    ) -> Result<Vec<Value>> {
         let null = Value::Null;
         let result: Vec<Value> = vec![null; column.len()];
         Ok(result)
@@ -48,6 +57,7 @@ impl TypeSerializer for NullSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
+        _format: Arc<FormatSettings>,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let nulls = vec![1u8; column.len()];
         let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; column.len()]);

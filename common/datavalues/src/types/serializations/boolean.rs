@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
@@ -28,7 +31,7 @@ const TRUE_STR: &str = "1";
 const FALSE_STR: &str = "0";
 
 impl TypeSerializer for BooleanSerializer {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, _format: Arc<FormatSettings>) -> Result<String> {
         if let DataValue::Boolean(x) = value {
             if *x {
                 Ok(TRUE_STR.to_owned())
@@ -40,7 +43,11 @@ impl TypeSerializer for BooleanSerializer {
         }
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+    fn serialize_column(
+        &self,
+        column: &ColumnRef,
+        _format: Arc<FormatSettings>,
+    ) -> Result<Vec<String>> {
         let array: &BooleanColumn = Series::check_get(column)?;
 
         let result: Vec<String> = array
@@ -56,7 +63,11 @@ impl TypeSerializer for BooleanSerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+    fn serialize_json(
+        &self,
+        column: &ColumnRef,
+        _format: Arc<FormatSettings>,
+    ) -> Result<Vec<Value>> {
         let array: &BooleanColumn = Series::check_get(column)?;
         let result: Vec<Value> = array
             .iter()
@@ -68,6 +79,7 @@ impl TypeSerializer for BooleanSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
+        _format: Arc<FormatSettings>,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let col: &BooleanColumn = Series::check_get(column)?;
         let values: Vec<u8> = col.iter().map(|c| c as u8).collect();
@@ -78,13 +90,15 @@ impl TypeSerializer for BooleanSerializer {
         &self,
         column: &ColumnRef,
         _valids: Option<&Bitmap>,
+        format: Arc<FormatSettings>,
     ) -> Result<Vec<Value>> {
-        self.serialize_json(column)
+        self.serialize_json(column, format)
     }
 
     fn serialize_json_object_suppress_error(
         &self,
         column: &ColumnRef,
+        _format: Arc<FormatSettings>,
     ) -> Result<Vec<Option<Value>>> {
         let column: &BooleanColumn = Series::check_get(column)?;
         let result: Vec<Option<Value>> = column

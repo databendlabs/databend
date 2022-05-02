@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
@@ -144,12 +145,13 @@ fn test_serializers() -> Result<()> {
         },
     ];
 
+    let format = Arc::new(FormatSettings::default());
     for test in tests {
         let serializer = test.data_type.create_serializer();
-        let val_res = serializer.serialize_value(&test.value)?;
+        let val_res = serializer.serialize_value(&test.value, format.clone())?;
         assert_eq!(&val_res, test.val_str, "case: {:#?}", test.name);
 
-        let col_res = serializer.serialize_column(&test.column)?;
+        let col_res = serializer.serialize_column(&test.column, format.clone())?;
         assert_eq!(col_res, test.col_str, "case: {:#?}", test.name);
     }
 
@@ -175,7 +177,7 @@ fn test_serializers() -> Result<()> {
             DataValue::Boolean(true),
             DataValue::UInt64(18869),
         ]);
-        let result = serializer.serialize_value(&value)?;
+        let result = serializer.serialize_value(&value, format.clone())?;
         let expect = "(1.2, 'hello', 1, '2021-08-30')";
         assert_eq!(&result, expect);
     }

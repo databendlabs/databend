@@ -26,6 +26,7 @@ pub struct FormatSettings {
     pub empty_as_default: bool,
     pub skip_header: bool,
     pub compression: Compression,
+    pub timezone: Vec<u8>,
 }
 
 impl Default for FormatSettings {
@@ -36,6 +37,7 @@ impl Default for FormatSettings {
             empty_as_default: false,
             skip_header: false,
             compression: Compression::None,
+            timezone: vec![b'U', b'T', b'C'],
         }
     }
 }

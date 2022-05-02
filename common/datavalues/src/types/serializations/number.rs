@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_io::prelude::Marshal;
 use common_io::prelude::Unmarshal;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
@@ -49,17 +51,25 @@ where T: PrimitiveType
         + opensrv_clickhouse::io::Marshal
         + opensrv_clickhouse::io::Unmarshal<T>
 {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, _format: Arc<FormatSettings>) -> Result<String> {
         Ok(format!("{:?}", value))
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+    fn serialize_column(
+        &self,
+        column: &ColumnRef,
+        _format: Arc<FormatSettings>,
+    ) -> Result<Vec<String>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<String> = column.iter().map(|x| format!("{}", x)).collect();
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+    fn serialize_json(
+        &self,
+        column: &ColumnRef,
+        _format: Arc<FormatSettings>,
+    ) -> Result<Vec<Value>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Value> = column
             .iter()
@@ -71,6 +81,7 @@ where T: PrimitiveType
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
+        _format: Arc<FormatSettings>,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let col: &PrimitiveColumn<T> = Series::check_get(column)?;
         let values: Vec<T> = col.iter().map(|c| c.to_owned()).collect();
@@ -81,13 +92,15 @@ where T: PrimitiveType
         &self,
         column: &ColumnRef,
         _valids: Option<&Bitmap>,
+        format: Arc<FormatSettings>,
     ) -> Result<Vec<Value>> {
-        self.serialize_json(column)
+        self.serialize_json(column, format)
     }
 
     fn serialize_json_object_suppress_error(
         &self,
         column: &ColumnRef,
+        _format: Arc<FormatSettings>,
     ) -> Result<Vec<Option<Value>>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Option<Value>> = column
