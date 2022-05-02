@@ -60,7 +60,7 @@ impl Binder {
         // Output of current `SELECT` statement.
         let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
 
-        self.analyze_aggregate(&stmt.having, &output_context, &mut input_context)?;
+        self.analyze_aggregate(&output_context, &mut input_context)?;
 
         if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
         {

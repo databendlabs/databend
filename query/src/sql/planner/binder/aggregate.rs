@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::scalar::ScalarBinder;
-use crate::sql::binder::scalar_common::find_aggregate_scalars;
 use crate::sql::binder::scalar_common::find_aggregate_scalars_from_bind_context;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::SExpr;
@@ -31,23 +30,10 @@ use crate::sql::ScalarExprRef;
 impl Binder {
     pub(crate) fn analyze_aggregate(
         &self,
-        expr: &Option<Expr>,
         output_context: &BindContext,
         input_context: &mut BindContext,
     ) -> Result<()> {
         let mut agg_expr: Vec<ScalarExprRef> = Vec::new();
-        let mut agg_scalars = find_aggregate_scalars_from_bind_context(output_context)?;
-        if let Some(e) = expr {
-            let scalar_binder = ScalarBinder::new();
-            let scalar = scalar_binder.bind_expr(e, input_context)?;
-            agg_scalars.extend_from_slice(
-                find_aggregate_scalars(&[scalar
-                    .as_any()
-                    .downcast_ref::<Scalar>()
-                    .ok_or_else(|| ErrorCode::UnImplement("Can't downcast to Scalar"))?])
-                .as_slice(),
-            );
-        }
         for agg_scalar in find_aggregate_scalars_from_bind_context(output_context)? {
             match agg_scalar {
                 Scalar::AggregateFunction {
