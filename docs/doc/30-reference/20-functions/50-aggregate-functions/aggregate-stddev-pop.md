@@ -1,5 +1,6 @@
 ---
 title: STDDEV_POP
+title_includes: STD, STDDEV
 ---
 
 Aggregate function.

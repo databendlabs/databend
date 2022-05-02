@@ -1,5 +1,6 @@
 ---
 title: SIPHASH
+title_includes: SIPHASH, SIPHASH64
 ---
 
 Produces a 64-bit [SipHash](https://131002.net/siphash) hash value.
@@ -53,5 +54,12 @@ SELECT SIPHASH(number) FROM numbers(2);
 | 13646096770106105413 |
 |  2206609067086327257 |
 +----------------------+
+
+SELECT SIPHASH64('1234567890');
++-------------------------+
+| SIPHASH64('1234567890') |
++-------------------------+
+|    18110648197875983073 |
++-------------------------+
 
 ```
