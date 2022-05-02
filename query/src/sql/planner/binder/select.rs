@@ -30,6 +30,7 @@ use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::plans::FilterPlan;
+use crate::sql::plans::HavingPlan;
 use crate::sql::plans::LogicalGet;
 use crate::sql::IndexType;
 use crate::storages::Table;
@@ -59,11 +60,16 @@ impl Binder {
         // Output of current `SELECT` statement.
         let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
 
-        self.analyze_aggregate(&output_context, &mut input_context)?;
+        self.analyze_aggregate(&stmt.having, &output_context, &mut input_context)?;
 
         if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
         {
             self.bind_group_by(&stmt.group_by, &mut input_context)?;
+            output_context.expression = input_context.expression.clone();
+        }
+
+        if let Some(expr) = &stmt.having {
+            self.bind_having(expr, &mut input_context)?;
             output_context.expression = input_context.expression.clone();
         }
 
@@ -147,6 +153,20 @@ impl Binder {
         let filter_plan = FilterPlan { predicate: scalar };
         let new_expr =
             SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
+        bind_context.expression = Some(new_expr);
+        Ok(())
+    }
+
+    pub(super) fn bind_having(
+        &mut self,
+        expr: &Expr,
+        bind_context: &mut BindContext,
+    ) -> Result<()> {
+        let scalar_binder = ScalarBinder::new();
+        let scalar = scalar_binder.bind_expr(expr, bind_context)?;
+        let having_plan = HavingPlan { predicate: scalar };
+        let new_expr =
+            SExpr::create_unary(having_plan.into(), bind_context.expression.clone().unwrap());
         bind_context.expression = Some(new_expr);
         Ok(())
     }

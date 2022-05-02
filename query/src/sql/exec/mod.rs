@@ -34,6 +34,7 @@ use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
+use crate::pipelines::new::processors::TransformHaving;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
@@ -42,6 +43,7 @@ use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::FilterPlan;
+use crate::sql::plans::HavingPlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
@@ -146,6 +148,11 @@ impl PipelineBuilder {
                 let aggregate: AggregatePlan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
                 self.build_aggregate(&aggregate, input_schema)
+            }
+            PlanType::Having => {
+                let having: HavingPlan = plan.try_into()?;
+                let input_schema = self.build_pipeline(&expression.children()[0])?;
+                self.build_having(&having, input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -316,5 +323,51 @@ impl PipelineBuilder {
             })?;
 
         Ok(final_schema)
+    }
+
+    fn build_having(
+        &mut self,
+        having: &HavingPlan,
+        input_schema: DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let output_schema = input_schema.clone();
+        let expr_builder = ExpressionBuilder::create(&self.metadata);
+        let scalar = having.predicate.as_any().downcast_ref::<Scalar>().unwrap();
+        let mut predicate = expr_builder.build(scalar)?;
+        predicate = self.normalize_aggr_to_col(predicate)?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformHaving::try_create(
+                    input_schema.clone(),
+                    predicate.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    self.ctx.clone(),
+                )
+            })?;
+        Ok(output_schema)
+    }
+
+    // Transform aggregator expression to column expression
+    fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
+        match expr.clone() {
+            Expression::BinaryExpression { left, op, right } => {
+                return Ok(Expression::BinaryExpression {
+                    left: Box::new(self.normalize_aggr_to_col(*left)?),
+                    op,
+                    right: Box::new(self.normalize_aggr_to_col(*right)?),
+                })
+            }
+            Expression::AggregateFunction { .. } => {
+                let col_name = expr.column_name();
+                let idx = self.metadata.column_idx_by_column_name(col_name.as_str())?;
+                return Ok(Expression::Column(format_field_name(
+                    col_name.as_str(),
+                    idx,
+                )));
+            }
+            _ => {}
+        }
+        Ok(expr)
     }
 }
