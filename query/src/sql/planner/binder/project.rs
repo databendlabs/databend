@@ -115,8 +115,7 @@ impl Binder {
 
                     // If expr is a ColumnRef, then it's a pass-through column. There is no need to
                     // generate a new ColumnEntry for it.
-                    let column_binding = match bound_expr.as_any().downcast_ref::<Scalar>().unwrap()
-                    {
+                    let column_binding = match bound_expr.safe_cast_to_scalar()? {
                         Scalar::ColumnRef {
                             index,
                             data_type,

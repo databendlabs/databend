@@ -47,7 +47,6 @@ use crate::sql::plans::HavingPlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
-use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
 
@@ -168,7 +167,7 @@ impl PipelineBuilder {
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for expr in project.items.iter() {
-            let scalar = expr.expr.as_any().downcast_ref::<Scalar>().unwrap();
+            let scalar = expr.expr.safe_cast_to_scalar()?;
             let expression = expr_builder.build(scalar)?;
             expressions.push(match expression {
                 Expression::Column(_) => expression.clone(),
@@ -201,7 +200,7 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let output_schema = input_schema.clone();
         let eb = ExpressionBuilder::create(&self.metadata);
-        let scalar = filter.predicate.as_any().downcast_ref::<Scalar>().unwrap();
+        let scalar = filter.predicate.safe_cast_to_scalar()?;
         let pred = eb.build(scalar)?;
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
@@ -261,7 +260,7 @@ impl PipelineBuilder {
         let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for scalar_expr in aggregate.agg_expr.iter() {
-            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+            let scalar = scalar_expr.safe_cast_to_scalar()?;
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
@@ -273,7 +272,7 @@ impl PipelineBuilder {
 
         let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
         for scalar_expr in aggregate.group_expr.iter() {
-            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+            let scalar = scalar_expr.safe_cast_to_scalar()?;
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
         }
@@ -332,7 +331,7 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let output_schema = input_schema.clone();
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        let scalar = having.predicate.as_any().downcast_ref::<Scalar>().unwrap();
+        let scalar = having.predicate.safe_cast_to_scalar()?;
         let mut predicate = expr_builder.build(scalar)?;
         predicate = self.normalize_aggr_to_col(predicate)?;
         self.pipeline

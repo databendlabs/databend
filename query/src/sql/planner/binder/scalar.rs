@@ -112,20 +112,12 @@ impl ScalarBinder {
         let right_scalar = self.bind_expr(right_child, bind_context)?;
         match op {
             BinaryOperator::Eq => Ok(Arc::new(Scalar::Equal {
-                left: Box::from(
-                    left_scalar
-                        .as_any()
-                        .downcast_ref::<Scalar>()
-                        .ok_or_else(|| ErrorCode::UnImplement("Can't downcast to Scalar"))?
-                        .clone(),
-                ),
-                right: Box::from(
-                    right_scalar
-                        .as_any()
-                        .downcast_ref::<Scalar>()
-                        .ok_or_else(|| ErrorCode::UnImplement("Can't downcast to Scalar"))?
-                        .clone(),
-                ),
+                left: Box::from(left_scalar.safe_cast_to_scalar()?.clone()),
+                right: Box::from(right_scalar.safe_cast_to_scalar()?.clone()),
+            })),
+            BinaryOperator::Plus => Ok(Arc::new(Scalar::Plus {
+                left: Box::new(left_scalar.safe_cast_to_scalar()?.clone()),
+                right: Box::new(right_scalar.safe_cast_to_scalar()?.clone()),
             })),
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported binary operator: {op}",
@@ -220,4 +212,12 @@ pub trait ScalarExpr: Any {
     fn contains_subquery(&self) -> bool;
 
     fn as_any(&self) -> &dyn Any;
+}
+
+impl dyn ScalarExpr {
+    pub fn safe_cast_to_scalar(&self) -> Result<&Scalar> {
+        self.as_any()
+            .downcast_ref::<Scalar>()
+            .ok_or_else(|| ErrorCode::UnImplement("Can't downcast to Scalar"))
+    }
 }

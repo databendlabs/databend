@@ -35,6 +35,10 @@ pub enum Scalar {
         left: Box<Scalar>,
         right: Box<Scalar>,
     },
+    Plus {
+        left: Box<Scalar>,
+        right: Box<Scalar>,
+    },
     AggregateFunction {
         func_name: String,
         distinct: bool,
@@ -53,7 +57,7 @@ impl ScalarExpr for Scalar {
                 nullable,
                 ..
             } => (data_type.clone(), *nullable),
-            Scalar::Equal { .. } => (BooleanType::new_impl(), false),
+            Scalar::Equal { .. } | Scalar::Plus { .. } => (BooleanType::new_impl(), false),
             Scalar::AggregateFunction {
                 data_type,
                 nullable,

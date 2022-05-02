@@ -51,10 +51,11 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Scalar::Equal { left, right } => {
+                                Scalar::Equal { left, right } | Scalar::Plus { left, right } => {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
                                 }
+
                                 Scalar::ColumnRef { .. } | Scalar::Literal { .. } => {}
                             };
 

@@ -37,6 +37,9 @@ impl<'a> ExpressionBuilder<'a> {
             Scalar::Equal { left, right } => {
                 self.build_binary_operator(left, right, "=".to_string())
             }
+            Scalar::Plus { left, right } => {
+                self.build_binary_operator(left, right, "+".to_string())
+            }
             Scalar::AggregateFunction {
                 func_name,
                 distinct,
