@@ -18,7 +18,6 @@ use serde::Serialize;
 pub struct FunctionFeatures {
     pub is_deterministic: bool,
     pub negative_function_name: Option<String>,
-    pub is_bool_func: bool,
     pub is_context_func: bool,
     pub maybe_monotonic: bool,
 
@@ -44,7 +43,6 @@ impl FunctionFeatures {
         FunctionFeatures {
             is_deterministic: false,
             negative_function_name: None,
-            is_bool_func: false,
             is_context_func: false,
             maybe_monotonic: false,
             passthrough_null: true,
@@ -60,11 +58,6 @@ impl FunctionFeatures {
 
     pub fn negative_function(mut self, negative_name: &str) -> FunctionFeatures {
         self.negative_function_name = Some(negative_name.to_string());
-        self
-    }
-
-    pub fn bool_function(mut self) -> FunctionFeatures {
-        self.is_bool_func = true;
         self
     }
 

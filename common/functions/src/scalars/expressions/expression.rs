@@ -32,7 +32,6 @@ impl ToCastFunction {
 
         // TODO(zhyass): complete DateTime
         features = match type_name {
-            "Boolean" => features.num_arguments(1).bool_function(),
             "Timestamp" | "DateTime" => features.variadic_arguments(1, 3),
             _ => features.num_arguments(1),
         };
