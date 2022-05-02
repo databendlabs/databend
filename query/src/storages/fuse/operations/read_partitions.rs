@@ -45,7 +45,7 @@ impl FuseTable {
                 }
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
-                    .apply(schema, &push_downs, ctx.as_ref())
+                    .apply(ctx.as_ref(), schema, &push_downs)
                     .await?;
 
                 let partitions_scanned = block_metas.len();

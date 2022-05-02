@@ -81,12 +81,12 @@ impl ConstantFoldingImpl {
         let output_fields = vec![expr.to_data_field(schema)?];
         let output_schema = DataSchemaRefExt::create(output_fields);
         ExpressionExecutor::try_create(
+            ctx,
             "Constant folding optimizer.",
             schema.clone(),
             output_schema,
             vec![expr],
             false,
-            ctx,
         )
     }
 

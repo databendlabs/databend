@@ -82,19 +82,18 @@ impl Binder {
                 let database = database
                     .as_ref()
                     .map(|ident| ident.name.clone())
-                    .unwrap_or_else(|| self.context.get_current_database());
+                    .unwrap_or_else(|| self.ctx.get_current_database());
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
-                let tenant = self.context.get_tenant();
+                let tenant = self.ctx.get_tenant();
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
                     .resolve_data_source(tenant.as_str(), database.as_str(), table.as_str())
                     .await?;
-                let (statistics, parts) = table_meta
-                    .read_partitions(self.context.clone(), None)
-                    .await?;
+                let (statistics, parts) =
+                    table_meta.read_partitions(self.ctx.clone(), None).await?;
                 let source = ReadDataSourcePlan {
                     source_info: SourceInfo::TableSource(table_meta.get_table_info().clone()),
                     scan_fields: None,

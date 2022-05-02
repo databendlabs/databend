@@ -105,7 +105,7 @@ impl BloomFilterIndexer {
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     #[allow(dead_code)]
-    pub fn try_create(source_data_blocks: &[DataBlock], ctx: Arc<QueryContext>) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[DataBlock]) -> Result<Self> {
         let seed = Self::create_seed();
         Self::try_create_with_seed(source_data_blocks, seed, ctx)
     }
@@ -513,12 +513,12 @@ impl BloomFilter {
             Box::new(Expression::create_scalar_function("city64WithSeed", args)),
         );
         let expr_executor = ExpressionExecutor::try_create(
+            ctx,
             "calculate cityhash64",
             input_schema.clone(),
             output_schema,
             vec![expr],
             true,
-            ctx,
         )?;
 
         let data_block = DataBlock::create(input_schema, vec![column.clone()]);

@@ -221,10 +221,10 @@ impl DatabendQueryFlightDispatcher {
         let stages_notify = self.stages_notify.clone();
 
         let flight_scatter = T::try_create(
+            query_context.clone(),
             action.get_plan().schema(),
             action.get_scatter_expression(),
             action.get_sinks().len(),
-            query_context.clone(),
         )?;
 
         query_context.try_spawn(

@@ -41,9 +41,9 @@ pub struct FilterTransform<const HAVING: bool> {
 
 impl<const HAVING: bool> FilterTransform<HAVING> {
     pub fn try_create(
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         predicate: Expression,
-        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let predicate_executor = Self::expr_executor(&schema, &predicate, ctx)?;
         predicate_executor.validate()?;
@@ -64,12 +64,12 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
         let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
         ExpressionExecutor::try_create(
+            ctx,
             "filter expression executor",
             schema.clone(),
             expr_schema,
             vec![expr.clone()],
             false,
-            ctx,
         )
     }
 
