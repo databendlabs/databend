@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::backtrace::Backtrace;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use backtrace::Backtrace;
-
 use crate::exception::ErrorCodeBacktrace;
-use crate::exception_code::ENABLE_BACKTRACE;
 use crate::ErrorCode;
 
 #[derive(thiserror::Error)]
@@ -56,9 +54,7 @@ impl From<anyhow::Error> for ErrorCode {
             1002,
             format!("{}, source: {:?}", error, error.source()),
             Some(Box::new(OtherErrors::AnyHow { error })),
-            ENABLE_BACKTRACE
-                .with(|v| v.get())
-                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
         )
     }
 }
@@ -69,9 +65,7 @@ impl From<&str> for ErrorCode {
             1002,
             error.to_string(),
             None,
-            ENABLE_BACKTRACE
-                .with(|v| v.get())
-                .then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
         )
     }
 }
