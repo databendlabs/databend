@@ -88,12 +88,12 @@ async fn execute(
             interpreter.execute(input_stream).await?
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
-
+    let format = ctx.get_format_settings()?;
     let stream = stream! {
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield(block_to_tsv(&block))
+                    yield(block_to_tsv(&block, &format))
                 },
                 Err(err) => yield(Err(err)),
             };

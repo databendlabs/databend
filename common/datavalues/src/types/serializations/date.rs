@@ -13,7 +13,7 @@
 // limitations under the License.
 use std::marker::PhantomData;
 use std::ops::AddAssign;
-use std::sync::Arc;
+
 
 use chrono::Date;
 use chrono::Duration;
@@ -44,7 +44,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> Default for DateSerializer<T> {
 const DATE_FMT: &str = "%Y-%m-%d";
 
 impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
-    fn serialize_value(&self, value: &DataValue, _format: Arc<FormatSettings>) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
         let mut date = NaiveDate::from_ymd(1970, 1, 1);
         let d = Duration::days(value.as_i64()?);
         date.add_assign(d);
@@ -54,7 +54,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
     fn serialize_column(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<String>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
 
@@ -73,7 +73,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
     fn serialize_json(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Value> = array
@@ -92,7 +92,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let tz: Tz = "UTC".parse().unwrap();

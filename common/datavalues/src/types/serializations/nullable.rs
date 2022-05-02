@@ -33,7 +33,7 @@ pub struct NullableSerializer {
 }
 
 impl TypeSerializer for NullableSerializer {
-    fn serialize_value(&self, value: &DataValue, format: Arc<FormatSettings>) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
         if value.is_null() {
             Ok("NULL".to_owned())
         } else {
@@ -44,7 +44,7 @@ impl TypeSerializer for NullableSerializer {
     fn serialize_column(
         &self,
         column: &ColumnRef,
-        format: Arc<FormatSettings>,
+        format: &FormatSettings,
     ) -> Result<Vec<String>> {
         let column: &NullableColumn = Series::check_get(column)?;
         let rows = column.len();
@@ -61,7 +61,7 @@ impl TypeSerializer for NullableSerializer {
     fn serialize_json(
         &self,
         column: &ColumnRef,
-        format: Arc<FormatSettings>,
+        format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         let column: &NullableColumn = Series::check_get(column)?;
         let rows = column.len();
@@ -78,7 +78,7 @@ impl TypeSerializer for NullableSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-        format: Arc<FormatSettings>,
+        format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let column: &NullableColumn = Series::check_get(column)?;
         let inner = self

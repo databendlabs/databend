@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_io::prelude::FormatSettings;
 use hyper::StatusCode;
 use poem::error::Result as PoemResult;
 use poem::post;
@@ -53,10 +54,12 @@ pub async fn statement_handler(
     let query = http_query_manager
         .try_create_query(&query_id, ctx, req)
         .await;
+        // TODO(veeupup): get query_ctx's format_settings here
+        let format = FormatSettings::default();
     match query {
         Ok(query) => {
             let resp = query
-                .get_response_page(0)
+                .get_response_page(0, &format)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             http_query_manager.remove_query(&query_id).await;

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_io::prelude::FormatSettings;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -39,7 +40,7 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(block: &DataBlock) -> Result<Self> {
+    pub fn new(block: &DataBlock, format: &FormatSettings) -> Result<Self> {
         let mut col_table = Vec::new();
         let columns_size = block.columns().len();
         for col_index in 0..columns_size {
@@ -48,7 +49,7 @@ impl JsonBlock {
             let field = block.schema().field(col_index);
             let data_type = field.data_type();
             let serializer = data_type.create_serializer();
-            col_table.push(serializer.serialize_json(&column).map_err(|e| {
+            col_table.push(serializer.serialize_json(&column, format).map_err(|e| {
                 ErrorCode::UnexpectedError(format!(
                     "fail to serialize filed {}, error = {}",
                     field.name(),

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use common_io::prelude::FormatSettings;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::Mutex as TokioMutex;
 use common_base::tokio::sync::RwLock;
@@ -175,9 +176,9 @@ impl HttpQuery {
         self.request.pagination.wait_time_secs == 0
     }
 
-    pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
+    pub async fn get_response_page(&self, page_no: usize, format: &FormatSettings) -> Result<HttpQueryResponseInternal> {
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no).await?),
+            data: Some(self.get_page(page_no, format).await?),
             session_id: self.session_id.clone(),
             state: self.get_state().await,
         })
@@ -202,10 +203,10 @@ impl HttpQuery {
         }
     }
 
-    async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
+    async fn get_page(&self, page_no: usize, format: &FormatSettings) -> Result<ResponseData> {
         let mut data = self.data.lock().await;
         let page = data
-            .get_a_page(page_no, &self.request.pagination.get_wait_type())
+            .get_a_page(page_no, &self.request.pagination.get_wait_type(), format)
             .await?;
         let response = ResponseData {
             page,

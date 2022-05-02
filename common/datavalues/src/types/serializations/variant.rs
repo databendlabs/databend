@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
@@ -29,7 +29,7 @@ use crate::prelude::*;
 pub struct VariantSerializer {}
 
 impl TypeSerializer for VariantSerializer {
-    fn serialize_value(&self, value: &DataValue, _format: Arc<FormatSettings>) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
         if let DataValue::Variant(v) = value {
             Ok(v.to_string())
         } else {
@@ -40,7 +40,7 @@ impl TypeSerializer for VariantSerializer {
     fn serialize_column(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<String>> {
         let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<String> = column.iter().map(|v| v.to_string()).collect();
@@ -50,7 +50,7 @@ impl TypeSerializer for VariantSerializer {
     fn serialize_json(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<Value> = column.iter().map(|v| v.as_ref().to_owned()).collect();
@@ -60,7 +60,7 @@ impl TypeSerializer for VariantSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let column: &VariantColumn = Series::check_get(column)?;
         let values: Vec<String> = column.iter().map(|v| v.to_string()).collect();
@@ -72,7 +72,7 @@ impl TypeSerializer for VariantSerializer {
         &self,
         column: &ColumnRef,
         valids: Option<&Bitmap>,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         let column: &VariantColumn = Series::check_get(column)?;
         let mut result: Vec<Value> = Vec::new();
@@ -102,7 +102,7 @@ impl TypeSerializer for VariantSerializer {
     fn serialize_json_object_suppress_error(
         &self,
         column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
         let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<Option<Value>> = column

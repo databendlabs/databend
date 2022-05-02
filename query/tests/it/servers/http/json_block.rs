@@ -67,8 +67,8 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     } else {
         block
     };
-
-    let json_block = JsonBlock::new(&block)?;
+    let format = FormatSettings::default();
+    let json_block = JsonBlock::new(&block, &format)?;
     let expect = vec![
         vec![val(1), val("a"), val(true), val(1.1), val("1970-01-02")],
         vec![val(2), val("b"), val(true), val(2.2), val("1970-01-03")],

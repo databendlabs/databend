@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 
+use common_io::prelude::FormatSettings;
 use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -46,11 +47,11 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    pub async fn write(&mut self, receiver: Result<Receiver<BlockItem>>) -> Result<()> {
+    pub async fn write(&mut self, receiver: Result<Receiver<BlockItem>>, format: &FormatSettings) -> Result<()> {
         match receiver {
             Err(error) => self.write_error(error).await,
             Ok(receiver) => {
-                let write_data = self.write_data(receiver);
+                let write_data = self.write_data(receiver, format);
                 write_data.await
             }
         }
@@ -85,8 +86,8 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    async fn write_block(&mut self, block: DataBlock) -> Result<()> {
-        let block = to_clickhouse_block(block)?;
+    async fn write_block(&mut self, block: DataBlock, format: &FormatSettings) -> Result<()> {
+        let block = to_clickhouse_block(block, format)?;
 
         match self.conn.write_block(&block).await {
             Ok(_) => Ok(()),
@@ -94,7 +95,7 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    async fn write_data(&mut self, mut receiver: Receiver<BlockItem>) -> Result<()> {
+    async fn write_data(&mut self, mut receiver: Receiver<BlockItem>, format: &FormatSettings) -> Result<()> {
         loop {
             match receiver.next().await {
                 None => {
@@ -106,13 +107,13 @@ impl<'a> QueryWriter<'a> {
                     return Ok(());
                 }
                 Some(BlockItem::Block(Ok(block))) => {
-                    self.write_block(block).await?;
+                    self.write_block(block, format).await?;
                 }
                 Some(BlockItem::InsertSample(block)) => {
                     let schema = block.schema();
                     let header = DataBlock::empty_with_schema(schema.clone());
 
-                    self.write_block(header).await?;
+                    self.write_block(header, format).await?;
                 }
             }
         }
@@ -132,7 +133,7 @@ pub fn from_clickhouse_err(res: opensrv_clickhouse::errors::Error) -> ErrorCode 
     ErrorCode::LogicalError(format!("clickhouse-srv expception: {:?}", res))
 }
 
-pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
+pub fn to_clickhouse_block(block: DataBlock, format: &FormatSettings) -> Result<Block> {
     let mut result = Block::new();
     if block.num_columns() == 0 {
         return Ok(result);
@@ -145,7 +146,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         let serializer = field.data_type().create_serializer();
         result.append_column(column::new_column(
             name,
-            serializer.serialize_clickhouse_format(&column.convert_full_column())?,
+            serializer.serialize_clickhouse_format(&column.convert_full_column(), format)?,
         ));
     }
     Ok(result)

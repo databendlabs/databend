@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,7 +28,7 @@ pub struct ArraySerializer {
 }
 
 impl TypeSerializer for ArraySerializer {
-    fn serialize_value(&self, value: &DataValue, format: Arc<FormatSettings>) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
         if let DataValue::Array(vals) = value {
             let mut res = String::new();
             res.push('[');
@@ -40,7 +40,7 @@ impl TypeSerializer for ArraySerializer {
                 }
                 first = false;
 
-                let s = self.inner.serialize_value(val, format.clone())?;
+                let s = self.inner.serialize_value(val, format)?;
                 if quoted {
                     res.push_str(&format!("'{}'", s));
                 } else {
@@ -57,13 +57,13 @@ impl TypeSerializer for ArraySerializer {
     fn serialize_column(
         &self,
         column: &ColumnRef,
-        format: Arc<FormatSettings>,
+        format: &FormatSettings,
     ) -> Result<Vec<String>> {
         let column: &ArrayColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
             let val = column.get(i);
-            let s = self.serialize_value(&val, format.clone())?;
+            let s = self.serialize_value(&val, format)?;
             result.push(s);
         }
         Ok(result)
@@ -72,7 +72,7 @@ impl TypeSerializer for ArraySerializer {
     fn serialize_json(
         &self,
         _column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         todo!()
     }
@@ -80,7 +80,7 @@ impl TypeSerializer for ArraySerializer {
     fn serialize_clickhouse_format(
         &self,
         _column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         todo!()
     }

@@ -145,13 +145,13 @@ fn test_serializers() -> Result<()> {
         },
     ];
 
-    let format = Arc::new(FormatSettings::default());
+    let format = FormatSettings::default();
     for test in tests {
         let serializer = test.data_type.create_serializer();
-        let val_res = serializer.serialize_value(&test.value, format.clone())?;
+        let val_res = serializer.serialize_value(&test.value, &format)?;
         assert_eq!(&val_res, test.val_str, "case: {:#?}", test.name);
 
-        let col_res = serializer.serialize_column(&test.column, format.clone())?;
+        let col_res = serializer.serialize_column(&test.column, &format)?;
         assert_eq!(col_res, test.col_str, "case: {:#?}", test.name);
     }
 
@@ -177,7 +177,7 @@ fn test_serializers() -> Result<()> {
             DataValue::Boolean(true),
             DataValue::UInt64(18869),
         ]);
-        let result = serializer.serialize_value(&value, format.clone())?;
+        let result = serializer.serialize_value(&value, &format)?;
         let expect = "(1.2, 'hello', 1, '2021-08-30')";
         assert_eq!(&result, expect);
     }

@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use common_io::prelude::FormatSettings;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -83,7 +84,9 @@ impl Function for JsonExtractPathTextFunction {
 
         let mut builder = ColumnBuilder::<VariantValue>::with_capacity(input_rows);
         let serializer = data_type.create_serializer();
-        match serializer.serialize_json_object(columns[0].column(), None) {
+        // TODO(veeupup): check if we can use default format_settings
+        let format = FormatSettings::default();
+        match serializer.serialize_json_object(columns[0].column(), None, &format) {
             Ok(values) => {
                 for v in values {
                     builder.append(&VariantValue::from(v));

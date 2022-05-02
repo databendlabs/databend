@@ -14,6 +14,7 @@
 
 use std::time::Instant;
 
+use common_io::prelude::FormatSettings;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::error::TryRecvError;
@@ -71,10 +72,10 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
+    pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait, format: &FormatSettings) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
-            let (block, end) = self.collect_new_page(tp).await?;
+            let (block, end) = self.collect_new_page(tp, format).await?;
             let num_row = block.num_rows();
             self.total_rows += num_row;
             let page = Page {
@@ -120,7 +121,7 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
+    pub async fn collect_new_page(&mut self, tp: &Wait, format: &FormatSettings) -> Result<(JsonBlock, bool)> {
         let mut results: Vec<JsonBlock> = Vec::new();
         let mut rows = 0;
         let block_rx = &mut self.block_rx;
@@ -130,7 +131,7 @@ impl ResultDataManager {
             match ResultDataManager::receive(block_rx, tp).await {
                 Ok(block) => {
                     rows += block.num_rows();
-                    results.push(JsonBlock::new(&block)?);
+                    results.push(JsonBlock::new(&block, format)?);
                     // TODO(youngsofun):  set it in post if needed
                     if rows >= TARGET_ROWS_PER_PAGE {
                         break;

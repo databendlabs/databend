@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_io::prelude::FormatSettings;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::compute::cast;
@@ -201,7 +202,9 @@ pub fn cast_to_variant(
     let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
         let serializer = from_type.create_serializer();
-        match serializer.serialize_json_object(&column, None) {
+        // TODO(veeupup): check if we can use default format_settings
+        let format = FormatSettings::default();
+        match serializer.serialize_json_object(&column, None, &format) {
             Ok(values) => {
                 for v in values {
                     builder.append(&VariantValue::from(v));

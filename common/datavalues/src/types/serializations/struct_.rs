@@ -32,7 +32,7 @@ pub struct StructSerializer {
 }
 
 impl TypeSerializer for StructSerializer {
-    fn serialize_value(&self, value: &DataValue, format: Arc<FormatSettings>) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String> {
         if let DataValue::Struct(vals) = value {
             let mut res = String::new();
             res.push('(');
@@ -44,7 +44,7 @@ impl TypeSerializer for StructSerializer {
                 }
                 first = false;
 
-                let s = inner.serialize_value(val, format.clone())?;
+                let s = inner.serialize_value(val, format)?;
                 if typ.data_type_id().is_quoted() {
                     res.push_str(&format!("'{}'", s));
                 } else {
@@ -61,13 +61,13 @@ impl TypeSerializer for StructSerializer {
     fn serialize_column(
         &self,
         column: &ColumnRef,
-        format: Arc<FormatSettings>,
+        format: &FormatSettings,
     ) -> Result<Vec<String>> {
         let column: &StructColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
             let val = column.get(i);
-            let s = self.serialize_value(&val, format.clone())?;
+            let s = self.serialize_value(&val, format)?;
             result.push(s);
         }
         Ok(result)
@@ -76,7 +76,7 @@ impl TypeSerializer for StructSerializer {
     fn serialize_json(
         &self,
         _column: &ColumnRef,
-        _format: Arc<FormatSettings>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         todo!()
     }
@@ -84,14 +84,14 @@ impl TypeSerializer for StructSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-        format: Arc<FormatSettings>,
+        format: &FormatSettings,
     ) -> Result<ArcColumnData> {
         let column: &StructColumn = Series::check_get(column)?;
         let result = self
             .inners
             .iter()
             .zip(column.values().iter())
-            .map(|(inner, col)| inner.serialize_clickhouse_format(col, format.clone()))
+            .map(|(inner, col)| inner.serialize_clickhouse_format(col, format))
             .collect::<Result<Vec<ArcColumnData>>>()?;
 
         let data = TupleColumnData { inner: result };
