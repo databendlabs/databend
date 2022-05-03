@@ -7,14 +7,14 @@ Converts a date or date with time to a UInt8 number containing the number of the
 ## Syntax
 
 ```sql
-toDayOfMonth(expr)
+toDayOfMonth( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date32/date64/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
 `UInt8` datatype.

@@ -7,16 +7,17 @@ Converts a date or date with time to a UInt16 number containing the number of th
 ## Syntax
 
 ```sql
-toDayOfYear(expr)
+toDayOfYear( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
+
 A `UInt16` number datatype.
 
 ## Examples

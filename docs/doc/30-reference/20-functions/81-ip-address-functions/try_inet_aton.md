@@ -23,7 +23,7 @@ An integer.
 ## Examples
 
 ```sql
-mysql> SELECT TRY_INET_ATON('10.0.5.9');
+SELECT TRY_INET_ATON('10.0.5.9');
 +---------------------------+
 | TRY_INET_ATON('10.0.5.9') |
 +---------------------------+

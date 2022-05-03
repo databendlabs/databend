@@ -1,5 +1,5 @@
 ---
-title: exists
+title: EXISTS
 ---
 
 The exists condition is used in combination with a subquery and is considered "to be met" if the subquery returns at least one row.
@@ -7,12 +7,12 @@ The exists condition is used in combination with a subquery and is considered "t
 ## Syntax
 
 ```sql
-where exists ( subquery );
+WHERE EXISTS ( <subquery> );
 ```
 
 ## Examples
 ```sql
-MySQL [(none)]> select number from numbers(5) as A where exists (select * from numbers(3) where number=1); 
+SELECT number FROM numbers(5) AS A WHERE exists (SELECT * FROM numbers(3) WHERE number=1); 
 +--------+
 | number |
 +--------+
@@ -23,8 +23,3 @@ MySQL [(none)]> select number from numbers(5) as A where exists (select * from n
 |      4 |
 +--------+
 ```
-```sql
-MySQL [(none)]> select number from numbers(5) as A where exists (select * from numbers(3) where number=4); 
-Query OK, 0 rows affected (0.04 sec)
-```
-

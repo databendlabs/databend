@@ -8,16 +8,17 @@ Returns the date.
 ## Syntax
 
 ```sql
-toMonday(expr)
+toMonday( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
+
 `UInt16` datatype.
 
 ## Examples

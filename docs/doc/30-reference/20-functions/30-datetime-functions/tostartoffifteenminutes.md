@@ -6,16 +6,17 @@ Rounds down the date with time to the start of the fifteen-minute interval.
 ## Syntax
 
 ```sql
-toStartOfFifteenMinutes(expr)
+toStartOfFifteenMinutes( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| `<expr>` | datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 
 ## Examples
