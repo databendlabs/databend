@@ -58,14 +58,19 @@ impl Binder {
     }
 
     pub async fn bind<'a>(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
-        let bind_context = self.bind_statement(stmt).await?;
+        let init_bind_context = BindContext::create();
+        let bind_context = self.bind_statement(stmt, &init_bind_context).await?;
         Ok(BindResult::create(bind_context, self.metadata))
     }
 
-    async fn bind_statement<'a>(&mut self, stmt: &Statement<'a>) -> Result<BindContext> {
+    async fn bind_statement<'a>(
+        &mut self,
+        stmt: &Statement<'a>,
+        bind_context: &BindContext,
+    ) -> Result<BindContext> {
         match stmt {
             Statement::Query(query) => {
-                let bind_context = self.bind_query(query).await?;
+                let bind_context = self.bind_query(query, bind_context).await?;
                 Ok(bind_context)
             }
             _ => todo!(),
