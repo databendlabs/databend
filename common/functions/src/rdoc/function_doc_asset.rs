@@ -55,12 +55,14 @@ impl FunctionDocAsset {
 
                     let cate_regexp =
                         CATE_REGEXP.get_or_init(|| Regex::new(r"\d+\-(\S+)-functions").unwrap());
-                    let cap = cate_regexp.captures(it.as_ref()).unwrap();
-                    let cate = cap.get(1).unwrap();
-                    doc.category = cate.as_str().to_string();
+                    let cap = cate_regexp.captures(it.as_ref());
+                    if let Some(cap) = cap {
+                        let cate = cap.get(1).unwrap();
+                        doc.category = cate.as_str().to_string();
 
-                    for key in keys {
-                        map.insert(key, doc.clone());
+                        for key in keys {
+                            map.insert(key, doc.clone());
+                        }
                     }
                 }
             }
