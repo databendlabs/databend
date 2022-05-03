@@ -1,5 +1,5 @@
 ---
-title: Sleep
+title: SLEEP
 ---
 
 Sleeps `seconds` seconds on each data block.
@@ -11,7 +11,7 @@ Sleeps `seconds` seconds on each data block.
 ## Syntax
 
 ```sql
-sleep(seconds)
+SLEEP(seconds)
 ```
 
 ## Arguments
@@ -33,11 +33,4 @@ SELECT sleep(2);
 +----------+
 |        0 |
 +----------+
-
-SELECT sleep(2.7);
-+------------+
-| sleep(2.7) |
-+------------+
-|          0 |
-+------------+
 ```
