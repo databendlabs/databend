@@ -33,7 +33,7 @@ use common_planners::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
-pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
+pub type ColumnsStatistics = HashMap<u32, ColumnStatistics>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct ColumnStatistics {
@@ -84,7 +84,7 @@ impl RangeFilter {
         })
     }
 
-    pub fn eval(&self, stats: &BlockStatistics) -> Result<bool> {
+    pub fn eval(&self, stats: &ColumnsStatistics) -> Result<bool> {
         let mut columns = Vec::with_capacity(self.stat_columns.len());
         for col in self.stat_columns.iter() {
             let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
@@ -205,7 +205,7 @@ impl StatColumn {
 
     fn apply_stat_value(
         &self,
-        stats: &BlockStatistics,
+        stats: &ColumnsStatistics,
         schema: DataSchemaRef,
     ) -> Result<Option<ColumnRef>> {
         if self.stat_type == StatType::Nulls {

@@ -14,13 +14,17 @@
 //
 
 use std::collections::HashMap;
+use std::mem::swap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_arrow::parquet::FileMetaData;
+use common_ast::parser::util::Input;
+use common_base::tokio::task::spawn_local;
 use common_cache::Cache;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -29,209 +33,194 @@ use opendal::Operator;
 
 use super::AppendOperationLogEntry;
 use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSink;
 use crate::pipelines::new::processors::AsyncSinker;
+use crate::pipelines::new::processors::Processor;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::serialize_data_block;
 use crate::storages::fuse::io::write_block;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
+use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 
-pub struct FuseSink {
+enum State {
+    None,
+    NeedSerialize(DataBlock),
+    Serialized {
+        data: Vec<u8>,
+        size: u64,
+        meta_data: FileMetaData,
+        block_statistics: BlockStatistics,
+    },
+    GenerateSegment,
+    SerializedSegment {
+        data: Vec<u8>,
+        location: String,
+        segment: Arc<SegmentInfo>,
+    },
+    Finished,
+}
+
+pub struct FuseTableSink {
+    state: State,
+    input: Arc<InputPort>,
     ctx: Arc<QueryContext>,
-    num_block_threshold: usize,
     data_accessor: Operator,
-    data_schema: Arc<DataSchema>,
-    number_of_blocks_accumulated: usize,
+    num_block_threshold: u64,
+    data_schema: DataSchemaRef,
     meta_locations: TableMetaLocationGenerator,
-    statistics_accumulator: Arc<RwLock<Option<StatisticsAccumulator>>>,
+    accumulator: StatisticsAccumulator,
 }
 
-#[async_trait]
-impl AsyncSink for FuseSink {
-    const NAME: &'static str = "FuseSink";
-    type ConsumeFuture<'a> = impl Future<Output = Result<()>> where Self: 'a;
-
-    /// We don't use async_trait for consume method, using GAT instead to make it more static dispatchable.
-    fn consume(&mut self, data_block: DataBlock) -> Self::ConsumeFuture<'_> {
-        async move {
-            if let Some(seg_info) = self.write_block(data_block).await? {
-                let block = self
-                    .seg_info_to_log_entry(seg_info)
-                    .await
-                    .and_then(DataBlock::try_from)?;
-                self.ctx.push_precommit_block(block);
-            }
-            Ok(())
-        }
-    }
-
-    async fn on_finish(&mut self) -> Result<()> {
-        let seg_info = self.flush().await?;
-
-        if let Some(seg_info) = seg_info {
-            let block = self
-                .seg_info_to_log_entry(seg_info)
-                .await
-                .and_then(DataBlock::try_from)?;
-            self.ctx.push_precommit_block(block);
-        }
-        Ok(())
-    }
-}
-
-impl FuseSink {
-    pub fn create_processor(
+impl FuseTableSink {
+    pub fn create(
         input: Arc<InputPort>,
         ctx: Arc<QueryContext>,
         num_block_threshold: usize,
         data_accessor: Operator,
         data_schema: Arc<DataSchema>,
         meta_locations: TableMetaLocationGenerator,
-        statistics_accumulator: Arc<RwLock<Option<StatisticsAccumulator>>>,
-    ) -> ProcessorPtr {
-        let sink = FuseSink {
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
-            num_block_threshold,
-            data_accessor,
+            input,
             data_schema,
+            data_accessor,
             meta_locations,
-            statistics_accumulator,
+            state: State::None,
+            accumulator: Default::default(),
+            num_block_threshold: num_block_threshold as u64,
+        })))
+    }
+}
 
-            number_of_blocks_accumulated: 0,
-        };
-
-        AsyncSinker::create(input, sink)
+#[async_trait]
+impl Processor for FuseTableSink {
+    fn name(&self) -> &'static str {
+        "FuseSink"
     }
 
-    async fn write_block(&mut self, block: DataBlock) -> Result<Option<SegmentInfo>> {
-        let schema = block.schema().to_arrow();
-        let location = self.meta_locations.gen_block_location();
-        let (file_size, file_meta_data) = write_block(
-            &schema,
-            block.clone(),
-            self.data_accessor.clone(),
-            &location,
-        )
-        .await?;
-
-        let mut acc_writer = self.statistics_accumulator.write();
-        let mut acc = acc_writer.take().unwrap_or_default();
-        let partial_acc = acc.begin(&block)?;
-
-        let col_metas = Self::column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_metas);
-        self.number_of_blocks_accumulated += 1;
-        if self.number_of_blocks_accumulated >= self.num_block_threshold {
-            let summary = acc.summary(self.data_schema.as_ref())?;
-            let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
-                row_count: acc.summary_row_count,
-                block_count: acc.summary_block_count,
-                uncompressed_byte_size: acc.in_memory_size,
-                compressed_byte_size: acc.file_size,
-                col_stats: summary,
-            });
-
-            // Reset state
-            self.number_of_blocks_accumulated = 0;
-            *acc_writer = None;
-
-            Ok(Some(seg))
-        } else {
-            // Stash the state
-            *acc_writer = Some(acc);
-            Ok(None)
+    fn event(&mut self) -> Result<Event> {
+        if matches!(
+            &self.state,
+            State::NeedSerialize(_) | State::GenerateSegment
+        ) {
+            return Ok(Event::Sync);
         }
-    }
 
-    async fn flush(&mut self) -> Result<Option<SegmentInfo>> {
-        let mut acc_writer = self.statistics_accumulator.write();
-        let acc = acc_writer.take();
-
-        if let Some(acc) = acc {
-            let summary = acc.summary(self.data_schema.as_ref())?;
-            let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
-                row_count: acc.summary_row_count,
-                block_count: acc.summary_block_count,
-                uncompressed_byte_size: acc.in_memory_size,
-                compressed_byte_size: acc.file_size,
-                col_stats: summary,
-            });
-
-            Ok(Some(seg))
-        } else {
-            Ok(None)
+        if matches!(
+            &self.state,
+            State::Serialized { .. } | State::SerializedSegment { .. }
+        ) {
+            return Ok(Event::Async);
         }
-    }
 
-    async fn seg_info_to_log_entry(
-        &self,
-        seg_info: SegmentInfo,
-    ) -> Result<AppendOperationLogEntry> {
-        let locs = self.meta_locations.clone();
-        let segment_info_cache = self
-            .ctx
-            .get_storage_cache_manager()
-            .get_table_segment_cache();
+        if self.input.is_finished() {
+            if self.accumulator.summary_row_count != 0 {
+                self.state = State::GenerateSegment;
+                return Ok(Event::Sync);
+            }
 
-        let seg_loc = locs.gen_segment_info_location();
-        let bytes = serde_json::to_vec(&seg_info)?;
-        self.data_accessor.object(&seg_loc).write(bytes).await?;
-        let seg = Arc::new(seg_info);
-        let log_entry = AppendOperationLogEntry::new(seg_loc.clone(), seg.clone());
-
-        if let Some(ref cache) = segment_info_cache {
-            let cache = &mut cache.write().await;
-            cache.put(seg_loc, seg);
-        }
-        Ok(log_entry)
-    }
-
-    fn column_metas(file_meta: &FileMetaData) -> Result<HashMap<ColumnId, ColumnMeta>> {
-        // currently we use one group only
-        let num_row_groups = file_meta.row_groups.len();
-        if num_row_groups != 1 {
-            return Err(ErrorCode::ParquetError(format!(
-                "invalid parquet file, expects only one row group, but got {}",
-                num_row_groups
-            )));
-        }
-        let row_group = &file_meta.row_groups[0];
-        let mut col_metas = HashMap::with_capacity(row_group.columns.len());
-        for (idx, col_chunk) in row_group.columns.iter().enumerate() {
-            match &col_chunk.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = ColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    col_metas.insert(idx as u32, res);
-                }
-                None => {
-                    return Err(ErrorCode::ParquetError(format!(
-                        "invalid parquet file, meta data of column idx {} is empty",
-                        idx
-                    )))
-                }
+            if matches!(&self.state, State::Finished) {
+                return Ok(Event::Finished);
             }
         }
-        Ok(col_metas)
+
+        if !self.input.has_data() {
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        }
+
+        self.state = State::NeedSerialize(self.input.pull_data().unwrap()?);
+        Ok(Event::Sync)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::None) {
+            State::NeedSerialize(data_block) => {
+                let location = self.meta_locations.gen_block_location();
+                let block_statistics = BlockStatistics::from(&data_block, location)?;
+
+                // we need a configuration of block size threshold here
+                let mut data = Vec::with_capacity(100 * 1024 * 1024);
+                let (size, meta_data) = serialize_data_block(data_block, &mut data)?;
+                self.state = State::Serialized {
+                    data,
+                    size,
+                    meta_data,
+                    block_statistics,
+                };
+            }
+            State::GenerateSegment => {
+                let acc = std::mem::replace(&mut self.accumulator, Default::default());
+                let summary = acc.summary(self.data_schema.as_ref())?;
+
+                let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
+                    row_count: acc.summary_row_count,
+                    block_count: acc.summary_block_count,
+                    uncompressed_byte_size: acc.in_memory_size,
+                    compressed_byte_size: acc.file_size,
+                    col_stats: summary,
+                });
+
+                self.state = State::SerializedSegment {
+                    data: serde_json::to_vec(&segment_info)?,
+                    location: self.meta_locations.gen_segment_info_location(),
+                    segment: Arc::new(segment_info),
+                }
+            }
+            _state => {
+                return Err(ErrorCode::LogicalError("Unknown state for fuse table sink"));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::None) {
+            State::Serialized {
+                data,
+                size,
+                meta_data,
+                block_statistics,
+            } => {
+                self.data_accessor
+                    .object(&block_statistics.block_file_location)
+                    .write(data)
+                    .await?;
+
+                self.accumulator
+                    .add_block(size, meta_data, block_statistics)?;
+                if self.accumulator.summary_block_count >= self.num_block_threshold {
+                    self.state = State::GenerateSegment;
+                }
+            }
+            State::SerializedSegment {
+                data,
+                location,
+                segment,
+            } => {
+                self.data_accessor.object(&location).write(data).await?;
+
+                // TODO: dyn operation for table trait
+                let log_entry = AppendOperationLogEntry::new(location, segment);
+                self.ctx
+                    .push_precommit_block(DataBlock::try_from(log_entry)?);
+            }
+            _state => {
+                return Err(ErrorCode::LogicalError(
+                    "Unknown state for fuse table sink.",
+                ));
+            }
+        }
+
+        Ok(())
     }
 }
