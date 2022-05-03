@@ -1,5 +1,5 @@
 ---
-title: try_inet_aton
+title: TRY_INET_ATON
 ---
 
 try_inet_aton function is used to take the dotted-quad representation of an IPv4 address as a string and returns the numeric value of the given IP address in form of an integer.
@@ -7,14 +7,14 @@ try_inet_aton function is used to take the dotted-quad representation of an IPv4
 ## Syntax
 
 ```sql
-try_inet_aton(expression)
+TRY_INET_ATON( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expression  | String.     |
+| `<expr>` | String.     |
 
 ## Return Type
 
