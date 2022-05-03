@@ -1,25 +1,25 @@
 ---------- Input ----------
-create table a.b (c integer not null 1, b varchar(10))
+create table a.b (c integer not null 1, b float(10))
 ---------- Output ---------
 error: 
   --> SQL:1:38
   |
-1 | create table a.b (c integer not null 1, b varchar(10))
+1 | create table a.b (c integer not null 1, b float(10))
   | ------                               ^ expected token ")"
   | |                                     
-  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
-create table a (c varchar(10))
+create table a (c float(10))
 ---------- Output ---------
 error: 
-  --> SQL:1:26
+  --> SQL:1:24
   |
-1 | create table a (c varchar(10))
-  | ------                   ^ expected token ")"
-  | |                         
-  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
+1 | create table a (c float(10))
+  | ------                 ^ expected token ")"
+  | |                       
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
@@ -29,22 +29,29 @@ error:
   --> SQL:1:19
   |
 1 | create table a (c varch)
-  | ------          - ^^^^^ expected token <BOOLEAN>
-  | |               |  
+  | ------          - ^^^^^
+  | |               | |
+  | |               | expected keyword `BOOLEAN`
+  | |               | while parsing type name
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
-  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> (<column definition>, ...)`
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
 
 ---------- Input ----------
 drop table if a.b
 ---------- Output ---------
-error: 
-  --> SQL:1:12
-  |
-1 | drop table if a.b
-  | ----       ^^ expected token <Ident>
-  | |           
-  | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
+DROP TABLE if
+---------- AST ------------
+DropTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "if",
+        quote: None,
+    },
+}
+---------- REST -----------
+a.b
 
 
 ---------- Input ----------
@@ -63,6 +70,7 @@ TruncateTable {
         name: "b",
         quote: None,
     },
+    purge: false,
 }
 ---------- REST -----------
 .c.d
@@ -75,9 +83,9 @@ error:
   --> SQL:1:10
   |
 1 | truncate a
-  | -------- ^ expected token <TABLE>
+  | -------- ^ expected keyword `TABLE`
   | |         
-  | while parsing `TRUNCATE TABLE [<database>.]<table>`
+  | while parsing `TRUNCATE TABLE [<database>.]<table> [PURGE]`
 
 
 ---------- Input ----------
@@ -87,9 +95,9 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  | ---- ^ expected token <TABLE>
+  | ---- ^ expected keyword `DATABASE`
   | |     
-  | while parsing `DROP TABLE [IF EXIST] [<database>.]<table>`
+  | while parsing `DROP DATABASE [IF EXISTS] <database>`
 
 
 ---------- Input ----------

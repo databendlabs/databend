@@ -827,12 +827,16 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-functions",
+ "common-meta-types",
+ "glob",
  "goldenfile",
+ "itertools",
  "logos",
  "nom",
  "nom-rule",
  "pratt",
  "pretty_assertions",
+ "regex",
  "sqlparser",
  "thiserror",
 ]
@@ -948,7 +952,6 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backtrace",
  "bincode",
  "common-arrow",
  "octocrab",
@@ -1299,7 +1302,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "backtrace",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
@@ -3768,9 +3770,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "268837db9408d1f180057486b390766c0cd958ff11fe23596e1cd4b8e0df73cb"
+checksum = "a4c5f75e2f95ede19929b28ea8f9afeb804e5397f1d5c550c18e94b264202911"
 dependencies = [
  "nom",
  "pratt",

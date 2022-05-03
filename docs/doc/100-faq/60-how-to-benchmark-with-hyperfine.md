@@ -1,5 +1,5 @@
 ---
-title: How to Benchmark with Hyperfine
+title: How to Benchmark With Hyperfine
 ---
 
 Hyperfine is a cross-platform command-line benchmarking tool, that supports warm-up and parameterized benchmarks.

@@ -562,7 +562,7 @@ impl ExprRPNBuilder {
             Expr::TryCast { data_type, .. } => {
                 let mut ty = SQLCommon::make_data_type(data_type)?;
                 if ty.can_inside_nullable() {
-                    ty = NullableType::arc(ty)
+                    ty = NullableType::new_impl(ty)
                 }
                 self.rpn.push(ExprRPNItem::Cast(ty, false));
             }
@@ -639,6 +639,15 @@ impl ExprRPNBuilder {
             Expr::MapAccess { keys, .. } => {
                 self.rpn.push(ExprRPNItem::MapAccess(keys.to_owned()));
             }
+            Expr::Trim { trim_where, .. } => match trim_where {
+                None => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("trim"), 1)),
+                Some(_) => {
+                    self.rpn
+                        .push(ExprRPNItem::function(String::from("trim"), 2));
+                }
+            },
             _ => (),
         }
 

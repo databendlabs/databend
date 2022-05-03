@@ -74,10 +74,10 @@ impl FuseTable {
 
         // blocks to be removed
         let prev_blocks: HashSet<String> = self
-            .blocks_of(seg_delta.iter().map(|i| **i), ctx.clone())
+            .blocks_of(ctx.clone(), seg_delta.iter().map(|i| **i))
             .await?;
         let current_blocks: HashSet<String> = self
-            .blocks_of(current_segments.iter().copied(), ctx.clone())
+            .blocks_of(ctx.clone(), current_segments.iter().copied())
             .await?;
         let block_delta = prev_blocks.difference(&current_blocks);
 
@@ -113,9 +113,9 @@ impl FuseTable {
 
     async fn blocks_of(
         &self,
+        ctx: Arc<QueryContext>,
         //locations: impl Iterator<Item = impl AsRef<Location>>,
         locations: impl Iterator<Item = &Location>,
-        ctx: Arc<QueryContext>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
         let reader = MetaReaders::segment_info_reader(ctx.as_ref());

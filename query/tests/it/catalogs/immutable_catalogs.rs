@@ -15,6 +15,7 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use databend_query::catalogs::Catalog;
 use databend_query::catalogs::ImmutableCatalog;
@@ -42,8 +43,10 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     // create database should failed
     let create_db_req = CreateDatabaseReq {
         if_not_exists: false,
-        tenant: tenant.to_string(),
-        db_name: "system".to_string(),
+        name_ident: DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: "system".to_string(),
+        },
         meta: Default::default(),
     };
     let create_db_req = catalog.create_database(create_db_req).await;
@@ -51,8 +54,10 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
     let drop_db_req = DropDatabaseReq {
         if_exists: false,
-        tenant: tenant.to_string(),
-        db_name: "system".to_string(),
+        name_ident: DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: "system".to_string(),
+        },
     };
     let drop_db_req = catalog.drop_database(drop_db_req).await;
     assert!(drop_db_req.is_err());

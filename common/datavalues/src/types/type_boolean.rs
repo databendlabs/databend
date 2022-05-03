@@ -25,8 +25,8 @@ pub use crate::prelude::*;
 pub struct BooleanType {}
 
 impl BooleanType {
-    pub fn arc() -> DataTypeImpl {
-        DataTypeImpl::Boolean(Self {})
+    pub fn new_impl() -> DataTypeImpl {
+        Self {}.into()
     }
 }
 
@@ -42,6 +42,10 @@ impl DataType for BooleanType {
 
     fn name(&self) -> String {
         "Boolean".to_string()
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["Bool"]
     }
 
     fn default_value(&self) -> DataValue {

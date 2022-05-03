@@ -66,7 +66,7 @@ impl From<String> for IntervalKind {
 }
 
 impl IntervalType {
-    pub fn arc(kind: IntervalKind) -> DataTypeImpl {
+    pub fn new_impl(kind: IntervalKind) -> DataTypeImpl {
         DataTypeImpl::Interval(Self { kind })
     }
 

@@ -1,5 +1,5 @@
 ---
-title: 'GRANT <privileges> To a User or Role'
+title: 'GRANT <privileges> to a User or Role'
 sidebar_label: 'GRANT <privileges>'
 description: Grants one or more access privileges to a user or a role.
 ---

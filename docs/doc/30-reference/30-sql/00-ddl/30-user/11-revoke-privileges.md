@@ -12,7 +12,7 @@ Removes one or more privileges on a securable object from a user or role. The pr
 ```sql
 REVOKE { 
         schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level>
-      }
+       }
 TO [ROLE <role_name>] [<user>]
 ```
 

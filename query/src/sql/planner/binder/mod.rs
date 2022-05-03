@@ -27,6 +27,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
 use crate::storages::Table;
 
+mod aggregate;
 mod bind_context;
 mod project;
 mod scalar;
@@ -42,17 +43,17 @@ mod select;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
+    ctx: Arc<QueryContext>,
     catalog: Arc<dyn Catalog>,
     metadata: Metadata,
-    context: Arc<QueryContext>,
 }
 
 impl Binder {
-    pub fn new(catalog: Arc<dyn Catalog>, context: Arc<QueryContext>) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, catalog: Arc<dyn Catalog>) -> Self {
         Binder {
+            ctx,
             catalog,
             metadata: Metadata::create(),
-            context,
         }
     }
 
@@ -63,8 +64,8 @@ impl Binder {
 
     async fn bind_statement<'a>(&mut self, stmt: &Statement<'a>) -> Result<BindContext> {
         match stmt {
-            Statement::Select(stmt) => {
-                let bind_context = self.bind_query(stmt).await?;
+            Statement::Query(query) => {
+                let bind_context = self.bind_query(query).await?;
                 Ok(bind_context)
             }
             _ => todo!(),

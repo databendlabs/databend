@@ -3,4 +3,4 @@ SELECT FROM_BASE64(TO_BASE64('abc'));
 SELECT TO_BASE64(NULL);
 SELECT FROM_BASE64(NULL);
 SELECT FROM_BASE64('1'); -- {ErrorCode 1060}
-SELECT TO_BASE64(toString(number)) FROM numbers(5) ORDER BY number;
+SELECT TO_BASE64(to_varchar(number)) FROM numbers(5) ORDER BY number;

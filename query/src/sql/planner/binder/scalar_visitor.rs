@@ -55,7 +55,7 @@ pub trait ScalarVisitor: Sized {
                                     stack.push(RecursionProcessing::Call(left));
                                     stack.push(RecursionProcessing::Call(right));
                                 }
-                                Scalar::ColumnRef { .. } => {}
+                                Scalar::ColumnRef { .. } | Scalar::Literal { .. } => {}
                             };
 
                             visitor

@@ -29,8 +29,16 @@ pub struct LogicXorExpression;
 
 impl LogicExpression for LogicXorExpression {
     fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
-        let lhs = cast_column_field(&columns[0], &BooleanType::arc())?;
-        let rhs = cast_column_field(&columns[1], &BooleanType::arc())?;
+        let lhs = cast_column_field(
+            &columns[0],
+            columns[0].data_type(),
+            &BooleanType::new_impl(),
+        )?;
+        let rhs = cast_column_field(
+            &columns[1],
+            columns[1].data_type(),
+            &BooleanType::new_impl(),
+        )?;
         let lhs_viewer = bool::try_create_viewer(&lhs)?;
         let rhs_viewer = bool::try_create_viewer(&rhs)?;
 

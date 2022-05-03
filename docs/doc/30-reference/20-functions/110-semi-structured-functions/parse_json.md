@@ -2,6 +2,7 @@
 title: PARSE_JSON
 description:
   Interprets input JSON string, producing a VARIANT value
+title_includes: TRY_PARSE_JSON
 ---
 
 `parse_json` and `try_parse_json` interprets an input string as a JSON document, producing a VARIANT value.

@@ -75,7 +75,7 @@ impl Function for RegexpReplaceFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::arc(StringType::arc())
+        NullableType::new_impl(StringType::new_impl())
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
@@ -96,14 +96,26 @@ impl Function for RegexpReplaceFunction {
 
         for i in 3..columns.len() {
             match i {
-                3 => pos = cast_column_field(&columns[3], &NullableType::arc(Int64Type::arc()))?,
+                3 => {
+                    pos = cast_column_field(
+                        &columns[3],
+                        columns[3].data_type(),
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                    )?
+                }
                 4 => {
-                    occurrence =
-                        cast_column_field(&columns[4], &NullableType::arc(Int64Type::arc()))?
+                    occurrence = cast_column_field(
+                        &columns[4],
+                        columns[4].data_type(),
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                    )?
                 }
                 _ => {
-                    match_type =
-                        cast_column_field(&columns[5], &NullableType::arc(StringType::arc()))?
+                    match_type = cast_column_field(
+                        &columns[5],
+                        columns[5].data_type(),
+                        &NullableType::new_impl(StringType::new_impl()),
+                    )?
                 }
             }
         }

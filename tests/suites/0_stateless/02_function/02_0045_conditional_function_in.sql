@@ -10,8 +10,10 @@ select 1 in (1.0, 2);
 select 'aa' in ('aa', 'bb', 'cc');
 select true in (true, false);
 select true in (NULL, false);
-SELECT toDate(18869) in (toDate(18869));
-SELECT toDate(18869) in ('2021-08-30');
+SELECT to_date(18869) in (to_date(18869));
+SELECT to_date(18869) in ('2021-08-30');
+SELECT to_date(18869) in (to_date(18869), NULL);
+SELECT NULL in ('2021-08-30');
 --
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Memory;
@@ -20,8 +22,8 @@ SELECT a FROM t1 WHERE b IN (NULL,3);
 DROP TABLE t1;
 --
 DROP TABLE IF EXISTS t2;
-CREATE TABLE t2(date DATE, datetime DATETIME) Engine = Memory;
-INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', '2022-04-24 02:49:20');
+CREATE TABLE t2(date DATE, datetime DATETIME null) Engine = Memory;
+INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', NULL);
 SELECT * FROM t2 WHERE date in ('2022-04-23');
-SELECT * FROM t2 WHERE datetime in ('2022-04-24 02:49:20');
+SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19', NULL);
 DROP TABLE t2;

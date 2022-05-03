@@ -76,7 +76,7 @@ impl Function for OctFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(
@@ -89,14 +89,19 @@ impl Function for OctFunction {
 
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &UInt64Type::new_impl(),
+                )?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(val.oct_string().as_bytes());
                 }
             }
             _ => {
-                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col =
+                    cast_column_field(&columns[0], columns[0].data_type(), &Int64Type::new_impl())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(val.oct_string().as_bytes());

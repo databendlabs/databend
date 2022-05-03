@@ -22,9 +22,9 @@ toDayOfWeek(expr)
 ## Examples
 
 ```sql
-SELECT toDayOfWeek(toDate(18869));
+SELECT toDayOfWeek(to_date(18869));
 +----------------------------+
-| toDayOfWeek(toDate(18869)) |
+| toDayOfWeek(to_date(18869)) |
 +----------------------------+
 |                          1 |
 +----------------------------+

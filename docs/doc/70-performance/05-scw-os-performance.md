@@ -1,5 +1,5 @@
 ---
-title: Databend On Scaleway OS Performance
+title: Databend on Scaleway OS Performance
 sidebar_label: On Scaleway OS Performance
 description:
   Sub-second analytics on Scaleway + OS experience.

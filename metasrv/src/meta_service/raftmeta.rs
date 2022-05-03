@@ -824,10 +824,9 @@ impl MetaNode {
                 ))
             })?;
 
-        let resp = client
-            .forward(req)
-            .await
-            .map_err(|e| MetaRaftError::ForwardRequestError(e.to_string()))?;
+        let resp = client.forward(req).await.map_err(|e| {
+            MetaRaftError::ForwardRequestError(format!("{} while forward to {}", e, endpoint))
+        })?;
         let raft_mes = resp.into_inner();
 
         let res: Result<ForwardResponse, MetaError> = raft_mes.into();

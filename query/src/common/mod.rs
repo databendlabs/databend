@@ -13,9 +13,11 @@
 // limitations under the License.
 
 pub mod context_function;
+mod expression_evaluator;
 mod hashtable;
 mod meta;
 pub mod service;
 
+pub use expression_evaluator::ExpressionEvaluator;
 pub use hashtable::*;
 pub use meta::MetaClientProvider;

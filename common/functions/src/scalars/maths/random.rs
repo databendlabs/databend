@@ -56,7 +56,7 @@ impl Function for RandomFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        Float64Type::arc()
+        Float64Type::new_impl()
     }
 
     fn eval(

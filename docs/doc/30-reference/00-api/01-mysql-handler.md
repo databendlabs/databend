@@ -20,7 +20,7 @@ If you are a developer and want to connect to Databend with MySQL JDBC driver, p
 
 ## Client
 
-Databend supports MySQL/MariaDB client to connect(Default port is 3307), it is same as you connect to a MySQL server.
+Databend supports MySQL/MariaDB client to connect(Default port is 3307, By `mysql_handler_port` config), it is same as you connect to a MySQL server.
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307 

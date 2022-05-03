@@ -1,6 +1,7 @@
 ---
 title: POW
 description: POW(x) function
+title_includes: POW, POWER
 ---
 
 Returns the value of x raised to the power of y.
@@ -42,4 +43,11 @@ SELECT POW(2,-2);
 +---------------+
 |          0.25 |
 +---------------+
+
+SELECT POWER(-2, 2);
++--------------+
+| POWER(-2, 2) |
++--------------+
+|            4 |
++--------------+
 ```

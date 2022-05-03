@@ -381,8 +381,8 @@ impl StateMachine {
         req: &CreateDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let tenant = &req.tenant;
-        let name = &req.db_name;
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
         let meta = &req.meta;
 
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
@@ -446,8 +446,8 @@ impl StateMachine {
         req: &DropDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let tenant = &req.tenant;
-        let name = &req.db_name;
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
@@ -640,26 +640,29 @@ impl StateMachine {
 
         tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
 
-        if let Some(sv) = sv {
-            if let Some(target) = &cond.target {
-                match target {
-                    txn_condition::Target::Seq(target_seq) => {
-                        return Ok(self.return_seq_condition_result(
-                            cond.expected,
-                            target_seq,
-                            &sv,
-                        ));
-                    }
-                    txn_condition::Target::Value(target_value) => {
+        if let Some(target) = &cond.target {
+            match target {
+                txn_condition::Target::Seq(target_seq) => {
+                    return Ok(self.return_seq_condition_result(
+                        cond.expected,
+                        target_seq,
+                        // seq is 0 if the record does not exist.
+                        &sv.unwrap_or_default(),
+                    ));
+                }
+                txn_condition::Target::Value(target_value) => {
+                    if let Some(sv) = sv {
                         return Ok(self.return_value_condition_result(
                             cond.expected,
                             target_value,
                             &sv,
                         ));
+                    } else {
+                        return Ok(false);
                     }
                 }
-            };
-        }
+            }
+        };
 
         Ok(false)
     }

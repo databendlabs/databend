@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
@@ -35,8 +36,9 @@ impl Series {
     /// Can be useful for fast comparisons.
     /// # Safety
     /// Assumes that the `column` is  T.
-    pub unsafe fn static_cast<T>(column: &ColumnRef) -> &T {
+    pub unsafe fn static_cast<T: Any>(column: &ColumnRef) -> &T {
         let object = column.as_ref();
+        debug_assert!(object.as_any().is::<T>());
         &*(object as *const dyn Column as *const T)
     }
 

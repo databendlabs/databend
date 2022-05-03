@@ -88,7 +88,7 @@ impl Default for MutableStringColumn {
 
 impl MutableColumn for MutableStringColumn {
     fn data_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

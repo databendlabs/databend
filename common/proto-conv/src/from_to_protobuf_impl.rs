@@ -21,11 +21,11 @@ use std::sync::Arc;
 use common_datavalues as dv;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
-use common_datavalues::DataTypeImpl;
 use common_meta_types as mt;
+use common_meta_types::DatabaseIdent;
+use common_meta_types::DatabaseNameIdent;
 use common_protos::pb;
 use common_protos::pb::data_type::Dt;
-use common_protos::pb::Variant;
 
 use crate::FromToProto;
 use crate::Incompatible;
@@ -47,8 +47,11 @@ impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
         };
 
         let v = Self {
-            database_id: p.db_id,
-            db: p.db_name,
+            ident: DatabaseIdent::from_pb(p.ident.ok_or_else(missing("DatabaseInfo.ident"))?)?,
+            name_ident: DatabaseNameIdent::from_pb(
+                p.name_ident
+                    .ok_or_else(missing("DatabaseInfo.name_ident"))?,
+            )?,
             meta: mt::DatabaseMeta::from_pb(meta)?,
         };
         Ok(v)
@@ -57,8 +60,8 @@ impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
     fn to_pb(&self) -> Result<pb::DatabaseInfo, Incompatible> {
         let p = pb::DatabaseInfo {
             ver: VER,
-            db_id: self.database_id,
-            db_name: self.db.clone(),
+            ident: Some(self.ident.to_pb()?),
+            name_ident: Some(self.name_ident.to_pb()?),
             meta: Some(self.meta.to_pb()?),
         };
         Ok(p)
@@ -352,10 +355,10 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 
     fn to_pb(&self) -> Result<pb::DataType, Incompatible> {
         match self {
-            DataTypeImpl::Null(_) => {
+            dv::DataTypeImpl::Null(_) => {
                 todo!()
             }
-            DataTypeImpl::Nullable(x) => {
+            dv::DataTypeImpl::Nullable(x) => {
                 let inn = x.to_pb()?;
 
                 let v = pb::DataType {
@@ -364,91 +367,91 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 };
                 Ok(v)
             }
-            DataTypeImpl::Boolean(_) => {
+            dv::DataTypeImpl::Boolean(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::BoolType(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Int8(_) => {
+            dv::DataTypeImpl::Int8(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int8Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Int16(_) => {
+            dv::DataTypeImpl::Int16(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int16Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Int32(_) => {
+            dv::DataTypeImpl::Int32(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int32Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Int64(_) => {
+            dv::DataTypeImpl::Int64(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Int64Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::UInt8(_) => {
+            dv::DataTypeImpl::UInt8(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Uint8Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::UInt16(_) => {
+            dv::DataTypeImpl::UInt16(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Uint16Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::UInt32(_) => {
+            dv::DataTypeImpl::UInt32(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Uint32Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::UInt64(_) => {
+            dv::DataTypeImpl::UInt64(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Uint64Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Float32(_) => {
+            dv::DataTypeImpl::Float32(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Float32Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Float64(_) => {
+            dv::DataTypeImpl::Float64(_) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::Float64Type(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Date(_x) => {
+            dv::DataTypeImpl::Date(_x) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::DateType(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Timestamp(x) => {
+            dv::DataTypeImpl::Timestamp(x) => {
                 let inn = x.to_pb()?;
 
                 let v = pb::DataType {
@@ -457,14 +460,14 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 };
                 Ok(v)
             }
-            DataTypeImpl::String(_x) => {
+            dv::DataTypeImpl::String(_x) => {
                 let v = pb::DataType {
                     ver: VER,
                     dt: Some(Dt::StringType(pb::Empty {})),
                 };
                 Ok(v)
             }
-            DataTypeImpl::Struct(x) => {
+            dv::DataTypeImpl::Struct(x) => {
                 let inn = x.to_pb()?;
 
                 let v = pb::DataType {
@@ -473,7 +476,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 };
                 Ok(v)
             }
-            DataTypeImpl::Array(x) => {
+            dv::DataTypeImpl::Array(x) => {
                 let inn = x.to_pb()?;
 
                 let v = pb::DataType {
@@ -482,7 +485,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 };
                 Ok(v)
             }
-            DataTypeImpl::Variant(x) => {
+            dv::DataTypeImpl::Variant(x) => {
                 let inn = x.to_pb()?;
 
                 let p = pb::DataType {
@@ -491,13 +494,13 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 };
                 Ok(p)
             }
-            DataTypeImpl::VariantArray(_x) => {
+            dv::DataTypeImpl::VariantArray(_x) => {
                 todo!()
             }
-            DataTypeImpl::VariantObject(_x) => {
+            dv::DataTypeImpl::VariantObject(_x) => {
                 todo!()
             }
-            DataTypeImpl::Interval(_x) => {
+            dv::DataTypeImpl::Interval(_x) => {
                 todo!()
             }
         }
@@ -619,7 +622,7 @@ impl FromToProto<pb::Variant> for dv::VariantType {
         Ok(Self {})
     }
 
-    fn to_pb(&self) -> Result<Variant, Incompatible> {
+    fn to_pb(&self) -> Result<pb::Variant, Incompatible> {
         let p = pb::Variant { ver: VER };
         Ok(p)
     }
@@ -649,4 +652,9 @@ fn check_ver(ver: u64) -> Result<(), Incompatible> {
         });
     }
     Ok(())
+}
+
+fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
+    let s = reason.to_string();
+    move || Incompatible { reason: s }
 }

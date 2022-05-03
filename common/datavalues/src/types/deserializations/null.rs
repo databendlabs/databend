@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_io::prelude::CpBufferReader;
+use common_io::prelude::*;
 
 use crate::ColumnRef;
 use crate::DataValue;
@@ -52,7 +52,7 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, _reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, _reader: &mut CheckpointReader<R>) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
