@@ -1,5 +1,5 @@
 ---
-title: not regexp
+title: NOT REGEXP
 ---
 
 Returns 1 if the string expr doesn't match the regular expression specified by the pattern pat, 0 otherwise.
@@ -7,13 +7,13 @@ Returns 1 if the string expr doesn't match the regular expression specified by t
 ## Syntax
 
 ```sql
-expr NOT REGEXP pat
+<expr> NOT REGEXP <pattern>
 ```
 
 ## Examples
 
 ```sql
-MySQL [(none)]> SELECT 'databend' NOT REGEXP 'd*';
+SELECT 'databend' NOT REGEXP 'd*';
 +------------------------------+
 | ('databend' not regexp 'd*') |
 +------------------------------+

@@ -23,7 +23,7 @@ String
 ## Examples
 
 ```sql
-mysql> SELECT try_inet_ntoa(167773449);
+SELECT try_inet_ntoa(167773449);
 +--------------------------+
 | try_inet_ntoa(167773449) |
 +--------------------------+

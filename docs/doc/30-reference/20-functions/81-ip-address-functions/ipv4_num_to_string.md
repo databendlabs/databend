@@ -1,5 +1,5 @@
 ---
-title: ipv4_num_to_string
+title: IPV4_NUM_TO_STRING
 ---
 
 Converts a 32-bit integer to an IPv4 address.
@@ -7,7 +7,7 @@ Converts a 32-bit integer to an IPv4 address.
 ## Syntax
 
 ```sql
-ipv4_num_to_string( <int32> )
+IPV4_NUM_TO_STRING( <int32> )
 ```
 
 ## Arguments
@@ -23,7 +23,7 @@ String, a dotted-quad IP address, eg “1.2.3.4” or "255.255.255.255".
 ## Examples
 
 ```sql
-MySQL [(none)]> select ipv4_num_to_string(16909060);
+SELECT ipv4_num_to_string(16909060);
 +------------------------------+
 | ipv4_num_to_string(16909060) |
 +------------------------------+
@@ -31,7 +31,7 @@ MySQL [(none)]> select ipv4_num_to_string(16909060);
 +------------------------------+
 
 
-MySQL [(none)]> select ipv4_num_to_string(1690906000000000000000000000);
+SELECT ipv4_num_to_string(1690906000000000000000000000);
 +--------------------------------------------------+
 | ipv4_num_to_string(1690906000000000000000000000) |
 +--------------------------------------------------+

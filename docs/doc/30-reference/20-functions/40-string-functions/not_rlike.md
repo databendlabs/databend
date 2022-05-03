@@ -1,5 +1,5 @@
 ---
-title: not rlike
+title: NOT RLIKE
 ---
 
 Returns 1 if the string expr doesn't match the regular expression specified by the pattern pat, 0 otherwise.
@@ -7,13 +7,13 @@ Returns 1 if the string expr doesn't match the regular expression specified by t
 ## Syntax
 
 ```sql
-expr not rlike pat
+<expr> not rlike <pattern>
 ```
 
 ## Examples
 
 ```sql
-MySQL [(none)]> SELECT 'databend' not rlike 'd*';
+SELECT 'databend' not rlike 'd*';
 +-----------------------------+
 | ('databend' not rlike 'd*') |
 +-----------------------------+

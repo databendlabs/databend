@@ -8,16 +8,17 @@ This function assumes that if clocks are moved ahead, it is by one hour and occu
 ## Syntax
 
 ```sql
-toHour(expr)
+toHour( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| `<expr>` | datetime |
 
 ## Return Type
+
  `UInt8` datatype.
 
 ## Examples

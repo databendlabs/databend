@@ -26,7 +26,6 @@ POWER(x, y)
 
 A Float64 data type value.
 
-
 ## Examples
 
 ```sql

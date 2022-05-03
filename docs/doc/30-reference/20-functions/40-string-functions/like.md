@@ -1,5 +1,5 @@
 ---
-title: like
+title: LIKE
 ---
 
 Pattern matching using an SQL pattern. Returns 1 (TRUE) or 0 (FALSE). If either expr or pat is NULL, the result is NULL.
@@ -7,13 +7,13 @@ Pattern matching using an SQL pattern. Returns 1 (TRUE) or 0 (FALSE). If either 
 ## Syntax
 
 ```sql
-expr LIKE pat 
+<expr> LIKE <pattern>
 ```
 
 ## Examples
 
 ```sql
-MySQL [(none)]>  select name, category from system.functions where name like 'tou%' order by name;
+SELECT name, category FROM system.functions WHERE name like 'tou%' ORDER BY name;
 +----------+------------+
 | name     | category   |
 +----------+------------+

@@ -1,5 +1,5 @@
 ---
-title: regexp
+title: REGEXP
 ---
 
 Returns 1 if the string expr matches the regular expression specified by the pattern pat, 0 otherwise.
@@ -7,13 +7,13 @@ Returns 1 if the string expr matches the regular expression specified by the pat
 ## Syntax
 
 ```sql
-expr REGEXP pat
+<expr> REGEXP <pattern>
 ```
 
 ## Examples
 
 ```sql
-MySQL [(none)]> SELECT 'databend' REGEXP 'd*';
+SELECT 'databend' REGEXP 'd*';
 +--------------------------+
 | ('databend' regexp 'd*') |
 +--------------------------+

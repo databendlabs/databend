@@ -1,5 +1,5 @@
 ---
-title: try_ipv4_string_to_num
+title: TRY_IPV4_STRING_TO_NUM
 ---
 
 Converts an IPv4 address to a 32-bit integer.
@@ -7,7 +7,7 @@ Converts an IPv4 address to a 32-bit integer.
 ## Syntax
 
 ```sql
-try_ipv4_string_to_num ( <ip> )
+TRY_IPV4_STRING_TO_NUM ( <ip> )
 ```
 
 ## Arguments
@@ -23,14 +23,14 @@ Integer
 ## Examples
 
 ```sql
-MySQL [(none)]> select try_ipv4_string_to_num('1.2.3.4');
+SELECT try_ipv4_string_to_num('1.2.3.4');
 +-----------------------------------+
 | try_ipv4_string_to_num('1.2.3.4') |
 +-----------------------------------+
 |                          16909060 |
 +-----------------------------------+
 
-MySQL [(none)]> select try_ipv4_string_to_num('127.0.0.1');
+SELECT try_ipv4_string_to_num('127.0.0.1');
 +-------------------------------------+
 | try_ipv4_string_to_num('127.0.0.1') |
 +-------------------------------------+

@@ -7,16 +7,17 @@ Converts a date or date with time to a UInt8 number containing the month number 
 ## Syntax
 
 ```sql
-toMonth(expr)
+toMonth( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
+
  `UInt8` datatype.
 
 ## Examples

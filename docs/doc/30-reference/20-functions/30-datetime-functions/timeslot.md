@@ -1,19 +1,19 @@
 ---
-title: timeslot
+title: TIMESLOT
 ---
 
 Rounds the time to the half hour.
 ## Syntax
 
 ```sql
-timeslot(expr)
+TIMESLOT( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| `<expr>` | datetime |
 
 ## Return Type
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
