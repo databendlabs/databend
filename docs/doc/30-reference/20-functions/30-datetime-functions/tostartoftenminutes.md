@@ -3,6 +3,7 @@ title: toStartOfTenMinutes
 ---
 
 Rounds down a date with time to the start of the ten-minute interval.
+
 ## Syntax
 
 ```sql
@@ -16,6 +17,7 @@ toStartOfTenMinutes(expr)
 | expr | datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 
 ## Examples

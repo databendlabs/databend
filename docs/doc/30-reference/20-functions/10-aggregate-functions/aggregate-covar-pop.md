@@ -24,7 +24,7 @@ float64
 ## Examples
 
 ```sql
-SELECT covar_pop(number, number) from (select * from numbers_mt(2) order by number asc);
+SELECT covar_pop(number, number) FROM (SELECT * FROM numbers_mt(2) ORDER BY number ASC);
 +---------------------------+
 | covar_pop(number, number) |
 +---------------------------+

@@ -8,14 +8,14 @@ Returns the date.
 ## Syntax
 
 ```sql
-toStartOfMonth(expr)
+toStartOfMonth( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
 Datetime object, returns date in “YYYY-MM-DD” format.

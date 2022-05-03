@@ -1,5 +1,5 @@
 ---
-title: not like
+title: NOT LIKE
 ---
 
 Pattern not matching using an SQL pattern. Returns 1 (TRUE) or 0 (FALSE). If either expr or pat is NULL, the result is NULL.
@@ -7,13 +7,13 @@ Pattern not matching using an SQL pattern. Returns 1 (TRUE) or 0 (FALSE). If eit
 ## Syntax
 
 ```sql
-expr NOT LIKE pat 
+<expr> NOT LIKE <pattern>
 ```
 
 ## Examples
 
 ```sql
-MySQL [(none)]> select name, category from system.functions where name like 'tou%' and name not like '%64' order by name;
+SELECT name, category FROM system.functions WHERE name like 'tou%' AND name not like '%64' ORDER BY name;
 +----------+------------+
 | name     | category   |
 +----------+------------+

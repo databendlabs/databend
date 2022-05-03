@@ -3,19 +3,21 @@ title: toStartOfYear
 ---
 
 Returns the first day of the year for a date or a date with time.
+
 ## Syntax
 
 ```sql
-toStartOfYear(expr)
+toStartOfYear( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD” format.
 
 ## Examples

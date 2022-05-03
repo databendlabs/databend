@@ -17,22 +17,16 @@ toStartOfSecond(expr)
 | expr | datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 
 ## Examples
 
 ```sql
-mysql> select toStartOfSecond(now());;
+SELECT toStartOfSecond(now());;
 +------------------------+
 | toStartOfSecond(now()) |
 +------------------------+
 | 2022-04-13 13:53:47    |
 +------------------------+
-
-mysql> select toStartOfSecond(toDateTime(1649858064));
-+-----------------------------------------+
-| toStartOfSecond(toDateTime(1649858064)) |
-+-----------------------------------------+
-| 2022-04-13 13:54:24                     |
-+-----------------------------------------+
 ```

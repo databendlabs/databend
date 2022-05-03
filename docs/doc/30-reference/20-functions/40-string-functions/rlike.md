@@ -1,5 +1,5 @@
 ---
-title: rlike
+title: RLIKE
 ---
 
 Returns 1 if the string expr matches the regular expression specified by the pattern pat, 0 otherwise.
@@ -7,13 +7,13 @@ Returns 1 if the string expr matches the regular expression specified by the pat
 ## Syntax
 
 ```sql
-expr rlike pat 
+<expr> RLIKE <pattern>
 ```
 
 ## Examples
 
 ```sql
-MySQL [(none)]> SELECT 'databend' rlike 'd*';
+SELECT 'databend' rlike 'd*';
 +-------------------------+
 | ('databend' rlike 'd*') |
 +-------------------------+
