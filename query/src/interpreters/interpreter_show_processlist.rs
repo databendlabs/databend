@@ -29,16 +29,14 @@ use crate::sql::PlanParser;
 
 pub struct ShowProcessListInterpreter {
     ctx: Arc<QueryContext>,
-    #[allow(dead_code)]
-    plan: ShowProcessListsPlan,
 }
 
 impl ShowProcessListInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        plan: ShowProcessListsPlan,
+        _plan: ShowProcessListsPlan,
     ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowProcessListInterpreter { ctx, plan }))
+        Ok(Arc::new(ShowProcessListInterpreter { ctx }))
     }
 
     fn build_query(&self) -> Result<String> {

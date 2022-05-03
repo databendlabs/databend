@@ -24,7 +24,6 @@ use tempfile::TempDir;
 
 pub(crate) struct GlobalSledDb {
     /// When opening a db on a temp dir, the temp dir guard must be held.
-    #[allow(dead_code)]
     pub(crate) temp_dir: Option<TempDir>,
     pub(crate) path: String,
     pub(crate) db: sled::Db,

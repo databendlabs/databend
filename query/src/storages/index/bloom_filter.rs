@@ -104,7 +104,7 @@ impl BloomFilterIndexer {
     /// Create a bloom filter block from source data.
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    #[allow(dead_code)]
+
     pub fn try_create(ctx: Arc<QueryContext>, source_data_blocks: &[DataBlock]) -> Result<Self> {
         let seed = Self::create_seed();
         Self::try_create_with_seed(source_data_blocks, seed, ctx)
@@ -198,7 +198,7 @@ impl BloomFilterIndexer {
     /// Returns false when the expression must be false, otherwise true.
     /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
     /// That is to say, you still need the load all data and run the execution.
-    #[allow(dead_code)]
+
     pub fn maybe_true(&self, expr: &Expression) -> Result<bool> {
         Ok(self.eval(expr)? != BloomFilterExprEvalResult::False)
     }
