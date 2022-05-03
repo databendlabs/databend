@@ -22,27 +22,27 @@ use crate::scalars::scalar_function_test::ScalarFunctionTest;
 fn test_humanize_size_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
-            name: "humanize_size(1000)",
-            columns: vec![Series::from_data(vec![1000_u32])],
-            expect: Series::from_data(vec!["1 KB"]),
+            name: "humanize_size(1024)",
+            columns: vec![Series::from_data(vec![1024_u32])],
+            expect: Series::from_data(vec!["1.00 KiB"]),
             error: "",
         },
         ScalarFunctionTest {
-            name: "humanize_size(-1000)",
-            columns: vec![Series::from_data(vec![-1000_i32])],
-            expect: Series::from_data(vec!["-1 KB"]),
+            name: "humanize_size(-1024)",
+            columns: vec![Series::from_data(vec![-1024_i32])],
+            expect: Series::from_data(vec!["-1.00 KiB"]),
             error: "",
         },
         ScalarFunctionTest {
             name: "humanize_size('abc')",
             columns: vec![Series::from_data(vec!["abc"])],
-            expect: Series::from_data(vec!["-1 KB"]),
+            expect: Series::from_data(vec!["-1 KiB"]),
             error: "Expected a numeric type, but got String",
         },
         ScalarFunctionTest {
             name: "humanize_size(true)",
             columns: vec![Series::from_data(vec![true])],
-            expect: Series::from_data(vec!["-1 KB"]),
+            expect: Series::from_data(vec!["-1 KiB"]),
             error: "Expected a numeric type, but got Boolean",
         },
     ];
@@ -54,8 +54,8 @@ fn test_humanize_size_function() -> Result<()> {
 fn test_humanize_size_nullable() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "humanize_size(null)",
-        columns: vec![Series::from_data(vec![Some(1_000_000_i32), None])],
-        expect: Series::from_data(vec![Some("1 MB"), None]),
+        columns: vec![Series::from_data(vec![Some(1_048_576_i32), None])],
+        expect: Series::from_data(vec![Some("1.00 MiB"), None]),
         error: "",
     }];
 
