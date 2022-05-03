@@ -23,6 +23,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
@@ -286,6 +287,11 @@ impl PipelineBuilder {
             let scalar = scalar_expr.safe_cast_to_scalar()?;
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
+        }
+        if !find_aggregate_exprs(&group_expressions).is_empty() {
+            return Err(ErrorCode::SyntaxException(
+                "Group by clause cannot contain aggregate functions",
+            ));
         }
         let mut final_exprs = agg_expressions.to_owned();
         final_exprs.extend_from_slice(group_expressions.as_slice());
