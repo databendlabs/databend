@@ -22,9 +22,9 @@ A `UInt16` number datatype.
 ## Examples
 
 ```sql
-SELECT toDayOfYear(toDate(18869));
+SELECT toDayOfYear(to_date(18869));
 +----------------------------+
-| toDayOfYear(toDate(18869)) |
+| toDayOfYear(to_date(18869)) |
 +----------------------------+
 |                        242 |
 +----------------------------+

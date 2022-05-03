@@ -1,6 +1,7 @@
 ---
 title: IN
 description: Tests whether the argument is or is not one of the members of an explicit list
+title_includes: IN, NOT_IN
 ---
 
 Tests whether the argument is or is not one of the members of an explicit list.

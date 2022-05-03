@@ -28,9 +28,9 @@ SELECT toStartOfDay(now());
 | 2022-03-29 00:00:00 |
 +---------------------+
 
-SELECT toStartOfDay(toDateTime(1630812366));
+SELECT toStartOfDay(to_datetime(1630812366));
 +--------------------------------------+
-| toStartOfDay(toDateTime(1630812366)) |
+| toStartOfDay(to_datetime(1630812366)) |
 +--------------------------------------+
 | 2021-09-05 00:00:00                  |
 +--------------------------------------+

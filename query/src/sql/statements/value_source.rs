@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_exception::BacktraceGuard;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -41,7 +40,6 @@ pub struct ValueSource {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     analyzer: ExpressionAnalyzer,
-    backtrace_guard: BacktraceGuard,
 }
 
 impl ValueSource {
@@ -50,7 +48,6 @@ impl ValueSource {
             schema,
             ctx: ctx.clone(),
             analyzer: ExpressionAnalyzer::create(ctx),
-            backtrace_guard: BacktraceGuard::new(true),
         }
     }
 
@@ -119,8 +116,6 @@ impl ValueSource {
                 .get_mut(col_idx)
                 .ok_or_else(|| ErrorCode::BadBytes("Deserializer is None"))?;
 
-            // Disable backtrace here.
-            self.backtrace_guard.disable();
             let (need_fallback, pop_count) = deser
                 .de_text_quoted(reader)
                 .and_then(|_| {
@@ -129,8 +124,6 @@ impl ValueSource {
                     Ok((need_fallback, col_idx + 1))
                 })
                 .unwrap_or((true, col_idx));
-            // Enable backtrace again.
-            self.backtrace_guard.enable();
 
             // Deserializer and expr-parser both will eat the end ')' of the row.
             if need_fallback {

@@ -30,9 +30,9 @@ SELECT toyear(now());
 |          2022 |
 +---------------+
 
-SELECT toyear(todatetime(1));
+SELECT toyear(to_datetime(1));
 +-----------------------+
-| toyear(todatetime(1)) |
+| toyear(to_datetime(1)) |
 +-----------------------+
 |                  1970 |
 +-----------------------+

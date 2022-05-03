@@ -28,9 +28,9 @@ SELECT toStartOfHour(now());
 | 2022-03-29 06:00:00  |
 +----------------------+
 
-SELECT toStartOfHour(toDateTime(1630812366));
+SELECT toStartOfHour(to_datetime(1630812366));
 +---------------------------------------+
-| toStartOfHour(toDateTime(1630812366)) |
+| toStartOfHour(to_datetime(1630812366)) |
 +---------------------------------------+
 | 2021-09-05 03:00:00                   |
 +---------------------------------------+
