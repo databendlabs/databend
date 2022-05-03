@@ -232,6 +232,7 @@ impl PipelineBuilder {
         let table = self.ctx.build_table_from_source_plan(&plan)?;
         self.ctx.try_set_partitions(plan.parts.clone())?;
         table.read2(self.ctx.clone(), &plan, &mut self.pipeline)?;
+
         let columns: Vec<IndexType> = scan.columns.iter().cloned().collect();
         let projections: Vec<Expression> = columns
             .iter()

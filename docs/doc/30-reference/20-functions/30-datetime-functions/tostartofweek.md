@@ -28,9 +28,9 @@ SELECT toStartOfWeek(now());
 | 2022-03-27           |
 +----------------------+
 
-SELECT toStartOfWeek(toDateTime(1630812366));
+SELECT toStartOfWeek(to_datetime(1630812366));
 +---------------------------------------+
-| toStartOfWeek(toDateTime(1630812366)) |
+| toStartOfWeek(to_datetime(1630812366)) |
 +---------------------------------------+
 | 2021-09-05                            |
 +---------------------------------------+

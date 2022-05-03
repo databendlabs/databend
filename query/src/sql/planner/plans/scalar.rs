@@ -21,7 +21,7 @@ use common_datavalues::DataValue;
 use crate::sql::planner::binder::ScalarExpr;
 use crate::sql::IndexType;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Scalar {
     ColumnRef {
         index: IndexType,

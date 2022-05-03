@@ -51,7 +51,6 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
-                .bool_function()
                 .disable_passthrough_null()
                 .variadic_arguments(2, usize::MAX),
         )

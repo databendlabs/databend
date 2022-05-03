@@ -29,9 +29,9 @@ SELECT toMinute(now());
 |              17 |
 +-----------------+
 
-SELECT toMinute(toDateTime(1630812366));
+SELECT toMinute(to_datetime(1630812366));
 +----------------------------------+
-| toMinute(toDateTime(1630812366)) |
+| toMinute(to_datetime(1630812366)) |
 +----------------------------------+
 |                               26 |
 +----------------------------------+

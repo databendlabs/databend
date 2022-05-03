@@ -16,10 +16,10 @@ SELECT '=== LEFT const, series ===';
 SELECT LEFT('123', number) FROM numbers(5) ORDER BY number;
 
 SELECT '=== LEFT series, const ===';
-SELECT LEFT(toString(number * 10000), 1) FROM numbers(5) ORDER BY number;
+SELECT LEFT(to_varchar(number * 10000), 1) FROM numbers(5) ORDER BY number;
 
 SELECT '=== LEFT series, series ===';
-SELECT LEFT(toString(number * 10000), number) FROM numbers(5) ORDER BY number;
+SELECT LEFT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number;
 
 SELECT '=== RIGHT null ===';
 SELECT RIGHT(NULL, 1);
@@ -39,7 +39,7 @@ SELECT '=== RIGHT const, series ===';
 SELECT RIGHT('123', number) FROM numbers(5) ORDER BY number;
 
 SELECT '=== RIGHT series, const ===';
-SELECT RIGHT(toString(number * 10000), 1) FROM numbers(5) ORDER BY number;
+SELECT RIGHT(to_varchar(number * 10000), 1) FROM numbers(5) ORDER BY number;
 
 SELECT '=== RIGHT series, series ===';
-SELECT RIGHT(toString(number * 10000), number) FROM numbers(5) ORDER BY number;
+SELECT RIGHT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number;

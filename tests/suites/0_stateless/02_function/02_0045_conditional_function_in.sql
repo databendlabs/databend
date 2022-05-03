@@ -10,9 +10,9 @@ select 1 in (1.0, 2);
 select 'aa' in ('aa', 'bb', 'cc');
 select true in (true, false);
 select true in (NULL, false);
-SELECT toDate(18869) in (toDate(18869));
-SELECT toDate(18869) in ('2021-08-30');
-SELECT toDate(18869) in (toDate(18869), NULL);
+SELECT to_date(18869) in (to_date(18869));
+SELECT to_date(18869) in ('2021-08-30');
+SELECT to_date(18869) in (to_date(18869), NULL);
 SELECT NULL in ('2021-08-30');
 --
 DROP TABLE IF EXISTS t1;

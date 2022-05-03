@@ -952,7 +952,6 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backtrace",
  "bincode",
  "common-arrow",
  "octocrab",
@@ -1303,7 +1302,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "backtrace",
  "console-subscriber",
  "once_cell",
  "opentelemetry",

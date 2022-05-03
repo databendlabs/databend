@@ -28,9 +28,9 @@ SELECT toStartOfFifteenMinutes(now());
 | 2022-03-29 06:45:00            |
 +--------------------------------+
 
-SELECT toStartOfFifteenMinutes(toDateTime(1630812366));
+SELECT toStartOfFifteenMinutes(to_datetime(1630812366));
 +-------------------------------------------------+
-| toStartOfFifteenMinutes(toDateTime(1630812366)) |
+| toStartOfFifteenMinutes(to_datetime(1630812366)) |
 +-------------------------------------------------+
 | 2021-09-05 03:15:00                             |
 +-------------------------------------------------+
