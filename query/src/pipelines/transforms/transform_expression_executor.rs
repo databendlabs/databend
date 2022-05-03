@@ -190,6 +190,7 @@ impl ExpressionExecutor {
             let column = column_map.get(arg.as_str()).cloned().ok_or_else(|| {
                 ErrorCode::LogicalError("Arguments must be prepared before function transform")
             })?;
+            println!("{arg}: {:?}", &column);
             arg_columns.push(column.column().clone());
         }
 

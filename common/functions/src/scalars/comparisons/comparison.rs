@@ -131,10 +131,12 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
 
         let lhs_id = args[0].data_type_id();
         let rhs_id = args[1].data_type_id();
+        let lhs_type = args[0].clone();
+        let rhs_type = args[1].clone();
 
         if args[0].eq(args[1]) {
             return with_match_physical_primitive_type!(lhs_id.to_physical_type(), |$T| {
-                let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(args[0].clone(), false, T::eval_simd::<$T>));
+                let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(args[0].clone(), lhs_type.clone(), rhs_type.clone(), false, T::eval_simd::<$T>));
                 ComparisonFunction::try_create_func(display_name, func)
             }, {
                 match lhs_id {
@@ -165,7 +167,7 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
 
         let least_supertype = compare_coercion(args[0], args[1])?;
         with_match_physical_primitive_type_error!(least_supertype.data_type_id().to_physical_type(), |$T| {
-            let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(least_supertype, true, T::eval_simd::<$T>));
+            let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(least_supertype, lhs_type, rhs_type, true, T::eval_simd::<$T>));
             ComparisonFunction::try_create_func(display_name, func)
         })
     }
@@ -265,8 +267,12 @@ where
 }
 
 pub struct ComparisonPrimitiveImpl<T: PrimitiveType, F> {
+    // TODO(leiysky): fill cast function for arguments during type checking
     least_supertype: DataTypeImpl,
     need_cast: bool,
+
+    lhs_type: DataTypeImpl,
+    rhs_type: DataTypeImpl,
     func: F,
     _phantom: PhantomData<T>,
 }
@@ -276,9 +282,17 @@ where
     T: PrimitiveType + comparison::Simd8,
     F: Fn(T::Simd, T::Simd) -> u8,
 {
-    pub fn new(least_supertype: DataTypeImpl, need_cast: bool, func: F) -> Self {
+    pub fn new(
+        least_supertype: DataTypeImpl,
+        lhs_type: DataTypeImpl,
+        rhs_type: DataTypeImpl,
+        need_cast: bool,
+        func: F,
+    ) -> Self {
         Self {
             least_supertype,
+            lhs_type,
+            rhs_type,
             need_cast,
             func,
             _phantom: PhantomData,
@@ -292,14 +306,14 @@ where
     F: Fn(T::Simd, T::Simd) -> u8 + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<BooleanColumn> {
-        let lhs = if self.need_cast && l.data_type() != self.least_supertype {
-            cast_column(l, &l.data_type(), &self.least_supertype)?
+        let lhs = if self.need_cast && self.lhs_type != self.least_supertype {
+            cast_column(l, &self.lhs_type, &self.least_supertype)?
         } else {
             l.clone()
         };
 
-        let rhs = if self.need_cast && r.data_type() != self.least_supertype {
-            cast_column(r, &r.data_type(), &self.least_supertype)?
+        let rhs = if self.need_cast && self.rhs_type != self.least_supertype {
+            cast_column(r, &self.rhs_type, &self.least_supertype)?
         } else {
             r.clone()
         };
