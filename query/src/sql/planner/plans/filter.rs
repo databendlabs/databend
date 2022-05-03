@@ -27,6 +27,8 @@ use crate::sql::plans::PlanType;
 pub struct FilterPlan {
     // TODO: split predicate into conjunctions
     pub predicate: ScalarExprRef,
+    // True if the plan represents having, else the plan represents where
+    pub is_having: bool,
 }
 
 impl BasePlan for FilterPlan {

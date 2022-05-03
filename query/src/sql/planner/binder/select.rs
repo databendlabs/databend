@@ -30,7 +30,6 @@ use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::plans::FilterPlan;
-use crate::sql::plans::HavingPlan;
 use crate::sql::plans::LogicalGet;
 use crate::sql::IndexType;
 use crate::storages::Table;
@@ -54,7 +53,7 @@ impl Binder {
         };
 
         if let Some(expr) = &stmt.selection {
-            self.bind_where(expr, &mut input_context)?;
+            self.bind_where(expr, &mut input_context, false)?;
         }
 
         // Output of current `SELECT` statement.
@@ -69,7 +68,7 @@ impl Binder {
         }
 
         if let Some(expr) = &stmt.having {
-            self.bind_having(expr, &mut input_context)?;
+            self.bind_where(expr, &mut input_context, true)?;
             output_context.expression = input_context.expression.clone();
         }
 
@@ -147,26 +146,20 @@ impl Binder {
         Ok(bind_context)
     }
 
-    pub(super) fn bind_where(&mut self, expr: &Expr, bind_context: &mut BindContext) -> Result<()> {
-        let scalar_binder = ScalarBinder::new();
-        let scalar = scalar_binder.bind_expr(expr, bind_context)?;
-        let filter_plan = FilterPlan { predicate: scalar };
-        let new_expr =
-            SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
-        bind_context.expression = Some(new_expr);
-        Ok(())
-    }
-
-    pub(super) fn bind_having(
+    pub(super) fn bind_where(
         &mut self,
         expr: &Expr,
         bind_context: &mut BindContext,
+        is_having: bool,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new();
         let scalar = scalar_binder.bind_expr(expr, bind_context)?;
-        let having_plan = HavingPlan { predicate: scalar };
+        let filter_plan = FilterPlan {
+            predicate: scalar,
+            is_having,
+        };
         let new_expr =
-            SExpr::create_unary(having_plan.into(), bind_context.expression.clone().unwrap());
+            SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
         bind_context.expression = Some(new_expr);
         Ok(())
     }

@@ -15,7 +15,6 @@
 mod aggregate;
 mod expression;
 mod filter;
-mod having;
 mod logical_get;
 mod pattern;
 mod physical_scan;
@@ -28,7 +27,6 @@ pub use aggregate::AggregatePlan;
 use enum_dispatch::enum_dispatch;
 pub use expression::ExpressionPlan;
 pub use filter::FilterPlan;
-pub use having::HavingPlan;
 pub use logical_get::LogicalGet;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
@@ -96,6 +94,5 @@ pub enum BasePlanImpl {
     Expression(ExpressionPlan),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
-    Having(HavingPlan),
     Pattern(PatternPlan),
 }

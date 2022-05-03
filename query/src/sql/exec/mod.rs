@@ -23,6 +23,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
 pub use util::decode_field_name;
@@ -35,7 +36,6 @@ use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
-use crate::pipelines::new::processors::TransformHaving;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
@@ -45,7 +45,6 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::ExpressionPlan;
 use crate::sql::plans::FilterPlan;
-use crate::sql::plans::HavingPlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
@@ -150,11 +149,6 @@ impl PipelineBuilder {
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
                 self.build_aggregate(&aggregate, input_schema)
             }
-            PlanType::Having => {
-                let having: HavingPlan = plan.try_into()?;
-                let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_having(&having, input_schema)
-            }
             PlanType::Expression => {
                 let expression_plan = plan.try_into()?;
                 let input_schema = self.build_pipeline(&expression.children()[0])?;
@@ -208,7 +202,16 @@ impl PipelineBuilder {
         let output_schema = input_schema.clone();
         let eb = ExpressionBuilder::create(&self.metadata);
         let scalar = filter.predicate.safe_cast_to_scalar()?;
-        let pred = eb.build(scalar)?;
+        let mut pred = eb.build(scalar)?;
+        let no_agg_expression = find_aggregate_exprs_in_expr(&pred).is_empty();
+        if !no_agg_expression && !filter.is_having {
+            return Err(ErrorCode::SyntaxException(
+                "WHERE clause cannot contain aggregate functions",
+            ));
+        }
+        if !no_agg_expression && filter.is_having {
+            pred = self.normalize_aggr_to_col(pred.clone())?;
+        }
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformFilter::try_create(
@@ -354,29 +357,6 @@ impl PipelineBuilder {
                     input_schema.clone(),
                     output_schema.clone(),
                     expressions.clone(),
-                    self.ctx.clone(),
-                )
-            })?;
-        Ok(output_schema)
-    }
-
-    fn build_having(
-        &mut self,
-        having: &HavingPlan,
-        input_schema: DataSchemaRef,
-    ) -> Result<DataSchemaRef> {
-        let output_schema = input_schema.clone();
-        let expr_builder = ExpressionBuilder::create(&self.metadata);
-        let scalar = having.predicate.safe_cast_to_scalar()?;
-        let mut predicate = expr_builder.build(scalar)?;
-        predicate = self.normalize_aggr_to_col(predicate)?;
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformHaving::try_create(
-                    input_schema.clone(),
-                    predicate.clone(),
-                    transform_input_port,
-                    transform_output_port,
                     self.ctx.clone(),
                 )
             })?;

@@ -75,7 +75,7 @@ impl Binder {
             .collect::<Result<Vec<ScalarExprRef>>>()?;
         let mut need_expression_plan = false;
         for group_expr in group_exprs.iter() {
-            if let Scalar::ColumnRef { .. } = group_expr.safe_cast_to_scalar()? {
+            if matches!(group_expr.safe_cast_to_scalar()?, Scalar::ColumnRef { .. }) {
                 continue;
             }
             need_expression_plan = true;
