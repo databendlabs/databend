@@ -84,13 +84,13 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         match IS_LEFT {
             true => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-                    let col = scalar_binary_op_ref::<Vu8, $S, Vu8, _>(columns[0].column(), columns[1].column(), left, &mut EvalContext::default())?;
+                    let col = scalar_binary_op_ref::<Vu8, $S, Vu8, _>(&columns[0], &columns[1], left, &mut EvalContext::default())?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()
@@ -98,7 +98,7 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
             }
             false => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-                    let col = scalar_binary_op_ref::<Vu8, $S, Vu8, _>(columns[0].column(), columns[1].column(), right, &mut EvalContext::default())?;
+                    let col = scalar_binary_op_ref::<Vu8, $S, Vu8, _>(&columns[0], &columns[1], right, &mut EvalContext::default())?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

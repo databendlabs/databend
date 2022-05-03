@@ -107,9 +107,9 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        _columns: &common_datavalues::ColumnsWithField,
+        _columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    ) -> Result<ColumnRef> {
         let value = T::execute();
         let column = Series::from_data(&[value as i32]);
         Ok(Arc::new(ConstColumn::new(column, input_rows)))

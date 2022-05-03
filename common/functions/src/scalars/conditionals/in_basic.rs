@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -62,7 +62,7 @@ macro_rules! scalar_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
+            let col = cast_column(col, &col.data_type(), &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0).to_owned_scalar();
@@ -84,7 +84,7 @@ macro_rules! float_contains {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
+            let col = cast_column(col, &col.data_type(), &$CAST_TYPE)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
@@ -116,7 +116,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if self.is_null {
@@ -126,9 +126,9 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
         let null_flag = columns[1..]
             .iter()
-            .any(|column| column.field().data_type().is_null());
+            .any(|column| column.data_type().is_null());
 
-        let mut least_super_dt = columns[0].field().data_type().clone();
+        let mut least_super_dt = columns[0].data_type();
         let mut nonull_least_super_dt = remove_nullable(&least_super_dt);
 
         // avoid precision loss
@@ -136,7 +136,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             for column in columns[1..].iter() {
                 if column.data_type().data_type_id().is_numeric() {
                     nonull_least_super_dt =
-                        numerical_coercion(&nonull_least_super_dt, column.data_type(), false)
+                        numerical_coercion(&nonull_least_super_dt, &column.data_type(), false)
                             .unwrap();
                 }
             }
@@ -149,7 +149,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         }
 
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
-        let input_col = cast_column_field(&columns[0], columns[0].data_type(), &least_super_dt)?;
+        let input_col = cast_column(&columns[0], &columns[0].data_type(), &least_super_dt)?;
 
         match least_super_type_id {
             TypeID::Boolean => {

@@ -142,17 +142,12 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
         let mut ctx = EvalContext::new(self.factor, self.precision, None);
-        let col = scalar_binary_op(
-            columns[0].column(),
-            columns[1].column(),
-            self.func.clone(),
-            &mut ctx,
-        )?;
+        let col = scalar_binary_op(&columns[0], &columns[1], self.func.clone(), &mut ctx)?;
         let col = Arc::new(col).arc();
         let x = col.clone();
         if O::get_type_id() == TypeID::Date {

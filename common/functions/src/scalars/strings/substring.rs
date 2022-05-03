@@ -20,7 +20,7 @@ use common_exception::Result;
 use itertools::izip;
 
 use crate::scalars::assert_string;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -78,22 +78,27 @@ impl Function for SubstringFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let s_column =
-            cast_column_field(&columns[0], columns[0].data_type(), &StringType::new_impl())?;
+        let s_column = cast_column(
+            &columns[0],
+            &columns[0].data_type(),
+            &StringType::new_impl(),
+        )?;
         let s_viewer = Vu8::try_create_viewer(&s_column)?;
 
-        let p_column =
-            cast_column_field(&columns[1], columns[1].data_type(), &Int64Type::new_impl())?;
+        let p_column = cast_column(&columns[1], &columns[1].data_type(), &Int64Type::new_impl())?;
         let p_viewer = i64::try_create_viewer(&p_column)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
 
         if columns.len() > 2 {
-            let p2_column =
-                cast_column_field(&columns[2], columns[2].data_type(), &UInt64Type::new_impl())?;
+            let p2_column = cast_column(
+                &columns[2],
+                &columns[2].data_type(),
+                &UInt64Type::new_impl(),
+            )?;
             let p2_viewer = u64::try_create_viewer(&p2_column)?;
 
             let iter = izip!(s_viewer, p_viewer, p2_viewer);

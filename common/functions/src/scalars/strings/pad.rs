@@ -124,16 +124,16 @@ impl<T: PadOperator> Function for PadFunction<T> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let col1 = Vu8::try_create_viewer(columns[0].column())?;
-        let col3 = Vu8::try_create_viewer(columns[2].column())?;
+        let col1 = Vu8::try_create_viewer(&columns[0])?;
+        let col3 = Vu8::try_create_viewer(&columns[2])?;
         let mut t = T::default();
         let mut builder = MutableStringColumn::with_capacity(input_rows);
 
         with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-            let col2 = $S::try_create_viewer(columns[1].column())?;
+            let col2 = $S::try_create_viewer(&columns[1])?;
             col1.iter()
                 .zip(col2.iter())
                 .zip(col3.iter())

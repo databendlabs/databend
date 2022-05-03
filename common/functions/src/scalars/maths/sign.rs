@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_type_id;
-use common_datavalues::ColumnWithField;
 use common_exception::Result;
 
 use crate::scalars::function_common::assert_numeric;
@@ -74,12 +73,12 @@ impl Function for SignFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-            let col = scalar_unary_op::<$S, i8, _>(columns[0].column(), sign::<$S>, &mut ctx)?;
+            let col = scalar_unary_op::<$S, i8, _>(&columns[0], sign::<$S>, &mut ctx)?;
             Ok(Arc::new(col))
         },{
             unreachable!()
@@ -93,9 +92,9 @@ impl Function for SignFunction {
         }
 
         // check whether the left/right boundary is numeric or not.
-        let is_boundary_numeric = |boundary: Option<ColumnWithField>| -> bool {
-            if let Some(column_field) = boundary {
-                column_field.data_type().data_type_id().is_numeric()
+        let is_boundary_numeric = |boundary: Option<ColumnRef>| -> bool {
+            if let Some(column) = boundary {
+                column.data_type().data_type_id().is_numeric()
             } else {
                 false
             }

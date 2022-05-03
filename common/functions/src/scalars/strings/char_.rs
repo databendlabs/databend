@@ -60,7 +60,7 @@ impl Function for CharFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let column_count = columns.len();
@@ -72,7 +72,6 @@ impl Function for CharFunction {
 
         let u8_type = u8::to_data_type();
         for (i, column) in columns.iter().enumerate() {
-            let column = column.column();
             let column = default_column_cast(column, &u8_type)?;
 
             match column.is_const() {

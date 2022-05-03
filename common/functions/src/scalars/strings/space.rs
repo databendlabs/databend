@@ -60,13 +60,13 @@ impl Function for SpaceFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             let func = |n: $S, _ctx: &mut EvalContext| -> Vu8 { vec![32u8; n.as_()] };
-            let col = scalar_unary_op::<$S, Vu8, _>(columns[0].column(), func, &mut ctx)?;
+            let col = scalar_unary_op::<$S, Vu8, _>(&columns[0], func, &mut ctx)?;
             Ok(Arc::new(col))
         },{
             unreachable!()

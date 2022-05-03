@@ -86,7 +86,7 @@ impl Function for EltFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if self.result_type.is_null() {
@@ -111,25 +111,21 @@ fn check_range(index: usize, cols: usize) -> Result<()> {
     Ok(())
 }
 
-fn execute_impl<S>(
-    columns: &ColumnsWithField,
-    input_rows: usize,
-    nullable: bool,
-) -> Result<ColumnRef>
+fn execute_impl<S>(columns: &[ColumnRef], input_rows: usize, nullable: bool) -> Result<ColumnRef>
 where
     S: Scalar + AsPrimitive<usize>,
     for<'a> S: Scalar<RefType<'a> = S>,
 {
-    let viewer = S::try_create_viewer(columns[0].column())?;
+    let viewer = S::try_create_viewer(&columns[0])?;
     let cols = columns.len() - 1;
 
-    if columns[0].column().is_const() {
+    if columns[0].is_const() {
         if viewer.null_at(0) {
             return Ok(NullColumn::new(input_rows).arc());
         }
         let index: usize = viewer.value_at(0).as_();
         check_range(index, cols)?;
-        let dest_column = columns[index].column();
+        let dest_column = &columns[index];
 
         return match (nullable, dest_column.data_type().can_inside_nullable()) {
             (true, true) => Ok(NullableColumn::wrap_inner(
@@ -142,11 +138,11 @@ where
 
     let viewers = columns[1..]
         .iter()
-        .map(|column| Vu8::try_create_viewer(column.column()))
+        .map(Vu8::try_create_viewer)
         .collect::<Result<Vec<_>>>()?;
     match nullable {
         false => {
-            let index_c = Series::check_get_scalar::<S>(columns[0].column())?;
+            let index_c = Series::check_get_scalar::<S>(&columns[0])?;
             let mut builder = MutableStringColumn::with_capacity(input_rows);
             for (row, index) in index_c.scalar_iter().enumerate() {
                 let index: usize = index.as_();
@@ -157,7 +153,7 @@ where
         }
 
         true => {
-            let index_viewer = u8::try_create_viewer(columns[0].column())?;
+            let index_viewer = u8::try_create_viewer(&columns[0])?;
             let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
 
             for row in 0..input_rows {

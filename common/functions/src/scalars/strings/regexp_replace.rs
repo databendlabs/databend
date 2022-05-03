@@ -22,7 +22,7 @@ use common_exception::Result;
 use regex::bytes::Regex;
 
 use crate::scalars::assert_string;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::strings::regexp_instr::regexp_match_result;
 use crate::scalars::strings::regexp_instr::validate_regexp_arguments;
 use crate::scalars::strings::regexp_like::build_regexp_from_pattern;
@@ -82,10 +82,10 @@ impl Function for RegexpReplaceFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let has_null = columns.iter().any(|col| col.column().is_null());
+        let has_null = columns.iter().any(|col| col.is_null());
         if has_null {
             return Ok(NullColumn::new(input_rows).arc());
         }
@@ -97,32 +97,32 @@ impl Function for RegexpReplaceFunction {
         for i in 3..columns.len() {
             match i {
                 3 => {
-                    pos = cast_column_field(
+                    pos = cast_column(
                         &columns[3],
-                        columns[3].data_type(),
+                        &columns[3].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
                     )?
                 }
                 4 => {
-                    occurrence = cast_column_field(
+                    occurrence = cast_column(
                         &columns[4],
-                        columns[4].data_type(),
+                        &columns[4].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
                     )?
                 }
                 _ => {
-                    match_type = cast_column_field(
+                    match_type = cast_column(
                         &columns[5],
-                        columns[5].data_type(),
+                        &columns[5].data_type(),
                         &NullableType::new_impl(StringType::new_impl()),
                     )?
                 }
             }
         }
 
-        let source = columns[0].column();
-        let pat = columns[1].column();
-        let repl = columns[2].column();
+        let source = &columns[0];
+        let pat = &columns[1];
+        let repl = &columns[2];
 
         if pat.is_const() && match_type.is_const() {
             let pat_value = pat.get_string(0)?;

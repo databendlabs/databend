@@ -43,6 +43,7 @@ impl NowFunction {
             .features(FunctionFeatures::default())
     }
 }
+
 impl Function for NowFunction {
     fn name(&self) -> &str {
         self.display_name.as_str()
@@ -55,9 +56,9 @@ impl Function for NowFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        _columns: &common_datavalues::ColumnsWithField,
+        _columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    ) -> Result<ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
         let value = utc.timestamp_micros();
         let column = Series::from_data(&[value]);

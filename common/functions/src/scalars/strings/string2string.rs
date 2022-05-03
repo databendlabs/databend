@@ -70,11 +70,11 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    ) -> Result<ColumnRef> {
         let mut op = T::default();
-        let column: &StringColumn = Series::check_get(columns[0].column())?;
+        let column: &StringColumn = Series::check_get(&columns[0])?;
         let estimate_bytes = op.estimate_bytes(column);
         let col = StringColumn::try_transform(column, estimate_bytes, |val, buffer| {
             op.try_apply(val, buffer)

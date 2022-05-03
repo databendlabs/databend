@@ -77,12 +77,12 @@ impl Function for ReplaceFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let view0 = Vu8::try_create_viewer(columns[0].column())?;
-        let view1 = Vu8::try_create_viewer(columns[1].column())?;
-        let view2 = Vu8::try_create_viewer(columns[2].column())?;
+        let view0 = Vu8::try_create_viewer(&columns[0])?;
+        let view1 = Vu8::try_create_viewer(&columns[1])?;
+        let view2 = Vu8::try_create_viewer(&columns[2])?;
 
         let mut values = Vec::with_capacity(view0.value_at(0).len() * input_rows);
         let mut offsets = Vec::with_capacity(input_rows + 1);

@@ -190,7 +190,7 @@ impl ExpressionExecutor {
             let column = column_map.get(arg.as_str()).cloned().ok_or_else(|| {
                 ErrorCode::LogicalError("Arguments must be prepared before function transform")
             })?;
-            arg_columns.push(column);
+            arg_columns.push(column.column().clone());
         }
 
         let tz = self.ctx.get_settings().get_timezone()?;

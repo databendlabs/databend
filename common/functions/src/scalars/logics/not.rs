@@ -18,7 +18,7 @@ use common_exception::Result;
 use super::logic::LogicExpression;
 use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -27,10 +27,10 @@ use crate::scalars::FunctionFeatures;
 pub struct LogicNotExpression;
 
 impl LogicExpression for LogicNotExpression {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
-        let col = cast_column_field(
+    fn eval(columns: &[ColumnRef], input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
+        let col = cast_column(
             &columns[0],
-            columns[0].data_type(),
+            &columns[0].data_type(),
             &BooleanType::new_impl(),
         )?;
 

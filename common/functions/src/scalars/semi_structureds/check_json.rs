@@ -54,11 +54,11 @@ impl Function for CheckJsonFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let data_type = columns[0].field().data_type();
-        let column = columns[0].column();
+        let data_type = columns[0].data_type();
+        let column = &columns[0];
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
 

@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -70,12 +70,16 @@ impl Function for RepeatFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let col1_viewer = Vu8::try_create_viewer(columns[0].column())?;
+        let col1_viewer = Vu8::try_create_viewer(&columns[0])?;
 
-        let col2 = cast_column_field(&columns[1], columns[1].data_type(), &UInt64Type::new_impl())?;
+        let col2 = cast_column(
+            &columns[1],
+            &columns[1].data_type(),
+            &UInt64Type::new_impl(),
+        )?;
         let col2_viewer = u64::try_create_viewer(&col2)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);

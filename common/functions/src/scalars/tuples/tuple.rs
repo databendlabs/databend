@@ -15,6 +15,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::StructColumn;
 use common_datavalues::StructType;
@@ -70,13 +71,10 @@ impl Function for TupleFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let cols = columns
-            .iter()
-            .map(|v| v.column().clone())
-            .collect::<Vec<_>>();
+    ) -> Result<ColumnRef> {
+        let cols = columns.to_vec();
         let arr: StructColumn = StructColumn::from_data(cols, self.result_type.clone());
         Ok(Arc::new(arr))
     }

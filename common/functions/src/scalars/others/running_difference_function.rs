@@ -89,11 +89,11 @@ impl Function for RunningDifferenceFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let dt = remove_nullable(columns[0].data_type());
-        let col = columns[0].column();
+        let dt = remove_nullable(&columns[0].data_type());
+        let col = &columns[0];
         match dt.data_type_id() {
             TypeID::Int8 => compute_i8(col, input_rows),
             TypeID::UInt8 => compute_u8(col, input_rows),
@@ -107,10 +107,8 @@ impl Function for RunningDifferenceFunction {
             TypeID::Float64 => compute_f64(col, input_rows),
 
             _ => Result::Err(ErrorCode::IllegalDataType(
-                format!(
-                    "Argument for function running_difference must have numeric type.: While processing running_difference({})",
-                    columns[0].field().name(),
-                )))
+                    "Argument for function running_difference must have numeric type.: While processing running_difference",
+                ))
         }
     }
 }

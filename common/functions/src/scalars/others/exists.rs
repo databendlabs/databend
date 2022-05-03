@@ -49,11 +49,11 @@ impl Function for ExistsFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        if columns[0].column().is_const() || columns[0].column().len() == 1 {
-            let value = columns[0].column().get(0);
+    ) -> Result<ColumnRef> {
+        if columns[0].is_const() || columns[0].len() == 1 {
+            let value = columns[0].get(0);
             match value {
                 DataValue::Array(v) => {
                     let c = Series::from_data(vec![!v.is_empty()]);

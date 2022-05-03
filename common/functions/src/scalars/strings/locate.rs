@@ -74,18 +74,18 @@ impl<const T: u8> Function for LocatingFunction<T> {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let (ss_column, s_column) = if T == FUNC_INSTR {
-            (columns[1].column(), columns[0].column())
+            (&columns[1], &columns[0])
         } else {
-            (columns[0].column(), columns[1].column())
+            (&columns[0], &columns[1])
         };
 
         // TODO, improve the performance using matching macros.
         let p_column = if T == FUNC_LOCATE && columns.len() == 3 {
-            default_column_cast(columns[2].column(), &u64::to_data_type())?
+            default_column_cast(&columns[2], &u64::to_data_type())?
         } else {
             ConstColumn::new(Series::from_data(vec![1u64]), input_rows).arc()
         };

@@ -19,7 +19,7 @@ use super::logic::LogicExpression;
 use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
 use crate::calcute;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -28,15 +28,15 @@ use crate::scalars::FunctionFeatures;
 pub struct LogicXorExpression;
 
 impl LogicExpression for LogicXorExpression {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
-        let lhs = cast_column_field(
+    fn eval(columns: &[ColumnRef], input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
+        let lhs = cast_column(
             &columns[0],
-            columns[0].data_type(),
+            &columns[0].data_type(),
             &BooleanType::new_impl(),
         )?;
-        let rhs = cast_column_field(
+        let rhs = cast_column(
             &columns[1],
-            columns[1].data_type(),
+            &columns[1].data_type(),
             &BooleanType::new_impl(),
         )?;
         let lhs_viewer = bool::try_create_viewer(&lhs)?;

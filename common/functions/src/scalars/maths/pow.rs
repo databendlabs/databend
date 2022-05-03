@@ -71,12 +71,12 @@ impl Function for PowFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                let col = scalar_binary_op::<$S, $T, f64, _>(columns[0].column(), columns[1].column(), scalar_pow, &mut EvalContext::default())?;
+                let col = scalar_binary_op::<$S, $T, f64, _>(&columns[0], &columns[1], scalar_pow, &mut EvalContext::default())?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()

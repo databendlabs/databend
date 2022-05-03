@@ -14,8 +14,6 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
-use common_datavalues::ColumnWithField;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
@@ -54,10 +52,7 @@ impl ExpressionEvaluator {
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
 
-                let columns = [ColumnWithField::new(
-                    result.clone(),
-                    DataField::new("", result.data_type()),
-                )];
+                let columns = [result.clone()];
                 func.eval(func_ctx, &columns, block.num_rows())
             }
 
@@ -69,16 +64,7 @@ impl ExpressionEvaluator {
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
 
-                let columns = [
-                    ColumnWithField::new(
-                        left_result.clone(),
-                        DataField::new("", left_result.data_type()),
-                    ),
-                    ColumnWithField::new(
-                        right_result.clone(),
-                        DataField::new("", right_result.data_type()),
-                    ),
-                ];
+                let columns = [left_result.clone(), right_result.clone()];
                 func.eval(func_ctx, &columns, block.num_rows())
             }
 
@@ -92,13 +78,8 @@ impl ExpressionEvaluator {
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
-                let columns: Vec<ColumnWithField> = results
-                    .into_iter()
-                    .map(|col| {
-                        ColumnWithField::new(col.clone(), DataField::new("", col.data_type()))
-                    })
-                    .collect();
-                func.eval(func_ctx, &columns, block.num_rows())
+
+                func.eval(func_ctx, &results, block.num_rows())
             }
 
             Expression::AggregateFunction { .. } => Err(ErrorCode::LogicalError(
@@ -123,10 +104,7 @@ impl ExpressionEvaluator {
                     CastFunction::create(&func_name, &type_name, from_type)
                 }?;
 
-                let columns = [ColumnWithField::new(
-                    result.clone(),
-                    DataField::new("", result.data_type()),
-                )];
+                let columns = [result.clone()];
 
                 func.eval(func_ctx, &columns, block.num_rows())
             }
@@ -154,13 +132,8 @@ impl ExpressionEvaluator {
 
                 let func_name = "get_path";
                 let func = FunctionFactory::instance().get(func_name, &arg_types2)?;
-                let columns: Vec<ColumnWithField> = results
-                    .into_iter()
-                    .map(|col| {
-                        ColumnWithField::new(col.clone(), DataField::new("", col.data_type()))
-                    })
-                    .collect();
-                func.eval(func_ctx, &columns, block.num_rows())
+
+                func.eval(func_ctx, &results, block.num_rows())
             }
 
             Expression::Wildcard => Err(ErrorCode::LogicalError("Unsupported wildcard expression")),

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -54,7 +53,7 @@ pub struct ExpressionMonotonicityVisitor {
     // HashMap<column_name, (variable_left, variable_right)>
     // variable_left: the variable range left.
     // variable_right: the variable range right.
-    variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+    variables: HashMap<String, (Option<ColumnRef>, Option<ColumnRef>)>,
 
     stack: Vec<(DataTypeImpl, Monotonicity)>,
 
@@ -64,7 +63,7 @@ pub struct ExpressionMonotonicityVisitor {
 impl ExpressionMonotonicityVisitor {
     fn create(
         input_schema: DataSchemaRef,
-        variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+        variables: HashMap<String, (Option<ColumnRef>, Option<ColumnRef>)>,
         single_point: bool,
     ) -> Self {
         Self {
@@ -89,9 +88,8 @@ impl ExpressionMonotonicityVisitor {
 
     fn try_calculate_boundary(
         func: &dyn Function,
-        result_type: &DataTypeImpl,
-        args: Vec<Option<ColumnWithField>>,
-    ) -> Result<Option<ColumnWithField>> {
+        args: Vec<Option<ColumnRef>>,
+    ) -> Result<Option<ColumnRef>> {
         if args.iter().any(|col| col.is_none()) {
             Ok(None)
         } else {
@@ -101,9 +99,7 @@ impl ExpressionMonotonicityVisitor {
                 .collect::<Vec<_>>();
             // TODO(veeupup): whether we need to pass function context here?
             let col = func.eval(FunctionContext::default(), &input_columns, 1)?;
-            let data_field = DataField::new("dummy", result_type.clone());
-            let data_column_field = ColumnWithField::new(col, data_field);
-            Ok(Some(data_column_field))
+            Ok(Some(col))
         }
     }
 
@@ -119,7 +115,7 @@ impl ExpressionMonotonicityVisitor {
                     return Err(ErrorCode::LogicalError(format!(
                         "Expected {} arguments, actual {}.",
                         args_size, index
-                    )))
+                    )));
                 }
                 Some((arg_type, monotonic)) => {
                     left_vec.push(monotonic.left.clone());
@@ -156,8 +152,8 @@ impl ExpressionMonotonicityVisitor {
             )));
         }
 
-        monotonic.left = Self::try_calculate_boundary(func.as_ref(), &return_type, left_vec)?;
-        monotonic.right = Self::try_calculate_boundary(func.as_ref(), &return_type, right_vec)?;
+        monotonic.left = Self::try_calculate_boundary(func.as_ref(), left_vec)?;
+        monotonic.right = Self::try_calculate_boundary(func.as_ref(), right_vec)?;
 
         self.stack.push((return_type, monotonic));
         Ok(self)
@@ -168,7 +164,7 @@ impl ExpressionMonotonicityVisitor {
     pub fn check_expression(
         schema: DataSchemaRef,
         expr: &Expression,
-        variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
+        variables: HashMap<String, (Option<ColumnRef>, Option<ColumnRef>)>,
         single_point: bool,
     ) -> Monotonicity {
         let visitor = Self::create(schema, variables, single_point);
@@ -183,8 +179,8 @@ impl ExpressionMonotonicityVisitor {
     pub fn extract_sort_column(
         schema: DataSchemaRef,
         sort_expr: &Expression,
-        left: Option<ColumnWithField>,
-        right: Option<ColumnWithField>,
+        left: Option<ColumnRef>,
+        right: Option<ColumnRef>,
         column_name: &str,
     ) -> Result<Expression> {
         if let Expression::Sort {
@@ -244,20 +240,15 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 Ok(self)
             }
             Expression::Literal {
-                value,
-                column_name,
-                data_type,
+                value, data_type, ..
             } => {
-                let name = column_name.clone().unwrap_or(format!("{}", value));
-                let data_field = DataField::new(&name, data_type.clone());
                 let col = data_type.create_constant_column(value, 1)?;
-                let data_column_field = ColumnWithField::new(col, data_field);
                 let monotonic = Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: true,
-                    left: Some(data_column_field.clone()),
-                    right: Some(data_column_field),
+                    left: Some(col.clone()),
+                    right: Some(col),
                 };
 
                 self.stack.push((data_type.clone(), monotonic));

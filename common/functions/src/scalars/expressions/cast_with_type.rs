@@ -62,17 +62,12 @@ impl CastOptions {
     }
 }
 
-pub fn cast_column_field(
-    column_with_field: &ColumnWithField,
+pub fn cast_column(
+    column: &ColumnRef,
     from_type: &DataTypeImpl,
     target_type: &DataTypeImpl,
 ) -> Result<ColumnRef> {
-    cast_with_type(
-        column_with_field.column(),
-        from_type,
-        target_type,
-        &DEFAULT_CAST_OPTIONS,
-    )
+    cast_with_type(column, from_type, target_type, &DEFAULT_CAST_OPTIONS)
 }
 
 // No logical type is specified

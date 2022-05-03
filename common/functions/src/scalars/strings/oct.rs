@@ -19,7 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_numeric;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -82,16 +82,16 @@ impl Function for OctFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(
+                let col = cast_column(
                     &columns[0],
-                    columns[0].data_type(),
+                    &columns[0].data_type(),
                     &UInt64Type::new_impl(),
                 )?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
@@ -101,7 +101,7 @@ impl Function for OctFunction {
             }
             _ => {
                 let col =
-                    cast_column_field(&columns[0], columns[0].data_type(), &Int64Type::new_impl())?;
+                    cast_column(&columns[0], &columns[0].data_type(), &Int64Type::new_impl())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(val.oct_string().as_bytes());

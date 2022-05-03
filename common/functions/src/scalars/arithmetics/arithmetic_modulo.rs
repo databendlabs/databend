@@ -81,11 +81,11 @@ where
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        let lhs = columns[0].column();
-        let rhs = columns[1].column();
+        let lhs = &columns[0];
+        let rhs = &columns[1];
         match (lhs.is_const(), rhs.is_const()) {
             (false, true) => {
                 let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(lhs) };

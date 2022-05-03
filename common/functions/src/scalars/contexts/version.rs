@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::StringType;
 use common_exception::Result;
@@ -56,10 +57,10 @@ impl Function for VersionFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        Ok(columns[0].column().clone())
+        Ok(columns[0].clone())
     }
 }
 

@@ -83,15 +83,15 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let data_type = columns[0].field().data_type();
+        let data_type = columns[0].data_type();
         if data_type.data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
 
-        let column = columns[0].column();
+        let column = &columns[0];
         if SUPPRESS_PARSE_ERROR {
             let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
@@ -123,7 +123,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             let (_, valids) = column.validity();
             let nullable_column: &NullableColumn = Series::check_get(column)?;
             let column = nullable_column.inner();
-            let data_type = remove_nullable(data_type);
+            let data_type = remove_nullable(&data_type);
 
             let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()

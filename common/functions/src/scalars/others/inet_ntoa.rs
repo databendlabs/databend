@@ -71,7 +71,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         if SUPPRESS_CAST_ERROR {
@@ -82,8 +82,8 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
                 parsing_mode: ParsingMode::Strict,
             };
             let column = cast_with_type(
-                columns[0].column(),
-                columns[0].data_type(),
+                &columns[0],
+                &columns[0].data_type(),
                 &cast_to,
                 &cast_options,
             )?;
@@ -105,8 +105,8 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
                 parsing_mode: ParsingMode::Strict,
             };
             let column = cast_with_type(
-                columns[0].column(),
-                columns[0].data_type(),
+                &columns[0],
+                &columns[0].data_type(),
                 &cast_to,
                 &cast_options,
             )?;

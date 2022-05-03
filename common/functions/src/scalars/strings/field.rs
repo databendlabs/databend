@@ -59,15 +59,15 @@ impl Function for FieldFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let basic_viewer = Vu8::try_create_viewer(columns[0].column())?;
+        let basic_viewer = Vu8::try_create_viewer(&columns[0])?;
 
         let viewers = columns
             .iter()
             .skip(1)
-            .map(|c| Vu8::try_create_viewer(c.column()))
+            .map(Vu8::try_create_viewer)
             .collect::<Result<Vec<_>>>()?;
 
         let mut values = Vec::with_capacity(input_rows);

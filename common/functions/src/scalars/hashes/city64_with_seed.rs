@@ -24,7 +24,7 @@ use common_exception::Result;
 use naive_cityhash::cityhash64_with_seed;
 
 use super::hash_base::DFHash;
-use crate::scalars::cast_column_field;
+use crate::scalars::cast_column;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -115,13 +115,13 @@ impl Function for City64WithSeedFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &common_datavalues::ColumnsWithField,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let column = columns[0].column();
+    ) -> Result<ColumnRef> {
+        let column = &columns[0];
         let physical_data_type = columns[0].data_type().data_type_id().to_physical_type();
 
-        let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());
+        let const_col: Result<&ConstColumn> = Series::check_get(&columns[1]);
 
         if let Ok(col) = const_col {
             let seed = col.get_u64(0)?;
@@ -137,8 +137,11 @@ impl Function for City64WithSeedFunction {
             });
             Ok(Arc::new(result_col))
         } else {
-            let seed_col =
-                cast_column_field(&columns[1], columns[1].data_type(), &UInt64Type::new_impl())?;
+            let seed_col = cast_column(
+                &columns[1],
+                &columns[1].data_type(),
+                &UInt64Type::new_impl(),
+            )?;
             let seed_viewer = u64::try_create_viewer(&seed_col)?;
 
             let result_col = with_match_scalar_types_error!(physical_data_type, |$S| {

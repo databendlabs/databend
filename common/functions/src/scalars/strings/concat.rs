@@ -59,12 +59,12 @@ impl Function for ConcatFunction {
     fn eval(
         &self,
         _func_ctx: FunctionContext,
-        columns: &ColumnsWithField,
+        columns: &[ColumnRef],
         input_rows: usize,
     ) -> Result<ColumnRef> {
         let viewers = columns
             .iter()
-            .map(|c| Vu8::try_create_viewer(c.column()))
+            .map(Vu8::try_create_viewer)
             .collect::<Result<Vec<_>>>()?;
 
         let mut values: Vec<u8> = Vec::with_capacity(input_rows * columns.len());
