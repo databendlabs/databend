@@ -205,7 +205,7 @@ impl ScalarBinder {
 
 pub type ScalarExprRef = Arc<dyn ScalarExpr>;
 
-pub trait ScalarExpr: Any {
+pub trait ScalarExpr: Any + Sync + Send {
     /// Get return type and nullability
     fn data_type(&self) -> (DataTypeImpl, bool);
 

@@ -107,7 +107,7 @@ pub struct HttpQueryResponseInternal {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
-    #[allow(dead_code)]
+
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     data: Arc<TokioMutex<ResultDataManager>>,

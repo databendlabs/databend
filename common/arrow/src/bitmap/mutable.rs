@@ -165,14 +165,6 @@ impl MutableBitmap {
         self.len() == 0
     }
 
-    /// # Safety
-    /// The caller must ensure that the [`MutableBitmap`] was properly initialized up to `len`.
-    #[inline]
-    pub(crate) unsafe fn set_len(&mut self, len: usize) {
-        self.buffer.set_len(len.saturating_add(7) / 8);
-        self.length = len;
-    }
-
     fn extend_set(&mut self, mut additional: usize) {
         let offset = self.length % 8;
         let added = if offset != 0 {

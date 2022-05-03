@@ -29,13 +29,11 @@ use crate::sql::PlanParser;
 
 pub struct ShowUsersInterpreter {
     ctx: Arc<QueryContext>,
-    #[allow(dead_code)]
-    plan: ShowUsersPlan,
 }
 
 impl ShowUsersInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowUsersPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowUsersInterpreter { ctx, plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, _plan: ShowUsersPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(ShowUsersInterpreter { ctx }))
     }
 
     fn build_query(&self) -> Result<String> {

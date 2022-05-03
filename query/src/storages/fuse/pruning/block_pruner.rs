@@ -29,14 +29,14 @@ use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::index::BlockStatistics;
+use crate::storages::index::ColumnsStatistics;
 use crate::storages::index::RangeFilter;
 
 pub struct BlockPruner {
     table_snapshot: Arc<TableSnapshot>,
 }
 
-type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
+type Pred = Box<dyn Fn(&ColumnsStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
     pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
         Self { table_snapshot }
@@ -54,9 +54,9 @@ impl BlockPruner {
                 // for the time being, we only handle the first expr
                 let verifiable_expression =
                     RangeFilter::try_create(Arc::new(ctx.clone()), &exprs.filters[0], schema)?;
-                Box::new(move |v: &BlockStatistics| verifiable_expression.eval(v))
+                Box::new(move |v: &ColumnsStatistics| verifiable_expression.eval(v))
             }
-            _ => Box::new(|_: &BlockStatistics| Ok(true)),
+            _ => Box::new(|_: &ColumnsStatistics| Ok(true)),
         };
 
         let segment_locs = self.table_snapshot.segments.clone();
