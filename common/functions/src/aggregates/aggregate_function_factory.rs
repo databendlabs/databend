@@ -91,7 +91,6 @@ impl AggregateFunctionDescription {
     }
 }
 
-#[allow(dead_code)]
 pub struct CombinatorDescription {
     creator: AggregateFunctionCombinatorCreator,
     // TODO(Winter): function document, this is very interesting.
