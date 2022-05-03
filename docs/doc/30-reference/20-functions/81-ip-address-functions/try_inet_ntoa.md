@@ -1,5 +1,5 @@
 ---
-title: try_inet_ntoa
+title: TRY_INET_NTOA
 ---
 
 try_inet_ntoa function is used to take the IPv4 address in network byte order and then it returns the address as a dotted-quad string representation.
@@ -7,14 +7,14 @@ try_inet_ntoa function is used to take the IPv4 address in network byte order an
 ## Syntax
 
 ```sql
-try_inet_ntoa(expression)
+TRY_INET_NTOA( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expression  | An Integer. |
+| `<expr>` | An Integer. |
 
 ## Return Type
 
