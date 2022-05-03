@@ -82,7 +82,7 @@ impl StatisticsAccumulator {
             row_count: statistics.block_rows_size,
             block_size: statistics.block_bytes_size,
             col_stats: statistics.block_column_statistics.clone(),
-            location: (statistics.block_file_location.clone(), DataBlock::VERSION),
+            location: (statistics.block_file_location, DataBlock::VERSION),
             col_metas: Self::column_metas(&meta)?,
         });
 

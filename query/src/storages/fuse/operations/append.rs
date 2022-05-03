@@ -21,7 +21,6 @@ use common_cache::Cache;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;

@@ -13,37 +13,25 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
-use std::mem::swap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_arrow::parquet::FileMetaData;
-use common_ast::parser::util::Input;
-use common_base::tokio::task::spawn_local;
-use common_cache::Cache;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use futures::Future;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::AsyncSink;
-use crate::pipelines::new::processors::AsyncSinker;
 use crate::pipelines::new::processors::Processor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::serialize_data_block;
-use crate::storages::fuse::io::write_block;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
@@ -55,7 +43,7 @@ enum State {
     Serialized {
         data: Vec<u8>,
         size: u64,
-        meta_data: FileMetaData,
+        meta_data: Box<FileMetaData>,
         block_statistics: BlockStatistics,
     },
     GenerateSegment,
@@ -127,9 +115,8 @@ impl Processor for FuseTableSink {
                 return Ok(Event::Sync);
             }
 
-            if matches!(&self.state, State::Finished) {
-                return Ok(Event::Finished);
-            }
+            self.state = State::Finished;
+            return Ok(Event::Finished);
         }
 
         if !self.input.has_data() {
@@ -153,12 +140,12 @@ impl Processor for FuseTableSink {
                 self.state = State::Serialized {
                     data,
                     size,
-                    meta_data,
                     block_statistics,
+                    meta_data: Box::new(meta_data),
                 };
             }
             State::GenerateSegment => {
-                let acc = std::mem::replace(&mut self.accumulator, Default::default());
+                let acc = std::mem::take(&mut self.accumulator);
                 let summary = acc.summary(self.data_schema.as_ref())?;
 
                 let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
@@ -197,7 +184,7 @@ impl Processor for FuseTableSink {
                     .await?;
 
                 self.accumulator
-                    .add_block(size, meta_data, block_statistics)?;
+                    .add_block(size, *meta_data, block_statistics)?;
                 if self.accumulator.summary_block_count >= self.num_block_threshold {
                     self.state = State::GenerateSegment;
                 }

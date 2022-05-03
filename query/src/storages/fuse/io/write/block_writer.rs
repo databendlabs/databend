@@ -15,7 +15,6 @@
 
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::datatypes::Schema;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
@@ -28,7 +27,7 @@ use common_exception::Result;
 use opendal::Operator;
 
 pub async fn write_block(
-    arrow_schema: &ArrowSchema,
+    _arrow_schema: &ArrowSchema,
     block: DataBlock,
     data_accessor: Operator,
     location: &str,
