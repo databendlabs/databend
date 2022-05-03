@@ -4,7 +4,7 @@ title: Json Extract Path Text
 
 Extracts value from a Json string by `path_name`.
 The value is returned as a `String` or `NULL` if either of the arguments is `NULL`.
-This function is equivalent to `TOSTRING(GET_PATH(PARSE_JSON(JSON), PATH_NAME))`.
+This function is equivalent to `to_varchar(GET_PATH(PARSE_JSON(JSON), PATH_NAME))`.
 
 ## Syntax
 

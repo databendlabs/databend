@@ -42,7 +42,6 @@ impl IsNotNullFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("is_null")
-                .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
         )

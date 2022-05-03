@@ -30,7 +30,7 @@ use crate::scalars::FunctionFeatures;
 
 // ignore(...) is a function that takes any arguments, and always returns 0.
 // it can be used in performance tests
-// eg: SELECT count() FROM numbers(1000000000) WHERE NOT ignore( toString(number) );
+// eg: SELECT count() FROM numbers(1000000000) WHERE NOT ignore( to_varchar(number) );
 #[derive(Clone)]
 pub struct IgnoreFunction {
     display_name: String,
@@ -47,7 +47,6 @@ impl IgnoreFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .bool_function()
                 .disable_passthrough_null()
                 .variadic_arguments(0, usize::MAX),
         )

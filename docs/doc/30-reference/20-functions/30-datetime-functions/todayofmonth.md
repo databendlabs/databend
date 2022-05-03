@@ -22,16 +22,16 @@ toDayOfMonth(expr)
 ## Examples
 
 ```sql
-SELECT toDayOfMonth(toDate(18869));
+SELECT toDayOfMonth(to_date(18869));
 +-----------------------------+
-| toDayOfMonth(toDate(18869)) |
+| toDayOfMonth(to_date(18869)) |
 +-----------------------------+
 |                          30 |
 +-----------------------------+
 
-SELECT toDayOfMonth(toDateTime(1630812366));
+SELECT toDayOfMonth(to_datetime(1630812366));
 +--------------------------------------+
-| toDayOfMonth(toDateTime(1630812366)) |
+| toDayOfMonth(to_datetime(1630812366)) |
 +--------------------------------------+
 |                                    5 |
 +--------------------------------------+

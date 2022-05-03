@@ -50,7 +50,6 @@ impl RegexpLikeFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .bool_function()
                 .variadic_arguments(2, 3),
         )
     }

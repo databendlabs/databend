@@ -150,9 +150,9 @@ select '周周周周' not regexp '.*';
 select '==compare_number_string==';
 -- using strict parse by default
 select '333' = '333';
-select toString(1) = '1';
-select toString(111) = '111';
-select toString(3 + 4) = '7';
+select to_varchar(1) = '1';
+select to_varchar(111) = '111';
+select to_varchar(3 + 4) = '7';
 
 -- TODO remove explicit cast
 select '123 ab' = 123; -- {ErrorCode 1010}
@@ -163,11 +163,11 @@ select '777.4' < 778;
 
 select '==compare_datetime==';
 -- compare with date/datetime strings
-SELECT '2021-03-05' = toDate('2021-03-05');
-SELECT '2021-03-05 01:01:01' = toDateTime('2021-03-05 01:01:01');
-SELECT '2021-03-05 01:01:02' > toDateTime('2021-03-05 01:01:01');
-SELECT '2021-03-06' > toDate('2021-03-05');
-SELECT toDateTime('2021-03-05 00:00:00') = toDate('2021-03-05');
-SELECT toDateTime('2021-03-05 00:00:01') > toDate('2021-03-05');
-SELECT toDateTime('2021-03-04 00:00:01') < toDate('2021-03-05');
-SELECT toDateTime(toDate('2021-03-05')) = toDate('2021-03-05');
+SELECT '2021-03-05' = to_date('2021-03-05');
+SELECT '2021-03-05 01:01:01' = to_datetime('2021-03-05 01:01:01');
+SELECT '2021-03-05 01:01:02' > to_datetime('2021-03-05 01:01:01');
+SELECT '2021-03-06' > to_date('2021-03-05');
+SELECT to_datetime('2021-03-05 00:00:00') = to_date('2021-03-05');
+SELECT to_datetime('2021-03-05 00:00:01') > to_date('2021-03-05');
+SELECT to_datetime('2021-03-04 00:00:01') < to_date('2021-03-05');
+SELECT to_datetime(to_date('2021-03-05')) = to_date('2021-03-05');

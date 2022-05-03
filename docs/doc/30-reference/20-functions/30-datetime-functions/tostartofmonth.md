@@ -23,16 +23,16 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-SELECT toStartOfMonth(toDate(18869));
+SELECT toStartOfMonth(to_date(18869));
 +-------------------------------+
-| toStartOfMonth(toDate(18869)) |
+| toStartOfMonth(to_date(18869)) |
 +-------------------------------+
 | 2021-08-01                    |
 +-------------------------------+
 
-SELECT toStartOfMonth(toDateTime(1630812366));
+SELECT toStartOfMonth(to_datetime(1630812366));
 +----------------------------------------+
-| toStartOfMonth(toDateTime(1630812366)) |
+| toStartOfMonth(to_datetime(1630812366)) |
 +----------------------------------------+
 | 2021-09-01                             |
 +----------------------------------------+

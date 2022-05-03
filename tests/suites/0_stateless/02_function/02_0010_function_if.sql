@@ -3,6 +3,6 @@ select if(number>1, number, 1) from numbers(3) order by number;
 select if(number<1, 2, number) from numbers(3) order by number;
 select if(number>0, 'Z+', 'zero') from numbers(3) order by number;
 select if(number<1, true, null) from numbers(3) order by number;
-select typeof(if(number % 3 = 0, toUInt32(1), toInt64(3))) from numbers(10) limit 1;
-select typeof(if(number % 3 = 0, toUInt32(1), toFloat32(3))) from numbers(10) limit 1;
+select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1;
+select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1;
 SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number;
