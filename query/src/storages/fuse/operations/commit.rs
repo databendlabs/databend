@@ -145,7 +145,7 @@ impl FuseTable {
         let prev = self.read_table_snapshot(ctx).await?;
         let prev_version = self.snapshot_format_version();
         let schema = self.table_info.meta.schema.as_ref().clone();
-        let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
+        let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
         let progress_values = ProgressValues {
             rows: summary.row_count as usize,
@@ -215,7 +215,7 @@ impl FuseTable {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
             let summary = &snapshot.summary;
-            statistics::merge_statistics(schema, &statistics, summary)?
+            statistics::merge_statistics(&statistics, summary)?
         } else {
             statistics
         };
@@ -265,7 +265,6 @@ impl FuseTable {
     }
 
     pub fn merge_append_operations(
-        schema: &DataSchema,
         append_log_entries: &[AppendOperationLogEntry],
     ) -> Result<(Vec<String>, Statistics)> {
         let (s, seg_locs) = append_log_entries.iter().try_fold(
@@ -281,7 +280,9 @@ impl FuseTable {
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
                 acc.col_stats =
-                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats], schema)?;
+                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?;
+                acc.cluster_stats =
+                    statistics::reduce_block_stats(&[&acc.cluster_stats, &stats.cluster_stats])?;
                 seg_acc.push(loc.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
             },

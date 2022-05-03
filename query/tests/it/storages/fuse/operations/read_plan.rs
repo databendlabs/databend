@@ -68,6 +68,7 @@ fn test_to_partitions() -> Result<()> {
         file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
+        cluster_stats: HashMap::new(),
         location: ("".to_owned(), 0),
         compression: Compression::Lz4Raw,
     };

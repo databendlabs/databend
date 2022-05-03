@@ -17,7 +17,6 @@ use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_functions::aggregates::eval_aggr;
 
 use crate::storages::fuse::meta::BlockMeta;
@@ -36,6 +35,8 @@ pub struct StatisticsAccumulator {
     pub summary_block_count: u64,
     pub in_memory_size: u64,
     pub file_size: u64,
+
+    pub cluster_statistics: Vec<BlockStatistics>,
 }
 
 impl StatisticsAccumulator {
@@ -60,8 +61,8 @@ impl StatisticsAccumulator {
         })
     }
 
-    pub fn summary(&self, schema: &DataSchema) -> common_exception::Result<BlockStatistics> {
-        super::reduce_block_stats(&self.blocks_statistics, schema)
+    pub fn summary(&self) -> common_exception::Result<BlockStatistics> {
+        super::reduce_block_stats(&self.blocks_statistics)
     }
 
     pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
@@ -104,6 +105,42 @@ impl StatisticsAccumulator {
         }
         Ok(statistics)
     }
+
+    pub fn acc_clusters(
+        cluster_keys: Vec<usize>,
+        block: DataBlock,
+    ) -> common_exception::Result<BlockStatistics> {
+        let mut cluster_stats = HashMap::with_capacity(cluster_keys.len());
+        if !cluster_keys.is_empty() {
+            let rows = block.num_rows();
+            for (i, v) in cluster_keys.iter().enumerate() {
+                let col = block.column(*v);
+                let min = col.get_checked(0)?;
+                let max = col.get_checked(col.len() - 1)?;
+
+                let (is_all_null, bitmap) = col.validity();
+                let null_count = match (is_all_null, bitmap) {
+                    (true, _) => rows,
+                    (false, Some(bitmap)) => bitmap.null_count(),
+                    (false, None) => 0,
+                };
+
+                let in_memory_size = col.memory_size() as u64;
+                let col_stats = ColumnStatistics {
+                    min,
+                    max,
+                    null_count: null_count as u64,
+                    in_memory_size,
+                };
+                cluster_stats.insert(i as u32, col_stats);
+            }
+        }
+        Ok(cluster_stats)
+    }
+
+    pub fn summary_clusters(&self) -> common_exception::Result<BlockStatistics> {
+        super::reduce_block_stats(&self.cluster_statistics)
+    }
 }
 
 pub struct PartiallyAccumulated {
@@ -119,6 +156,7 @@ impl PartiallyAccumulated {
         file_size: u64,
         location: String,
         col_metas: HashMap<ColumnId, ColumnMeta>,
+        cluster_stats: HashMap<ColumnId, ColumnStatistics>,
     ) -> StatisticsAccumulator {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
@@ -128,6 +166,7 @@ impl PartiallyAccumulated {
             file_size,
             col_stats: self.block_column_statistics,
             col_metas,
+            cluster_stats,
             location: (location, DataBlock::VERSION),
             compression: Compression::Lz4Raw,
         };

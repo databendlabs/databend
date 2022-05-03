@@ -24,6 +24,7 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_planners::Expression;
 use futures::Future;
 use opendal::Operator;
 
@@ -32,6 +33,7 @@ use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSink;
 use crate::pipelines::new::processors::AsyncSinker;
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::write_block;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
@@ -49,6 +51,7 @@ pub struct FuseSink {
     number_of_blocks_accumulated: usize,
     meta_locations: TableMetaLocationGenerator,
     statistics_accumulator: Arc<RwLock<Option<StatisticsAccumulator>>>,
+    cluster_keys_index: Vec<usize>,
 }
 
 #[async_trait]
@@ -85,6 +88,7 @@ impl AsyncSink for FuseSink {
 }
 
 impl FuseSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn create_processor(
         input: Arc<InputPort>,
         ctx: Arc<QueryContext>,
@@ -93,6 +97,7 @@ impl FuseSink {
         data_schema: Arc<DataSchema>,
         meta_locations: TableMetaLocationGenerator,
         statistics_accumulator: Arc<RwLock<Option<StatisticsAccumulator>>>,
+        cluster_keys_index: Vec<usize>,
     ) -> ProcessorPtr {
         let sink = FuseSink {
             ctx,
@@ -101,7 +106,7 @@ impl FuseSink {
             data_schema,
             meta_locations,
             statistics_accumulator,
-
+            cluster_keys_index,
             number_of_blocks_accumulated: 0,
         };
 
@@ -109,6 +114,32 @@ impl FuseSink {
     }
 
     async fn write_block(&mut self, block: DataBlock) -> Result<Option<SegmentInfo>> {
+        let cluster_stats =
+            StatisticsAccumulator::acc_clusters(self.cluster_keys_index.clone(), block.clone())?;
+
+        // Remove unused columns before sink
+        let input_schema = block.schema().clone();
+        let block = if self.data_schema != input_schema {
+            let exprs: Vec<Expression> = input_schema
+                .fields()
+                .iter()
+                .map(|f| Expression::Column(f.name().to_owned()))
+                .collect();
+
+            let executor = ExpressionExecutor::try_create(
+                "expression executor",
+                input_schema.clone(),
+                self.data_schema.clone(),
+                exprs,
+                true,
+                self.ctx.clone(),
+            )?;
+            executor.validate()?;
+            executor.execute(&block)?
+        } else {
+            block
+        };
+
         let schema = block.schema().to_arrow();
         let location = self.meta_locations.gen_block_location();
         let (file_size, file_meta_data) = write_block(
@@ -121,19 +152,22 @@ impl FuseSink {
 
         let mut acc_writer = self.statistics_accumulator.write();
         let mut acc = acc_writer.take().unwrap_or_default();
+        acc.cluster_statistics.push(cluster_stats.clone());
         let partial_acc = acc.begin(&block)?;
 
         let col_metas = Self::column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_metas);
+        acc = partial_acc.end(file_size, location, col_metas, cluster_stats);
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
-            let summary = acc.summary(self.data_schema.as_ref())?;
+            let col_stats = acc.summary()?;
+            let cluster_stats = acc.summary_clusters()?;
             let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
                 row_count: acc.summary_row_count,
                 block_count: acc.summary_block_count,
                 uncompressed_byte_size: acc.in_memory_size,
                 compressed_byte_size: acc.file_size,
-                col_stats: summary,
+                col_stats,
+                cluster_stats,
             });
 
             // Reset state
@@ -153,13 +187,15 @@ impl FuseSink {
         let acc = acc_writer.take();
 
         if let Some(acc) = acc {
-            let summary = acc.summary(self.data_schema.as_ref())?;
+            let col_stats = acc.summary()?;
+            let cluster_stats = acc.summary_clusters()?;
             let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
                 row_count: acc.summary_row_count,
                 block_count: acc.summary_block_count,
                 uncompressed_byte_size: acc.in_memory_size,
                 compressed_byte_size: acc.file_size,
-                col_stats: summary,
+                col_stats,
+                cluster_stats,
             });
 
             Ok(Some(seg))

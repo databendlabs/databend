@@ -22,14 +22,12 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::BlockCompactor;
 use crate::pipelines::new::processors::ExpressionTransform;
-use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::TransformCompact;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
@@ -49,7 +47,7 @@ pub type AppendOperationLogEntryStream =
 
 impl FuseTable {
     #[inline]
-    pub async fn append_trunks(
+    pub async fn append_chunks(
         &self,
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
@@ -64,7 +62,6 @@ impl FuseTable {
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             da.clone(),
             stream,
-            self.table_info.schema().clone(),
             rows_per_block,
             block_per_seg,
             self.meta_location_generator().clone(),
@@ -117,15 +114,21 @@ impl FuseTable {
             )
         })?;
 
+        let mut cluster_keys_index = Vec::with_capacity(self.order_keys.len());
         if !self.order_keys.is_empty() {
             let input_schema = self.table_info.schema();
             let mut merged = input_schema.fields().clone();
 
             for expr in &self.order_keys {
                 let cname = expr.column_name();
-                if !merged.iter().any(|x| x.name() == &cname) {
-                    merged.push(expr.to_data_field(&input_schema)?);
-                }
+                let index = merged
+                    .iter()
+                    .position(|x| x.name() == &cname)
+                    .unwrap_or_else(|| {
+                        merged.push(expr.to_data_field(&input_schema).unwrap());
+                        merged.len() - 1
+                    });
+                cluster_keys_index.push(index);
             }
 
             let output_schema = DataSchemaRefExt::create(merged);
@@ -162,26 +165,6 @@ impl FuseTable {
                     sort_descs.clone(),
                 )
             })?;
-
-            // Remove unused columns before sink
-            if output_schema != input_schema {
-                let project_exprs: Vec<Expression> = input_schema
-                    .fields()
-                    .iter()
-                    .map(|f| Expression::Column(f.name().to_owned()))
-                    .collect();
-
-                pipeline.add_transform(|transform_input_port, transform_output_port| {
-                    ProjectionTransform::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        output_schema.clone(),
-                        input_schema.clone(),
-                        project_exprs.clone(),
-                        ctx.clone(),
-                    )
-                })?;
-            }
         }
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
@@ -198,6 +181,7 @@ impl FuseTable {
                     self.table_info.schema().clone(),
                     self.meta_location_generator().clone(),
                     acc.clone(),
+                    cluster_keys_index.clone(),
                 ),
             );
         }

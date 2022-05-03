@@ -48,6 +48,7 @@ pub struct BlockMeta {
     pub file_size: u64,
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
+    pub cluster_stats: HashMap<ColumnId, ColumnStatistics>,
     pub location: Location,
 
     /// Compression algo used to compress the columns of blocks
@@ -93,6 +94,7 @@ impl From<v0::BlockMeta> for BlockMeta {
             file_size: s.file_size,
             col_stats: s.col_stats,
             col_metas: s.col_metas,
+            cluster_stats: HashMap::new(),
             location: (s.location.path, DataBlock::VERSION),
             compression: Compression::Lz4,
         }

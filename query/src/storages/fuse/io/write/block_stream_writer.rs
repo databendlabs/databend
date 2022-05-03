@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use common_arrow::parquet::FileMetaData;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -41,7 +39,6 @@ pub type SegmentInfoStream =
 pub struct BlockStreamWriter {
     num_block_threshold: usize,
     data_accessor: Operator,
-    data_schema: Arc<DataSchema>,
     number_of_blocks_accumulated: usize,
     statistics_accumulator: Option<StatisticsAccumulator>,
     meta_locations: TableMetaLocationGenerator,
@@ -51,7 +48,6 @@ impl BlockStreamWriter {
     pub async fn write_block_stream(
         data_accessor: Operator,
         block_stream: SendableDataBlockStream,
-        data_schema: Arc<DataSchema>,
         row_per_block: usize,
         block_per_segment: usize,
         meta_locations: TableMetaLocationGenerator,
@@ -70,12 +66,7 @@ impl BlockStreamWriter {
 
         // Write out the blocks.
         // And transform the stream of DataBlocks into Stream of SegmentInfo at the same time.
-        let block_writer = BlockStreamWriter::new(
-            block_per_segment,
-            data_accessor,
-            data_schema,
-            meta_locations,
-        );
+        let block_writer = BlockStreamWriter::new(block_per_segment, data_accessor, meta_locations);
         let segments = Self::transform(Box::pin(block_stream), block_writer);
 
         Box::pin(segments)
@@ -84,13 +75,11 @@ impl BlockStreamWriter {
     pub fn new(
         num_block_threshold: usize,
         data_accessor: Operator,
-        data_schema: Arc<DataSchema>,
         meta_locations: TableMetaLocationGenerator,
     ) -> Self {
         Self {
             num_block_threshold,
             data_accessor,
-            data_schema,
             number_of_blocks_accumulated: 0,
             statistics_accumulator: None,
             meta_locations,
@@ -134,16 +123,17 @@ impl BlockStreamWriter {
             block_writer::write_block(&schema, block, self.data_accessor.clone(), &location)
                 .await?;
         let col_metas = Self::column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_metas);
+        acc = partial_acc.end(file_size, location, col_metas, HashMap::new());
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
-            let summary = acc.summary(self.data_schema.as_ref())?;
+            let summary = acc.summary()?;
             let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
                 row_count: acc.summary_row_count,
                 block_count: acc.summary_block_count,
                 uncompressed_byte_size: acc.in_memory_size,
                 compressed_byte_size: acc.file_size,
                 col_stats: summary,
+                cluster_stats: HashMap::new(),
             });
 
             // Reset state
@@ -231,17 +221,18 @@ impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
 
     fn finish(mut self) -> Result<Option<SegmentInfo>> {
         let acc = self.statistics_accumulator.take();
-        let data_schema = self.data_schema.as_ref();
         match acc {
             None => Ok(None),
             Some(acc) => {
-                let summary = acc.summary(data_schema)?;
+                let col_stats = acc.summary()?;
+                let cluster_stats = acc.summary_clusters()?;
                 let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,
                     block_count: acc.summary_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
-                    col_stats: summary,
+                    col_stats,
+                    cluster_stats,
                 });
                 Ok(Some(seg))
             }
