@@ -15,6 +15,7 @@
 #![allow(non_snake_case)]
 
 use std::backtrace::Backtrace;
+use std::backtrace::BacktraceStatus;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -108,8 +109,14 @@ impl Debug for ErrorCode {
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
                 match backtrace {
-                    ErrorCodeBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
-                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodeBacktrace::Origin(backtrace) => {
+                        if backtrace.status() == BacktraceStatus::Disabled {
+                            write!(f, "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> ")
+                        } else {
+                            write!(f, "\n\n{}", backtrace)
+                        }
+                    }
+                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
                 }
             }
         }
