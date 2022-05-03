@@ -79,7 +79,6 @@ pub enum PlanType {
     Expression,
     Filter,
     Aggregate,
-    Having,
 
     // Pattern
     Pattern,
