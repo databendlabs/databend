@@ -7,8 +7,14 @@ Converts a date or date with time to a UInt32 number containing the year and mon
 ## Syntax
 
 ```sql
-toYYYYMM(expr)
+toYYYYMM( <expr> )
 ```
+
+## Arguments
+
+| Arguments   | Description |
+| ----------- | ----------- |
+| `<expr>` | date/datetime |
 
 ## Return Type
 

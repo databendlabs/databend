@@ -21,7 +21,7 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
+
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {

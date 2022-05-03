@@ -7,16 +7,17 @@ Converts a date with time to a UInt8 number containing the number of the second 
 ## Syntax
 
 ```sql
-toSecond(expr)
+toSecond( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| `<expr>` | datetime |
 
 ## Return Type
+
 `UInt8` datatype.
 
 ## Examples

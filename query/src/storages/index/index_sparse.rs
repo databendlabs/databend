@@ -41,7 +41,6 @@ pub struct SparseIndex {
     pub version: IndexSchemaVersion,
 }
 
-#[allow(dead_code)]
 impl SparseIndex {
     fn create(col: String) -> Self {
         SparseIndex {

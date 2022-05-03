@@ -61,9 +61,7 @@ pub struct SettingValue {
 #[derive(Clone)]
 pub struct Settings {
     settings: Arc<RwLock<HashMap<String, SettingValue>>>,
-    #[allow(dead_code)]
     user_api: Arc<UserApiProvider>,
-    #[allow(dead_code)]
     session_ctx: Arc<SessionContext>,
 }
 

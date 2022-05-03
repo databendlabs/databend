@@ -6,8 +6,14 @@ Converts a date or date with time to a UInt64 number containing the year and mon
 ## Syntax
 
 ```sql
-toYYYYMMDDhhmmss(expr)
+toYYYYMMDDhhmmss( <expr> )
 ```
+
+## Arguments
+
+| Arguments   | Description |
+| ----------- | ----------- |
+| `<expr>` | date/datetime |
 
 ## Return Type
 

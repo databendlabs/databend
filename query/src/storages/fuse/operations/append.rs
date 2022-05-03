@@ -21,7 +21,6 @@ use common_cache::Cache;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -37,7 +36,7 @@ use crate::pipelines::new::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
-use crate::storages::fuse::operations::FuseSink;
+use crate::storages::fuse::operations::FuseTableSink;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
@@ -185,20 +184,18 @@ impl FuseTable {
         }
 
         let mut sink_pipeline_builder = SinkPipeBuilder::create();
-        let acc = Arc::new(RwLock::new(None));
         for _ in 0..pipeline.output_len() {
             let input_port = InputPort::create();
             sink_pipeline_builder.add_sink(
                 input_port.clone(),
-                FuseSink::create_processor(
+                FuseTableSink::create(
                     input_port,
                     ctx.clone(),
                     block_per_seg,
                     da.clone(),
                     self.table_info.schema().clone(),
                     self.meta_location_generator().clone(),
-                    acc.clone(),
-                ),
+                )?,
             );
         }
 

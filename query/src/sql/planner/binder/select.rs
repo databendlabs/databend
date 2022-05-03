@@ -20,9 +20,9 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SourceInfo;
+use common_planners::Expression;
 
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -31,23 +31,35 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalGet;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
+use crate::sql::ScalarExprRef;
 use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
+use crate::table_functions::TableFunction;
 
 impl Binder {
     #[async_recursion]
-    pub(super) async fn bind_query(&mut self, query: &Query) -> Result<BindContext> {
+    pub(super) async fn bind_query(
+        &mut self,
+        query: &Query,
+        bind_context: &BindContext,
+    ) -> Result<BindContext> {
         match &query.body {
-            SetExpr::Select(stmt) => self.bind_select_stmt(stmt).await,
-            SetExpr::Query(stmt) => self.bind_query(stmt).await,
+            SetExpr::Select(stmt) => self.bind_select_stmt(stmt, bind_context).await,
+            SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
             _ => todo!(),
         }
         // TODO: support ORDER BY
     }
 
-    pub(super) async fn bind_select_stmt(&mut self, stmt: &SelectStmt) -> Result<BindContext> {
+    pub(super) async fn bind_select_stmt(
+        &mut self,
+        stmt: &SelectStmt,
+        bind_context: &BindContext,
+    ) -> Result<BindContext> {
         let mut input_context = if let Some(from) = &stmt.from {
-            self.bind_table_reference(from).await?
+            self.bind_table_reference(from, bind_context).await?
         } else {
             BindContext::create()
         };
@@ -72,7 +84,11 @@ impl Binder {
         Ok(output_context)
     }
 
-    async fn bind_table_reference(&mut self, stmt: &TableReference) -> Result<BindContext> {
+    async fn bind_table_reference(
+        &mut self,
+        stmt: &TableReference,
+        bind_context: &BindContext,
+    ) -> Result<BindContext> {
         match stmt {
             TableReference::Table {
                 database,
@@ -92,22 +108,58 @@ impl Binder {
                 let table_meta: Arc<dyn Table> = self
                     .resolve_data_source(tenant.as_str(), database.as_str(), table.as_str())
                     .await?;
-                let (statistics, parts) =
-                    table_meta.read_partitions(self.ctx.clone(), None).await?;
-                let source = ReadDataSourcePlan {
-                    source_info: SourceInfo::TableSource(table_meta.get_table_info().clone()),
-                    scan_fields: None,
-                    parts,
-                    statistics,
-                    description: format!("read source from table {table}"),
-                    tbl_args: None,
-                    push_downs: None,
-                };
+                let source = table_meta.read_plan(self.ctx.clone(), None).await?;
                 let table_index = self.metadata.add_table(database, table_meta, source);
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
                     result.apply_table_alias(&table, alias)?;
+                }
+                Ok(result)
+            }
+            TableReference::TableFunction {
+                name,
+                params,
+                alias,
+            } => {
+                let scalar_binder = ScalarBinder::new();
+                let args = params
+                    .iter()
+                    .map(|arg| scalar_binder.bind_expr(arg, bind_context))
+                    .collect::<Result<Vec<ScalarExprRef>>>()?;
+                let expressions = args
+                    .into_iter()
+                    .map(|scalar| {
+                        let scalar = scalar.as_any().downcast_ref::<Scalar>().unwrap();
+                        match scalar {
+                            Scalar::Literal { data_value } => Ok(Expression::Literal {
+                                value: data_value.clone(),
+                                column_name: None,
+                                data_type: data_value.data_type(),
+                            }),
+                            _ => Err(ErrorCode::UnImplement(format!(
+                                "Unsupported table argument type: {:?}",
+                                scalar
+                            ))),
+                        }
+                    })
+                    .collect::<Result<Vec<Expression>>>()?;
+
+                let table_args = Some(expressions);
+
+                let table_meta: Arc<dyn TableFunction> = self
+                    .catalog
+                    .get_table_function(name.name.as_str(), table_args)?;
+                let table = table_meta.as_table();
+
+                let source = table.read_plan(self.ctx.clone(), None).await?;
+                let table_index =
+                    self.metadata
+                        .add_table("system".to_string(), table.clone(), source);
+
+                let mut result = self.bind_base_table(table_index).await?;
+                if let Some(alias) = alias {
+                    result.apply_table_alias(table.name(), alias)?;
                 }
                 Ok(result)
             }

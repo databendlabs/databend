@@ -50,8 +50,8 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         .add_role(&tenant, RoleInfo::new("role1"), false)
         .await?;
 
-    #[allow(dead_code)]
     struct Test {
+        #[allow(dead_code)]
         name: &'static str,
         query: String,
         principal_identity: Option<PrincipalIdentity>,

@@ -1,5 +1,5 @@
 ---
-title: Subtract time interval
+title: Subtract Time Interval
 description: Subtract time interval function
 title_includes: subtractYears, subtractMonths, subtractDays, subtractHours, subtractMinutes, subtractSeconds
 ---
@@ -44,23 +44,23 @@ SELECT to_date(18875), subtractDays(to_date(18875), 2);
 | 2021-09-05    | 2021-09-03                     |
 +---------------+--------------------------------+
 
-SELECT to_dateTime(1630833797), subtractHours(to_dateTime(1630833797), 2);
+SELECT to_datetime(1630833797), subtractHours(to_datetime(1630833797), 2);
 +------------------------+------------------------------------------+
-| to_dateTime(1630833797) | subtractHours(to_dateTime(1630833797), 2) |
+| to_datetime(1630833797) | subtractHours(to_datetime(1630833797), 2) |
 +------------------------+------------------------------------------+
 | 2021-09-05 09:23:17    | 2021-09-05 07:23:17                      |
 +------------------------+------------------------------------------+
 
-SELECT to_dateTime(1630833797), subtractMinutes(to_dateTime(1630833797), 2);
+SELECT to_datetime(1630833797), subtractMinutes(to_datetime(1630833797), 2);
 +------------------------+--------------------------------------------+
-| to_dateTime(1630833797) | subtractMinutes(to_dateTime(1630833797), 2) |
+| to_datetime(1630833797) | subtractMinutes(to_datetime(1630833797), 2) |
 +------------------------+--------------------------------------------+
 | 2021-09-05 09:23:17    | 2021-09-05 09:21:17                        |
 +------------------------+--------------------------------------------+
 
-SELECT to_dateTime(1630833797), subtractSeconds(to_dateTime(1630833797), 2);
+SELECT to_datetime(1630833797), subtractSeconds(to_datetime(1630833797), 2);
 +------------------------+--------------------------------------------+
-| to_dateTime(1630833797) | subtractSeconds(to_dateTime(1630833797), 2) |
+| to_datetime(1630833797) | subtractSeconds(to_datetime(1630833797), 2) |
 +------------------------+--------------------------------------------+
 | 2021-09-05 09:23:17    | 2021-09-05 09:23:15                        |
 +------------------------+--------------------------------------------+

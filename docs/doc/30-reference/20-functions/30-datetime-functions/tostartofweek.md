@@ -3,6 +3,7 @@ title: toStartOfWeek
 ---
 
 Returns the first day of the year for a date or a date with time.
+
 ## Syntax
 
 ```sql
@@ -13,9 +14,10 @@ toStartOfWeek(expr)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| expr | date/datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD” format.
 
 ## Examples
