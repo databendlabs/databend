@@ -30,16 +30,16 @@ SELECT toMonday(now());
 |           19079 |
 +-----------------+
 
-SELECT todate(toMonday(now()));
+SELECT to_date(toMonday(now()));
 +-------------------------+
-| todate(toMonday(now())) |
+| to_date(toMonday(now())) |
 +-------------------------+
 | 2022-03-28              |
 +-------------------------+
 
-SELECT toMonday(toDateTime(1630812366));
+SELECT toMonday(to_datetime(1630812366));
 +----------------------------------+
-| toMonday(toDateTime(1630812366)) |
+| toMonday(to_datetime(1630812366)) |
 +----------------------------------+
 |                            18869 |
 +----------------------------------+

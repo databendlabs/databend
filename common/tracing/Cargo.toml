@@ -14,7 +14,6 @@ test = false
 console = ["console-subscriber"]
 
 [dependencies] # In alphabetical order
-backtrace = "0.3.64"
 console-subscriber = { version = "0.1.3", optional = true }
 once_cell = "1.10.0"
 opentelemetry = { version = "0.17.0", default-features = false, features = ["trace", "rt-tokio"] }

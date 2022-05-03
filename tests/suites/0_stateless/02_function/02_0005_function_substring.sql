@@ -24,18 +24,18 @@ SELECT '=== const, series, series ===';
 SELECT SUBSTRING('12345', number, number) FROM numbers(7) ORDER BY number;
 
 SELECT '=== series, const ===';
-SELECT SUBSTRING(toString(number * 100 + number), 2) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), 2) FROM numbers(7) ORDER BY number;
 SELECT '=== series, const, const ===';
-SELECT SUBSTRING(toString(number * 100 + number), 1, 1) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER BY number;
 SELECT '=== series, const, series ===';
-SELECT SUBSTRING(toString(number * 100 + number), 1, number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) ORDER BY number;
 
 SELECT '=== series, series ===';
-SELECT SUBSTRING(toString(number * 100 + number), number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), number) FROM numbers(7) ORDER BY number;
 SELECT '=== series, series, const ===';
-SELECT SUBSTRING(toString(number * 100 + number), number, 1) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), number, 1) FROM numbers(7) ORDER BY number;
 SELECT '=== series, series, series ===';
-SELECT SUBSTRING(toString(number * 100 + number), number, number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), number, number) FROM numbers(7) ORDER BY number;
 
 SELECT '=== forms ===';
 SELECT SUBSTRING('12345' FROM 2);
