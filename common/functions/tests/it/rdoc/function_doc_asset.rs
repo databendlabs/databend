@@ -19,7 +19,7 @@ use pulldown_cmark::Parser;
 
 #[test]
 fn test_markdown_iter() {
-    let file = FunctionDocAsset::get("10-conditional-functions/if.md").unwrap();
+    let file = FunctionDocAsset::get("11-conditional-functions/if.md").unwrap();
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_HEADING_ATTRIBUTES);
@@ -31,7 +31,7 @@ fn test_markdown_iter() {
 
 #[test]
 fn test_parse() -> Result<()> {
-    let file = FunctionDocAsset::get("50-aggregate-functions/aggregate-max.md").unwrap();
+    let file = FunctionDocAsset::get("10-aggregate-functions/aggregate-max.md").unwrap();
 
     let data = file.data.as_ref();
     let data = String::from_utf8_lossy(data);
