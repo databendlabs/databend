@@ -1,5 +1,5 @@
 ---
-title: Json Extract Path Text
+title: JSON_EXTRACT_PATH_TEXT
 ---
 
 Extracts value from a Json string by `path_name`.
