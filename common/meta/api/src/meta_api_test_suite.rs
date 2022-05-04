@@ -534,120 +534,113 @@ impl MetaApiTestSuite {
             assert_eq!(1, res.database_id, "first database id is 1");
         }
 
-        tracing::info!("--- create and get table");
+        tracing::info!("--- create tb2 and get table");
+        let created_on = Utc::now();
+
+        let mut req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: table_meta(created_on),
+        };
+        let tb_ident_2 = {
+            let tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.version;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+            tb_ident_2
+        };
+
+        tracing::info!("--- create table again with if_not_exists = true");
+        {
+            req.if_not_exists = true;
+            let res = mt.create_table(req.clone()).await?;
+            assert_eq!(
+                tb_ident_2.table_id, res.table_id,
+                "new table id is still the same"
+            );
+
+            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            let want = TableInfo {
+                ident: tb_ident_2.clone(),
+                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                name: tbl_name.into(),
+                meta: table_meta(created_on),
+            };
+            assert_eq!(want, got.as_ref().clone(), "get created table");
+        }
+
+        tracing::info!("--- create table again with if_not_exists = false");
+        {
+            req.if_not_exists = false;
+
+            let res = mt.create_table(req).await;
+            tracing::info!("create table res: {:?}", res);
+
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(
+                format!(
+                    "Code: 2302, displayText = Table '{}' already exists.",
+                    tbl_name
+                ),
+                err_code.to_string()
+            );
+
+            // get_table returns the old table
+
+            let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+            let want = TableInfo {
+                ident: tb_ident_2.clone(),
+                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                name: tbl_name.into(),
+                meta: table_meta(created_on),
+            };
+            assert_eq!(want, got.as_ref().clone(), "get old table");
+        }
+
+        tracing::info!("--- create another table");
         {
             let created_on = Utc::now();
 
-            let mut req = CreateTableReq {
+            let req = CreateTableReq {
                 if_not_exists: false,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
+                    table_name: "tb3".to_string(),
                 },
                 table_meta: table_meta(created_on),
             };
 
-            {
-                let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "table id is 1");
-
-                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-                let want = TableInfo {
-                    ident: TableIdent::new(1, 1),
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                    name: tbl_name.into(),
-                    meta: table_meta(created_on),
-                };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
-            }
-
-            tracing::info!("--- create table again with if_not_exists = true");
-            {
-                req.if_not_exists = true;
-                let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "new table id");
-
-                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let want = TableInfo {
-                    ident: TableIdent::new(1, 1),
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                    name: tbl_name.into(),
-                    meta: table_meta(created_on),
-                };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
-            }
-
-            tracing::info!("--- create table again with if_not_exists = false");
-            {
-                req.if_not_exists = false;
-
-                let res = mt.create_table(req).await;
-                tracing::info!("create table res: {:?}", res);
-
-                let status = res.err().unwrap();
-                let err_code = ErrorCode::from(status);
-
-                assert_eq!(
-                    format!(
-                        "Code: 2302, displayText = Table '{}' already exists.",
-                        tbl_name
-                    ),
-                    err_code.to_string()
-                );
-
-                // get_table returns the old table
-
-                let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-                let want = TableInfo {
-                    ident: TableIdent::new(1, 1),
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                    name: tbl_name.into(),
-                    meta: table_meta(created_on),
-                };
-                assert_eq!(want, got.as_ref().clone(), "get old table");
-            }
+            let res = mt.create_table(req.clone()).await?;
+            assert!(
+                res.table_id > tb_ident_2.table_id,
+                "table id > {}",
+                tb_ident_2.table_id
+            );
         }
 
-        tracing::info!("--- upsert table options");
-        {
-            tracing::info!("--- upsert table options with key1=val1");
-            {
-                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-
-                mt.upsert_table_option(UpsertTableOptionReq::new(&table.ident, "key1", "val1"))
-                    .await?;
-
-                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
-            }
-
-            tracing::info!("--- upsert table options with key1=val1");
-            {
-                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-
-                let got = mt
-                    .upsert_table_option(UpsertTableOptionReq::new(
-                        &TableIdent {
-                            table_id: table.ident.table_id,
-                            version: table.ident.version - 1,
-                        },
-                        "key1",
-                        "val2",
-                    ))
-                    .await;
-
-                let err = got.unwrap_err();
-                let err = ErrorCode::from(err);
-
-                assert_eq!(ErrorCode::TableVersionMismatched("").code(), err.code());
-
-                // table is not affected.
-                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
-            }
-        }
         tracing::info!("--- drop table");
         {
             tracing::info!("--- drop table with if_exists = false");
@@ -969,6 +962,124 @@ impl MetaApiTestSuite {
             assert_eq!(want, got.as_ref().clone(), "get renamed table");
         }
 
+        Ok(())
+    }
+
+    pub async fn table_upsert_option<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let _tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.version;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+        }
+
+        tracing::info!("--- upsert table options");
+        {
+            tracing::info!("--- upsert table options with key1=val1");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                mt.upsert_table_option(UpsertTableOptionReq::new(&table.ident, "key1", "val1"))
+                    .await?;
+
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+            }
+
+            tracing::info!("--- upsert table options with key1=val1");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let got = mt
+                    .upsert_table_option(UpsertTableOptionReq::new(
+                        &TableIdent {
+                            table_id: table.ident.table_id,
+                            version: table.ident.version - 1,
+                        },
+                        "key1",
+                        "val2",
+                    ))
+                    .await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::TableVersionMismatched("").code(), err.code());
+
+                // table is not affected.
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+            }
+        }
         Ok(())
     }
 

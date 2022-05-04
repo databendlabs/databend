@@ -86,6 +86,42 @@ impl TableNameIdent {
     }
 }
 
+impl Display for TableNameIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "'{}'.'{}'.'{}'",
+            self.tenant, self.db_name, self.table_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TenantDBIdTableName {
+    pub tenant: String,
+    pub db_id: u64,
+    pub table_name: String,
+}
+
+impl Display for TenantDBIdTableName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}'.{}.'{}'", self.tenant, self.db_id, self.table_name)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TenantDBIdTableId {
+    pub tenant: String,
+    pub db_id: u64,
+    pub table_id: u64,
+}
+
+impl Display for TenantDBIdTableId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}'.{}.{}", self.tenant, self.db_id, self.table_id)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
     pub ident: TableIdent,
