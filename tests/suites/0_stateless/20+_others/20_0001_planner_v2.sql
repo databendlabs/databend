@@ -16,3 +16,5 @@ select sin(cos(number)) from numbers(1);
 
 -- In list
 select * from numbers(5) where number in (1, 3);
+
+set enable_planner_v2 = 0;
