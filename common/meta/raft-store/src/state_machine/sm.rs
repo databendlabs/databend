@@ -491,10 +491,10 @@ impl StateMachine {
         req: &CreateTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(req.tenant(), req.db_name(), txn_tree)?;
 
         let (table_id, prev, result) =
-            self.txn_create_table(txn_tree, db_id, None, &req.table_name, &req.table_meta)?;
+            self.txn_create_table(txn_tree, db_id, None, req.table_name(), &req.table_meta)?;
         let table_id = table_id.unwrap();
 
         if prev.is_some() {

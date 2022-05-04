@@ -163,8 +163,8 @@ impl MetaApi for StateMachine {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let db_name = &req.db_name;
-        let table_name = &req.table_name;
+        let db_name = req.db_name();
+        let table_name = req.table_name();
         let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}-{}", &db_name, &table_name);

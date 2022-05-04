@@ -163,7 +163,7 @@ impl KVApiKey for DatabaseTenantIdIdent {
         check_segment_absent(elts.next(), 4, s)?;
 
         let tenant = unescape_for_key(tenant)?;
-        let db_id = deserialize_id(db_id)?;
+        let db_id = decode_id(db_id)?;
 
         Ok(DatabaseTenantIdIdent { tenant, db_id })
     }
@@ -312,7 +312,7 @@ fn check_segment(elt: &str, i: usize, expect: &str) -> Result<(), KVApiKeyError>
     Ok(())
 }
 
-fn deserialize_id(s: &str) -> Result<u64, KVApiKeyError> {
+fn decode_id(s: &str) -> Result<u64, KVApiKeyError> {
     let id = s.parse::<u64>().map_err(|e| KVApiKeyError::InvalidId {
         s: s.to_string(),
         reason: e.to_string(),
