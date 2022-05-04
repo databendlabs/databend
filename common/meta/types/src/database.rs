@@ -40,6 +40,12 @@ pub struct DatabaseIdent {
     pub seq: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseTenantIdIdent {
+    pub tenant: String,
+    pub db_id: u64,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,

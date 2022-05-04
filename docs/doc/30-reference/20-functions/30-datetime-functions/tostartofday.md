@@ -6,16 +6,17 @@ Rounds down a date with time to the start of the day.
 ## Syntax
 
 ```sql
-toStartOfDay(expr)
+toStartOfDay( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| `<expr>` | datetime |
 
 ## Return Type
+
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
 
 ## Examples

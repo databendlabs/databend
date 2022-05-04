@@ -20,17 +20,30 @@ use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::parquet::encoding::Encoding;
 use common_arrow::parquet::FileMetaData;
+use common_arrow::write_parquet_file;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
 
 pub async fn write_block(
-    arrow_schema: &ArrowSchema,
+    _arrow_schema: &ArrowSchema,
     block: DataBlock,
     data_accessor: Operator,
     location: &str,
 ) -> Result<(u64, FileMetaData)> {
+    // we need a configuration of block size threshold here
+    let mut buf = Vec::with_capacity(100 * 1024 * 1024);
+    let result = serialize_data_block(block, &mut buf)?;
+
+    data_accessor.object(location).write(buf).await?;
+
+    Ok(result)
+}
+
+pub fn serialize_data_block(block: DataBlock, buf: &mut Vec<u8>) -> Result<(u64, FileMetaData)> {
+    let arrow_schema = block.schema().to_arrow();
+
     let options = WriteOptions {
         write_statistics: false,
         compression: Compression::Lz4Raw,
@@ -44,18 +57,13 @@ pub async fn write_block(
         .collect();
 
     let iter = vec![Ok(batch)];
-    let row_groups = RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
+    let row_groups =
+        RowGroupIterator::try_new(iter.into_iter(), &arrow_schema, options, encodings)?;
 
-    // we need a configuration of block size threshold here
-    let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-
-    let result =
-        common_arrow::write_parquet_file(&mut buf, row_groups, arrow_schema.clone(), options)
-            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-
-    data_accessor.object(location).write(buf).await?;
-
-    Ok(result)
+    match write_parquet_file(buf, row_groups, arrow_schema.clone(), options) {
+        Ok(result) => Ok(result),
+        Err(cause) => Err(ErrorCode::ParquetError(cause.to_string())),
+    }
 }
 
 fn col_encoding(_data_type: &ArrowDataType) -> Encoding {

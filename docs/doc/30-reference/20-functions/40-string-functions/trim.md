@@ -16,21 +16,21 @@ RTRIM(expr);
 ## Examples
 
 ```sql
-MySQL [(none)]> SELECT TRIM('   aaa   ');
+SELECT TRIM('   aaa   ');
 +-------------------+
 | trim('   aaa   ') |
 +-------------------+
 | aaa               |
 +-------------------+
 
-MySQL [(none)]> SELECT LTRIM('   aaa   ');
+SELECT LTRIM('   aaa   ');
 +--------------------+
 | LTRIM('   aaa   ') |
 +--------------------+
 | aaa                |
 +--------------------+
 
-MySQL [(none)]> SELECT RTRIM('   aaa   ');
+SELECT RTRIM('   aaa   ');
 +--------------------+
 | RTRIM('   aaa   ') |
 +--------------------+

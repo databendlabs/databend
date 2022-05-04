@@ -1,5 +1,5 @@
 ---
-title: ignore
+title: IGNORE
 ---
 
 By using insert ignore statement, the rows with invalid data that cause the error are ignored and the rows with valid data are inserted into the table.
@@ -7,8 +7,8 @@ By using insert ignore statement, the rows with invalid data that cause the erro
 ## Syntax
 
 ```sql
-insert ignore into table(column_list)
-values( value_list),
+INSERT ignore INTO TABLE(column_list)
+VALUES( value_list),
       ( value_list),
       ...
 ```

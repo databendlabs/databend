@@ -10,8 +10,8 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-GET_IGNORE_CASE(<object>, <field_name>)
-GET_IGNORE_CASE(<variant>, <field_name>)
+GET_IGNORE_CASE( <object>, <field_name> )
+GET_IGNORE_CASE( <variant>, <field_name> )
 ```
 
 ## Arguments

@@ -14,14 +14,14 @@ ABS(x)
 ## Examples
 
 ```sql
-MySQL [(none)]> select ABS(-5);
+SELECT ABS(-5);
 +---------+
 | ABS(-5) |
 +---------+
 |       5 |
 +---------+
 
-MySQL [(none)]> select ABS(-5.5);
+SELECT ABS(-5.5);
 +-----------+
 | ABS(-5.5) |
 +-----------+
