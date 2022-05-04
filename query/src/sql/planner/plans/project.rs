@@ -17,11 +17,11 @@ use std::any::Any;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
 #[derive(Clone)]
@@ -31,7 +31,7 @@ pub struct ProjectPlan {
 
 #[derive(Clone)]
 pub struct ProjectItem {
-    pub expr: ScalarExprRef,
+    pub expr: Scalar,
     pub index: IndexType,
 }
 

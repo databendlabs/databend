@@ -30,7 +30,7 @@ pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::ProjectItem;
 pub use project::ProjectPlan;
-pub use scalar::Scalar;
+pub use scalar::*;
 
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;

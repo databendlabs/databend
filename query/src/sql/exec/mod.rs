@@ -45,7 +45,6 @@ use crate::sql::plans::FilterPlan;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
-use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
 
@@ -97,11 +96,7 @@ impl PipelineBuilder {
                     *index,
                 ))),
             ));
-            let field = if column_entry.nullable {
-                DataField::new_nullable(name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(name.as_str(), column_entry.data_type.clone())
-            };
+            let field = DataField::new(name.as_str(), column_entry.data_type.clone());
             output_fields.push(field);
         }
         let output_schema = Arc::new(DataSchema::new(output_fields));
@@ -160,17 +155,10 @@ impl PipelineBuilder {
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        for expr in project.items.iter() {
-            let scalar = expr.expr.as_any().downcast_ref::<Scalar>().unwrap();
-            let expression = expr_builder.build(scalar)?;
-            expressions.push(match expression {
-                Expression::Column(_) => expression.clone(),
-                _ => {
-                    let col_name = expression.column_name();
-                    let idx = self.metadata.column_idx_by_column_name(col_name.as_str())?;
-                    Expression::Column(format_field_name(col_name.as_str(), idx))
-                }
-            });
+        for item in project.items.iter() {
+            let scalar = &item.expr;
+            let expression = expr_builder.build_and_rename(scalar, item.index)?;
+            expressions.push(expression);
         }
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
@@ -194,7 +182,7 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let output_schema = input_schema.clone();
         let eb = ExpressionBuilder::create(&self.metadata);
-        let scalar = filter.predicate.as_any().downcast_ref::<Scalar>().unwrap();
+        let scalar = &filter.predicate;
         let pred = eb.build(scalar)?;
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
@@ -254,8 +242,7 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        for scalar_expr in aggregate.agg_expr.iter() {
-            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+        for scalar in aggregate.agg_expr.iter() {
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
@@ -266,8 +253,7 @@ impl PipelineBuilder {
         let partial_schema = schema_builder.build_aggregate(partial_data_fields, &input_schema)?;
 
         let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
-        for scalar_expr in aggregate.group_expr.iter() {
-            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+        for scalar in aggregate.group_expr.iter() {
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
         }

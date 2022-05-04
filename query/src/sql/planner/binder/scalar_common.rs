@@ -63,7 +63,7 @@ where F: Fn(&Scalar) -> bool {
     scalars
 }
 
-fn find_scalars_in_scalars<F>(scalars: &[&Scalar], find_fn: &F) -> Vec<Scalar>
+fn find_scalars_in_scalars<F>(scalars: &[Scalar], find_fn: &F) -> Vec<Scalar>
 where F: Fn(&Scalar) -> bool {
     scalars
         .iter()
@@ -76,7 +76,7 @@ where F: Fn(&Scalar) -> bool {
         })
 }
 
-pub fn find_aggregate_scalars(scalars: &[&Scalar]) -> Vec<Scalar> {
+pub fn find_aggregate_scalars(scalars: &[Scalar]) -> Vec<Scalar> {
     find_scalars_in_scalars(scalars, &|nest_scalar| {
         matches!(nest_scalar, Scalar::AggregateFunction { .. })
     })
@@ -86,16 +86,7 @@ pub fn find_aggregate_scalars_from_bind_context(bind_context: &BindContext) -> R
     let scalars = bind_context
         .all_column_bindings()
         .iter()
-        .filter(|col_binding| col_binding.scalar.is_some())
-        .map(|col_binding| {
-            col_binding
-                .scalar
-                .as_ref()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<Scalar>()
-                .unwrap()
-        })
-        .collect::<Vec<&Scalar>>();
+        .flat_map(|col_binding| col_binding.scalar.clone().map(|s| *s))
+        .collect::<Vec<Scalar>>();
     Ok(find_aggregate_scalars(&scalars))
 }

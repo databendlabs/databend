@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_ast::ast::Expr;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -22,10 +21,10 @@ use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::scalar_common::find_aggregate_scalars_from_bind_context;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
-use crate::sql::ScalarExprRef;
 
 impl Binder {
     pub(crate) fn analyze_aggregate(
@@ -33,24 +32,25 @@ impl Binder {
         output_context: &BindContext,
         input_context: &mut BindContext,
     ) -> Result<()> {
-        let mut agg_expr: Vec<ScalarExprRef> = Vec::new();
+        let mut agg_expr: Vec<Scalar> = Vec::new();
         for agg_scalar in find_aggregate_scalars_from_bind_context(output_context)? {
             match agg_scalar {
-                Scalar::AggregateFunction {
+                Scalar::AggregateFunction(AggregateFunction {
                     func_name,
                     distinct,
                     params,
                     args,
-                    data_type,
-                    nullable,
-                } => agg_expr.push(Arc::new(Scalar::AggregateFunction {
-                    func_name,
-                    distinct,
-                    params,
-                    args,
-                    data_type,
-                    nullable,
-                })),
+                    return_type,
+                }) => agg_expr.push(
+                    AggregateFunction {
+                        func_name,
+                        distinct,
+                        params,
+                        args,
+                        return_type,
+                    }
+                    .into(),
+                ),
                 _ => {
                     return Err(ErrorCode::LogicalError(
                         "scalar expr must be Aggregation scalar expr",
@@ -67,15 +67,15 @@ impl Binder {
         group_by_expr: &[Expr],
         input_context: &mut BindContext,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new();
+        let scalar_binder = ScalarBinder::new(input_context);
         let group_expr = group_by_expr
             .iter()
-            .map(|expr| scalar_binder.bind_expr(expr, input_context))
-            .collect::<Result<Vec<ScalarExprRef>>>();
+            .map(|expr| scalar_binder.bind_expr(expr))
+            .collect::<Result<Vec<(Scalar, DataTypeImpl)>>>()?;
 
         let aggregate_plan = AggregatePlan {
-            group_expr: group_expr?,
-            agg_expr: input_context.agg_scalar_exprs.as_ref().unwrap().clone(),
+            group_expr: group_expr.into_iter().map(|(scalar, _)| scalar).collect(),
+            agg_expr: input_context.agg_scalar_exprs.clone().unwrap(),
         };
         let new_expr = SExpr::create_unary(
             aggregate_plan.into(),
