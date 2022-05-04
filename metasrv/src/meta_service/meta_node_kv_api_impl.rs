@@ -94,7 +94,7 @@ impl KVApi for MetaNode {
         Ok(res)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, txn), fields(txn=display(&txn)))]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
         let ent = LogEntry {
             txid: None,
