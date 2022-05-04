@@ -20,6 +20,7 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -29,11 +30,11 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
+use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalGet;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
-use crate::sql::ScalarExprRef;
 use crate::storages::Table;
 use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
@@ -45,12 +46,22 @@ impl Binder {
         query: &Query,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
-        match &query.body {
+        let bind_context = match &query.body {
             SetExpr::Select(stmt) => self.bind_select_stmt(stmt, bind_context).await,
             SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
-            _ => todo!(),
-        }
+            _ => Err(ErrorCode::UnImplement("Unsupported query type")),
+        }?;
+
         // TODO: support ORDER BY
+        if !query.order_by.is_empty() {
+            return Err(ErrorCode::UnImplement("Unsupported ORDER BY"));
+        }
+
+        if !query.limit.is_empty() {
+            return Err(ErrorCode::UnImplement("Unsupported LIMIT"));
+        }
+
+        Ok(bind_context)
     }
 
     pub(super) async fn bind_select_stmt(
@@ -122,26 +133,23 @@ impl Binder {
                 params,
                 alias,
             } => {
-                let scalar_binder = ScalarBinder::new();
+                let scalar_binder = ScalarBinder::new(bind_context);
                 let args = params
                     .iter()
-                    .map(|arg| scalar_binder.bind_expr(arg, bind_context))
-                    .collect::<Result<Vec<ScalarExprRef>>>()?;
+                    .map(|arg| scalar_binder.bind_expr(arg))
+                    .collect::<Result<Vec<(Scalar, DataTypeImpl)>>>()?;
                 let expressions = args
                     .into_iter()
-                    .map(|scalar| {
-                        let scalar = scalar.as_any().downcast_ref::<Scalar>().unwrap();
-                        match scalar {
-                            Scalar::Literal { data_value } => Ok(Expression::Literal {
-                                value: data_value.clone(),
-                                column_name: None,
-                                data_type: data_value.data_type(),
-                            }),
-                            _ => Err(ErrorCode::UnImplement(format!(
-                                "Unsupported table argument type: {:?}",
-                                scalar
-                            ))),
-                        }
+                    .map(|(scalar, _)| match scalar {
+                        Scalar::ConstantExpr(ConstantExpr { value }) => Ok(Expression::Literal {
+                            value: value.clone(),
+                            column_name: None,
+                            data_type: value.data_type(),
+                        }),
+                        _ => Err(ErrorCode::UnImplement(format!(
+                            "Unsupported table argument type: {:?}",
+                            scalar
+                        ))),
                     })
                     .collect::<Result<Vec<Expression>>>()?;
 
@@ -163,7 +171,7 @@ impl Binder {
                 }
                 Ok(result)
             }
-            _ => todo!(),
+            _ => Err(ErrorCode::UnImplement("Unsupported table reference type")),
         }
     }
 
@@ -177,7 +185,6 @@ impl Binder {
                 column_name: column.name.clone(),
                 index: column.column_index,
                 data_type: column.data_type.clone(),
-                nullable: column.nullable,
                 scalar: None,
             };
             bind_context.add_column_binding(column_binding);
@@ -194,8 +201,8 @@ impl Binder {
     }
 
     pub(super) fn bind_where(&mut self, expr: &Expr, bind_context: &mut BindContext) -> Result<()> {
-        let scalar_binder = ScalarBinder::new();
-        let scalar = scalar_binder.bind_expr(expr, bind_context)?;
+        let scalar_binder = ScalarBinder::new(bind_context);
+        let (scalar, _) = scalar_binder.bind_expr(expr)?;
         let filter_plan = FilterPlan { predicate: scalar };
         let new_expr =
             SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
