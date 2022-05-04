@@ -176,6 +176,8 @@ pub use table::TableIdent;
 pub use table::TableInfo;
 pub use table::TableMeta;
 pub use table::TableNameIdent;
+pub use table::TenantDBIdTableId;
+pub use table::TenantDBIdTableName;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use user_auth::AuthInfo;

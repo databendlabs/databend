@@ -27,6 +27,12 @@ pub struct DatabaseNameIdent {
     pub db_name: String,
 }
 
+impl Display for DatabaseNameIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.db_name)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub ident: DatabaseIdent,
@@ -44,6 +50,12 @@ pub struct DatabaseIdent {
 pub struct DatabaseTenantIdIdent {
     pub tenant: String,
     pub db_id: u64,
+}
+
+impl Display for DatabaseTenantIdIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.db_id)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

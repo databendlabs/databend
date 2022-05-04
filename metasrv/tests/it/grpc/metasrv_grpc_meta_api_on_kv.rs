@@ -73,9 +73,6 @@ async fn test_meta_api_on_kv_database_list_in_diff_tenant() -> anyhow::Result<()
         .await
 }
 
-// Under developing:
-
-/*
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_on_kv_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
@@ -83,11 +80,13 @@ async fn test_meta_api_on_kv_table_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.table_create_get_drop(&client).await
 }
 
+// Under developing:
+/*
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_on_kv_table_rename() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
