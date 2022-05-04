@@ -88,9 +88,12 @@ impl AlterViewInterpreter {
         let catalog = self.ctx.get_catalog();
         let plan = DropTableReq {
             if_exists: true,
-            tenant: self.plan.tenant.clone(),
-            db_name: self.plan.db.clone(),
-            table_name: self.plan.viewname.clone(),
+
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name: self.plan.db.clone(),
+                table_name: self.plan.viewname.clone(),
+            },
         };
         catalog.drop_table(plan).await?;
 

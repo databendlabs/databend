@@ -499,9 +499,11 @@ impl MetaApiTestSuite {
             // should be not vunerable?
             let plan = DropTableReq {
                 if_exists: false,
-                tenant: tenant.into(),
-                db_name: db_name.into(),
-                table_name: tbl_name.into(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.into(),
+                    db_name: db_name.into(),
+                    table_name: tbl_name.into(),
+                },
             };
 
             let got = mt.drop_table(plan).await;
@@ -652,9 +654,11 @@ impl MetaApiTestSuite {
             {
                 let plan = DropTableReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
                 };
                 mt.drop_table(plan.clone()).await?;
 
@@ -677,9 +681,11 @@ impl MetaApiTestSuite {
             {
                 let plan = DropTableReq {
                     if_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
                 };
                 let res = mt.drop_table(plan.clone()).await;
                 let err = res.unwrap_err();
@@ -695,9 +701,11 @@ impl MetaApiTestSuite {
             {
                 let plan = DropTableReq {
                     if_exists: true,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
                 };
                 mt.drop_table(plan.clone()).await?;
             }

@@ -244,9 +244,19 @@ pub struct CreateTableReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
-    pub table_name: String,
+    pub name_ident: TableNameIdent,
+}
+
+impl DropTableReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+    pub fn table_name(&self) -> &str {
+        &self.name_ident.table_name
+    }
 }
 
 impl Display for DropTableReq {
@@ -254,7 +264,10 @@ impl Display for DropTableReq {
         write!(
             f,
             "drop_table(if_exists={}):{}/{}-{}",
-            self.if_exists, self.tenant, self.db_name, self.table_name
+            self.if_exists,
+            self.tenant(),
+            self.db_name(),
+            self.table_name()
         )
     }
 }
