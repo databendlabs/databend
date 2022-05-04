@@ -189,7 +189,7 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let table_name = req.table_name.clone();
+        let table_name = req.table_name().to_string();
         let if_exists = req.if_exists;
 
         let res = self.sm_tree.txn(true, |t| {

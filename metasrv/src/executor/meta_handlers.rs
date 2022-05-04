@@ -182,7 +182,7 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropTableReq> for ActionHandler {
     async fn handle(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let table_name = req.table_name.clone();
+        let table_name = req.table_name().to_string();
         let if_exists = req.if_exists;
 
         let cr = LogEntry {
