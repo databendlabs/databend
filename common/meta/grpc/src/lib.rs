@@ -26,5 +26,5 @@ pub use grpc_action::MetaGrpcWriteReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::MetaGrpcClient;
 pub use grpc_client_conf::MetaGrpcClientConf;
+pub use meta_client_on_kv::KVApiKey;
 pub use meta_client_on_kv::MetaClientOnKV;
-pub use meta_client_on_kv::ToKVMetaKey;

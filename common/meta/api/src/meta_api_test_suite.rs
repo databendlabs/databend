@@ -207,7 +207,7 @@ impl MetaApiTestSuite {
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
         tracing::info!("--- tenant1 create db1");
-        {
+        let db_id_1 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -224,10 +224,11 @@ impl MetaApiTestSuite {
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.database_id, "first database id is 1");
-        }
+            res.database_id
+        };
 
         tracing::info!("--- tenant1 create db2");
-        {
+        let db_id_2 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -243,11 +244,16 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(2, res.database_id, "second database id is 2");
-        }
+            assert!(
+                res.database_id > db_id_1,
+                "second database id is > {}",
+                db_id_1
+            );
+            res.database_id
+        };
 
         tracing::info!("--- tenant2 create db1");
-        {
+        let _db_id_3 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -263,8 +269,9 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(3, res.database_id, "third database id is 3");
-        }
+            assert!(res.database_id > db_id_2, "third database id > {}", db_id_2);
+            res.database_id
+        };
 
         tracing::info!("--- tenant1 get db1");
         {
@@ -340,25 +347,37 @@ impl MetaApiTestSuite {
 
     pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
+        let mut db_ids = vec![];
+        let db_names = vec!["db1", "db2"];
+        let engines = vec!["eng1", "eng2"];
         let tenant = "tenant1";
         {
-            let res = self.create_database(mt, tenant, "db1").await?;
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
             assert_eq!(1, res.database_id);
+            db_ids.push(res.database_id);
 
-            let res = self.create_database(mt, tenant, "db2").await?;
-            assert_eq!(2, res.database_id);
+            let res = self.create_database(mt, tenant, "db2", "eng2").await?;
+            assert!(res.database_id > 1);
+            db_ids.push(res.database_id);
         }
 
-        tracing::info!("--- get_databases");
+        tracing::info!("--- list_databases");
         {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
                     tenant: tenant.to_string(),
                 })
                 .await?;
-            let want: Vec<u64> = vec![1, 2];
+
             let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
-            assert_eq!(want, got)
+            assert_eq!(db_ids, got);
+
+            for (i, db_info) in dbs.iter().enumerate() {
+                assert_eq!(tenant, db_info.name_ident.tenant);
+                assert_eq!(db_names[i], db_info.name_ident.db_name);
+                assert_eq!(db_ids[i], db_info.ident.db_id);
+                assert_eq!(engines[i], db_info.meta.engine);
+            }
         }
 
         Ok(())
@@ -368,18 +387,22 @@ impl MetaApiTestSuite {
         tracing::info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
+
+        let mut db_ids = vec![];
         {
-            let res = self.create_database(mt, tenant1, "db1").await?;
+            let res = self.create_database(mt, tenant1, "db1", "eng1").await?;
             assert_eq!(1, res.database_id);
+            db_ids.push(res.database_id);
 
-            let res = self.create_database(mt, tenant1, "db2").await?;
-            assert_eq!(2, res.database_id);
+            let res = self.create_database(mt, tenant1, "db2", "eng2").await?;
+            assert!(res.database_id > 1);
+            db_ids.push(res.database_id);
         }
 
-        {
-            let res = self.create_database(mt, tenant2, "db3").await?;
-            assert_eq!(3, res.database_id);
-        }
+        let db_id_3 = {
+            let res = self.create_database(mt, tenant2, "db3", "eng1").await?;
+            res.database_id
+        };
 
         tracing::info!("--- get_databases by tenant1");
         {
@@ -388,9 +411,8 @@ impl MetaApiTestSuite {
                     tenant: tenant1.to_string(),
                 })
                 .await?;
-            let want: Vec<u64> = vec![1, 2];
             let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
-            assert_eq!(want, got)
+            assert_eq!(db_ids, got)
         }
 
         tracing::info!("--- get_databases by tenant2");
@@ -400,7 +422,7 @@ impl MetaApiTestSuite {
                     tenant: tenant2.to_string(),
                 })
                 .await?;
-            let want: Vec<u64> = vec![3];
+            let want: Vec<u64> = vec![db_id_3];
             let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
@@ -938,7 +960,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- prepare db");
         {
-            let res = self.create_database(mt, tenant, db_name).await?;
+            let res = self.create_database(mt, tenant, db_name, "eng1").await?;
             assert_eq!(1, res.database_id, "first database id is 1");
         }
 
@@ -1127,6 +1149,7 @@ impl MetaApiTestSuite {
         mt: &MT,
         tenant: &str,
         db_name: &str,
+        engine: &str,
     ) -> anyhow::Result<CreateDatabaseReply> {
         tracing::info!("--- create database {}", db_name);
 
@@ -1137,7 +1160,7 @@ impl MetaApiTestSuite {
                 db_name: db_name.to_string(),
             },
             meta: DatabaseMeta {
-                engine: "".to_string(),
+                engine: engine.to_string(),
                 ..Default::default()
             },
         };

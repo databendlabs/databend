@@ -14,13 +14,9 @@
 
 //! Test metasrv MetaApi on a single node.
 
-use std::time::Duration;
-
 use common_base::tokio;
-use common_base::tokio::time::sleep;
 use common_meta_api::MetaApiTestSuite;
 use common_meta_grpc::MetaClientOnKV;
-use common_tracing::tracing;
 
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
@@ -34,18 +30,8 @@ async fn test_meta_api_on_kv_database_create_get_drop() -> anyhow::Result<()> {
 
     let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    tracing::debug!("--- xp is here");
-    MetaApiTestSuite {}
-        .database_create_get_drop(&client)
-        .await?;
-
-    sleep(Duration::from_millis(2000)).await;
-    Ok(())
+    MetaApiTestSuite {}.database_create_get_drop(&client).await
 }
-
-// Under developing:
-
-/*
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_on_kv_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
@@ -54,7 +40,7 @@ async fn test_meta_api_on_kv_database_create_get_drop_in_diff_tenant() -> anyhow
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(&client)
@@ -68,7 +54,7 @@ async fn test_meta_api_on_kv_database_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.database_list(&client).await
 }
@@ -80,13 +66,16 @@ async fn test_meta_api_on_kv_database_list_in_diff_tenant() -> anyhow::Result<()
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}
         .database_list_in_diff_tenant(&client)
         .await
 }
 
+// Under developing:
+
+/*
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_on_kv_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();

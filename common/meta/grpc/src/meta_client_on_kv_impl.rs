@@ -70,7 +70,7 @@ use txn_condition::Target;
 use ConditionResult::Eq;
 
 use crate::meta_client_on_kv::DatabaseIdGen;
-use crate::meta_client_on_kv::ToKVMetaKey;
+use crate::meta_client_on_kv::KVApiKey;
 use crate::MetaClientOnKV;
 
 #[tonic::async_trait]
@@ -85,7 +85,6 @@ impl MetaApi for MetaClientOnKV {
             tenant: name_key.tenant.clone(),
             db_id: 0,
         };
-        tracing::debug!("--- xp:  enter create_database");
 
         loop {
             // Get db by name to ensure absence
@@ -224,9 +223,79 @@ impl MetaApi for MetaClientOnKV {
 
     async fn list_databases(
         &self,
-        _req: ListDatabaseReq,
+        req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
-        todo!()
+        let name_key = DatabaseNameIdent {
+            tenant: req.tenant,
+            // Using a empty db to to list all
+            db_name: "".to_string(),
+        };
+
+        let prefix = name_key.to_key();
+        // Pairs of db-name and db_id with seq
+        let key_seq_ids = self.inner.prefix_list_kv(&prefix).await?;
+
+        let n = key_seq_ids.len();
+
+        // Keys for fetching serialized DatabaseMeta from KVApi
+        let mut kv_keys = Vec::with_capacity(n);
+        let mut db_names = Vec::with_capacity(n);
+        let mut db_ids = Vec::with_capacity(n);
+
+        for (db_name_key, seq_id) in key_seq_ids.iter() {
+            let db_id = self
+                .deserialize_id(&seq_id.data)
+                .map_err(Self::meta_encode_err)?;
+            db_ids.push(db_id);
+
+            // Parse key and get db_name:
+
+            let n = DatabaseNameIdent::from_key(db_name_key).map_err(Self::meta_encode_err)?;
+            db_names.push(n.db_name);
+
+            // Build KVApi key for `mget()` db_meta
+            let tenant_id_key = DatabaseTenantIdIdent {
+                tenant: name_key.tenant.clone(),
+                db_id,
+            };
+
+            let k = tenant_id_key.to_key();
+            kv_keys.push(k);
+        }
+
+        // Batch get all db-metas.
+        // - A db-meta may be already deleted. It is Ok. Just ignore it.
+
+        let seq_metas = self.inner.mget_kv(&kv_keys).await?;
+        let mut db_infos = Vec::with_capacity(kv_keys.len());
+
+        for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
+            if let Some(seq_meta) = seq_meta_opt {
+                let db_meta: DatabaseMeta = self
+                    .deserialize_struct(&seq_meta.data)
+                    .map_err(Self::meta_encode_err)?;
+
+                let db_info = DatabaseInfo {
+                    ident: DatabaseIdent {
+                        db_id: db_ids[i],
+                        seq: seq_meta.seq,
+                    },
+                    name_ident: DatabaseNameIdent {
+                        tenant: name_key.tenant.clone(),
+                        db_name: db_names[i].clone(),
+                    },
+                    meta: db_meta,
+                };
+                db_infos.push(Arc::new(db_info));
+            } else {
+                tracing::debug!(
+                    k = display(&kv_keys[i]),
+                    "db_meta not found, maybe just deleted after listing names and before listing meta"
+                );
+            }
+        }
+
+        Ok(db_infos)
     }
 
     async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
@@ -308,10 +377,7 @@ impl MetaClientOnKV {
         &self,
         name_ident: &DatabaseNameIdent,
     ) -> Result<(u64, u64), MetaError> {
-        let res = self
-            .inner
-            .get_kv(&name_ident.to_key().map_err(Self::meta_encode_err)?)
-            .await?;
+        let res = self.inner.get_kv(&name_ident.to_key()).await?;
 
         if let Some(seq_v) = res {
             Ok((seq_v.seq, self.deserialize_id(&seq_v.data)?))
@@ -327,10 +393,7 @@ impl MetaClientOnKV {
         &self,
         tid: &DatabaseTenantIdIdent,
     ) -> Result<(u64, Option<DatabaseMeta>), MetaError> {
-        let res = self
-            .inner
-            .get_kv(&tid.to_key().map_err(Self::meta_encode_err)?)
-            .await?;
+        let res = self.inner.get_kv(&tid.to_key()).await?;
 
         if let Some(seq_v) = res {
             Ok((seq_v.seq, Some(self.deserialize_struct(&seq_v.data)?)))
@@ -361,11 +424,11 @@ impl MetaClientOnKV {
     ///
     /// Ids are categorized by generators.
     /// Ids may not be consecutive.
-    async fn fetch_id<T: ToKVMetaKey>(&self, generator: T) -> Result<u64, MetaError> {
+    async fn fetch_id<T: KVApiKey>(&self, generator: T) -> Result<u64, MetaError> {
         let res = self
             .inner
             .upsert_kv(UpsertKVAction {
-                key: generator.to_key().map_err(Self::meta_encode_err)?,
+                key: generator.to_key(),
                 seq: MatchSeq::Any,
                 value: Operation::Update(b"".to_vec()),
                 value_meta: None,
@@ -380,12 +443,12 @@ impl MetaClientOnKV {
     /// Build a TxnCondition that compares the seq of a record.
     fn txn_cond_seq(
         &self,
-        key: &impl ToKVMetaKey,
+        key: &impl KVApiKey,
         op: ConditionResult,
         seq: u64,
     ) -> Result<TxnCondition, MetaError> {
         let cond = TxnCondition {
-            key: key.to_key().map_err(Self::meta_encode_err)?,
+            key: key.to_key(),
             expected: op as i32,
             target: Some(Target::Seq(seq)),
         };
@@ -393,10 +456,10 @@ impl MetaClientOnKV {
     }
 
     /// Build a txn operation that puts a record.
-    fn txn_op_put(&self, key: &impl ToKVMetaKey, value: Vec<u8>) -> Result<TxnOp, MetaError> {
+    fn txn_op_put(&self, key: &impl KVApiKey, value: Vec<u8>) -> Result<TxnOp, MetaError> {
         let put = TxnOp {
             request: Some(Request::Put(TxnPutRequest {
-                key: key.to_key().map_err(Self::meta_encode_err)?,
+                key: key.to_key(),
                 value,
                 prev_value: true,
             })),
@@ -405,10 +468,10 @@ impl MetaClientOnKV {
     }
 
     /// Build a txn operation that deletes a record.
-    fn txn_op_del(&self, key: &impl ToKVMetaKey) -> Result<TxnOp, MetaError> {
+    fn txn_op_del(&self, key: &impl KVApiKey) -> Result<TxnOp, MetaError> {
         let put = TxnOp {
             request: Some(Request::Delete(TxnDeleteRequest {
-                key: key.to_key().map_err(Self::meta_encode_err)?,
+                key: key.to_key(),
                 prev_value: true,
             })),
         };
