@@ -13,7 +13,9 @@
 //  limitations under the License.
 //
 
-mod fuse_snapshots;
+mod fuse_snapshot;
+mod fuse_snapshot_table;
+mod table_args;
 
-pub use fuse_snapshots::FuseSnapshot;
-pub use fuse_snapshots::FuseSnapshotTable;
+pub use fuse_snapshot::FuseSnapshot;
+pub use fuse_snapshot_table::FuseSnapshotTable;

@@ -31,6 +31,9 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use super::fuse_snapshot::FuseSnapshot;
+use super::table_args::parse_func_history_args;
+use super::table_args::string_literal;
 use crate::catalogs::Catalog;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -39,23 +42,20 @@ use crate::pipelines::new::processors::AsyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
-use crate::storages::fuse::table_functions::table_arg_util::string_literal;
-use crate::storages::fuse::FuseHistory;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
-pub const FUSE_FUNC_HIST: &str = "fuse_history";
+const FUSE_FUNC_SNAPSHOT: &str = "fuse_snapshot";
 
-pub struct FuseHistoryTable {
+pub struct FuseSnapshotTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
 }
 
-impl FuseHistoryTable {
+impl FuseSnapshotTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
@@ -64,20 +64,20 @@ impl FuseHistoryTable {
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
 
-        let engine = FUSE_FUNC_HIST.to_owned();
+        let engine = FUSE_FUNC_SNAPSHOT.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: FuseHistory::schema(),
+                schema: FuseSnapshot::schema(),
                 engine,
                 ..Default::default()
             },
         };
 
-        Ok(Arc::new(FuseHistoryTable {
+        Ok(Arc::new(FuseSnapshotTable {
             table_info,
             arg_database_name,
             arg_table_name,
@@ -86,7 +86,7 @@ impl FuseHistoryTable {
 }
 
 #[async_trait::async_trait]
-impl Table for FuseHistoryTable {
+impl Table for FuseSnapshotTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -132,9 +132,9 @@ impl Table for FuseHistoryTable {
             ))
         })?;
 
-        let blocks = vec![FuseHistory::new(ctx.clone(), tbl).get_history().await?];
+        let blocks = vec![FuseSnapshot::new(ctx.clone(), tbl).get_history().await?];
         Ok(Box::pin(DataBlockStream::create(
-            FuseHistory::schema(),
+            FuseSnapshot::schema(),
             None,
             blocks,
         )))
@@ -186,7 +186,7 @@ impl FuseHistorySource {
 }
 
 impl AsyncSource for FuseHistorySource {
-    const NAME: &'static str = "fuse_history";
+    const NAME: &'static str = "fuse_snapshot";
 
     type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
@@ -216,7 +216,7 @@ impl AsyncSource for FuseHistorySource {
             })?;
 
             Ok(Some(
-                FuseHistory::new(self.ctx.clone(), tbl)
+                FuseSnapshot::new(self.ctx.clone(), tbl)
                     .get_history()
                     .await?,
             ))
@@ -224,7 +224,7 @@ impl AsyncSource for FuseHistorySource {
     }
 }
 
-impl TableFunction for FuseHistoryTable {
+impl TableFunction for FuseSnapshotTable {
     fn function_name(&self) -> &str {
         self.name()
     }

@@ -23,21 +23,21 @@ use crate::catalogs::Catalog;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::FuseHistory;
+use crate::storages::fuse::table_functions::FuseSnapshot;
 use crate::storages::fuse::FuseTable;
 
-pub struct FuseHistoryProcedure {}
+pub struct FuseSnapshotProcedure {}
 
-impl FuseHistoryProcedure {
+impl FuseSnapshotProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(FuseHistoryProcedure {}))
+        Ok(Box::new(FuseSnapshotProcedure {}))
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for FuseHistoryProcedure {
+impl Procedure for FuseSnapshotProcedure {
     fn name(&self) -> &str {
-        "FUSE_HISTORY"
+        "FUSE_SNAPSHOT"
     }
 
     fn features(&self) -> ProcedureFeatures {
@@ -64,10 +64,10 @@ impl Procedure for FuseHistoryProcedure {
             ))
         })?;
 
-        Ok(FuseHistory::new(ctx, tbl).get_history().await?)
+        Ok(FuseSnapshot::new(ctx, tbl).get_history().await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        FuseHistory::schema()
+        FuseSnapshot::schema()
     }
 }

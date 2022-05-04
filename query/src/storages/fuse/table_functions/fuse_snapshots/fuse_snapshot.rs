@@ -18,17 +18,17 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use super::io::MetaReaders;
-use super::meta::TableSnapshot;
-use super::FuseTable;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::FuseTable;
 
-pub struct FuseHistory<'a> {
+pub struct FuseSnapshot<'a> {
     pub ctx: Arc<QueryContext>,
     pub table: &'a FuseTable,
 }
 
-impl<'a> FuseHistory<'a> {
+impl<'a> FuseSnapshot<'a> {
     pub fn new(ctx: Arc<QueryContext>, table: &'a FuseTable) -> Self {
         Self { ctx, table }
     }
@@ -51,7 +51,7 @@ impl<'a> FuseHistory<'a> {
     fn snapshots_to_block(
         &self,
         snapshots: Vec<Arc<TableSnapshot>>,
-        lastest_snapshot_version: u64,
+        latest_snapshot_version: u64,
     ) -> Result<DataBlock> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
@@ -63,7 +63,7 @@ impl<'a> FuseHistory<'a> {
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
-        let mut current_snapshot_version = lastest_snapshot_version;
+        let mut current_snapshot_version = latest_snapshot_version;
         let location_generator = &self.table.meta_location_generator;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
@@ -86,7 +86,7 @@ impl<'a> FuseHistory<'a> {
             current_snapshot_version = ver;
         }
 
-        Ok(DataBlock::create(FuseHistory::schema(), vec![
+        Ok(DataBlock::create(FuseSnapshot::schema(), vec![
             Series::from_data(snapshot_ids),
             Series::from_data(snapshot_locations),
             Series::from_data(format_versions),
