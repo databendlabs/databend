@@ -110,9 +110,15 @@ pub enum Cmd {
     RenameTable {
         // latest add
         if_exists: Option<bool>,
-        tenant: String,
-        db_name: String,
-        table_name: String,
+        // latest add
+        name_ident: Option<TableNameIdent>,
+        // 20220413
+        tenant: Option<String>,
+        // 20220413
+        db_name: Option<String>,
+        // 20220413
+        table_name: Option<String>,
+
         new_db_name: String,
         new_table_name: String,
     },

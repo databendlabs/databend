@@ -278,11 +278,21 @@ pub struct DropTableReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTableReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
-    pub table_name: String,
+    pub name_ident: TableNameIdent,
     pub new_db_name: String,
     pub new_table_name: String,
+}
+
+impl RenameTableReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+    pub fn table_name(&self) -> &str {
+        &self.name_ident.table_name
+    }
 }
 
 impl Display for RenameTableReq {
@@ -290,7 +300,11 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant, self.db_name, self.table_name, self.new_db_name, self.new_table_name
+            self.tenant(),
+            self.db_name(),
+            self.table_name(),
+            self.new_db_name,
+            self.new_table_name
         )
     }
 }

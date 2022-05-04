@@ -535,17 +535,17 @@ impl StateMachine {
         req: &RenameTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
-        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
+        let db_id = self.txn_get_database_id(req.tenant(), req.db_name(), txn_tree)?;
+        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, req.table_name())?;
         if prev.is_none() {
             return Err(MetaStorageError::AppError(AppError::UnknownTable(
-                UnknownTable::new(&req.table_name, "apply_rename_table_cmd"),
+                UnknownTable::new(req.table_name(), "apply_rename_table_cmd"),
             )));
         }
         assert!(result.is_none());
 
         let table_meta = &prev.as_ref().unwrap().data;
-        let db_id = self.txn_get_database_id(&req.tenant, &req.new_db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(req.tenant(), &req.new_db_name, txn_tree)?;
         let (new_table_id, new_prev, new_result) =
             self.txn_create_table(txn_tree, db_id, table_id, &req.new_table_name, table_meta)?;
         if new_prev.is_some() {
