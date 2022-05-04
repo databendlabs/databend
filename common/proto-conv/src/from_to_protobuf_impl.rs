@@ -174,7 +174,7 @@ impl FromToProto<pb::TableInfo> for mt::TableInfo {
     }
 }
 
-impl FromToProto<pb::TableNameIdent> for mt::TableNameIndent {
+impl FromToProto<pb::TableNameIdent> for mt::TableNameIdent {
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
         check_ver(p.ver)?;
 

@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 
 use crate::storages::github::github_client::create_github_client;
 use crate::storages::github::GithubDataGetter;
@@ -52,9 +53,11 @@ impl RepoInfoTable {
         options.table_type = GithubTableType::Info.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: options.owner.clone(),
-            table_name: options.repo.clone(),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: options.owner.clone(),
+                table_name: options.repo.clone(),
+            },
             table_meta: TableMeta {
                 schema: RepoInfoTable::schema(),
                 engine: "GITHUB".into(),

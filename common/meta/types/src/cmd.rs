@@ -33,6 +33,7 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::RenameTableReq;
+use crate::TableNameIdent;
 use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
@@ -205,6 +206,7 @@ impl<'de> Deserialize<'de> for Cmd {
             }
             LatestVersionCmd::CreateTable {
                 if_not_exists,
+                name_ident,
                 tenant,
                 db_name,
                 table_name,
@@ -213,13 +215,23 @@ impl<'de> Deserialize<'de> for Cmd {
                 // since 20220413 there is an `if_exists` field.
                 let if_not_exists = if_not_exists.unwrap_or_default();
 
-                Cmd::CreateTable(CreateTableReq {
-                    if_not_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                    table_meta,
-                })
+                if let Some(ni) = name_ident {
+                    Cmd::CreateTable(CreateTableReq {
+                        if_not_exists,
+                        name_ident: ni,
+                        table_meta,
+                    })
+                } else {
+                    Cmd::CreateTable(CreateTableReq {
+                        if_not_exists,
+                        name_ident: TableNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: db_name.unwrap(),
+                            table_name: table_name.unwrap(),
+                        },
+                        table_meta,
+                    })
+                }
             }
             LatestVersionCmd::DropTable {
                 if_exists,

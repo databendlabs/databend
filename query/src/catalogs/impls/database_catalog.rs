@@ -257,7 +257,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        if req.tenant.is_empty() {
+        if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while create table)",
             ));
@@ -266,7 +266,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(req.tenant(), req.db_name())
             .await?
         {
             return self.immutable_catalog.create_table(req).await;

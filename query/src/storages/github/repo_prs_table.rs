@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use octocrab::models;
 use octocrab::params;
 
@@ -55,9 +56,11 @@ impl RepoPRsTable {
         options.table_type = GithubTableType::PullRequests.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: options.owner.clone(),
-            table_name: format!("{}_{}", options.repo.clone(), "prs"),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: options.owner.clone(),
+                table_name: format!("{}_{}", options.repo.clone(), "prs"),
+            },
             table_meta: TableMeta {
                 schema: RepoPRsTable::schema(),
                 engine: "GITHUB".into(),
