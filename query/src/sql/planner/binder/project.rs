@@ -108,7 +108,7 @@ impl Binder {
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => alias.name.clone(),
-                        None => self.metadata.get_expr_display_string(expr, true)?,
+                        None => self.metadata.get_expr_display_string(expr)?,
                     };
 
                     // TODO(leiysky): If expr is a ColumnRef, then it's a pass-through column.

@@ -45,13 +45,12 @@ impl<'a> DataSchemaBuilder<'a> {
                 new_data_fields.push(data_field);
                 continue;
             }
-            let idx = self
-                .metadata
-                .column_idx_by_column_name(data_field.name().as_str())?;
-            new_data_fields.push(DataField::new(
-                &*format_field_name(data_field.name().as_str(), idx),
-                data_field.data_type().clone(),
-            ));
+            let field = if data_field.is_nullable() {
+                DataField::new_nullable(data_field.name(), data_field.data_type().clone())
+            } else {
+                DataField::new(data_field.name(), data_field.data_type().clone())
+            };
+            new_data_fields.push(field);
         }
         Ok(Arc::new(DataSchema::new(new_data_fields)))
     }

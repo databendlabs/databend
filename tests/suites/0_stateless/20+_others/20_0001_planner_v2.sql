@@ -20,6 +20,7 @@ select * from numbers(5) where number in (1, 3);
 -- Aggregator operator
 create table t(a int, b int);
 insert into t values(1, 2), (2, 3), (3, 4);
+select sum(a) + 1 from t group by a;
 select sum(a) from t group by a;
 select sum(a) from t;
 select count(a) from t group by a;
