@@ -263,6 +263,7 @@ impl QueryContextShared {
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+            format.timezone = settings.get_timezone()?;
         }
         Ok(format)
     }

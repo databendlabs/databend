@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use chrono_tz::Tz;
 use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -125,6 +126,10 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
     fn create_serializer(&self) -> TypeSerializerImpl;
+    /// work for timestamp serializer
+    fn create_serializer_with_tz(&self, _tz: Tz) -> TypeSerializerImpl {
+        unimplemented!()
+    }
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 

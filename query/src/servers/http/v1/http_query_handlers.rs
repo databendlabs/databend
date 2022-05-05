@@ -202,7 +202,7 @@ pub(crate) async fn query_handler(
         .try_create_query(&query_id, ctx, req)
         .await;
 
-    // TODO(veeupup): get query_ctx's format_settings here
+    // TODO(veeupup): get global query_ctx's format_settings, because we cann't set session settings now
     let format = FormatSettings::default();
     match query {
         Ok(query) => {

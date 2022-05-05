@@ -150,6 +150,10 @@ impl DataType for TimestampType {
         TimestampSerializer::default().into()
     }
 
+    fn create_serializer_with_tz(&self, tz: Tz) -> TypeSerializerImpl {
+        TimestampSerializer::new_with_tz(tz).into()
+    }
+
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         let tz = "UTC".parse::<Tz>().unwrap();
         TimestampDeserializer {

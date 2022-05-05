@@ -37,6 +37,10 @@ impl Default for TimestampSerializer {
 }
 
 impl TimestampSerializer {
+    pub fn new_with_tz(tz: Tz) -> Self {
+        Self {tz}
+    }
+
     pub fn to_timestamp(&self, value: &i64) -> DateTime<Tz> {
         value.to_timestamp(&self.tz)
     }
