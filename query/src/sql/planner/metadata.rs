@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 
 use crate::sql::common::IndexType;
-use crate::sql::exec::format_field_name;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -120,45 +119,9 @@ impl Metadata {
         result
     }
 
-    pub fn column_idx_by_column_name(&self, col_name: &str) -> Result<IndexType> {
-        for col in self.columns.iter() {
-            if col.name == col_name {
-                return Ok(col.column_index);
-            }
-        }
-        Err(ErrorCode::LogicalError(format!(
-            "Can't find column {col_name} in metadata"
-        )))
-    }
-
-    fn create_function_display_name(
-        &self,
-        fun: &str,
-        distinct: &bool,
-        args: &[Expr],
-    ) -> Result<String> {
-        let mut names = Vec::new();
-        if !optimize_remove_count_args(fun, *distinct, args) {
-            names = args
-                .iter()
-                .map(|arg| self.get_expr_display_string(arg, false))
-                .collect::<Result<Vec<String>>>()?;
-        }
-        Ok(match distinct {
-            true => format!("{}({}{})", fun, "distinct ", names.join(",")),
-            false => format!("{}({}{})", fun, "", names.join(",")),
-        })
-    }
-
-    pub fn get_expr_display_string(&self, expr: &Expr, is_first_expr: bool) -> Result<String> {
+    pub fn get_expr_display_string(&self, expr: &Expr) -> Result<String> {
         match expr {
-            Expr::ColumnRef { column, .. } => {
-                if is_first_expr {
-                    return Ok(column.name.clone());
-                }
-                let idx = self.column_idx_by_column_name(column.name.as_str())?;
-                Ok(format_field_name(column.name.as_str(), idx))
-            }
+            Expr::ColumnRef { column, .. } => Ok(column.name.clone()),
 
             Expr::Literal(literal) => Ok(format!("{}", literal)),
 
@@ -169,7 +132,25 @@ impl Metadata {
                 distinct,
                 args,
                 ..
-            } => self.create_function_display_name(name.name.as_str(), distinct, args),
+            } => {
+                let fun = name.name.as_str();
+                let mut names = Vec::new();
+                if !optimize_remove_count_args(
+                    fun,
+                    *distinct,
+                    args.iter().collect::<Vec<&Expr>>().as_slice(),
+                ) {
+                    names = args
+                        .iter()
+                        .map(|arg| self.get_expr_display_string(arg))
+                        .collect::<Result<Vec<String>>>()?;
+                }
+
+                Ok(match distinct {
+                    true => format!("{}({}{})", fun, "distinct ", names.join(",")),
+                    false => format!("{}({}{})", fun, "", names.join(",")),
+                })
+            }
 
             Expr::IsNull { expr, not } => Ok(format!(
                 "{} IS {}NULL",
@@ -275,7 +256,7 @@ impl Metadata {
     }
 }
 
-pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[Expr]) -> bool {
+pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {
     name.eq_ignore_ascii_case("count")
         && !distinct
         && args
