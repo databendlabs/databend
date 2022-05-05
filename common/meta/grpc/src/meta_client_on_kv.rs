@@ -19,10 +19,10 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_types::DBIdTableName;
 use common_meta_types::DatabaseId;
 use common_meta_types::DatabaseNameIdent;
 use common_meta_types::TenantDBIdTableId;
-use common_meta_types::TenantDBIdTableName;
 use common_tracing::tracing;
 
 use crate::MetaGrpcClient;
@@ -162,17 +162,15 @@ impl KVApiKey for DatabaseId {
     }
 }
 
-/// "__fd_table/<tenant_id>/<db_id>/by_name/<tb_name>"
-impl KVApiKey for TenantDBIdTableName {
+/// "__fd_table/<db_id>/<tb_name>"
+impl KVApiKey for DBIdTableName {
     const PREFIX: &'static str = PREFIX_TABLE;
 
     fn to_key(&self) -> String {
         format!(
-            "{}/{}/{}/{}/{}",
+            "{}/{}/{}",
             Self::PREFIX,
-            escape_for_key(&self.tenant),
             self.db_id,
-            SEG_BY_NAME,
             escape_for_key(&self.table_name),
         )
     }
@@ -183,22 +181,15 @@ impl KVApiKey for TenantDBIdTableName {
         let prefix = check_segment_present(elts.next(), 0, s)?;
         check_segment(prefix, 0, Self::PREFIX)?;
 
-        let tenant = check_segment_present(elts.next(), 1, s)?;
-        let tenant = unescape_for_key(tenant)?;
-
-        let db_id = check_segment_present(elts.next(), 2, s)?;
+        let db_id = check_segment_present(elts.next(), 1, s)?;
         let db_id = decode_id(db_id)?;
 
-        let by_name = check_segment_present(elts.next(), 3, s)?;
-        check_segment(by_name, 3, SEG_BY_NAME)?;
-
-        let tb_name = check_segment_present(elts.next(), 4, s)?;
+        let tb_name = check_segment_present(elts.next(), 2, s)?;
         let tb_name = unescape_for_key(tb_name)?;
 
-        check_segment_absent(elts.next(), 5, s)?;
+        check_segment_absent(elts.next(), 3, s)?;
 
-        Ok(TenantDBIdTableName {
-            tenant,
+        Ok(DBIdTableName {
             db_id,
             table_name: tb_name,
         })

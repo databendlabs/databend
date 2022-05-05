@@ -28,6 +28,7 @@ use common_meta_types::CreateShareReply;
 use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DBIdTableName;
 use common_meta_types::DatabaseAlreadyExists;
 use common_meta_types::DatabaseId;
 use common_meta_types::DatabaseIdent;
@@ -58,7 +59,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableNameIdent;
 use common_meta_types::TenantDBIdTableId;
-use common_meta_types::TenantDBIdTableName;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
@@ -311,13 +311,12 @@ impl MetaApi for MetaClientOnKV {
 
             // Get table by tenant,db_id, table_name to assert absence.
 
-            let tenant_dbid_tbname = TenantDBIdTableName {
-                tenant: tenant_dbname.tenant.clone(),
+            let dbid_tbname = DBIdTableName {
                 db_id,
                 table_name: req.name_ident.table_name.clone(),
             };
 
-            let (tb_id_seq, tb_id) = self.get_id_value(&tenant_dbid_tbname).await?;
+            let (tb_id_seq, tb_id) = self.get_id_value(&dbid_tbname).await?;
             if tb_id_seq > 0 {
                 return if req.if_not_exists {
                     Ok(CreateTableReply { table_id: tb_id })
@@ -355,10 +354,10 @@ impl MetaApi for MetaClientOnKV {
                         // db has not to change
                         self.txn_cond_seq(&tenant_dbname, Eq, db_id_seq)?,
                         // no other table with the same name is inserted.
-                        self.txn_cond_seq(&tenant_dbid_tbname, Eq, 0)?,
+                        self.txn_cond_seq(&dbid_tbname, Eq, 0)?,
                     ],
                     if_then: vec![
-                        self.txn_op_put(&tenant_dbid_tbname, self.serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
+                        self.txn_op_put(&dbid_tbname, self.serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
                         self.txn_op_put(
                             &tenant_dbid_tbid,
                             self.serialize_struct(&req.table_meta)?,
@@ -401,13 +400,12 @@ impl MetaApi for MetaClientOnKV {
 
             // Get table by tenant,db_id, table_name to assert presence.
 
-            let tenant_dbid_tbname = TenantDBIdTableName {
-                tenant: tenant_dbname.tenant.clone(),
+            let dbid_tbname = DBIdTableName {
                 db_id,
                 table_name: req.name_ident.table_name.clone(),
             };
 
-            let (tb_id_seq, table_id) = self.get_id_value(&tenant_dbid_tbname).await?;
+            let (tb_id_seq, table_id) = self.get_id_value(&dbid_tbname).await?;
             if tb_id_seq == 0 {
                 return if req.if_exists {
                     Ok(DropTableReply {})
@@ -446,13 +444,13 @@ impl MetaApi for MetaClientOnKV {
                         // db has not to change
                         self.txn_cond_seq(&tenant_dbname, Eq, db_id_seq)?,
                         // still this table id
-                        self.txn_cond_seq(&tenant_dbid_tbname, Eq, tb_id_seq)?,
+                        self.txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
                         // table is not changed
                         self.txn_cond_seq(&tenant_dbid_tbid, Eq, tb_meta_seq)?,
                     ],
                     if_then: vec![
-                        self.txn_op_del(&tenant_dbid_tbname)?, // (tenant, db_id, tb_name) -> tb_id
-                        self.txn_op_del(&tenant_dbid_tbid)?,   // (tenant, db_id, tb_id) -> tb_meta
+                        self.txn_op_del(&dbid_tbname)?, // (tenant, db_id, tb_name) -> tb_id
+                        self.txn_op_del(&tenant_dbid_tbid)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     else_then: vec![],
                 };
@@ -494,13 +492,12 @@ impl MetaApi for MetaClientOnKV {
 
         // Get table by tenant,db_id, table_name to assert presence.
 
-        let tenant_dbid_tbname = TenantDBIdTableName {
-            tenant: tenant_dbname.tenant.clone(),
+        let dbid_tbname = DBIdTableName {
             db_id,
             table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let (tb_id_seq, table_id) = self.get_id_value(&tenant_dbid_tbname).await?;
+        let (tb_id_seq, table_id) = self.get_id_value(&dbid_tbname).await?;
         self.table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
         let tenant_dbid_tbid = TenantDBIdTableId {
@@ -555,19 +552,18 @@ impl MetaApi for MetaClientOnKV {
 
         // List tables by tenant, db_id, table_name.
 
-        let tenant_dbid_tbname = TenantDBIdTableName {
-            tenant: tenant_dbname.tenant.clone(),
+        let dbid_tbname = DBIdTableName {
             db_id,
             // Use empty name to scan all tables
             table_name: "".to_string(),
         };
 
-        let (tenant_dbid_tbnames, ids) = self.list_id_value(&tenant_dbid_tbname).await?;
+        let (tenant_dbid_tbnames, ids) = self.list_id_value(&dbid_tbname).await?;
 
         let mut tb_meta_keys = Vec::with_capacity(ids.len());
         for (i, name_key) in tenant_dbid_tbnames.iter().enumerate() {
             let tenant_dbid_tbid = TenantDBIdTableId {
-                tenant: name_key.tenant.clone(),
+                tenant: tenant_dbname.tenant.clone(),
                 db_id: name_key.db_id,
                 table_id: ids[i],
             };
