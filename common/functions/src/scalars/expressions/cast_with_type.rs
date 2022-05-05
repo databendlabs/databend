@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::compute::cast;
@@ -28,6 +29,7 @@ use super::cast_from_datetimes::cast_from_date;
 use super::cast_from_string::cast_from_string;
 use super::cast_from_variant::cast_from_variant;
 use crate::scalars::expressions::cast_from_datetimes::cast_from_timestamp;
+use crate::scalars::FunctionContext;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CastOptions {
@@ -67,23 +69,27 @@ pub fn cast_column_field(
     column_with_field: &ColumnWithField,
     from_type: &DataTypeImpl,
     target_type: &DataTypeImpl,
+    func_ctx: &FunctionContext,
 ) -> Result<ColumnRef> {
     cast_with_type(
         column_with_field.column(),
         from_type,
         target_type,
         &DEFAULT_CAST_OPTIONS,
+        func_ctx,
     )
 }
 
 // No logical type is specified
 // Use Default options
 pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
+    let func_ctx = FunctionContext::default();
     cast_with_type(
         column,
         &column.data_type(),
         data_type,
         &DEFAULT_CAST_OPTIONS,
+        &func_ctx,
     )
 }
 
@@ -92,6 +98,7 @@ pub fn cast_with_type(
     from_type: &DataTypeImpl,
     target_type: &DataTypeImpl,
     cast_options: &CastOptions,
+    func_ctx: &FunctionContext,
 ) -> Result<ColumnRef> {
     // they are pyhsically the same type
     if &column.data_type() == target_type {
@@ -115,7 +122,7 @@ pub fn cast_with_type(
     if column.is_const() {
         let col: &ConstColumn = Series::check_get(column)?;
         let inner = col.inner();
-        let res = cast_with_type(inner, from_type, target_type, cast_options)?;
+        let res = cast_with_type(inner, from_type, target_type, cast_options, func_ctx)?;
         return Ok(ConstColumn::new(res, column.len()).arc());
     }
 
@@ -123,18 +130,37 @@ pub fn cast_with_type(
     let nonull_data_type = remove_nullable(target_type);
 
     let (result, valids) = match nonull_from_type.data_type_id() {
-        TypeID::String => {
-            cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
-        TypeID::Date => cast_from_date(column, &nonull_from_type, &nonull_data_type, cast_options),
-        TypeID::Timestamp => {
-            cast_from_timestamp(column, &nonull_from_type, &nonull_data_type, cast_options)
-        }
+        TypeID::String => cast_from_string(
+            column,
+            &nonull_from_type,
+            &nonull_data_type,
+            cast_options,
+            func_ctx,
+        ),
+        TypeID::Date => cast_from_date(
+            column,
+            &nonull_from_type,
+            &nonull_data_type,
+            cast_options,
+            func_ctx,
+        ),
+        TypeID::Timestamp => cast_from_timestamp(
+            column,
+            &nonull_from_type,
+            &nonull_data_type,
+            cast_options,
+            func_ctx,
+        ),
         TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
             cast_from_variant(column, &nonull_data_type)
         }
-        // TypeID::Interval => arrow_cast_compute(column, &nonull_data_type, cast_options),
-        _ => arrow_cast_compute(column, &nonull_from_type, &nonull_data_type, cast_options),
+        _ => arrow_cast_compute(
+            column,
+            &nonull_from_type,
+            &nonull_data_type,
+            cast_options,
+            func_ctx,
+        ),
     }?;
 
     // check date/timestamp bound
@@ -184,6 +210,7 @@ pub fn cast_to_variant(
     column: &ColumnRef,
     from_type: &DataTypeImpl,
     data_type: &DataTypeImpl,
+    func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let size = column.len();
@@ -201,8 +228,14 @@ pub fn cast_to_variant(
     }
     let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
-        let serializer = from_type.create_serializer();
-        // TODO(veeupup): check if we can use default format_settings
+        let serializer = if from_type.data_type_id() == TypeID::Timestamp {
+            let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            })?;
+            from_type.create_serializer_with_tz(tz)
+        } else {
+            from_type.create_serializer()
+        };
         let format = FormatSettings::default();
         match serializer.serialize_json_object(&column, None, &format) {
             Ok(values) => {
@@ -227,9 +260,10 @@ pub fn arrow_cast_compute(
     from_type: &DataTypeImpl,
     data_type: &DataTypeImpl,
     cast_options: &CastOptions,
+    func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     if data_type.data_type_id().is_variant() {
-        return cast_to_variant(column, from_type, data_type);
+        return cast_to_variant(column, from_type, data_type, func_ctx);
     }
 
     let arrow_array = column.as_arrow_array();

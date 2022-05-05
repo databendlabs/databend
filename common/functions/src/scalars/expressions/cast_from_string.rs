@@ -24,12 +24,14 @@ use common_exception::Result;
 use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::new_mutable_bitmap;
 use super::cast_with_type::CastOptions;
+use crate::scalars::FunctionContext;
 
 pub fn cast_from_string(
     column: &ColumnRef,
     from_type: &DataTypeImpl,
     data_type: &DataTypeImpl,
     cast_options: &CastOptions,
+    func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let str_column = Series::remove_nullable(column);
     let str_column: &StringColumn = Series::check_get(&str_column)?;
@@ -78,7 +80,7 @@ pub fn cast_from_string(
             Ok((builder.build(size), Some(bitmap.into())))
         }
         TypeID::Interval => todo!(),
-        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options, func_ctx),
     }
 }
 

@@ -14,15 +14,18 @@
 
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::CastOptions;
+use crate::scalars::FunctionContext;
 
 const DATE_FMT: &str = "%Y-%m-%d";
 // const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
@@ -32,6 +35,7 @@ pub fn cast_from_date(
     from_type: &DataTypeImpl,
     data_type: &DataTypeImpl,
     cast_options: &CastOptions,
+    func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
     let c: &Int32Column = Series::check_get(&c)?;
@@ -42,7 +46,8 @@ pub fn cast_from_date(
             let mut builder = ColumnBuilder::<Vu8>::with_capacity(size);
 
             for v in c.iter() {
-                let s = timestamp_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
+                let utc = "UTC".parse::<Tz>().unwrap();
+                let s = timestamp_to_string(utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
                 builder.append(s.as_bytes());
             }
             Ok((builder.build(size), None))
@@ -54,7 +59,7 @@ pub fn cast_from_date(
             Ok((result, None))
         }
 
-        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options, func_ctx),
     }
 }
 
@@ -63,6 +68,7 @@ pub fn cast_from_timestamp(
     from_type: &DataTypeImpl,
     data_type: &DataTypeImpl,
     cast_options: &CastOptions,
+    func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
     let c: &Int64Column = Series::check_get(&c)?;
@@ -73,9 +79,12 @@ pub fn cast_from_timestamp(
     match data_type.data_type_id() {
         TypeID::String => {
             let mut builder = MutableStringColumn::with_capacity(size);
+            let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            })?;
             for v in c.iter() {
                 let s = timestamp_to_string(
-                    date_time64.utc_timestamp(*v),
+                    tz.timestamp(*v / 1_000_000, (*v % 1_000_000 * 1_000) as u32),
                     date_time64.format_string().as_str(),
                 );
                 builder.append_value(s.as_bytes());
@@ -97,11 +106,11 @@ pub fn cast_from_timestamp(
             Ok((result, None))
         }
 
-        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options, func_ctx),
     }
 }
 
 #[inline]
-fn timestamp_to_string(date: DateTime<Utc>, fmt: &str) -> String {
+fn timestamp_to_string(date: DateTime<Tz>, fmt: &str) -> String {
     date.format(fmt).to_string()
 }

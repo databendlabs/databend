@@ -57,6 +57,7 @@ impl IfFunction {
         &self,
         cond_col: &ColumnRef,
         columns: &ColumnsWithField,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(cond_col.is_const());
         // whether nullable or not, we can use viewer to make it
@@ -77,6 +78,7 @@ impl IfFunction {
         cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
         input_rows: usize,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(columns[0].column().is_const() || columns[1].column().is_const());
         let (lhs_col, rhs_col, reverse) = if columns[0].column().is_const() {
@@ -85,8 +87,18 @@ impl IfFunction {
             (&columns[1], &columns[0], true)
         };
 
-        let lhs = cast_column_field(lhs_col, lhs_col.data_type(), &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, rhs_col.data_type(), &self.least_supertype)?;
+        let lhs = cast_column_field(
+            lhs_col,
+            lhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            rhs_col,
+            rhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
 
@@ -181,12 +193,23 @@ impl IfFunction {
         cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
         input_rows: usize,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let lhs = cast_column_field(lhs_col, lhs_col.data_type(), &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, rhs_col.data_type(), &self.least_supertype)?;
+        let lhs = cast_column_field(
+            lhs_col,
+            lhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            rhs_col,
+            rhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
 
         let type_id = remove_nullable(&self.least_supertype).data_type_id();
 
@@ -217,12 +240,23 @@ impl IfFunction {
         &self,
         cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
+        func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         let lhs_col = &columns[0];
         let rhs_col = &columns[1];
 
-        let lhs = cast_column_field(lhs_col, lhs_col.data_type(), &self.least_supertype)?;
-        let rhs = cast_column_field(rhs_col, rhs_col.data_type(), &self.least_supertype)?;
+        let lhs = cast_column_field(
+            lhs_col,
+            lhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
+        let rhs = cast_column_field(
+            rhs_col,
+            rhs_col.data_type(),
+            &self.least_supertype,
+            func_ctx,
+        )?;
 
         debug_assert!(!self.least_supertype.is_nullable());
         let type_id = self.least_supertype.data_type_id();
@@ -256,7 +290,7 @@ impl Function for IfFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -265,24 +299,24 @@ impl Function for IfFunction {
 
         // 1. fast path for cond nullable or const or null column
         if cond_col.is_const() {
-            return self.eval_cond_const(&cond_col, &columns[1..]);
+            return self.eval_cond_const(&cond_col, &columns[1..], &func_ctx);
         }
 
         let cond_col = Series::check_get_scalar::<bool>(&cond_col)?;
 
         // 2. handle when lhs / rhs is const
         if columns[1].column().is_const() || columns[2].column().is_const() {
-            return self.eval_const(cond_col, &columns[1..], input_rows);
+            return self.eval_const(cond_col, &columns[1..], input_rows, &func_ctx);
         }
 
         // 3. handle nullable column
         let whether_nullable = |col: &ColumnRef| col.is_nullable() || col.data_type().is_null();
         if whether_nullable(columns[1].column()) || whether_nullable(columns[2].column()) {
-            return self.eval_nullable(cond_col, &columns[1..], input_rows);
+            return self.eval_nullable(cond_col, &columns[1..], input_rows, &func_ctx);
         }
 
         // 4. all normal type and are not nullable/const
-        self.eval_generic(cond_col, &columns[1..])
+        self.eval_generic(cond_col, &columns[1..], &func_ctx)
     }
 }
 

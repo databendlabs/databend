@@ -59,11 +59,11 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
 }
 
 macro_rules! scalar_contains {
-    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident) => {{
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0).to_owned_scalar();
@@ -81,11 +81,11 @@ macro_rules! scalar_contains {
 }
 
 macro_rules! float_contains {
-    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident) => {{
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident, $FUNC_CTX: expr) => {{
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
         let mut vals_set = HashSet::with_capacity($ROWS - 1);
         for col in &$COLUMNS[1..] {
-            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE)?;
+            let col = cast_column_field(col, col.data_type(), &$CAST_TYPE, &$FUNC_CTX)?;
             let col_viewer = $T::try_create_viewer(&col)?;
             if col_viewer.valid_at(0) {
                 let val = col_viewer.value_at(0);
@@ -116,7 +116,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -150,50 +150,139 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         }
 
         let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
-        let input_col = cast_column_field(&columns[0], columns[0].data_type(), &least_super_dt)?;
+        let input_col = cast_column_field(
+            &columns[0],
+            columns[0].data_type(),
+            &least_super_dt,
+            &func_ctx,
+        )?;
 
         match least_super_type_id {
             TypeID::Boolean => {
-                scalar_contains!(bool, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    bool,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::UInt8 => {
-                scalar_contains!(u8, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(u8, input_col, input_rows, columns, least_super_dt, func_ctx)
             }
             TypeID::UInt16 => {
-                scalar_contains!(u16, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    u16,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::UInt32 => {
-                scalar_contains!(u32, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    u32,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::UInt64 => {
-                scalar_contains!(u64, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    u64,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Int8 => {
-                scalar_contains!(i8, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(i8, input_col, input_rows, columns, least_super_dt, func_ctx)
             }
             TypeID::Int16 => {
-                scalar_contains!(i16, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    i16,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Int32 => {
-                scalar_contains!(i32, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    i32,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Int64 => {
-                scalar_contains!(i64, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    i64,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::String => {
-                scalar_contains!(Vu8, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    Vu8,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Float32 => {
-                float_contains!(f32, input_col, input_rows, columns, least_super_dt)
+                float_contains!(
+                    f32,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Float64 => {
-                float_contains!(f64, input_col, input_rows, columns, least_super_dt)
+                float_contains!(
+                    f64,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Date => {
-                scalar_contains!(i32, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    i32,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             TypeID::Timestamp => {
-                scalar_contains!(i64, input_col, input_rows, columns, least_super_dt)
+                scalar_contains!(
+                    i64,
+                    input_col,
+                    input_rows,
+                    columns,
+                    least_super_dt,
+                    func_ctx
+                )
             }
             _ => Result::Err(ErrorCode::BadDataValueType(format!(
                 "{} type is not supported for IN now",

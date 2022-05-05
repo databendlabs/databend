@@ -55,7 +55,7 @@ impl Function for BinFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -67,6 +67,7 @@ impl Function for BinFunction {
                     &columns[0],
                     columns[0].data_type(),
                     &UInt64Type::new_impl(),
+                    &func_ctx,
                 )?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 for val in col.iter() {
@@ -74,8 +75,12 @@ impl Function for BinFunction {
                 }
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                let col =
-                    cast_column_field(&columns[0], columns[0].data_type(), &Int64Type::new_impl())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &Int64Type::new_impl(),
+                    &func_ctx,
+                )?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 for val in col.iter() {
                     builder.append(format!("{:b}", val).as_bytes());
@@ -86,6 +91,7 @@ impl Function for BinFunction {
                     &columns[0],
                     columns[0].data_type(),
                     &Float64Type::new_impl(),
+                    &func_ctx,
                 )?;
                 let col = col.as_any().downcast_ref::<Float64Column>().unwrap();
                 for val in col.iter() {
