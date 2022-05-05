@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
-use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
