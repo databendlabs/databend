@@ -66,7 +66,7 @@ impl Procedure for FuseSegmentProcedure {
         })?;
 
         Ok(FuseSegment::new(ctx, tbl, snapshot_id)
-            .get_history()
+            .get_segments()
             .await?)
     }
 

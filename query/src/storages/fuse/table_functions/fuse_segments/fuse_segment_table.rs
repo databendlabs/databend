@@ -138,7 +138,7 @@ impl Table for FuseSegmentTable {
 
         let blocks = vec![
             FuseSegment::new(ctx.clone(), tbl, self.arg_snapshot_id.clone())
-                .get_history()
+                .get_segments()
                 .await?,
         ];
         Ok(Box::pin(DataBlockStream::create(
@@ -220,16 +220,10 @@ impl AsyncSource for FuseHistorySource {
                 )
                 .await?;
 
-            let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                ErrorCode::BadArguments(format!(
-                    "expecting fuse table, but got table of engine type: {}",
-                    tbl.get_table_info().meta.engine
-                ))
-            })?;
-
+            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
             Ok(Some(
                 FuseSegment::new(self.ctx.clone(), tbl, self.arg_snapshot_id.clone())
-                    .get_history()
+                    .get_segments()
                     .await?,
             ))
         }

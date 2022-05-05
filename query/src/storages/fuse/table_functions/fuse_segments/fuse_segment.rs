@@ -38,7 +38,7 @@ impl<'a> FuseSegment<'a> {
         }
     }
 
-    pub async fn get_history(&self) -> Result<DataBlock> {
+    pub async fn get_segments(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let snapshot_location = tbl.snapshot_loc();
         let snapshot_version = tbl.snapshot_format_version();

@@ -208,13 +208,7 @@ impl AsyncSource for FuseHistorySource {
                 )
                 .await?;
 
-            let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                ErrorCode::BadArguments(format!(
-                    "expecting fuse table, but got table of engine type: {}",
-                    tbl.get_table_info().meta.engine
-                ))
-            })?;
-
+            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
             Ok(Some(
                 FuseSnapshot::new(self.ctx.clone(), tbl)
                     .get_history()
