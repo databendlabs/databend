@@ -48,7 +48,6 @@ impl SystemDatabase {
             system::MetricsTable::create(sys_db_meta.next_table_id()),
             system::ColumnsTable::create(sys_db_meta.next_table_id()),
             system::UsersTable::create(sys_db_meta.next_table_id()),
-            system::WarehousesTable::create(sys_db_meta.next_table_id()),
             Arc::new(system::QueryLogTable::create(
                 sys_db_meta.next_table_id(),
                 config.query.max_query_log_size as i32,
