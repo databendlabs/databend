@@ -15,6 +15,7 @@
 
 use std::ops::Not;
 use std::sync::Arc;
+use chrono_tz::Tz;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -55,11 +56,23 @@ impl ValueSource {
     }
 
     pub async fn read<'a>(&self, reader: &mut CpBufferReader<'a>) -> Result<DataBlock> {
+        let format = self.ctx.get_format_settings()?;
+        let tz =
+        String::from_utf8(format.timezone.clone()).map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
+        let tz = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
         let mut desers = self
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_deserializer(1024))
+            .map(|f| {
+                if f.data_type().data_type_id() == TypeID::Timestamp {
+                    f.data_type().create_deserializer_with_tz(1024, tz)
+                }else {
+                    f.data_type().create_deserializer(1024)
+                }
+            })
             .collect::<Vec<_>>();
 
         let col_size = desers.len();

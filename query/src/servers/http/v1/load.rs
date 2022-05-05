@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use chrono_tz::Tz;
 
 use async_compat::CompatExt;
 use async_stream::stream;
@@ -279,7 +280,8 @@ fn build_ndjson_stream(
     plan: &PlanNode,
     mut multipart: Multipart,
 ) -> PoemResult<SendableDataBlockStream> {
-    let builder = NDJsonSourceBuilder::create(plan.schema());
+    let tz = "UTC".parse::<Tz>().unwrap();
+    let builder = NDJsonSourceBuilder::create(plan.schema(), tz);
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
@@ -383,7 +385,8 @@ async fn ndjson_source_pipe_builder(
     plan: &PlanNode,
     mut multipart: Multipart,
 ) -> PoemResult<SourcePipeBuilder> {
-    let builder = NDJsonSourceBuilder::create(plan.schema());
+    let tz = "UTC".parse::<Tz>().unwrap();
+    let builder = NDJsonSourceBuilder::create(plan.schema(), tz);
     let mut source_pipe_builder = SourcePipeBuilder::create();
     while let Ok(Some(field)) = multipart.next_field().await {
         let bytes = field

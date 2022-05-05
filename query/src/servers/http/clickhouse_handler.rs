@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use chrono_tz::Tz;
 
 use async_stream::stream;
 use common_exception::ErrorCode;
@@ -224,7 +225,9 @@ pub async fn clickhouse_handler_post(
 }
 
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
-    let builder = NDJsonSourceBuilder::create(plan.schema());
+    // TODO(veeupup): HTTP with global session tz
+    let tz = "UTC".parse::<Tz>().unwrap();
+    let builder = NDJsonSourceBuilder::create(plan.schema(), tz);
     let cursor = futures::io::Cursor::new(
         body.into_vec()
             .await

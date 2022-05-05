@@ -126,11 +126,15 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
     fn create_serializer(&self) -> TypeSerializerImpl;
-    /// work for timestamp serializer
+    /// work only for timestamp serializer
     fn create_serializer_with_tz(&self, _tz: Tz) -> TypeSerializerImpl {
         unimplemented!()
     }
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
+    /// work only for timestamp deserializer
+    fn create_deserializer_with_tz(&self, _capacity: usize, _tz: Tz) -> TypeDeserializerImpl {
+        unimplemented!()
+    }
 }
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypeImpl {

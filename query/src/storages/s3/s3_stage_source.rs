@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
+use chrono_tz::Tz;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -122,7 +123,13 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let mut builder = NDJsonSourceBuilder::create(schema);
+        let format = ctx.get_format_settings()?;
+        let tz =
+        String::from_utf8(format.timezone.clone()).map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
+        let tz = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        let mut builder = NDJsonSourceBuilder::create(schema, tz);
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.

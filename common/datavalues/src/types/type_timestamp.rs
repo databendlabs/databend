@@ -164,6 +164,15 @@ impl DataType for TimestampType {
         .into()
     }
 
+    fn create_deserializer_with_tz(&self, capacity: usize, tz: Tz) -> TypeDeserializerImpl {
+        TimestampDeserializer {
+            builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
+            tz,
+            precision: self.precision,
+        }
+        .into()
+    }
+
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
     }
