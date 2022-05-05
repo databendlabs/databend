@@ -151,7 +151,6 @@ impl PipelineBuilder {
         project: &ProjectPlan,
         input_schema: DataSchemaRef,
     ) -> Result<DataSchemaRef> {
-        dbg!(input_schema.clone());
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
         let mut expressions = Vec::with_capacity(project.items.len());
@@ -161,7 +160,6 @@ impl PipelineBuilder {
             let expression = expr_builder.build_and_rename(scalar, item.index)?;
             expressions.push(expression);
         }
-        dbg!(output_schema.clone());
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 ProjectionTransform::try_create(
