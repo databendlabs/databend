@@ -39,7 +39,12 @@ impl<'a> ExpressionBuilder<'a> {
     }
 
     pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
-        let expr = self.build(scalar)?;
+        let mut expr = self.build(scalar)?;
+        if let Expression::AggregateFunction { .. } = expr {
+            let col_name = expr.column_name();
+            let idx = self.metadata.column_idx_by_column_name(col_name.as_str())?;
+            expr = Expression::Column(format_field_name(col_name.as_str(), idx))
+        };
         let column = self.metadata.column(index);
         Ok(Expression::Alias(
             format_field_name(column.name.as_str(), index),

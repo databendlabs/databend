@@ -17,4 +17,17 @@ select sin(cos(number)) from numbers(1);
 -- In list
 select * from numbers(5) where number in (1, 3);
 
+-- Aggregator operator
+create table t(a int, b int);
+insert into t values(1, 2), (2, 3), (3, 4);
+select sum(a) from t group by a;
+select sum(a) from t;
+select count(a) from t group by a;
+select count(a) from t;
+select count() from t;
+select count() from t group by a;
+select count(1) from t;
+select count(1) from t group by a;
+select count(*) from t;
+drop table t;
 set enable_planner_v2 = 0;

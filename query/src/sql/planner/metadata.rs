@@ -138,7 +138,11 @@ impl Metadata {
         args: &[Expr],
     ) -> Result<String> {
         let mut names = Vec::new();
-        if !optimize_remove_count_args(fun, *distinct, args) {
+        if !optimize_remove_count_args(
+            fun,
+            *distinct,
+            args.iter().collect::<Vec<&Expr>>().as_slice(),
+        ) {
             names = args
                 .iter()
                 .map(|arg| self.get_expr_display_string(arg, false))
@@ -162,7 +166,7 @@ impl Metadata {
 
             Expr::Literal(literal) => Ok(format!("{}", literal)),
 
-            Expr::CountAll => Ok("count(*)".to_string()),
+            Expr::CountAll => Ok("count()".to_string()),
 
             Expr::FunctionCall {
                 name,
@@ -275,7 +279,7 @@ impl Metadata {
     }
 }
 
-pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[Expr]) -> bool {
+pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {
     name.eq_ignore_ascii_case("count")
         && !distinct
         && args
