@@ -54,11 +54,11 @@ use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
+use common_meta_types::TableId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableNameIdent;
-use common_meta_types::TenantDBIdTableId;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
@@ -336,11 +336,7 @@ impl MetaApi for MetaClientOnKV {
 
             let table_id = self.fetch_id(TableIdGen {}).await?;
 
-            let tenant_dbid_tbid = TenantDBIdTableId {
-                tenant: tenant_dbname_tbname.tenant.clone(),
-                db_id,
-                table_id,
-            };
+            let tbid = TableId { table_id };
 
             tracing::debug!(
                 table_id,
@@ -358,10 +354,7 @@ impl MetaApi for MetaClientOnKV {
                     ],
                     if_then: vec![
                         self.txn_op_put(&dbid_tbname, self.serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
-                        self.txn_op_put(
-                            &tenant_dbid_tbid,
-                            self.serialize_struct(&req.table_meta)?,
-                        )?, // (tenant, db_id, tb_id) -> tb_meta
+                        self.txn_op_put(&tbid, self.serialize_struct(&req.table_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     else_then: vec![],
                 };
@@ -370,7 +363,7 @@ impl MetaApi for MetaClientOnKV {
 
                 tracing::debug!(
                     name = debug(&tenant_dbname_tbname),
-                    id = debug(&tenant_dbid_tbid),
+                    id = debug(&tbid),
                     succ = display(succ),
                     "create_table"
                 );
@@ -419,21 +412,17 @@ impl MetaApi for MetaClientOnKV {
                 };
             }
 
-            let tenant_dbid_tbid = TenantDBIdTableId {
-                tenant: tenant_dbname_tbname.tenant.clone(),
-                db_id,
-                table_id,
-            };
+            let tbid = TableId { table_id };
 
             let (tb_meta_seq, _tb_meta): (_, Option<TableMeta>) =
-                self.get_struct_value(&tenant_dbid_tbid).await?;
+                self.get_struct_value(&tbid).await?;
 
             // Delete table by deleting two record:
             // (tenant, db_id, table_name) -> table_id
             // (tenant, db_id, table_id) -> table_meta
 
             tracing::debug!(
-                ident = display(&tenant_dbid_tbid),
+                ident = display(&tbid),
                 name = display(&tenant_dbname_tbname),
                 "drop table"
             );
@@ -446,11 +435,11 @@ impl MetaApi for MetaClientOnKV {
                         // still this table id
                         self.txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
                         // table is not changed
-                        self.txn_cond_seq(&tenant_dbid_tbid, Eq, tb_meta_seq)?,
+                        self.txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
                     ],
                     if_then: vec![
                         self.txn_op_del(&dbid_tbname)?, // (tenant, db_id, tb_name) -> tb_id
-                        self.txn_op_del(&tenant_dbid_tbid)?, // (tenant, db_id, tb_id) -> tb_meta
+                        self.txn_op_del(&tbid)?,        // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     else_then: vec![],
                 };
@@ -459,7 +448,7 @@ impl MetaApi for MetaClientOnKV {
 
                 tracing::debug!(
                     name = debug(&tenant_dbname_tbname),
-                    id = debug(&tenant_dbid_tbid),
+                    id = debug(&tbid),
                     succ = display(succ),
                     "drop_table"
                 );
@@ -500,23 +489,18 @@ impl MetaApi for MetaClientOnKV {
         let (tb_id_seq, table_id) = self.get_id_value(&dbid_tbname).await?;
         self.table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
-        let tenant_dbid_tbid = TenantDBIdTableId {
-            tenant: tenant_dbname_tbname.tenant.clone(),
-            db_id,
-            table_id,
-        };
+        let tbid = TableId { table_id };
 
-        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
-            self.get_struct_value(&tenant_dbid_tbid).await?;
+        let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = self.get_struct_value(&tbid).await?;
 
         self.table_has_to_exist(
             tb_meta_seq,
             tenant_dbname_tbname,
-            format!("get_table meta by: {}", tenant_dbid_tbid),
+            format!("get_table meta by: {}", tbid),
         )?;
 
         tracing::debug!(
-            ident = display(&tenant_dbid_tbid),
+            ident = display(&tbid),
             name = display(&tenant_dbname_tbname),
             "get_table"
         );
@@ -561,14 +545,10 @@ impl MetaApi for MetaClientOnKV {
         let (tenant_dbid_tbnames, ids) = self.list_id_value(&dbid_tbname).await?;
 
         let mut tb_meta_keys = Vec::with_capacity(ids.len());
-        for (i, name_key) in tenant_dbid_tbnames.iter().enumerate() {
-            let tenant_dbid_tbid = TenantDBIdTableId {
-                tenant: tenant_dbname.tenant.clone(),
-                db_id: name_key.db_id,
-                table_id: ids[i],
-            };
+        for (i, _name_key) in tenant_dbid_tbnames.iter().enumerate() {
+            let tbid = TableId { table_id: ids[i] };
 
-            tb_meta_keys.push(tenant_dbid_tbid.to_key());
+            tb_meta_keys.push(tbid.to_key());
         }
 
         // mget() corresponding table_metas

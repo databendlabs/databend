@@ -109,15 +109,13 @@ impl Display for DBIdTableName {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
-pub struct TenantDBIdTableId {
-    pub tenant: String,
-    pub db_id: u64,
+pub struct TableId {
     pub table_id: u64,
 }
 
-impl Display for TenantDBIdTableId {
+impl Display for TableId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "'{}'.{}.{}", self.tenant, self.db_id, self.table_id)
+        write!(f, "{}", self.table_id)
     }
 }
 

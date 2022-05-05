@@ -22,7 +22,7 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_types::DBIdTableName;
 use common_meta_types::DatabaseId;
 use common_meta_types::DatabaseNameIdent;
-use common_meta_types::TenantDBIdTableId;
+use common_meta_types::TableId;
 use common_tracing::tracing;
 
 use crate::MetaGrpcClient;
@@ -69,10 +69,8 @@ pub struct TableIdGen {}
 const PREFIX_DATABASE: &str = "__fd_database";
 const PREFIX_DATABASE_BY_ID: &str = "__fd_database_by_id";
 const PREFIX_TABLE: &str = "__fd_table";
-// const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
+const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
 const PREFIX_ID_GEN: &str = "__fd_id_gen";
-const SEG_BY_NAME: &str = "by_name";
-const SEG_BY_ID: &str = "by_id";
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KVApiKeyError {
@@ -103,15 +101,15 @@ where Self: Sized
     fn from_key(s: &str) -> Result<Self, KVApiKeyError>;
 }
 
+/// __fd_database/<tenant>/<db_name> -> <db_id>
 impl KVApiKey for DatabaseNameIdent {
     const PREFIX: &'static str = PREFIX_DATABASE;
 
     fn to_key(&self) -> String {
         format!(
-            "{}/{}/{}/{}",
+            "{}/{}/{}",
             Self::PREFIX,
             escape_for_key(&self.tenant),
-            SEG_BY_NAME,
             escape_for_key(&self.db_name),
         )
     }
@@ -124,12 +122,9 @@ impl KVApiKey for DatabaseNameIdent {
 
         let tenant = check_segment_present(elts.next(), 1, s)?;
 
-        let by_name = check_segment_present(elts.next(), 2, s)?;
-        check_segment(by_name, 2, SEG_BY_NAME)?;
+        let db_name = check_segment_present(elts.next(), 2, s)?;
 
-        let db_name = check_segment_present(elts.next(), 3, s)?;
-
-        check_segment_absent(elts.next(), 4, s)?;
+        check_segment_absent(elts.next(), 3, s)?;
 
         let tenant = unescape_for_key(tenant)?;
         let db_name = unescape_for_key(db_name)?;
@@ -153,10 +148,9 @@ impl KVApiKey for DatabaseId {
         check_segment(prefix, 0, Self::PREFIX)?;
 
         let db_id = check_segment_present(elts.next(), 1, s)?;
+        let db_id = decode_id(db_id)?;
 
         check_segment_absent(elts.next(), 2, s)?;
-
-        let db_id = decode_id(db_id)?;
 
         Ok(DatabaseId { db_id })
     }
@@ -196,19 +190,12 @@ impl KVApiKey for DBIdTableName {
     }
 }
 
-/// "__fd_table/<tenant_id>/<db_id>/by_id/<tb_id>"
-impl KVApiKey for TenantDBIdTableId {
-    const PREFIX: &'static str = PREFIX_TABLE;
+/// "__fd_table_by_id/<tb_id>"
+impl KVApiKey for TableId {
+    const PREFIX: &'static str = PREFIX_TABLE_BY_ID;
 
     fn to_key(&self) -> String {
-        format!(
-            "{}/{}/{}/{}/{}",
-            Self::PREFIX,
-            escape_for_key(&self.tenant),
-            self.db_id,
-            SEG_BY_ID,
-            self.table_id,
-        )
+        format!("{}/{}", Self::PREFIX, self.table_id,)
     }
 
     fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
@@ -217,25 +204,12 @@ impl KVApiKey for TenantDBIdTableId {
         let prefix = check_segment_present(elts.next(), 0, s)?;
         check_segment(prefix, 0, Self::PREFIX)?;
 
-        let tenant = check_segment_present(elts.next(), 1, s)?;
-        let tenant = unescape_for_key(tenant)?;
-
-        let db_id = check_segment_present(elts.next(), 2, s)?;
-        let db_id = decode_id(db_id)?;
-
-        let by_id = check_segment_present(elts.next(), 3, s)?;
-        check_segment(by_id, 3, SEG_BY_ID)?;
-
-        let tb_id = check_segment_present(elts.next(), 4, s)?;
+        let tb_id = check_segment_present(elts.next(), 1, s)?;
         let tb_id = decode_id(tb_id)?;
 
-        check_segment_absent(elts.next(), 5, s)?;
+        check_segment_absent(elts.next(), 2, s)?;
 
-        Ok(TenantDBIdTableId {
-            tenant,
-            db_id,
-            table_id: tb_id,
-        })
+        Ok(TableId { table_id: tb_id })
     }
 }
 
