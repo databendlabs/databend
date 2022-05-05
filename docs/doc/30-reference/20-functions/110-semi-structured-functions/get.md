@@ -10,11 +10,11 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-GET(<array>, <index>)
-get(<variant>, <index>)
+GET( <array>, <index> )
+get( <variant>, <index> )
 
-get(<object>, <field_name>)
-get(<variant>, <field_name>)
+get( <object>, <field_name> )
+get( <variant>, <field_name> )
 ```
 
 ## Arguments

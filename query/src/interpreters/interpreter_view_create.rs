@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::GrantObject;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use common_meta_types::UserPrivilegeType;
 use common_planners::CreateViewPlan;
 use common_streams::DataBlockStream;
@@ -83,9 +84,11 @@ impl CreateViewInterpreter {
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,
-            tenant: self.plan.tenant.clone(),
-            db_name: self.plan.db.clone(),
-            table_name: self.plan.viewname.clone(),
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name: self.plan.db.clone(),
+                table_name: self.plan.viewname.clone(),
+            },
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
                 options,

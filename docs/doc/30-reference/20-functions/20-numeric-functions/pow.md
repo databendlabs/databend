@@ -1,6 +1,7 @@
 ---
 title: POW
 description: POW(x) function
+title_includes: POW, POWER
 ---
 
 Returns the value of x raised to the power of y.
@@ -25,7 +26,6 @@ POWER(x, y)
 
 A Float64 data type value.
 
-
 ## Examples
 
 ```sql
@@ -42,4 +42,11 @@ SELECT POW(2,-2);
 +---------------+
 |          0.25 |
 +---------------+
+
+SELECT POWER(-2, 2);
++--------------+
+| POWER(-2, 2) |
++--------------+
+|            4 |
++--------------+
 ```

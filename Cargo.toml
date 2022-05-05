@@ -62,7 +62,6 @@ split-debuginfo = "unpacked"
 [profile.dev.package]
 addr2line = { opt-level = 3 }
 adler = { opt-level = 3 }
-backtrace = { opt-level = 3 }
 gimli = { opt-level = 3 }
 miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }

@@ -175,7 +175,6 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -208,7 +207,6 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }

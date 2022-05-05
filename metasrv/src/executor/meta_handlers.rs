@@ -146,8 +146,8 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableReq> for ActionHandler {
     async fn handle(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let db_name = req.db_name.clone();
-        let table_name = req.table_name.clone();
+        let db_name = req.db_name().to_string();
+        let table_name = req.table_name().to_string();
         let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
@@ -182,7 +182,7 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropTableReq> for ActionHandler {
     async fn handle(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let table_name = req.table_name.clone();
+        let table_name = req.table_name().to_string();
         let if_exists = req.if_exists;
 
         let cr = LogEntry {

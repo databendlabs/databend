@@ -13,8 +13,7 @@
 //  limitations under the License.
 //
 
-mod fuse_history_table;
-mod table_arg_util;
+mod fuse_snapshots;
 
-pub use fuse_history_table::FuseHistoryTable;
-pub use fuse_history_table::FUSE_FUNC_HIST;
+pub use fuse_snapshots::FuseSnapshot;
+pub use fuse_snapshots::FuseSnapshotTable;

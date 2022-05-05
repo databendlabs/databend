@@ -25,6 +25,7 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::TableMeta;
+use crate::TableNameIdent;
 use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
@@ -82,26 +83,42 @@ pub enum Cmd {
     CreateTable {
         // latest add
         if_not_exists: Option<bool>,
-        tenant: String,
-        db_name: String,
-        table_name: String,
+        // latest add
+        name_ident: Option<TableNameIdent>,
+        // 20220413
+        tenant: Option<String>,
+        // 20220413
+        db_name: Option<String>,
+        // 20220413
+        table_name: Option<String>,
         table_meta: TableMeta,
     },
 
     DropTable {
         // latest add
         if_exists: Option<bool>,
-        tenant: String,
-        db_name: String,
-        table_name: String,
+        // latest add
+        name_ident: Option<TableNameIdent>,
+        // 20220413
+        tenant: Option<String>,
+        // 20220413
+        db_name: Option<String>,
+        // 20220413
+        table_name: Option<String>,
     },
 
     RenameTable {
         // latest add
         if_exists: Option<bool>,
-        tenant: String,
-        db_name: String,
-        table_name: String,
+        // latest add
+        name_ident: Option<TableNameIdent>,
+        // 20220413
+        tenant: Option<String>,
+        // 20220413
+        db_name: Option<String>,
+        // 20220413
+        table_name: Option<String>,
+
         new_db_name: String,
         new_table_name: String,
     },

@@ -84,6 +84,13 @@ impl TypeFactory {
             })
     }
 
+    pub fn register_names(&self) -> Vec<&str> {
+        self.case_insensitive_types
+            .keys()
+            .map(|s| s.as_str())
+            .collect()
+    }
+
     pub fn register(&mut self, data_type: DataTypeImpl) {
         let mut names = vec![data_type.name()];
 

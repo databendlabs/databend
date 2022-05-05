@@ -114,11 +114,11 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    rule! (
+    rule!(
         #joined_tables
         | #parenthesized_joined_tables
         | #subquery
-        | #set_returning_function
+        | #table_function
         | #aliased_table
     )(i)
 }
@@ -158,12 +158,12 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
     )(i)
 }
 
-pub fn set_returning_function(i: Input) -> IResult<TableReference> {
+pub fn table_function(i: Input) -> IResult<TableReference> {
     map(
         rule! {
             #ident ~ "(" ~ #comma_separated_list0(expr) ~ ")" ~ #table_alias?
         },
-        |(name, _, params, _, alias)| TableReference::SetReturningFunction {
+        |(name, _, params, _, alias)| TableReference::TableFunction {
             name,
             params,
             alias,
@@ -209,10 +209,10 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
     }
 
     let table_ref_without_join = |i| {
-        rule! (
+        rule!(
             #parenthesized_joined_tables
             | #subquery
-            | #set_returning_function
+            | #table_function
             | #aliased_table
         )(i)
     };

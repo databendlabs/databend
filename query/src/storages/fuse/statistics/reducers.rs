@@ -26,13 +26,13 @@ use common_functions::aggregates::eval_aggr;
 
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Statistics;
-use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
+use crate::storages::index::ColumnsStatistics;
 
-pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
+pub fn reduce_block_stats<T: Borrow<ColumnsStatistics>>(
     stats: &[T],
     schema: &DataSchema,
-) -> Result<BlockStatistics> {
+) -> Result<ColumnsStatistics> {
     let len = stats.len();
 
     // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>

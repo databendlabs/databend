@@ -18,7 +18,6 @@ use common_exception::Result;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::AggregateFunctionRef;
 
-#[allow(dead_code)]
 pub trait AggregateCombinator: Sync + Send {
     fn name() -> &'static str;
 

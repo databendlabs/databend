@@ -13,4 +13,4 @@
 //  limitations under the License.
 //
 
-mod fuse_history_table;
+mod fuse_snapshot_table;

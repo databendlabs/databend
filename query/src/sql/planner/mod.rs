@@ -14,12 +14,11 @@
 
 use std::sync::Arc;
 
-pub use binder::ScalarExpr;
-pub use binder::ScalarExprRef;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
 use common_exception::Result;
+pub use plans::ScalarExpr;
 
 use crate::sessions::QueryContext;
 use crate::sql::exec::PipelineBuilder;
@@ -31,6 +30,7 @@ use crate::sql::planner::binder::Binder;
 pub(crate) mod binder;
 mod metadata;
 pub mod plans;
+mod semantic;
 
 pub use metadata::ColumnEntry;
 pub use metadata::Metadata;

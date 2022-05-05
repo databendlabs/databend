@@ -10,9 +10,9 @@ The value is returned as a `Variant` or `NULL` if either of the arguments is `NU
 ## Syntax
 
 ```sql
-GET_PATH(<array>, <path_name>)
-GET_PATH(<object>, <path_name>)
-GET_PATH(<variant>, <path_name>)
+GET_PATH( <array>, <path_name> )
+GET_PATH( <object>, <path_name> )
+GET_PATH( <variant>, <path_name> )
 ```
 
 ## Arguments

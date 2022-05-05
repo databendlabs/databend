@@ -25,6 +25,7 @@ use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use databend_query::catalogs::Catalog;
 
 use crate::tests::create_catalog;
@@ -140,9 +141,11 @@ async fn test_catalogs_table() -> Result<()> {
 
         let mut req = CreateTableReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "default".to_string(),
-            table_name: "test_table".to_string(),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "default".to_string(),
+                table_name: "test_table".to_string(),
+            },
             table_meta: TableMeta {
                 schema: schema.clone(),
                 engine: "MEMORY".to_string(),
@@ -163,7 +166,7 @@ async fn test_catalogs_table() -> Result<()> {
         assert_eq!(table.name(), "test_table");
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.create_table(req.clone()).await;
         assert!(res.is_err());
     }
@@ -172,9 +175,11 @@ async fn test_catalogs_table() -> Result<()> {
     {
         let mut req = DropTableReq {
             if_exists: false,
-            tenant: tenant.to_string(),
-            db_name: "default".to_string(),
-            table_name: "test_table".to_string(),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "default".to_string(),
+                table_name: "test_table".to_string(),
+            },
         };
         let res = catalog.drop_table(req.clone()).await;
         assert!(res.is_ok());
@@ -182,7 +187,7 @@ async fn test_catalogs_table() -> Result<()> {
         assert!(table_list_4.is_empty());
 
         // Tenant empty.
-        req.tenant = "".to_string();
+        req.name_ident.tenant = "".to_string();
         let res = catalog.drop_table(req).await;
         assert!(res.is_err());
     }

@@ -21,6 +21,7 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GrantObject;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use common_meta_types::UserPrivilegeType;
 use common_planners::AlterViewPlan;
 use common_streams::DataBlockStream;
@@ -86,9 +87,12 @@ impl AlterViewInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let plan = DropTableReq {
             if_exists: true,
-            tenant: self.plan.tenant.clone(),
-            db_name: self.plan.db.clone(),
-            table_name: self.plan.viewname.clone(),
+
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name: self.plan.db.clone(),
+                table_name: self.plan.viewname.clone(),
+            },
         };
         catalog.drop_table(plan).await?;
 
@@ -97,9 +101,11 @@ impl AlterViewInterpreter {
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
             if_not_exists: true,
-            tenant: self.plan.tenant.clone(),
-            db_name: self.plan.db.clone(),
-            table_name: self.plan.viewname.clone(),
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name: self.plan.db.clone(),
+                table_name: self.plan.viewname.clone(),
+            },
             table_meta: TableMeta {
                 engine: VIEW_ENGINE.to_string(),
                 options,

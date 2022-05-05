@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::RenameTableReq;
+use common_meta_types::TableNameIdent;
 use common_planners::RenameTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -53,10 +54,12 @@ impl Interpreter for RenameTableInterpreter {
             let catalog = self.ctx.get_catalog(&entity.catalog_name)?;
             catalog
                 .rename_table(RenameTableReq {
-                    tenant,
                     if_exists: entity.if_exists,
-                    db_name: entity.database_name.clone(),
-                    table_name: entity.table_name.clone(),
+                    name_ident: TableNameIdent {
+                        tenant,
+                        db_name: entity.database_name.clone(),
+                        table_name: entity.table_name.clone(),
+                    },
                     new_db_name: entity.new_database_name.clone(),
                     new_table_name: entity.new_table_name.clone(),
                 })

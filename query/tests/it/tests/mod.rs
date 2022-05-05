@@ -16,8 +16,7 @@ mod catalog;
 mod config;
 mod context;
 mod number;
-#[allow(dead_code)]
-mod parquet;
+
 mod sessions;
 pub(crate) mod tls_constants;
 
@@ -29,5 +28,4 @@ pub use context::create_query_context_with_config;
 pub use context::create_storage_context;
 pub use context::ClusterDescriptor;
 pub use number::NumberTestData;
-pub use parquet::ParquetTestData;
 pub use sessions::SessionManagerBuilder;

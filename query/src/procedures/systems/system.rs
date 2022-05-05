@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::procedures::systems::FuseHistoryProcedure;
+use crate::procedures::systems::FuseSnapshotProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct SystemProcedure;
@@ -20,8 +20,8 @@ pub struct SystemProcedure;
 impl SystemProcedure {
     pub fn register(factory: &mut ProcedureFactory) {
         factory.register(
-            "system$fuse_history",
-            Box::new(FuseHistoryProcedure::try_create),
+            "system$fuse_snapshot",
+            Box::new(FuseSnapshotProcedure::try_create),
         );
     }
 }

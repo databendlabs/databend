@@ -952,7 +952,6 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backtrace",
  "bincode",
  "common-arrow",
  "octocrab",
@@ -1131,6 +1130,7 @@ dependencies = [
 name = "common-meta-grpc"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "common-arrow",
  "common-base",
  "common-containers",
@@ -1138,6 +1138,8 @@ dependencies = [
  "common-grpc",
  "common-meta-api",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "common-tracing",
  "derive_more",
  "futures",
@@ -1145,6 +1147,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "thiserror",
  "tonic",
 ]
 
@@ -1310,7 +1313,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "backtrace",
  "console-subscriber",
  "once_cell",
  "opentelemetry",

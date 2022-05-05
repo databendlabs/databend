@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 
 use crate::Expression;
 use crate::PlanNode;
@@ -43,9 +44,11 @@ impl From<CreateTablePlan> for CreateTableReq {
     fn from(p: CreateTablePlan) -> Self {
         CreateTableReq {
             if_not_exists: p.if_not_exists,
-            tenant: p.tenant,
-            db_name: p.db,
-            table_name: p.table,
+            name_ident: TableNameIdent {
+                tenant: p.tenant,
+                db_name: p.db,
+                table_name: p.table,
+            },
             table_meta: p.table_meta,
         }
     }

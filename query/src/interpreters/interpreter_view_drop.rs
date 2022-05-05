@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::DropTableReq;
 use common_meta_types::GrantObject;
+use common_meta_types::TableNameIdent;
 use common_meta_types::UserPrivilegeType;
 use common_planners::DropViewPlan;
 use common_streams::DataBlockStream;
@@ -78,9 +79,11 @@ impl Interpreter for DropViewInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let plan = DropTableReq {
             if_exists: self.plan.if_exists,
-            tenant: self.plan.tenant.clone(),
-            db_name,
-            table_name: viewname,
+            name_ident: TableNameIdent {
+                tenant: self.plan.tenant.clone(),
+                db_name,
+                table_name: viewname,
+            },
         };
         catalog.drop_table(plan).await?;
 

@@ -1,19 +1,19 @@
 ---
-title: timeslot
+title: TIMESLOT
 ---
 
 Rounds the time to the half hour.
 ## Syntax
 
 ```sql
-timeslot(expr)
+TIMESLOT( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| `<expr>` | datetime |
 
 ## Return Type
 Datetime object, returns date in “YYYY-MM-DD hh:mm:ss” format.
@@ -28,9 +28,9 @@ SELECT timeslot(now());
 | 2022-03-29 06:30:00 |
 +---------------------+
 
-SELECT timeslot(toDateTime(1630812366));
+SELECT timeslot(to_datetime(1630812366));
 +----------------------------------+
-| timeslot(toDateTime(1630812366)) |
+| timeslot(to_datetime(1630812366)) |
 +----------------------------------+
 | 2021-09-05 03:00:00              |
 +----------------------------------+

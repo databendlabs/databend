@@ -25,23 +25,6 @@ impl<T> Deref for Wrap<T> {
     }
 }
 
-unsafe fn index_of_unchecked<T>(slice: &[T], item: &T) -> usize {
-    (item as *const _ as usize - slice.as_ptr() as usize) / std::mem::size_of::<T>()
-}
-
-#[allow(dead_code)]
-fn index_of<T>(slice: &[T], item: &T) -> Option<usize> {
-    debug_assert!(std::mem::size_of::<T>() > 0);
-    let ptr = item as *const T;
-    unsafe {
-        if slice.as_ptr() < ptr && slice.as_ptr().add(slice.len()) > ptr {
-            Some(index_of_unchecked(slice, item))
-        } else {
-            None
-        }
-    }
-}
-
 pub fn get_iter_capacity<T, I: Iterator<Item = T>>(iter: &I) -> usize {
     match iter.size_hint() {
         (_lower, Some(upper)) => upper,
