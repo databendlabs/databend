@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -47,11 +45,7 @@ impl TypeSerializer for VariantSerializer {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let column: &VariantColumn = Series::check_get(column)?;
         let result: Vec<Value> = column.iter().map(|v| v.as_ref().to_owned()).collect();
         Ok(result)

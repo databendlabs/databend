@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::borrow::Cow;
-use chrono_tz::Tz;
 
-use common_io::prelude::FormatSettings;
+use chrono_tz::Tz;
 use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
@@ -48,7 +48,11 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    pub async fn write(&mut self, receiver: Result<Receiver<BlockItem>>, format: &FormatSettings) -> Result<()> {
+    pub async fn write(
+        &mut self,
+        receiver: Result<Receiver<BlockItem>>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         match receiver {
             Err(error) => self.write_error(error).await,
             Ok(receiver) => {
@@ -96,7 +100,11 @@ impl<'a> QueryWriter<'a> {
         }
     }
 
-    async fn write_data(&mut self, mut receiver: Receiver<BlockItem>, format: &FormatSettings) -> Result<()> {
+    async fn write_data(
+        &mut self,
+        mut receiver: Receiver<BlockItem>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         loop {
             match receiver.next().await {
                 None => {
@@ -145,13 +153,13 @@ pub fn to_clickhouse_block(block: DataBlock, format: &FormatSettings) -> Result<
         let field = block.schema().field(column_index);
         let name = field.name();
         let serializer = if field.data_type().data_type_id() == TypeID::Timestamp {
-            let tz =
-            String::from_utf8(format.timezone.clone()).map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
+            let tz = String::from_utf8(format.timezone.clone())
+                .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
             let tz = tz.parse::<Tz>().map_err(|_| {
                 ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
             field.data_type().create_serializer_with_tz(tz)
-        }else {
+        } else {
             field.data_type().create_serializer()
         };
         result.append_column(column::new_column(

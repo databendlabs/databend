@@ -41,11 +41,7 @@ impl TypeSerializer for NullableSerializer {
         }
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>> {
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
         let column: &NullableColumn = Series::check_get(column)?;
         let rows = column.len();
         let mut res = self.inner.serialize_column(column.inner(), format)?;
@@ -58,11 +54,7 @@ impl TypeSerializer for NullableSerializer {
         Ok(res)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>> {
         let column: &NullableColumn = Series::check_get(column)?;
         let rows = column.len();
         let mut res = self.inner.serialize_json(column.inner(), format)?;

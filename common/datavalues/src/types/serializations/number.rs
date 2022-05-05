@@ -14,7 +14,6 @@
 
 use std::marker::PhantomData;
 
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
@@ -65,11 +64,7 @@ where T: PrimitiveType
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Value> = column
             .iter()

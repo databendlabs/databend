@@ -169,8 +169,11 @@ where R: AsyncRead + Unpin + Send
             .iter()
             .map(|f| {
                 if f.data_type().data_type_id() == TypeID::Timestamp {
-                    f.data_type().create_deserializer_with_tz(self.builder.block_size, self.builder.tz.clone())
-                }else {
+                    f.data_type().create_deserializer_with_tz(
+                        self.builder.block_size,
+                        self.builder.tz.clone(),
+                    )
+                } else {
                     f.data_type().create_deserializer(self.builder.block_size)
                 }
             })

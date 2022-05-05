@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use chrono_tz::Tz;
 
+use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
@@ -103,7 +103,7 @@ impl DataType for NullableType {
         .into()
     }
 
-    fn create_deserializer_with_tz(&self, capacity:usize, tz: Tz) ->TypeDeserializerImpl {
+    fn create_deserializer_with_tz(&self, capacity: usize, tz: Tz) -> TypeDeserializerImpl {
         NullableDeserializer {
             inner: Box::new(self.inner.create_deserializer_with_tz(capacity, tz)),
             bitmap: MutableBitmap::with_capacity(capacity),

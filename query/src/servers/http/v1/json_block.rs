@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_io::prelude::FormatSettings;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -22,6 +21,7 @@ use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone)]

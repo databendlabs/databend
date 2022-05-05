@@ -58,11 +58,7 @@ impl TypeSerializer for StructSerializer {
         }
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>> {
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
         let column: &StructColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
@@ -73,11 +69,7 @@ impl TypeSerializer for StructSerializer {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        _column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, _column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         todo!()
     }
 

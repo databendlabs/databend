@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -48,13 +46,8 @@ pub use variant::*;
 #[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String>;
-    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings)
-        -> Result<Vec<Value>>;
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>>;
+    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>>;
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>>;
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,

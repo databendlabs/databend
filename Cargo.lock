@@ -975,6 +975,7 @@ dependencies = [
  "bstr",
  "bumpalo",
  "bytes 1.1.0",
+ "chrono-tz",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",

@@ -15,6 +15,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use chrono_tz::Tz;
 
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
@@ -141,12 +142,15 @@ where
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let mut ctx = EvalContext::new(self.factor, self.precision, None);
+        let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        let mut ctx = EvalContext::new(self.factor, self.precision, None, tz);
         let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),

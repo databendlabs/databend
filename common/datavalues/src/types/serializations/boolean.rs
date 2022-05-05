@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -63,11 +61,7 @@ impl TypeSerializer for BooleanSerializer {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let array: &BooleanColumn = Series::check_get(column)?;
         let result: Vec<Value> = array
             .iter()

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
@@ -54,11 +52,7 @@ impl TypeSerializer for ArraySerializer {
         }
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>> {
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
         let column: &ArrayColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
@@ -69,11 +63,7 @@ impl TypeSerializer for ArraySerializer {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        _column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, _column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         todo!()
     }
 

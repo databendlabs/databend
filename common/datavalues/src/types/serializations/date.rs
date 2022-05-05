@@ -14,7 +14,6 @@
 use std::marker::PhantomData;
 use std::ops::AddAssign;
 
-
 use chrono::Date;
 use chrono::Duration;
 use chrono::NaiveDate;
@@ -70,11 +69,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Value> = array
             .iter()

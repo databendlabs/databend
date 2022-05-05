@@ -14,13 +14,13 @@
 
 use std::time::Instant;
 
-use common_io::prelude::FormatSettings;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::error::TryRecvError;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
 
 use crate::servers::http::v1::JsonBlock;
@@ -72,7 +72,12 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait, format: &FormatSettings) -> Result<Page> {
+    pub async fn get_a_page(
+        &mut self,
+        page_no: usize,
+        tp: &Wait,
+        format: &FormatSettings,
+    ) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
             let (block, end) = self.collect_new_page(tp, format).await?;
@@ -121,7 +126,11 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn collect_new_page(&mut self, tp: &Wait, format: &FormatSettings) -> Result<(JsonBlock, bool)> {
+    pub async fn collect_new_page(
+        &mut self,
+        tp: &Wait,
+        format: &FormatSettings,
+    ) -> Result<(JsonBlock, bool)> {
         let mut results: Vec<JsonBlock> = Vec::new();
         let mut rows = 0;
         let block_rx = &mut self.block_rx;

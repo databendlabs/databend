@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use common_io::prelude::FormatSettings;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;

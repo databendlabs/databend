@@ -54,8 +54,8 @@ pub async fn statement_handler(
     let query = http_query_manager
         .try_create_query(&query_id, ctx, req)
         .await;
-        // TODO(veeupup): get query_ctx's format_settings here
-        let format = FormatSettings::default();
+    // TODO(veeupup): get query_ctx's format_settings here
+    let format = FormatSettings::default();
     match query {
         Ok(query) => {
             let resp = query

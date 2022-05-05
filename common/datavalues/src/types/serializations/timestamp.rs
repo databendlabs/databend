@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use chrono::DateTime;
 use chrono_tz::Tz;
 use common_exception::*;
@@ -38,7 +36,7 @@ impl Default for TimestampSerializer {
 
 impl TimestampSerializer {
     pub fn new_with_tz(tz: Tz) -> Self {
-        Self {tz}
+        Self { tz }
     }
 
     pub fn to_timestamp(&self, value: &i64) -> DateTime<Tz> {
@@ -71,11 +69,7 @@ impl TypeSerializer for TimestampSerializer {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
         let result: Vec<Value> = array
             .iter()

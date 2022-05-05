@@ -15,8 +15,8 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
-use chrono_tz::Tz;
 
+use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -124,8 +124,8 @@ impl StageSource {
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
         let format = ctx.get_format_settings()?;
-        let tz =
-        String::from_utf8(format.timezone.clone()).map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
+        let tz = String::from_utf8(format.timezone.clone())
+            .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
         let tz = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;

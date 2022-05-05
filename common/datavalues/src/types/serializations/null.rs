@@ -44,11 +44,7 @@ impl TypeSerializer for NullSerializer {
         Ok(result)
     }
 
-    fn serialize_json(
-        &self,
-        column: &ColumnRef,
-        _format: &FormatSettings,
-    ) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let null = Value::Null;
         let result: Vec<Value> = vec![null; column.len()];
         Ok(result)

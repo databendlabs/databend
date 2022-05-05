@@ -179,7 +179,11 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
         let instant = Instant::now();
         let blocks = self.base.do_query(query).await;
 
-        let format = self.session.get_shared_query_context().await?.get_format_settings()?;
+        let format = self
+            .session
+            .get_shared_query_context()
+            .await?
+            .get_format_settings()?;
         let mut write_result = writer.write(blocks, &format);
 
         if let Err(cause) = write_result {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::TypeID;
@@ -28,8 +27,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
-use common_tracing::tracing;
 use common_io::prelude::FormatSettings;
+use common_tracing::tracing;
 use opensrv_mysql::*;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
@@ -41,7 +40,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
     }
 
-    pub fn write(&mut self, query_result: Result<(Vec<DataBlock>, String)>, format: &FormatSettings) -> Result<()> {
+    pub fn write(
+        &mut self,
+        query_result: Result<(Vec<DataBlock>, String)>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
                 Ok((blocks, extra_info)) => Self::ok(blocks, extra_info, writer, format)?,
@@ -55,7 +58,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         blocks: Vec<DataBlock>,
         extra_info: String,
         dataset_writer: QueryResultWriter<'a, W>,
-        format: &FormatSettings
+        format: &FormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         let default_response = OkResponse {
@@ -111,8 +114,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
-        let tz =
-            String::from_utf8(format.timezone.clone()).map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
+        let tz = String::from_utf8(format.timezone.clone())
+            .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
         let tz = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
@@ -158,19 +161,23 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 }
                                 (TypeID::Struct, DataValue::Struct(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val, format)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
                                 (TypeID::Variant, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val, format)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
                                 (TypeID::VariantArray, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val, format)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
                                 (TypeID::VariantObject, DataValue::Variant(_)) => {
                                     let serializer = data_type.create_serializer();
-                                    row_writer.write_col(serializer.serialize_value(&val, format)?)?
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
                                 (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
 

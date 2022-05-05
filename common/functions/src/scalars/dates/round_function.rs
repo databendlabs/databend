@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
+use common_datavalues::chrono::TimeZone;
 use std::fmt;
 
 use common_datavalues::prelude::*;
@@ -56,7 +58,7 @@ impl RoundFunction {
     // Consider about the timezones/offsets
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
-    fn execute(&self, time: i64) -> i64 {
+    fn execute(&self, time: i64, tz: &Tz) -> i64 {
         let round = self.round as i64;
         time / MICROSECONDS / round * round * MICROSECONDS
     }
@@ -73,13 +75,18 @@ impl Function for RoundFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let func = |val: i64, _ctx: &mut EvalContext| self.execute(val);
+        let func = |val: i64, ctx: &mut EvalContext| self.execute(val, &ctx.tz);
+        let mut eval_context = EvalContext::default();
+        let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        eval_context.tz = tz;
         let col =
-            scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+            scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
         for micros in col.iter() {
             let _ = check_timestamp(*micros)?;
         }

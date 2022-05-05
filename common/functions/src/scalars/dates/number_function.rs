@@ -15,6 +15,7 @@
 use std::fmt;
 use std::marker::PhantomData;
 
+use chrono_tz::Tz;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::TimeZone;
@@ -46,7 +47,7 @@ pub struct NumberFunction<T, R> {
 pub trait NumberOperator<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn to_number(_value: DateTime<Utc>) -> R;
+    fn to_number(_value: DateTime<Tz>, tz: &Tz) -> R;
 
     // Used to check the monotonicity of the function.
     // For example, ToDayOfYear is monotonous only when the time range is the same year.
@@ -68,7 +69,7 @@ pub struct ToYYYYMM;
 impl NumberOperator<u32> for ToYYYYMM {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u32 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u32 {
         value.year() as u32 * 100 + value.month()
     }
 }
@@ -79,7 +80,7 @@ pub struct ToYYYYMMDD;
 impl NumberOperator<u32> for ToYYYYMMDD {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u32 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u32 {
         value.year() as u32 * 10000 + value.month() * 100 + value.day()
     }
 }
@@ -90,7 +91,7 @@ pub struct ToYYYYMMDDhhmmss;
 impl NumberOperator<u64> for ToYYYYMMDDhhmmss {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u64 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u64 {
         value.year() as u64 * 10000000000
             + value.month() as u64 * 100000000
             + value.day() as u64 * 1000000
@@ -106,9 +107,9 @@ pub struct ToStartOfYear;
 impl NumberOperator<i32> for ToStartOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> i32 {
-        let end: DateTime<Utc> = Utc.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
-        get_day(end) as i32
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> i32 {
+        let end = tz.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
+        get_day(end, tz) as i32
     }
 
     fn return_type() -> Option<DataTypeImpl> {
@@ -122,14 +123,14 @@ pub struct ToStartOfISOYear;
 impl NumberOperator<i32> for ToStartOfISOYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> i32 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> i32 {
         let week_day = value.weekday().num_days_from_monday();
         let iso_week = value.iso_week();
         let iso_week_num = iso_week.week();
         let sub_days = (iso_week_num - 1) * 7 + week_day;
         let result = value.timestamp_millis() - sub_days as i64 * 24 * 3600 * 1000;
-        let end: DateTime<Utc> = Utc.timestamp_millis(result);
-        get_day(end) as i32
+        let end = tz.timestamp_millis(result);
+        get_day(end, tz) as i32
     }
 
     fn return_type() -> Option<DataTypeImpl> {
@@ -143,10 +144,10 @@ pub struct ToStartOfQuarter;
 impl NumberOperator<i32> for ToStartOfQuarter {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> i32 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> i32 {
         let new_month = value.month0() / 3 * 3 + 1;
-        let date = Utc.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
-        get_day(date) as i32
+        let date = tz.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
+        get_day(date, tz) as i32
     }
 
     fn return_type() -> Option<DataTypeImpl> {
@@ -160,9 +161,9 @@ pub struct ToStartOfMonth;
 impl NumberOperator<i32> for ToStartOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> i32 {
-        let date = Utc.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
-        get_day(date) as i32
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> i32 {
+        let date = tz.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
+        get_day(date, tz) as i32
     }
 
     fn return_type() -> Option<DataTypeImpl> {
@@ -176,7 +177,7 @@ pub struct ToMonth;
 impl NumberOperator<u8> for ToMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u8 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
         value.month() as u8
     }
 
@@ -193,7 +194,7 @@ pub struct ToDayOfYear;
 impl NumberOperator<u16> for ToDayOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u16 {
         value.ordinal() as u16
     }
 
@@ -210,7 +211,7 @@ pub struct ToDayOfMonth;
 impl NumberOperator<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u8 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
         value.day() as u8
     }
 
@@ -227,7 +228,7 @@ pub struct ToDayOfWeek;
 impl NumberOperator<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u8 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
         value.weekday().number_from_monday() as u8
     }
 
@@ -243,7 +244,7 @@ pub struct ToHour;
 impl NumberOperator<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u8 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
         value.hour() as u8
     }
 
@@ -260,7 +261,7 @@ pub struct ToMinute;
 impl NumberOperator<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u8 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
         value.minute() as u8
     }
 
@@ -279,7 +280,7 @@ pub struct ToSecond;
 impl NumberOperator<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u8 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
         value.second() as u8
     }
 
@@ -298,9 +299,9 @@ pub struct ToMonday;
 impl NumberOperator<u16> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u16 {
         let weekday = value.weekday();
-        (get_day(value) as u32 - weekday.num_days_from_monday()) as u16
+        (get_day(value, tz) as u32 - weekday.num_days_from_monday()) as u16
     }
 }
 
@@ -310,7 +311,7 @@ pub struct ToYear;
 impl NumberOperator<u16> for ToYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Utc>) -> u16 {
+    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u16 {
         value.year() as u16
     }
 }
@@ -360,7 +361,7 @@ where
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -368,9 +369,10 @@ where
 
         let number_array = match type_id {
             TypeID::Date => {
+                let tz = "UTC".parse::<Tz>().unwrap();
                 let func = |v: i32, _ctx: &mut EvalContext| {
-                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                    T::to_number(date_time)
+                    let date_time = tz.timestamp(v as i64 * 24 * 3600, 0_u32);
+                    T::to_number(date_time, &tz)
                 };
                 let col = scalar_unary_op::<i32, R, _>(
                     columns[0].column(),
@@ -380,9 +382,15 @@ where
                 Ok(col.arc())
             }
             TypeID::Timestamp => {
+                // round_func need to calcute it with origin timezone
+                // such as in UTC: 2022-03-31 22:00 and in +8:00 time is 2022-04-01 6:00
+                // then the result of to the month of should be 2022-04-01 6:00 rather than 2022-03-01 22:00
+                let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
+                    ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+                })?;
                 let func = |v: i64, _ctx: &mut EvalContext| {
-                    let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
-                    T::to_number(date_time)
+                    let date_time = tz.timestamp(v / 1_000_000, 0_u32);
+                    T::to_number(date_time, &tz)
                 };
                 let col = scalar_unary_op::<i64, R, _>(
                     columns[0].column(),
@@ -442,8 +450,8 @@ impl<T, R> fmt::Display for NumberFunction<T, R> {
     }
 }
 
-fn get_day(date: DateTime<Utc>) -> i64 {
-    let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
+fn get_day(date: DateTime<Tz>, tz: &Tz) -> i64 {
+    let start = tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
     let duration = date.signed_duration_since(start);
     duration.num_days()
 }
