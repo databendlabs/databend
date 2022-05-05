@@ -47,14 +47,13 @@ pub struct DatabaseIdent {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct DatabaseTenantIdIdent {
-    pub tenant: String,
+pub struct DatabaseId {
     pub db_id: u64,
 }
 
-impl Display for DatabaseTenantIdIdent {
+impl Display for DatabaseId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.db_id)
+        write!(f, "{}", self.db_id)
     }
 }
 

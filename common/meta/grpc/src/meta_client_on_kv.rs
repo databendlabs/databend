@@ -19,8 +19,8 @@ use std::time::Duration;
 
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_types::DatabaseId;
 use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DatabaseTenantIdIdent;
 use common_meta_types::TenantDBIdTableId;
 use common_meta_types::TenantDBIdTableName;
 use common_tracing::tracing;
@@ -67,7 +67,9 @@ pub struct DatabaseIdGen {}
 pub struct TableIdGen {}
 
 const PREFIX_DATABASE: &str = "__fd_database";
+const PREFIX_DATABASE_BY_ID: &str = "__fd_database_by_id";
 const PREFIX_TABLE: &str = "__fd_table";
+// const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
 const PREFIX_ID_GEN: &str = "__fd_id_gen";
 const SEG_BY_NAME: &str = "by_name";
 const SEG_BY_ID: &str = "by_id";
@@ -136,18 +138,12 @@ impl KVApiKey for DatabaseNameIdent {
     }
 }
 
-/// "__fd_database/<tenant_id>/by_id/<db_id>"
-impl KVApiKey for DatabaseTenantIdIdent {
-    const PREFIX: &'static str = PREFIX_DATABASE;
+/// "__fd_database_by_id/<db_id>"
+impl KVApiKey for DatabaseId {
+    const PREFIX: &'static str = PREFIX_DATABASE_BY_ID;
 
     fn to_key(&self) -> String {
-        format!(
-            "{}/{}/{}/{}",
-            Self::PREFIX,
-            escape_for_key(&self.tenant),
-            SEG_BY_ID,
-            self.db_id,
-        )
+        format!("{}/{}", Self::PREFIX, self.db_id,)
     }
 
     fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
@@ -156,19 +152,13 @@ impl KVApiKey for DatabaseTenantIdIdent {
         let prefix = check_segment_present(elts.next(), 0, s)?;
         check_segment(prefix, 0, Self::PREFIX)?;
 
-        let tenant = check_segment_present(elts.next(), 1, s)?;
+        let db_id = check_segment_present(elts.next(), 1, s)?;
 
-        let by_id = check_segment_present(elts.next(), 2, s)?;
-        check_segment(by_id, 2, SEG_BY_ID)?;
+        check_segment_absent(elts.next(), 2, s)?;
 
-        let db_id = check_segment_present(elts.next(), 3, s)?;
-
-        check_segment_absent(elts.next(), 4, s)?;
-
-        let tenant = unescape_for_key(tenant)?;
         let db_id = decode_id(db_id)?;
 
-        Ok(DatabaseTenantIdIdent { tenant, db_id })
+        Ok(DatabaseId { db_id })
     }
 }
 

@@ -29,11 +29,11 @@ use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseAlreadyExists;
+use common_meta_types::DatabaseId;
 use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
-use common_meta_types::DatabaseTenantIdIdent;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReply;
@@ -88,11 +88,6 @@ impl MetaApi for MetaClientOnKV {
     ) -> Result<CreateDatabaseReply, MetaError> {
         let name_key = &req.name_ident;
 
-        let mut id_key = DatabaseTenantIdIdent {
-            tenant: name_key.tenant.clone(),
-            db_id: 0,
-        };
-
         loop {
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = self.get_db_id_by_name(name_key).await?;
@@ -112,7 +107,7 @@ impl MetaApi for MetaClientOnKV {
             }
 
             let db_id = self.fetch_id(DatabaseIdGen {}).await?;
-            id_key.db_id = db_id;
+            let id_key = DatabaseId { db_id };
 
             tracing::debug!(db_id, name_key = debug(&name_key), "new database id");
 
@@ -145,11 +140,6 @@ impl MetaApi for MetaClientOnKV {
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
         let name_key = &req.name_ident;
 
-        let mut id_key = DatabaseTenantIdIdent {
-            tenant: name_key.tenant.clone(),
-            db_id: 0,
-        };
-
         loop {
             let res = self
                 .get_db_or_err(name_key, format!("drop_database: {}", &name_key))
@@ -167,7 +157,7 @@ impl MetaApi for MetaClientOnKV {
                 }
             };
 
-            id_key.db_id = db_id;
+            let db_id_key = DatabaseId { db_id };
 
             tracing::debug!(db_id, name_key = debug(&name_key), "drop_database");
 
@@ -175,11 +165,11 @@ impl MetaApi for MetaClientOnKV {
                 let txn_req = TxnRequest {
                     condition: vec![
                         self.txn_cond_seq(name_key, Eq, db_id_seq)?,
-                        self.txn_cond_seq(&id_key, Eq, db_meta_seq)?,
+                        self.txn_cond_seq(&db_id_key, Eq, db_meta_seq)?,
                     ],
                     if_then: vec![
-                        self.txn_op_del(name_key)?, // (tenant, db_name) -> db_id
-                        self.txn_op_del(&id_key)?,  // (tenant, db_id) -> db_meta
+                        self.txn_op_del(name_key)?,   // (tenant, db_name) -> db_id
+                        self.txn_op_del(&db_id_key)?, // (tenant, db_id) -> db_meta
                     ],
                     else_then: vec![],
                 };
@@ -188,7 +178,7 @@ impl MetaApi for MetaClientOnKV {
 
                 tracing::debug!(
                     name = debug(&name_key),
-                    id = debug(&id_key),
+                    id = debug(&db_id_key),
                     succ = display(succ),
                     "drop_database"
                 );
@@ -203,16 +193,11 @@ impl MetaApi for MetaClientOnKV {
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
         let name_key = &req.inner;
 
-        let mut id_key = DatabaseTenantIdIdent {
-            tenant: name_key.tenant.clone(),
-            db_id: 0,
-        };
-
         // Get db id by name
         let (db_id_seq, db_id) = self.get_db_id_by_name(name_key).await?;
         self.db_has_to_exist(db_id_seq, name_key, "get_database")?;
 
-        id_key.db_id = db_id;
+        let id_key = DatabaseId { db_id };
 
         // Get db_meta by id
         let (db_meta_seq, db_meta) = self.get_db_by_id(&id_key).await?;
@@ -267,12 +252,9 @@ impl MetaApi for MetaClientOnKV {
             db_names.push(n.db_name);
 
             // Build KVApi key for `mget()` db_meta
-            let tenant_id_key = DatabaseTenantIdIdent {
-                tenant: name_key.tenant.clone(),
-                db_id,
-            };
+            let db_id_key = DatabaseId { db_id };
 
-            let k = tenant_id_key.to_key();
+            let k = db_id_key.to_key();
             kv_keys.push(k);
         }
 
@@ -670,10 +652,7 @@ impl MetaClientOnKV {
         let (db_id_seq, db_id) = self.get_id_value(name_key).await?;
         self.db_has_to_exist(db_id_seq, name_key, &msg)?;
 
-        let id_key = DatabaseTenantIdIdent {
-            tenant: name_key.tenant.clone(),
-            db_id,
-        };
+        let id_key = DatabaseId { db_id };
 
         let (db_meta_seq, db_meta) = self.get_db_by_id(&id_key).await?;
         self.db_has_to_exist(db_meta_seq, name_key, msg)?;
@@ -703,9 +682,9 @@ impl MetaClientOnKV {
     /// It returns seq number and the data.
     async fn get_db_by_id(
         &self,
-        tid: &DatabaseTenantIdIdent,
+        db_id: &DatabaseId,
     ) -> Result<(u64, Option<DatabaseMeta>), MetaError> {
-        let res = self.inner.get_kv(&tid.to_key()).await?;
+        let res = self.inner.get_kv(&db_id.to_key()).await?;
 
         if let Some(seq_v) = res {
             Ok((seq_v.seq, Some(self.deserialize_struct(&seq_v.data)?)))
