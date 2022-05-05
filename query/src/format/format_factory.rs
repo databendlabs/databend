@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use once_cell::sync::Lazy;
-use crate::InputFormat;
+use common_datavalues::DataSchemaRef;
 use common_exception::{ErrorCode, Result};
+use common_io::prelude::FormatSettings;
 use crate::format::format::InputFormat;
+use crate::format::format_csv::CsvInputFormat;
+use crate::pipelines::processors::FormatterSettings;
 
-pub type InputFormatFactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn InputFormat>> + Send + Sync>;
+pub type InputFormatFactoryCreator = Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Box<dyn InputFormat>> + Send + Sync>;
 
 pub struct FormatFactory {
     case_insensitive_desc: HashMap<String, InputFormatFactoryCreator>,
@@ -13,6 +16,8 @@ pub struct FormatFactory {
 
 static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
     let mut format_factory = FormatFactory::create();
+
+    CsvInputFormat::register(&mut format_factory);
 
     Arc::new(format_factory)
 });
@@ -33,7 +38,7 @@ impl FormatFactory {
         case_insensitive_desc.insert(name.to_lowercase(), creator);
     }
 
-    pub fn get_input(&self, name: impl AsRef<str>) -> Result<Box<dyn InputFormat>> {
+    pub fn get_input(&self, name: impl AsRef<str>, schema: DataSchemaRef, settings: FormatSettings) -> Result<Box<dyn InputFormat>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
@@ -43,7 +48,7 @@ impl FormatFactory {
             .ok_or_else(|| ErrorCode::UnknownFormat(format!("Unsupported format: {}", origin_name)))?;
 
 
-        creator(&origin_name)
+        creator(&origin_name, schema, settings)
     }
 }
 

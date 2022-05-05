@@ -41,6 +41,3 @@ pub use stream_sort::SortStream;
 pub use stream_source::SourceStream;
 pub use stream_sub_queries::SubQueriesStream;
 pub use stream_take::TakeStream;
-pub use sources::Cutter;
-pub use sources::InputState;
-pub use sources::InputFormat;

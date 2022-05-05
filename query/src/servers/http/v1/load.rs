@@ -336,11 +336,12 @@ async fn csv_source_pipe_builder(
     mut multipart: Multipart,
     block_size: usize,
 ) -> PoemResult<SourcePipeBuilder> {
+    /// CREATE FORMAT sk
     // let mut builder = CsvSourceBuilder::create(plan.schema(), format_settings.clone());
     // builder.block_size(block_size);
     let ports = vec![OutputPort::create()];
     let mut source_pipe_builder = SourcePipeBuilder::create();
-    let sources = MultipartFormat::input_sources("csv", multipart, ports.clone())?;
+    let sources = MultipartFormat::input_sources("csv", multipart, plan.schema(), format_settings.clone(), ports.clone()).unwrap();
 
     for (index, source) in sources.into_iter().enumerate() {
         source_pipe_builder.add_source(ports[index].clone(), source);
