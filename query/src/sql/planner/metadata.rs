@@ -119,17 +119,6 @@ impl Metadata {
         result
     }
 
-    pub fn column_idx_by_column_name(&self, col_name: &str) -> Result<IndexType> {
-        for col in self.columns.iter() {
-            if col.name == col_name {
-                return Ok(col.column_index);
-            }
-        }
-        Err(ErrorCode::LogicalError(format!(
-            "Can't find column {col_name} in metadata"
-        )))
-    }
-
     pub fn get_expr_display_string(&self, expr: &Expr) -> Result<String> {
         match expr {
             Expr::ColumnRef { column, .. } => Ok(column.name.clone()),
