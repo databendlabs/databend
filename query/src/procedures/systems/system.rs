@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::procedures::systems::FuseSegmentProcedure;
 use crate::procedures::systems::FuseSnapshotProcedure;
 use crate::procedures::ProcedureFactory;
 
@@ -22,6 +23,10 @@ impl SystemProcedure {
         factory.register(
             "system$fuse_snapshot",
             Box::new(FuseSnapshotProcedure::try_create),
+        );
+        factory.register(
+            "system$fuse_segment",
+            Box::new(FuseSegmentProcedure::try_create),
         );
     }
 }
