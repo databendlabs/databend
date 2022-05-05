@@ -179,7 +179,7 @@ async fn test_fuse_snapshot_table_read() -> Result<()> {
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
         expects_err(
             "check_row_and_block_count_after_append",
-            ErrorCode::bad_arguments_code(),
+            ErrorCode::logical_error_code(),
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

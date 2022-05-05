@@ -31,7 +31,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use super::fuse_snapshot::FuseSnapshot;
+use super::fuse_segment::FuseSegment;
 use super::table_args::parse_func_history_args;
 use crate::catalogs::Catalog;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -47,46 +47,49 @@ use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
-const FUSE_FUNC_SNAPSHOT: &str = "fuse_snapshot";
+const FUSE_FUNC_SEGMENT: &str = "fuse_segment";
 
-pub struct FuseSnapshotTable {
+pub struct FuseSegmentTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
+    arg_snapshot_id: String,
 }
 
-impl FuseSnapshotTable {
+impl FuseSegmentTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
+        let (arg_database_name, arg_table_name, arg_snapshot_id) =
+            parse_func_history_args(&table_args)?;
 
-        let engine = FUSE_FUNC_SNAPSHOT.to_owned();
+        let engine = FUSE_FUNC_SEGMENT.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: FuseSnapshot::schema(),
+                schema: FuseSegment::schema(),
                 engine,
                 ..Default::default()
             },
         };
 
-        Ok(Arc::new(FuseSnapshotTable {
+        Ok(Arc::new(FuseSegmentTable {
             table_info,
             arg_database_name,
             arg_table_name,
+            arg_snapshot_id,
         }))
     }
 }
 
 #[async_trait::async_trait]
-impl Table for FuseSnapshotTable {
+impl Table for FuseSegmentTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -107,6 +110,7 @@ impl Table for FuseSnapshotTable {
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),
+            string_literal(self.arg_snapshot_id.as_str()),
         ])
     }
 
@@ -132,9 +136,13 @@ impl Table for FuseSnapshotTable {
             ))
         })?;
 
-        let blocks = vec![FuseSnapshot::new(ctx.clone(), tbl).get_history().await?];
+        let blocks = vec![
+            FuseSegment::new(ctx.clone(), tbl, self.arg_snapshot_id.clone())
+                .get_segments()
+                .await?,
+        ];
         Ok(Box::pin(DataBlockStream::create(
-            FuseSnapshot::schema(),
+            FuseSegment::schema(),
             None,
             blocks,
         )))
@@ -155,6 +163,7 @@ impl Table for FuseSnapshotTable {
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
+                self.arg_snapshot_id.to_owned(),
             )?],
         });
 
@@ -167,6 +176,7 @@ struct FuseHistorySource {
     ctx: Arc<QueryContext>,
     arg_database_name: String,
     arg_table_name: String,
+    arg_snapshot_id: String,
 }
 
 impl FuseHistorySource {
@@ -175,12 +185,14 @@ impl FuseHistorySource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
+        arg_snapshot_id: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
+            arg_snapshot_id,
         })
     }
 }
@@ -210,15 +222,15 @@ impl AsyncSource for FuseHistorySource {
 
             let tbl = FuseTable::try_from_table(tbl.as_ref())?;
             Ok(Some(
-                FuseSnapshot::new(self.ctx.clone(), tbl)
-                    .get_history()
+                FuseSegment::new(self.ctx.clone(), tbl, self.arg_snapshot_id.clone())
+                    .get_segments()
                     .await?,
             ))
         }
     }
 }
 
-impl TableFunction for FuseSnapshotTable {
+impl TableFunction for FuseSegmentTable {
     fn function_name(&self) -> &str {
         self.name()
     }
