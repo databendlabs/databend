@@ -556,8 +556,77 @@ impl MetaApi for MetaClientOnKV {
         return Ok(Arc::new(tb_info));
     }
 
-    async fn list_tables(&self, _req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
-        todo!()
+    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+        let tenant_dbname = &req.inner;
+
+        // Get db by name to ensure presence
+
+        let (db_id_seq, db_id) = self.get_id_value(tenant_dbname).await?;
+        tracing::debug!(
+            db_id_seq,
+            db_id,
+            ?tenant_dbname,
+            "get database for listing table"
+        );
+
+        self.db_has_to_exist(db_id_seq, tenant_dbname, "list_tables")?;
+
+        // List tables by tenant, db_id, table_name.
+
+        let tenant_dbid_tbname = TenantDBIdTableName {
+            tenant: tenant_dbname.tenant.clone(),
+            db_id,
+            // Use empty name to scan all tables
+            table_name: "".to_string(),
+        };
+
+        let (tenant_dbid_tbnames, ids) = self.list_id_value(&tenant_dbid_tbname).await?;
+
+        let mut tb_meta_keys = Vec::with_capacity(ids.len());
+        for (i, name_key) in tenant_dbid_tbnames.iter().enumerate() {
+            let tenant_dbid_tbid = TenantDBIdTableId {
+                tenant: name_key.tenant.clone(),
+                db_id: name_key.db_id,
+                table_id: ids[i],
+            };
+
+            tb_meta_keys.push(tenant_dbid_tbid.to_key());
+        }
+
+        // mget() corresponding table_metas
+
+        let seq_tb_metas = self.inner.mget_kv(&tb_meta_keys).await?;
+
+        let mut tb_infos = Vec::with_capacity(ids.len());
+
+        for (i, seq_meta_opt) in seq_tb_metas.iter().enumerate() {
+            if let Some(seq_meta) = seq_meta_opt {
+                let tb_meta: TableMeta = self
+                    .deserialize_struct(&seq_meta.data)
+                    .map_err(Self::meta_encode_err)?;
+
+                let tb_info = TableInfo {
+                    ident: TableIdent {
+                        table_id: ids[i],
+                        version: seq_meta.seq,
+                    },
+                    desc: format!(
+                        "'{}'.'{}'",
+                        tenant_dbname.db_name, tenant_dbid_tbnames[i].table_name
+                    ),
+                    meta: tb_meta,
+                    name: tenant_dbid_tbnames[i].to_string(),
+                };
+                tb_infos.push(Arc::new(tb_info));
+            } else {
+                tracing::debug!(
+                    k = display(&tb_meta_keys[i]),
+                    "db_meta not found, maybe just deleted after listing names and before listing meta"
+                );
+            }
+        }
+
+        Ok(tb_infos)
     }
 
     async fn get_table_by_id(
@@ -704,6 +773,36 @@ impl MetaClientOnKV {
         } else {
             Ok((0, 0))
         }
+    }
+
+    /// List kvs whose value is formatted as it is an `id`, i.e., `u64`.
+    ///
+    /// It expects the kv-value is an id, such as:
+    /// `__fd_table/<tenant>/<db_id>/by_name/<table_name> -> (seq, table_id)`, or
+    /// `__fd_database/<tenant>/by_name/<db_name> -> (seq, db_id)`.
+    ///
+    /// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of id.
+    async fn list_id_value<K: KVApiKey>(&self, key: &K) -> Result<(Vec<K>, Vec<u64>), MetaError> {
+        let res = self.inner.prefix_list_kv(&key.to_key()).await?;
+
+        let n = res.len();
+
+        let mut structured_keys = Vec::with_capacity(n);
+        let mut ids = Vec::with_capacity(n);
+
+        for (str_key, seq_id) in res.iter() {
+            let id = self
+                .deserialize_id(&seq_id.data)
+                .map_err(Self::meta_encode_err)?;
+            ids.push(id);
+
+            // Parse key and get db_name:
+
+            let struct_key = K::from_key(str_key).map_err(Self::meta_encode_err)?;
+            structured_keys.push(struct_key);
+        }
+
+        Ok((structured_keys, ids))
     }
 
     /// Get a struct value.
