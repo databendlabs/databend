@@ -1128,20 +1128,26 @@ impl MetaApiTestSuite {
                 },
             };
 
-            {
+            let tb_ids = {
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "table id is 1");
+                assert!(res.table_id >= 1, "table id >= 1");
+
+                let tb_id1 = res.table_id;
 
                 req.name_ident.table_name = "tb2".to_string();
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(2, res.table_id, "table id is 2");
-            }
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                let tb_id2 = res.table_id;
+
+                vec![tb_id1, tb_id2]
+            };
 
             tracing::info!("--- get_tables");
             {
                 let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await?;
-                assert_eq!(1, res[0].ident.table_id);
-                assert_eq!(2, res[1].ident.table_id);
+                assert_eq!(tb_ids.len(), res.len());
+                assert_eq!(tb_ids[0], res[0].ident.table_id);
+                assert_eq!(tb_ids[1], res[1].ident.table_id);
             }
         }
 
