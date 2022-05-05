@@ -26,7 +26,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::table_test_fixture::*;
 
 #[tokio::test]
-async fn test_fuse_history_table_args() -> Result<()> {
+async fn test_fuse_snapshot_table_args() -> Result<()> {
     let test_db = "db_not_exist";
     let test_tbl = "tbl_not_exist";
     expects_err(
@@ -71,7 +71,7 @@ async fn test_fuse_history_table_args() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_fuse_history_table_read() -> Result<()> {
+async fn test_fuse_snapshot_table_read() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
@@ -115,7 +115,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
             "+-------+",
         ];
         let qry = format!(
-            "select count(1) as count from fuse_history('{}', '{}')",
+            "select count(1) as count from fuse_snapshot('{}', '{}')",
             db, tbl
         );
 
@@ -136,7 +136,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
             "+-----------+-------------+",
         ];
         let qry = format!(
-            "select row_count, block_count from fuse_history('{}', '{}')",
+            "select row_count, block_count from fuse_snapshot('{}', '{}')",
             db, tbl
         );
         expects_ok(
@@ -159,7 +159,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
             "+-----------+-------------+",
         ];
         let qry = format!(
-            "select row_count, block_count from fuse_history('{}', '{}') order by row_count",
+            "select row_count, block_count from fuse_snapshot('{}', '{}') order by row_count",
             db, tbl
         );
         expects_ok(
@@ -175,7 +175,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
         let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
         execute_query(ctx.clone(), qry.as_str()).await?;
 
-        let qry = format!("select * from fuse_history('{}', '{}')", db, "in_mem");
+        let qry = format!("select * from fuse_snapshot('{}', '{}')", db, "in_mem");
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
         expects_err(
             "check_row_and_block_count_after_append",

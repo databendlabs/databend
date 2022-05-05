@@ -14,7 +14,6 @@
 
 pub mod cache;
 mod constants;
-mod fuse_history;
 mod fuse_part;
 mod fuse_table;
 pub mod io;
@@ -22,10 +21,7 @@ pub mod meta;
 pub mod operations;
 pub mod pruning;
 pub mod statistics;
-mod table_functions;
+pub mod table_functions;
 
 pub use constants::*;
-pub use fuse_history::FuseHistory;
 pub use fuse_table::FuseTable;
-pub use table_functions::FuseHistoryTable;
-pub use table_functions::FUSE_FUNC_HIST;
