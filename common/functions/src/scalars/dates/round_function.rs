@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
-use common_datavalues::chrono::TimeZone;
 use std::fmt;
 
+use chrono_tz::Tz;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Timelike;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,17 +28,29 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
+#[derive(Clone, Copy)]
+pub enum Round {
+    Second,
+    Minute,
+    FiveMinutes,
+    TenMinutes,
+    FifteenMinutes,
+    TimeSlot,
+    Hour,
+    Day,
+}
+
 #[derive(Clone)]
 pub struct RoundFunction {
     display_name: String,
-    round: u32,
+    round: Round,
 }
 
 impl RoundFunction {
     pub fn try_create(
         display_name: &str,
         args: &[&DataTypeImpl],
-        round: u32,
+        round: Round,
     ) -> Result<Box<dyn Function>> {
         if args[0].data_type_id() != TypeID::Timestamp {
             return Err(ErrorCode::BadDataValueType(format!(
@@ -59,8 +73,38 @@ impl RoundFunction {
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
     fn execute(&self, time: i64, tz: &Tz) -> i64 {
-        let round = self.round as i64;
-        time / MICROSECONDS / round * round * MICROSECONDS
+        let dt = tz.timestamp(time / MICROSECONDS, 0_u32);
+        match self.round {
+            Round::Second => dt.timestamp_micros(),
+            Round::Minute => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), 0, 0, 0)
+                .timestamp_micros(),
+            Round::FiveMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 5 * 5, 0, 0)
+                .timestamp_micros(),
+            Round::TenMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 10 * 10, 0, 0)
+                .timestamp_micros(),
+            Round::FifteenMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 15 * 15, 0, 0)
+                .timestamp_micros(),
+            Round::TimeSlot => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 30 * 30, 0, 0)
+                .timestamp_micros(),
+            Round::Hour => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), 0, 0, 0)
+                .timestamp_micros(),
+            Round::Day => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(0, 0, 0, 0)
+                .timestamp_micros(),
+        }
     }
 }
 
@@ -85,8 +129,7 @@ impl Function for RoundFunction {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         eval_context.tz = tz;
-        let col =
-            scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
+        let col = scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
         for micros in col.iter() {
             let _ = check_timestamp(*micros)?;
         }

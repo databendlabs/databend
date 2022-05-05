@@ -25,6 +25,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::round_function::Round;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
@@ -268,7 +269,7 @@ impl NumberOperator<u8> for ToMinute {
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], 60 * 60)
+            RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], Round::Hour)
                 .unwrap(),
         )
     }
@@ -287,8 +288,12 @@ impl NumberOperator<u8> for ToSecond {
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     fn factor_function() -> Option<Box<dyn Function>> {
         Some(
-            RoundFunction::try_create("toStartOfMinute", &[&TimestampType::new_impl(0)], 60)
-                .unwrap(),
+            RoundFunction::try_create(
+                "toStartOfMinute",
+                &[&TimestampType::new_impl(0)],
+                Round::Second,
+            )
+            .unwrap(),
         )
     }
 }

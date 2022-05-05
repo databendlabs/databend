@@ -41,7 +41,7 @@ impl EvalContext {
             factor,
             precision,
             error,
-            tz
+            tz,
         }
     }
 

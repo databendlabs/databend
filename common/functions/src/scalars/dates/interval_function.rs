@@ -15,8 +15,8 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use chrono_tz::Tz;
 
+use chrono_tz::Tz;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::NaiveDate;
