@@ -145,11 +145,11 @@ impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
         session: SessionRef,
+        ctx: Arc<QueryContext>,
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<Arc<RwLock<Executor>>> {
         let sql = &request.sql;
         let start_time = Instant::now();
-        let ctx = session.create_query_context().await?;
         ctx.attach_query_str(sql);
         let plan = match PlanParser::parse(ctx.clone(), sql).await {
             Ok(p) => p,
