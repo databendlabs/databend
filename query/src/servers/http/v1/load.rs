@@ -45,6 +45,7 @@ use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
+use crate::servers::http::v1::multipart_format::MultipartFormat;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
@@ -121,7 +122,7 @@ pub async fn streaming_load(
                             multipart,
                             max_block_size,
                         )
-                        .await
+                            .await
                     } else if format.to_lowercase().as_str() == "parquet" {
                         parquet_source_pipe_builder(context.clone(), &plan, multipart).await
                     } else if format.to_lowercase().as_str() == "ndjson"
@@ -335,22 +336,16 @@ async fn csv_source_pipe_builder(
     mut multipart: Multipart,
     block_size: usize,
 ) -> PoemResult<SourcePipeBuilder> {
-    let mut builder = CsvSourceBuilder::create(plan.schema(), format_settings.clone());
-    builder.block_size(block_size);
+    // let mut builder = CsvSourceBuilder::create(plan.schema(), format_settings.clone());
+    // builder.block_size(block_size);
+    let ports = vec![OutputPort::create()];
     let mut source_pipe_builder = SourcePipeBuilder::create();
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let bytes = field
-            .bytes()
-            .await
-            .map_err_to_code(ErrorCode::BadBytes, || "Read part to field bytes error")
-            .unwrap();
-        let cursor = Cursor::new(bytes);
-        let csv_source = builder.build(cursor).unwrap();
-        let output_port = OutputPort::create();
-        let source =
-            StreamSourceV2::create(ctx.clone(), Box::new(csv_source), output_port.clone()).unwrap();
-        source_pipe_builder.add_source(output_port, source);
+    let sources = MultipartFormat::input_sources("csv", multipart, ports.clone())?;
+
+    for (index, source) in sources.into_iter().enumerate() {
+        source_pipe_builder.add_source(ports[index].clone(), source);
     }
+
     Ok(source_pipe_builder)
 }
 

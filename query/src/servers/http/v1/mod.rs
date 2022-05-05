@@ -18,6 +18,7 @@ mod load;
 mod query;
 mod stage;
 mod statement;
+mod multipart_format;
 
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;

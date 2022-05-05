@@ -139,6 +139,8 @@ build_exceptions! {
     // Network error codes.
     NetworkRequestError(1073),
 
+    UnknownFormat(1074),
+
     // Tenant error codes.
     TenantIsEmpty(1101),
     IndexOutOfBounds(1102),

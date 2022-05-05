@@ -16,6 +16,7 @@ mod source;
 mod source_csv;
 mod source_ndjson;
 mod source_parquet;
+mod cutter;
 
 pub use source::Source;
 pub use source_csv::CsvSource;
@@ -24,3 +25,6 @@ pub use source_ndjson::NDJsonSource;
 pub use source_ndjson::NDJsonSourceBuilder;
 pub use source_parquet::ParquetSource;
 pub use source_parquet::ParquetSourceBuilder;
+pub use cutter::Cutter;
+pub use databend_query::format::format::InputFormat;
+pub use databend_query::format::format::InputState;
