@@ -19,15 +19,16 @@ use common_exception::Result;
 use crate::storages::fuse::table_functions::string_value;
 use crate::table_functions::TableArgs;
 
-pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String)> {
+pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String, String)> {
     match table_args {
-        Some(args) if args.len() == 2 => {
+        Some(args) if args.len() == 3 => {
             let db = string_value(&args[0])?;
             let tbl = string_value(&args[1])?;
-            Ok((db, tbl))
+            let snapshot_id = string_value(&args[2])?;
+            Ok((db, tbl, snapshot_id))
         }
         _ => Err(ErrorCode::BadArguments(format!(
-            "expecting database and table name (as two string literals), but got {:?}",
+            "expecting <database>, <table_name> and <snapshot_id> (as string literals), but got {:?}",
             table_args
         ))),
     }

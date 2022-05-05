@@ -13,22 +13,23 @@
 //  limitations under the License.
 //
 
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 
-use crate::storages::fuse::table_functions::string_value;
-use crate::table_functions::TableArgs;
-
-pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String)> {
-    match table_args {
-        Some(args) if args.len() == 2 => {
-            let db = string_value(&args[0])?;
-            let tbl = string_value(&args[1])?;
-            Ok((db, tbl))
-        }
-        _ => Err(ErrorCode::BadArguments(format!(
-            "expecting database and table name (as two string literals), but got {:?}",
-            table_args
-        ))),
+pub fn string_value(expr: &Expression) -> Result<String> {
+    if let Expression::Literal { value, .. } = expr {
+        String::from_utf8(value.as_string()?)
+            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
+    } else {
+        Err(ErrorCode::BadArguments(format!(
+            "expecting string literal, but got {:?}",
+            expr
+        )))
     }
+}
+
+pub fn string_literal(val: &str) -> Expression {
+    Expression::create_literal(DataValue::String(val.as_bytes().to_vec()))
 }
