@@ -199,6 +199,7 @@ impl TransformAggregator {
 
 pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
+    const GROUPY_TWO_LEVEL_THRESHOLD: usize;
 
     fn consume(&mut self, data: DataBlock) -> Result<()>;
     fn generate(&mut self) -> Result<Option<DataBlock>>;

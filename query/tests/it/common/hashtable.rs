@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_query::common::Grower;
+use databend_query::common::HashTableGrower;
+use databend_query::common::SingleLevelGrower;
 
 #[test]
 fn test_hash_table_grower() {
-    let mut grower = Grower::default();
+    let mut grower = SingleLevelGrower::default();
 
     assert_eq!(grower.max_size(), 256);
 

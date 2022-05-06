@@ -216,13 +216,19 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for PartialAggregator<true, Method>
 {
     const NAME: &'static str = "";
+    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 10000;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
         let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
 
+        if !self.state.is_two_level() && block.num_rows() >= Self::GROUPY_TWO_LEVEL_THRESHOLD {
+            self.state.convert_to_two_level();
+        }
+
         let places = Self::lookup_state(&self.params, group_keys, &mut self.state);
+
         Self::execute(&self.params, &block, &places)
     }
 
@@ -235,6 +241,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for PartialAggregator<false, Method>
 {
     const NAME: &'static str = "";
+    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 10000;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.

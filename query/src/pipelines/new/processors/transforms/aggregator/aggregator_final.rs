@@ -108,12 +108,17 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<true, Method>
 {
     const NAME: &'static str = "";
+    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 10000;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
         let aggregate_function_len = self.params.aggregate_functions.len();
         let keys_column = block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
+
+        if !self.state.is_two_level() && block.num_rows() > Self::GROUPY_TWO_LEVEL_THRESHOLD {
+            self.state.convert_to_two_level();
+        }
 
         let places = Self::lookup_state(&self.params, &mut self.state, keys_iter.get_slice());
 
@@ -189,6 +194,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 columns.extend_from_slice(&group_columns_builder.finish()?);
+
                 Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
             }
         }
@@ -199,6 +205,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<false, Method>
 {
     const NAME: &'static str = "";
+    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 10000;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);

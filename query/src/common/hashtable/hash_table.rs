@@ -18,12 +18,12 @@ use std::alloc::Layout;
 use std::marker::PhantomData;
 use std::mem;
 
-use crate::common::hashtable::hash_table_grower::Grower;
+use crate::common::hashtable::hash_table_grower::HashTableGrower;
 use crate::common::HashTableEntity;
-use crate::common::HashTableIter;
+use crate::common::HashTableIteratorKind;
 use crate::common::HashTableKeyable;
 
-pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
+pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> {
     size: usize,
     grower: Grower,
     entities: *mut Entity,
@@ -35,7 +35,9 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>> {
     generics_hold: PhantomData<Key>,
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key, Entity> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> Drop
+    for HashTable<Key, Entity, Grower>
+{
     fn drop(&mut self) {
         unsafe {
             let size = (self.grower.max_size() as usize) * mem::size_of::<Entity>();
@@ -53,8 +55,10 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> Drop for HashTable<Key
     }
 }
 
-impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity> {
-    pub fn create() -> HashTable<Key, Entity> {
+impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower>
+    HashTable<Key, Entity, Grower>
+{
+    pub fn create() -> HashTable<Key, Entity, Grower> {
         let size = (1 << 8) * mem::size_of::<Entity>();
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, mem::align_of::<Entity>());
@@ -83,13 +87,25 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> HashTableIter<Key, Entity> {
-        HashTableIter::create(self.grower.max_size(), self.entities, self.zero_entity)
+    pub fn iter(&self) -> HashTableIteratorKind<Key, Entity> {
+        HashTableIteratorKind::create_hash_table_iter(
+            self.grower.max_size(),
+            self.entities,
+            self.zero_entity,
+        )
     }
 
     #[inline(always)]
     pub fn insert_key(&mut self, key: &Key, inserted: &mut bool) -> *mut Entity {
         let hash = key.fast_hash();
+        match self.insert_if_zero_key(key, hash, inserted) {
+            None => self.insert_non_zero_key(key, hash, inserted),
+            Some(zero_hash_table_entity) => zero_hash_table_entity,
+        }
+    }
+
+    #[inline(always)]
+    pub fn insert_hash_key(&mut self, key: &Key, hash: u64, inserted: &mut bool) -> *mut Entity {
         match self.insert_if_zero_key(key, hash, inserted) {
             None => self.insert_non_zero_key(key, hash, inserted),
             Some(zero_hash_table_entity) => zero_hash_table_entity,
@@ -119,7 +135,8 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
             let grower = &self.grower;
 
             let mut place_value = grower.place(hash_value);
-            while !self.entities.offset(place_value).is_zero()
+
+            while std::intrinsics::likely(!self.entities.offset(place_value).is_zero())
                 && !self
                     .entities
                     .offset(place_value)
