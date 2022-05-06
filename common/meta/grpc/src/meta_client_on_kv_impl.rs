@@ -274,14 +274,8 @@ impl MetaApi for MetaClientOnKV {
         loop {
             // Get db by name to ensure presence
 
-            let (db_id_seq, db_id) = self.get_id_value(&tenant_dbname).await?;
-            tracing::debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
-
-            self.db_has_to_exist(
-                db_id_seq,
-                &tenant_dbname,
-                format!("create_table: {}", tenant_dbname_tbname),
-            )?;
+            let (_, db_id, db_meta_seq, db_meta) =
+                self.get_db_or_err(&tenant_dbname, "create_table").await?;
 
             // Get table by tenant,db_id, table_name to assert absence.
 
@@ -321,12 +315,17 @@ impl MetaApi for MetaClientOnKV {
             {
                 let txn_req = TxnRequest {
                     condition: vec![
-                        // db has not to change
-                        self.txn_cond_seq(&tenant_dbname, Eq, db_id_seq)?,
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        self.txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
                         // no other table with the same name is inserted.
                         self.txn_cond_seq(&dbid_tbname, Eq, 0)?,
                     ],
                     if_then: vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                        self.txn_op_put(&DatabaseId { db_id }, self.serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         self.txn_op_put(&dbid_tbname, self.serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
                         self.txn_op_put(&tbid, self.serialize_struct(&req.table_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
@@ -356,14 +355,8 @@ impl MetaApi for MetaClientOnKV {
         loop {
             // Get db by name to ensure presence
 
-            let (db_id_seq, db_id) = self.get_id_value(&tenant_dbname).await?;
-            tracing::debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
-
-            self.db_has_to_exist(
-                db_id_seq,
-                &tenant_dbname,
-                format!("create_table: {}", tenant_dbname_tbname),
-            )?;
+            let (_, db_id, db_meta_seq, db_meta) =
+                self.get_db_or_err(&tenant_dbname, "drop_table").await?;
 
             // Get table by tenant,db_id, table_name to assert presence.
 
@@ -404,14 +397,19 @@ impl MetaApi for MetaClientOnKV {
             {
                 let txn_req = TxnRequest {
                     condition: vec![
-                        // db has not to change
-                        self.txn_cond_seq(&tenant_dbname, Eq, db_id_seq)?,
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        self.txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
                         // still this table id
                         self.txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
                         // table is not changed
                         self.txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
                     ],
                     if_then: vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                        self.txn_op_put(&DatabaseId { db_id }, self.serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         self.txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
                         self.txn_op_del(&tbid)?,        // (tb_id) -> tb_meta
                     ],
@@ -446,7 +444,7 @@ impl MetaApi for MetaClientOnKV {
         loop {
             // Get db by name to ensure presence
 
-            let (_, db_id, db_meta_seq, _) =
+            let (_, db_id, db_meta_seq, db_meta) =
                 self.get_db_or_err(&tenant_dbname, "rename_table").await?;
 
             // Get table by db_id, table_name to assert presence.
@@ -469,7 +467,7 @@ impl MetaApi for MetaClientOnKV {
                 tenant: tenant_dbname.tenant.clone(),
                 db_name: req.new_db_name.clone(),
             };
-            let (_, new_db_id, new_db_meta_seq, _) = self
+            let (_, new_db_id, new_db_meta_seq, new_db_meta) = self
                 .get_db_or_err(&tenant_newdbname, "rename_table: new db")
                 .await?;
 
@@ -487,21 +485,39 @@ impl MetaApi for MetaClientOnKV {
             )?;
 
             {
+                let condition = vec![
+                    // db has not to change, i.e., no new table is created.
+                    // Renaming db is OK and does not affect the seq of db_meta.
+                    self.txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
+                    self.txn_cond_seq(&DatabaseId { db_id: new_db_id }, Eq, new_db_meta_seq)?,
+                    // table_name->table_id does not change.
+                    // Updating the table meta is ok.
+                    self.txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
+                    self.txn_cond_seq(&newdbid_newtbname, Eq, 0)?,
+                ];
+
+                let mut then_ops = vec![
+                    self.txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
+                    self.txn_op_put(&newdbid_newtbname, self.serialize_id(table_id)?)?, // (db_id, tb_name) -> tb_id
+                    // Changing a table in a db has to update the seq of db_meta,
+                    // to block the batch-delete-tables when deleting a db.
+                    // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                    self.txn_op_put(&DatabaseId { db_id }, self.serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
+                ];
+
+                if db_id != new_db_id {
+                    then_ops.push(
+                        // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                        self.txn_op_put(
+                            &DatabaseId { db_id: new_db_id },
+                            self.serialize_struct(&new_db_meta)?,
+                        )?, // (db_id) -> db_meta
+                    );
+                }
+
                 let txn_req = TxnRequest {
-                    condition: vec![
-                        // db has not to change, i.e., no new table is created.
-                        // Renaming db is OK and does not affect the seq of db_meta.
-                        self.txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
-                        self.txn_cond_seq(&DatabaseId { db_id: new_db_id }, Eq, new_db_meta_seq)?,
-                        // table_name->table_id does not change.
-                        // Updating the table meta is ok.
-                        self.txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
-                        self.txn_cond_seq(&newdbid_newtbname, Eq, 0)?,
-                    ],
-                    if_then: vec![
-                        self.txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
-                        self.txn_op_put(&newdbid_newtbname, self.serialize_id(table_id)?)?, // (db_id, tb_name) -> tb_id
-                    ],
+                    condition,
+                    if_then: then_ops,
                     else_then: vec![],
                 };
 
