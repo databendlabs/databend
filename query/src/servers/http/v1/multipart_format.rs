@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use common_base::tokio::io::AsyncReadExt;
 use common_base::tokio::sync::mpsc::Receiver;
-use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -11,9 +10,9 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use poem::web::Multipart;
 
-use crate::format::FormatFactory;
-use crate::format::InputFormat;
-use crate::format::InputState;
+use crate::formats::FormatFactory;
+use crate::formats::InputFormat;
+use crate::formats::InputState;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;

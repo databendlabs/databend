@@ -7,9 +7,8 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use once_cell::sync::Lazy;
 
-use crate::format::format::InputFormat;
-use crate::format::format_csv::CsvInputFormat;
-use crate::pipelines::processors::FormatterSettings;
+use crate::formats::format::InputFormat;
+use crate::formats::format_csv::CsvInputFormat;
 
 pub type InputFormatFactoryCreator =
     Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Box<dyn InputFormat>> + Send + Sync>;
@@ -27,7 +26,7 @@ static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
 });
 
 impl FormatFactory {
-    pub(in crate::format::format_factory) fn create() -> FormatFactory {
+    pub(in crate::formats::format_factory) fn create() -> FormatFactory {
         FormatFactory {
             case_insensitive_desc: Default::default(),
         }
@@ -55,9 +54,9 @@ impl FormatFactory {
             .case_insensitive_desc
             .get(&lowercase_name)
             .ok_or_else(|| {
-                ErrorCode::UnknownFormat(format!("Unsupported format: {}", origin_name))
+                ErrorCode::UnknownFormat(format!("Unsupported formats: {}", origin_name))
             })?;
 
-        creator(&origin_name, schema, settings)
+        creator(origin_name, schema, settings)
     }
 }

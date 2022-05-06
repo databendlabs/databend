@@ -8,11 +8,8 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::StringType;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use databend_query::format::format_csv::CsvInputFormat;
-use databend_query::format::format_csv::CsvInputState;
-use databend_query::format::InputFormat;
-use databend_query::format::InputState;
-use nom::AsBytes;
+use databend_query::formats::format_csv::CsvInputFormat;
+use databend_query::formats::format_csv::CsvInputState;
 
 #[test]
 fn test_accepted_multi_lines() -> Result<()> {

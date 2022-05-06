@@ -1,14 +1,10 @@
 use std::any::Any;
 use std::io::Cursor;
-use std::ops::Deref;
 
-use common_arrow::arrow::io::csv;
-use common_arrow::arrow::io::csv::read::ByteRecord;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BufferRead;
@@ -17,9 +13,9 @@ use common_io::prelude::BufferReader;
 use common_io::prelude::CheckpointReader;
 use common_io::prelude::FormatSettings;
 
-use crate::format::FormatFactory;
-use crate::format::InputFormat;
-use crate::format::InputState;
+use crate::formats::FormatFactory;
+use crate::formats::InputFormat;
+use crate::formats::InputState;
 
 pub struct CsvInputState {
     pub quotes: bool,
@@ -55,9 +51,9 @@ impl CsvInputFormat {
     }
 
     pub fn try_create(
-        name: &str,
+        _name: &str,
         schema: DataSchemaRef,
-        settings: FormatSettings,
+        _settings: FormatSettings,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
     ) -> Result<Box<dyn InputFormat>> {
@@ -88,8 +84,8 @@ impl CsvInputFormat {
     }
 
     fn find_quotes(buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
-        for index in pos..buf.len() {
-            if buf[index] == b'"' {
+        for (index, byte) in buf.iter().enumerate().skip(pos) {
+            if *byte == b'"' {
                 state.quotes = false;
                 return index + 1;
             }
@@ -217,10 +213,8 @@ impl InputFormat for CsvInputFormat {
             if buf[0] == b'\r' {
                 index += 1;
             }
-        } else if state.ignore_if_first_is_n {
-            if buf[0] == b'\n' {
-                index += 1;
-            }
+        } else if state.ignore_if_first_is_n && buf[0] == b'\n' {
+            index += 1;
         }
 
         while index < buf.len() && need_more_data {

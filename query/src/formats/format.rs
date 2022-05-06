@@ -1,7 +1,6 @@
 use std::any::Any;
 
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_exception::Result;
 
 pub trait InputState: Send {
