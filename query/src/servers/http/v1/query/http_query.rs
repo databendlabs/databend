@@ -117,7 +117,6 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     pub(crate) async fn try_create(
-        id: &str,
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
         config: HttpQueryConfig,
@@ -153,13 +152,16 @@ impl HttpQuery {
         };
         let session_id = session.get_id().clone();
 
+        let ctx = session.create_query_context().await?;
+        let id = ctx.get_id();
+
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 
-        let state = ExecuteState::try_create(&request, session, block_tx).await?;
+        let state = ExecuteState::try_create(&request, session, ctx, block_tx).await?;
         let data = Arc::new(TokioMutex::new(ResultDataManager::new(block_rx)));
         let query = HttpQuery {
-            id: id.to_string(),
+            id,
             session_id,
             request,
             state,

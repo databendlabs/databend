@@ -140,14 +140,6 @@ impl ComparisonOp {
     }
 }
 
-impl TryFrom<BinaryOperator> for ComparisonOp {
-    type Error = ErrorCode;
-
-    fn try_from(value: BinaryOperator) -> Result<Self> {
-        Self::try_from_binary_op(&value)
-    }
-}
-
 impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     type Error = ErrorCode;
 

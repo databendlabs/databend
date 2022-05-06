@@ -769,8 +769,6 @@ impl MetaApiTestSuite {
 
             let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
-
-            assert_eq!(1, res.database_id, "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -785,20 +783,11 @@ impl MetaApiTestSuite {
         };
 
         tracing::info!("--- create table for rename");
-        {
-            let res = mt.create_table(req.clone()).await?;
-            assert_eq!(1, res.table_id, "table id is 1");
-
+        let tb_ident = {
+            mt.create_table(req.clone()).await?;
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-            let want = TableInfo {
-                ident: TableIdent::new(1, 1),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                name: tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get created table after drop");
-        }
+            got.ident.clone()
+        };
 
         tracing::info!("--- rename table, ok");
         {
@@ -816,7 +805,13 @@ impl MetaApiTestSuite {
 
             let got = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
             let want = TableInfo {
-                ident: TableIdent::new(1, 2),
+                // TODO: use this after kv-txn rename-table replaces metasrv rename-table:
+                //    `ident: tb_ident.clone(),`
+                //     rename-table should not change the seq.
+                ident: TableIdent {
+                    table_id: tb_ident.table_id,
+                    version: got.ident.version,
+                },
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
                 name: new_tbl_name.into(),
                 meta: table_meta(created_on),
@@ -857,20 +852,14 @@ impl MetaApiTestSuite {
         }
 
         tracing::info!("--- create table again after rename, ok");
-        {
-            let res = mt.create_table(req.clone()).await?;
-            assert_eq!(2, res.table_id, "table id should be 2");
+        let tb_ident2 = {
+            mt.create_table(req.clone()).await?;
 
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-            let want = TableInfo {
-                ident: TableIdent::new(2, 3),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                name: tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get created table after rename");
-        }
+            assert_ne!(tb_ident.table_id, got.ident.table_id);
+            assert_ne!(tb_ident.version, got.ident.version);
+            got.ident.clone()
+        };
 
         tracing::info!("--- rename table again after recreate, error");
         {
@@ -894,7 +883,7 @@ impl MetaApiTestSuite {
             );
         }
 
-        tracing::info!("--- rename table to other db, error");
+        tracing::info!("--- rename table to unknown db, error");
         {
             let req = RenameTableReq {
                 if_exists: false,
@@ -930,10 +919,7 @@ impl MetaApiTestSuite {
                 },
             };
 
-            let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
-
-            assert_eq!(2, res.database_id, "database id is 2");
+            mt.create_database(plan).await?;
         }
 
         tracing::info!("--- rename table to other db, ok");
@@ -954,7 +940,12 @@ impl MetaApiTestSuite {
                 .get_table((tenant, new_db_name, new_tbl_name).into())
                 .await?;
             let want = TableInfo {
-                ident: TableIdent::new(2, 4),
+                // TODO similar: version should not change.
+                //   ident: tb_ident2,
+                ident: TableIdent {
+                    table_id: tb_ident2.table_id,
+                    version: got.ident.version,
+                },
                 desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
                 name: new_tbl_name.into(),
                 meta: table_meta(created_on),
@@ -1128,20 +1119,26 @@ impl MetaApiTestSuite {
                 },
             };
 
-            {
+            let tb_ids = {
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "table id is 1");
+                assert!(res.table_id >= 1, "table id >= 1");
+
+                let tb_id1 = res.table_id;
 
                 req.name_ident.table_name = "tb2".to_string();
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(2, res.table_id, "table id is 2");
-            }
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                let tb_id2 = res.table_id;
+
+                vec![tb_id1, tb_id2]
+            };
 
             tracing::info!("--- get_tables");
             {
                 let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await?;
-                assert_eq!(1, res[0].ident.table_id);
-                assert_eq!(2, res[1].ident.table_id);
+                assert_eq!(tb_ids.len(), res.len());
+                assert_eq!(tb_ids[0], res[0].ident.table_id);
+                assert_eq!(tb_ids[1], res[1].ident.table_id);
             }
         }
 

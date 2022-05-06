@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_scalar_types_error;
 use common_exception::Result;

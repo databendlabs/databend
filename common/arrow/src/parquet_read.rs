@@ -29,7 +29,7 @@ fn get_field_columns<'a>(
 ) -> Vec<&'a ColumnChunkMetaData> {
     columns
         .iter()
-        .filter(|x| x.descriptor().path_in_schema()[0] == field_name)
+        .filter(|x| x.descriptor().path_in_schema[0] == field_name)
         .collect()
 }
 

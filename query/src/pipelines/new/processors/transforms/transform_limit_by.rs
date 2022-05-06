@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_arrow::arrow;
 use common_arrow::arrow::array::BooleanArray;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
