@@ -678,7 +678,7 @@ impl MetaApi for MetaClientOnKV {
 
             tracing::debug!(ident = display(&tbid), "upsert_table_option");
 
-            if tb_meta_seq == 0 {
+            if tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(MetaError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, format!("upsert_table_option")),
                 )));
