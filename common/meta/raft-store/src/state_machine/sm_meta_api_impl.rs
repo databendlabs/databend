@@ -91,7 +91,7 @@ impl MetaApi for StateMachine {
             return Err(MetaError::from(ae));
         }
 
-        Ok(CreateDatabaseReply { database_id: db_id })
+        Ok(CreateDatabaseReply { db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {

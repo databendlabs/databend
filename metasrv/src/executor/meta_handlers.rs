@@ -100,7 +100,7 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
 
         Ok(CreateDatabaseReply {
             // TODO(xp): return DatabaseInfo?
-            database_id: db_id,
+            db_id,
         })
     }
 }

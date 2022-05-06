@@ -68,7 +68,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create db1 again with if_not_exists=false");
@@ -111,7 +111,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "db1 id is 1");
+            assert_eq!(1, res.db_id, "db1 id is 1");
         }
 
         tracing::info!("--- get db1");
@@ -141,7 +141,7 @@ impl MetaApiTestSuite {
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
-                4, res.database_id,
+                4, res.db_id,
                 "second database id is 4: seq increment but no used"
             );
         }
@@ -224,8 +224,8 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "first database id is 1");
-            res.database_id
+            assert_eq!(1, res.db_id, "first database id is 1");
+            res.db_id
         };
 
         tracing::info!("--- tenant1 create db2");
@@ -245,12 +245,8 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert!(
-                res.database_id > db_id_1,
-                "second database id is > {}",
-                db_id_1
-            );
-            res.database_id
+            assert!(res.db_id > db_id_1, "second database id is > {}", db_id_1);
+            res.db_id
         };
 
         tracing::info!("--- tenant2 create db1");
@@ -270,8 +266,8 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert!(res.database_id > db_id_2, "third database id > {}", db_id_2);
-            res.database_id
+            assert!(res.db_id > db_id_2, "third database id > {}", db_id_2);
+            res.db_id
         };
 
         tracing::info!("--- tenant1 get db1");
@@ -354,12 +350,12 @@ impl MetaApiTestSuite {
         let tenant = "tenant1";
         {
             let res = self.create_database(mt, tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.database_id);
-            db_ids.push(res.database_id);
+            assert_eq!(1, res.db_id);
+            db_ids.push(res.db_id);
 
             let res = self.create_database(mt, tenant, "db2", "eng2").await?;
-            assert!(res.database_id > 1);
-            db_ids.push(res.database_id);
+            assert!(res.db_id > 1);
+            db_ids.push(res.db_id);
         }
 
         tracing::info!("--- list_databases");
@@ -392,17 +388,17 @@ impl MetaApiTestSuite {
         let mut db_ids = vec![];
         {
             let res = self.create_database(mt, tenant1, "db1", "eng1").await?;
-            assert_eq!(1, res.database_id);
-            db_ids.push(res.database_id);
+            assert_eq!(1, res.db_id);
+            db_ids.push(res.db_id);
 
             let res = self.create_database(mt, tenant1, "db2", "eng2").await?;
-            assert!(res.database_id > 1);
-            db_ids.push(res.database_id);
+            assert!(res.db_id > 1);
+            db_ids.push(res.db_id);
         }
 
         let db_id_3 = {
             let res = self.create_database(mt, tenant2, "db3", "eng1").await?;
-            res.database_id
+            res.db_id
         };
 
         tracing::info!("--- get_databases by tenant1");
@@ -531,7 +527,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create tb2 and get table");
@@ -554,7 +550,7 @@ impl MetaApiTestSuite {
                 let tb_id = res.table_id;
 
                 let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let seq = got.ident.version;
+                let seq = got.ident.seq;
 
                 let ident = TableIdent::new(tb_id, seq);
 
@@ -810,7 +806,7 @@ impl MetaApiTestSuite {
                 //     rename-table should not change the seq.
                 ident: TableIdent {
                     table_id: tb_ident.table_id,
-                    version: got.ident.version,
+                    seq: got.ident.seq,
                 },
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
                 name: new_tbl_name.into(),
@@ -857,7 +853,7 @@ impl MetaApiTestSuite {
 
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             assert_ne!(tb_ident.table_id, got.ident.table_id);
-            assert_ne!(tb_ident.version, got.ident.version);
+            assert_ne!(tb_ident.seq, got.ident.seq);
             got.ident.clone()
         };
 
@@ -944,7 +940,7 @@ impl MetaApiTestSuite {
                 //   ident: tb_ident2,
                 ident: TableIdent {
                     table_id: tb_ident2.table_id,
-                    version: got.ident.version,
+                    seq: got.ident.seq,
                 },
                 desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
                 name: new_tbl_name.into(),
@@ -995,7 +991,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create and get table");
@@ -1018,7 +1014,7 @@ impl MetaApiTestSuite {
                 let tb_id = res.table_id;
 
                 let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let seq = got.ident.version;
+                let seq = got.ident.seq;
 
                 let ident = TableIdent::new(tb_id, seq);
 
@@ -1054,7 +1050,7 @@ impl MetaApiTestSuite {
                     .upsert_table_option(UpsertTableOptionReq::new(
                         &TableIdent {
                             table_id: table.ident.table_id,
-                            version: table.ident.version - 1,
+                            seq: table.ident.seq - 1,
                         },
                         "key1",
                         "val2",
@@ -1079,7 +1075,7 @@ impl MetaApiTestSuite {
                     .upsert_table_option(UpsertTableOptionReq::new(
                         &TableIdent {
                             table_id: 1024,
-                            version: table.ident.version - 1,
+                            seq: table.ident.seq - 1,
                         },
                         "key1",
                         "val2",
@@ -1218,7 +1214,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- prepare db");
         {
             let res = self.create_database(mt, tenant, db_name, "eng1").await?;
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create 2 tables: tb1 tb2");
@@ -1463,7 +1459,7 @@ impl MetaApiTestSuite {
             let res = node_a.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- get db1 on node_b");

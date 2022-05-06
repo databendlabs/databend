@@ -27,7 +27,6 @@ use maplit::hashmap;
 
 use crate::database::DatabaseNameIdent;
 use crate::MatchSeq;
-use crate::MetaVersion;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -35,26 +34,25 @@ pub struct TableIdent {
     /// Globally unique id to identify a table.
     pub table_id: u64,
 
-    /// version of this table snapshot.
+    /// seq AKA version of this table snapshot.
     ///
-    /// Any change to a table causes the version to increment, e.g. insert or delete rows, update schema etc.
-    /// But renaming a table should not affect the version, since the table itself does not change.
-    /// The tuple (database_id, table_id, version) identifies a unique and consistent table snapshot.
+    /// Any change to a table causes the seq to increment, e.g. insert or delete rows, update schema etc.
+    /// But renaming a table should not affect the seq, since the table itself does not change.
+    /// The tuple (table_id, seq) identifies a unique and consistent table snapshot.
     ///
-    /// A version is not guaranteed to be consecutive.
-    ///
-    pub version: MetaVersion,
+    /// A seq is not guaranteed to be consecutive.
+    pub seq: u64,
 }
 
 impl TableIdent {
-    pub fn new(table_id: u64, version: MetaVersion) -> Self {
-        TableIdent { table_id, version }
+    pub fn new(table_id: u64, seq: u64) -> Self {
+        TableIdent { table_id, seq }
     }
 }
 
 impl Display for TableIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "table_id:{}, ver:{}", self.table_id, self.version)
+        write!(f, "table_id:{}, ver:{}", self.table_id, self.seq)
     }
 }
 
@@ -367,7 +365,7 @@ impl UpsertTableOptionReq {
     ) -> UpsertTableOptionReq {
         UpsertTableOptionReq {
             table_id: table_ident.table_id,
-            seq: MatchSeq::Exact(table_ident.version),
+            seq: MatchSeq::Exact(table_ident.seq),
             options: hashmap! {key.into() => Some(value.into())},
         }
     }
