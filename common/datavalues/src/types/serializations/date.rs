@@ -91,3 +91,6 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }
+
+pub type Date32Serializer = DateSerializer<i32>;
+pub type IntervalSerializer = DateSerializer<i64>;

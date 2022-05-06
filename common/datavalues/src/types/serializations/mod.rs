@@ -15,7 +15,6 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use enum_dispatch::enum_dispatch;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
 
@@ -42,7 +41,6 @@ pub use struct_::*;
 pub use timestamp::*;
 pub use variant::*;
 
-#[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue) -> Result<String>;
     fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>>;
@@ -70,27 +68,145 @@ pub trait TypeSerializer: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-#[enum_dispatch(TypeSerializer)]
 pub enum TypeSerializerImpl {
     Null(NullSerializer),
     Nullable(NullableSerializer),
     Boolean(BooleanSerializer),
-    Int8(NumberSerializer<i8>),
-    Int16(NumberSerializer<i16>),
-    Int32(NumberSerializer<i32>),
-    Int64(NumberSerializer<i64>),
-    UInt8(NumberSerializer<u8>),
-    UInt16(NumberSerializer<u16>),
-    UInt32(NumberSerializer<u32>),
-    UInt64(NumberSerializer<u64>),
-    Float32(NumberSerializer<f32>),
-    Float64(NumberSerializer<f64>),
+    Int8(Int8Serializer),
+    Int16(Int16Serializer),
+    Int32(Int32Serializer),
+    Int64(Int64Serializer),
+    UInt8(UInt8Serializer),
+    UInt16(UInt16Serializer),
+    UInt32(UInt32Serializer),
+    UInt64(UInt64Serializer),
+    Float32(Float32Serializer),
+    Float64(Float64Serializer),
 
-    Date(DateSerializer<i32>),
-    Interval(DateSerializer<i64>),
+    Date(Date32Serializer),
+    Interval(IntervalSerializer),
     Timestamp(TimestampSerializer),
     String(StringSerializer),
     Array(ArraySerializer),
     Struct(StructSerializer),
     Variant(VariantSerializer),
 }
+
+#[macro_export]
+macro_rules! for_all_serializers {
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { Null, NullSerializer},
+            { Nullable, NullableSerializer},
+            { Boolean, BooleanSerializer},
+            { Int8, Int8Serializer},
+            { Int16, Int16Serializer},
+            { Int32, Int32Serializer},
+            { Int64, Int64Serializer},
+            { UInt8, UInt8Serializer},
+            { UInt16, UInt16Serializer},
+            { UInt32, UInt32Serializer},
+            { UInt64, UInt64Serializer},
+            { Float32, Float32Serializer},
+            { Float64, Float64Serializer},
+
+            { Date, Date32Serializer},
+            { Interval, IntervalSerializer},
+            { Timestamp, TimestampSerializer},
+            { String, StringSerializer},
+            { Array, ArraySerializer},
+            { Struct, StructSerializer},
+            { Variant, VariantSerializer}
+        }
+    };
+}
+
+macro_rules! impl_from {
+    ([], $( { $Abc: ident, $DT: ident} ),*) => {
+        $(
+             /// Implement `TypeSerializer -> TypeSerializerImpl`
+            impl From<$DT> for TypeSerializerImpl {
+                fn from(dt: $DT) -> Self {
+                    TypeSerializerImpl::$Abc(dt)
+                }
+            }
+
+            /// Implement `TypeSerializerImpl -> TypeSerializer`
+            impl TryFrom<TypeSerializerImpl> for $DT {
+                type Error = ErrorCode;
+
+                fn try_from(array: TypeSerializerImpl) -> std::result::Result<Self, Self::Error> {
+                    match array {
+                        TypeSerializerImpl::$Abc(array) => Ok(array),
+                        _ => Err(ErrorCode::IllegalDataType(format!("expected to be data_type: {:?}",  stringify!(TypeSerializerImpl::$Abc) ))),
+                    }
+                }
+            }
+        )*
+    }
+}
+
+for_all_serializers! { impl_from }
+
+macro_rules! impl_serializer {
+    ([], $( { $Abc: ident, $DT: ident} ),*) => {
+        impl TypeSerializerImpl {
+            pub fn serialize_value(&self, value: &DataValue) -> Result<String> {
+                match self {
+                    $(
+                        TypeSerializerImpl::$Abc(a) => a.serialize_value(value),
+                    )*
+                }
+            }
+            pub fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+                match self {
+                    $(
+                        TypeSerializerImpl::$Abc(a) => a.serialize_json(column),
+                    )*
+                }
+            }
+
+            pub fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+                match self {
+                    $(
+                        TypeSerializerImpl::$Abc(a) => a.serialize_column(column),
+                    )*
+                }
+            }
+
+            pub fn serialize_clickhouse_format(&self, column: &ColumnRef) -> Result<ArcColumnData> {
+                match self {
+                    $(
+                        TypeSerializerImpl::$Abc(a) => a.serialize_clickhouse_format(column),
+                    )*
+                }
+            }
+
+            pub fn serialize_json_object(
+                &self,
+                column: &ColumnRef,
+                valids: Option<&Bitmap>,
+            ) -> Result<Vec<Value>> {
+                match self {
+                    $(
+                        TypeSerializerImpl::$Abc(a) => a.serialize_json_object(column, valids),
+                    )*
+                }
+            }
+
+            pub fn serialize_json_object_suppress_error(
+                &self,
+                column: &ColumnRef,
+            ) -> Result<Vec<Option<Value>>> {
+                match self {
+                    $(
+                        TypeSerializerImpl::$Abc(a) => a.serialize_json_object_suppress_error(column),
+                    )*
+                }
+            }
+        }
+    };
+}
+
+for_all_serializers! { impl_serializer }

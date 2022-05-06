@@ -17,7 +17,6 @@ use common_macros::MallocSizeOf;
 
 use crate::remove_nullable;
 use crate::types::data_type::from_arrow_field;
-use crate::types::data_type::DataType;
 use crate::types::data_type::DataTypeImpl;
 use crate::wrap_nullable;
 use crate::TypeID;

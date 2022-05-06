@@ -100,3 +100,14 @@ where T: PrimitiveType
         Ok(result)
     }
 }
+
+pub type Int8Serializer = NumberSerializer<i8>;
+pub type Int16Serializer = NumberSerializer<i16>;
+pub type Int32Serializer = NumberSerializer<i32>;
+pub type Int64Serializer = NumberSerializer<i64>;
+pub type UInt8Serializer = NumberSerializer<u8>;
+pub type UInt16Serializer = NumberSerializer<u16>;
+pub type UInt32Serializer = NumberSerializer<u32>;
+pub type UInt64Serializer = NumberSerializer<u64>;
+pub type Float32Serializer = NumberSerializer<f32>;
+pub type Float64Serializer = NumberSerializer<f64>;

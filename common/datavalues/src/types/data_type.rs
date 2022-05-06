@@ -17,14 +17,15 @@ use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use dyn_clone::DynClone;
-use enum_dispatch::enum_dispatch;
 
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
 use super::type_date::DateType;
 use super::type_id::TypeID;
+use super::type_interval::IntervalType;
 use super::type_nullable::NullableType;
 use super::type_primitive::Float32Type;
 use super::type_primitive::Float64Type;
@@ -39,6 +40,9 @@ use super::type_primitive::UInt8Type;
 use super::type_string::StringType;
 use super::type_struct::StructType;
 use super::type_timestamp::TimestampType;
+use super::type_variant::VariantType;
+use super::type_variant_array::VariantArrayType;
+use super::type_variant_object::VariantObjectType;
 use crate::prelude::*;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
@@ -46,7 +50,6 @@ pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "type")]
-#[enum_dispatch(DataType)]
 pub enum DataTypeImpl {
     Null(NullType),
     Nullable(NullableType),
@@ -72,7 +75,6 @@ pub enum DataTypeImpl {
     Interval(IntervalType),
 }
 
-#[enum_dispatch]
 pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn data_type_id(&self) -> TypeID;
 
@@ -208,26 +210,6 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypeImpl {
     }
 }
 
-pub trait ToDataType {
-    fn to_data_type() -> DataTypeImpl;
-}
-
-macro_rules! impl_to_data_type {
-    ([], $( { $S: ident, $TY: ident} ),*) => {
-        $(
-            paste::paste!{
-                impl ToDataType for $S {
-                    fn to_data_type() -> DataTypeImpl {
-                        [<$TY Type>]::new_impl()
-                    }
-                }
-            }
-        )*
-    }
-}
-
-for_all_scalar_varints! { impl_to_data_type }
-
 pub fn wrap_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
     if !data_type.can_inside_nullable() {
         return data_type.clone();
@@ -250,3 +232,227 @@ pub fn format_data_type_sql(data_type: &DataTypeImpl) -> String {
         false => notnull_type.sql_name(),
     }
 }
+
+pub trait ToDataType {
+    fn to_data_type() -> DataTypeImpl;
+}
+
+macro_rules! impl_to_data_type {
+    ([], $( { $S: ident, $TY: ident} ),*) => {
+        $(
+            paste::paste!{
+                impl ToDataType for $S {
+                    fn to_data_type() -> DataTypeImpl {
+                        [<$TY Type>]::new_impl()
+                    }
+                }
+            }
+        )*
+    }
+}
+
+for_all_scalar_varints! { impl_to_data_type }
+
+#[macro_export]
+macro_rules! for_all_data_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { Null, NullType},
+            { Nullable, NullableType},
+            { Boolean, BooleanType},
+            { UInt8, UInt8Type},
+            { UInt16, UInt16Type},
+            { UInt32, UInt32Type},
+            { UInt64, UInt64Type},
+            { Int8, Int8Type},
+            { Int16, Int16Type},
+            { Int32, Int32Type},
+            { Int64, Int64Type},
+            { Float32, Float32Type},
+            { Float64, Float64Type},
+            { Date, DateType},
+            { Timestamp, TimestampType},
+            { String, StringType},
+            { Struct, StructType},
+            { Array,  ArrayType},
+            { Variant,  VariantType},
+            { VariantArray, VariantArrayType},
+            { VariantObject, VariantObjectType},
+            { Interval, IntervalType}
+        }
+    };
+}
+
+macro_rules! impl_from {
+    ([], $( { $Abc: ident, $DT: ident} ),*) => {
+        $(
+             /// Implement `DataType -> DataTypeImpl`
+            impl From<$DT> for DataTypeImpl {
+                fn from(dt: $DT) -> Self {
+                    DataTypeImpl::$Abc(dt)
+                }
+            }
+
+            /// Implement `DataTypeImpl -> DataType`
+            impl TryFrom<DataTypeImpl> for $DT {
+                type Error = ErrorCode;
+
+                fn try_from(array: DataTypeImpl) -> std::result::Result<Self, Self::Error> {
+                    match array {
+                        DataTypeImpl::$Abc(array) => Ok(array),
+                        _ => Err(ErrorCode::IllegalDataType(format!("expected to be data_type: {:?}",  stringify!(DataTypeImpl::$Abc) ))),
+                    }
+                }
+            }
+        )*
+    }
+}
+
+for_all_data_types! { impl_from }
+
+macro_rules! impl_data_type {
+    ([], $( { $Abc: ident, $DT: ident} ),*) => {
+        impl DataTypeImpl {
+            pub fn data_type_id(&self) -> TypeID {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.data_type_id(),
+                    )*
+                }
+            }
+
+            pub fn is_nullable(&self) -> bool {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.is_nullable(),
+                    )*
+                }
+            }
+
+            pub fn is_null(&self) -> bool {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.is_null(),
+                    )*
+                }
+            }
+
+            pub fn name(&self) -> String {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.name(),
+                    )*
+                }
+            }
+
+            /// Returns the name to display in the SQL describe
+            pub fn sql_name(&self) -> String {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.sql_name(),
+                    )*
+                }
+            }
+
+            pub fn aliases(&self) -> &[&str] {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.aliases(),
+                    )*
+                }
+            }
+
+            pub fn as_any(&self) -> &dyn Any {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.as_any(),
+                    )*
+                }
+            }
+
+            pub fn default_value(&self) -> DataValue {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.default_value(),
+                    )*
+                }
+            }
+
+            pub fn can_inside_nullable(&self) -> bool {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.can_inside_nullable(),
+                    )*
+                }
+            }
+
+            pub fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.create_constant_column(data, size),
+                    )*
+                }
+            }
+
+            pub fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.create_column(data),
+                    )*
+                }
+            }
+
+            /// arrow_type did not have nullable sign, it's nullable sign is in the field
+            pub fn arrow_type(&self) -> ArrowType {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.arrow_type(),
+                    )*
+                }
+            }
+
+            pub fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.custom_arrow_meta(),
+                    )*
+                }
+            }
+
+            pub fn to_arrow_field(&self, name: &str) -> ArrowField {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.to_arrow_field(name),
+                    )*
+                }
+            }
+
+            pub fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>{
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.create_mutable(capacity),
+                    )*
+                }
+            }
+
+            pub fn create_serializer(&self) -> TypeSerializerImpl {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.create_serializer(),
+                    )*
+                }
+            }
+
+            pub fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+                match self {
+                    $(
+                        DataTypeImpl::$Abc(a) => a.create_deserializer(capacity),
+                    )*
+                }
+            }
+        }
+    }
+}
+
+for_all_data_types! { impl_data_type }
