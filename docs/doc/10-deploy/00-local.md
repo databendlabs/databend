@@ -205,5 +205,4 @@ SELECT * FROM t1
 |    2 |
 +------+
 ```
-
 <GetLatest/>
