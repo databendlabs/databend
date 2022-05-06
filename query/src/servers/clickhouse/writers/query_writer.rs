@@ -152,16 +152,7 @@ pub fn to_clickhouse_block(block: DataBlock, format: &FormatSettings) -> Result<
         let column = block.column(column_index);
         let field = block.schema().field(column_index);
         let name = field.name();
-        let serializer = if field.data_type().data_type_id() == TypeID::Timestamp {
-            let tz = String::from_utf8(format.timezone.clone())
-                .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
-            let tz = tz.parse::<Tz>().map_err(|_| {
-                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-            })?;
-            field.data_type().create_serializer_with_tz(tz)
-        } else {
-            field.data_type().create_serializer()
-        };
+        let serializer = field.data_type().create_serializer();
         result.append_column(column::new_column(
             name,
             serializer.serialize_clickhouse_format(&column.convert_full_column(), format)?,

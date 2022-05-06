@@ -390,9 +390,7 @@ where
                 // round_func need to calcute it with origin timezone
                 // such as in UTC: 2022-03-31 22:00 and in +8:00 time is 2022-04-01 6:00
                 // then the result of to the month of should be 2022-04-01 6:00 rather than 2022-03-01 22:00
-                let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
-                    ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-                })?;
+                let tz = func_ctx.tz;
                 let func = |v: i64, _ctx: &mut EvalContext| {
                     let date_time = tz.timestamp(v / 1_000_000, 0_u32);
                     T::to_number(date_time, &tz)

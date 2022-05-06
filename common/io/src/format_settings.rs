@@ -37,7 +37,7 @@ impl Default for FormatSettings {
             empty_as_default: false,
             skip_header: false,
             compression: Compression::None,
-            timezone: vec![b'U', b'T', b'C'],
+            timezone: "UTC".as_bytes().to_vec(),
         }
     }
 }

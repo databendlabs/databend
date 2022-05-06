@@ -14,7 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
-
+use chrono_tz::Tz;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
@@ -99,6 +99,9 @@ impl Processor for SinkTransform {
             let tz = self.ctx.get_settings().get_timezone()?;
             let tz = String::from_utf8(tz).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+            })?;
+            let tz = tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
             let func_ctx = FunctionContext { tz };
             input_stream = Box::pin(CastStream::try_create(

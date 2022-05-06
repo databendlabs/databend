@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use chrono_tz::Tz;
+use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::NaiveDate;
 use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_exception::ErrorCode;
 
 use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::new_mutable_bitmap;
@@ -55,9 +58,9 @@ pub fn cast_from_string(
 
         TypeID::Timestamp => {
             let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-
+            let tz = func_ctx.tz;
             for (row, v) in str_column.iter().enumerate() {
-                match string_to_timestamp(v) {
+                match string_to_timestamp(v, &tz) {
                     Some(d) => {
                         builder.append(d.timestamp_micros());
                     }
@@ -86,9 +89,9 @@ pub fn cast_from_string(
 
 // TODO support timezone
 #[inline]
-pub fn string_to_timestamp(date_str: impl AsRef<[u8]>) -> Option<NaiveDateTime> {
+pub fn string_to_timestamp(date_str: impl AsRef<[u8]>, tz: &Tz) -> Option<DateTime<Tz>> {
     let s = std::str::from_utf8(date_str.as_ref()).ok();
-    s.and_then(|c| NaiveDateTime::parse_from_str(c, "%Y-%m-%d %H:%M:%S%.9f").ok())
+    s.and_then(|c| tz.datetime_from_str(c, "%Y-%m-%d %H:%M:%S%.f").ok())
 }
 
 #[inline]

@@ -67,11 +67,7 @@ impl ValueSource {
             .fields()
             .iter()
             .map(|f| {
-                if f.data_type().data_type_id() == TypeID::Timestamp {
-                    f.data_type().create_deserializer_with_tz(1024, tz)
-                } else {
                     f.data_type().create_deserializer(1024)
-                }
             })
             .collect::<Vec<_>>();
 

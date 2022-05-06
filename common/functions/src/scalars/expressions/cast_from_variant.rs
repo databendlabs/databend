@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_datavalues::chrono::Datelike;
@@ -19,8 +20,9 @@ use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use serde_json::Value as JsonValue;
 
+use serde_json::Value as JsonValue;
+use crate::scalars::FunctionContext;
 use super::cast_from_string::string_to_date;
 use super::cast_from_string::string_to_timestamp;
 use super::cast_with_type::new_mutable_bitmap;
@@ -28,6 +30,7 @@ use super::cast_with_type::new_mutable_bitmap;
 pub fn cast_from_variant(
     column: &ColumnRef,
     data_type: &DataTypeImpl,
+    func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let json_column: &VariantColumn = if column.is_const() {
@@ -134,12 +137,12 @@ pub fn cast_from_variant(
             TypeID::Timestamp => {
                 // TODO(veeupup): support datetime with precision
                 let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-
+                let tz = func_ctx.tz;
                 for (row, value) in json_column.iter().enumerate() {
                     match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
-                            if let Some(d) = string_to_timestamp(v) {
+                            if let Some(d) = string_to_timestamp(v, &tz) {
                                 builder.append(d.timestamp_micros());
                             } else {
                                 bitmap.set(row, false);

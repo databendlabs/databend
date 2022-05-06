@@ -88,24 +88,9 @@ impl DataType for NullableType {
         .into()
     }
 
-    fn create_serializer_with_tz(&self, tz: Tz) -> TypeSerializerImpl {
-        NullableSerializer {
-            inner: Box::new(self.inner.create_serializer_with_tz(tz)),
-        }
-        .into()
-    }
-
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         NullableDeserializer {
             inner: Box::new(self.inner.create_deserializer(capacity)),
-            bitmap: MutableBitmap::with_capacity(capacity),
-        }
-        .into()
-    }
-
-    fn create_deserializer_with_tz(&self, capacity: usize, tz: Tz) -> TypeDeserializerImpl {
-        NullableDeserializer {
-            inner: Box::new(self.inner.create_deserializer_with_tz(capacity, tz)),
             bitmap: MutableBitmap::with_capacity(capacity),
         }
         .into()

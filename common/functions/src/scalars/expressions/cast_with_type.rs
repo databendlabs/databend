@@ -152,7 +152,7 @@ pub fn cast_with_type(
             func_ctx,
         ),
         TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
-            cast_from_variant(column, &nonull_data_type)
+            cast_from_variant(column, &nonull_data_type, func_ctx)
         }
         _ => arrow_cast_compute(
             column,
@@ -228,14 +228,7 @@ pub fn cast_to_variant(
     }
     let mut builder = ColumnBuilder::<VariantValue>::with_capacity(size);
     if from_type.data_type_id().is_numeric() || from_type.data_type_id() == TypeID::Boolean {
-        let serializer = if from_type.data_type_id() == TypeID::Timestamp {
-            let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
-                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-            })?;
-            from_type.create_serializer_with_tz(tz)
-        } else {
-            from_type.create_serializer()
-        };
+        let serializer = from_type.create_serializer();
         let format = FormatSettings::default();
         match serializer.serialize_json_object(&column, None, &format) {
             Ok(values) => {

@@ -79,9 +79,7 @@ pub fn cast_from_timestamp(
     match data_type.data_type_id() {
         TypeID::String => {
             let mut builder = MutableStringColumn::with_capacity(size);
-            let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
-                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-            })?;
+            let tz = func_ctx.tz;
             for v in c.iter() {
                 let s = timestamp_to_string(
                     tz.timestamp(*v / 1_000_000, (*v % 1_000_000 * 1_000) as u32),

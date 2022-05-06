@@ -148,10 +148,7 @@ where
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
-        let mut ctx = EvalContext::new(self.factor, self.precision, None, tz);
+        let mut ctx = EvalContext::new(self.factor, self.precision, None, func_ctx.tz.clone());
         let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),

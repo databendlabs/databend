@@ -150,21 +150,8 @@ impl DataType for TimestampType {
         TimestampSerializer::default().into()
     }
 
-    fn create_serializer_with_tz(&self, tz: Tz) -> TypeSerializerImpl {
-        TimestampSerializer::new_with_tz(tz).into()
-    }
-
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         let tz = "UTC".parse::<Tz>().unwrap();
-        TimestampDeserializer {
-            builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-            tz,
-            precision: self.precision,
-        }
-        .into()
-    }
-
-    fn create_deserializer_with_tz(&self, capacity: usize, tz: Tz) -> TypeDeserializerImpl {
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
             tz,

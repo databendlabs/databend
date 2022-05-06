@@ -18,7 +18,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
-
+use chrono_tz::Tz;
 use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
@@ -397,11 +397,13 @@ impl QueryContext {
     }
 
     pub fn try_get_function_context(&self) -> Result<FunctionContext> {
-        Ok(FunctionContext {
-            tz: String::from_utf8(self.get_settings().get_timezone()?).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-            })?,
-        })
+        let tz = String::from_utf8(self.get_settings().get_timezone()?).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+        })?;
+        let tz = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        Ok(FunctionContext {tz})
     }
 }
 

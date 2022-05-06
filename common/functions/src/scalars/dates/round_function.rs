@@ -125,10 +125,7 @@ impl Function for RoundFunction {
     ) -> Result<common_datavalues::ColumnRef> {
         let func = |val: i64, ctx: &mut EvalContext| self.execute(val, &ctx.tz);
         let mut eval_context = EvalContext::default();
-        let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
-        eval_context.tz = tz;
+        eval_context.tz = func_ctx.tz.clone();
         let col = scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
         for micros in col.iter() {
             let _ = check_timestamp(*micros)?;

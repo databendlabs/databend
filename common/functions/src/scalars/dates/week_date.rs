@@ -147,9 +147,7 @@ where
             mode = week_mode;
         }
 
-        let tz = func_ctx.tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
+        let tz = func_ctx.tz;
 
         match columns[0].data_type().data_type_id() {
             TypeID::Date => {
