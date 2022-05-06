@@ -14,7 +14,8 @@
 
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
-use common_meta_grpc::MetaClientOnKV;
+use common_meta_api::SchemaApiImpl;
+use common_meta_grpc::MetaGrpcClient;
 
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
@@ -26,7 +27,8 @@ async fn test_meta_api_on_kv_database_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.database_create_get_drop(&client).await
 }
@@ -38,7 +40,8 @@ async fn test_meta_api_on_kv_database_create_get_drop_in_diff_tenant() -> anyhow
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(&client)
@@ -52,7 +55,8 @@ async fn test_meta_api_on_kv_database_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.database_list(&client).await
 }
@@ -64,7 +68,8 @@ async fn test_meta_api_on_kv_database_list_in_diff_tenant() -> anyhow::Result<()
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}
         .database_list_in_diff_tenant(&client)
@@ -78,7 +83,8 @@ async fn test_meta_api_on_kv_table_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.table_create_get_drop(&client).await
 }
@@ -90,7 +96,8 @@ async fn test_meta_api_on_kv_table_rename() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.table_rename(&client).await
 }
@@ -102,7 +109,8 @@ async fn test_meta_api_on_kv_table_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.table_list(&client).await
 }
@@ -114,7 +122,8 @@ async fn test_meta_api_on_kv_upsert_table_option() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.table_upsert_option(&client).await
 }
@@ -126,7 +135,8 @@ async fn test_meta_api_on_kv_get_table_by_id() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.get_table_by_id(&client).await
 }
@@ -141,6 +151,7 @@ async fn test_meta_api_on_kv_share_create_get_drop() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = SchemaApiImpl::new(client);
 
     MetaApiTestSuite {}.share_create_get_drop(&client).await
 }

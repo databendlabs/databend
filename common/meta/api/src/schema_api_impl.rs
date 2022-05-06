@@ -16,8 +16,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
-use common_meta_api::KVApi;
-use common_meta_api::MetaApi;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
 use common_meta_types::AppError;
@@ -72,13 +70,27 @@ use common_tracing::tracing;
 use txn_condition::Target;
 use ConditionResult::Eq;
 
-use crate::meta_client_on_kv::DatabaseIdGen;
-use crate::meta_client_on_kv::KVApiKey;
-use crate::meta_client_on_kv::TableIdGen;
-use crate::MetaClientOnKV;
+use crate::DatabaseIdGen;
+use crate::KVApi;
+use crate::KVApiKey;
+use crate::MetaApi;
+use crate::TableIdGen;
+
+/// Impl SchemaApi on a KVApi impl.
+///
+/// It implement transactional operation on the client side, through `KVApi::transaction()`.
+pub struct SchemaApiImpl<KV: KVApi> {
+    pub inner: KV,
+}
+
+impl<KV: KVApi> SchemaApiImpl<KV> {
+    pub fn new(kv_api: KV) -> Self {
+        Self { inner: kv_api }
+    }
+}
 
 #[tonic::async_trait]
-impl MetaApi for MetaClientOnKV {
+impl<KV: KVApi> MetaApi for SchemaApiImpl<KV> {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
@@ -765,7 +777,7 @@ impl MetaApi for MetaClientOnKV {
 }
 
 // Supporting utils
-impl MetaClientOnKV {
+impl<KV: KVApi> SchemaApiImpl<KV> {
     /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
     async fn get_db_or_err(
         &self,
