@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,8 @@
 
 #![allow(non_snake_case)]
 
+use std::backtrace::Backtrace;
 use std::sync::Arc;
-
-use backtrace::Backtrace;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
@@ -29,11 +28,12 @@ macro_rules! build_exceptions {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
+                    let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
                     ErrorCode::create(
                         $code,
                         display_text.into(),
                         None,
-                        Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new())))
+                        bt,
                     )
                 }
                 paste::item! {
@@ -120,6 +120,8 @@ build_exceptions! {
     SemanticError(1065),
     InvalidAuthInfo(1066),
     InvalidTimezone(1067),
+    InvalidDate(1068),
+    InvalidTimestamp(1069),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -183,6 +185,7 @@ build_exceptions! {
     // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
+    UnsupportedEngineParams(2703),
 
     // Share error codes.
     ShareAlreadyExists(2705),

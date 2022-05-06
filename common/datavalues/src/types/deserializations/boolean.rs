@@ -54,7 +54,7 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         let v = if BufferReadExt::ignore_insensitive_bytes(reader, b"true")? {
             Ok(true)
         } else if BufferReadExt::ignore_insensitive_bytes(reader, b"false")? {

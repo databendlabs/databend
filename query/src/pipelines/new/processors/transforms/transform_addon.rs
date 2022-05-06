@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -73,12 +74,12 @@ where Self: Transform
         }
         let schema_after_default_expr = Arc::new(DataSchema::new(default_expr_fields.clone()));
         let expression_executor = ExpressionExecutor::try_create(
+            ctx,
             "stream_addon",
             input_schema,
             schema_after_default_expr,
             default_exprs,
             true,
-            ctx,
         )?;
 
         Ok(Transformer::create(input, output, Self {

@@ -1,6 +1,6 @@
 SELECT '=== IGNORE ===';
 select count() from numbers(100) where ignore(number + 1);
-select count() from numbers(100) where not ignore(toString(number + 3), 1, 4343, 4343, 'a');
+select count() from numbers(100) where not ignore(to_varchar(number + 3), 1, 4343, 4343, 'a');
 SELECT '=== TRY_INET_ATON ===';
 SELECT TRY_INET_ATON('10.0.5.9');
 SELECT TRY_INET_ATON(NULL);

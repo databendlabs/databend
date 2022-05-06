@@ -1,8 +1,8 @@
 ---
-title: Start a query Cluster on kubernetes
+title: Start a Query Cluster on Kubernetes
 sidebar_label: K8s Cluster
 description:
-  How to Deploy a Databend Query Cluster on kubernetes.
+  How to deploy a Databend query cluster on Kubernetes.
 ---
 
 :::tip
@@ -31,11 +31,11 @@ We will bootstrap a minio server on kubernetes, with the following configuration
 
 ```shell title="minio-server-config"
 STORAGE_TYPE=s3
-S3_STORAGE_BUCKET=sample-storage
-S3_STORAGE_REGION=us-east-1
-S3_STORAGE_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
-S3_STORAGE_ACCESS_KEY_ID=minio
-S3_STORAGE_SECRET_ACCESS_KEY=minio123
+STORAGE_S3_BUCKET=sample-storage
+STORAGE_S3_REGION=us-east-1
+STORAGE_S3_ENDPOINT_URL=http://minio.minio.svc.cluster.local:9000
+STORAGE_S3_ACCESS_KEY_ID=minio
+STORAGE_S3_SECRET_ACCESS_KEY=minio123
 ```
 
 The following configuration shall be applied to the target kubernetes cluster, it would create a bucket named `sample-storage` with `10Gi` storage space

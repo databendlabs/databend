@@ -32,7 +32,7 @@ pub struct HexFunction {
 }
 
 impl HexFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string but got {}",
@@ -56,8 +56,8 @@ impl Function for HexFunction {
         "hex"
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn eval(
@@ -68,13 +68,18 @@ impl Function for HexFunction {
     ) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &UInt64Type::new_impl(),
+                )?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 let iter = col.iter().map(|val| format!("{:x}", val).into_bytes());
                 Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col =
+                    cast_column_field(&columns[0], columns[0].data_type(), &Int64Type::new_impl())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 let iter = col.iter().map(|val| match val.cmp(&0) {
                     Ordering::Less => format!("-{:x}", val.unsigned_abs()).into_bytes(),
@@ -83,7 +88,11 @@ impl Function for HexFunction {
                 Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::String => {
-                let col = cast_column_field(&columns[0], &StringType::arc())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &StringType::new_impl(),
+                )?;
                 let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
                 let iter = col.iter().map(|val| {
                     let mut buffer = vec![0u8; val.len() * 2];

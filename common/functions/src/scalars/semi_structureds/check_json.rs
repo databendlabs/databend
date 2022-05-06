@@ -30,7 +30,7 @@ pub struct CheckJsonFunction {
 }
 
 impl CheckJsonFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(CheckJsonFunction {
             display_name: display_name.to_string(),
         }))
@@ -47,8 +47,8 @@ impl Function for CheckJsonFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        NullableType::arc(StringType::arc())
+    fn return_type(&self) -> DataTypeImpl {
+        NullableType::new_impl(StringType::new_impl())
     }
 
     fn eval(

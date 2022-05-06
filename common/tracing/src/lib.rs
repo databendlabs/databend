@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(backtrace)]
+
 mod logging;
 mod panic_hook;
 mod tracing_to_jaeger;

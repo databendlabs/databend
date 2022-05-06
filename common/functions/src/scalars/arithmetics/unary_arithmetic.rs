@@ -30,7 +30,7 @@ use crate::scalars::Monotonicity;
 #[derive(Clone)]
 pub struct UnaryArithmeticFunction<L: Scalar, O: Scalar, F> {
     op: DataValueUnaryOperator,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
     func: F,
     _phantom: PhantomData<(L, O)>,
 }
@@ -43,7 +43,7 @@ where
 {
     pub fn try_create_func(
         op: DataValueUnaryOperator,
-        result_type: DataTypePtr,
+        result_type: DataTypeImpl,
         func: F,
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
@@ -65,7 +65,7 @@ where
         "UnaryArithmeticFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

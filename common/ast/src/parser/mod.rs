@@ -12,75 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod ast;
+pub mod error;
 pub mod expr;
-pub mod rule;
+pub mod query;
+pub mod statement;
 pub mod token;
-
-use std::ops::Range;
+pub mod util;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use nom::combinator::map;
 
-use self::rule::statement::statement;
-use self::token::TokenKind;
-use self::token::Tokenizer;
-use crate::parser::ast::Statement;
-use crate::rule;
+use crate::ast::Statement;
+use crate::parser::error::pretty_print_error;
+use crate::parser::statement::statements;
+use crate::parser::token::Token;
+use crate::parser::token::TokenKind;
+use crate::parser::token::Tokenizer;
+
+pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
+    Tokenizer::new(sql).collect::<Result<Vec<_>>>()
+}
 
 /// Parse a SQL string into `Statement`s.
-pub fn parse_sql(sql: &str) -> Result<Vec<Statement>> {
-    let tokens = Tokenizer::new(sql).collect::<Result<Vec<_>>>()?;
-    let stmt = map(rule! { #statement ~ ";" }, |(stmt, _)| stmt);
-    let mut stmts = rule! { #stmt+ };
-    match stmts(tokens.as_slice()) {
+pub fn parse_sql<'a>(sql_tokens: &'a [Token<'a>]) -> Result<Vec<Statement<'a>>> {
+    match statements(sql_tokens) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
-        Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(sql, vec![(
-            rest[0].span.clone(),
-            "unable to parse rest of the sql".to_owned(),
-        )]))),
+        Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(
+            sql_tokens[0].source,
+            vec![(
+                rest[0].span.clone(),
+                "unable to parse rest of the sql".to_owned(),
+            )],
+        ))),
         Err(nom::Err::Error(err) | nom::Err::Failure(err)) => Err(ErrorCode::SyntaxException(
-            pretty_print_error(sql, err.to_labels()),
+            pretty_print_error(sql_tokens[0].source, err.to_labels()),
         )),
         Err(nom::Err::Incomplete(_)) => unreachable!(),
     }
-}
-
-pub fn pretty_print_error(source: &str, lables: Vec<(Range<usize>, String)>) -> String {
-    use codespan_reporting::diagnostic::Diagnostic;
-    use codespan_reporting::diagnostic::Label;
-    use codespan_reporting::files::SimpleFile;
-    use codespan_reporting::term;
-    use codespan_reporting::term::termcolor::Buffer;
-    use codespan_reporting::term::Chars;
-    use codespan_reporting::term::Config;
-
-    let mut writer = Buffer::no_color();
-    let file = SimpleFile::new("SQL", source);
-    let config = Config {
-        chars: Chars::ascii(),
-        before_label_lines: 3,
-        ..Default::default()
-    };
-
-    let lables = lables
-        .into_iter()
-        .enumerate()
-        .map(|(i, (span, msg))| {
-            if i == 0 {
-                Label::primary((), span).with_message(msg)
-            } else {
-                Label::secondary((), span).with_message(msg)
-            }
-        })
-        .collect();
-
-    let diagnostic = Diagnostic::error().with_labels(lables);
-
-    term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
-
-    std::str::from_utf8(&writer.into_inner())
-        .unwrap()
-        .to_string()
 }

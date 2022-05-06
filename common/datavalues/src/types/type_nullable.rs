@@ -15,40 +15,37 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 
 use super::data_type::DataType;
-use super::data_type::DataTypePtr;
+use super::data_type::DataTypeImpl;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
-    inner: DataTypePtr,
-    name: String,
+    inner: Box<DataTypeImpl>,
 }
 
 impl NullableType {
-    pub fn arc(inner: DataTypePtr) -> DataTypePtr {
-        Arc::new(Self::create(inner))
+    pub fn new_impl(inner: DataTypeImpl) -> DataTypeImpl {
+        DataTypeImpl::Nullable(Self::create(inner))
     }
 
-    pub fn create(inner: DataTypePtr) -> Self {
+    pub fn create(inner: DataTypeImpl) -> Self {
         debug_assert!(inner.can_inside_nullable());
         NullableType {
-            name: format!("Nullable({})", inner.name()),
-            inner,
+            inner: Box::new(inner),
         }
     }
 
-    pub fn inner_type(&self) -> &DataTypePtr {
+    pub fn inner_type(&self) -> &DataTypeImpl {
         &self.inner
     }
 }
 
-#[typetag::serde]
 impl DataType for NullableType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Nullable
@@ -59,8 +56,8 @@ impl DataType for NullableType {
         self
     }
 
-    fn name(&self) -> &str {
-        &self.name
+    fn name(&self) -> String {
+        format!("Nullable({})", self.inner.name())
     }
 
     fn is_nullable(&self) -> bool {
@@ -83,23 +80,25 @@ impl DataType for NullableType {
         self.inner.custom_arrow_meta()
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(NullableSerializer {
-            inner: self.inner.create_serializer(),
-        })
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        NullableSerializer {
+            inner: Box::new(self.inner.create_serializer()),
+        }
+        .into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(NullableDeserializer {
-            inner: self.inner.create_deserializer(capacity),
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        NullableDeserializer {
+            inner: Box::new(self.inner.create_deserializer(capacity)),
             bitmap: MutableBitmap::with_capacity(capacity),
-        })
+        }
+        .into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutableNullableColumn::new(
             self.inner.create_mutable(capacity),
-            Arc::new(self.clone()),
+            DataTypeImpl::Nullable(self.clone()),
         ))
     }
 

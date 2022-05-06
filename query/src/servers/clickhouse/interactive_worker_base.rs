@@ -27,6 +27,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -42,6 +43,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::SyncReceiverCkSource;
 use crate::pipelines::new::SourcePipeBuilder;
@@ -69,7 +71,16 @@ impl InteractiveWorkerBase {
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
-        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await;
+
+        let plan = match plan {
+            Ok(p) => p,
+            Err(e) => {
+                InterpreterQueryLog::fail_to_start(ctx, e.clone()).await;
+                return Err(e);
+            }
+        };
+
         match plan {
             PlanNode::Insert(ref insert) => {
                 // It has select plan, so we do not need to consume data from client
@@ -198,7 +209,7 @@ impl InteractiveWorkerBase {
             }
         });
 
-        ctx.try_spawn(async move {
+        let query_result = ctx.try_spawn(async move {
             // Query log start.
             let _ = interpreter
                 .start()
@@ -206,22 +217,30 @@ impl InteractiveWorkerBase {
                 .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
             // Execute and read stream data.
-            let async_data_stream = interpreter.execute(None);
-            let mut data_stream = async_data_stream.await?;
-            while let Some(block) = data_stream.next().await {
-                data_tx.send(BlockItem::Block(block)).await.ok();
+            match interpreter.execute(None).await {
+                Err(e) => {
+                    cancel_clone.store(true, Ordering::Relaxed);
+                    Err(e)
+                }
+                Ok(mut data_stream) => {
+                    while let Some(block) = data_stream.next().await {
+                        data_tx.send(BlockItem::Block(block)).await.ok();
+                    }
+                    let _ = interpreter
+                        .finish()
+                        .await
+                        .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+                    cancel_clone.store(true, Ordering::Relaxed);
+                    Ok::<(), ErrorCode>(())
+                }
             }
-            cancel_clone.store(true, Ordering::Relaxed);
-
-            // Query log finish.
-            let _ = interpreter
-                .finish()
-                .await
-                .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
-            Ok::<(), ErrorCode>(())
         })?;
-
-        Ok(rx)
+        let query_result = query_result
+            .await
+            .map_err_to_code(ErrorCode::TokioError, || {
+                "Cannot join handle from context's runtime"
+            })?;
+        query_result.map(|_| rx)
     }
 }
 

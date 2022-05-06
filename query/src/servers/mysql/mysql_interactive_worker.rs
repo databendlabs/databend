@@ -37,6 +37,7 @@ use tokio_stream::StreamExt;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::InterpreterQueryLog;
 use crate::interpreters::SelectInterpreterV2;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
@@ -290,11 +291,20 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     }
                 }
 
-                let plan = plan?;
+                let plan = match plan {
+                    Ok(p) => p,
+                    Err(e) => {
+                        InterpreterQueryLog::fail_to_start(context, e.clone()).await;
+                        return Err(e);
+                    }
+                };
+                tracing::debug!("Get logic plan:\n{:?}", plan);
+
                 let settings = context.get_settings();
 
                 let interpreter: Arc<dyn Interpreter> =
                     if settings.get_enable_new_processor_framework()? != 0
+                        && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
                         && matches!(plan, PlanNode::Select(..))
                     {

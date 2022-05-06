@@ -46,7 +46,7 @@ impl Column for ConstColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.column.data_type()
     }
 

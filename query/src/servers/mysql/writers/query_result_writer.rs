@@ -18,9 +18,11 @@ use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::DateTimeType;
+use common_datavalues::TimestampType;
+use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
@@ -78,7 +80,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
-                TypeID::DateTime => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -106,7 +108,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
-        let utc: Tz = "UTC".parse().unwrap();
+        let tz: Tz = "UTC".parse().unwrap();
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {
@@ -131,17 +133,14 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 }
                                 (TypeID::Date, DataValue::Int64(v)) => {
                                     let v = v as i32;
-                                    row_writer.write_col(v.to_date(&utc).naive_local())?
+                                    row_writer.write_col(v.to_date(&tz).naive_local())?
                                 }
-                                (TypeID::DateTime, DataValue::Int64(v)) => {
-                                    let data_type: &DateTimeType =
+                                (TypeID::Timestamp, DataValue::Int64(v)) => {
+                                    let data_type: &TimestampType =
                                         data_type.as_any().downcast_ref().unwrap();
-                                    let tz = data_type.tz();
-                                    let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
-                                    let tz: Tz = tz.parse().unwrap();
 
                                     row_writer.write_col(
-                                        v.to_date_time64(data_type.precision(), &tz)
+                                        v.to_timestamp(&tz)
                                             .naive_local()
                                             .format(data_type.format_string().as_str())
                                             .to_string(),

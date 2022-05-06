@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,13 @@
 
 #![allow(non_snake_case)]
 
+use std::backtrace::Backtrace;
+use std::backtrace::BacktraceStatus;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use backtrace::Backtrace;
 use thiserror::Error;
 
 #[derive(Clone)]
@@ -108,8 +109,14 @@ impl Debug for ErrorCode {
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
                 match backtrace {
-                    ErrorCodeBacktrace::Origin(backtrace) => write!(f, "\n\n{:?}", backtrace),
-                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodeBacktrace::Origin(backtrace) => {
+                        if backtrace.status() == BacktraceStatus::Disabled {
+                            write!(f, "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> ")
+                        } else {
+                            write!(f, "\n\n{}", backtrace)
+                        }
+                    }
+                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
                 }
             }
         }
@@ -133,7 +140,7 @@ impl ErrorCode {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
         }
     }
 

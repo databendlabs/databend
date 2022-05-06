@@ -20,10 +20,11 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
-use crate::compatibility::cmd_00000000_20220413;
+use crate::compatibility::cmd_00000000_20220427::Cmd as LatestVersionCmd;
 use crate::CreateDatabaseReq;
 use crate::CreateShareReq;
 use crate::CreateTableReq;
+use crate::DatabaseNameIdent;
 use crate::DropDatabaseReq;
 use crate::DropShareReq;
 use crate::DropTableReq;
@@ -32,6 +33,8 @@ use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
 use crate::RenameTableReq;
+use crate::TableNameIdent;
+use crate::TxnRequest;
 use crate::UpsertTableOptionReq;
 
 /// A Cmd describes what a user want to do to raft state machine
@@ -48,6 +51,11 @@ pub enum Cmd {
     AddNode {
         node_id: NodeId,
         node: Node,
+    },
+
+    /// Remove node
+    RemoveNode {
+        node_id: NodeId,
     },
 
     /// Add a database if absent
@@ -95,6 +103,8 @@ pub enum Cmd {
         /// Meta data of a value.
         value_meta: Option<KVMeta>,
     },
+
+    Transaction(TxnRequest),
 }
 
 impl fmt::Display for Cmd {
@@ -106,6 +116,10 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
+            Cmd::RemoveNode { node_id } => {
+                write!(f, "remove_node:{}", node_id)
+            }
+
             Cmd::CreateDatabase(req) => req.fmt(f),
             Cmd::DropDatabase(req) => req.fmt(f),
             Cmd::CreateTable(req) => req.fmt(f),
@@ -126,6 +140,9 @@ impl fmt::Display for Cmd {
                     key, seq, value, value_meta
                 )
             }
+            Cmd::Transaction(txn) => {
+                write!(f, "txn:{:?}", txn)
+            }
         }
     }
 }
@@ -133,59 +150,63 @@ impl fmt::Display for Cmd {
 impl<'de> Deserialize<'de> for Cmd {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        let c: cmd_00000000_20220413::Cmd = de::Deserialize::deserialize(deserializer)?;
+        let c: LatestVersionCmd = de::Deserialize::deserialize(deserializer)?;
         let latest = match c {
-            cmd_00000000_20220413::Cmd::IncrSeq { key } => Cmd::IncrSeq { key },
-            cmd_00000000_20220413::Cmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
-            cmd_00000000_20220413::Cmd::CreateDatabase {
+            LatestVersionCmd::IncrSeq { key } => Cmd::IncrSeq { key },
+            LatestVersionCmd::AddNode { node_id, node } => Cmd::AddNode { node_id, node },
+            LatestVersionCmd::RemoveNode { node_id } => Cmd::RemoveNode { node_id },
+            LatestVersionCmd::CreateDatabase {
                 if_not_exists,
-                tenant,
+                name_ident,
                 name,
-                db_name,
+                tenant,
                 meta,
             } => {
                 if let Some(x) = if_not_exists {
                     // latest
                     Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: x,
-                        tenant,
-                        db_name: db_name.unwrap(),
+                        name_ident: name_ident.unwrap(),
                         meta,
                     })
                 } else {
                     // 20220413
                     Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: false,
-                        tenant,
-                        db_name: name.unwrap(),
+                        name_ident: DatabaseNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: name.unwrap(),
+                        },
                         meta,
                     })
                 }
             }
-            cmd_00000000_20220413::Cmd::DropDatabase {
+            LatestVersionCmd::DropDatabase {
                 if_exists,
+                name_ident,
                 tenant,
                 name,
-                db_name,
             } => {
                 if let Some(x) = if_exists {
                     // latest
                     Cmd::DropDatabase(DropDatabaseReq {
                         if_exists: x,
-                        tenant,
-                        db_name: db_name.unwrap(),
+                        name_ident: name_ident.unwrap(),
                     })
                 } else {
                     // 20220413
                     Cmd::DropDatabase(DropDatabaseReq {
                         if_exists: false,
-                        tenant,
-                        db_name: name.unwrap(),
+                        name_ident: DatabaseNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: name.unwrap(),
+                        },
                     })
                 }
             }
-            cmd_00000000_20220413::Cmd::CreateTable {
+            LatestVersionCmd::CreateTable {
                 if_not_exists,
+                name_ident,
                 tenant,
                 db_name,
                 table_name,
@@ -194,16 +215,27 @@ impl<'de> Deserialize<'de> for Cmd {
                 // since 20220413 there is an `if_exists` field.
                 let if_not_exists = if_not_exists.unwrap_or_default();
 
-                Cmd::CreateTable(CreateTableReq {
-                    if_not_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                    table_meta,
-                })
+                if let Some(ni) = name_ident {
+                    Cmd::CreateTable(CreateTableReq {
+                        if_not_exists,
+                        name_ident: ni,
+                        table_meta,
+                    })
+                } else {
+                    Cmd::CreateTable(CreateTableReq {
+                        if_not_exists,
+                        name_ident: TableNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: db_name.unwrap(),
+                            table_name: table_name.unwrap(),
+                        },
+                        table_meta,
+                    })
+                }
             }
-            cmd_00000000_20220413::Cmd::DropTable {
+            LatestVersionCmd::DropTable {
                 if_exists,
+                name_ident,
                 tenant,
                 db_name,
                 table_name,
@@ -211,15 +243,25 @@ impl<'de> Deserialize<'de> for Cmd {
                 // since 20220413 there is an `if_exists` field.
                 let if_exists = if_exists.unwrap_or_default();
 
-                Cmd::DropTable(DropTableReq {
-                    if_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                })
+                if let Some(ni) = name_ident {
+                    Cmd::DropTable(DropTableReq {
+                        if_exists,
+                        name_ident: ni,
+                    })
+                } else {
+                    Cmd::DropTable(DropTableReq {
+                        if_exists,
+                        name_ident: TableNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: db_name.unwrap(),
+                            table_name: table_name.unwrap(),
+                        },
+                    })
+                }
             }
-            cmd_00000000_20220413::Cmd::RenameTable {
+            LatestVersionCmd::RenameTable {
                 if_exists,
+                name_ident,
                 tenant,
                 db_name,
                 table_name,
@@ -229,19 +271,30 @@ impl<'de> Deserialize<'de> for Cmd {
                 // since 20220413 there is an `if_exists` field.
                 let if_exists = if_exists.unwrap_or_default();
 
-                Cmd::RenameTable(RenameTableReq {
-                    if_exists,
-                    tenant,
-                    db_name,
-                    table_name,
-                    new_db_name,
-                    new_table_name,
-                })
+                if let Some(ni) = name_ident {
+                    Cmd::RenameTable(RenameTableReq {
+                        if_exists,
+                        name_ident: ni,
+                        new_db_name,
+                        new_table_name,
+                    })
+                } else {
+                    Cmd::RenameTable(RenameTableReq {
+                        if_exists,
+                        name_ident: TableNameIdent {
+                            tenant: tenant.unwrap(),
+                            db_name: db_name.unwrap(),
+                            table_name: table_name.unwrap(),
+                        },
+                        new_db_name,
+                        new_table_name,
+                    })
+                }
             }
-            cmd_00000000_20220413::Cmd::CreateShare(x) => Cmd::CreateShare(x),
-            cmd_00000000_20220413::Cmd::DropShare(x) => Cmd::DropShare(x),
-            cmd_00000000_20220413::Cmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
-            cmd_00000000_20220413::Cmd::UpsertKV {
+            LatestVersionCmd::CreateShare(x) => Cmd::CreateShare(x),
+            LatestVersionCmd::DropShare(x) => Cmd::DropShare(x),
+            LatestVersionCmd::UpsertTableOptions(x) => Cmd::UpsertTableOptions(x),
+            LatestVersionCmd::UpsertKV {
                 key,
                 seq,
                 value,
@@ -252,6 +305,7 @@ impl<'de> Deserialize<'de> for Cmd {
                 value,
                 value_meta,
             },
+            LatestVersionCmd::Transaction(txn) => Cmd::Transaction(txn),
         };
 
         Ok(latest)

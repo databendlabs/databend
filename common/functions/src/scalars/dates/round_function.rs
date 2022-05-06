@@ -33,12 +33,12 @@ pub struct RoundFunction {
 impl RoundFunction {
     pub fn try_create(
         display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
         round: u32,
     ) -> Result<Box<dyn Function>> {
-        if args[0].data_type_id() != TypeID::DateTime {
+        if args[0].data_type_id() != TypeID::Timestamp {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Function {} must have a DateTime type as argument, but got {}",
+                "Function {} must have a Timestamp type as argument, but got {}",
                 display_name,
                 args[0].name(),
             )));
@@ -58,7 +58,7 @@ impl RoundFunction {
     #[inline]
     fn execute(&self, time: i64) -> i64 {
         let round = self.round as i64;
-        time / round * round
+        time / MICROSECONDS / round * round * MICROSECONDS
     }
 }
 
@@ -67,8 +67,8 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        DateTimeType::arc(0, None)
+    fn return_type(&self) -> DataTypeImpl {
+        TimestampType::new_impl(0)
     }
 
     fn eval(
@@ -80,6 +80,9 @@ impl Function for RoundFunction {
         let func = |val: i64, _ctx: &mut EvalContext| self.execute(val);
         let col =
             scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+        for micros in col.iter() {
+            let _ = check_timestamp(*micros)?;
+        }
         Ok(col.arc())
     }
 

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::UseDatabasePlan;
 use common_streams::DataBlockStream;
@@ -45,6 +46,9 @@ impl Interpreter for UseDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        if self.plan.db.trim().is_empty() {
+            return Err(ErrorCode::UnknownDatabase("No database selected"));
+        }
         self.ctx.set_current_database(self.plan.db.clone()).await?;
         let schema = Arc::new(DataSchema::empty());
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))

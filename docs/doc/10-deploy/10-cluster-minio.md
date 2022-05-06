@@ -2,7 +2,7 @@
 title: Start a Local Query Cluster
 sidebar_label: Local Cluster
 description:
-  How to Deploy a Local Query Cluster.
+  How to deploy a local query cluster.
 ---
 
 :::tip
@@ -36,8 +36,8 @@ Install Databend with standalone mode, please see [Install Databend with MinIO](
 
 ```shell title="databend-query-node2.toml"
 [log]
-log_level = "INFO"
-log_dir = "benddata/_logs"
+level = "INFO"
+dir = "benddata/_logs"
 
 [query]
 # For admin RESET API.
@@ -75,7 +75,7 @@ meta_password = "root"
 
 [storage]
 # fs|s3
-storage_type = "s3"
+type = "s3"
 
 [storage.fs]
 

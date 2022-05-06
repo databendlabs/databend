@@ -44,9 +44,8 @@ where
 
     file_writer.start()?;
     for group in row_groups {
-        let (group, len) = group?;
-        file_writer.write(group, len)?;
+        file_writer.write(group?)?;
     }
-    let (size, _writer, file_meta_data) = file_writer.end_ext(None)?;
+    let (size, file_meta_data) = file_writer.end_ext(None)?;
     Ok((size, file_meta_data))
 }

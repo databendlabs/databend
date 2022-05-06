@@ -21,7 +21,7 @@ pub struct SQLCommon;
 
 impl SQLCommon {
     /// Maps the SQL type to the corresponding Arrow `DataType`
-    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypePtr> {
+    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypeImpl> {
         match sql_type {
             SQLDataType::TinyInt(_) => Ok(i8::to_data_type()),
             SQLDataType::UnsignedTinyInt(_) => Ok(u8::to_data_type()),
@@ -40,27 +40,27 @@ impl SQLCommon {
             SQLDataType::Decimal(_, _) => Ok(f64::to_data_type()),
             SQLDataType::Real | SQLDataType::Double => Ok(f64::to_data_type()),
             SQLDataType::Boolean => Ok(bool::to_data_type()),
-            SQLDataType::Date => Ok(DateType::arc()),
+            SQLDataType::Date => Ok(DateType::new_impl()),
             // default precision is 6, microseconds
             SQLDataType::Timestamp(None) | SQLDataType::DateTime(None) => {
-                Ok(DateTimeType::arc(6, None))
+                Ok(TimestampType::new_impl(6))
             }
             SQLDataType::Timestamp(Some(precision)) => {
-                if *precision <= 9 {
-                    Ok(DateTimeType::arc(*precision as usize, None))
+                if *precision <= 6 {
+                    Ok(TimestampType::new_impl(*precision as usize))
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type TIMESTAMP(n), n only ranges from 0~9, {} is invalid",
+                        "The SQL data type TIMESTAMP(n), n only ranges from 0~6, {} is invalid",
                         precision
                     )))
                 }
             }
             SQLDataType::DateTime(Some(precision)) => {
-                if *precision <= 9 {
-                    Ok(DateTimeType::arc(*precision as usize, None))
+                if *precision <= 6 {
+                    Ok(TimestampType::new_impl(*precision as usize))
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type DATETIME(n), n only ranges from 0~9, {} is invalid",
+                        "The SQL data type DATETIME(n), n only ranges from 0~6, {} is invalid",
                         precision
                     )))
                 }
@@ -83,6 +83,14 @@ impl SQLCommon {
             _ => Result::Err(ErrorCode::IllegalDataType(format!(
                 "The SQL data type {sql_type:?} is not implemented",
             ))),
+        }
+    }
+
+    pub fn short_sql(query: &str) -> String {
+        if query.len() >= 64 && query[..=6].eq_ignore_ascii_case("INSERT") {
+            format!("{}...", &query[..64])
+        } else {
+            query.to_string()
         }
     }
 }

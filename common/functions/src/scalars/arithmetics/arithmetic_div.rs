@@ -36,13 +36,13 @@ pub struct ArithmeticDivFunction;
 impl ArithmeticDivFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[&DataTypePtr],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
             with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     DataValueBinaryOperator::Div,
-                    Float64Type::arc(),
+                    Float64Type::new_impl(),
                     div_scalar
                 )
             })

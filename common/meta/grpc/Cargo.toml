@@ -21,15 +21,18 @@ common-exception = { path = "../../exception" }
 common-grpc = { path = "../../grpc" }
 common-meta-api = { path = "../api" }
 common-meta-types = { path = "../types" }
+common-proto-conv = { path = "../../proto-conv" }
+common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }
 
+anyerror = "0.1.6"
 derive_more = "0.99.17"
 futures = "0.3.21"
 prost = "=0.9.0"
 rand = "0.8.5"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
+thiserror = "1.0.30"
 tonic = { version = "=0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 [dev-dependencies]
-common-base = { path = "../../base" }

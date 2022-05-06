@@ -21,6 +21,6 @@ mod read;
 mod read_partitions;
 mod truncate;
 
-pub use fuse_sink::FuseSink;
+pub use fuse_sink::FuseTableSink;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;

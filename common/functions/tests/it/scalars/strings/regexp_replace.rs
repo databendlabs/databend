@@ -154,8 +154,8 @@ fn test_regexp_replace_function() -> Result<()> {
 #[test]
 fn test_regexp_replace_constant_column() -> Result<()> {
     let data_type = DataValue::String("[a-z]+".as_bytes().into());
-    let data_value1 = StringType::arc().create_constant_column(&data_type, 3)?;
-    let data_value2 = StringType::arc().create_constant_column(&data_type, 3)?;
+    let data_value1 = StringType::new_impl().create_constant_column(&data_type, 3)?;
+    let data_value2 = StringType::new_impl().create_constant_column(&data_type, 3)?;
 
     let tests = vec![
         ScalarFunctionTest {

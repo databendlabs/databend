@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -63,12 +64,12 @@ where Self: Transform
         let expr_schema = DataSchemaRefExt::create(vec![expr_field]);
 
         ExpressionExecutor::try_create(
+            ctx,
             "filter expression executor",
             schema.clone(),
             expr_schema,
             vec![expr.clone()],
             false,
-            ctx,
         )
     }
 

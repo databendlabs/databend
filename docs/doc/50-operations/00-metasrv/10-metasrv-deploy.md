@@ -1,6 +1,6 @@
 ---
-title: Deploy Databend Meta Service
-sidebar_label: Deploy Meta Service
+title: Deploy a Databend Meta Service Cluster
+sidebar_label: Deploy a Databend Meta Service Cluster
 description:
   How to deploy Databend Meta Service Cluster.
 ---
@@ -56,7 +56,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.22-nightly/databend-v0.7.22-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -66,7 +66,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.22-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.22-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 You can find two executable files:

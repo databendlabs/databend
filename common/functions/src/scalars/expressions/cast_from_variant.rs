@@ -22,12 +22,12 @@ use common_exception::Result;
 use serde_json::Value as JsonValue;
 
 use super::cast_from_string::string_to_date;
-use super::cast_from_string::string_to_datetime;
+use super::cast_from_string::string_to_timestamp;
 use super::cast_with_type::new_mutable_bitmap;
 
 pub fn cast_from_variant(
     column: &ColumnRef,
-    data_type: &DataTypePtr,
+    data_type: &DataTypeImpl,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let json_column: &VariantColumn = if column.is_const() {
@@ -131,17 +131,16 @@ pub fn cast_from_variant(
                 }
                 return Ok((builder.build(size), Some(bitmap.into())));
             }
-            TypeID::DateTime => {
+            TypeID::Timestamp => {
                 // TODO(veeupup): support datetime with precision
                 let mut builder = ColumnBuilder::<i64>::with_capacity(size);
-                let datetime = DateTimeType::create(0, None);
 
                 for (row, value) in json_column.iter().enumerate() {
                     match value.as_ref() {
                         JsonValue::Null => bitmap.set(row, false),
                         JsonValue::String(v) => {
-                            if let Some(d) = string_to_datetime(v) {
-                                builder.append(datetime.from_nano_seconds(d.timestamp_nanos()));
+                            if let Some(d) = string_to_timestamp(v) {
+                                builder.append(d.timestamp_micros());
                             } else {
                                 bitmap.set(row, false);
                             }

@@ -21,14 +21,13 @@ use common_base::tokio::sync::RwLock;
 use common_base::tokio::time::sleep;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_meta_types::UserInfo;
 use common_tracing::tracing;
 
 use super::expiring_map::ExpiringMap;
+use super::HttpQueryContext;
 use crate::configs::Config;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
-use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 
 // TODO(youngsofun): may need refactor later for 2 reasons:
@@ -56,20 +55,13 @@ impl HttpQueryManager {
         }))
     }
 
-    pub(crate) fn next_query_id(self: &Arc<Self>) -> String {
-        uuid::Uuid::new_v4().to_string()
-    }
-
     pub(crate) async fn try_create_query(
         self: &Arc<Self>,
-        id: &str,
+        ctx: &HttpQueryContext,
         request: HttpQueryRequest,
-        session_manager: &Arc<SessionManager>,
-        user_info: &UserInfo,
     ) -> Result<Arc<HttpQuery>> {
-        let query =
-            HttpQuery::try_create(id, request, session_manager, user_info, self.config).await?;
-        self.add_query(id, query.clone()).await;
+        let query = HttpQuery::try_create(ctx, request, self.config).await?;
+        self.add_query(&query.id, query.clone()).await;
         Ok(query)
     }
 

@@ -25,7 +25,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::assert_date_or_datetime;
+use crate::scalars::assert_date_or_timestamp;
 use crate::scalars::assert_numeric;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
@@ -44,7 +44,7 @@ pub struct WeekFunction<T, R> {
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> DataTypePtr;
+    fn return_type() -> DataTypeImpl;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
     fn factor_function() -> Option<Box<dyn Function>> {
         None
@@ -57,8 +57,8 @@ pub struct ToStartOfWeek;
 impl WeekResultFunction<i32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> DataTypePtr {
-        DateType::arc()
+    fn return_type() -> DataTypeImpl {
+        DateType::new_impl()
     }
     fn to_number(value: DateTime<Utc>, week_mode: u64) -> i32 {
         let mut weekday = value.weekday().number_from_sunday();
@@ -80,8 +80,8 @@ where
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        assert_date_or_datetime(args[0])?;
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
+        assert_date_or_timestamp(args[0])?;
         if args.len() > 1 {
             assert_numeric(args[1])?;
         }
@@ -118,7 +118,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         T::return_type()
     }
 
@@ -149,25 +149,36 @@ where
 
         match columns[0].data_type().data_type_id() {
             TypeID::Date => {
-                    let col: &Int32Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                           let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
-            TypeID::DateTime => {
-                    let col: &Int64Column = Series::check_get(columns[0].column())?;
-                    let iter = col.scalar_iter().map(|v| {
-                            let date_time = Utc.timestamp(v as i64, 0_u32);
-                            T::to_number(date_time, mode)
-                    });
-                    Ok(PrimitiveColumn::<R>::from_owned_iterator(iter).arc())
-            },
+                let col: &Int32Column = Series::check_get(columns[0].column())?;
+                let iter = col.scalar_iter().map(|v| {
+                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
+                    T::to_number(date_time, mode)
+                });
+                let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
+                let viewer = i32::try_create_viewer(&col)?;
+                for days in viewer.iter() {
+                    let _ = check_date(days)?;
+                }
+                Ok(col)
+            }
+            TypeID::Timestamp => {
+                let col: &Int64Column = Series::check_get(columns[0].column())?;
+                let iter = col.scalar_iter().map(|v| {
+                    let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
+                    T::to_number(date_time, mode)
+                });
+                let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
+                let viewer = i32::try_create_viewer(&col)?;
+                for days in viewer.iter() {
+                    let _ = check_date(days)?;
+                }
+                Ok(col)
+            }
             other => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
+                "Illegal type {:?} of argument of function {}.Should be a Date or Timestamp",
                 other,
-                self.name()))),
+                self.name()
+            ))),
         }
     }
 

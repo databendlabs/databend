@@ -15,6 +15,7 @@
 pub use common_meta_types::ForwardRequest;
 pub use common_meta_types::ForwardRequestBody;
 pub use common_meta_types::JoinRequest;
+pub use common_meta_types::LeaveRequest;
 pub use meta_service_impl::RaftServiceImpl;
 pub use raftmeta::MetaNode;
 

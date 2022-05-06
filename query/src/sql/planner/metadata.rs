@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::sync::Arc;
 
+use common_ast::ast::Expr;
+use common_ast::ast::Literal;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 
 use crate::sql::common::IndexType;
@@ -53,8 +58,7 @@ impl TableEntry {
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,
-    pub data_type: DataTypePtr,
-    pub nullable: bool,
+    pub data_type: DataTypeImpl,
 
     // Table index of column entry. None if column is derived from a subquery.
     pub table_index: Option<IndexType>,
@@ -63,8 +67,7 @@ pub struct ColumnEntry {
 impl ColumnEntry {
     pub fn new(
         name: String,
-        data_type: DataTypePtr,
-        nullable: bool,
+        data_type: DataTypeImpl,
         column_index: IndexType,
         table_index: Option<IndexType>,
     ) -> Self {
@@ -72,7 +75,6 @@ impl ColumnEntry {
             column_index,
             name,
             data_type,
-            nullable,
             table_index,
         }
     }
@@ -117,15 +119,112 @@ impl Metadata {
         result
     }
 
+    pub fn get_expr_display_string(&self, expr: &Expr) -> Result<String> {
+        match expr {
+            Expr::ColumnRef { column, .. } => Ok(column.name.clone()),
+
+            Expr::Literal(literal) => Ok(format!("{}", literal)),
+
+            Expr::CountAll => Ok("count(*)".to_string()),
+
+            Expr::FunctionCall {
+                name,
+                distinct,
+                args,
+                ..
+            } => {
+                let fun = name.name.as_str();
+                let mut names = Vec::new();
+                if !optimize_remove_count_args(
+                    fun,
+                    *distinct,
+                    args.iter().collect::<Vec<&Expr>>().as_slice(),
+                ) {
+                    names = args
+                        .iter()
+                        .map(|arg| self.get_expr_display_string(arg))
+                        .collect::<Result<Vec<String>>>()?;
+                }
+
+                Ok(match distinct {
+                    true => format!("{}({}{})", fun, "distinct ", names.join(",")),
+                    false => format!("{}({}{})", fun, "", names.join(",")),
+                })
+            }
+
+            Expr::IsNull { expr, not } => Ok(format!(
+                "{} IS {}NULL",
+                expr,
+                if *not { "NOT " } else { "" }
+            )),
+
+            Expr::InList { expr, list, not } => {
+                let mut w = vec![];
+                write!(&mut w, "{} {}IN (", expr, if *not { "NOT " } else { "" })?;
+                for (i, expr) in list.iter().enumerate() {
+                    write!(&mut w, "{}", expr)?;
+                    if i < list.len() - 1 {
+                        write!(&mut w, ", ")?;
+                    }
+                }
+                write!(&mut w, ")")?;
+
+                Ok(String::from_utf8(w)?)
+            }
+
+            Expr::Between {
+                expr,
+                low,
+                high,
+                not,
+            } => Ok(format!(
+                "{} {}BETWEEN {} AND {}",
+                expr,
+                if *not { "NOT " } else { "" },
+                low,
+                high
+            )),
+
+            Expr::BinaryOp { op, left, right } => Ok(format!("{} {} {}", left, op, right)),
+
+            Expr::UnaryOp { op, expr } => Ok(format!("{} {}", op, expr)),
+
+            Expr::Cast {
+                expr, target_type, ..
+            } => Ok(format!("CAST({} AS {})", expr, target_type)),
+
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => Ok(format!(
+                "SUBSTRING({}{}{})",
+                expr,
+                if let Some(from) = substring_from {
+                    format!("FROM {}", from)
+                } else {
+                    "".to_string()
+                },
+                if let Some(for_expr) = substring_for {
+                    format!("FOR {}", for_expr)
+                } else {
+                    "".to_string()
+                }
+            )),
+            _ => Err(ErrorCode::LogicalError(format!(
+                "{expr} doesn't implement get_expr_display_string"
+            ))),
+        }
+    }
+
     pub fn add_column(
         &mut self,
         name: String,
-        data_type: DataTypePtr,
-        nullable: bool,
+        data_type: DataTypeImpl,
         table_index: Option<IndexType>,
     ) -> IndexType {
         let column_index = self.columns.len();
-        let column_entry = ColumnEntry::new(name, data_type, nullable, column_index, table_index);
+        let column_entry = ColumnEntry::new(name, data_type, column_index, table_index);
         self.columns.push(column_entry);
         column_index
     }
@@ -150,10 +249,17 @@ impl Metadata {
             self.add_column(
                 field.name().clone(),
                 field.data_type().clone(),
-                field.is_nullable(),
                 Some(table_index),
             );
         }
         table_index
     }
+}
+
+pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {
+    name.eq_ignore_ascii_case("count")
+        && !distinct
+        && args
+            .iter()
+            .all(|expr| matches!(expr, Expr::Literal(literal) if *literal!=Literal::Null))
 }

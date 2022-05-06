@@ -27,12 +27,34 @@ pub struct DatabaseNameIdent {
     pub db_name: String,
 }
 
+impl Display for DatabaseNameIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.db_name)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
-    // TODO(xp): store the seq AKA version for CAS update
-    pub database_id: u64,
-    pub db: String,
+    pub ident: DatabaseIdent,
+    pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseIdent {
+    pub db_id: u64,
+    pub seq: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseId {
+    pub db_id: u64,
+}
+
+impl Display for DatabaseId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.db_id)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -41,6 +63,8 @@ pub struct DatabaseMeta {
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
     pub created_on: DateTime<Utc>,
+    pub updated_on: DateTime<Utc>,
+    pub comment: String,
 }
 
 impl Default for DatabaseMeta {
@@ -50,6 +74,8 @@ impl Default for DatabaseMeta {
             engine_options: BTreeMap::new(),
             options: BTreeMap::new(),
             created_on: Utc::now(),
+            updated_on: Utc::now(),
+            comment: "".to_string(),
         }
     }
 }
@@ -73,8 +99,7 @@ impl DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
+    pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
 
@@ -83,7 +108,7 @@ impl Display for CreateDatabaseReq {
         write!(
             f,
             "create_db(if_not_exists={}):{}/{}={:?}",
-            self.if_not_exists, self.tenant, self.db_name, self.meta
+            self.if_not_exists, self.name_ident.tenant, self.name_ident.db_name, self.meta
         )
     }
 }
@@ -96,8 +121,7 @@ pub struct CreateDatabaseReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
+    pub name_ident: DatabaseNameIdent,
 }
 
 impl Display for DropDatabaseReq {
@@ -105,7 +129,7 @@ impl Display for DropDatabaseReq {
         write!(
             f,
             "drop_db(if_exists={}):{}/{}",
-            self.if_exists, self.tenant, self.db_name
+            self.if_exists, self.name_ident.tenant, self.name_ident.db_name
         )
     }
 }

@@ -61,9 +61,7 @@ pub struct SettingValue {
 #[derive(Clone)]
 pub struct Settings {
     settings: Arc<RwLock<HashMap<String, SettingValue>>>,
-    #[allow(dead_code)]
     user_api: Arc<UserApiProvider>,
-    #[allow(dead_code)]
     session_ctx: Arc<SessionContext>,
 }
 
@@ -318,7 +316,7 @@ impl Settings {
     }
 
     fn set_to_global(&self, setting: &mut SettingValue) -> Result<()> {
-        let tenant = self.session_ctx.get_tenant();
+        let tenant = self.session_ctx.get_current_tenant();
         let _ = futures::executor::block_on(
             self.user_api
                 .get_setting_api_client(&tenant)?

@@ -30,7 +30,7 @@ pub struct IsNotNullFunction {
 impl IsNotNullFunction {
     pub fn try_create_func(
         _display_name: &str,
-        _args: &[&DataTypePtr],
+        _args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNotNullFunction {
             _display_name: "isNotNull".to_string(),
@@ -42,7 +42,6 @@ impl IsNotNullFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("is_null")
-                .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
         )
@@ -54,7 +53,7 @@ impl Function for IsNotNullFunction {
         "IsNotNullFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         bool::to_data_type()
     }
 

@@ -27,12 +27,11 @@ use crate::prelude::*;
 pub struct VariantArrayType {}
 
 impl VariantArrayType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn new_impl() -> DataTypeImpl {
+        DataTypeImpl::VariantArray(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for VariantArrayType {
     fn data_type_id(&self) -> TypeID {
         TypeID::VariantArray
@@ -43,8 +42,8 @@ impl DataType for VariantArrayType {
         self
     }
 
-    fn name(&self) -> &str {
-        "Array"
+    fn name(&self) -> String {
+        "Array".to_string()
     }
 
     fn default_value(&self) -> DataValue {
@@ -80,12 +79,12 @@ impl DataType for VariantArrayType {
         Some(mp)
     }
 
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(VariantSerializer {})
+    fn create_serializer(&self) -> TypeSerializerImpl {
+        VariantSerializer {}.into()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(VariantDeserializer::with_capacity(capacity))
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        VariantDeserializer::with_capacity(capacity).into()
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {

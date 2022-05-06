@@ -153,7 +153,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         create_primitive_datatype::<T>()
     }
 

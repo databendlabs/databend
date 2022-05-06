@@ -27,8 +27,10 @@ use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseAlreadyExists;
+use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReply;
@@ -82,7 +84,10 @@ impl MetaApi for StateMachine {
         assert!(result.is_some());
 
         if prev.is_some() && !req.if_not_exists {
-            let ae = AppError::from(DatabaseAlreadyExists::new(req.db_name, "create database"));
+            let ae = AppError::from(DatabaseAlreadyExists::new(
+                req.name_ident.db_name,
+                "create database",
+            ));
             return Err(MetaError::from(ae));
         }
 
@@ -98,7 +103,10 @@ impl MetaApi for StateMachine {
         assert!(res.result().is_none());
 
         if res.prev().is_none() && !req.if_exists {
-            let ae = AppError::from(UnknownDatabase::new(req.db_name, "drop database"));
+            let ae = AppError::from(UnknownDatabase::new(
+                req.name_ident.db_name,
+                "drop database",
+            ));
             return Err(MetaError::from(ae));
         }
 
@@ -110,8 +118,14 @@ impl MetaApi for StateMachine {
         let seq_meta = self.get_database_meta_by_id(&db_id)?;
 
         let dbi = DatabaseInfo {
-            database_id: db_id,
-            db: req.db_name.clone(),
+            ident: DatabaseIdent {
+                db_id,
+                seq: seq_meta.seq,
+            },
+            name_ident: DatabaseNameIdent {
+                tenant: req.tenant.clone(),
+                db_name: req.db_name.clone(),
+            },
             meta: seq_meta.data,
         };
         Ok(Arc::new(dbi))
@@ -125,15 +139,21 @@ impl MetaApi for StateMachine {
 
         let it = self
             .database_lookup()
-            .scan_prefix(&DatabaseLookupKey::new(req.tenant, "".to_string()))?;
+            .scan_prefix(&DatabaseLookupKey::new(req.tenant.clone(), "".to_string()))?;
 
         for r in it {
             let (db_lookup_key, seq_id) = r;
             let seq_meta = self.get_database_meta_by_id(&seq_id.data)?;
 
             let db_info = DatabaseInfo {
-                database_id: seq_id.data,
-                db: db_lookup_key.get_database_name(),
+                ident: DatabaseIdent {
+                    db_id: seq_id.data,
+                    seq: seq_meta.seq,
+                },
+                name_ident: DatabaseNameIdent {
+                    tenant: req.tenant.clone(),
+                    db_name: db_lookup_key.get_database_name(),
+                },
                 meta: seq_meta.data,
             };
             res.push(Arc::new(db_info));
@@ -143,8 +163,8 @@ impl MetaApi for StateMachine {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let db_name = &req.db_name;
-        let table_name = &req.table_name;
+        let db_name = req.db_name();
+        let table_name = req.table_name();
         let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}-{}", &db_name, &table_name);
@@ -169,7 +189,7 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let table_name = req.table_name.clone();
+        let table_name = req.table_name().to_string();
         let if_exists = req.if_exists;
 
         let res = self.sm_tree.txn(true, |t| {

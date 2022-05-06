@@ -57,6 +57,7 @@ pub struct PartialAggregator<
     Method: HashMethod + PolymorphicKeysHelper<Method>,
 > {
     is_generated: bool,
+    states_dropped: bool,
 
     method: Method,
     state: Method::State,
@@ -71,6 +72,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let state = method.aggregate_state();
         Self {
             is_generated: false,
+            states_dropped: false,
             state,
             method,
             params,
@@ -262,7 +264,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.state.len() == 0 || self.is_generated {
-            true => Ok(None),
+            true => {
+                self.drop_states();
+                Ok(None)
+            }
             false => {
                 self.is_generated = true;
                 let mut keys_column_builder = self.method.keys_column_builder(self.state.len());
@@ -276,5 +281,46 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 ])))
             }
         }
+    }
+}
+
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
+    PartialAggregator<HAS_AGG, Method>
+{
+    fn drop_states(&mut self) {
+        if !self.states_dropped {
+            let aggregator_params = self.params.as_ref();
+            let aggregate_functions = &aggregator_params.aggregate_functions;
+            let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+
+            let states = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            for group_entity in self.state.iter() {
+                let place: StateAddr = (*group_entity.get_state_value()).into();
+
+                for (function, state_offset) in functions.iter().zip(states.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
+            }
+            self.states_dropped = true;
+        }
+    }
+}
+
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> Drop
+    for PartialAggregator<HAS_AGG, Method>
+{
+    fn drop(&mut self) {
+        self.drop_states();
     }
 }

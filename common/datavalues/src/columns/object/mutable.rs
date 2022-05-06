@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -31,7 +31,7 @@ where T: ObjectType
 impl<T> MutableColumn for MutableObjectColumn<T>
 where T: ObjectType
 {
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         T::data_type()
     }
 

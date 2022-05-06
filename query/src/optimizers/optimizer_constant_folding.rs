@@ -81,12 +81,12 @@ impl ConstantFoldingImpl {
         let output_fields = vec![expr.to_data_field(schema)?];
         let output_schema = DataSchemaRefExt::create(output_fields);
         ExpressionExecutor::try_create(
+            ctx,
             "Constant folding optimizer.",
             schema.clone(),
             output_schema,
             vec![expr],
             false,
-            ctx,
         )
     }
 
@@ -111,7 +111,7 @@ impl ConstantFoldingImpl {
     fn convert_to_expression(
         column_name: String,
         data_block: DataBlock,
-        data_type: DataTypePtr,
+        data_type: DataTypeImpl,
     ) -> Result<Expression> {
         debug_assert!(data_block.num_rows() == 1);
         debug_assert!(data_block.num_columns() == 1);
@@ -190,7 +190,7 @@ impl PlanRewriter for ConstantFoldingImpl {
 
             fn mutate_cast(
                 &mut self,
-                typ: &DataTypePtr,
+                typ: &DataTypeImpl,
                 expr: Expression,
                 pg_style: bool,
                 origin_expr: &Expression,

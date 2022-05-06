@@ -41,6 +41,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -53,6 +54,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -65,6 +67,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -86,6 +89,7 @@ fn create_table() -> Result<()> {
         },
         like: None,
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -100,6 +104,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
         query: None,
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -117,6 +122,7 @@ fn create_table() -> Result<()> {
         options: maplit::btreemap! {"location".into() => "batcave".into()},
         like: None,
         query: Some(Box::new(DfQueryStatement {
+            distinct: false,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
                     name: ObjectName(vec![Ident::new("t2")]),
@@ -134,6 +140,7 @@ fn create_table() -> Result<()> {
             limit: None,
             offset: None,
         })),
+        order_keys: vec![],
     });
     expect_parse_ok(sql, expected)?;
     Ok(())
@@ -151,6 +158,7 @@ fn create_table_select() -> Result<()> {
             options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+            order_keys: vec![],
         }),
     )?;
 
@@ -164,6 +172,7 @@ fn create_table_select() -> Result<()> {
             options: maplit::btreemap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+            order_keys: vec![],
         }),
     )?;
 

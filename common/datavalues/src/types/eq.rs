@@ -15,32 +15,33 @@
 use std::sync::Arc;
 
 use super::type_array::ArrayType;
-use super::type_datetime::DateTimeType;
 use super::type_nullable::NullableType;
 use super::type_struct::StructType;
+use super::type_timestamp::TimestampType;
 use super::DataType;
+use super::DataTypeImpl;
 
-impl Eq for dyn DataType + '_ {}
+impl Eq for DataTypeImpl {}
 
-impl PartialEq for dyn DataType + '_ {
-    fn eq(&self, that: &dyn DataType) -> bool {
+impl PartialEq for DataTypeImpl {
+    fn eq(&self, that: &DataTypeImpl) -> bool {
         equal(self, that)
     }
 }
 
-impl PartialEq<dyn DataType> for Arc<dyn DataType + '_> {
-    fn eq(&self, that: &dyn DataType) -> bool {
+impl PartialEq<DataTypeImpl> for Arc<DataTypeImpl> {
+    fn eq(&self, that: &DataTypeImpl) -> bool {
         equal(&**self, that)
     }
 }
 
-impl PartialEq<dyn DataType> for Box<dyn DataType + '_> {
-    fn eq(&self, that: &dyn DataType) -> bool {
+impl PartialEq<DataTypeImpl> for Box<DataTypeImpl> {
+    fn eq(&self, that: &DataTypeImpl) -> bool {
         equal(&**self, that)
     }
 }
 
-pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
+pub fn equal(lhs: &DataTypeImpl, rhs: &DataTypeImpl) -> bool {
     if lhs.data_type_id() != rhs.data_type_id() {
         return false;
     }
@@ -52,9 +53,9 @@ pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
             true
         }
 
-        DateTime => {
-            let lhs: &DateTimeType = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &DateTimeType = rhs.as_any().downcast_ref().unwrap();
+        Timestamp => {
+            let lhs: &TimestampType = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &TimestampType = rhs.as_any().downcast_ref().unwrap();
 
             lhs.precision() == rhs.precision()
         }

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -26,14 +26,14 @@ use crate::types::create_primitive_datatype;
 pub struct MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     pub(crate) values: Vec<T>,
 }
 
 impl<T> MutableColumn for MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }
 
@@ -97,7 +97,7 @@ where T: PrimitiveType
 impl<T> MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    pub fn from_data(data_type: DataTypePtr, values: Vec<T>) -> Self {
+    pub fn from_data(data_type: DataTypeImpl, values: Vec<T>) -> Self {
         Self { data_type, values }
     }
 

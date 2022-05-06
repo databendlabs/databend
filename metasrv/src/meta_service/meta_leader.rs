@@ -34,6 +34,7 @@ use openraft::raft::ClientWriteRequest;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
+use crate::meta_service::LeaveRequest;
 use crate::meta_service::MetaNode;
 
 /// The container of APIs of a metasrv leader in a metasrv cluster.
@@ -60,6 +61,10 @@ impl<'a> MetaLeader<'a> {
             ForwardRequestBody::Join(join_req) => {
                 self.join(join_req).await?;
                 Ok(ForwardResponse::Join(()))
+            }
+            ForwardRequestBody::Leave(leave_req) => {
+                self.leave(leave_req).await?;
+                Ok(ForwardResponse::Leave(()))
             }
             ForwardRequestBody::Write(entry) => {
                 let res = self.write(entry).await?;
@@ -146,9 +151,42 @@ impl<'a> MetaLeader<'a> {
             },
         };
 
-        self.write(ent.clone()).await?;
+        self.write(ent).await?;
 
         self.change_membership(membership).await
+    }
+
+    /// A node leave the cluster.
+    ///
+    /// - Remove the node from cluster.
+    /// - Remove the node from membership.
+    ///
+    /// If the node is not in cluster membership, it still returns Ok.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn leave(&self, req: LeaveRequest) -> Result<(), MetaError> {
+        let node_id = req.node_id;
+        let metrics = self.meta_node.raft.metrics().borrow().clone();
+        let membership = metrics.membership_config.membership.clone();
+
+        if !membership.contains(&node_id) {
+            return Ok(());
+        }
+
+        // TODO(xp): deal with joint config
+        assert!(membership.get_ith_config(1).is_none());
+
+        // safe unwrap: if the first config is None, panic is the expected behavior here.
+        let mut membership = membership.get_ith_config(0).unwrap().clone();
+
+        membership.remove(&node_id);
+
+        self.change_membership(membership).await?;
+        let ent = LogEntry {
+            txid: None,
+            cmd: Cmd::RemoveNode { node_id },
+        };
+        self.write(ent).await?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -184,8 +222,9 @@ impl<'a> MetaLeader<'a> {
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
     /// If the leadership is lost during writing the log, it returns an UnknownError.
     /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, entry))]
     pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
+        tracing::debug!(entry = debug(&entry), "write LogEntry");
         let write_rst = self
             .meta_node
             .raft

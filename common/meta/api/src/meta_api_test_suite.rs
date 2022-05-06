@@ -22,6 +22,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReq;
@@ -34,6 +35,7 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
@@ -53,8 +55,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -71,8 +75,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..Default::default()
@@ -92,8 +98,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: true,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -111,16 +119,18 @@ impl MetaApiTestSuite {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db1")).await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- create db2");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -139,7 +149,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- get db2");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db2")).await?;
-            assert_eq!("db2".to_string(), res.db, "db1.db is db1");
+            assert_eq!("db2".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- get absent db");
@@ -158,8 +168,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -178,8 +190,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant: tenant.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -194,11 +208,13 @@ impl MetaApiTestSuite {
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
         tracing::info!("--- tenant1 create db1");
-        {
+        let db_id_1 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -209,14 +225,17 @@ impl MetaApiTestSuite {
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.database_id, "first database id is 1");
-        }
+            res.database_id
+        };
 
         tracing::info!("--- tenant1 create db2");
-        {
+        let db_id_2 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -226,15 +245,22 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(2, res.database_id, "second database id is 2");
-        }
+            assert!(
+                res.database_id > db_id_1,
+                "second database id is > {}",
+                db_id_1
+            );
+            res.database_id
+        };
 
         tracing::info!("--- tenant2 create db1");
-        {
+        let _db_id_3 = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant2.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant2.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -244,16 +270,17 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(3, res.database_id, "third database id is 3");
-        }
+            assert!(res.database_id > db_id_2, "third database id > {}", db_id_2);
+            res.database_id
+        };
 
         tracing::info!("--- tenant1 get db1");
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant1, "db1")).await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- tenant1 get absent db");
@@ -286,8 +313,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -306,8 +335,10 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant: tenant1.to_string(),
-                db_name: "db2".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant1.to_string(),
+                    db_name: "db2".to_string(),
+                },
             })
             .await?;
         }
@@ -317,25 +348,37 @@ impl MetaApiTestSuite {
 
     pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
+        let mut db_ids = vec![];
+        let db_names = vec!["db1", "db2"];
+        let engines = vec!["eng1", "eng2"];
         let tenant = "tenant1";
         {
-            let res = self.create_database(mt, tenant, "db1").await?;
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
             assert_eq!(1, res.database_id);
+            db_ids.push(res.database_id);
 
-            let res = self.create_database(mt, tenant, "db2").await?;
-            assert_eq!(2, res.database_id);
+            let res = self.create_database(mt, tenant, "db2", "eng2").await?;
+            assert!(res.database_id > 1);
+            db_ids.push(res.database_id);
         }
 
-        tracing::info!("--- get_databases");
+        tracing::info!("--- list_databases");
         {
             let dbs = mt
                 .list_databases(ListDatabaseReq {
                     tenant: tenant.to_string(),
                 })
                 .await?;
-            let want: Vec<u64> = vec![1, 2];
-            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
-            assert_eq!(want, got)
+
+            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
+            assert_eq!(db_ids, got);
+
+            for (i, db_info) in dbs.iter().enumerate() {
+                assert_eq!(tenant, db_info.name_ident.tenant);
+                assert_eq!(db_names[i], db_info.name_ident.db_name);
+                assert_eq!(db_ids[i], db_info.ident.db_id);
+                assert_eq!(engines[i], db_info.meta.engine);
+            }
         }
 
         Ok(())
@@ -345,18 +388,22 @@ impl MetaApiTestSuite {
         tracing::info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
+
+        let mut db_ids = vec![];
         {
-            let res = self.create_database(mt, tenant1, "db1").await?;
+            let res = self.create_database(mt, tenant1, "db1", "eng1").await?;
             assert_eq!(1, res.database_id);
+            db_ids.push(res.database_id);
 
-            let res = self.create_database(mt, tenant1, "db2").await?;
-            assert_eq!(2, res.database_id);
+            let res = self.create_database(mt, tenant1, "db2", "eng2").await?;
+            assert!(res.database_id > 1);
+            db_ids.push(res.database_id);
         }
 
-        {
-            let res = self.create_database(mt, tenant2, "db3").await?;
-            assert_eq!(3, res.database_id);
-        }
+        let db_id_3 = {
+            let res = self.create_database(mt, tenant2, "db3", "eng1").await?;
+            res.database_id
+        };
 
         tracing::info!("--- get_databases by tenant1");
         {
@@ -365,9 +412,8 @@ impl MetaApiTestSuite {
                     tenant: tenant1.to_string(),
                 })
                 .await?;
-            let want: Vec<u64> = vec![1, 2];
-            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
-            assert_eq!(want, got)
+            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
+            assert_eq!(db_ids, got)
         }
 
         tracing::info!("--- get_databases by tenant2");
@@ -377,8 +423,8 @@ impl MetaApiTestSuite {
                     tenant: tenant2.to_string(),
                 })
                 .await?;
-            let want: Vec<u64> = vec![3];
-            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
+            let want: Vec<u64> = vec![db_id_3];
+            let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
         }
 
@@ -415,9 +461,12 @@ impl MetaApiTestSuite {
 
             let req = CreateTableReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+
                 table_meta: table_meta(created_on),
             };
             // test create table
@@ -450,9 +499,11 @@ impl MetaApiTestSuite {
             // should be not vunerable?
             let plan = DropTableReq {
                 if_exists: false,
-                tenant: tenant.into(),
-                db_name: db_name.into(),
-                table_name: tbl_name.into(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.into(),
+                    db_name: db_name.into(),
+                    table_name: tbl_name.into(),
+                },
             };
 
             let got = mt.drop_table(plan).await;
@@ -467,8 +518,474 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- create tb2 and get table");
+        let created_on = Utc::now();
+
+        let mut req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
                 db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: table_meta(created_on),
+        };
+        let tb_ident_2 = {
+            let tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.version;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+            tb_ident_2
+        };
+
+        tracing::info!("--- create table again with if_not_exists = true");
+        {
+            req.if_not_exists = true;
+            let res = mt.create_table(req.clone()).await?;
+            assert_eq!(
+                tb_ident_2.table_id, res.table_id,
+                "new table id is still the same"
+            );
+
+            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            let want = TableInfo {
+                ident: tb_ident_2.clone(),
+                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                name: tbl_name.into(),
+                meta: table_meta(created_on),
+            };
+            assert_eq!(want, got.as_ref().clone(), "get created table");
+        }
+
+        tracing::info!("--- create table again with if_not_exists = false");
+        {
+            req.if_not_exists = false;
+
+            let res = mt.create_table(req).await;
+            tracing::info!("create table res: {:?}", res);
+
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(
+                format!(
+                    "Code: 2302, displayText = Table '{}' already exists.",
+                    tbl_name
+                ),
+                err_code.to_string()
+            );
+
+            // get_table returns the old table
+
+            let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+            let want = TableInfo {
+                ident: tb_ident_2.clone(),
+                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                name: tbl_name.into(),
+                meta: table_meta(created_on),
+            };
+            assert_eq!(want, got.as_ref().clone(), "get old table");
+        }
+
+        tracing::info!("--- create another table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: "tb3".to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            assert!(
+                res.table_id > tb_ident_2.table_id,
+                "table id > {}",
+                tb_ident_2.table_id
+            );
+        }
+
+        tracing::info!("--- drop table");
+        {
+            tracing::info!("--- drop table with if_exists = false");
+            {
+                let plan = DropTableReq {
+                    if_exists: false,
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
+                };
+                mt.drop_table(plan.clone()).await?;
+
+                tracing::info!("--- get table after drop");
+                {
+                    let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
+                    let status = res.err().unwrap();
+                    let err_code = ErrorCode::from(status);
+
+                    assert_eq!(
+                        format!("Code: 1025, displayText = Unknown table '{:}'.", tbl_name),
+                        err_code.to_string(),
+                        "get dropped table {}",
+                        tbl_name
+                    );
+                }
+            }
+
+            tracing::info!("--- drop table with if_exists = false again, error");
+            {
+                let plan = DropTableReq {
+                    if_exists: false,
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
+                };
+                let res = mt.drop_table(plan.clone()).await;
+                let err = res.unwrap_err();
+                assert_eq!(
+                    ErrorCode::UnknownTable("").code(),
+                    ErrorCode::from(err).code(),
+                    "drop table {} with if_exists=false again",
+                    tbl_name
+                );
+            }
+
+            tracing::info!("--- drop table with if_exists = true again, ok");
+            {
+                let plan = DropTableReq {
+                    if_exists: true,
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tbl_name.to_string(),
+                    },
+                };
+                mt.drop_table(plan.clone()).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn table_rename<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let new_tbl_name = "tb3";
+        let new_db_name = "db2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- rename table on unknown db");
+        {
+            let req = RenameTableReq {
+                if_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            let got = mt.rename_table(req.clone()).await;
+            tracing::debug!("--- rename table on unknown database got: {:?}", got);
+
+            assert!(got.is_err());
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(got.unwrap_err()).code()
+            );
+        }
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+        }
+
+        let created_on = Utc::now();
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: table_meta(created_on),
+        };
+
+        tracing::info!("--- create table for rename");
+        let tb_ident = {
+            mt.create_table(req.clone()).await?;
+            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            got.ident.clone()
+        };
+
+        tracing::info!("--- rename table, ok");
+        {
+            let req = RenameTableReq {
+                if_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            mt.rename_table(req.clone()).await?;
+
+            let got = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
+            let want = TableInfo {
+                // TODO: use this after kv-txn rename-table replaces metasrv rename-table:
+                //    `ident: tb_ident.clone(),`
+                //     rename-table should not change the seq.
+                ident: TableIdent {
+                    table_id: tb_ident.table_id,
+                    version: got.ident.version,
+                },
+                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
+                name: new_tbl_name.into(),
+                meta: table_meta(created_on),
+            };
+            assert_eq!(want, got.as_ref().clone(), "get renamed table");
+
+            tracing::info!("--- get old table after rename");
+            {
+                let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
+                let err = res.err().unwrap();
+                assert_eq!(
+                    ErrorCode::UnknownTable("").code(),
+                    ErrorCode::from(err).code()
+                );
+            }
+        }
+
+        tracing::info!("--- rename table again, error");
+        {
+            let req = RenameTableReq {
+                if_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            let res = mt.rename_table(req.clone()).await;
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::UnknownTable("").code(),
+                ErrorCode::from(err).code(),
+                "rename table {} again",
+                tbl_name
+            );
+        }
+
+        tracing::info!("--- create table again after rename, ok");
+        let tb_ident2 = {
+            mt.create_table(req.clone()).await?;
+
+            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            assert_ne!(tb_ident.table_id, got.ident.table_id);
+            assert_ne!(tb_ident.version, got.ident.version);
+            got.ident.clone()
+        };
+
+        tracing::info!("--- rename table again after recreate, error");
+        {
+            let req = RenameTableReq {
+                if_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            let res = mt.rename_table(req.clone()).await;
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::TableAlreadyExists("").code(),
+                ErrorCode::from(err).code(),
+                "rename table {} again after recreate",
+                tbl_name
+            );
+        }
+
+        tracing::info!("--- rename table to unknown db, error");
+        {
+            let req = RenameTableReq {
+                if_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: new_db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            let res = mt.rename_table(req.clone()).await;
+            tracing::debug!("--- rename table to other db got: {:?}", res);
+
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(res.unwrap_err()).code()
+            );
+        }
+
+        tracing::info!("--- prepare other db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: new_db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            mt.create_database(plan).await?;
+        }
+
+        tracing::info!("--- rename table to other db, ok");
+        {
+            let req = RenameTableReq {
+                if_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: new_db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            mt.rename_table(req.clone()).await?;
+
+            let got = mt
+                .get_table((tenant, new_db_name, new_tbl_name).into())
+                .await?;
+            let want = TableInfo {
+                // TODO similar: version should not change.
+                //   ident: tb_ident2,
+                ident: TableIdent {
+                    table_id: tb_ident2.table_id,
+                    version: got.ident.version,
+                },
+                desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
+                name: new_tbl_name.into(),
+                meta: table_meta(created_on),
+            };
+            assert_eq!(want, got.as_ref().clone(), "get renamed table");
+        }
+
+        Ok(())
+    }
+
+    pub async fn table_upsert_option<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -485,74 +1002,35 @@ impl MetaApiTestSuite {
         {
             let created_on = Utc::now();
 
-            let mut req = CreateTableReq {
+            let req = CreateTableReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
                 table_meta: table_meta(created_on),
             };
 
-            {
+            let _tb_ident_2 = {
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "table id is 1");
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
 
                 let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.version;
+
+                let ident = TableIdent::new(tb_id, seq);
 
                 let want = TableInfo {
-                    ident: TableIdent::new(1, 1),
+                    ident: ident.clone(),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
-            }
-
-            tracing::info!("--- create table again with if_not_exists = true");
-            {
-                req.if_not_exists = true;
-                let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "new table id");
-
-                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let want = TableInfo {
-                    ident: TableIdent::new(1, 1),
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                    name: tbl_name.into(),
-                    meta: table_meta(created_on),
-                };
-                assert_eq!(want, got.as_ref().clone(), "get created table");
-            }
-
-            tracing::info!("--- create table again with if_not_exists = false");
-            {
-                req.if_not_exists = false;
-
-                let res = mt.create_table(req).await;
-                tracing::info!("create table res: {:?}", res);
-
-                let status = res.err().unwrap();
-                let err_code = ErrorCode::from(status);
-
-                assert_eq!(
-                    format!(
-                        "Code: 2302, displayText = Table '{}' already exists.",
-                        tbl_name
-                    ),
-                    err_code.to_string()
-                );
-
-                // get_table returns the old table
-
-                let got = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-                let want = TableInfo {
-                    ident: TableIdent::new(1, 1),
-                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                    name: tbl_name.into(),
-                    meta: table_meta(created_on),
-                };
-                assert_eq!(want, got.as_ref().clone(), "get old table");
-            }
+                ident
+            };
         }
 
         tracing::info!("--- upsert table options");
@@ -592,73 +1070,39 @@ impl MetaApiTestSuite {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
-        }
-        tracing::info!("--- drop table");
-        {
-            tracing::info!("--- drop table with if_exists = false");
+
+            tracing::info!("--- upsert table options with not exist table id");
             {
-                let plan = DropTableReq {
-                    if_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                };
-                mt.drop_table(plan.clone()).await?;
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
-                tracing::info!("--- get table after drop");
-                {
-                    let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
-                    let status = res.err().unwrap();
-                    let err_code = ErrorCode::from(status);
+                let got = mt
+                    .upsert_table_option(UpsertTableOptionReq::new(
+                        &TableIdent {
+                            table_id: 1024,
+                            version: table.ident.version - 1,
+                        },
+                        "key1",
+                        "val2",
+                    ))
+                    .await;
 
-                    assert_eq!(
-                        format!("Code: 1025, displayText = Unknown table '{:}'.", tbl_name),
-                        err_code.to_string(),
-                        "get dropped table {}",
-                        tbl_name
-                    );
-                }
-            }
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
 
-            tracing::info!("--- drop table with if_exists = false again, error");
-            {
-                let plan = DropTableReq {
-                    if_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                };
-                let res = mt.drop_table(plan.clone()).await;
-                let err = res.unwrap_err();
-                assert_eq!(
-                    ErrorCode::UnknownTable("").code(),
-                    ErrorCode::from(err).code(),
-                    "drop table {} with if_exists=false again",
-                    tbl_name
-                );
-            }
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
 
-            tracing::info!("--- drop table with if_exists = true again, ok");
-            {
-                let plan = DropTableReq {
-                    if_exists: true,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                };
-                mt.drop_table(plan.clone()).await?;
+                // table is not affected.
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
         }
-
         Ok(())
     }
 
-    pub async fn table_rename<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn get_table_by_id<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
-        let new_tbl_name = "tb3";
-        let new_db_name = "db2";
 
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
@@ -677,32 +1121,14 @@ impl MetaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- rename table on unknown db");
-        {
-            let req = RenameTableReq {
-                if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let got = mt.rename_table(req.clone()).await;
-            tracing::debug!("--- rename table on unknown database got: {:?}", got);
-
-            assert!(got.is_err());
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(got.unwrap_err()).code()
-            );
-        }
-
         tracing::info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
                     ..DatabaseMeta::default()
@@ -715,181 +1141,63 @@ impl MetaApiTestSuite {
             assert_eq!(1, res.database_id, "first database id is 1");
         }
 
-        let created_on = Utc::now();
-        let req = CreateTableReq {
-            if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
-            table_name: tbl_name.to_string(),
-            table_meta: table_meta(created_on),
-        };
-
-        tracing::info!("--- create table for rename");
+        tracing::info!("--- create and get table");
         {
-            let res = mt.create_table(req.clone()).await?;
-            assert_eq!(1, res.table_id, "table id is 1");
+            let created_on = Utc::now();
 
-            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-            let want = TableInfo {
-                ident: TableIdent::new(1, 1),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                name: tbl_name.into(),
-                meta: table_meta(created_on),
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
             };
-            assert_eq!(want, got.as_ref().clone(), "get created table after drop");
+
+            let _tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.version;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
         }
 
-        tracing::info!("--- rename table, ok");
+        tracing::info!("--- get_table_by_id ");
         {
-            let req = RenameTableReq {
-                if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            mt.rename_table(req.clone()).await?;
-
-            let got = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
-            let want = TableInfo {
-                ident: TableIdent::new(1, 2),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
-                name: new_tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get renamed table");
-
-            tracing::info!("--- get old table after rename");
+            tracing::info!("--- get_table_by_id ");
             {
-                let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
-                let err = res.err().unwrap();
-                assert_eq!(
-                    ErrorCode::UnknownTable("").code(),
-                    ErrorCode::from(err).code()
-                );
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let (table_id, table_meta) = mt.get_table_by_id(table.ident.table_id).await?;
+
+                assert_eq!(table_meta.options.get("opt‐1"), Some(&"val-1".into()));
+                assert_eq!(table_id.table_id, table.ident.table_id);
+            }
+
+            tracing::info!("--- get_table_by_id with not exists table_id");
+            {
+                let got = mt.get_table_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
             }
         }
-
-        tracing::info!("--- rename table again, error");
-        {
-            let req = RenameTableReq {
-                if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let res = mt.rename_table(req.clone()).await;
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownTable("").code(),
-                ErrorCode::from(err).code(),
-                "rename table {} again",
-                tbl_name
-            );
-        }
-
-        tracing::info!("--- create table again after rename, ok");
-        {
-            let res = mt.create_table(req.clone()).await?;
-            assert_eq!(2, res.table_id, "table id should be 2");
-
-            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-            let want = TableInfo {
-                ident: TableIdent::new(2, 3),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                name: tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get created table after rename");
-        }
-
-        tracing::info!("--- rename table again after recreate, error");
-        {
-            let req = RenameTableReq {
-                if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let res = mt.rename_table(req.clone()).await;
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::TableAlreadyExists("").code(),
-                ErrorCode::from(err).code(),
-                "rename table {} again after recreate",
-                tbl_name
-            );
-        }
-
-        tracing::info!("--- rename table to other db, error");
-        {
-            let req = RenameTableReq {
-                if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-                new_db_name: new_db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let res = mt.rename_table(req.clone()).await;
-            tracing::debug!("--- rename table to other db got: {:?}", res);
-
-            assert!(res.is_err());
-            assert_eq!(
-                ErrorCode::UnknownDatabase("").code(),
-                ErrorCode::from(res.unwrap_err()).code()
-            );
-        }
-
-        tracing::info!("--- prepare other db");
-        {
-            let plan = CreateDatabaseReq {
-                if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: new_db_name.to_string(),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
-
-            assert_eq!(2, res.database_id, "database id is 2");
-        }
-
-        tracing::info!("--- rename table to other db, ok");
-        {
-            let req = RenameTableReq {
-                if_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-                new_db_name: new_db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            mt.rename_table(req.clone()).await?;
-
-            let got = mt
-                .get_table((tenant, new_db_name, new_tbl_name).into())
-                .await?;
-            let want = TableInfo {
-                ident: TableIdent::new(2, 4),
-                desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
-                name: new_tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get renamed table");
-        }
-
         Ok(())
     }
 
@@ -909,7 +1217,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- prepare db");
         {
-            let res = self.create_database(mt, tenant, db_name).await?;
+            let res = self.create_database(mt, tenant, db_name, "eng1").await?;
             assert_eq!(1, res.database_id, "first database id is 1");
         }
 
@@ -923,11 +1231,13 @@ impl MetaApiTestSuite {
 
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
-            let mut plan = CreateTableReq {
+            let mut req = CreateTableReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: "tb1".to_string(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: "tb1".to_string(),
+                },
                 table_meta: TableMeta {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),
@@ -936,20 +1246,26 @@ impl MetaApiTestSuite {
                 },
             };
 
-            {
-                let res = mt.create_table(plan.clone()).await?;
-                assert_eq!(1, res.table_id, "table id is 1");
+            let tb_ids = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
 
-                plan.table_name = "tb2".to_string();
-                let res = mt.create_table(plan.clone()).await?;
-                assert_eq!(2, res.table_id, "table id is 2");
-            }
+                let tb_id1 = res.table_id;
+
+                req.name_ident.table_name = "tb2".to_string();
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                let tb_id2 = res.table_id;
+
+                vec![tb_id1, tb_id2]
+            };
 
             tracing::info!("--- get_tables");
             {
                 let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await?;
-                assert_eq!(1, res[0].ident.table_id);
-                assert_eq!(2, res[1].ident.table_id);
+                assert_eq!(tb_ids.len(), res.len());
+                assert_eq!(tb_ids[0], res[0].ident.table_id);
+                assert_eq!(tb_ids[1], res[1].ident.table_id);
             }
         }
 
@@ -1098,15 +1414,18 @@ impl MetaApiTestSuite {
         mt: &MT,
         tenant: &str,
         db_name: &str,
+        engine: &str,
     ) -> anyhow::Result<CreateDatabaseReply> {
         tracing::info!("--- create database {}", db_name);
 
         let req = CreateDatabaseReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db_name.to_string(),
+            },
             meta: DatabaseMeta {
-                engine: "".to_string(),
+                engine: engine.to_string(),
                 ..Default::default()
             },
         };
@@ -1131,8 +1450,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1152,8 +1473,8 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1", res.db, "db1.db is db1");
+            assert_eq!(1, res.ident.db_id, "db1 id is 1");
+            assert_eq!("db1", res.name_ident.db_name, "db1.db is db1");
         }
 
         tracing::info!("--- get nonexistent-db on node_b, expect correct error");
@@ -1188,8 +1509,10 @@ impl MetaApiTestSuite {
             for db_name in dbs {
                 let req = CreateDatabaseReq {
                     if_not_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
+                    name_ident: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
                     meta: DatabaseMeta {
                         engine: "github".to_string(),
                         ..Default::default()
@@ -1211,10 +1534,10 @@ impl MetaApiTestSuite {
             tracing::debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(1, res[0].database_id, "db1 id is 1");
-            assert_eq!("db1", res[0].db, "db1.name is db1");
-            assert_eq!(2, res[1].database_id, "db3 id is 2");
-            assert_eq!("db3", res[1].db, "db3.name is db3");
+            assert_eq!(1, res[0].ident.db_id, "db1 id is 1");
+            assert_eq!("db1", res[0].name_ident.db_name, "db1.name is db1");
+            assert_eq!(2, res[1].ident.db_id, "db3 id is 2");
+            assert_eq!("db3", res[1].name_ident.db_name, "db3.name is db3");
         }
 
         Ok(())
@@ -1232,8 +1555,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1253,9 +1578,11 @@ impl MetaApiTestSuite {
             for tb in tables {
                 let req = CreateTableReq {
                     if_not_exists: false,
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tb.to_string(),
+                    name_ident: TableNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                        table_name: tb.to_string(),
+                    },
                     table_meta: TableMeta {
                         schema: schema.clone(),
                         engine: "JSON".to_string(),
@@ -1296,8 +1623,10 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
                     ..Default::default()
@@ -1316,9 +1645,11 @@ impl MetaApiTestSuite {
 
             let req = CreateTableReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: "tb1".to_string(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: "tb1".to_string(),
+                },
                 table_meta: TableMeta {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),

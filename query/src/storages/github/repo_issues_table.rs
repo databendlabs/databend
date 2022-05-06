@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use octocrab::models;
 use octocrab::params;
 
@@ -56,9 +57,11 @@ impl RepoIssuesTable {
         options.table_type = GithubTableType::Issues.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: options.owner.clone(),
-            table_name: format!("{}_{}", options.repo.clone(), "issues"),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: options.owner.clone(),
+                table_name: format!("{}_{}", options.repo.clone(), "issues"),
+            },
             table_meta: TableMeta {
                 schema: RepoIssuesTable::schema(),
                 engine: "GITHUB".into(),
@@ -79,9 +82,9 @@ impl RepoIssuesTable {
             DataField::new(LABELS, Vu8::to_data_type()),
             DataField::new(ASSIGNESS, Vu8::to_data_type()),
             DataField::new(COMMENTS, u32::to_data_type()),
-            DataField::new(CREATED_AT, DateTimeType::arc(0, None)),
-            DataField::new(UPDATED_AT, DateTimeType::arc(0, None)),
-            DataField::new_nullable(CLOSED_AT, DateTimeType::arc(0, None)),
+            DataField::new(CREATED_AT, TimestampType::new_impl(0)),
+            DataField::new(UPDATED_AT, TimestampType::new_impl(0)),
+            DataField::new_nullable(CLOSED_AT, TimestampType::new_impl(0)),
         ];
 
         Arc::new(DataSchema::new(fields))

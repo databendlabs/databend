@@ -27,6 +27,7 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
@@ -43,6 +44,7 @@ use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::meta_service::ForwardRequest;
 use databend_meta::meta_service::ForwardRequestBody;
 use databend_meta::meta_service::JoinRequest;
+use databend_meta::meta_service::LeaveRequest;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::Opened;
 use maplit::btreeset;
@@ -211,8 +213,10 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase(CreateDatabaseReq {
                         if_not_exists: false,
-                        tenant: tenant.to_string(),
-                        db_name: name.to_string(),
+                        name_ident: DatabaseNameIdent {
+                            tenant: tenant.to_string(),
+                            db_name: name.to_string(),
+                        },
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
                             ..Default::default()
@@ -437,6 +441,56 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         mn.raft
             .wait(timeout())
             .members(btreeset! {0,2,3}, format!("node-{} membership", mn.sto.id))
+            .await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+async fn test_meta_node_leave() -> anyhow::Result<()> {
+    // - Bring up a cluster
+    // - Leave a node by sending a Leave request to a non-voter.
+    // - Restart all nodes and check if states are restored.
+
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+    let span = tracing::span!(tracing::Level::INFO, "test_meta_node_leave");
+    let _ent = span.enter();
+
+    let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
+    let mut all = test_context_nodes(&tcs);
+
+    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
+    let leader = all[leader_id as usize].clone();
+
+    // leave a node
+    let leave_node_id = 1;
+    let admin_req = leave_req(leave_node_id, 0);
+    leader.handle_forwardable_request(admin_req).await?;
+
+    tracing::info!("--- stop all meta node");
+
+    for mn in all.drain(..) {
+        mn.stop().await?;
+    }
+
+    // restart the cluster and check membership
+    tracing::info!("--- re-open all meta node");
+
+    let tc0 = &tcs[0];
+    let tc2 = &tcs[2];
+    let mn0 = MetaNode::open_create_boot(&tc0.config.raft_config, Some(()), None, None).await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, Some(()), None, None).await?;
+
+    let all = vec![mn0, mn2];
+
+    tracing::info!("--- check reopened memberships");
+
+    for mn in all.iter() {
+        mn.raft
+            .wait(timeout())
+            .members(btreeset! {0,2}, format!("node-{} membership", mn.sto.id))
             .await?;
     }
 
@@ -818,6 +872,13 @@ fn join_req(node_id: NodeId, endpoint: Endpoint, forward: u64) -> ForwardRequest
     ForwardRequest {
         forward_to_leader: forward,
         body: ForwardRequestBody::Join(JoinRequest { node_id, endpoint }),
+    }
+}
+
+fn leave_req(node_id: NodeId, forward: u64) -> ForwardRequest {
+    ForwardRequest {
+        forward_to_leader: forward,
+        body: ForwardRequestBody::Leave(LeaveRequest { node_id }),
     }
 }
 

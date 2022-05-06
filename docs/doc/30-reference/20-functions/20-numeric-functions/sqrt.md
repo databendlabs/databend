@@ -21,7 +21,6 @@ SQRT(x)
 
 A Float64 data type value.
 
-
 ## Examples
 
 ```sql

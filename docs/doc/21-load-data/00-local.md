@@ -1,8 +1,8 @@
 ---
-title: Load Data from Local File System
+title: Load Data From Local File System
 sidebar_label: From Local File System
 description:
-  Load Data from Local File System.
+  Load data from local file system.
 ---
 
 <p align="center">

@@ -20,6 +20,8 @@ use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_grpc::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::MetaError;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
 
 use crate::meta_service::MetaNode;
 
@@ -134,6 +136,17 @@ impl ActionHandler {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }
+        }
+    }
+
+    pub async fn execute_txn(&self, req: TxnRequest) -> TxnReply {
+        match self.meta_node.transaction(req).await {
+            Ok(resp) => resp,
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
         }
     }
 }

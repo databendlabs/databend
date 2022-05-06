@@ -32,7 +32,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
-use databend_query::storages::fuse::FuseHistoryTable;
+use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -125,6 +125,7 @@ impl TestFixture {
                 ..Default::default()
             },
             as_select: None,
+            order_keys: vec![],
         }
     }
 
@@ -218,7 +219,7 @@ pub async fn test_drive_with_args_and_ctx(
     tbl_args: TableArgs,
     ctx: std::sync::Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
-    let func = FuseHistoryTable::create("system", "fuse_history", 1, tbl_args)?;
+    let func = FuseSnapshotTable::create("system", "fuse_snapshot", 1, tbl_args)?;
     let source_plan = func
         .clone()
         .as_table()
@@ -360,7 +361,7 @@ pub async fn history_should_have_only_one_item(
         "+-------+",
     ];
     let qry = format!(
-        "select count(*) as count from fuse_history('{}', '{}')",
+        "select count(*) as count from fuse_snapshot('{}', '{}')",
         db, tbl
     );
 

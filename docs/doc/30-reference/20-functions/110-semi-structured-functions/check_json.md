@@ -9,7 +9,7 @@ If the input cannot be translated to a valid JSON value, the output string conta
 ## Syntax
 
 ```sql
-CHECK_JSON(<expr>)
+CHECK_JSON( <expr> )
 ```
 
 ## Arguments

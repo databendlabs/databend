@@ -23,6 +23,7 @@ use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
 use common_datablocks::HashMethodSingleString;
+use common_datavalues::DataType;
 use common_datavalues::MutableColumn;
 use common_datavalues::ScalarColumn;
 use common_datavalues::Series;
@@ -55,10 +56,13 @@ pub struct FinalAggregator<
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
 > {
     is_generated: bool,
+    states_dropped: bool,
 
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
+    // used for deserialization only, so we can reuse it during the loop
+    temp_place: StateAddr,
     ctx: Arc<QueryContext>,
 }
 
@@ -67,11 +71,19 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>, ctx: Arc<QueryContext>) -> Self {
         let state = method.aggregate_state();
+        let temp_place = if params.aggregate_functions.is_empty() {
+            0.into()
+        } else {
+            state.alloc_layout2(&params)
+        };
+
         Self {
             is_generated: false,
+            states_dropped: false,
             state,
             method,
             params,
+            temp_place,
             ctx,
         }
     }
@@ -124,6 +136,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             self.state.convert_to_two_level();
         }
 
+        // first state places of current block
         let places = Self::lookup_state(&self.params, &mut self.state, keys_iter.get_slice());
 
         let states_columns = (0..aggregate_function_len)
@@ -139,25 +152,26 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-        let temp_place = self.state.alloc_layout2(&self.params);
         for (row, place) in places.iter().enumerate() {
             for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                 let final_place = place.next(offsets_aggregate_states[idx]);
-                let state_place = temp_place.next(offsets_aggregate_states[idx]);
+                let state_place = self.temp_place.next(offsets_aggregate_states[idx]);
 
                 let mut data = states_binary_columns[idx].get_data(row);
-                aggregate_function.init_state(state_place);
+
                 aggregate_function.deserialize(state_place, &mut data)?;
                 aggregate_function.merge(final_place, state_place)?;
             }
         }
-
         Ok(())
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.state.len() == 0 || self.is_generated {
-            true => Ok(None),
+            true => {
+                self.drop_states();
+                Ok(None)
+            }
             false => {
                 self.is_generated = true;
                 let mut group_columns_builder = self
@@ -244,5 +258,51 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
             }
         }
+    }
+}
+
+impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
+    FinalAggregator<FINAL, Method>
+{
+    fn drop_states(&mut self) {
+        if !self.states_dropped {
+            let aggregator_params = self.params.as_ref();
+            let aggregate_functions = &aggregator_params.aggregate_functions;
+            let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
+
+            let functions = aggregate_functions
+                .iter()
+                .filter(|p| p.need_manual_drop_state())
+                .collect::<Vec<_>>();
+
+            let state_offsets = offsets_aggregate_states
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| aggregate_functions[*idx].need_manual_drop_state())
+                .map(|(_, s)| *s)
+                .collect::<Vec<_>>();
+
+            for group_entity in self.state.iter() {
+                let place: StateAddr = (*group_entity.get_state_value()).into();
+
+                for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
+                    unsafe { function.drop_state(place.next(*state_offset)) }
+                }
+            }
+
+            for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
+                let place = self.temp_place.next(*state_offset);
+                unsafe { function.drop_state(place) }
+            }
+            self.states_dropped = true;
+        }
+    }
+}
+
+impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Drop
+    for FinalAggregator<FINAL, Method>
+{
+    fn drop(&mut self) {
+        self.drop_states();
     }
 }

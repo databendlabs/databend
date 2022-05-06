@@ -139,7 +139,6 @@ impl PlanVisitor for QueryPipelineBuilder {
 
     fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
-
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 ProjectionTransform::try_create(

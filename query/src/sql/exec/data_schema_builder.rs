@@ -34,6 +34,27 @@ impl<'a> DataSchemaBuilder<'a> {
         DataSchemaBuilder { metadata }
     }
 
+    pub fn build_aggregate(
+        &self,
+        data_fields: Vec<DataField>,
+        input_schema: &DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let mut new_data_fields = Vec::with_capacity(data_fields.len());
+        for data_field in data_fields {
+            if input_schema.has_field(data_field.name()) {
+                new_data_fields.push(data_field);
+                continue;
+            }
+            let field = if data_field.is_nullable() {
+                DataField::new_nullable(data_field.name(), data_field.data_type().clone())
+            } else {
+                DataField::new(data_field.name(), data_field.data_type().clone())
+            };
+            new_data_fields.push(field);
+        }
+        Ok(Arc::new(DataSchema::new(new_data_fields)))
+    }
+
     pub fn build_project(
         &self,
         plan: &ProjectPlan,
@@ -44,11 +65,7 @@ impl<'a> DataSchemaBuilder<'a> {
             let index = item.index;
             let column_entry = self.metadata.column(index);
             let field_name = format_field_name(column_entry.name.as_str(), index);
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
+            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
         }
 
@@ -60,11 +77,8 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in plan.columns.iter() {
             let column_entry = self.metadata.column(*index);
             let field_name = format_field_name(column_entry.name.as_str(), *index);
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
+            let field =
+                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone());
 
             fields.push(field);
         }
@@ -77,11 +91,8 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in columns {
             let column_entry = self.metadata.column(*index);
             let field_name = column_entry.name.clone();
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
+            let field =
+                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone());
 
             fields.push(field);
         }

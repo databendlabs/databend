@@ -30,7 +30,7 @@ pub struct UnhexFunction {
 }
 
 impl UnhexFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_string(args[0])?;
         Ok(Box::new(UnhexFunction {
             _display_name: display_name.to_string(),
@@ -48,8 +48,8 @@ impl Function for UnhexFunction {
         "unhex"
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn eval(

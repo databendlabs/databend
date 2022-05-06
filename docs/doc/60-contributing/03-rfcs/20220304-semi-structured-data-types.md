@@ -158,7 +158,7 @@ pub struct ObjectColumn<T: ObjectType> {
 
 #[derive(Debug)]
 pub struct MutableObjectColumn<T: ObjectType> {
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     pub(crate) values: Vec<T>,
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::backtrace::Backtrace;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
-
-use backtrace::Backtrace;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
@@ -55,7 +54,18 @@ impl From<anyhow::Error> for ErrorCode {
             1002,
             format!("{}, source: {:?}", error, error.source()),
             Some(Box::new(OtherErrors::AnyHow { error })),
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        )
+    }
+}
+
+impl From<&str> for ErrorCode {
+    fn from(error: &str) -> Self {
+        ErrorCode::create(
+            1002,
+            error.to_string(),
+            None,
+            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
         )
     }
 }

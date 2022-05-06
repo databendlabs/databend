@@ -1,5 +1,5 @@
 ---
-title: Connecting Databend with DBeaver
+title: Connecting Databend With DBeaver
 sidebar_label: DBeaver
 description:
   Connecting Databend with DBeaver.

@@ -24,9 +24,11 @@ use crate::ColumnRef;
 use crate::NullableColumn;
 use crate::Series;
 use crate::TypeSerializer;
+use crate::TypeSerializerImpl;
 
+#[derive(Debug, Clone)]
 pub struct NullableSerializer {
-    pub inner: Box<dyn TypeSerializer>,
+    pub inner: Box<TypeSerializerImpl>,
 }
 
 impl TypeSerializer for NullableSerializer {

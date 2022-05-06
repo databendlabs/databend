@@ -33,7 +33,7 @@ impl_logic_expression!(LogicAndExpression, &, |lhs: bool, rhs: bool, lhs_v: bool
 pub struct LogicAndFunction;
 
 impl LogicAndFunction {
-    pub fn try_create(_display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         LogicFunctionImpl::<LogicAndExpression>::try_create(LogicOperator::And, args)
     }
 

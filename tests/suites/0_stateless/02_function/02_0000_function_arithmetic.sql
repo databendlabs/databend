@@ -10,5 +10,6 @@ SELECT 20 DIV 6;
 SELECT 20 DIV 7;
 SELECT 20 DIV 8.1;
 SELECT 20.1 DIV 9;
-SELECT typeof(-toUInt32(1)), typeof(-toUInt64(1)), typeof(-toInt32(1)), typeof(-toFloat32(1)), typeof(+toUInt8(1));
+SELECT typeof(-to_uint32(1)), typeof(-to_uint64(1)), typeof(-to_int32(1)), typeof(-to_float32(1)), typeof(+to_uint8(1));
 SELECT Null + 1, Null - 1, Null * 1, Null / 1;
+SELECT 1 + 1.0, 1 + 2.0;

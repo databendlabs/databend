@@ -23,7 +23,7 @@ use common_exception::Result;
 
 use crate::prelude::*;
 use crate::BooleanColumn;
-use crate::DataTypePtr;
+use crate::DataTypeImpl;
 use crate::DataValue;
 use crate::NullColumn;
 use crate::TypeID;
@@ -32,11 +32,11 @@ pub type ColumnRef = Arc<dyn Column>;
 pub trait Column: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     /// Type of data that column contains. It's an underlying physical type:
-    /// UInt16 for Date, UInt32 for DateTime, so on.
+    /// Int32 for Date, Int64 for Timestamp, so on.
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
-    fn data_type(&self) -> DataTypePtr;
+    fn data_type(&self) -> DataTypeImpl;
 
     fn column_type_name(&self) -> String;
 
@@ -158,7 +158,7 @@ where A: AsRef<dyn Array>
 {
     fn into_column(self) -> ColumnRef {
         use TypeID::*;
-        let data_type: DataTypePtr = from_arrow_type(self.as_ref().data_type());
+        let data_type: DataTypeImpl = from_arrow_type(self.as_ref().data_type());
         match data_type.data_type_id() {
             // arrow type has no nullable type
             Nullable => unimplemented!(),
@@ -171,7 +171,7 @@ where A: AsRef<dyn Array>
             Int8 => Arc::new(Int8Column::from_arrow_array(self.as_ref())),
             Int16 => Arc::new(Int16Column::from_arrow_array(self.as_ref())),
             Int32 | Date => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
-            Int64 | Interval | DateTime => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
+            Int64 | Interval | Timestamp => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
             Array => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),

@@ -16,9 +16,7 @@ use std::io::Read;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
-use common_io::prelude::BufferReadExt;
-use common_io::prelude::CpBufferReader;
+use common_io::prelude::*;
 
 use crate::prelude::*;
 
@@ -75,7 +73,7 @@ impl TypeDeserializer for StringDeserializer {
         }
     }
 
-    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'\'')?;
         self.builder.append_value(self.buffer.as_slice());
@@ -87,7 +85,7 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
         self.builder.append_value(self.buffer.as_slice());

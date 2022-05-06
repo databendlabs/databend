@@ -89,76 +89,76 @@ impl DataValue {
     }
 
     /// Get the minimal memory sized data type.
-    pub fn data_type(&self) -> DataTypePtr {
+    pub fn data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
-                    return Int8Type::arc();
+                    return Int8Type::new_impl();
                 }
                 if *n >= i16::MIN as i64 && *n <= i16::MAX as i64 {
-                    return Int16Type::arc();
+                    return Int16Type::new_impl();
                 }
                 if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
-                    return Int32Type::arc();
+                    return Int32Type::new_impl();
                 }
-                Int64Type::arc()
+                Int64Type::new_impl()
             }
             DataValue::UInt64(n) => {
                 if *n <= u8::MAX as u64 {
-                    return UInt8Type::arc();
+                    return UInt8Type::new_impl();
                 }
                 if *n <= u16::MAX as u64 {
-                    return UInt16Type::arc();
+                    return UInt16Type::new_impl();
                 }
                 if *n <= u32::MAX as u64 {
-                    return UInt32Type::arc();
+                    return UInt32Type::new_impl();
                 }
-                UInt64Type::arc()
+                UInt64Type::new_impl()
             }
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
+            DataValue::Float64(_) => Float64Type::new_impl(),
+            DataValue::String(_) => StringType::new_impl(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
+                    UInt8Type::new_impl()
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Variant(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::new_impl(),
         }
     }
 
     /// Get the maximum memory sized data type
-    pub fn max_data_type(&self) -> DataTypePtr {
+    pub fn max_data_type(&self) -> DataTypeImpl {
         match self {
-            DataValue::Null => Arc::new(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
-            DataValue::Int64(_) => Int64Type::arc(),
-            DataValue::UInt64(_) => UInt64Type::arc(),
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
+            DataValue::Null => DataTypeImpl::Null(NullType {}),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
+            DataValue::Int64(_) => Int64Type::new_impl(),
+            DataValue::UInt64(_) => UInt64Type::new_impl(),
+            DataValue::Float64(_) => Float64Type::new_impl(),
+            DataValue::String(_) => StringType::new_impl(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
+                    UInt8Type::new_impl()
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(ArrayType::create(inner_type))
+                DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
+                DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Variant(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::new_impl(),
         }
     }
 
@@ -235,7 +235,7 @@ impl DataValue {
         }
     }
 
-    pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
+    pub fn as_const_column(&self, data_type: &DataTypeImpl, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
     }
 
@@ -424,6 +424,7 @@ impl fmt::Debug for DataValue {
 pub fn format_datavalue_sql(value: &DataValue) -> String {
     match value {
         DataValue::String(_) | DataValue::Variant(_) => format!("'{}'", value),
+        DataValue::Float64(value) => format!("'{:?}'", value),
         _ => format!("{}", value),
     }
 }
