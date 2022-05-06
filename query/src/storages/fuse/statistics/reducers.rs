@@ -89,7 +89,7 @@ pub fn reduce_block_stats<T: Borrow<ColumnsStatistics>>(stats: &[T]) -> Result<C
             max_stats
                 .iter()
                 .skip(1)
-                .for_each(|v| match (min.is_null(), v.is_null()) {
+                .for_each(|v| match (max.is_null(), v.is_null()) {
                     (true, _) => max = v.clone(),
                     (_, true) => {}
                     _ => {

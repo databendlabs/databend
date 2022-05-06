@@ -311,7 +311,7 @@ impl Ord for DataValue {
         }
 
         if !self.is_numeric() || !other.is_numeric() {
-            panic!("Cannot compare different types with non-numeric type");
+            panic!("Cannot compare different types with {:?} and {:?}", self.value_type(), other.value_type());
         }
 
         if self.is_float() || other.is_float() {
