@@ -129,7 +129,6 @@ pub use meta_storage_errors::UnknownShare;
 pub use meta_storage_errors::UnknownTable;
 pub use meta_storage_errors::UnknownTableId;
 pub use operation::MetaId;
-pub use operation::MetaVersion;
 pub use operation::Operation;
 pub use principal_identity::PrincipalIdentity;
 pub use protobuf::txn_condition;

@@ -1092,14 +1092,21 @@ dependencies = [
 name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-trait",
  "common-base",
  "common-datavalues",
  "common-exception",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "common-tracing",
  "maplit",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tonic",
 ]
 
 [[package]]
@@ -1123,7 +1130,6 @@ dependencies = [
 name = "common-meta-grpc"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "common-arrow",
  "common-base",
  "common-containers",

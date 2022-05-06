@@ -30,7 +30,6 @@ use crate::Endpoint;
 use crate::GetDatabaseReq;
 use crate::GetKVActionReply;
 use crate::GetKVReq;
-use crate::GetShareReq;
 use crate::GetTableReq;
 use crate::ListDatabaseReq;
 use crate::ListKVReq;
@@ -81,8 +80,7 @@ pub enum ForwardRequestBody {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
     ListKV(ListKVReq),
-
-    GetShare(GetShareReq),
+    // GetShare(GetShareReq),
 }
 
 /// A request that is forwarded from one raft node to another

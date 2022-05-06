@@ -16,16 +16,12 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
-use common_meta_api::KVApi;
-use common_meta_api::MetaApi;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
 use common_meta_types::AppError;
 use common_meta_types::ConditionResult;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateShareReply;
-use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DBIdTableName;
@@ -37,12 +33,9 @@ use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropShareReply;
-use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -53,7 +46,6 @@ use common_meta_types::MetaId;
 use common_meta_types::Operation;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
-use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableId;
 use common_meta_types::TableIdent;
@@ -78,13 +70,27 @@ use common_tracing::tracing;
 use txn_condition::Target;
 use ConditionResult::Eq;
 
-use crate::meta_client_on_kv::DatabaseIdGen;
-use crate::meta_client_on_kv::KVApiKey;
-use crate::meta_client_on_kv::TableIdGen;
-use crate::MetaClientOnKV;
+use crate::DatabaseIdGen;
+use crate::KVApi;
+use crate::KVApiKey;
+use crate::MetaApi;
+use crate::TableIdGen;
+
+/// Impl SchemaApi on a KVApi impl.
+///
+/// It implement transactional operation on the client side, through `KVApi::transaction()`.
+pub struct SchemaApiImpl<KV: KVApi> {
+    pub inner: KV,
+}
+
+impl<KV: KVApi> SchemaApiImpl<KV> {
+    pub fn new(kv_api: KV) -> Self {
+        Self { inner: kv_api }
+    }
+}
 
 #[tonic::async_trait]
-impl MetaApi for MetaClientOnKV {
+impl<KV: KVApi> MetaApi for SchemaApiImpl<KV> {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
@@ -98,7 +104,7 @@ impl MetaApi for MetaClientOnKV {
 
             if db_id_seq > 0 {
                 return if req.if_not_exists {
-                    Ok(CreateDatabaseReply { database_id: db_id })
+                    Ok(CreateDatabaseReply { db_id })
                 } else {
                     Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
                         DatabaseAlreadyExists::new(
@@ -134,7 +140,7 @@ impl MetaApi for MetaClientOnKV {
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply { database_id: db_id });
+                    return Ok(CreateDatabaseReply { db_id });
                 }
             }
         }
@@ -582,7 +588,7 @@ impl MetaApi for MetaClientOnKV {
         let tb_info = TableInfo {
             ident: TableIdent {
                 table_id,
-                version: tb_meta_seq,
+                seq: tb_meta_seq,
             },
             desc: tenant_dbname_tbname.to_string(),
             name: tenant_dbname_tbname.table_name.clone(),
@@ -640,7 +646,7 @@ impl MetaApi for MetaClientOnKV {
                 let tb_info = TableInfo {
                     ident: TableIdent {
                         table_id: ids[i],
-                        version: seq_meta.seq,
+                        seq: seq_meta.seq,
                     },
                     desc: format!(
                         "'{}'.'{}'",
@@ -753,16 +759,17 @@ impl MetaApi for MetaClientOnKV {
         }
     }
 
-    async fn create_share(&self, _req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
-        todo!()
-    }
-
-    async fn drop_share(&self, _req: DropShareReq) -> Result<DropShareReply, MetaError> {
-        todo!()
-    }
-    async fn get_share(&self, _req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
-        todo!()
-    }
+    // async fn create_share(&self, _req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
+    //     todo!()
+    // }
+    //
+    // async fn drop_share(&self, _req: DropShareReq) -> Result<DropShareReply, MetaError> {
+    //     todo!()
+    // }
+    //
+    // async fn get_share(&self, _req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+    //     todo!()
+    // }
 
     fn name(&self) -> String {
         "MetaClientOnKV".to_string()
@@ -770,7 +777,7 @@ impl MetaApi for MetaClientOnKV {
 }
 
 // Supporting utils
-impl MetaClientOnKV {
+impl<KV: KVApi> SchemaApiImpl<KV> {
     /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)
     async fn get_db_or_err(
         &self,

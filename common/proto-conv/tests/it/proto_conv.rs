@@ -52,7 +52,7 @@ fn new_table_info() -> mt::TableInfo {
     mt::TableInfo {
         ident: mt::TableIdent {
             table_id: 5,
-            version: 6,
+            seq: 6,
         },
         desc: "foo".to_string(),
         name: "bar".to_string(),
@@ -245,7 +245,7 @@ fn test_load_old() -> anyhow::Result<()> {
         let want = mt::TableInfo {
             ident: mt::TableIdent {
                 table_id: 5,
-                version: 6,
+                seq: 6,
             },
             desc: "foo".to_string(),
             name: "bar".to_string(),
