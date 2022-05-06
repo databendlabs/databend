@@ -158,7 +158,7 @@ impl<'a> ExpressionBuilder<'a> {
     }
 
     // Transform aggregator expression to column expression
-    fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
+    pub(crate) fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
         match expr.clone() {
             Expression::BinaryExpression { left, op, right } => {
                 return Ok(Expression::BinaryExpression {
