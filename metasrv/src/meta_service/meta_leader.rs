@@ -106,12 +106,11 @@ impl<'a> MetaLeader<'a> {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.prefix_list_kv(&req.prefix).await?;
                 Ok(ForwardResponse::ListKV(res))
-            }
-            ForwardRequestBody::GetShare(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_share(req).await?;
-                Ok(ForwardResponse::ShareInfo(res))
-            }
+            } // ForwardRequestBody::GetShare(req) => {
+              //     let sm = self.meta_node.get_state_machine().await;
+              //     let res = sm.get_share(req).await?;
+              //     Ok(ForwardResponse::ShareInfo(res))
+              // }
         }
     }
 

@@ -63,7 +63,7 @@ pub fn try_into_table_info(
     let table_info = TableInfo {
         ident: TableIdent {
             table_id: 0,
-            version: 0,
+            seq: 0,
         },
         desc: "".to_owned(),
         name: hms_table.table_name.unwrap_or_default(),

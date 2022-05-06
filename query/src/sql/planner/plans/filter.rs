@@ -27,6 +27,8 @@ use crate::sql::plans::Scalar;
 pub struct FilterPlan {
     // TODO: split predicate into conjunctions
     pub predicate: Scalar,
+    // True if the plan represents having, else the plan represents where
+    pub is_having: bool,
 }
 
 impl BasePlan for FilterPlan {

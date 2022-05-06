@@ -33,7 +33,6 @@ use common_streams::SendableDataBlockStream;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
-use super::table_args::string_literal;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
@@ -41,6 +40,7 @@ use crate::pipelines::new::processors::AsyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
@@ -83,9 +83,8 @@ impl FuseSnapshotTable {
         }))
     }
 
-    fn get_catalog_name(&self) -> &str {
-        // TODO
-        "default"
+    fn get_catalog_name(&self) -> Result<String> {
+        FuseTable::get_catalog_name(&self.table_info)
     }
 }
 
@@ -121,7 +120,7 @@ impl Table for FuseSnapshotTable {
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog(self.get_catalog_name())?
+            .get_catalog(self.get_catalog_name()?)?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),
@@ -159,6 +158,7 @@ impl Table for FuseSnapshotTable {
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
+                self.get_catalog_name()?,
             )?],
         });
 
@@ -171,6 +171,7 @@ struct FuseHistorySource {
     ctx: Arc<QueryContext>,
     arg_database_name: String,
     arg_table_name: String,
+    catalog_name: String,
 }
 
 impl FuseHistorySource {
@@ -179,12 +180,14 @@ impl FuseHistorySource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
+        catalog_name: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
+            catalog_name,
         })
     }
 }
@@ -204,7 +207,7 @@ impl AsyncSource for FuseHistorySource {
             let tenant_id = self.ctx.get_tenant();
             let tbl = self
                 .ctx
-                .get_catalog("default")? // TODO pass in this guy
+                .get_catalog(&self.catalog_name)? // TODO pass in this guy
                 .get_table(
                     tenant_id.as_str(),
                     self.arg_database_name.as_str(),
@@ -212,13 +215,7 @@ impl AsyncSource for FuseHistorySource {
                 )
                 .await?;
 
-            let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                ErrorCode::BadArguments(format!(
-                    "expecting fuse table, but got table of engine type: {}",
-                    tbl.get_table_info().meta.engine
-                ))
-            })?;
-
+            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
             Ok(Some(
                 FuseSnapshot::new(self.ctx.clone(), tbl)
                     .get_history()

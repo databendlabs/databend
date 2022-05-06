@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use common_arrow::parquet::FileMetaData;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
@@ -28,6 +27,7 @@ use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::Compression;
 use crate::storages::fuse::meta::Versioned;
+use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
 use crate::storages::index::ColumnsStatistics;
 
@@ -35,6 +35,7 @@ use crate::storages::index::ColumnsStatistics;
 pub struct StatisticsAccumulator {
     pub blocks_metas: Vec<BlockMeta>,
     pub blocks_statistics: Vec<ColumnsStatistics>,
+    pub cluster_statistics: Vec<Option<ClusterStatistics>>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
     pub in_memory_size: u64,
@@ -46,7 +47,11 @@ impl StatisticsAccumulator {
         Default::default()
     }
 
-    pub fn begin(mut self, block: &DataBlock) -> Result<PartiallyAccumulated> {
+    pub fn begin(
+        mut self,
+        block: &DataBlock,
+        cluster_stats: Option<ClusterStatistics>,
+    ) -> Result<PartiallyAccumulated> {
         let row_count = block.num_rows() as u64;
         let block_in_memory_size = block.memory_size() as u64;
 
@@ -55,11 +60,13 @@ impl StatisticsAccumulator {
         self.in_memory_size += block_in_memory_size;
         let block_stats = Self::acc_columns(block)?;
         self.blocks_statistics.push(block_stats.clone());
+        self.cluster_statistics.push(cluster_stats.clone());
         Ok(PartiallyAccumulated {
             accumulator: self,
             block_row_count: block.num_rows() as u64,
             block_size: block.memory_size() as u64,
             block_columns_statistics: block_stats,
+            block_cluster_statistics: cluster_stats,
         })
     }
 
@@ -75,6 +82,8 @@ impl StatisticsAccumulator {
         self.summary_row_count += statistics.block_rows_size;
         self.blocks_statistics
             .push(statistics.block_column_statistics.clone());
+        self.cluster_statistics
+            .push(statistics.block_cluster_statistics.clone());
 
         self.blocks_metas.push(BlockMeta {
             file_size,
@@ -84,6 +93,7 @@ impl StatisticsAccumulator {
             col_stats: statistics.block_column_statistics.clone(),
             location: (statistics.block_file_location, DataBlock::VERSION),
             col_metas: Self::column_metas(&meta)?,
+            cluster_stats: statistics.block_cluster_statistics,
         });
 
         Ok(())
@@ -133,8 +143,12 @@ impl StatisticsAccumulator {
         Ok(col_metas)
     }
 
-    pub fn summary(&self, schema: &DataSchema) -> Result<ColumnsStatistics> {
-        super::reduce_block_stats(&self.blocks_statistics, schema)
+    pub fn summary(&self) -> Result<ColumnsStatistics> {
+        super::reduce_block_stats(&self.blocks_statistics)
+    }
+
+    pub fn summary_clusters(&self) -> Option<ClusterStatistics> {
+        super::reduce_cluster_stats(&self.cluster_statistics)
     }
 
     pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<ColumnsStatistics> {
@@ -184,6 +198,7 @@ pub struct PartiallyAccumulated {
     block_row_count: u64,
     block_size: u64,
     block_columns_statistics: HashMap<ColumnId, ColumnStatistics>,
+    block_cluster_statistics: Option<ClusterStatistics>,
 }
 
 impl PartiallyAccumulated {
@@ -201,6 +216,7 @@ impl PartiallyAccumulated {
             file_size,
             col_stats: self.block_columns_statistics,
             col_metas,
+            cluster_stats: self.block_cluster_statistics,
             location: (location, DataBlock::VERSION),
             compression: Compression::Lz4Raw,
         };
@@ -214,15 +230,21 @@ pub struct BlockStatistics {
     pub block_bytes_size: u64,
     pub block_file_location: String,
     pub block_column_statistics: HashMap<ColumnId, ColumnStatistics>,
+    pub block_cluster_statistics: Option<ClusterStatistics>,
 }
 
 impl BlockStatistics {
-    pub fn from(data_block: &DataBlock, location: String) -> Result<BlockStatistics> {
+    pub fn from(
+        data_block: &DataBlock,
+        location: String,
+        cluster_stats: Option<ClusterStatistics>,
+    ) -> Result<BlockStatistics> {
         Ok(BlockStatistics {
             block_file_location: location,
             block_rows_size: data_block.num_rows() as u64,
             block_bytes_size: data_block.memory_size() as u64,
             block_column_statistics: Self::columns_statistics(data_block)?,
+            block_cluster_statistics: cluster_stats,
         })
     }
 
@@ -265,5 +287,25 @@ impl BlockStatistics {
             statistics.insert(idx as u32, col_stats);
         }
         Ok(statistics)
+    }
+
+    pub fn clusters_statistics(
+        cluster_keys: Vec<usize>,
+        block: DataBlock,
+    ) -> Result<Option<ClusterStatistics>> {
+        if cluster_keys.is_empty() {
+            return Ok(None);
+        }
+
+        let mut min = Vec::with_capacity(cluster_keys.len());
+        let mut max = Vec::with_capacity(cluster_keys.len());
+
+        for key in cluster_keys.iter() {
+            let col = block.column(*key);
+            min.push(col.get_checked(0)?);
+            max.push(col.get_checked(col.len() - 1)?);
+        }
+
+        Ok(Some(ClusterStatistics { min, max }))
     }
 }

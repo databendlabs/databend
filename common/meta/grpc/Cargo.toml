@@ -25,7 +25,6 @@ common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }
 
-anyerror = "0.1.6"
 derive_more = "0.99.17"
 futures = "0.3.21"
 prost = "=0.9.0"

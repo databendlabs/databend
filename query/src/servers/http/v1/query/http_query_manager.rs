@@ -55,18 +55,13 @@ impl HttpQueryManager {
         }))
     }
 
-    pub(crate) fn next_query_id(self: &Arc<Self>) -> String {
-        uuid::Uuid::new_v4().to_string()
-    }
-
     pub(crate) async fn try_create_query(
         self: &Arc<Self>,
-        id: &str,
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
     ) -> Result<Arc<HttpQuery>> {
-        let query = HttpQuery::try_create(id, ctx, request, self.config).await?;
-        self.add_query(id, query.clone()).await;
+        let query = HttpQuery::try_create(ctx, request, self.config).await?;
+        self.add_query(&query.id, query.clone()).await;
         Ok(query)
     }
 

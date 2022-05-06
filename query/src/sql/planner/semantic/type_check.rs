@@ -26,6 +26,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
+use crate::sql::planner::metadata::optimize_remove_count_args;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -45,8 +46,8 @@ use crate::sql::BindContext;
 /// which check validity of unbound `ColumnRef` and try to replace it with qualified
 /// `BoundColumnRef`.
 ///
-/// If failed, a `SemanticError` will be raised. This may caused by incompitible
-/// argument types of expressions, or inresolvable columns.
+/// If failed, a `SemanticError` will be raised. This may caused by incompatible
+/// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
 }
@@ -238,10 +239,18 @@ impl<'a> TypeChecker<'a> {
 
                     Ok((
                         AggregateFunction {
-                            func_name: agg_func.name().to_string(),
+                            func_name: func_name.to_string(),
                             distinct: *distinct,
                             params,
-                            args: arguments.into_iter().map(|arg| arg.0).collect(),
+                            args: if optimize_remove_count_args(
+                                func_name,
+                                *distinct,
+                                args.as_slice(),
+                            ) {
+                                vec![]
+                            } else {
+                                arguments.into_iter().map(|arg| arg.0).collect()
+                            },
                             return_type: agg_func.return_type()?,
                         }
                         .into(),

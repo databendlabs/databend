@@ -27,4 +27,3 @@ mod settings_table;
 mod tables_table;
 mod tracing_table;
 mod users_table;
-mod warehouses_table;

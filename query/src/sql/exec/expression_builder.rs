@@ -39,7 +39,8 @@ impl<'a> ExpressionBuilder<'a> {
     }
 
     pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
-        let expr = self.build(scalar)?;
+        let mut expr = self.build(scalar)?;
+        expr = self.normalize_aggr_to_col(expr)?;
         let column = self.metadata.column(index);
         Ok(Expression::Alias(
             format_field_name(column.name.as_str(), index),
@@ -154,5 +155,33 @@ impl<'a> ExpressionBuilder<'a> {
             params,
             args: arg_exprs,
         })
+    }
+
+    // Transform aggregator expression to column expression
+    pub(crate) fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
+        match expr.clone() {
+            Expression::BinaryExpression { left, op, right } => {
+                return Ok(Expression::BinaryExpression {
+                    left: Box::new(self.normalize_aggr_to_col(*left)?),
+                    op,
+                    right: Box::new(self.normalize_aggr_to_col(*right)?),
+                })
+            }
+            Expression::AggregateFunction { .. } => {
+                let col_name = expr.column_name();
+                return Ok(Expression::Column(col_name));
+            }
+            Expression::ScalarFunction { op, args } => {
+                return Ok(Expression::ScalarFunction {
+                    op,
+                    args: args
+                        .iter()
+                        .map(|arg| self.normalize_aggr_to_col(arg.clone()))
+                        .collect::<Result<Vec<Expression>>>()?,
+                })
+            }
+            _ => {}
+        }
+        Ok(expr)
     }
 }

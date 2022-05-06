@@ -14,7 +14,7 @@ Our goal is to make contributing to the Databend project easy and transparent.
 Thank you.
 
 :::tip
-Once the code been merged, your name will be stoned in the `system.contributors` table forever.
+Once the code been merged, your name will be stored in the `system.contributors` table forever.
 
 `SELECT * FROM system.contributors`
 :::

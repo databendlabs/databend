@@ -203,7 +203,7 @@ impl FromToProto<pb::TableIdent> for mt::TableIdent {
 
         let v = Self {
             table_id: p.table_id,
-            version: p.seq,
+            seq: p.seq,
         };
         Ok(v)
     }
@@ -212,7 +212,7 @@ impl FromToProto<pb::TableIdent> for mt::TableIdent {
         let p = pb::TableIdent {
             ver: VER,
             table_id: self.table_id,
-            seq: self.version,
+            seq: self.seq,
         };
 
         Ok(p)

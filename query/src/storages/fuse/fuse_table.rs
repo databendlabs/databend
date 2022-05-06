@@ -97,12 +97,15 @@ impl FuseTable {
     }
 
     pub fn catalog_name(&self) -> Result<String> {
+        Self::get_catalog_name(&self.table_info)
+    }
+
+    pub fn get_catalog_name(table_info: &TableInfo) -> Result<String> {
         // Gets catalog name from table table_info.options().
         //
         // - This is a temporary workaround
         // - Later, catalog id should be kept in meta layer (persistent in KV server)
 
-        let table_info = &self.table_info;
         let table_id = table_info.ident.table_id;
         table_info
             .options()
@@ -221,7 +224,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
-        let log_entry_stream = self.append_trunks(ctx, stream).await?;
+        let log_entry_stream = self.append_chunks(ctx, stream).await?;
         let data_block_stream =
             log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
                 Ok(log_entry) => DataBlock::try_from(log_entry),

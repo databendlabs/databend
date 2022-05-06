@@ -235,8 +235,10 @@ impl QueryContext {
         self.shared.get_catalogs()
     }
 
-    pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.shared.get_catalogs().get_catalog(catalog_name)
+    pub fn get_catalog(&self, catalog_name: impl AsRef<str>) -> Result<Arc<dyn Catalog>> {
+        self.shared
+            .get_catalogs()
+            .get_catalog(catalog_name.as_ref())
     }
 
     /// Fetch a Table by db and table name.
