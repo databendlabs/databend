@@ -57,7 +57,7 @@ impl IfFunction {
         &self,
         cond_col: &ColumnRef,
         columns: &ColumnsWithField,
-        func_ctx: &FunctionContext,
+        _func_ctx: &FunctionContext,
     ) -> Result<ColumnRef> {
         debug_assert!(cond_col.is_const());
         // whether nullable or not, we can use viewer to make it

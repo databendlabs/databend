@@ -27,18 +27,18 @@ pub struct TimestampDeserializer {
 }
 
 impl TypeDeserializer for TimestampDeserializer {
-    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: i64 = reader.read_scalar()?;
         let _ = check_timestamp(value)?;
         self.builder.append_value(value);
         Ok(())
     }
 
-    fn de_default(&mut self) {
+    fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.append_value(i64::default());
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: i64 = reader.read_scalar()?;
@@ -48,7 +48,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::String(v) => {
                 let v = v.clone();
@@ -64,7 +64,7 @@ impl TypeDeserializer for TimestampDeserializer {
         }
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = ts.timestamp_micros();
@@ -74,7 +74,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = ts.timestamp_micros();
@@ -84,7 +84,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = ts.timestamp_micros();
         let _ = check_timestamp(micros)?;
@@ -92,7 +92,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = ts.timestamp_micros();
@@ -104,7 +104,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text_json<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text_json<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let ts = reader.read_timestamp_text(&self.tz)?;
         let micros = ts.timestamp_micros();
@@ -115,7 +115,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()?;
         let _ = check_timestamp(v)?;
         self.builder.append_value(v.as_());

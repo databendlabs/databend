@@ -123,13 +123,7 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let format = ctx.get_format_settings()?;
-        let tz = String::from_utf8(format.timezone.clone())
-            .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
-        let tz = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
-        let mut builder = NDJsonSourceBuilder::create(schema, tz);
+        let mut builder = NDJsonSourceBuilder::create(schema, ctx.get_format_settings()?);
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.

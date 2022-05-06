@@ -19,10 +19,10 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::NaiveDateTime;
+
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_exception::ErrorCode;
+
 
 use super::cast_with_type::arrow_cast_compute;
 use super::cast_with_type::new_mutable_bitmap;

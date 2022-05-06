@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;

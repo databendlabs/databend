@@ -37,7 +37,7 @@ impl StringDeserializer {
 impl TypeDeserializer for StringDeserializer {
     // See GroupHash.rs for StringColumn
     #[allow(clippy::uninit_vec)]
-    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
 
         self.buffer.clear();
@@ -51,11 +51,11 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self) {
+    fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.append_value("");
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
             self.builder.append_value(reader);
@@ -63,7 +63,7 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::String(s) => {
                 self.builder.append_value(s);
@@ -73,26 +73,26 @@ impl TypeDeserializer for StringDeserializer {
         }
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'\'')?;
         self.builder.append_value(self.buffer.as_slice());
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         self.builder.append_value(reader);
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
         self.builder.append_value(self.buffer.as_slice());
         Ok(())
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }
 

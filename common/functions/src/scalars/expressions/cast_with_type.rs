@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use chrono_tz::Tz;
+
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::compute::cast;
@@ -210,7 +210,7 @@ pub fn cast_to_variant(
     column: &ColumnRef,
     from_type: &DataTypeImpl,
     data_type: &DataTypeImpl,
-    func_ctx: &FunctionContext,
+    _func_ctx: &FunctionContext,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let size = column.len();

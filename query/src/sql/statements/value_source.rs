@@ -57,11 +57,7 @@ impl ValueSource {
 
     pub async fn read<'a>(&self, reader: &mut CpBufferReader<'a>) -> Result<DataBlock> {
         let format = self.ctx.get_format_settings()?;
-        let tz = String::from_utf8(format.timezone.clone())
-            .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
-        let tz = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
+        let tz = format.timezone.clone();
         let mut desers = self
             .schema
             .fields()
@@ -120,6 +116,7 @@ impl ValueSource {
             ));
         }
 
+        let format = self.ctx.get_format_settings()?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces()?;
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
@@ -131,7 +128,7 @@ impl ValueSource {
             // Disable backtrace here.
             self.backtrace_guard.disable();
             let (need_fallback, pop_count) = deser
-                .de_text_quoted(reader)
+                .de_text_quoted(reader, &format)
                 .and_then(|_| {
                     let _ = reader.ignore_white_spaces()?;
                     let need_fallback = reader.ignore_byte(col_end)?.not();
@@ -158,7 +155,7 @@ impl ValueSource {
                         .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone())?;
+                    deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
 
                 return Ok(());

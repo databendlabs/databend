@@ -20,7 +20,7 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Timelike;
-use common_datavalues::chrono::Utc;
+
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -70,7 +70,7 @@ pub struct ToYYYYMM;
 impl NumberOperator<u32> for ToYYYYMM {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u32 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u32 {
         value.year() as u32 * 100 + value.month()
     }
 }
@@ -81,7 +81,7 @@ pub struct ToYYYYMMDD;
 impl NumberOperator<u32> for ToYYYYMMDD {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u32 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u32 {
         value.year() as u32 * 10000 + value.month() * 100 + value.day()
     }
 }
@@ -92,7 +92,7 @@ pub struct ToYYYYMMDDhhmmss;
 impl NumberOperator<u64> for ToYYYYMMDDhhmmss {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u64 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u64 {
         value.year() as u64 * 10000000000
             + value.month() as u64 * 100000000
             + value.day() as u64 * 1000000
@@ -178,7 +178,7 @@ pub struct ToMonth;
 impl NumberOperator<u8> for ToMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u8 {
         value.month() as u8
     }
 
@@ -195,7 +195,7 @@ pub struct ToDayOfYear;
 impl NumberOperator<u16> for ToDayOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u16 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u16 {
         value.ordinal() as u16
     }
 
@@ -212,7 +212,7 @@ pub struct ToDayOfMonth;
 impl NumberOperator<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u8 {
         value.day() as u8
     }
 
@@ -229,7 +229,7 @@ pub struct ToDayOfWeek;
 impl NumberOperator<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u8 {
         value.weekday().number_from_monday() as u8
     }
 
@@ -245,7 +245,7 @@ pub struct ToHour;
 impl NumberOperator<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u8 {
         value.hour() as u8
     }
 
@@ -262,7 +262,7 @@ pub struct ToMinute;
 impl NumberOperator<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u8 {
         value.minute() as u8
     }
 
@@ -281,7 +281,7 @@ pub struct ToSecond;
 impl NumberOperator<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u8 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u8 {
         value.second() as u8
     }
 
@@ -316,7 +316,7 @@ pub struct ToYear;
 impl NumberOperator<u16> for ToYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn to_number(value: DateTime<Tz>, tz: &Tz) -> u16 {
+    fn to_number(value: DateTime<Tz>, _tz: &Tz) -> u16 {
         value.year() as u16
     }
 }

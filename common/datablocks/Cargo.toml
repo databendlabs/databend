@@ -12,6 +12,7 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
+common-io = { path = "../io" }
 common-arrow = { path = "../arrow" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }

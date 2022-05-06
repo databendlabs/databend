@@ -62,9 +62,7 @@ impl CsvSourceBuilder {
 
         let empty_as_default = format_settings.empty_as_default;
         let skip_header = format_settings.skip_header;
-
-        let tz = String::from_utf8(format_settings.timezone.clone()).unwrap();
-        let tz = tz.parse::<Tz>().unwrap();
+        let tz = format_settings.timezone.clone();
 
         CsvSourceBuilder {
             schema,
@@ -183,16 +181,18 @@ where R: AsyncRead + Unpin + Send
             if record.is_empty() {
                 break;
             }
+            let mut format = FormatSettings::default();
+            format.timezone = self.builder.tz.clone();
             for (col, pack) in packs.iter_mut().enumerate() {
                 match record.get(col) {
                     Some(bytes) => {
                         if bytes.is_empty() && self.builder.empty_as_default {
-                            pack.de_default();
+                            pack.de_default(&format);
                         } else {
-                            pack.de_whole_text(bytes)?
+                            pack.de_whole_text(bytes, &format)?
                         }
                     }
-                    None => pack.de_default(),
+                    None => pack.de_default(&format),
                 }
             }
             rows += 1;

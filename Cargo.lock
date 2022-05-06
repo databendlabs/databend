@@ -915,6 +915,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
+ "common-io",
  "pretty_assertions",
  "regex",
 ]

@@ -19,6 +19,7 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_io::prelude::FormatSettings;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::SendableDataBlockStream;
@@ -226,8 +227,7 @@ pub async fn clickhouse_handler_post(
 
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
     // TODO(veeupup): HTTP with global session tz
-    let tz = "UTC".parse::<Tz>().unwrap();
-    let builder = NDJsonSourceBuilder::create(plan.schema(), tz);
+    let builder = NDJsonSourceBuilder::create(plan.schema(), FormatSettings::default());
     let cursor = futures::io::Cursor::new(
         body.into_vec()
             .await

@@ -23,6 +23,7 @@ use common_datavalues::PrimitiveType;
 use common_datavalues::ScalarColumnBuilder;
 use common_datavalues::TypeDeserializer;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
@@ -100,12 +101,13 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
 
         let rows = self.data.len();
         let mut res = Vec::with_capacity(self.groups_fields.len());
+        let format = FormatSettings::default();
         for group_field in self.groups_fields.iter() {
             let data_type = group_field.data_type();
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key)?;
+                deserializer.de_binary(key, &format)?;
             }
             res.push(deserializer.finish_to_column());
         }

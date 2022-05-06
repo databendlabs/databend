@@ -114,11 +114,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
-        let tz = String::from_utf8(format.timezone.clone())
-            .map_err(|_| ErrorCode::LogicalError("timezone must be set"))?;
-        let tz = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
+        let tz = format.timezone.clone();
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {

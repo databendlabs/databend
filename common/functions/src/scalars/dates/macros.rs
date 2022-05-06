@@ -39,7 +39,7 @@ macro_rules! impl_interval_year_month {
 #[macro_export]
 macro_rules! define_date_add_year_months {
     ($l: ident, $r: ident, $ctx: ident, $op: expr) => {{
-        let tz = $ctx.tz;
+        let _tz = $ctx.tz;
         let factor = $ctx.factor;
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
         let naive = epoch.checked_add_signed(Duration::days($l as i64));

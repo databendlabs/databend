@@ -18,9 +18,9 @@ use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
+
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
+
 use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;
