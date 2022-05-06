@@ -680,7 +680,7 @@ impl MetaApi for MetaClientOnKV {
 
             if tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(MetaError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, format!("upsert_table_option")),
+                    UnknownTableId::new(req.table_id, "upsert_table_option"),
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
