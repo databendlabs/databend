@@ -90,8 +90,8 @@ impl MetaApi for MetaClientOnKV {
 
         loop {
             // Get db by name to ensure absence
-            let (db_id_seq, db_id) = self.get_db_id_by_name(name_key).await?;
-            tracing::debug!(db_id_seq, db_id, ?name_key, "get db");
+            let (db_id_seq, db_id) = self.get_id_value(name_key).await?;
+            tracing::debug!(db_id_seq, db_id, ?name_key, "get_database");
 
             if db_id_seq > 0 {
                 return if req.if_not_exists {
@@ -116,7 +116,7 @@ impl MetaApi for MetaClientOnKV {
                     condition: vec![self.txn_cond_seq(name_key, Eq, 0)?],
                     if_then: vec![
                         self.txn_op_put(name_key, self.serialize_id(db_id)?)?, // (tenant, db_name) -> db_id
-                        self.txn_op_put(&id_key, self.serialize_struct(&req.meta)?)?, // (tenant, db_id) -> db_meta
+                        self.txn_op_put(&id_key, self.serialize_struct(&req.meta)?)?, // (db_id) -> db_meta
                     ],
                     else_then: vec![],
                 };
@@ -138,12 +138,13 @@ impl MetaApi for MetaClientOnKV {
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
-        let name_key = &req.name_ident;
+        let tenant_dbname = &req.name_ident;
 
         loop {
             let res = self
-                .get_db_or_err(name_key, format!("drop_database: {}", &name_key))
+                .get_db_or_err(tenant_dbname, format!("drop_database: {}", &tenant_dbname))
                 .await;
+
             let (db_id_seq, db_id, db_meta_seq, _db_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
@@ -159,17 +160,17 @@ impl MetaApi for MetaClientOnKV {
 
             let db_id_key = DatabaseId { db_id };
 
-            tracing::debug!(db_id, name_key = debug(&name_key), "drop_database");
+            tracing::debug!(db_id, name_key = debug(&tenant_dbname), "drop_database");
 
             {
                 let txn_req = TxnRequest {
                     condition: vec![
-                        self.txn_cond_seq(name_key, Eq, db_id_seq)?,
+                        self.txn_cond_seq(tenant_dbname, Eq, db_id_seq)?,
                         self.txn_cond_seq(&db_id_key, Eq, db_meta_seq)?,
                     ],
                     if_then: vec![
-                        self.txn_op_del(name_key)?,   // (tenant, db_name) -> db_id
-                        self.txn_op_del(&db_id_key)?, // (tenant, db_id) -> db_meta
+                        self.txn_op_del(tenant_dbname)?, // (tenant, db_name) -> db_id
+                        self.txn_op_del(&db_id_key)?,    // (db_id) -> db_meta
                     ],
                     else_then: vec![],
                 };
@@ -177,7 +178,7 @@ impl MetaApi for MetaClientOnKV {
                 let (succ, _responses) = self.send_txn(txn_req).await?;
 
                 tracing::debug!(
-                    name = debug(&name_key),
+                    name = debug(&tenant_dbname),
                     id = debug(&db_id_key),
                     succ = display(succ),
                     "drop_database"
@@ -193,19 +194,7 @@ impl MetaApi for MetaClientOnKV {
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
         let name_key = &req.inner;
 
-        // Get db id by name
-        let (db_id_seq, db_id) = self.get_db_id_by_name(name_key).await?;
-        self.db_has_to_exist(db_id_seq, name_key, "get_database")?;
-
-        let id_key = DatabaseId { db_id };
-
-        // Get db_meta by id
-        let (db_meta_seq, db_meta) = self.get_db_by_id(&id_key).await?;
-        self.db_has_to_exist(
-            db_meta_seq,
-            name_key,
-            format_args!("get_database by_id: {}", id_key),
-        )?;
+        let (_, db_id, db_meta_seq, db_meta) = self.get_db_or_err(name_key, "get_database").await?;
 
         let db = DatabaseInfo {
             ident: DatabaseIdent {
@@ -213,7 +202,7 @@ impl MetaApi for MetaClientOnKV {
                 seq: db_meta_seq,
             },
             name_ident: name_key.clone(),
-            meta: db_meta.unwrap(),
+            meta: db_meta,
         };
 
         Ok(Arc::new(db))
@@ -313,8 +302,8 @@ impl MetaApi for MetaClientOnKV {
             }
 
             // Create table by inserting two record:
-            // (tenant, db_id, table_name) -> table_id
-            // (tenant, db_id, table_id) -> table_meta
+            // (db_id, table_name) -> table_id
+            // (table_id) -> table_meta
 
             let table_id = self.fetch_id(TableIdGen {}).await?;
 
@@ -400,8 +389,8 @@ impl MetaApi for MetaClientOnKV {
                 self.get_struct_value(&tbid).await?;
 
             // Delete table by deleting two record:
-            // (tenant, db_id, table_name) -> table_id
-            // (tenant, db_id, table_id) -> table_meta
+            // (db_id, table_name) -> table_id
+            // (table_id) -> table_meta
 
             tracing::debug!(
                 ident = display(&tbid),
@@ -420,8 +409,8 @@ impl MetaApi for MetaClientOnKV {
                         self.txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
                     ],
                     if_then: vec![
-                        self.txn_op_del(&dbid_tbname)?, // (tenant, db_id, tb_name) -> tb_id
-                        self.txn_op_del(&tbid)?,        // (tenant, db_id, tb_id) -> tb_meta
+                        self.txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
+                        self.txn_op_del(&tbid)?,        // (tb_id) -> tb_meta
                     ],
                     else_then: vec![],
                 };
@@ -696,43 +685,16 @@ impl MetaClientOnKV {
 
         let id_key = DatabaseId { db_id };
 
-        let (db_meta_seq, db_meta) = self.get_db_by_id(&id_key).await?;
+        let (db_meta_seq, db_meta) = self.get_struct_value(&id_key).await?;
         self.db_has_to_exist(db_meta_seq, name_key, msg)?;
 
-        Ok((db_id_seq, db_id, db_meta_seq, db_meta.unwrap()))
-    }
-
-    /// Get db id with seq, by name
-    ///
-    /// It returns (seq, db_id).
-    /// If db is not found, (0,0) is returned.
-    async fn get_db_id_by_name(
-        &self,
-        name_ident: &DatabaseNameIdent,
-    ) -> Result<(u64, u64), MetaError> {
-        let res = self.inner.get_kv(&name_ident.to_key()).await?;
-
-        if let Some(seq_v) = res {
-            Ok((seq_v.seq, self.deserialize_id(&seq_v.data)?))
-        } else {
-            Ok((0, 0))
-        }
-    }
-
-    /// Get DatabaseMeta by database id.
-    ///
-    /// It returns seq number and the data.
-    async fn get_db_by_id(
-        &self,
-        db_id: &DatabaseId,
-    ) -> Result<(u64, Option<DatabaseMeta>), MetaError> {
-        let res = self.inner.get_kv(&db_id.to_key()).await?;
-
-        if let Some(seq_v) = res {
-            Ok((seq_v.seq, Some(self.deserialize_struct(&seq_v.data)?)))
-        } else {
-            Ok((0, None))
-        }
+        Ok((
+            db_id_seq,
+            db_id,
+            db_meta_seq,
+            // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
+            db_meta.unwrap(),
+        ))
     }
 
     /// Return OK if a db_id or db_meta exists by checking the seq.
