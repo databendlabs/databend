@@ -1070,6 +1070,31 @@ impl MetaApiTestSuite {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
+
+            tracing::info!("--- upsert table options with not exist table id");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let got = mt
+                    .upsert_table_option(UpsertTableOptionReq::new(
+                        &TableIdent {
+                            table_id: 1024,
+                            version: table.ident.version - 1,
+                        },
+                        "key1",
+                        "val2",
+                    ))
+                    .await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+
+                // table is not affected.
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+            }
         }
         Ok(())
     }
