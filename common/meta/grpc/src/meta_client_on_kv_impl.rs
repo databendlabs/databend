@@ -69,6 +69,7 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownTable;
+use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
@@ -677,15 +678,20 @@ impl MetaApi for MetaClientOnKV {
 
             tracing::debug!(ident = display(&tbid), "upsert_table_option");
 
+            if tb_meta_seq == 0 {
+                return Err(MetaError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, format!("upsert_table_option")),
+                )));
+            }
             if req_seq.match_seq(tb_meta_seq).is_err() {
-                let err = AppError::from(TableVersionMismatched::new(
-                    req.table_id,
-                    req.seq,
-                    tb_meta_seq,
-                    "upsert_table_option",
-                ));
-
-                return Err(MetaError::AppError(err));
+                return Err(MetaError::AppError(AppError::from(
+                    TableVersionMismatched::new(
+                        req.table_id,
+                        req.seq,
+                        tb_meta_seq,
+                        "upsert_table_option",
+                    ),
+                )));
             }
             let mut table_meta = table_meta.unwrap();
             // update table options
