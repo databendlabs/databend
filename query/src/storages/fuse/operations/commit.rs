@@ -254,7 +254,7 @@ impl FuseTable {
         self::utils::gather_legacy_options(table_info, &mut options);
 
         let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.version;
+        let table_version = table_info.ident.seq;
         let req = UpsertTableOptionReq {
             table_id,
             seq: MatchSeq::Exact(table_version),

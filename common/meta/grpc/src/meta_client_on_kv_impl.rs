@@ -98,7 +98,7 @@ impl MetaApi for MetaClientOnKV {
 
             if db_id_seq > 0 {
                 return if req.if_not_exists {
-                    Ok(CreateDatabaseReply { database_id: db_id })
+                    Ok(CreateDatabaseReply { db_id })
                 } else {
                     Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
                         DatabaseAlreadyExists::new(
@@ -134,7 +134,7 @@ impl MetaApi for MetaClientOnKV {
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply { database_id: db_id });
+                    return Ok(CreateDatabaseReply { db_id });
                 }
             }
         }
@@ -582,7 +582,7 @@ impl MetaApi for MetaClientOnKV {
         let tb_info = TableInfo {
             ident: TableIdent {
                 table_id,
-                version: tb_meta_seq,
+                seq: tb_meta_seq,
             },
             desc: tenant_dbname_tbname.to_string(),
             name: tenant_dbname_tbname.table_name.clone(),
@@ -640,7 +640,7 @@ impl MetaApi for MetaClientOnKV {
                 let tb_info = TableInfo {
                     ident: TableIdent {
                         table_id: ids[i],
-                        version: seq_meta.seq,
+                        seq: seq_meta.seq,
                     },
                     desc: format!(
                         "'{}'.'{}'",

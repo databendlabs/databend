@@ -176,7 +176,7 @@ impl Catalog for MutableCatalog {
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
             ident: DatabaseIdent {
-                db_id: res.database_id,
+                db_id: res.db_id,
                 seq: 0, // TODO
             },
             name_ident: req.name_ident.clone(),
@@ -184,9 +184,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(&req.name_ident.tenant).await?;
-        Ok(CreateDatabaseReply {
-            database_id: res.database_id,
-        })
+        Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
