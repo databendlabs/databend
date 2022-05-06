@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fuse_history;
+mod fuse_segment;
+mod fuse_snapshot;
 mod system;
 
-pub use fuse_history::FuseHistoryProcedure;
+pub use fuse_segment::FuseSegmentProcedure;
+pub use fuse_snapshot::FuseSnapshotProcedure;
 pub use system::SystemProcedure;

@@ -8,11 +8,11 @@ SELECT EXPORT_SET(0, 'YYYY', 'NNN', '_ABCDEFGH_', 8);
 
 SELECT '=== series ===';
 SELECT '=== EXPORT_SET(16,    number,   number,   ::, 11) ===';
-SELECT EXPORT_SET(16,    toString(number),   toString(number),   '::', 11)  FROM numbers(5) ORDER BY number;
+SELECT EXPORT_SET(16,    to_varchar(number),   to_varchar(number),   '::', 11)  FROM numbers(5) ORDER BY number;
 SELECT '=== EXPORT_SET(16,    YY, number,   ::, 11) ===';
-SELECT EXPORT_SET(16,    'YY', toString(number),   '::', 11)  FROM numbers(5) ORDER BY number;
+SELECT EXPORT_SET(16,    'YY', to_varchar(number),   '::', 11)  FROM numbers(5) ORDER BY number;
 SELECT '=== EXPORT_SET(16,    number,   NN, ::, 11) ===';
-SELECT EXPORT_SET(16,    toString(number),   'NN', '::', 11)  FROM numbers(5) ORDER BY number;
+SELECT EXPORT_SET(16,    to_varchar(number),   'NN', '::', 11)  FROM numbers(5) ORDER BY number;
 SELECT '=== EXPORT_SET(16,    YY, NN, ::, 11) ===';
 SELECT EXPORT_SET(16,    'YY', 'NN', '::', 11)  FROM numbers(5) ORDER BY number;
 

@@ -113,9 +113,9 @@ impl QueryResponse {
         }
     }
 
-    pub(crate) fn fail_to_start_sql(id: String, err: &ErrorCode) -> QueryResponse {
+    pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> QueryResponse {
         QueryResponse {
-            id,
+            id: "".to_string(),
             stats: QueryStats::default(),
             state: ExecuteStateKind::Failed,
             data: vec![],
@@ -197,10 +197,7 @@ pub(crate) async fn query_handler(
 ) -> PoemResult<Json<QueryResponse>> {
     tracing::info!("receive http query: {:?}", req);
     let http_query_manager = ctx.session_mgr.get_http_query_manager();
-    let query_id = http_query_manager.next_query_id();
-    let query = http_query_manager
-        .try_create_query(&query_id, ctx, req)
-        .await;
+    let query = http_query_manager.try_create_query(ctx, req).await;
 
     // TODO(veeupup): get global query_ctx's format_settings, because we cann't set session settings now
     let format = FormatSettings::default();
@@ -218,7 +215,7 @@ pub(crate) async fn query_handler(
         }
         Err(e) => {
             tracing::error!("Fail to start sql, Error: {:?}", e);
-            Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e)))
+            Ok(Json(QueryResponse::fail_to_start_sql(&e)))
         }
     }
 }

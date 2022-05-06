@@ -106,12 +106,11 @@ impl<'a> MetaLeader<'a> {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.prefix_list_kv(&req.prefix).await?;
                 Ok(ForwardResponse::ListKV(res))
-            }
-            ForwardRequestBody::GetShare(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_share(req).await?;
-                Ok(ForwardResponse::ShareInfo(res))
-            }
+            } // ForwardRequestBody::GetShare(req) => {
+              //     let sm = self.meta_node.get_state_machine().await;
+              //     let res = sm.get_share(req).await?;
+              //     Ok(ForwardResponse::ShareInfo(res))
+              // }
         }
     }
 
@@ -222,8 +221,9 @@ impl<'a> MetaLeader<'a> {
     /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
     /// If the leadership is lost during writing the log, it returns an UnknownError.
     /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, entry))]
     pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
+        tracing::debug!(entry = debug(&entry), "write LogEntry");
         let write_rst = self
             .meta_node
             .raft

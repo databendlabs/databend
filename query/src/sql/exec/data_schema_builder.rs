@@ -22,7 +22,6 @@ use common_exception::Result;
 use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::ProjectPlan;
-use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
 
@@ -46,13 +45,12 @@ impl<'a> DataSchemaBuilder<'a> {
                 new_data_fields.push(data_field);
                 continue;
             }
-            let idx = self
-                .metadata
-                .column_idx_by_column_name(data_field.name().as_str())?;
-            new_data_fields.push(DataField::new(
-                &*format_field_name(data_field.name().as_str(), idx),
-                data_field.data_type().clone(),
-            ));
+            let field = if data_field.is_nullable() {
+                DataField::new_nullable(data_field.name(), data_field.data_type().clone())
+            } else {
+                DataField::new(data_field.name(), data_field.data_type().clone())
+            };
+            new_data_fields.push(field);
         }
         Ok(Arc::new(DataSchema::new(new_data_fields)))
     }
@@ -64,17 +62,11 @@ impl<'a> DataSchemaBuilder<'a> {
     ) -> Result<DataSchemaRef> {
         let mut fields = input_schema.fields().clone();
         for item in plan.items.iter() {
-            if let Some(Scalar::ColumnRef { .. }) = item.expr.as_any().downcast_ref::<Scalar>() {
-                let index = item.index;
-                let column_entry = self.metadata.column(index);
-                let field_name = format_field_name(column_entry.name.as_str(), index);
-                let field = if column_entry.nullable {
-                    DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-                } else {
-                    DataField::new(field_name.as_str(), column_entry.data_type.clone())
-                };
-                fields.push(field);
-            }
+            let index = item.index;
+            let column_entry = self.metadata.column(index);
+            let field_name = format_field_name(column_entry.name.as_str(), index);
+            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
+            fields.push(field);
         }
 
         Ok(Arc::new(DataSchema::new(fields)))
@@ -85,11 +77,8 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in plan.columns.iter() {
             let column_entry = self.metadata.column(*index);
             let field_name = format_field_name(column_entry.name.as_str(), *index);
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
+            let field =
+                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone());
 
             fields.push(field);
         }
@@ -102,11 +91,8 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in columns {
             let column_entry = self.metadata.column(*index);
             let field_name = column_entry.name.clone();
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
+            let field =
+                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone());
 
             fields.push(field);
         }

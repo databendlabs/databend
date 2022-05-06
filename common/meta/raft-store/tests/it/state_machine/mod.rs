@@ -38,6 +38,7 @@ use common_meta_types::MetaStorageError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -228,9 +229,11 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         Ok(m.apply_cmd(
             &Cmd::CreateTable(CreateTableReq {
                 if_not_exists: false,
-                tenant: tenant.to_string(),
-                db_name: "db1".to_string(),
-                table_name: "tb1".to_string(),
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                    table_name: "tb1".to_string(),
+                },
                 table_meta: Default::default(),
             }),
             &t,

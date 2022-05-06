@@ -11,7 +11,7 @@ echo "show value of table being cloned"
 echo "select *  from t09_0011" | $MYSQL_CLIENT_CONNECT
 
 ## get the snapshot id
-SNAPSHOT_LOC=$(echo "select snapshot_location from fuse_history('default','t09_0011')" | mysql -h127.0.0.1 -P3307 -uroot -s)
+SNAPSHOT_LOC=$(echo "select snapshot_location from fuse_snapshot('default','t09_0011')" | mysql -h127.0.0.1 -P3307 -uroot -s)
 
 ## create a shallow clones of t09_0011 by using the table option 'snapshot_loc'
 ## using lower case option key

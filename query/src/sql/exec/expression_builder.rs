@@ -17,6 +17,14 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::sql::exec::util::format_field_name;
+use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AndExpr;
+use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
+use crate::sql::plans::ConstantExpr;
+use crate::sql::plans::FunctionCall;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
@@ -30,20 +38,76 @@ impl<'a> ExpressionBuilder<'a> {
         ExpressionBuilder { metadata }
     }
 
+    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
+        let mut expr = self.build(scalar)?;
+        expr = self.normalize_aggr_to_col(expr)?;
+        let column = self.metadata.column(index);
+        Ok(Expression::Alias(
+            format_field_name(column.name.as_str(), index),
+            Box::new(expr),
+        ))
+    }
+
     pub fn build(&self, scalar: &Scalar) -> Result<Expression> {
         match scalar {
-            Scalar::ColumnRef { index, .. } => self.build_column_ref(*index),
-            Scalar::Literal { data_value } => self.build_literal(data_value),
-            Scalar::Equal { left, right } => {
-                self.build_binary_operator(left, right, "=".to_string())
+            Scalar::BoundColumnRef(BoundColumnRef { column }) => {
+                self.build_column_ref(column.index)
             }
-            Scalar::AggregateFunction {
+            Scalar::ConstantExpr(ConstantExpr { value }) => self.build_literal(value),
+            Scalar::ComparisonExpr(ComparisonExpr { op, left, right }) => {
+                self.build_binary_operator(left, right, op.to_func_name())
+            }
+            Scalar::AggregateFunction(AggregateFunction {
                 func_name,
                 distinct,
                 params,
                 args,
                 ..
-            } => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
+            }) => self.build_aggr_function(func_name.clone(), *distinct, params.clone(), args),
+            Scalar::AndExpr(AndExpr { left, right }) => {
+                let left = self.build(&**left)?;
+                let right = self.build(&**right)?;
+                Ok(Expression::BinaryExpression {
+                    left: Box::new(left),
+                    op: "and".to_string(),
+                    right: Box::new(right),
+                })
+            }
+            Scalar::OrExpr(OrExpr { left, right }) => {
+                let left = self.build(&**left)?;
+                let right = self.build(&**right)?;
+                Ok(Expression::BinaryExpression {
+                    left: Box::new(left),
+                    op: "or".to_string(),
+                    right: Box::new(right),
+                })
+            }
+            Scalar::FunctionCall(FunctionCall {
+                arguments,
+                func_name,
+                ..
+            }) => {
+                let args = arguments
+                    .iter()
+                    .map(|arg| self.build(arg))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Expression::ScalarFunction {
+                    op: func_name.clone(),
+                    args,
+                })
+            }
+            Scalar::Cast(CastExpr {
+                argument,
+                target_type,
+                ..
+            }) => {
+                let arg = self.build(argument)?;
+                Ok(Expression::Cast {
+                    expr: Box::new(arg),
+                    data_type: target_type.clone(),
+                    pg_style: false,
+                })
+            }
         }
     }
 
@@ -91,5 +155,33 @@ impl<'a> ExpressionBuilder<'a> {
             params,
             args: arg_exprs,
         })
+    }
+
+    // Transform aggregator expression to column expression
+    fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
+        match expr.clone() {
+            Expression::BinaryExpression { left, op, right } => {
+                return Ok(Expression::BinaryExpression {
+                    left: Box::new(self.normalize_aggr_to_col(*left)?),
+                    op,
+                    right: Box::new(self.normalize_aggr_to_col(*right)?),
+                })
+            }
+            Expression::AggregateFunction { .. } => {
+                let col_name = expr.column_name();
+                return Ok(Expression::Column(col_name));
+            }
+            Expression::ScalarFunction { op, args } => {
+                return Ok(Expression::ScalarFunction {
+                    op,
+                    args: args
+                        .iter()
+                        .map(|arg| self.normalize_aggr_to_col(arg.clone()))
+                        .collect::<Result<Vec<Expression>>>()?,
+                })
+            }
+            _ => {}
+        }
+        Ok(expr)
     }
 }

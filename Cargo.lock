@@ -131,8 +131,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.10.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=36b0824#36b08249dd03c8b8f88f454158fcf3401c647a49"
+version = "0.11.1"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=2d70fbf46fd37f4ef532945c588be69a71998e44#2d70fbf46fd37f4ef532945c588be69a71998e44"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -953,7 +953,6 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backtrace",
  "bincode",
  "common-arrow",
  "octocrab",
@@ -1095,14 +1094,21 @@ dependencies = [
 name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-trait",
  "common-base",
  "common-datavalues",
  "common-exception",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "common-tracing",
  "maplit",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tonic",
 ]
 
 [[package]]
@@ -1133,6 +1139,8 @@ dependencies = [
  "common-grpc",
  "common-meta-api",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "common-tracing",
  "derive_more",
  "futures",
@@ -1140,6 +1148,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "thiserror",
  "tonic",
 ]
 
@@ -1306,7 +1315,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "backtrace",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
@@ -4304,8 +4312,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.10.3"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=daae989#daae98961c5b6243465f176518d849d9297fdb74"
+version = "0.12.0"
+source = "git+https://github.com/datafuse-extras/parquet2?rev=03c108b#03c108bfcae58a6ba2b6a54132888dea964b3950"
 dependencies = [
  "async-stream",
  "bitpacking",

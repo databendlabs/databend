@@ -17,19 +17,14 @@ use std::sync::Arc;
 
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateShareReply;
-use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropShareReply;
-use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -37,7 +32,6 @@ use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
-use common_meta_types::ShareInfo;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -84,12 +78,14 @@ pub trait MetaApi: Send + Sync {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError>;
 
-    // share
-    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError>;
-
-    async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError>;
-
-    async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError>;
+    // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
+    //       Since `share` has nothing really to do with database or table.
+    // // share
+    // async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError>;
+    //
+    // async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError>;
+    //
+    // async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError>;
 
     fn name(&self) -> String;
 }

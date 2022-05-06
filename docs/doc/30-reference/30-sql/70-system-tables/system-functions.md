@@ -74,7 +74,7 @@ is_aggregate: 0
 Read 1 rows, 1 B in 0.000 sec., 2.64 thousand rows/sec., 2.64 KB/sec.
 
 *************************** 4. row ***************************
-        name: touint16
+        name: to_uint32
   is_builtin: 1
 is_aggregate: 0
   definition: 
@@ -107,9 +107,9 @@ is_aggregate: 0
 | 2022-03-29 00:00:00 |
 +---------------------+
 
-SELECT toStartOfDay(toDateTime(1630812366));
+SELECT toStartOfDay(to_datetime(1630812366));
 +--------------------------------------+
-| toStartOfDay(toDateTime(1630812366)) |
+| toStartOfDay(to_datetime(1630812366)) |
 +--------------------------------------+
 | 2021-09-05 00:00:00                  |
 +--------------------------------------+
@@ -186,9 +186,9 @@ is_aggregate: 0
 |              14 |
 +-----------------+
 
-SELECT toSecond(toDateTime(1630812366));
+SELECT toSecond(to_datetime(1630812366));
 +----------------------------------+
-| toSecond(toDateTime(1630812366)) |
+| toSecond(to_datetime(1630812366)) |
 +----------------------------------+
 |                                6 |
 +----------------------------------+

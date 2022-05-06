@@ -64,11 +64,6 @@ impl SnapshotVersion {
 
 impl Versioned<0> for DataBlock {}
 
-#[allow(dead_code)]
-pub enum BlockVersion {
-    V0(PhantomData<DataBlock>),
-}
-
 mod converters {
 
     use super::*;

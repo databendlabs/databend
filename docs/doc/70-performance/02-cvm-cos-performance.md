@@ -679,7 +679,7 @@ FROM ontime;
 ## Block Statistics
 
 ```sql
-CALL system$fuse_history('default', 'ontime');
+CALL system$fuse_snapshot('default', 'ontime');
 ```
 
 ```text

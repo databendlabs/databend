@@ -40,6 +40,7 @@ use crate::scalars::RoundFunction;
 #[derive(Clone, Debug)]
 pub struct NumberFunction<T, R> {
     display_name: String,
+    input_type: DataTypeImpl,
     t: PhantomData<T>,
     r: PhantomData<R>,
 }
@@ -53,7 +54,7 @@ pub trait NumberOperator<R> {
     // For example, ToDayOfYear is monotonous only when the time range is the same year.
     // So we can use ToStartOfYearFunction to check whether the time range is in the same year.
     // If the function always monotonous, just return error.
-    fn factor_function() -> Option<Box<dyn Function>> {
+    fn factor_function(_input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
         // default to "Always monotonous, has no factor function"
         None
     }
@@ -183,8 +184,8 @@ impl NumberOperator<u8> for ToMonth {
 
     // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
-    fn factor_function() -> Option<Box<dyn Function>> {
-        Some(ToStartOfYearFunction::try_create("toStartOfYear").unwrap())
+    fn factor_function(input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
+        Some(ToStartOfYearFunction::try_create("toStartOfYear", input_type).unwrap())
     }
 }
 
@@ -200,8 +201,8 @@ impl NumberOperator<u16> for ToDayOfYear {
 
     // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
-    fn factor_function() -> Option<Box<dyn Function>> {
-        Some(ToStartOfYearFunction::try_create("toStartOfYear").unwrap())
+    fn factor_function(input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
+        Some(ToStartOfYearFunction::try_create("toStartOfYear", input_type).unwrap())
     }
 }
 
@@ -217,8 +218,8 @@ impl NumberOperator<u8> for ToDayOfMonth {
 
     // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
     // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth(2021-11-20) > ToDayOfMonth(2021-12-01).
-    fn factor_function() -> Option<Box<dyn Function>> {
-        Some(ToStartOfMonthFunction::try_create("toStartOfMonth").unwrap())
+    fn factor_function(input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
+        Some(ToStartOfMonthFunction::try_create("toStartOfMonth", input_type).unwrap())
     }
 }
 
@@ -233,8 +234,8 @@ impl NumberOperator<u8> for ToDayOfWeek {
     }
 
     // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same week.
-    fn factor_function() -> Option<Box<dyn Function>> {
-        Some(ToMondayFunction::try_create("toMonday").unwrap())
+    fn factor_function(input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
+        Some(ToMondayFunction::try_create("toMonday", input_type).unwrap())
     }
 }
 
@@ -249,7 +250,7 @@ impl NumberOperator<u8> for ToHour {
     }
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
-    fn factor_function() -> Option<Box<dyn Function>> {
+    fn factor_function(_input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
         let type_name = DateType::new_impl().name();
         Some(CastFunction::create("toDate", type_name.as_str(), u8::to_data_type()).unwrap())
     }
@@ -266,7 +267,7 @@ impl NumberOperator<u8> for ToMinute {
     }
 
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
-    fn factor_function() -> Option<Box<dyn Function>> {
+    fn factor_function(_input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
         Some(
             RoundFunction::try_create("toStartOfHour", &[&TimestampType::new_impl(0)], Round::Hour)
                 .unwrap(),
@@ -285,7 +286,7 @@ impl NumberOperator<u8> for ToSecond {
     }
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
-    fn factor_function() -> Option<Box<dyn Function>> {
+    fn factor_function(_input_type: DataTypeImpl) -> Option<Box<dyn Function>> {
         Some(
             RoundFunction::try_create(
                 "toStartOfMinute",
@@ -325,9 +326,10 @@ where
     T: NumberOperator<R> + Clone + Sync + Send + 'static,
     R: PrimitiveType + Clone + ToDataType + Scalar<RefType<'static> = R>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, input_type: DataTypeImpl) -> Result<Box<dyn Function>> {
         Ok(Box::new(NumberFunction::<T, R> {
             display_name: display_name.to_string(),
+            input_type,
             t: PhantomData,
             r: PhantomData,
         }))
@@ -341,7 +343,7 @@ where
         }
 
         let function_creator: FactoryCreator =
-            Box::new(move |display_name, _args| Self::try_create(display_name));
+            Box::new(move |display_name, args| Self::try_create(display_name, args[0].clone()));
 
         FunctionDescription::creator(function_creator).features(features)
     }
@@ -369,7 +371,7 @@ where
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let type_id = columns[0].field().data_type().data_type_id();
+        let type_id = self.input_type.data_type_id();
 
         let number_array = match type_id {
             TypeID::Date => {
@@ -411,7 +413,7 @@ where
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        let func = match T::factor_function() {
+        let func = match T::factor_function(self.input_type.clone()) {
             Some(f) => f,
             // Always monotonous, has no factor function.
             None => return Ok(Monotonicity::clone_without_range(&args[0])),

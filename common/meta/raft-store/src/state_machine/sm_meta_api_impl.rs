@@ -22,8 +22,6 @@ use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateShareReply;
-use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseAlreadyExists;
@@ -33,12 +31,9 @@ use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropShareReply;
-use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -47,15 +42,12 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaStorageError;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
-use common_meta_types::ShareAlreadyExists;
-use common_meta_types::ShareInfo;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableVersionMismatched;
 use common_meta_types::UnknownDatabase;
-use common_meta_types::UnknownShare;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReply;
@@ -91,7 +83,7 @@ impl MetaApi for StateMachine {
             return Err(MetaError::from(ae));
         }
 
-        Ok(CreateDatabaseReply { database_id: db_id })
+        Ok(CreateDatabaseReply { db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
@@ -163,8 +155,8 @@ impl MetaApi for StateMachine {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
-        let db_name = &req.db_name;
-        let table_name = &req.table_name;
+        let db_name = req.db_name();
+        let table_name = req.table_name();
         let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}-{}", &db_name, &table_name);
@@ -189,7 +181,7 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
-        let table_name = req.table_name.clone();
+        let table_name = req.table_name().to_string();
         let if_exists = req.if_exists;
 
         let res = self.sm_tree.txn(true, |t| {
@@ -338,56 +330,56 @@ impl MetaApi for StateMachine {
         Ok(UpsertTableOptionReply {})
     }
 
-    async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
-        let share_name = &req.share_name;
-        let if_not_exists = req.if_not_exists;
-
-        tracing::info!("create share: {:}: {:?}", &req.tenant, &share_name);
-
-        let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&Cmd::CreateShare(req.clone()), &t)?;
-            Ok(r)
-        })?;
-
-        let mut ch: Change<ShareInfo, u64> = res.try_into().unwrap();
-        let share_id = ch.ident.take().unwrap();
-        let (prev, result) = ch.unpack_data();
-
-        assert!(result.is_some());
-
-        if prev.is_some() && !if_not_exists {
-            let ae = AppError::from(ShareAlreadyExists::new(share_name, "create share"));
-            Err(MetaError::from(ae))
-        } else {
-            Ok(CreateShareReply { share_id })
-        }
-    }
-
-    async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
-        let share_name = &req.share_name;
-        let if_exists = req.if_exists;
-
-        let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&Cmd::DropShare(req.clone()), &t)?;
-            Ok(r)
-        })?;
-
-        assert!(res.result().is_none());
-
-        if res.prev().is_none() && !if_exists {
-            let ae = AppError::from(UnknownShare::new(share_name, "drop share"));
-            return Err(MetaError::from(ae));
-        }
-
-        Ok(DropShareReply {})
-    }
-
-    async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
-        let share_id = self.get_share_id(&req.tenant, &req.share_name)?;
-        let seq_share_info = self.get_share_info_by_id(&share_id)?;
-        Ok(Arc::new(seq_share_info.data))
-    }
-
+    // async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, MetaError> {
+    //     let share_name = &req.share_name;
+    //     let if_not_exists = req.if_not_exists;
+    //
+    //     tracing::info!("create share: {:}: {:?}", &req.tenant, &share_name);
+    //
+    //     let res = self.sm_tree.txn(true, |t| {
+    //         let r = self.apply_cmd(&Cmd::CreateShare(req.clone()), &t)?;
+    //         Ok(r)
+    //     })?;
+    //
+    //     let mut ch: Change<ShareInfo, u64> = res.try_into().unwrap();
+    //     let share_id = ch.ident.take().unwrap();
+    //     let (prev, result) = ch.unpack_data();
+    //
+    //     assert!(result.is_some());
+    //
+    //     if prev.is_some() && !if_not_exists {
+    //         let ae = AppError::from(ShareAlreadyExists::new(share_name, "create share"));
+    //         Err(MetaError::from(ae))
+    //     } else {
+    //         Ok(CreateShareReply { share_id })
+    //     }
+    // }
+    //
+    // async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, MetaError> {
+    //     let share_name = &req.share_name;
+    //     let if_exists = req.if_exists;
+    //
+    //     let res = self.sm_tree.txn(true, |t| {
+    //         let r = self.apply_cmd(&Cmd::DropShare(req.clone()), &t)?;
+    //         Ok(r)
+    //     })?;
+    //
+    //     assert!(res.result().is_none());
+    //
+    //     if res.prev().is_none() && !if_exists {
+    //         let ae = AppError::from(UnknownShare::new(share_name, "drop share"));
+    //         return Err(MetaError::from(ae));
+    //     }
+    //
+    //     Ok(DropShareReply {})
+    // }
+    //
+    // async fn get_share(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+    //     let share_id = self.get_share_id(&req.tenant, &req.share_name)?;
+    //     let seq_share_info = self.get_share_info_by_id(&share_id)?;
+    //     Ok(Arc::new(seq_share_info.data))
+    // }
+    //
     fn name(&self) -> String {
         "StateMachine".to_string()
     }

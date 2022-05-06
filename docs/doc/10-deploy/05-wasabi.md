@@ -4,6 +4,8 @@ sidebar_label: With Wasabi
 description:
   How to deploy Databend with Wasabi object storage
 ---
+import GetLatest from '@site/src/components/GetLatest';
+
 
 :::tip
 
@@ -40,7 +42,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -50,7 +52,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -195,3 +197,5 @@ SELECT * FROM t1
 |    2 |
 +------+
 ```
+
+<GetLatest/>
