@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::catalogs::default::DatabaseCatalog;
+#[cfg(feature = "hive")]
 use crate::catalogs::hive::HiveCatalog;
 use crate::catalogs::Catalog;
 use crate::configs::Config;
@@ -26,6 +27,8 @@ use crate::configs::Config;
 // TODO catalogs are hard coded
 
 pub const CATALOG_DEFAULT: &str = "default";
+
+#[cfg(feature = "hive")]
 pub const CATALOG_HIVE: &str = "hive";
 
 pub struct CatalogManager {
@@ -38,7 +41,11 @@ impl CatalogManager {
         let mut manager = CatalogManager { catalogs };
 
         manager.register_build_in_catalogs(conf).await?;
-        manager.register_external_catalogs(conf)?;
+
+        #[cfg(feature = "hive")]
+        {
+            manager.register_external_catalogs(conf)?;
+        }
 
         Ok(manager)
     }
@@ -58,6 +65,7 @@ impl CatalogManager {
         Ok(())
     }
 
+    #[cfg(feature = "hive")]
     fn register_external_catalogs(&mut self, conf: &Config) -> Result<()> {
         let hms_address = &conf.catalog.meta_store_address;
         if !hms_address.is_empty() {

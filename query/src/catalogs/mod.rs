@@ -16,6 +16,7 @@ mod catalog;
 
 mod catalog_manager;
 pub mod default;
+#[cfg(feature = "hive")]
 pub mod hive;
 
 pub use catalog::Catalog;
