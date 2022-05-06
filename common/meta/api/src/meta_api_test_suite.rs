@@ -31,6 +31,7 @@ use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -196,6 +197,65 @@ impl MetaApiTestSuite {
                 },
             })
             .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn database_create_rename<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+
+        tracing::info!("--- create db1");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- rename db1 to db2");
+        {
+            let req = RenameDatabaseReq {
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
+                new_db_name: "db2".to_string(),
+            };
+
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+        }
+
+        tracing::info!("--- rename db1 to db3 ");
+        {
+            let req = RenameDatabaseReq {
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: "db1".to_string(),
+                },
+                new_db_name: "db3".to_string(),
+            };
+
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            let err = ErrorCode::from(err);
+
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
         }
 
         Ok(())

@@ -80,6 +80,12 @@ pub enum Cmd {
         name: Option<String>,
     },
 
+    /// Rename a database
+    RenameDatabase {
+        name_ident: Option<DatabaseNameIdent>,
+        new_db_name: Option<String>,
+    },
+
     CreateTable {
         // latest add
         if_not_exists: Option<bool>,

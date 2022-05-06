@@ -35,6 +35,8 @@ use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareInfo;
@@ -54,6 +56,11 @@ pub trait MetaApi: Send + Sync {
     ) -> Result<CreateDatabaseReply, MetaError>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError>;
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError>;
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError>;
 

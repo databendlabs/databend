@@ -59,6 +59,10 @@ impl ActionHandler {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }
+            MetaGrpcWriteReq::RenameDatabase(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
 
             // table
             MetaGrpcWriteReq::CreateTable(a) => {

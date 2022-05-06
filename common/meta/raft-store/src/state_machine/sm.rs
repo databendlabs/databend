@@ -55,6 +55,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::PbSeqV;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReq;
 use common_meta_types::SeqV;
 use common_meta_types::ShareInfo;
@@ -486,6 +487,59 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_rename_database_cmd(
+        &self,
+        req: &RenameDatabaseReq,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
+        let dbs = txn_tree.key_space::<DatabaseLookup>();
+
+        let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
+        let (prev, result) =
+            self.txn_sub_tree_upsert(&dbs, &db_key, &MatchSeq::Any, Operation::Delete, None)?;
+
+        assert!(
+            result.is_none(),
+            "delete with MatchSeq::Any always succeeds"
+        );
+
+        // if it is just deleted
+        if let Some(seq_db_id) = prev {
+            // TODO(xp): reconsider this impl. it may not be required.
+            self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
+            let new_db_key = DatabaseLookupKey::new(tenant.to_string(), req.new_db_name.clone());
+
+            let db_id = seq_db_id.data;
+
+            let (_prev, result) = self.txn_sub_tree_upsert(
+                &dbs,
+                &new_db_key,
+                &MatchSeq::Exact(0),
+                Operation::Update(db_id),
+                None,
+            )?;
+
+            tracing::debug!(
+                "applied rename Database from {} to {}, {:?}",
+                name,
+                req.new_db_name,
+                result
+            );
+
+            return Ok(AppliedState::DatabaseMeta(Change::nochange_with_id(
+                db_id, None,
+            )));
+        }
+
+        // not exist
+
+        tracing::debug!("applied rename Database: {} {:?}", name, result);
+        Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_table_cmd(
         &self,
         req: &CreateTableReq,
@@ -907,6 +961,7 @@ impl StateMachine {
             Cmd::CreateDatabase(req) => self.apply_create_database_cmd(req, txn_tree),
 
             Cmd::DropDatabase(req) => self.apply_drop_database_cmd(req, txn_tree),
+            Cmd::RenameDatabase(req) => self.apply_rename_database_cmd(req, txn_tree),
 
             Cmd::CreateTable(req) => self.apply_create_table_cmd(req, txn_tree),
 

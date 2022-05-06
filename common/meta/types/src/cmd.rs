@@ -32,6 +32,7 @@ use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
+use crate::RenameDatabaseReq;
 use crate::RenameTableReq;
 use crate::TableNameIdent;
 use crate::TxnRequest;
@@ -63,6 +64,9 @@ pub enum Cmd {
 
     /// Drop a database if absent
     DropDatabase(DropDatabaseReq),
+
+    /// Rename a database
+    RenameDatabase(RenameDatabaseReq),
 
     /// Create a table if absent
     CreateTable(CreateTableReq),
@@ -122,6 +126,7 @@ impl fmt::Display for Cmd {
 
             Cmd::CreateDatabase(req) => req.fmt(f),
             Cmd::DropDatabase(req) => req.fmt(f),
+            Cmd::RenameDatabase(req) => req.fmt(f),
             Cmd::CreateTable(req) => req.fmt(f),
             Cmd::DropTable(req) => req.fmt(f),
             Cmd::RenameTable(req) => req.fmt(f),
@@ -204,6 +209,13 @@ impl<'de> Deserialize<'de> for Cmd {
                     })
                 }
             }
+            LatestVersionCmd::RenameDatabase {
+                name_ident,
+                new_db_name,
+            } => Cmd::RenameDatabase(RenameDatabaseReq {
+                name_ident: name_ident.unwrap(),
+                new_db_name: new_db_name.unwrap(),
+            }),
             LatestVersionCmd::CreateTable {
                 if_not_exists,
                 name_ident,

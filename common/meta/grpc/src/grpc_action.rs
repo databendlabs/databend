@@ -39,6 +39,8 @@ use common_meta_types::ListTableReq;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
 use common_meta_types::PrefixListReply;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareInfo;
@@ -58,6 +60,7 @@ pub trait RequestFor {
 pub enum MetaGrpcWriteReq {
     CreateDatabase(CreateDatabaseReq),
     DropDatabase(DropDatabaseReq),
+    RenameDatabase(RenameDatabaseReq),
 
     CreateTable(CreateTableReq),
     DropTable(DropTableReq),
@@ -197,6 +200,10 @@ impl RequestFor for GetDatabaseReq {
 
 impl RequestFor for DropDatabaseReq {
     type Reply = DropDatabaseReply;
+}
+
+impl RequestFor for RenameDatabaseReq {
+    type Reply = RenameDatabaseReply;
 }
 
 impl RequestFor for CreateTableReq {

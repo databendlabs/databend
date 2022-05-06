@@ -51,6 +51,8 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::Operation;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareInfo;
@@ -189,6 +191,64 @@ impl MetaApi for MetaClientOnKV {
 
                 if succ {
                     return Ok(DropDatabaseReply {});
+                }
+            }
+        }
+    }
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError> {
+        let tenant_dbname = &req.name_ident;
+
+        loop {
+            let res = self
+                .get_db_or_err(
+                    tenant_dbname,
+                    format!("rename_database: {}", &tenant_dbname),
+                )
+                .await;
+
+            let (db_id_seq, db_id, db_meta_seq, _db_meta) = match res {
+                Ok(x) => x,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+
+            let db_id_key = DatabaseId { db_id };
+
+            tracing::debug!(db_id, name_key = debug(&tenant_dbname), "rename_database");
+
+            {
+                let new_tenant_dbname = DatabaseNameIdent {
+                    tenant: tenant_dbname.tenant.clone(),
+                    db_name: req.new_db_name.clone(),
+                };
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        self.txn_cond_seq(tenant_dbname, Eq, db_id_seq)?,
+                        self.txn_cond_seq(&db_id_key, Eq, db_meta_seq)?,
+                    ],
+                    if_then: vec![
+                        self.txn_op_del(tenant_dbname)?, // del (tenant, db_name) -> db_id
+                        self.txn_op_put(&new_tenant_dbname, self.serialize_id(db_id)?)?, // (tenant, new_db_name) -> db_id
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = self.send_txn(txn_req).await?;
+
+                tracing::debug!(
+                    name = debug(&tenant_dbname),
+                    id = debug(&db_id_key),
+                    succ = display(succ),
+                    "rename_database"
+                );
+
+                if succ {
+                    return Ok(RenameDatabaseReply {});
                 }
             }
         }

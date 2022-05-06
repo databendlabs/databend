@@ -138,6 +138,25 @@ impl Display for DropDatabaseReq {
 pub struct DropDatabaseReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameDatabaseReq {
+    pub name_ident: DatabaseNameIdent,
+    pub new_db_name: String,
+}
+
+impl Display for RenameDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "rename_database:{}/{} to {}",
+            self.name_ident.tenant, self.name_ident.db_name, self.new_db_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameDatabaseReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct GetDatabaseReq {
     pub inner: DatabaseNameIdent,
 }

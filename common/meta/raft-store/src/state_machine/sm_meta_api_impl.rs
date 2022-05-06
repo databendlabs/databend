@@ -45,6 +45,8 @@ use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaStorageError;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::ShareAlreadyExists;
@@ -111,6 +113,28 @@ impl MetaApi for StateMachine {
         }
 
         Ok(DropDatabaseReply {})
+    }
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError> {
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&Cmd::RenameDatabase(req.clone()), &t)?;
+            Ok(r)
+        })?;
+
+        assert!(res.result().is_none());
+
+        if res.prev().is_none() {
+            let ae = AppError::from(UnknownDatabase::new(
+                req.name_ident.db_name,
+                "rename database",
+            ));
+            return Err(MetaError::from(ae));
+        }
+
+        Ok(RenameDatabaseReply {})
     }
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
