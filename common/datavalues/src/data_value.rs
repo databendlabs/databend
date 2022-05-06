@@ -15,12 +15,14 @@
 // Borrow from apache/arrow/rust/datafusion/src/functions.rs
 // See notice.md
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
+use ordered_float::OrderedFloat;
 use serde_json::json;
 
 use crate::prelude::*;
@@ -177,6 +179,19 @@ impl DataValue {
         matches!(self, DataValue::UInt64(_))
     }
 
+    #[inline]
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            DataValue::Int64(_) | DataValue::UInt64(_) | DataValue::Float64(_)
+        )
+    }
+
+    #[inline]
+    pub fn is_float(&self) -> bool {
+        matches!(self, DataValue::Float64(_))
+    }
+
     pub fn as_u64(&self) -> Result<u64> {
         match self {
             DataValue::Int64(v) if *v >= 0 => Ok(*v as u64),
@@ -255,6 +270,66 @@ impl DataValue {
         };
 
         Ok(ret)
+    }
+}
+
+impl Eq for DataValue {}
+
+impl Ord for DataValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.value_type() == other.value_type() {
+            return match (self, other) {
+                (DataValue::Null, DataValue::Null) => Ordering::Equal,
+                (DataValue::Boolean(v1), DataValue::Boolean(v2)) => v1.cmp(v2),
+                (DataValue::UInt64(v1), DataValue::UInt64(v2)) => v1.cmp(v2),
+                (DataValue::Int64(v1), DataValue::Int64(v2)) => v1.cmp(v2),
+                (DataValue::Float64(v1), DataValue::Float64(v2)) => {
+                    OrderedFloat::from(*v1).cmp(&OrderedFloat::from(*v2))
+                }
+                (DataValue::String(v1), DataValue::String(v2)) => v1.cmp(v2),
+                (DataValue::Array(v1), DataValue::Array(v2)) => {
+                    for (l, r) in v1.iter().zip(v2) {
+                        let cmp = l.cmp(r);
+                        if cmp != Ordering::Equal {
+                            return cmp;
+                        }
+                    }
+                    v1.len().cmp(&v2.len())
+                }
+                (DataValue::Struct(v1), DataValue::Struct(v2)) => {
+                    for (l, r) in v1.iter().zip(v2.iter()) {
+                        let cmp = l.cmp(r);
+                        if cmp != Ordering::Equal {
+                            return cmp;
+                        }
+                    }
+                    v1.len().cmp(&v2.len())
+                }
+                (DataValue::Variant(v1), DataValue::Variant(v2)) => v1.cmp(v2),
+                _ => unreachable!(),
+            };
+        }
+
+        if !self.is_numeric() || !other.is_numeric() {
+            panic!(
+                "Cannot compare different types with {:?} and {:?}",
+                self.value_type(),
+                other.value_type()
+            );
+        }
+
+        if self.is_float() || other.is_float() {
+            return OrderedFloat::from(self.as_f64().unwrap())
+                .cmp(&OrderedFloat::from(other.as_f64().unwrap()));
+        }
+
+        self.as_i64().unwrap().cmp(&other.as_i64().unwrap())
+    }
+}
+
+impl PartialOrd for DataValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 

@@ -152,7 +152,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
-        let log_entry_stream = self.append_trunks(ctx, stream).await?;
+        let log_entry_stream = self.append_chunks(ctx, stream).await?;
         let data_block_stream =
             log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
                 Ok(log_entry) => DataBlock::try_from(log_entry),
