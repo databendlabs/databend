@@ -647,9 +647,25 @@ impl MetaApi for MetaClientOnKV {
 
     async fn get_table_by_id(
         &self,
-        _table_id: MetaId,
+        table_id: MetaId,
     ) -> Result<(TableIdent, Arc<TableMeta>), MetaError> {
-        todo!()
+        let tbid = TableId { table_id };
+
+        let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
+            self.get_struct_value(&tbid).await?;
+
+        tracing::debug!(ident = display(&tbid), "get_table_by_id");
+
+        if tb_meta_seq == 0 || table_meta.is_none() {
+            return Err(MetaError::AppError(AppError::UnknownTableId(
+                UnknownTableId::new(table_id, "get_table_by_id"),
+            )));
+        }
+
+        Ok((
+            TableIdent::new(table_id, tb_meta_seq),
+            Arc::new(table_meta.unwrap()),
+        ))
     }
 
     async fn upsert_table_option(
