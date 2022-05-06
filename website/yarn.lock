@@ -3658,6 +3658,13 @@ copy-webpack-plugin@^10.2.4:
     schema-utils "^4.0.0"
     serialize-javascript "^6.0.0"
 
+copyforjs@^1.0.6:
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/copyforjs/-/copyforjs-1.0.6.tgz#3a9b00e8bbf5ad0a1892fe6a014a9a1454f88ad5"
+  integrity sha512-VfJ30kXkb5Xgjnh0kBfn4PCFVbcnBSb/WnToBy1C4x36HcobHoV+8fs+2IXNFlTP61rGKrP55R2tMis3kspcag==
+  dependencies:
+    typescript "^4.6.4"
+
 core-js-compat@^3.18.0, core-js-compat@^3.19.1:
   version "3.19.3"
   resolved "https://registry.npmjs.org/core-js-compat/-/core-js-compat-3.19.3.tgz"
@@ -7798,6 +7805,11 @@ typedarray-to-buffer@^3.1.5:
 typescript@^4.3.5:
   version "4.5.2"
   resolved "https://registry.npmjs.org/typescript/-/typescript-4.5.2.tgz"
+
+typescript@^4.6.4:
+  version "4.6.4"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.6.4.tgz#caa78bbc3a59e6a5c510d35703f6a09877ce45e9"
+  integrity sha512-9ia/jWHIEbo49HfjrLGfKbZSuWo9iTMwXO+Ca3pRsSpbsMbc7/IU8NKdCZVRRBafVPGnoJeFL76ZOAA84I9fEg==
 
 ua-parser-js@^0.7.30:
   version "0.7.31"

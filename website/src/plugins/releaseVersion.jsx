@@ -1,6 +1,8 @@
 import axios from "axios";
 import ExecutionEnvironment from '@docusaurus/ExecutionEnvironment';
-import { useSessionStorageState, useMount } from 'ahooks';
+import { useSessionStorageState, useMount, useUnMount } from 'ahooks';
+import { copyToClipboard } from 'copyforjs';
+
 
 const cacheKey = 'global-cache-releases';
 const cacheTimeKey = 'global-cache-time';
@@ -8,17 +10,28 @@ const cacheTimeKey = 'global-cache-time';
 export function getLatest(){
   let [cacheReleast, setCacheReleast] = useSessionStorageState(cacheKey);
   const [cacheTime, setCacheTime] = useSessionStorageState(cacheTimeKey);
-  useMount(()=>{
-    const timeStamp = new Date().getTime();
-    // It's only cached for an hour
-    if (cacheTime && (timeStamp - cacheTime) > 60*60*1000 ) {
-      cacheReleast = null;
-      setCacheReleast();
-    }
+  useMount(()=>{  
     if (ExecutionEnvironment.canUseDOM) {
       setTimeout(()=>{
+        const timeStamp = new Date().getTime();
+        // It's only cached for an hour
+        if (cacheTime && (timeStamp - cacheTime) > 60*60*1000) {
+          cacheReleast = null;
+          setCacheReleast();
+        }
         getData();
-      })
+        const dom = document.querySelectorAll('.clean-btn')
+        for(let button of dom) {
+          if (button?.getAttribute('aria-label') === 'Copy code to clipboard') {
+            button.addEventListener("click", ()=>{
+              setTimeout(()=>{
+                const text = button?.previousSibling?.innerText;
+                copyToClipboard(String(text).trim())
+               }, 1)
+            }, false);
+          }
+        }
+      });
     }
   })
   function getData(){

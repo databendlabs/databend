@@ -22,6 +22,7 @@
     "ahooks": "^3.3.10",
     "axios": "^0.27.2",
     "clsx": "^1.1.1",
+    "copyforjs": "^1.0.6",
     "docusaurus-plugin-sass": "^0.2.1",
     "node": "^17.7.2",
     "prism-react-renderer": "^1.2.1",
