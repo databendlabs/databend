@@ -567,6 +567,7 @@ impl<KV: KVApi> MetaApi for KV {
         tracing::debug!(
             ident = display(&tbid),
             name = display(&tenant_dbname_tbname),
+            table_meta = debug(&tb_meta),
             "get_table"
         );
 
