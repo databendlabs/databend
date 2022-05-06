@@ -79,8 +79,7 @@ pub enum MetaGrpcReadReq {
     GetTableExt(GetTableExtReq),
     ListTables(ListTableReq),
 
-    GetShare(GetShareReq),
-
+    // GetShare(GetShareReq),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),

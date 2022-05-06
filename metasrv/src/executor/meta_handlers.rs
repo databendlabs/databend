@@ -43,7 +43,6 @@ use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -374,10 +373,10 @@ impl RequestHandler<DropShareReq> for ActionHandler {
     }
 }
 
-#[async_trait::async_trait]
-impl RequestHandler<GetShareReq> for ActionHandler {
-    async fn handle(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
-        let res = self.meta_node.consistent_read(req).await?;
-        Ok(res)
-    }
-}
+// #[async_trait::async_trait]
+// impl RequestHandler<GetShareReq> for ActionHandler {
+//     async fn handle(&self, req: GetShareReq) -> Result<Arc<ShareInfo>, MetaError> {
+//         let res = self.meta_node.consistent_read(req).await?;
+//         Ok(res)
+//     }
+// }
