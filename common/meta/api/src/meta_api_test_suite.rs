@@ -1099,6 +1099,108 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
+    pub async fn get_table_by_id<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let _tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.version;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+        }
+
+        tracing::info!("--- get_table_by_id ");
+        {
+            tracing::info!("--- get_table_by_id ");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let (table_id, table_meta) = mt.get_table_by_id(table.ident.table_id).await?;
+
+                assert_eq!(table_meta.options.get("opt‐1"), Some(&"val-1".into()));
+                assert_eq!(table_id.table_id, table.ident.table_id);
+            }
+
+            tracing::info!("--- get_table_by_id with not exists table_id");
+            {
+                let got = mt.get_table_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+            }
+        }
+        Ok(())
+    }
+
     pub async fn table_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
