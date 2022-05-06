@@ -4,11 +4,13 @@ sidebar_label: With Local FS (Test)
 description:
   How to deploy Databend with local FS (For Test).
 ---
+import GetLatest from '@site/src/components/GetLatest';
 
 This guideline will deploy Databend(standalone) with local fs step by step.
 
 <p align="center">
 <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
+
 </p>
 
 :::caution
@@ -18,7 +20,6 @@ Databend requires scalable storage layer(like Object Storage) as its storage, lo
 :::
 
 ## 1. Download
-
 You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../60-contributing/00-building-from-source.md).
 
 ```shell
@@ -32,14 +33,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +48,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-aarch64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +58,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.32-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,7 +73,7 @@ tar xzvf databend-v0.7.32-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.32-nightly-aarch64-unknown-linux-musl.tar.gz
+tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -204,3 +205,5 @@ SELECT * FROM t1
 |    2 |
 +------+
 ```
+
+<GetLatest/>
