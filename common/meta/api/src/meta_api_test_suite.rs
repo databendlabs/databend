@@ -844,6 +844,22 @@ impl MetaApiTestSuite {
             );
         }
 
+        tracing::info!("--- rename table again, with if_exist=true, OK");
+        {
+            let req = RenameTableReq {
+                if_exists: true,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            // Ok
+            mt.rename_table(req.clone()).await?;
+        }
+
         tracing::info!("--- create table again after rename, ok");
         let tb_ident2 = {
             mt.create_table(req.clone()).await?;

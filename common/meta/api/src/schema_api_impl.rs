@@ -451,11 +451,16 @@ impl<KV: KVApi> MetaApi for KV {
             };
 
             let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
-            table_has_to_exist(
-                tb_id_seq,
-                tenant_dbname_tbname,
-                "rename_table: src (db,table)",
-            )?;
+            if req.if_exists {
+                // TODO: table does not exist, can not return table id.
+                return Ok(RenameTableReply { table_id: 0 });
+            } else {
+                table_has_to_exist(
+                    tb_id_seq,
+                    tenant_dbname_tbname,
+                    "rename_table: src (db,table)",
+                )?;
+            }
 
             // Get the renaming target db to ensure presence.
 
