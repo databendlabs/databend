@@ -42,12 +42,11 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let val_start_with = 1;
 
     let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let col_stats = blocks
         .iter()
         .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = reducers::reduce_block_stats(&col_stats, &schema);
+    let r = reducers::reduce_block_stats(&col_stats);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(1, r.len());
@@ -63,7 +62,7 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
     let test_file_size = 1;
     for item in blocks {
-        let block_acc = stats_acc.begin(&item?)?;
+        let block_acc = stats_acc.begin(&item?, None)?;
         stats_acc = block_acc.end(test_file_size, "".to_owned(), HashMap::new());
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());

@@ -22,6 +22,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
@@ -29,6 +30,7 @@ use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::serialize_data_block;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
@@ -64,6 +66,7 @@ pub struct FuseTableSink {
     data_schema: DataSchemaRef,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
+    cluster_keys_index: Vec<usize>,
 }
 
 impl FuseTableSink {
@@ -74,6 +77,7 @@ impl FuseTableSink {
         data_accessor: Operator,
         data_schema: Arc<DataSchema>,
         meta_locations: TableMetaLocationGenerator,
+        cluster_keys_index: Vec<usize>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
@@ -84,6 +88,7 @@ impl FuseTableSink {
             state: State::None,
             accumulator: Default::default(),
             num_block_threshold: num_block_threshold as u64,
+            cluster_keys_index,
         })))
     }
 }
@@ -131,12 +136,40 @@ impl Processor for FuseTableSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(data_block) => {
+                let cluster_stats = BlockStatistics::clusters_statistics(
+                    self.cluster_keys_index.clone(),
+                    data_block.clone(),
+                )?;
+
+                // Remove unused columns before serialize
+                let input_schema = data_block.schema().clone();
+                let block = if self.data_schema != input_schema {
+                    let exprs: Vec<Expression> = input_schema
+                        .fields()
+                        .iter()
+                        .map(|f| Expression::Column(f.name().to_owned()))
+                        .collect();
+
+                    let executor = ExpressionExecutor::try_create(
+                        self.ctx.clone(),
+                        "expression executor",
+                        input_schema,
+                        self.data_schema.clone(),
+                        exprs,
+                        true,
+                    )?;
+                    executor.validate()?;
+                    executor.execute(&data_block)?
+                } else {
+                    data_block
+                };
+
                 let location = self.meta_locations.gen_block_location();
-                let block_statistics = BlockStatistics::from(&data_block, location)?;
+                let block_statistics = BlockStatistics::from(&block, location, cluster_stats)?;
 
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let (size, meta_data) = serialize_data_block(data_block, &mut data)?;
+                let (size, meta_data) = serialize_data_block(block, &mut data)?;
                 self.state = State::Serialized {
                     data,
                     size,
@@ -146,14 +179,16 @@ impl Processor for FuseTableSink {
             }
             State::GenerateSegment => {
                 let acc = std::mem::take(&mut self.accumulator);
-                let summary = acc.summary(self.data_schema.as_ref())?;
+                let col_stats = acc.summary()?;
+                let cluster_stats = acc.summary_clusters();
 
                 let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,
                     block_count: acc.summary_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
-                    col_stats: summary,
+                    col_stats,
+                    cluster_stats,
                 });
 
                 self.state = State::SerializedSegment {
