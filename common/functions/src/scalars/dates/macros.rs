@@ -39,6 +39,7 @@ macro_rules! impl_interval_year_month {
 #[macro_export]
 macro_rules! define_date_add_year_months {
     ($l: ident, $r: ident, $ctx: ident, $op: expr) => {{
+        let tz = $ctx.tz;
         let factor = $ctx.factor;
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
         let naive = epoch.checked_add_signed(Duration::days($l as i64));
@@ -65,21 +66,11 @@ macro_rules! define_date_add_year_months {
 #[macro_export]
 macro_rules! define_timestamp_add_year_months {
     ($l: ident, $r: ident, $ctx: ident, $op: expr) => {{
+        let tz = $ctx.tz;
         let factor = $ctx.factor;
         let micros = $l;
-        let naive = NaiveDateTime::from_timestamp_opt(
-            micros / 1_000_000,
-            (micros % 1_000_000 * 1000) as u32,
-        );
-        if naive.is_none() {
-            $ctx.set_error(ErrorCode::Overflow(format!(
-                "Overflow on datetime with microseconds {}",
-                $l
-            )));
-            return 0;
-        };
+        let date = tz.timestamp(micros / 1_000_000, (micros % 1_000_000 * 1000) as u32);
 
-        let date = naive.unwrap();
         let new_date = $op(date.year(), date.month(), date.day(), $r.as_() * factor);
         new_date.map_or_else(
             |e| {
