@@ -47,6 +47,7 @@ use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MatchSeq;
+use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::Operation;
@@ -59,6 +60,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableNameIdent;
+use common_meta_types::TableVersionMismatched;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
@@ -662,9 +664,66 @@ impl MetaApi for MetaClientOnKV {
 
     async fn upsert_table_option(
         &self,
-        _req: UpsertTableOptionReq,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError> {
-        todo!()
+        let tbid = TableId {
+            table_id: req.table_id,
+        };
+        let req_seq = req.seq;
+
+        loop {
+            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
+                self.get_struct_value(&tbid).await?;
+
+            tracing::debug!(ident = display(&tbid), "upsert_table_option");
+
+            if req_seq.match_seq(tb_meta_seq).is_err() {
+                let err = AppError::from(TableVersionMismatched::new(
+                    req.table_id,
+                    req.seq,
+                    tb_meta_seq,
+                    "upsert_table_option",
+                ));
+
+                return Err(MetaError::AppError(err));
+            }
+            let mut table_meta = table_meta.unwrap();
+            // update table options
+            let opts = &mut table_meta.options;
+
+            for (k, opt_v) in &req.options {
+                match opt_v {
+                    None => {
+                        opts.remove(k);
+                    }
+                    Some(v) => {
+                        opts.insert(k.to_string(), v.to_string());
+                    }
+                }
+            }
+            let txn_req = TxnRequest {
+                condition: vec![
+                    // table is not changed
+                    self.txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                ],
+                if_then: vec![
+                    self.txn_op_put(&tbid, self.serialize_struct(&table_meta)?)?, // tb_id -> tb_meta
+                ],
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = self.send_txn(txn_req).await?;
+
+            tracing::debug!(
+                id = debug(&tbid),
+                succ = display(succ),
+                "upsert_table_option"
+            );
+
+            if succ {
+                return Ok(UpsertTableOptionReply {});
+            }
+        }
     }
 
     async fn create_share(&self, _req: CreateShareReq) -> Result<CreateShareReply, MetaError> {

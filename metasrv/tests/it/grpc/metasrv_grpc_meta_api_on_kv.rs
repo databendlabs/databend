@@ -107,6 +107,18 @@ async fn test_meta_api_on_kv_table_list() -> anyhow::Result<()> {
     MetaApiTestSuite {}.table_list(&client).await
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_api_on_kv_upsert_table_option() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+
+    MetaApiTestSuite {}.table_upsert_option(&client).await
+}
+
 // Under developing:
 /*
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
