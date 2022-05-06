@@ -115,7 +115,7 @@ impl Display for CreateDatabaseReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
-    pub database_id: u64,
+    pub db_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

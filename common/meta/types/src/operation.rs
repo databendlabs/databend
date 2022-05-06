@@ -16,7 +16,6 @@
 
 use std::fmt::Debug;
 
-pub type MetaVersion = u64;
 pub type MetaId = u64;
 
 /// An operation that updates a field, delete it, or leave it as is.
