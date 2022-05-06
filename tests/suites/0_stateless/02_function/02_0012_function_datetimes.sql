@@ -1,3 +1,4 @@
+set timezone = 'UTC';
 SELECT today() >= 18869;
 SELECT now() >= 1630295616;
 select  toDateTime(1630320462000000), toInt64(toDateTime(1630320462000000))  = 1630320462000000;

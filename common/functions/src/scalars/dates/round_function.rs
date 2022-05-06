@@ -78,7 +78,7 @@ impl RoundFunction {
             Round::Second => dt.timestamp_micros(),
             Round::Minute => tz
                 .ymd(dt.year(), dt.month(), dt.day())
-                .and_hms_micro(dt.hour(), 0, 0, 0)
+                .and_hms_micro(dt.hour(), dt.minute(), 0, 0)
                 .timestamp_micros(),
             Round::FiveMinutes => tz
                 .ymd(dt.year(), dt.month(), dt.day())
