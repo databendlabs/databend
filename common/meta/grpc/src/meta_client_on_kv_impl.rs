@@ -229,32 +229,14 @@ impl MetaApi for MetaClientOnKV {
             db_name: "".to_string(),
         };
 
-        let prefix = name_key.to_key();
         // Pairs of db-name and db_id with seq
-        let key_seq_ids = self.inner.prefix_list_kv(&prefix).await?;
-
-        let n = key_seq_ids.len();
+        let (tenant_dbnames, db_ids) = self.list_id_value(&name_key).await?;
 
         // Keys for fetching serialized DatabaseMeta from KVApi
-        let mut kv_keys = Vec::with_capacity(n);
-        let mut db_names = Vec::with_capacity(n);
-        let mut db_ids = Vec::with_capacity(n);
+        let mut kv_keys = Vec::with_capacity(db_ids.len());
 
-        for (db_name_key, seq_id) in key_seq_ids.iter() {
-            let db_id = self
-                .deserialize_id(&seq_id.data)
-                .map_err(Self::meta_encode_err)?;
-            db_ids.push(db_id);
-
-            // Parse key and get db_name:
-
-            let n = DatabaseNameIdent::from_key(db_name_key).map_err(Self::meta_encode_err)?;
-            db_names.push(n.db_name);
-
-            // Build KVApi key for `mget()` db_meta
-            let db_id_key = DatabaseId { db_id };
-
-            let k = db_id_key.to_key();
+        for db_id in db_ids.iter() {
+            let k = DatabaseId { db_id: *db_id }.to_key();
             kv_keys.push(k);
         }
 
@@ -277,7 +259,7 @@ impl MetaApi for MetaClientOnKV {
                     },
                     name_ident: DatabaseNameIdent {
                         tenant: name_key.tenant.clone(),
-                        db_name: db_names[i].clone(),
+                        db_name: tenant_dbnames[i].db_name.clone(),
                     },
                     meta: db_meta,
                 };
@@ -460,8 +442,92 @@ impl MetaApi for MetaClientOnKV {
         }
     }
 
-    async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
-        todo!()
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+        let tenant_dbname_tbname = &req.name_ident;
+        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
+        let tenant_newdbname_newtbname = TableNameIdent {
+            tenant: tenant_dbname_tbname.tenant.clone(),
+            db_name: req.new_db_name.clone(),
+            table_name: req.new_table_name.clone(),
+        };
+
+        loop {
+            // Get db by name to ensure presence
+
+            let (_, db_id, db_meta_seq, _) =
+                self.get_db_or_err(&tenant_dbname, "rename_table").await?;
+
+            // Get table by db_id, table_name to assert presence.
+
+            let dbid_tbname = DBIdTableName {
+                db_id,
+                table_name: tenant_dbname_tbname.table_name.clone(),
+            };
+
+            let (tb_id_seq, table_id) = self.get_id_value(&dbid_tbname).await?;
+            self.table_has_to_exist(
+                tb_id_seq,
+                tenant_dbname_tbname,
+                "rename_table: src (db,table)",
+            )?;
+
+            // Get the renaming target db to ensure presence.
+
+            let tenant_newdbname = DatabaseNameIdent {
+                tenant: tenant_dbname.tenant.clone(),
+                db_name: req.new_db_name.clone(),
+            };
+            let (_, new_db_id, new_db_meta_seq, _) = self
+                .get_db_or_err(&tenant_newdbname, "rename_table: new db")
+                .await?;
+
+            // Get the renaming target table to ensure absence
+
+            let newdbid_newtbname = DBIdTableName {
+                db_id: new_db_id,
+                table_name: req.new_table_name.clone(),
+            };
+            let (new_tb_id_seq, _new_tb_id) = self.get_id_value(&newdbid_newtbname).await?;
+            self.table_has_to_not_exist(
+                new_tb_id_seq,
+                &tenant_newdbname_newtbname,
+                "rename_table",
+            )?;
+
+            {
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        self.txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
+                        self.txn_cond_seq(&DatabaseId { db_id: new_db_id }, Eq, new_db_meta_seq)?,
+                        // table_name->table_id does not change.
+                        // Updating the table meta is ok.
+                        self.txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
+                        self.txn_cond_seq(&newdbid_newtbname, Eq, 0)?,
+                    ],
+                    if_then: vec![
+                        self.txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
+                        self.txn_op_put(&newdbid_newtbname, self.serialize_id(table_id)?)?, // (db_id, tb_name) -> tb_id
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = self.send_txn(txn_req).await?;
+
+                tracing::debug!(
+                    name = debug(&tenant_dbname_tbname),
+                    to = debug(&newdbid_newtbname),
+                    table_id = debug(&table_id),
+                    succ = display(succ),
+                    "rename_table"
+                );
+
+                if succ {
+                    return Ok(RenameTableReply { table_id });
+                }
+            }
+        }
     }
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {
@@ -542,10 +608,10 @@ impl MetaApi for MetaClientOnKV {
             table_name: "".to_string(),
         };
 
-        let (tenant_dbid_tbnames, ids) = self.list_id_value(&dbid_tbname).await?;
+        let (dbid_tbnames, ids) = self.list_id_value(&dbid_tbname).await?;
 
         let mut tb_meta_keys = Vec::with_capacity(ids.len());
-        for (i, _name_key) in tenant_dbid_tbnames.iter().enumerate() {
+        for (i, _name_key) in dbid_tbnames.iter().enumerate() {
             let tbid = TableId { table_id: ids[i] };
 
             tb_meta_keys.push(tbid.to_key());
@@ -570,10 +636,10 @@ impl MetaApi for MetaClientOnKV {
                     },
                     desc: format!(
                         "'{}'.'{}'",
-                        tenant_dbname.db_name, tenant_dbid_tbnames[i].table_name
+                        tenant_dbname.db_name, dbid_tbnames[i].table_name
                     ),
                     meta: tb_meta,
-                    name: tenant_dbid_tbnames[i].to_string(),
+                    name: dbid_tbnames[i].to_string(),
                 };
                 tb_infos.push(Arc::new(tb_info));
             } else {
@@ -712,11 +778,31 @@ impl MetaClientOnKV {
         }
     }
 
+    /// Return OK if a table_id or table_meta does not exist by checking the seq.
+    ///
+    /// Otherwise returns TableAlreadyExists error
+    fn table_has_to_not_exist(
+        &self,
+        seq: u64,
+        name_ident: &TableNameIdent,
+        ctx: impl Display,
+    ) -> Result<(), MetaError> {
+        if seq == 0 {
+            Ok(())
+        } else {
+            tracing::debug!(seq, ?name_ident, "exist");
+
+            Err(MetaError::AppError(AppError::TableAlreadyExists(
+                TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
+            )))
+        }
+    }
+
     /// Get value that is formatted as it is an `id`, i.e., `u64`.
     ///
     /// It expects the kv-value is an id, such as:
-    /// `__fd_table/<tenant>/<db_id>/by_name/<table_name> -> (seq, table_id)`, or
-    /// `__fd_database/<tenant>/by_name/<db_name> -> (seq, db_id)`.
+    /// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
+    /// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
     ///
     /// It returns (seq, xx_id).
     /// If not found, (0,0) is returned.
@@ -733,8 +819,8 @@ impl MetaClientOnKV {
     /// List kvs whose value is formatted as it is an `id`, i.e., `u64`.
     ///
     /// It expects the kv-value is an id, such as:
-    /// `__fd_table/<tenant>/<db_id>/by_name/<table_name> -> (seq, table_id)`, or
-    /// `__fd_database/<tenant>/by_name/<db_name> -> (seq, db_id)`.
+    /// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
+    /// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
     ///
     /// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of id.
     async fn list_id_value<K: KVApiKey>(&self, key: &K) -> Result<(Vec<K>, Vec<u64>), MetaError> {

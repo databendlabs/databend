@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test metasrv MetaApi on a single node.
-
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
 use common_meta_grpc::MetaClientOnKV;
@@ -85,8 +83,6 @@ async fn test_meta_api_on_kv_table_create_get_drop() -> anyhow::Result<()> {
     MetaApiTestSuite {}.table_create_get_drop(&client).await
 }
 
-// Under developing:
-/*
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_on_kv_table_rename() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
@@ -94,11 +90,10 @@ async fn test_meta_api_on_kv_table_rename() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaClientOnKV::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.table_rename(&client).await
 }
- */
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_on_kv_table_list() -> anyhow::Result<()> {
