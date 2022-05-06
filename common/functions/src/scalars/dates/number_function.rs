@@ -291,7 +291,7 @@ impl NumberOperator<u8> for ToSecond {
             RoundFunction::try_create(
                 "toStartOfMinute",
                 &[&TimestampType::new_impl(0)],
-                Round::Second,
+                Round::Minute,
             )
             .unwrap(),
         )
