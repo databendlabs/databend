@@ -120,13 +120,13 @@ impl FuseTable {
 
             for expr in &self.order_keys {
                 let cname = expr.column_name();
-                let index = merged
-                    .iter()
-                    .position(|x| x.name() == &cname)
-                    .unwrap_or_else(|| {
-                        merged.push(expr.to_data_field(&input_schema).unwrap());
+                let index = match merged.iter().position(|x| x.name() == &cname) {
+                    None => {
+                        merged.push(expr.to_data_field(&input_schema)?);
                         merged.len() - 1
-                    });
+                    }
+                    Some(idx) => idx,
+                };
                 cluster_keys_index.push(index);
             }
 
