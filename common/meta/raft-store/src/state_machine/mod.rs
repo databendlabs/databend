@@ -36,7 +36,6 @@ pub mod share_lookup;
 pub mod share_outbound;
 pub mod sm;
 mod sm_kv_api_impl;
-mod sm_meta_api_impl;
 pub mod snapshot;
 pub mod state_machine_meta;
 pub mod table_lookup;
