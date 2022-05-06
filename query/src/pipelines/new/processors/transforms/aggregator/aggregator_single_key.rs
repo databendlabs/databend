@@ -80,7 +80,6 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
 
 impl Aggregator for SingleKeyAggregator<true> {
     const NAME: &'static str = "FinalSingleKeyAggregator";
-    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 0;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         for (index, func) in self.funcs.iter().enumerate() {
@@ -134,7 +133,6 @@ impl Aggregator for SingleKeyAggregator<true> {
 
 impl Aggregator for SingleKeyAggregator<false> {
     const NAME: &'static str = "PartialSingleKeyAggregator";
-    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 0;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let rows = block.num_rows();

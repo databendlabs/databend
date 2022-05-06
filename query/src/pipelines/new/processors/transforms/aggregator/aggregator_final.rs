@@ -38,6 +38,7 @@ use crate::pipelines::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::transforms::group_by::KeysColumnIter;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::transforms::group_by::StateEntity;
+use crate::sessions::QueryContext;
 
 pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
@@ -58,18 +59,20 @@ pub struct FinalAggregator<
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
+    ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     FinalAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
+    pub fn create(method: Method, params: Arc<AggregatorParams>, ctx: Arc<QueryContext>) -> Self {
         let state = method.aggregate_state();
         Self {
             is_generated: false,
             state,
             method,
             params,
+            ctx,
         }
     }
 }
@@ -108,7 +111,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<true, Method>
 {
     const NAME: &'static str = "";
-    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 10000;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         // 1.1 and 1.2.
@@ -116,7 +118,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let keys_column = block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
-        if !self.state.is_two_level() && block.num_rows() > Self::GROUPY_TWO_LEVEL_THRESHOLD {
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && block.num_rows() >= group_by_two_level_threshold {
             self.state.convert_to_two_level();
         }
 
@@ -205,11 +209,16 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     for FinalAggregator<false, Method>
 {
     const NAME: &'static str = "";
-    const GROUPY_TWO_LEVEL_THRESHOLD: usize = 10000;
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);
         let keys_iter = self.method.keys_iter_from_column(key_array)?;
+
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && block.num_rows() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
 
         let mut inserted = true;
         for keys_ref in keys_iter.get_slice() {

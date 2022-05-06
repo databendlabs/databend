@@ -112,6 +112,7 @@ impl PlanVisitor for QueryPipelineBuilder {
                         transform_output_port,
                         &aggregator_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })
     }
@@ -131,6 +132,7 @@ impl PlanVisitor for QueryPipelineBuilder {
                         transform_output_port,
                         &aggregator_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })
     }
