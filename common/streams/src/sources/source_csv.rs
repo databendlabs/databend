@@ -18,7 +18,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -62,7 +61,7 @@ impl CsvSourceBuilder {
 
         let empty_as_default = format_settings.empty_as_default;
         let skip_header = format_settings.skip_header;
-        let tz = format_settings.timezone.clone();
+        let tz = format_settings.timezone;
 
         CsvSourceBuilder {
             schema,
@@ -165,9 +164,7 @@ where R: AsyncRead + Unpin + Send
             .schema
             .fields()
             .iter()
-            .map(|f| {
-                f.data_type().create_deserializer(self.builder.block_size)
-            })
+            .map(|f| f.data_type().create_deserializer(self.builder.block_size))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -181,8 +178,10 @@ where R: AsyncRead + Unpin + Send
             if record.is_empty() {
                 break;
             }
-            let mut format = FormatSettings::default();
-            format.timezone = self.builder.tz.clone();
+            let format = FormatSettings {
+                timezone: self.builder.tz,
+                ..Default::default()
+            };
             for (col, pack) in packs.iter_mut().enumerate() {
                 match record.get(col) {
                     Some(bytes) => {

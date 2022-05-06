@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use chrono_tz::Tz;
 
+use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;

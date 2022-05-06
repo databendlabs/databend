@@ -45,7 +45,13 @@ impl TypeDeserializer for NullableDeserializer {
         self.bitmap.push(false);
     }
 
-    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, _rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        _rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         // it's covered outside
         unreachable!()
     }
@@ -64,7 +70,11 @@ impl TypeDeserializer for NullableDeserializer {
     }
 
     // TODO: support null text setting
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         if reader.ignore_insensitive_bytes(b"null")? {
             self.de_default(format);
             return Ok(());
@@ -74,7 +84,11 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, format: &FormatSettings) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         if reader.ignore_insensitive_bytes(b"null")? {
             self.de_default(format);
             return Ok(());

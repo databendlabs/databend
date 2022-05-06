@@ -124,8 +124,10 @@ impl Function for RoundFunction {
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let func = |val: i64, ctx: &mut EvalContext| self.execute(val, &ctx.tz);
-        let mut eval_context = EvalContext::default();
-        eval_context.tz = func_ctx.tz.clone();
+        let mut eval_context = EvalContext {
+            tz: func_ctx.tz,
+            ..Default::default()
+        };
         let col = scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
         for micros in col.iter() {
             let _ = check_timestamp(*micros)?;

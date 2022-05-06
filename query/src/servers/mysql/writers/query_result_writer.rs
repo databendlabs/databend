@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
@@ -114,7 +113,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         let block = blocks[0].clone();
-        let tz = format.timezone.clone();
+        let tz = format.timezone;
         match convert_schema(block.schema()) {
             Err(error) => Self::err(&error, dataset_writer),
             Ok(columns) => {

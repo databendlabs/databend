@@ -18,7 +18,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;

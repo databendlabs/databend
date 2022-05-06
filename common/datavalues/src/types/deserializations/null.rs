@@ -36,7 +36,13 @@ impl TypeDeserializer for NullDeserializer {
         self.builder.append_default();
     }
 
-    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for _ in 0..rows {
             self.builder.append_default();
         }
@@ -52,7 +58,11 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, _reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        _reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }

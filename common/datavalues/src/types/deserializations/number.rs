@@ -38,7 +38,13 @@ where
         self.builder.append_value(T::default());
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
@@ -78,7 +84,11 @@ where
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let v: T = if !T::FLOATING {
             reader.read_int_text()
         } else {

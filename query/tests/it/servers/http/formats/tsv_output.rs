@@ -16,6 +16,7 @@ use common_arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use databend_query::servers::http::formats::tsv_output::block_to_tsv;
 use pretty_assertions::assert_eq;
 

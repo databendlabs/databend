@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;

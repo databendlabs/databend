@@ -15,12 +15,10 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -44,7 +42,7 @@ impl NDJsonSourceBuilder {
             schema,
             block_size: 10000,
             size_limit: usize::MAX,
-            format
+            format,
         }
     }
 
@@ -112,9 +110,7 @@ where R: AsyncBufRead + Unpin + Send
             .schema
             .fields()
             .iter()
-            .map(|f| {
-                f.data_type().create_deserializer(self.builder.block_size)
-            })
+            .map(|f| f.data_type().create_deserializer(self.builder.block_size))
             .collect::<Vec<_>>();
 
         let fields = self

@@ -18,9 +18,9 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Not;
 
-use common_io::prelude::FormatSettings;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::DataBlock;
 
@@ -339,7 +339,7 @@ where T: PrimitiveType
                         &reader[null_offsize..],
                         step,
                         rows,
-                        &format
+                        &format,
                     )?;
 
                     null_offsize += 1;

@@ -55,7 +55,13 @@ impl TypeDeserializer for StringDeserializer {
         self.builder.append_value("");
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
             self.builder.append_value(reader);
@@ -73,7 +79,11 @@ impl TypeDeserializer for StringDeserializer {
         }
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'\'')?;
         self.builder.append_value(self.buffer.as_slice());
@@ -85,7 +95,11 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
         self.builder.append_value(self.buffer.as_slice());

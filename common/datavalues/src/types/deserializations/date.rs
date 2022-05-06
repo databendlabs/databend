@@ -44,7 +44,13 @@ where
         self.builder.append_value(T::default());
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
@@ -78,7 +84,11 @@ where
         Ok(())
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -89,7 +99,11 @@ where
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let date = reader.read_date_text()?;
         let days = uniform(date);
         let _ = check_date(days.as_i32())?;
@@ -97,7 +111,11 @@ where
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -109,7 +127,11 @@ where
         Ok(())
     }
 
-    fn de_text_json<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text_json<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);

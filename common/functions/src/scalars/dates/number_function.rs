@@ -20,7 +20,6 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Timelike;
-
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;

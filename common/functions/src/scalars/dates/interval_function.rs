@@ -16,7 +16,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::NaiveDate;
@@ -148,7 +147,7 @@ where
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let mut ctx = EvalContext::new(self.factor, self.precision, None, func_ctx.tz.clone());
+        let mut ctx = EvalContext::new(self.factor, self.precision, None, func_ctx.tz);
         let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),

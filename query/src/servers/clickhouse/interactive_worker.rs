@@ -54,10 +54,8 @@ impl ClickHouseSession for InteractiveWorker {
             .session
             .get_shared_query_context()
             .await
-            .map_err(|err| to_clickhouse_err(err))?;
-        let format = query_ctx
-            .get_format_settings()
-            .map_err(|err| to_clickhouse_err(err))?;
+            .map_err(to_clickhouse_err)?;
+        let format = query_ctx.get_format_settings().map_err(to_clickhouse_err)?;
         if let Err(cause) = query_writer.write(get_query_result.await, &format).await {
             let new_error = cause.add_message(&ctx.state.query);
             return Err(to_clickhouse_err(new_error));

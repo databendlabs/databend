@@ -33,7 +33,13 @@ impl TypeDeserializer for BooleanDeserializer {
         self.builder.append_value(false);
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: bool = reader.read_scalar()?;
@@ -54,7 +60,11 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let v = if BufferReadExt::ignore_insensitive_bytes(reader, b"true")? {
             Ok(true)
         } else if BufferReadExt::ignore_insensitive_bytes(reader, b"false")? {

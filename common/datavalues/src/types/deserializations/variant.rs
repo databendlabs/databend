@@ -55,7 +55,13 @@ impl TypeDeserializer for VariantDeserializer {
             .append_value(VariantValue::from(serde_json::Value::Null));
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, _format: &FormatSettings) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
             let val = serde_json::from_slice(reader)?;
@@ -69,7 +75,11 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
         let val = serde_json::from_slice(self.buffer.as_slice())?;
@@ -83,7 +93,11 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _format: &FormatSettings) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'\'')?;
 

@@ -14,7 +14,6 @@
 
 use std::borrow::Cow;
 
-use chrono_tz::Tz;
 use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;

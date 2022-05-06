@@ -18,6 +18,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
+
 use chrono_tz::Tz;
 use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
@@ -403,7 +404,7 @@ impl QueryContext {
         let tz = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        Ok(FunctionContext {tz})
+        Ok(FunctionContext { tz })
     }
 }
 

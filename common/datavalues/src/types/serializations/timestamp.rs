@@ -25,7 +25,6 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Default)]
 pub struct TimestampSerializer;
 
-
 impl TimestampSerializer {
     pub fn to_timestamp(&self, value: &i64, tz: &Tz) -> DateTime<Tz> {
         value.to_timestamp(tz)
@@ -41,16 +40,12 @@ impl TypeSerializer for TimestampSerializer {
         Ok(dt.format(TIME_FMT).to_string())
     }
 
-    fn serialize_column(
-        &self,
-        column: &ColumnRef,
-        format: &FormatSettings,
-    ) -> Result<Vec<String>> {
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>> {
         let column: &PrimitiveColumn<i64> = Series::check_get(column)?;
         let result: Vec<String> = column
             .iter()
             .map(|v| {
-                let dt = self.to_timestamp(v,&format.timezone);
+                let dt = self.to_timestamp(v, &format.timezone);
                 dt.format(TIME_FMT).to_string()
             })
             .collect();
@@ -62,7 +57,7 @@ impl TypeSerializer for TimestampSerializer {
         let result: Vec<Value> = array
             .iter()
             .map(|v| {
-                let dt = self.to_timestamp(v,&format.timezone);
+                let dt = self.to_timestamp(v, &format.timezone);
                 serde_json::to_value(dt.format(TIME_FMT).to_string()).unwrap()
             })
             .collect();
@@ -75,7 +70,10 @@ impl TypeSerializer for TimestampSerializer {
         format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
-        let values: Vec<DateTime<Tz>> = array.iter().map(|v| self.to_timestamp(v,&format.timezone)).collect();
+        let values: Vec<DateTime<Tz>> = array
+            .iter()
+            .map(|v| self.to_timestamp(v, &format.timezone))
+            .collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

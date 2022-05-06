@@ -43,7 +43,13 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_default(&mut self, format: &FormatSettings);
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize, format: &FormatSettings) -> Result<()>;
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        format: &FormatSettings,
+    ) -> Result<()>;
 
     fn de_json(&mut self, reader: &Value, format: &FormatSettings) -> Result<()>;
 
@@ -53,17 +59,33 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()>;
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, format: &FormatSettings) -> Result<()>;
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()>;
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, format: &FormatSettings) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         self.de_text(reader, format)
     }
 
-    fn de_text_json<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, format: &FormatSettings) -> Result<()> {
+    fn de_text_json<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         self.de_text(reader, format)
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, format: &FormatSettings) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         self.de_text(reader, format)
     }
 

@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 
-
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::Result;
