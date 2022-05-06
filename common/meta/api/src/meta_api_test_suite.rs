@@ -1498,6 +1498,8 @@ impl MetaApiTestSuite {
     ) -> anyhow::Result<()> {
         tracing::info!("--- create db1 and db3 on node_a");
         let tenant = "tenant1";
+
+        let mut db_ids = vec![];
         {
             let dbs = vec!["db1", "db3"];
             for db_name in dbs {
@@ -1512,9 +1514,8 @@ impl MetaApiTestSuite {
                         ..Default::default()
                     },
                 };
-                let res = node_a.create_database(req).await;
-                tracing::info!("create database res: {:?}", res);
-                assert!(res.is_ok());
+                let res = node_a.create_database(req).await?;
+                db_ids.push(res.db_id);
             }
         }
 
@@ -1528,9 +1529,9 @@ impl MetaApiTestSuite {
             tracing::debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(1, res[0].ident.db_id, "db1 id is 1");
+            assert_eq!(db_ids[0], res[0].ident.db_id, "db1 id");
             assert_eq!("db1", res[0].name_ident.db_name, "db1.name is db1");
-            assert_eq!(2, res[1].ident.db_id, "db3 id is 2");
+            assert_eq!(db_ids[1], res[1].ident.db_id, "db3 id");
             assert_eq!("db3", res[1].name_ident.db_name, "db3.name is db3");
         }
 
@@ -1546,6 +1547,9 @@ impl MetaApiTestSuite {
         tracing::info!("--- create db1 and tb1, tb2 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
+
+        let mut tb_ids = vec![];
+
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1584,9 +1588,8 @@ impl MetaApiTestSuite {
                         ..Default::default()
                     },
                 };
-                let res = node_a.create_table(req).await;
-                tracing::info!("create table res: {:?}", res);
-                assert!(res.is_ok());
+                let res = node_a.create_table(req).await?;
+                tb_ids.push(res.table_id);
             }
         }
 
@@ -1596,9 +1599,9 @@ impl MetaApiTestSuite {
             tracing::debug!("get table list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "table list len is 2");
-            assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
+            assert_eq!(tb_ids[0], res[0].ident.table_id, "tb1 id");
             assert_eq!("tb1", res[0].name, "tb1.name is tb1");
-            assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
+            assert_eq!(tb_ids[1], res[1].ident.table_id, "tb2 id");
             assert_eq!("tb2", res[1].name, "tb2.name is tb2");
         }
 
@@ -1614,7 +1617,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- create table tb1 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
-        {
+        let tb_id = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -1652,10 +1655,9 @@ impl MetaApiTestSuite {
                 },
             };
 
-            let res = node_a.create_table(req).await;
-            tracing::info!("create table res: {:?}", res);
-            assert!(res.is_ok());
-        }
+            let res = node_a.create_table(req).await?;
+            res.table_id
+        };
 
         tracing::info!("--- get tb1 on node_b");
         {
@@ -1664,7 +1666,7 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present table res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.table_id, "tb1 id is 1");
+            assert_eq!(tb_id, res.ident.table_id, "tb1 id is 1");
             assert_eq!("tb1", res.name, "tb1.name is tb1");
         }
 
