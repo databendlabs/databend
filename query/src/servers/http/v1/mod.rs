@@ -15,10 +15,10 @@
 mod http_query_handlers;
 pub mod json_block;
 mod load;
+mod multipart_format;
 mod query;
 mod stage;
 mod statement;
-mod multipart_format;
 
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;

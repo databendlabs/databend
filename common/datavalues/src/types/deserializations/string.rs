@@ -73,13 +73,6 @@ impl TypeDeserializer for StringDeserializer {
         }
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
-        self.buffer.clear();
-        reader.read_quoted_text(&mut self.buffer, b'\'')?;
-        self.builder.append_value(self.buffer.as_slice());
-        Ok(())
-    }
-
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         self.builder.append_value(reader);
         Ok(())
@@ -88,6 +81,13 @@ impl TypeDeserializer for StringDeserializer {
     fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
+        self.builder.append_value(self.buffer.as_slice());
+        Ok(())
+    }
+
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+        self.buffer.clear();
+        reader.read_quoted_text(&mut self.buffer, b'\'')?;
         self.builder.append_value(self.buffer.as_slice());
         Ok(())
     }

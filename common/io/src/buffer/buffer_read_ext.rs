@@ -55,6 +55,11 @@ pub trait BufferReadExt: BufferRead {
         Ok(())
     }
 
+    fn eof(&mut self) -> Result<bool> {
+        let buffer = self.fill_buf()?;
+        Ok(buffer.is_empty())
+    }
+
     fn must_eof(&mut self) -> Result<()> {
         let buffer = self.fill_buf()?;
         if !buffer.is_empty() {

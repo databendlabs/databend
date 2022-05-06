@@ -1,26 +1,40 @@
 use std::mem::replace;
 use std::sync::Arc;
-use poem::web::Multipart;
+
 use common_base::tokio::io::AsyncReadExt;
-use common_base::tokio::sync::mpsc::{Receiver, Sender};
+use common_base::tokio::sync::mpsc::Receiver;
+use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use crate::format::{FormatFactory, InputFormat, InputState};
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
+use poem::web::Multipart;
 
+use crate::format::FormatFactory;
+use crate::format::InputFormat;
+use crate::format::InputState;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
 
 pub struct MultipartFormat;
 
 impl MultipartFormat {
-    pub fn input_sources(name: &str, mut multipart: Multipart, schema: DataSchemaRef, settings: FormatSettings, ports: Vec<Arc<OutputPort>>) -> Result<Vec<ProcessorPtr>> {
+    pub fn input_sources(
+        name: &str,
+        mut multipart: Multipart,
+        schema: DataSchemaRef,
+        settings: FormatSettings,
+        ports: Vec<Arc<OutputPort>>,
+    ) -> Result<Vec<ProcessorPtr>> {
         let input_format = FormatFactory::instance().get_input(name, schema, settings)?;
 
         if ports.len() != 1 || input_format.support_parallel() {
-            return Err(ErrorCode::UnImplement("Unimplemented parallel input format."));
+            return Err(ErrorCode::UnImplement(
+                "Unimplemented parallel input format.",
+            ));
         }
 
         let (tx, rx) = common_base::tokio::sync::mpsc::channel(2);
@@ -30,26 +44,44 @@ impl MultipartFormat {
                 let mut buf = vec![0; 2048];
                 let mut async_reader = field.into_async_read();
                 match async_reader.read(&mut buf[..]).await {
-                    Ok(0) => { break; }
+                    Ok(0) => {
+                        break;
+                    }
                     Ok(read_size) => {
                         if read_size != buf.len() {
                             buf = buf[0..read_size].to_vec();
                         }
 
                         if let Err(cause) = tx.send(Ok(buf)).await {
-                            common_tracing::tracing::warn!("Multipart channel disconnect. {}", cause);
+                            common_tracing::tracing::warn!(
+                                "Multipart channel disconnect. {}",
+                                cause
+                            );
                         }
                     }
                     Err(cause) => {
-                        if let Err(cause) = tx.send(Err(ErrorCode::BadBytes(format!("Read part to field bytes error, cause {:?}", cause)))).await {
-                            common_tracing::tracing::warn!("Multipart channel disconnect. {}", cause);
+                        if let Err(cause) = tx
+                            .send(Err(ErrorCode::BadBytes(format!(
+                                "Read part to field bytes error, cause {:?}",
+                                cause
+                            ))))
+                            .await
+                        {
+                            common_tracing::tracing::warn!(
+                                "Multipart channel disconnect. {}",
+                                cause
+                            );
                         }
                     }
                 }
             }
         });
 
-        Ok(vec![SequentialInputFormatSource::create(ports[0].clone(), input_format, rx)?])
+        Ok(vec![SequentialInputFormatSource::create(
+            ports[0].clone(),
+            input_format,
+            rx,
+        )?])
     }
 }
 
@@ -70,17 +102,23 @@ pub struct SequentialInputFormatSource {
 }
 
 impl SequentialInputFormatSource {
-    pub fn create(output: Arc<OutputPort>, input_format: Box<dyn InputFormat>, data_receiver: Receiver<Result<Vec<u8>>>) -> Result<ProcessorPtr> {
+    pub fn create(
+        output: Arc<OutputPort>,
+        input_format: Box<dyn InputFormat>,
+        data_receiver: Receiver<Result<Vec<u8>>>,
+    ) -> Result<ProcessorPtr> {
         let input_state = input_format.create_state();
-        Ok(ProcessorPtr::create(Box::new(SequentialInputFormatSource {
-            output,
-            input_state,
-            input_format,
-            data_receiver,
-            finished: false,
-            state: State::NeedReceiveData,
-            data_block: vec![],
-        })))
+        Ok(ProcessorPtr::create(Box::new(
+            SequentialInputFormatSource {
+                output,
+                input_state,
+                input_format,
+                data_receiver,
+                finished: false,
+                state: State::NeedReceiveData,
+                data_block: vec![],
+            },
+        )))
     }
 }
 
@@ -123,20 +161,26 @@ impl Processor for SequentialInputFormatSource {
 
                 while !data_slice.is_empty() {
                     let len = data_slice.len();
-                    let read_size = self.input_format.read_buf(data_slice, &mut self.input_state)?;
+                    let read_size = self
+                        .input_format
+                        .read_buf(data_slice, &mut self.input_state)?;
 
                     data_slice = &data_slice[read_size..];
 
                     if read_size < len {
-                        self.data_block.push(self.input_format.deserialize_data(&mut self.input_state)?);
+                        self.data_block
+                            .push(self.input_format.deserialize_data(&mut self.input_state)?);
                     }
                 }
             }
             State::NeedDeserialize => {
-                self.data_block.push(self.input_format.deserialize_data(&mut self.input_state)?);
+                self.data_block
+                    .push(self.input_format.deserialize_data(&mut self.input_state)?);
             }
             _ => {
-                return Err(ErrorCode::LogicalError("State failure in Multipart format."));
+                return Err(ErrorCode::LogicalError(
+                    "State failure in Multipart format.",
+                ));
             }
         }
 

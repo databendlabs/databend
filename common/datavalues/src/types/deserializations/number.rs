@@ -65,6 +65,10 @@ where
         }
     }
 
+    fn de_null(&mut self) -> bool {
+        false
+    }
+
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let v: T = if !T::FLOATING {
@@ -86,10 +90,6 @@ where
         }?;
         self.builder.append_value(v);
         Ok(())
-    }
-
-    fn de_null(&mut self) -> bool {
-        false
     }
 
     fn append_data_value(&mut self, value: DataValue) -> Result<()> {

@@ -1,11 +1,18 @@
 use std::sync::Arc;
-use nom::AsBytes;
+
+use common_datablocks::assert_blocks_eq;
+use common_datavalues::type_primitive::UInt32Type;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
+use common_datavalues::DataTypeImpl;
+use common_datavalues::StringType;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use databend_query::format::format_csv::CsvInputState;
 use databend_query::format::format_csv::CsvInputFormat;
-use databend_query::format::{InputFormat, InputState};
+use databend_query::format::format_csv::CsvInputState;
+use databend_query::format::InputFormat;
+use databend_query::format::InputState;
+use nom::AsBytes;
 
 #[test]
 fn test_accepted_multi_lines() -> Result<()> {
@@ -35,12 +42,83 @@ fn test_accepted_multi_lines() -> Result<()> {
     let mut csv_input_state = csv_input_format.create_state();
 
     let bytes = "first\tsecond\nfirst\t".as_bytes();
-    assert_eq!(bytes.len(), csv_input_format.read_buf(bytes, &mut csv_input_state)?);
-    assert_eq!(bytes, &csv_input_state.as_any().downcast_mut::<CsvInputState>().unwrap().memory);
+    assert_eq!(
+        bytes.len(),
+        csv_input_format.read_buf(bytes, &mut csv_input_state)?
+    );
+    assert_eq!(
+        bytes,
+        &csv_input_state
+            .as_any()
+            .downcast_mut::<CsvInputState>()
+            .unwrap()
+            .memory
+    );
 
     let bytes = "second\nfirst\t".as_bytes();
     assert_eq!(7, csv_input_format.read_buf(bytes, &mut csv_input_state)?);
-    assert_eq!("first\tsecond\nfirst\tsecond\n".as_bytes(), csv_input_state.as_any().downcast_mut::<CsvInputState>().unwrap().memory);
+    assert_eq!(
+        "first\tsecond\nfirst\tsecond\n".as_bytes(),
+        csv_input_state
+            .as_any()
+            .downcast_mut::<CsvInputState>()
+            .unwrap()
+            .memory
+    );
+    Ok(())
+}
+
+#[test]
+fn test_deserialize_multi_lines() -> Result<()> {
+    let csv_input_format = CsvInputFormat::try_create(
+        "csv",
+        Arc::new(DataSchema::new(vec![
+            DataField::new("a", DataTypeImpl::UInt32(UInt32Type::default())),
+            DataField::new("b", DataTypeImpl::String(StringType::default())),
+        ])),
+        FormatSettings::default(),
+        1,
+        10 * 1024 * 1024,
+    )?;
+
+    let mut csv_input_state = csv_input_format.create_state();
+
+    csv_input_format.read_buf("1\t\"second\"\n".as_bytes(), &mut csv_input_state)?;
+    assert_blocks_eq(
+        vec![
+            "+---+----------+",
+            "| a | b        |",
+            "+---+----------+",
+            "| 1 | \"second\" |",
+            "+---+----------+",
+        ],
+        &[csv_input_format.deserialize_data(&mut csv_input_state)?],
+    );
+
+    let csv_input_format = CsvInputFormat::try_create(
+        "csv",
+        Arc::new(DataSchema::new(vec![
+            DataField::new("a", DataTypeImpl::UInt32(UInt32Type::default())),
+            DataField::new("b", DataTypeImpl::String(StringType::default())),
+        ])),
+        FormatSettings::default(),
+        2,
+        10 * 1024 * 1024,
+    )?;
+
+    let mut csv_input_state = csv_input_format.create_state();
+
+    csv_input_format.read_buf("1\t\"second\"\n".as_bytes(), &mut csv_input_state)?;
+    assert_blocks_eq(
+        vec![
+            "+---+----------+",
+            "| a | b        |",
+            "+---+----------+",
+            "| 1 | \"second\" |",
+            "+---+----------+",
+        ],
+        &[csv_input_format.deserialize_data(&mut csv_input_state)?],
+    );
     Ok(())
 }
 
@@ -56,8 +134,18 @@ fn assert_complete_line(content: &str) -> Result<()> {
     let mut csv_input_state = csv_input_format.create_state();
 
     let bytes = content.as_bytes();
-    assert_eq!(bytes.len(), csv_input_format.read_buf(bytes, &mut csv_input_state)?);
-    assert_eq!(bytes, &csv_input_state.as_any().downcast_mut::<CsvInputState>().unwrap().memory);
+    assert_eq!(
+        bytes.len(),
+        csv_input_format.read_buf(bytes, &mut csv_input_state)?
+    );
+    assert_eq!(
+        bytes,
+        &csv_input_state
+            .as_any()
+            .downcast_mut::<CsvInputState>()
+            .unwrap()
+            .memory
+    );
     Ok(())
 }
 
@@ -73,7 +161,17 @@ fn assert_broken_line(content: &str, assert_size: usize) -> Result<()> {
     let mut csv_input_state = csv_input_format.create_state();
 
     let bytes = content.as_bytes();
-    assert_eq!(assert_size, csv_input_format.read_buf(bytes, &mut csv_input_state)?);
-    assert_eq!(&bytes[0..assert_size], &csv_input_state.as_any().downcast_mut::<CsvInputState>().unwrap().memory);
+    assert_eq!(
+        assert_size,
+        csv_input_format.read_buf(bytes, &mut csv_input_state)?
+    );
+    assert_eq!(
+        &bytes[0..assert_size],
+        &csv_input_state
+            .as_any()
+            .downcast_mut::<CsvInputState>()
+            .unwrap()
+            .memory
+    );
     Ok(())
 }

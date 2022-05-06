@@ -69,16 +69,16 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
-        self.buffer.clear();
-        reader.read_escaped_string_text(&mut self.buffer)?;
-        let val = serde_json::from_slice(self.buffer.as_slice())?;
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+        let val = serde_json::from_slice(reader)?;
         self.builder.append_value(val);
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
-        let val = serde_json::from_slice(reader)?;
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+        self.buffer.clear();
+        reader.read_escaped_string_text(&mut self.buffer)?;
+        let val = serde_json::from_slice(self.buffer.as_slice())?;
         self.builder.append_value(val);
         Ok(())
     }

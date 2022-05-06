@@ -122,7 +122,7 @@ pub async fn streaming_load(
                             multipart,
                             max_block_size,
                         )
-                            .await
+                        .await
                     } else if format.to_lowercase().as_str() == "parquet" {
                         parquet_source_pipe_builder(context.clone(), &plan, multipart).await
                     } else if format.to_lowercase().as_str() == "ndjson"
@@ -341,7 +341,14 @@ async fn csv_source_pipe_builder(
     // builder.block_size(block_size);
     let ports = vec![OutputPort::create()];
     let mut source_pipe_builder = SourcePipeBuilder::create();
-    let sources = MultipartFormat::input_sources("csv", multipart, plan.schema(), format_settings.clone(), ports.clone()).unwrap();
+    let sources = MultipartFormat::input_sources(
+        "csv",
+        multipart,
+        plan.schema(),
+        format_settings.clone(),
+        ports.clone(),
+    )
+    .unwrap();
 
     for (index, source) in sources.into_iter().enumerate() {
         source_pipe_builder.add_source(ports[index].clone(), source);

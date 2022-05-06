@@ -1,4 +1,5 @@
 use std::any::Any;
+
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::Result;
@@ -18,7 +19,3 @@ pub trait InputFormat: Send {
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
 }
-
-
-
-

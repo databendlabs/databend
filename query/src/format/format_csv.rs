@@ -1,14 +1,25 @@
 use std::any::Any;
 use std::io::Cursor;
 use std::ops::Deref;
+
 use common_arrow::arrow::io::csv;
 use common_arrow::arrow::io::csv::read::ByteRecord;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataSchemaRef, TypeDeserializerImpl};
-use crate::format::{FormatFactory, InputFormat, InputState};
-use common_exception::Result;
-use common_io::prelude::FormatSettings;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
+use common_datavalues::TypeDeserializer;
+use common_datavalues::TypeDeserializerImpl;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_io::prelude::BufferRead;
+use common_io::prelude::BufferReadExt;
+use common_io::prelude::BufferReader;
+use common_io::prelude::CheckpointReader;
+use common_io::prelude::FormatSettings;
+
+use crate::format::FormatFactory;
+use crate::format::InputFormat;
+use crate::format::InputState;
 
 pub struct CsvInputState {
     pub quotes: bool,
@@ -33,16 +44,46 @@ pub struct CsvInputFormat {
 
 impl CsvInputFormat {
     pub fn register(factory: &mut FormatFactory) {
-        factory.register_input("csv", Box::new(|name: &str, schema: DataSchemaRef, settings: FormatSettings| {
-            CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
-        }))
+        factory.register_input(
+            "csv",
+            Box::new(
+                |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
+                    CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
+                },
+            ),
+        )
     }
 
-    pub fn try_create(name: &str, schema: DataSchemaRef, settings: FormatSettings, min_accepted_rows: usize, min_accepted_bytes: usize) -> Result<Box<dyn InputFormat>> {
+    pub fn try_create(
+        name: &str,
+        schema: DataSchemaRef,
+        settings: FormatSettings,
+        min_accepted_rows: usize,
+        min_accepted_bytes: usize,
+    ) -> Result<Box<dyn InputFormat>> {
+        // let field_delimiter = match settings.field_delimiter.len() {
+        //     n if n >= 1 => settings.field_delimiter[0],
+        //     _ => b',',
+        // };
+        //
+        // let record_delimiter = match settings.record_delimiter.len() {
+        //     n if n >= 1 => settings.record_delimiter[0],
+        //     _ => b'\n',
+        // };
+
+        // let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
+        //     Terminator::CRLF
+        // } else {
+        //     Terminator::Any(record_delimiter)
+        // };
+
+        // let skip_header = settings.skip_header;
+        // let empty_as_default = settings.empty_as_default;
+
         Ok(Box::new(CsvInputFormat {
             schema,
             min_accepted_rows,
-            min_accepted_bytes: min_accepted_bytes,
+            min_accepted_bytes,
         }))
     }
 
@@ -57,7 +98,13 @@ impl CsvInputFormat {
         buf.len()
     }
 
-    fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut CsvInputState, more_data: &mut bool) -> usize {
+    fn find_delimiter(
+        &self,
+        buf: &[u8],
+        pos: usize,
+        state: &mut CsvInputState,
+        more_data: &mut bool,
+    ) -> usize {
         for index in pos..buf.len() {
             match buf[index] {
                 b'"' => {
@@ -66,7 +113,9 @@ impl CsvInputFormat {
                 }
                 b'\r' => {
                     state.accepted_rows += 1;
-                    if state.accepted_rows >= self.min_accepted_rows || (state.accepted_bytes + index) >= self.min_accepted_bytes {
+                    if state.accepted_rows >= self.min_accepted_rows
+                        || (state.accepted_bytes + index) >= self.min_accepted_bytes
+                    {
                         *more_data = false;
                     }
 
@@ -80,7 +129,9 @@ impl CsvInputFormat {
                 }
                 b'\n' => {
                     state.accepted_rows += 1;
-                    if state.accepted_rows >= self.min_accepted_rows || (state.accepted_bytes + index) >= self.min_accepted_bytes {
+                    if state.accepted_rows >= self.min_accepted_rows
+                        || (state.accepted_bytes + index) >= self.min_accepted_bytes
+                    {
                         *more_data = false;
                     }
 
@@ -113,12 +164,48 @@ impl InputFormat for CsvInputFormat {
     }
 
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<DataBlock> {
+        let mut deserializers = Vec::with_capacity(self.schema.num_fields());
         for field in self.schema.fields() {
             let data_type = field.data_type();
-            let deserializer = data_type.create_deserializer(self.min_accepted_rows);
-            // deserializer
+            deserializers.push(data_type.create_deserializer(self.min_accepted_rows));
         }
-        todo!()
+
+        let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+        let cursor = Cursor::new(&state.memory);
+        let reader: Box<dyn BufferRead> = Box::new(BufferReader::new(cursor));
+        let mut checkpoint_reader = CheckpointReader::new(reader);
+
+        for row_index in 0..self.min_accepted_rows {
+            if checkpoint_reader.eof()? {
+                break;
+            }
+
+            for column_index in 0..deserializers.len() {
+                if checkpoint_reader.ignore_byte(b'\t')? {
+                    deserializers[column_index].de_default();
+                } else {
+                    deserializers[column_index].de_text_csv(&mut checkpoint_reader)?;
+
+                    if column_index + 1 != deserializers.len() {
+                        checkpoint_reader.must_ignore_byte(b'\t')?;
+                    }
+                }
+            }
+
+            if !checkpoint_reader.ignore_byte(b'\n')? & !checkpoint_reader.ignore_byte(b'\r')? {
+                return Err(ErrorCode::BadBytes(format!(
+                    "Parse csv error at line {}",
+                    row_index
+                )));
+            }
+        }
+
+        let mut columns = Vec::with_capacity(deserializers.len());
+        for deserializer in &mut deserializers {
+            columns.push(deserializer.finish_to_column());
+        }
+
+        Ok(DataBlock::create(self.schema.clone(), columns))
     }
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {

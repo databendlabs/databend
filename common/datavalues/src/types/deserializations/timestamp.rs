@@ -64,16 +64,6 @@ impl TypeDeserializer for TimestampDeserializer {
         }
     }
 
-    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
-        reader.must_ignore_byte(b'\'')?;
-        let ts = reader.read_timestamp_text(&self.tz)?;
-        let micros = ts.timestamp_micros();
-        let _ = check_timestamp(micros)?;
-        reader.must_ignore_byte(b'\'')?;
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let ts = reader.read_timestamp_text(&self.tz)?;
@@ -111,6 +101,16 @@ impl TypeDeserializer for TimestampDeserializer {
         let _ = check_timestamp(micros)?;
         reader.must_ignore_byte(b'"')?;
 
+        self.builder.append_value(micros.as_());
+        Ok(())
+    }
+
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+        reader.must_ignore_byte(b'\'')?;
+        let ts = reader.read_timestamp_text(&self.tz)?;
+        let micros = ts.timestamp_micros();
+        let _ = check_timestamp(micros)?;
+        reader.must_ignore_byte(b'\'')?;
         self.builder.append_value(micros.as_());
         Ok(())
     }
