@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::storages::fuse::meta::ColumnId;
@@ -66,39 +67,22 @@ pub fn reduce_block_stats<T: Borrow<ColumnsStatistics>>(stats: &[T]) -> Result<C
                 in_memory_size += col_stats.in_memory_size;
             }
 
-            let mut min = min_stats[0].clone();
-            let mut max = max_stats[0].clone();
-
             // TODO
             // for some data types, we shall balance the accuracy and the length
             // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
-            min_stats
+            let min = min_stats
                 .iter()
-                .skip(1)
-                .for_each(|v| match (min.is_null(), v.is_null()) {
-                    (true, _) => min = v.clone(),
-                    (_, true) => {}
-                    _ => {
-                        let ord = min.cmp(v);
-                        if ord == Ordering::Greater {
-                            min = v.clone();
-                        }
-                    }
-                });
+                .filter(|s| !s.is_null())
+                .min_by(|&x, &y| x.partial_cmp(y).unwrap_or(Ordering::Equal))
+                .cloned()
+                .unwrap_or(DataValue::Null);
 
-            max_stats
+            let max = max_stats
                 .iter()
-                .skip(1)
-                .for_each(|v| match (max.is_null(), v.is_null()) {
-                    (true, _) => max = v.clone(),
-                    (_, true) => {}
-                    _ => {
-                        let ord = max.cmp(v);
-                        if ord == Ordering::Less {
-                            max = v.clone();
-                        }
-                    }
-                });
+                .filter(|s| !s.is_null())
+                .max_by(|&x, &y| x.partial_cmp(y).unwrap_or(Ordering::Equal))
+                .cloned()
+                .unwrap_or(DataValue::Null);
 
             acc.insert(*id, ColumnStatistics {
                 min,
@@ -129,14 +113,18 @@ pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
                     break;
                 }
                 (_, true) => break,
-                _ => match l.cmp(r) {
-                    Ordering::Equal => continue,
-                    Ordering::Less => break,
-                    Ordering::Greater => {
-                        min = stat.min.clone();
-                        break;
+                _ => {
+                    if let Some(cmp) = l.partial_cmp(r) {
+                        match cmp {
+                            Ordering::Equal => continue,
+                            Ordering::Less => break,
+                            Ordering::Greater => {
+                                min = stat.min.clone();
+                                break;
+                            }
+                        }
                     }
-                },
+                }
             }
         }
 
@@ -147,14 +135,18 @@ pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
                     break;
                 }
                 (_, true) => break,
-                _ => match l.cmp(r) {
-                    Ordering::Equal => continue,
-                    Ordering::Less => {
-                        max = stat.max.clone();
-                        break;
+                _ => {
+                    if let Some(cmp) = l.partial_cmp(r) {
+                        match cmp {
+                            Ordering::Equal => continue,
+                            Ordering::Less => {
+                                max = stat.max.clone();
+                                break;
+                            }
+                            Ordering::Greater => break,
+                        }
                     }
-                    Ordering::Greater => break,
-                },
+                }
             }
         }
     }
