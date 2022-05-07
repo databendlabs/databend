@@ -62,7 +62,7 @@ impl Function for HexFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -72,14 +72,19 @@ impl Function for HexFunction {
                     &columns[0],
                     columns[0].data_type(),
                     &UInt64Type::new_impl(),
+                    &func_ctx,
                 )?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
                 let iter = col.iter().map(|val| format!("{:x}", val).into_bytes());
                 Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                let col =
-                    cast_column_field(&columns[0], columns[0].data_type(), &Int64Type::new_impl())?;
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &Int64Type::new_impl(),
+                    &func_ctx,
+                )?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
                 let iter = col.iter().map(|val| match val.cmp(&0) {
                     Ordering::Less => format!("-{:x}", val.unsigned_abs()).into_bytes(),
@@ -92,6 +97,7 @@ impl Function for HexFunction {
                     &columns[0],
                     columns[0].data_type(),
                     &StringType::new_impl(),
+                    &func_ctx,
                 )?;
                 let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
                 let iter = col.iter().map(|val| {

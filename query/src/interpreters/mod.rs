@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod access;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_common;
@@ -71,6 +72,7 @@ mod interpreter_view_drop;
 mod plan_schedulers;
 mod stream;
 
+pub use access::ManagementModeAccess;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use chrono_tz::Tz;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnsWithField;
 use common_datavalues::DataTypeImpl;
@@ -25,13 +26,13 @@ use super::Monotonicity;
 /// for now, this is only store Timezone
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: String,
+    pub tz: Tz,
 }
 
 impl Default for FunctionContext {
     fn default() -> Self {
         Self {
-            tz: "UTC".to_string(),
+            tz: "UTC".parse::<Tz>().unwrap(),
         }
     }
 }

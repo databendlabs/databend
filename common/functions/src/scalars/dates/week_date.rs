@@ -16,11 +16,11 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Sub;
 
+use chrono_tz::Tz;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,7 +45,7 @@ pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
     fn return_type() -> DataTypeImpl;
-    fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
+    fn to_number(_value: DateTime<Tz>, mode: u64, tz: &Tz) -> R;
     fn factor_function() -> Option<Box<dyn Function>> {
         None
     }
@@ -60,7 +60,7 @@ impl WeekResultFunction<i32> for ToStartOfWeek {
     fn return_type() -> DataTypeImpl {
         DateType::new_impl()
     }
-    fn to_number(value: DateTime<Utc>, week_mode: u64) -> i32 {
+    fn to_number(value: DateTime<Tz>, week_mode: u64, tz: &Tz) -> i32 {
         let mut weekday = value.weekday().number_from_sunday();
         if week_mode & 1 == 1 {
             weekday = value.weekday().number_from_monday();
@@ -68,7 +68,7 @@ impl WeekResultFunction<i32> for ToStartOfWeek {
         weekday -= 1;
         let duration = Duration::days(weekday as i64);
         let result = value.sub(duration);
-        get_day(result)
+        get_day(result, tz)
     }
 }
 
@@ -124,7 +124,7 @@ where
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -147,12 +147,14 @@ where
             mode = week_mode;
         }
 
+        let tz = func_ctx.tz;
+
         match columns[0].data_type().data_type_id() {
             TypeID::Date => {
                 let col: &Int32Column = Series::check_get(columns[0].column())?;
                 let iter = col.scalar_iter().map(|v| {
-                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                    T::to_number(date_time, mode)
+                    let date_time = tz.timestamp(v as i64 * 24 * 3600, 0_u32);
+                    T::to_number(date_time, mode, &tz)
                 });
                 let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
                 let viewer = i32::try_create_viewer(&col)?;
@@ -164,8 +166,8 @@ where
             TypeID::Timestamp => {
                 let col: &Int64Column = Series::check_get(columns[0].column())?;
                 let iter = col.scalar_iter().map(|v| {
-                    let date_time = Utc.timestamp(v / 1_000_000, 0_u32);
-                    T::to_number(date_time, mode)
+                    let date_time = tz.timestamp(v / 1_000_000, 0_u32);
+                    T::to_number(date_time, mode, &tz)
                 });
                 let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
                 let viewer = i32::try_create_viewer(&col)?;
@@ -222,8 +224,8 @@ impl<T, R> fmt::Display for WeekFunction<T, R> {
     }
 }
 
-fn get_day(date: DateTime<Utc>) -> i32 {
-    let start: DateTime<Utc> = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0);
+fn get_day(date: DateTime<Tz>, tz: &Tz) -> i32 {
+    let start = tz.ymd(1970, 1, 1).and_hms(0, 0, 0);
     let duration = date.signed_duration_since(start);
     duration.num_days() as i32
 }

@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test metasrv MetaApi on a single node.
+//! Test metasrv SchemaApi on a single node.
 
 use common_base::tokio;
-use common_meta_api::MetaApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 use common_meta_grpc::MetaGrpcClient;
 
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -30,11 +30,13 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}.database_create_get_drop(&client).await
+    SchemaApiTestSuite {}
+        .database_create_get_drop(&client)
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -42,13 +44,13 @@ async fn test_meta_api_database_create_get_drop_in_diff_tenant() -> anyhow::Resu
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(&client)
         .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_database_list() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -56,11 +58,11 @@ async fn test_meta_api_database_list() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}.database_list(&client).await
+    SchemaApiTestSuite {}.database_list(&client).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_database_list_in_diff_tenant() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -68,13 +70,13 @@ async fn test_meta_api_database_list_in_diff_tenant() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .database_list_in_diff_tenant(&client)
         .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -82,11 +84,11 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}.table_create_get_drop(&client).await
+    SchemaApiTestSuite {}.table_create_get_drop(&client).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_table_rename() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -94,11 +96,11 @@ async fn test_meta_api_table_rename() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}.table_rename(&client).await
+    SchemaApiTestSuite {}.table_rename(&client).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_table_upsert_option() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -106,11 +108,11 @@ async fn test_meta_api_table_upsert_option() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}.table_upsert_option(&client).await
+    SchemaApiTestSuite {}.table_upsert_option(&client).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_table_list() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_table_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -118,11 +120,11 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
-    MetaApiTestSuite {}.table_list(&client).await
+    SchemaApiTestSuite {}.table_list(&client).await
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-// async fn test_meta_api_share_create_get_drop() -> anyhow::Result<()> {
+// async fn test_meta_grpc_client_share_create_get_drop() -> anyhow::Result<()> {
 //     let (_log_guards, ut_span) = init_meta_ut!();
 //     let _ent = ut_span.enter();
 //
@@ -130,7 +132,7 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
 //
 //     let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 //
-//     MetaApiTestSuite {}.share_create_get_drop(&client).await
+//     SchemaApiTestSuite {}.share_create_get_drop(&client).await
 // }
 
 // TODO(xp): uncomment following tests when the function is ready
@@ -138,7 +140,7 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
 
 /*
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
@@ -216,7 +218,7 @@ async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
@@ -230,7 +232,7 @@ async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;

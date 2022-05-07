@@ -31,7 +31,7 @@ error:
 1 | CAST(col1 AS foo)
   | ----         ^^^
   | |            |
-  | |            expected keyword `BOOLEAN`
+  | |            expected `ARRAY`, `BIGINT`, `BOOLEAN`, `BOOL`, `DATETIME`, or 26 more ...
   | |            while parsing type name
   | while parsing `CAST(... AS ...)`
   | while parsing expression
@@ -44,7 +44,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ expected keyword `AS`
+  | ----     ^ expected `AS` or ","
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression

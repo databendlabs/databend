@@ -16,6 +16,7 @@ common-arrow = { path = "../arrow" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-infallible = { path = "../infallible" }
+common-io = { path = "../io" }
 
 # Github dependencies
 

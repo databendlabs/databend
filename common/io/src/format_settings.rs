@@ -14,18 +14,20 @@
 
 use std::str::FromStr;
 
+use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FormatSettings {
     pub record_delimiter: Vec<u8>,
     pub field_delimiter: Vec<u8>,
     pub empty_as_default: bool,
     pub skip_header: bool,
     pub compression: Compression,
+    pub timezone: Tz,
 }
 
 impl Default for FormatSettings {
@@ -36,6 +38,7 @@ impl Default for FormatSettings {
             empty_as_default: false,
             skip_header: false,
             compression: Compression::None,
+            timezone: "UTC".parse::<Tz>().unwrap(),
         }
     }
 }

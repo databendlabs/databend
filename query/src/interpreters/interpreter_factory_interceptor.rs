@@ -22,6 +22,7 @@ use common_streams::ErrorStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
@@ -30,18 +31,22 @@ use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {
     ctx: Arc<QueryContext>,
+    plan: PlanNode,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
     source_pipe_builder: Mutex<Option<SourcePipeBuilder>>,
+    management_mode_access: ManagementModeAccess,
 }
 
 impl InterceptorInterpreter {
     pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr, plan: PlanNode) -> Self {
         InterceptorInterpreter {
             ctx: ctx.clone(),
+            plan: plan.clone(),
             inner,
-            query_log: InterpreterQueryLog::create(ctx, Some(plan)),
+            query_log: InterpreterQueryLog::create(ctx.clone(), Some(plan)),
             source_pipe_builder: Mutex::new(None),
+            management_mode_access: ManagementModeAccess::create(ctx),
         }
     }
 }
@@ -56,6 +61,9 @@ impl Interpreter for InterceptorInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        // Management mode access check.
+        self.management_mode_access.check(&self.plan)?;
+
         let _ = self
             .inner
             .set_source_pipe_builder((*self.source_pipe_builder.lock()).clone());
