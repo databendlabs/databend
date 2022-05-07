@@ -31,8 +31,6 @@ tenant_id = "test_tenant"
 cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
-table_engine_csv_enabled = true
-table_engine_parquet_enabled = true
 database_engine_github_enabled = true
 
 table_cache_enabled = true
