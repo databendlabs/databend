@@ -1,15 +1,17 @@
 import axios from "axios";
 import ExecutionEnvironment from '@docusaurus/ExecutionEnvironment';
-import { useSessionStorageState, useMount } from 'ahooks';
+import { useSessionStorageState, useMount, useLocalStorageState } from 'ahooks';
 import { copyToClipboard } from 'copyforjs';
 
 
 const cacheKey = 'global-cache-releases';
 const cacheTimeKey = 'global-cache-time';
+const cacheTagNameKey = 'global-cache-tag-name';
 
 export function getLatest(){
   let [cacheReleast, setCacheReleast] = useSessionStorageState(cacheKey);
   const [cacheTime, setCacheTime] = useSessionStorageState(cacheTimeKey);
+  const [cacheTagName, setCacheTagName] = useLocalStorageState(cacheTagNameKey);
   useMount(()=>{  
     if (ExecutionEnvironment.canUseDOM) {
       setTimeout(()=>{
@@ -46,6 +48,7 @@ export function getLatest(){
             setCacheReleast(data)
             setCacheTime(new Date().getTime())
             setText(name);
+            setCacheTagName(name);
           } else {
             setText()
           }
@@ -55,12 +58,12 @@ export function getLatest(){
         })
     }
   }
-  // default value v0.7.38
-  function setText(text = 'v0.7.38') {
+  function setText(text) {
     const dom = document.querySelectorAll('.variable');
     for (let div of dom){
       if (div.innerHTML === '${version}') {
-        div.innerText = text;
+        // when error default value v0.7.39
+        div.innerText = text ? text : (cacheTagName || 'v0.7.39');
       }
     }
   }
