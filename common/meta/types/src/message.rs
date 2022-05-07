@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use openraft::raft::AppendEntriesRequest;
 use openraft::raft::InstallSnapshotRequest;
 use openraft::raft::VoteRequest;
@@ -25,22 +23,15 @@ use thiserror::Error;
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::AppliedState;
-use crate::DatabaseInfo;
 use crate::Endpoint;
-use crate::GetDatabaseReq;
 use crate::GetKVActionReply;
 use crate::GetKVReq;
-use crate::GetTableReq;
-use crate::ListDatabaseReq;
 use crate::ListKVReq;
-use crate::ListTableReq;
 use crate::LogEntry;
 use crate::MGetKVActionReply;
 use crate::MGetKVReq;
 use crate::NodeId;
 use crate::PrefixListReply;
-use crate::ShareInfo;
-use crate::TableInfo;
 use crate::TxnOpResponse;
 use crate::TxnReply;
 
@@ -72,15 +63,9 @@ pub enum ForwardRequestBody {
 
     Write(LogEntry),
 
-    ListDatabase(ListDatabaseReq),
-    GetDatabase(GetDatabaseReq),
-    ListTable(ListTableReq),
-    GetTable(GetTableReq),
-
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
     ListKV(ListKVReq),
-    // GetShare(GetShareReq),
 }
 
 /// A request that is forwarded from one raft node to another
@@ -104,12 +89,6 @@ pub enum ForwardResponse {
     Join(()),
     Leave(()),
     AppliedState(AppliedState),
-    ListDatabase(Vec<Arc<DatabaseInfo>>),
-    DatabaseInfo(Arc<DatabaseInfo>),
-    ListTable(Vec<Arc<TableInfo>>),
-    TableInfo(Arc<TableInfo>),
-
-    ShareInfo(Arc<ShareInfo>),
 
     GetKV(GetKVActionReply),
     MGetKV(MGetKVActionReply),
