@@ -114,7 +114,7 @@ impl Function for City64WithSeedFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -137,8 +137,12 @@ impl Function for City64WithSeedFunction {
             });
             Ok(Arc::new(result_col))
         } else {
-            let seed_col =
-                cast_column_field(&columns[1], columns[1].data_type(), &UInt64Type::new_impl())?;
+            let seed_col = cast_column_field(
+                &columns[1],
+                columns[1].data_type(),
+                &UInt64Type::new_impl(),
+                &func_ctx,
+            )?;
             let seed_viewer = u64::try_create_viewer(&seed_col)?;
 
             let result_col = with_match_scalar_types_error!(physical_data_type, |$S| {

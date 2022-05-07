@@ -72,20 +72,32 @@ impl Function for SubstringIndexFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let s_column =
-            cast_column_field(&columns[0], columns[0].data_type(), &StringType::new_impl())?;
+        let s_column = cast_column_field(
+            &columns[0],
+            columns[0].data_type(),
+            &StringType::new_impl(),
+            &func_ctx,
+        )?;
         let s_viewer = Vu8::try_create_viewer(&s_column)?;
 
-        let d_column =
-            cast_column_field(&columns[1], columns[1].data_type(), &StringType::new_impl())?;
+        let d_column = cast_column_field(
+            &columns[1],
+            columns[1].data_type(),
+            &StringType::new_impl(),
+            &func_ctx,
+        )?;
         let d_viewer = Vu8::try_create_viewer(&d_column)?;
 
-        let c_column =
-            cast_column_field(&columns[2], columns[2].data_type(), &Int64Type::new_impl())?;
+        let c_column = cast_column_field(
+            &columns[2],
+            columns[2].data_type(),
+            &Int64Type::new_impl(),
+            &func_ctx,
+        )?;
         let c_viewer = i64::try_create_viewer(&c_column)?;
 
         let iter = izip!(s_viewer, d_viewer, c_viewer);

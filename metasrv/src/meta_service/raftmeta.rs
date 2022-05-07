@@ -23,7 +23,7 @@ use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_grpc::DNSResolver;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_raft_store::state_machine::TableLookupKey;

@@ -20,6 +20,7 @@ use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::NaiveDate;
 use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::chrono::TimeZone;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
@@ -141,12 +142,12 @@ where
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let mut ctx = EvalContext::new(self.factor, self.precision, None);
+        let mut ctx = EvalContext::new(self.factor, self.precision, None, func_ctx.tz);
         let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),

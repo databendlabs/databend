@@ -122,7 +122,7 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let mut builder = NDJsonSourceBuilder::create(schema);
+        let mut builder = NDJsonSourceBuilder::create(schema, ctx.get_format_settings()?);
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.

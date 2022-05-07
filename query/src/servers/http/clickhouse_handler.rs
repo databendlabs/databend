@@ -18,6 +18,7 @@ use async_stream::stream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_io::prelude::FormatSettings;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::SendableDataBlockStream;
@@ -88,12 +89,12 @@ async fn execute(
             interpreter.execute(input_stream).await?
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
-
+    let format = ctx.get_format_settings()?;
     let stream = stream! {
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield(block_to_tsv(&block))
+                    yield(block_to_tsv(&block, &format))
                 },
                 Err(err) => yield(Err(err)),
             };
@@ -224,7 +225,8 @@ pub async fn clickhouse_handler_post(
 }
 
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
-    let builder = NDJsonSourceBuilder::create(plan.schema());
+    // TODO(veeupup): HTTP with global session tz
+    let builder = NDJsonSourceBuilder::create(plan.schema(), FormatSettings::default());
     let cursor = futures::io::Cursor::new(
         body.into_vec()
             .await

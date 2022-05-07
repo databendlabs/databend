@@ -22,6 +22,7 @@ use crate::calcute;
 use crate::impl_logic_expression;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 

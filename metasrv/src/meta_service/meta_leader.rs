@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 
 use common_meta_api::KVApi;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::ClientWriteError;
 use common_meta_sled_store::openraft::raft::EntryPayload;

@@ -915,6 +915,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
+ "common-io",
  "pretty_assertions",
  "regex",
 ]
@@ -974,6 +975,7 @@ dependencies = [
  "bstr",
  "bumpalo",
  "bytes 1.1.0",
+ "chrono-tz",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -1294,6 +1296,7 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "async-trait",
+ "chrono-tz",
  "common-arrow",
  "common-base",
  "common-datablocks",

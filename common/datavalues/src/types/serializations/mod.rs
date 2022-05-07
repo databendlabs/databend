@@ -15,6 +15,7 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use enum_dispatch::enum_dispatch;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
@@ -44,15 +45,20 @@ pub use variant::*;
 
 #[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
-    fn serialize_value(&self, value: &DataValue) -> Result<String>;
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>>;
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>>;
-    fn serialize_clickhouse_format(&self, column: &ColumnRef) -> Result<ArcColumnData>;
+    fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String>;
+    fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>>;
+    fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>>;
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<ArcColumnData>;
 
     fn serialize_json_object(
         &self,
         _column: &ColumnRef,
         _valids: Option<&Bitmap>,
+        _format: &FormatSettings,
     ) -> Result<Vec<Value>> {
         Err(ErrorCode::BadDataValueType(
             "Error parsing JSON: unsupported data type",
@@ -62,6 +68,7 @@ pub trait TypeSerializer: Send + Sync {
     fn serialize_json_object_suppress_error(
         &self,
         _column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<Vec<Option<Value>>> {
         Err(ErrorCode::BadDataValueType(
             "Error parsing JSON: unsupported data type",

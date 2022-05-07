@@ -71,7 +71,7 @@ impl Function for Sha2HashFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -124,8 +124,12 @@ impl Function for Sha2HashFunction {
 
             Ok(Arc::new(col))
         } else {
-            let l =
-                cast_column_field(&columns[1], columns[1].data_type(), &UInt16Type::new_impl())?;
+            let l = cast_column_field(
+                &columns[1],
+                columns[1].data_type(),
+                &UInt16Type::new_impl(),
+                &func_ctx,
+            )?;
             let l_viewer = u16::try_create_viewer(&l)?;
 
             let mut col_builder = MutableStringColumn::with_capacity(l.len());

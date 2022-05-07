@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -119,6 +120,9 @@ impl InsertInterpreter {
                     let tz = self.ctx.get_settings().get_timezone()?;
                     let tz = String::from_utf8(tz).map_err(|_| {
                         ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+                    })?;
+                    let tz = tz.parse::<Tz>().map_err(|_| {
+                        ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
                     })?;
                     let func_ctx = FunctionContext { tz };
                     pipeline.add_transform(|transform_input_port, transform_output_port| {

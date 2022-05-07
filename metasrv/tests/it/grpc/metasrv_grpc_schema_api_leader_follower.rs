@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test metasrv MetaApi by writing to leader and then reading from a follower.
+//! Test metasrv SchemaApi by writing to leader and then reading from a follower.
 use common_base::tokio;
-use common_meta_api::MetaApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 
 use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
@@ -29,7 +29,7 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let client0 = tcs[0].grpc_client().await?;
     let client1 = tcs[1].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .database_get_diff_nodes(&client0, &client1)
         .await
 }
@@ -44,7 +44,7 @@ async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let client0 = tcs[0].grpc_client().await?;
     let client1 = tcs[1].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .list_database_diff_nodes(&client0, &client1)
         .await
 }
@@ -58,7 +58,7 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
 
     let client0 = tcs[0].grpc_client().await?;
     let client1 = tcs[1].grpc_client().await?;
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .table_get_diff_nodes(&client0, &client1)
         .await
 }
@@ -73,7 +73,7 @@ async fn test_meta_api_list_table() -> anyhow::Result<()> {
     let client0 = tcs[0].grpc_client().await?;
     let client1 = tcs[1].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .list_table_diff_nodes(&client0, &client1)
         .await
 }
