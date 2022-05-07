@@ -147,6 +147,11 @@ impl<'a> DataSchemaBuilder<'a> {
             match arg_expr {
                 Expression::AggregateFunction { args, .. } => {
                     for arg_inner_expr in args.iter() {
+                        if matches!(arg_inner_expr, Expression::AggregateFunction { .. }) {
+                            return Err(ErrorCode::SyntaxException(
+                                "Aggregation function cannot contain aggregate function",
+                            ));
+                        }
                         let expr_name = arg_inner_expr.column_name().clone();
                         if input_schema.has_field(expr_name.as_str()) {
                             continue;
