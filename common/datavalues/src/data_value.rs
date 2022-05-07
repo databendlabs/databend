@@ -15,7 +15,6 @@
 // Borrow from apache/arrow/rust/datafusion/src/functions.rs
 // See notice.md
 
-use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
@@ -27,7 +26,7 @@ use serde_json::json;
 use crate::prelude::*;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -273,57 +272,6 @@ impl DataValue {
 }
 
 impl Eq for DataValue {}
-
-impl PartialOrd for DataValue {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.value_type() == other.value_type() {
-            return match (self, other) {
-                (DataValue::Null, DataValue::Null) => None,
-                (DataValue::Boolean(v1), DataValue::Boolean(v2)) => v1.partial_cmp(v2),
-                (DataValue::UInt64(v1), DataValue::UInt64(v2)) => v1.partial_cmp(v2),
-                (DataValue::Int64(v1), DataValue::Int64(v2)) => v1.partial_cmp(v2),
-                (DataValue::Float64(v1), DataValue::Float64(v2)) => v1.partial_cmp(v2),
-                (DataValue::String(v1), DataValue::String(v2)) => v1.partial_cmp(v2),
-                (DataValue::Array(v1), DataValue::Array(v2)) => {
-                    for (l, r) in v1.iter().zip(v2) {
-                        if let Some(cmp) = l.partial_cmp(r) {
-                            if cmp != Ordering::Equal {
-                                return Some(cmp);
-                            }
-                        }
-                    }
-                    v1.len().partial_cmp(&v2.len())
-                }
-                (DataValue::Struct(v1), DataValue::Struct(v2)) => {
-                    for (l, r) in v1.iter().zip(v2.iter()) {
-                        if let Some(cmp) = l.partial_cmp(r) {
-                            if cmp != Ordering::Equal {
-                                return Some(cmp);
-                            }
-                        }
-                    }
-                    v1.len().partial_cmp(&v2.len())
-                }
-                (DataValue::Variant(v1), DataValue::Variant(v2)) => v1.partial_cmp(v2),
-                _ => unreachable!(),
-            };
-        }
-
-        if !self.is_numeric() || !other.is_numeric() {
-            panic!(
-                "Cannot compare different types with {:?} and {:?}",
-                self.value_type(),
-                other.value_type()
-            );
-        }
-
-        if self.is_float() || other.is_float() {
-            return self.as_f64().unwrap().partial_cmp(&other.as_f64().unwrap());
-        }
-
-        self.as_i64().unwrap().partial_cmp(&other.as_i64().unwrap())
-    }
-}
 
 // Did not use std::convert:TryFrom
 // Because we do not need custom type error.
