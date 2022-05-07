@@ -64,6 +64,7 @@ async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = "0.1.53"
 backoff = "0.4.0"
+backon = "0.0.2"
 base64 = "0.13.0"
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
 bumpalo = "3.9.1"
@@ -113,7 +114,6 @@ tonic = "=0.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-backon = "0.0.2"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
