@@ -49,7 +49,6 @@ mod user_quota;
 mod user_setting;
 mod user_stage;
 
-pub(crate) mod compatibility;
 pub mod error_context;
 mod principal_identity;
 mod proto_display;
