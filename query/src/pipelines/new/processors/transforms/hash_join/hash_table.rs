@@ -102,7 +102,7 @@ impl ChainHashTable {
     fn hash(&self, columns: &[ColumnRef], row_count: usize) -> Result<HashVector> {
         let hash_values = columns
             .iter()
-            .map(|col| HashUtil::compute_hash(col))
+            .map(HashUtil::compute_hash)
             .collect::<Result<Vec<HashVector>>>()?;
         Ok(HashUtil::combine_hashes(&hash_values, row_count))
     }
