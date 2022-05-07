@@ -182,18 +182,14 @@ impl InputFormat for CsvInputFormat {
                 break;
             }
 
-            println!("deserializers len {}", deserializers.len());
             for column_index in 0..deserializers.len() {
                 if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default();
                 } else {
-                    deserializers[column_index].de_text_csv(&mut checkpoint_reader)?;
+                    deserializers[column_index].de_text_csv(&mut checkpoint_reader, self.field_delimiter)?;
 
-                    println!("deserializers index {} len {}", column_index, deserializers.len());
                     if column_index + 1 != deserializers.len() {
                         checkpoint_reader.must_ignore_white_spaces_and_byte(self.field_delimiter)?;
-                        let buffer = checkpoint_reader.fill_buf()?;
-                        println!("expect field delimiter. {}, {}, {}", column_index, deserializers.len(), buffer[0] as char);
                     }
                 }
             }
@@ -257,7 +253,6 @@ impl InputFormat for CsvInputFormat {
                 };
 
                 if state.accepted_rows == 1 {
-                    println!("skip header {}", index);
                     return Ok(index);
                 }
             }

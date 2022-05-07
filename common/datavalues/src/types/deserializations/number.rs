@@ -92,7 +92,7 @@ impl<T> TypeDeserializer for NumberDeserializer<T>
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _delimiter: u8) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let v: T = if !T::FLOATING {
             reader.read_int_text()

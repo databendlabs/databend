@@ -63,7 +63,8 @@ impl MultipartWorker {
                         let mut async_reader = field.into_async_read();
 
                         'read: loop {
-                            let mut buf = vec![0; 2048];
+                            // 1048576 from clickhouse DBMS_DEFAULT_BUFFER_SIZE
+                            let mut buf = vec![0; 1048576];
                             let read_res = async_reader.read(&mut buf[..]).await;
 
                             match read_res {
@@ -77,9 +78,9 @@ impl MultipartWorker {
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {
                                         common_tracing::tracing::warn!(
-                                    "Multipart channel disconnect. {}",
-                                    cause
-                                );
+                                            "Multipart channel disconnect. {}",
+                                            cause
+                                        );
 
                                         break 'outer;
                                     }
@@ -191,7 +192,6 @@ impl Processor for SequentialInputFormatSource {
         }
 
         if let Some(data_block) = self.data_block.pop() {
-            println!("Push block {:?}", data_block);
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -240,10 +240,7 @@ impl Processor for SequentialInputFormatSource {
                 }
             }
             State::NeedDeserialize => {
-                let block = self.input_format.deserialize_data(&mut self.input_state)?;
-                println!("deserialize block {:?}", block);
-                self.data_block
-                    .push(block);
+                self.data_block.push(self.input_format.deserialize_data(&mut self.input_state)?);
             }
             _ => {
                 return Err(ErrorCode::LogicalError(

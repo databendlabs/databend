@@ -55,7 +55,7 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()>;
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _delimiter: u8) -> Result<()> {
         self.de_text(reader)
     }
 
