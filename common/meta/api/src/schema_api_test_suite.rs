@@ -36,17 +36,17 @@ use common_meta_types::TableNameIdent;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::MetaApi;
+use crate::SchemaApi;
 
-/// Test suite of `MetaApi`.
+/// Test suite of `SchemaApi`.
 ///
-/// It is not used by this crate, but is used by other crate that impl `MetaApi`,
+/// It is not used by this crate, but is used by other crate that impl `SchemaApi`,
 /// to ensure an impl works as expected,
 /// such as `common/meta/embedded` and `metasrv`.
-pub struct MetaApiTestSuite {}
+pub struct SchemaApiTestSuite {}
 
-impl MetaApiTestSuite {
-    pub async fn database_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+impl SchemaApiTestSuite {
+    pub async fn database_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         tracing::info!("--- create db1");
         {
@@ -198,7 +198,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_create_get_drop_in_diff_tenant<MT: MetaApi>(
+    pub async fn database_create_get_drop_in_diff_tenant<MT: SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -339,7 +339,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
         let db_names = vec!["db1", "db2"];
@@ -377,7 +377,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list_in_diff_tenant<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
@@ -424,7 +424,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -700,7 +700,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_rename<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -965,7 +965,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_upsert_option<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_upsert_option<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1108,7 +1108,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn get_table_by_id<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn get_table_by_id<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1210,7 +1210,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
 
@@ -1281,7 +1281,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    // pub async fn share_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    // pub async fn share_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
     //     let tenant1 = "tenant1";
     //     let share_name1 = "share1";
     //     let share_name2 = "share2";
@@ -1418,8 +1418,8 @@ impl MetaApiTestSuite {
     //
 }
 
-impl MetaApiTestSuite {
-    async fn create_database<MT: MetaApi>(
+impl SchemaApiTestSuite {
+    async fn create_database<MT: SchemaApi>(
         &self,
         mt: &MT,
         tenant: &str,
@@ -1447,10 +1447,10 @@ impl MetaApiTestSuite {
 }
 
 // Test write and read meta on different nodes
-// This is meant for testing distributed MetaApi impl, to ensure a read-after-write consistency.
-impl MetaApiTestSuite {
+// This is meant for testing distributed SchemaApi impl, to ensure a read-after-write consistency.
+impl SchemaApiTestSuite {
     /// Create db one node, get db on another
-    pub async fn database_get_diff_nodes<MT: MetaApi>(
+    pub async fn database_get_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1507,7 +1507,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create dbs on node_a, list dbs on node_b
-    pub async fn list_database_diff_nodes<MT: MetaApi>(
+    pub async fn list_database_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1555,7 +1555,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create table on node_a, list table on node_b
-    pub async fn list_table_diff_nodes<MT: MetaApi>(
+    pub async fn list_table_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1625,7 +1625,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create table on node_a, get table on node_b
-    pub async fn table_get_diff_nodes<MT: MetaApi>(
+    pub async fn table_get_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,

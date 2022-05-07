@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test metasrv MetaApi by writing to one follower and then reading from another follower.
+//! Test metasrv SchemaApi by writing to one follower and then reading from another follower.
 
 use common_base::tokio;
-use common_meta_api::MetaApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 
 use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -30,13 +30,13 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let follower1 = tcs[1].grpc_client().await?;
     let follower2 = tcs[2].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .database_get_diff_nodes(&follower1, &follower2)
         .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_list_database() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -45,13 +45,13 @@ async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let follower1 = tcs[1].grpc_client().await?;
     let follower2 = tcs[2].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .list_database_diff_nodes(&follower1, &follower2)
         .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -60,13 +60,13 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let follower1 = tcs[1].grpc_client().await?;
     let follower2 = tcs[2].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .table_get_diff_nodes(&follower1, &follower2)
         .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_meta_api_list_table() -> anyhow::Result<()> {
+async fn test_meta_grpc_client_list_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -75,7 +75,7 @@ async fn test_meta_api_list_table() -> anyhow::Result<()> {
     let follower1 = tcs[1].grpc_client().await?;
     let follower2 = tcs[2].grpc_client().await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .list_table_diff_nodes(&follower1, &follower2)
         .await
 }

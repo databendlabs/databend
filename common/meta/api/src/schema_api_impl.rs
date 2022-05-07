@@ -73,11 +73,13 @@ use ConditionResult::Eq;
 use crate::DatabaseIdGen;
 use crate::KVApi;
 use crate::KVApiKey;
-use crate::MetaApi;
+use crate::SchemaApi;
 use crate::TableIdGen;
 
+/// SchemaApi is implemented upon KVApi.
+/// Thus every type that impl KVApi impls SchemaApi.
 #[tonic::async_trait]
-impl<KV: KVApi> MetaApi for KV {
+impl<KV: KVApi> SchemaApi for KV {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
@@ -320,7 +322,7 @@ impl<KV: KVApi> MetaApi for KV {
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         txn_op_put(&dbid_tbname, serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
                         txn_op_put(&tbid, serialize_struct(&req.table_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
@@ -404,7 +406,7 @@ impl<KV: KVApi> MetaApi for KV {
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
                         txn_op_del(&tbid)?,        // (tb_id) -> tb_meta
@@ -497,13 +499,13 @@ impl<KV: KVApi> MetaApi for KV {
                     txn_op_put(&newdbid_newtbname, serialize_id(table_id)?)?, // (db_id, tb_name) -> tb_id
                     // Changing a table in a db has to update the seq of db_meta,
                     // to block the batch-delete-tables when deleting a db.
-                    // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                    // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                     txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                 ];
 
                 if db_id != new_db_id {
                     then_ops.push(
-                        // TODO: test this when old metasrv is replaced with kv-txn based MetaAPI.
+                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(
                             &DatabaseId { db_id: new_db_id },
                             serialize_struct(&new_db_meta)?,
