@@ -31,4 +31,6 @@ pub trait InputFormat: Send {
     fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<DataBlock>;
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
+
+    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
 }

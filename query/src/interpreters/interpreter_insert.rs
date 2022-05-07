@@ -280,8 +280,8 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let new_pipeline = NewPipeline::create();
-        Ok(new_pipeline)
+        let insert_pipeline = NewPipeline::create();
+        Ok(insert_pipeline)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

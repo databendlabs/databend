@@ -92,6 +92,15 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+        self.buffer.clear();
+        reader.read_quoted_text(&mut self.buffer, b'"')?;
+
+        let val = serde_json::from_slice(self.buffer.as_slice())?;
+        self.builder.append_value(val);
+        Ok(())
+    }
+
     fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.builder.append_data_value(value)
     }

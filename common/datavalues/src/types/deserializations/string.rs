@@ -92,6 +92,13 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+        self.buffer.clear();
+        reader.read_quoted_text(&mut self.buffer, b'"')?;
+        self.builder.append_value(self.buffer.as_slice());
+        Ok(())
+    }
+
     fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.builder.append_data_value(value)
     }

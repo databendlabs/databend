@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_stream::stream;
-use common_base::ProgressValues;
+use common_base::{ProgressValues, Thread, TrySpawn};
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
-use common_planners::InsertInputSource;
+use common_planners::{InsertInputSource, InsertPlan};
 use common_planners::PlanNode;
 use common_streams::CsvSourceBuilder;
 use common_streams::NDJsonSourceBuilder;
@@ -39,16 +40,18 @@ use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
+use common_datavalues::{DataSchema, DataSchemaRef};
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::v1::multipart_format::MultipartFormat;
+use crate::servers::http::v1::multipart_format::{MultipartFormat, MultipartWorker};
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
+use common_exception::Result;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoadResponse {
@@ -58,12 +61,68 @@ pub struct LoadResponse {
     pub error: Option<String>,
 }
 
+fn get_input_format(node: &PlanNode) -> Result<&str> {
+    match node {
+        PlanNode::Insert(insert) => match &insert.source {
+            InsertInputSource::StreamingWithFormat(format) => Ok(format),
+            _ => Err(ErrorCode::UnknownFormat("Not found format name in plan")),
+        }
+        _ => Err(ErrorCode::UnknownFormat("Not found format name in plan")),
+    }
+}
+
+fn execute_query(context: Arc<QueryContext>, node: PlanNode, source_builder: SourcePipeBuilder) -> impl Future<Output=Result<()>> {
+    async move {
+        let interpreter = InterpreterFactory::get(context, node)?;
+
+        if let Err(cause) = interpreter.start().await {
+            tracing::error!("interpreter.start error: {:?}", cause);
+        }
+
+        // TODO(Winter): very hack code. need remove it.
+        interpreter.set_source_pipe_builder(Option::from(source_builder))?;
+
+        let mut data_stream = interpreter.execute(None).await?;
+
+        while let Some(_block) = data_stream.next().await {}
+
+        // Write Finish to query log table.
+        if let Err(cause) = interpreter.finish().await {
+            tracing::error!("interpreter.finish error: {:?}", cause);
+        }
+
+        Ok(())
+    }
+}
+
+async fn new_processor_format(ctx: &Arc<QueryContext>, node: &PlanNode, mut multipart: Multipart) -> Result<Json<LoadResponse>> {
+    let format = get_input_format(node)?;
+    let format_settings = ctx.get_format_settings()?;
+
+    let (mut worker, builder) =
+        format_source_pipe_builder(format, node.schema(), multipart, &format_settings)?;
+
+    let handler = ctx.spawn(execute_query(ctx.clone(), node.clone(), builder));
+
+
+    worker.work().await;
+
+    match handler.await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(cause)) => Err(cause),
+        Err(_) => Err(ErrorCode::TokioError("Maybe panic.")),
+    }?;
+
+    Ok(Json(LoadResponse {
+        error: None,
+        state: "SUCCESS".to_string(),
+        id: uuid::Uuid::new_v4().to_string(),
+        stats: ctx.get_scan_progress_value(),
+    }))
+}
+
 #[poem::handler]
-pub async fn streaming_load(
-    ctx: &HttpQueryContext,
-    req: &Request,
-    mut multipart: Multipart,
-) -> PoemResult<Json<LoadResponse>> {
+pub async fn streaming_load(ctx: &HttpQueryContext, req: &Request, mut multipart: Multipart) -> PoemResult<Json<LoadResponse>> {
     let session = ctx
         .create_session(SessionType::HTTPStreamingLoad)
         .await
@@ -115,15 +174,16 @@ pub async fn streaming_load(
             PlanNode::Insert(insert) => match &insert.source {
                 InsertInputSource::StreamingWithFormat(format) => {
                     if format.to_lowercase().as_str() == "csv" {
-                        csv_source_pipe_builder(
-                            context.clone(),
-                            &plan,
-                            &format_settings,
-                            multipart,
-                            max_block_size,
-                        )
-                        .await
-                    } else if format.to_lowercase().as_str() == "parquet" {
+                        return match new_processor_format(&context, &plan, multipart).await {
+                            Ok(res) => Ok(res),
+                            Err(cause) => {
+                                println!("catch error {:?}", cause);
+                                Err(InternalServerError(cause))
+                            }
+                        };
+                    }
+
+                    if format.to_lowercase().as_str() == "parquet" {
                         parquet_source_pipe_builder(context.clone(), &plan, multipart).await
                     } else if format.to_lowercase().as_str() == "ndjson"
                         || format.to_lowercase().as_str() == "jsoneachrow"
@@ -329,29 +389,27 @@ fn build_csv_stream(
     Ok(Box::pin(stream))
 }
 
-async fn csv_source_pipe_builder(
-    _ctx: Arc<QueryContext>,
-    plan: &PlanNode,
-    format_settings: &FormatSettings,
+fn format_source_pipe_builder(
+    format: &str,
+    schema: DataSchemaRef,
     multipart: Multipart,
-    _block_size: usize,
-) -> PoemResult<SourcePipeBuilder> {
+    format_settings: &FormatSettings,
+) -> Result<(MultipartWorker, SourcePipeBuilder)> {
     let ports = vec![OutputPort::create()];
     let mut source_pipe_builder = SourcePipeBuilder::create();
-    let sources = MultipartFormat::input_sources(
-        "csv",
+    let (worker, sources) = MultipartFormat::input_sources(
+        format,
         multipart,
-        plan.schema(),
+        schema,
         format_settings.clone(),
         ports.clone(),
-    )
-    .unwrap();
+    )?;
 
     for (index, source) in sources.into_iter().enumerate() {
         source_pipe_builder.add_source(ports[index].clone(), source);
     }
 
-    Ok(source_pipe_builder)
+    Ok((worker, source_pipe_builder))
 }
 
 async fn parquet_source_pipe_builder(

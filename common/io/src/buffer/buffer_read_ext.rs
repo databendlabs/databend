@@ -24,6 +24,7 @@ pub trait BufferReadExt: BufferRead {
     fn ignore_bytes(&mut self, bs: &[u8]) -> Result<bool>;
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> Result<bool>;
     fn ignore_white_spaces(&mut self) -> Result<bool>;
+    fn ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<bool>;
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize>;
 
     fn keep_read(&mut self, buf: &mut Vec<u8>, f: impl Fn(u8) -> bool) -> Result<usize>;
@@ -83,9 +84,21 @@ pub trait BufferReadExt: BufferRead {
 
     fn must_ignore_byte(&mut self, b: u8) -> Result<()> {
         if !self.ignore_byte(b)? {
+            let buf = self.fill_buf()?;
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
-                format!("Expected to have char {}", b as char),
+                format!("Expected to have char {}, {}", b as char, buf[0] as char),
+            ));
+        }
+        Ok(())
+    }
+
+    fn must_ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<()> {
+        if !self.ignore_white_spaces_and_byte(b)? {
+            let buf = self.fill_buf()?;
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Expected to have char {}, {}", b as char, buf[0] as char),
             ));
         }
         Ok(())
@@ -113,7 +126,7 @@ pub trait BufferReadExt: BufferRead {
 }
 
 impl<R> BufferReadExt for R
-where R: BufferRead
+    where R: BufferRead
 {
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> Result<usize> {
         let mut bytes = 0;
@@ -175,6 +188,17 @@ where R: BufferRead
             cnt += 1;
         }
         Ok(cnt > 0)
+    }
+
+    fn ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<bool> {
+        self.ignores(|c: u8| c == b' ' || c == b'\t')?;
+
+        if self.ignore_byte(b)? {
+            self.ignores(|c: u8| c == b' ' || c == b'\t')?;
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize> {

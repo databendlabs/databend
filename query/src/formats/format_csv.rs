@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -21,7 +21,7 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BufferRead;
+use common_io::prelude::{BufferRead, CpBufferReader};
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
 use common_io::prelude::CheckpointReader;
@@ -36,8 +36,8 @@ pub struct CsvInputState {
     pub memory: Vec<u8>,
     pub accepted_rows: usize,
     pub accepted_bytes: usize,
-    pub ignore_if_first_is_r: bool,
-    pub ignore_if_first_is_n: bool,
+    pub need_more_data: bool,
+    pub ignore_if_first: Option<u8>,
 }
 
 impl InputState for CsvInputState {
@@ -48,50 +48,49 @@ impl InputState for CsvInputState {
 
 pub struct CsvInputFormat {
     schema: DataSchemaRef,
+    field_delimiter: u8,
+    need_skip_header: bool,
+    row_delimiter: Option<u8>,
     min_accepted_rows: usize,
     min_accepted_bytes: usize,
 }
 
 impl CsvInputFormat {
     pub fn register(factory: &mut FormatFactory) {
-        factory.register_input(
-            "csv",
-            Box::new(
-                |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
-                    CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
-                },
-            ),
-        )
+        factory.register_input("csv", Box::new(
+            |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
+                CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
+            },
+        ))
     }
 
     pub fn try_create(
         _name: &str,
         schema: DataSchemaRef,
-        _settings: FormatSettings,
+        settings: FormatSettings,
         min_accepted_rows: usize,
         min_accepted_bytes: usize,
     ) -> Result<Box<dyn InputFormat>> {
-        // let field_delimiter = match settings.field_delimiter.len() {
-        //     n if n >= 1 => settings.field_delimiter[0],
-        //     _ => b',',
-        // };
-        //
-        // let record_delimiter = match settings.record_delimiter.len() {
-        //     n if n >= 1 => settings.record_delimiter[0],
-        //     _ => b'\n',
-        // };
+        let field_delimiter = match settings.field_delimiter.len() {
+            n if n >= 1 => settings.field_delimiter[0],
+            _ => b',',
+        };
 
-        // let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
-        //     Terminator::CRLF
-        // } else {
-        //     Terminator::Any(record_delimiter)
-        // };
+        let mut row_delimiter = None;
 
-        // let skip_header = settings.skip_header;
-        // let empty_as_default = settings.empty_as_default;
+        if !settings.record_delimiter.is_empty()
+            && settings.record_delimiter[0] != b'\n'
+            && settings.record_delimiter[0] != b'\r' {
+            row_delimiter = Some(settings.record_delimiter[0]);
+        }
+
+        let need_skip_header = settings.skip_header;
 
         Ok(Box::new(CsvInputFormat {
             schema,
+            row_delimiter,
+            field_delimiter,
+            need_skip_header,
             min_accepted_rows,
             min_accepted_bytes,
         }))
@@ -108,56 +107,49 @@ impl CsvInputFormat {
         buf.len()
     }
 
-    fn find_delimiter(
-        &self,
-        buf: &[u8],
-        pos: usize,
-        state: &mut CsvInputState,
-        more_data: &mut bool,
-    ) -> usize {
+    fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
         for index in pos..buf.len() {
-            match buf[index] {
-                b'"' => {
-                    state.quotes = true;
-                    return index + 1;
+            if buf[index] == b'"' {
+                state.quotes = true;
+                return index + 1;
+            }
+
+            if let Some(b) = &self.row_delimiter {
+                if buf[index] == *b {
+                    return self.accept_row::<0>(buf, pos, state, index);
                 }
-                b'\r' => {
-                    state.accepted_rows += 1;
-                    if state.accepted_rows >= self.min_accepted_rows
-                        || (state.accepted_bytes + index) >= self.min_accepted_bytes
-                    {
-                        *more_data = false;
-                    }
-
-                    if buf.len() <= index + 1 {
-                        state.ignore_if_first_is_n = true;
-                    } else if buf[index + 1] == b'\n' {
-                        return index + 2;
-                    }
-
-                    return index + 1;
+            } else {
+                if buf[index] == b'\r' {
+                    return self.accept_row::<b'\n'>(buf, pos, state, index);
+                } else if buf[index] == b'\n' {
+                    return self.accept_row::<b'\r'>(buf, pos, state, index);
                 }
-                b'\n' => {
-                    state.accepted_rows += 1;
-                    if state.accepted_rows >= self.min_accepted_rows
-                        || (state.accepted_bytes + index) >= self.min_accepted_bytes
-                    {
-                        *more_data = false;
-                    }
-
-                    if buf.len() <= index + 1 {
-                        state.ignore_if_first_is_r = true;
-                    } else if buf[index + 1] == b'\r' {
-                        return index + 2;
-                    }
-
-                    return index + 1;
-                }
-                _ => { /*do nothing*/ }
             }
         }
 
         buf.len()
+    }
+
+    #[inline(always)]
+    fn accept_row<const C: u8>(&self, buf: &[u8], pos: usize, state: &mut CsvInputState, index: usize) -> usize {
+        state.accepted_rows += 1;
+        state.accepted_bytes += (index - pos);
+
+        if state.accepted_rows >= self.min_accepted_rows
+            || (state.accepted_bytes + index) >= self.min_accepted_bytes
+        {
+            state.need_more_data = false;
+        }
+
+        if C != 0 {
+            if buf.len() <= index + 1 {
+                state.ignore_if_first = Some(C);
+            } else if buf[index + 1] == C {
+                return index + 2;
+            }
+        }
+
+        return index + 1;
     }
 }
 
@@ -168,8 +160,8 @@ impl InputFormat for CsvInputFormat {
             memory: vec![],
             accepted_rows: 0,
             accepted_bytes: 0,
-            ignore_if_first_is_r: false,
-            ignore_if_first_is_n: false,
+            need_more_data: false,
+            ignore_if_first: None,
         })
     }
 
@@ -190,19 +182,32 @@ impl InputFormat for CsvInputFormat {
                 break;
             }
 
+            println!("deserializers len {}", deserializers.len());
             for column_index in 0..deserializers.len() {
-                if checkpoint_reader.ignore_byte(b'\t')? {
+                if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default();
                 } else {
                     deserializers[column_index].de_text_csv(&mut checkpoint_reader)?;
 
+                    println!("deserializers index {} len {}", column_index, deserializers.len());
                     if column_index + 1 != deserializers.len() {
-                        checkpoint_reader.must_ignore_byte(b'\t')?;
+                        checkpoint_reader.must_ignore_white_spaces_and_byte(self.field_delimiter)?;
+                        let buffer = checkpoint_reader.fill_buf()?;
+                        println!("expect field delimiter. {}, {}, {}", column_index, deserializers.len(), buffer[0] as char);
                     }
                 }
             }
 
-            if !checkpoint_reader.ignore_byte(b'\n')? & !checkpoint_reader.ignore_byte(b'\r')? {
+            checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
+
+            if let Some(delimiter) = &self.row_delimiter {
+                if !checkpoint_reader.ignore_white_spaces_and_byte(*delimiter)? {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Parse csv error at line {}",
+                        row_index
+                    )));
+                }
+            } else if !checkpoint_reader.ignore_white_spaces_and_byte(b'\n')? & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')? {
                 return Err(ErrorCode::BadBytes(format!(
                     "Parse csv error at line {}",
                     row_index
@@ -220,25 +225,44 @@ impl InputFormat for CsvInputFormat {
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
         let mut index = 0;
-        let mut need_more_data = true;
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
 
-        if state.ignore_if_first_is_r {
-            if buf[0] == b'\r' {
+        if let Some(first) = state.ignore_if_first.take() {
+            if buf[0] == first {
                 index += 1;
             }
-        } else if state.ignore_if_first_is_n && buf[0] == b'\n' {
-            index += 1;
         }
 
-        while index < buf.len() && need_more_data {
+        state.need_more_data = true;
+        while index < buf.len() && state.need_more_data {
             index = match state.quotes {
                 true => Self::find_quotes(buf, index, state),
-                false => self.find_delimiter(buf, index, state, &mut need_more_data),
+                false => self.find_delimiter(buf, index, state),
             }
         }
 
         state.memory.extend_from_slice(&buf[0..index]);
         Ok(index)
+    }
+
+    fn skip_header(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {
+        if self.need_skip_header {
+            let mut index = 0;
+            let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
+
+            while index < buf.len() {
+                index = match state.quotes {
+                    true => Self::find_quotes(buf, index, state),
+                    false => self.find_delimiter(buf, index, state),
+                };
+
+                if state.accepted_rows == 1 {
+                    println!("skip header {}", index);
+                    return Ok(index);
+                }
+            }
+        }
+
+        Ok(0)
     }
 }

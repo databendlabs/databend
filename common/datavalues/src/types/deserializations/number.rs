@@ -24,9 +24,9 @@ pub struct NumberDeserializer<T: PrimitiveType> {
 }
 
 impl<T> TypeDeserializer for NumberDeserializer<T>
-where
-    T: PrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
+    where
+        T: PrimitiveType,
+        T: Unmarshal<T> + StatBuffer + FromLexical,
 {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
@@ -88,6 +88,22 @@ where
         } else {
             reader.read_float_text()
         }?;
+        self.builder.append_value(v);
+        Ok(())
+    }
+
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+        let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
+        let v: T = if !T::FLOATING {
+            reader.read_int_text()
+        } else {
+            reader.read_float_text()
+        }?;
+
+        if maybe_quote {
+            reader.must_ignore(|f| f == b'\'' || f == b'"')?;
+        }
+
         self.builder.append_value(v);
         Ok(())
     }
