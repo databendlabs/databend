@@ -25,11 +25,12 @@ const MAX_DISPLAY_ERROR_COUNT: usize = 5;
 /// through a parse tree. This take a deepest error at `alt` combinator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Error<'a> {
+    /// The next token when encountering an error.
     pub span: Token<'a>,
-    /// List of errors accumulated, containing the affected part of input
-    /// data, and some context.
+    /// List of errors tried in various branches that consumed
+    /// the same (farthest) length of input.
     pub errors: Vec<ErrorKind>,
-    ///
+    /// The backtrace stack of the error.
     pub contexts: Vec<(Token<'a>, &'static str)>,
 }
 
