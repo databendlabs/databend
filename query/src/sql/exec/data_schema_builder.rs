@@ -18,6 +18,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -133,5 +134,45 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
         Ok(Arc::new(DataSchema::new(fields)))
+    }
+
+    pub fn build_agg_func(
+        &self,
+        input_schema: DataSchemaRef,
+        exprs: &[Expression],
+    ) -> Result<(DataSchemaRef, Vec<Expression>)> {
+        let mut fields = input_schema.fields().clone();
+        let mut agg_inner_expressions = vec![];
+        for arg_expr in exprs.iter() {
+            match arg_expr {
+                Expression::AggregateFunction { args, .. } => {
+                    for arg_inner_expr in args.iter() {
+                        let expr_name = arg_inner_expr.column_name().clone();
+                        if input_schema.has_field(expr_name.as_str()) {
+                            continue;
+                        }
+                        let field = if arg_inner_expr.nullable(&input_schema)? {
+                            DataField::new_nullable(
+                                expr_name.as_str(),
+                                arg_inner_expr.to_data_type(&input_schema)?,
+                            )
+                        } else {
+                            DataField::new(
+                                expr_name.as_str(),
+                                arg_inner_expr.to_data_type(&input_schema)?,
+                            )
+                        };
+                        fields.push(field);
+                        agg_inner_expressions.push(arg_inner_expr.clone())
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::LogicalError(
+                        "Expression must be aggregated function",
+                    ))
+                }
+            }
+        }
+        Ok((Arc::new(DataSchema::new(fields)), agg_inner_expressions))
     }
 }
