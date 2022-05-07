@@ -84,9 +84,7 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
         false
     }
 
-    fn convert_to_two_level(&mut self) {
-        unimplemented!()
-    }
+    fn convert_to_two_level(&mut self) {}
 }
 
 /// The fixed length array is used as the data structure to locate the key by subscript
@@ -95,6 +93,7 @@ pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
     size: usize,
     max_size: usize,
     data: *mut ShortFixedKeysStateEntity<T>,
+    two_level_flag: bool,
 }
 
 // TODO:(Winter) Hack:
@@ -121,6 +120,7 @@ impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {
                 data: raw_ptr as *mut ShortFixedKeysStateEntity<T>,
                 size: 0,
                 max_size,
+                two_level_flag: false,
             }
         }
     }
@@ -185,6 +185,16 @@ where
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
         self.entity(key, inserted)
     }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        self.two_level_flag = true;
+    }
 }
 
 pub struct LongerFixedKeysAggregatorState<T: HashTableKeyable> {
@@ -246,7 +256,9 @@ where
 
     #[inline(always)]
     fn convert_to_two_level(&mut self) {
-        self.data.convert_to_two_level();
+        unsafe {
+            self.data.convert_to_two_level();
+        }
         self.two_level_flag = true;
     }
 }
@@ -255,6 +267,7 @@ pub struct SerializedKeysAggregatorState {
     pub keys_area: Bump,
     pub state_area: Bump,
     pub data_state_map: HashMapKind<KeysRef, usize>,
+    pub two_level_flag: bool,
 }
 
 // TODO:(Winter) Hack:
@@ -323,6 +336,19 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
 
         state_entity
     }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        unsafe {
+            self.data_state_map.convert_to_two_level();
+        }
+        self.two_level_flag = true;
+    }
 }
 
 impl AggregatorState<HashMethodSingleString> for SerializedKeysAggregatorState {
@@ -381,5 +407,18 @@ impl AggregatorState<HashMethodSingleString> for SerializedKeysAggregatorState {
         }
 
         state_entity
+    }
+
+    #[inline(always)]
+    fn is_two_level(&self) -> bool {
+        self.two_level_flag
+    }
+
+    #[inline(always)]
+    fn convert_to_two_level(&mut self) {
+        unsafe {
+            self.data_state_map.convert_to_two_level();
+        }
+        self.two_level_flag = true;
     }
 }

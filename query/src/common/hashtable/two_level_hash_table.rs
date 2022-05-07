@@ -59,7 +59,7 @@ impl<
 
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        self.len() != 0
+        self.len() == 0
     }
 
     #[inline(always)]
@@ -79,8 +79,27 @@ impl<
     }
 
     #[inline(always)]
-    pub fn convert_to_two_level(&mut self) {
+    pub fn insert_hash_key(&mut self, key: &Key, hash: u64, inserted: &mut bool) -> *mut Entity {
+        match self {
+            HashTableKind::HashTable(data) => data.insert_hash_key(key, hash, inserted),
+            HashTableKind::TwoLevelHashTable(data) => data.insert_hash_key(key, hash, inserted),
+        }
+    }
+
+    #[allow(clippy::missing_safety_doc)]
+    pub unsafe fn convert_to_two_level(&mut self) {
         let mut two_level_hash_table = Self::create_two_level_hash_table();
+
+        if !self.is_empty() {
+            let mut inserted = true;
+            for old_entity in self.iter() {
+                let new_entity =
+                    two_level_hash_table.insert_key(old_entity.get_key(), &mut inserted);
+                if inserted {
+                    new_entity.swap(old_entity);
+                }
+            }
+        }
         std::mem::swap(self, &mut two_level_hash_table);
     }
 }
@@ -131,6 +150,12 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
     #[inline(always)]
     pub fn insert_key(&mut self, key: &Key, inserted: &mut bool) -> *mut Entity {
         let hash = key.fast_hash();
+        let bucket = self.get_bucket_from_hash(&hash);
+        self.hash_tables[bucket].insert_hash_key(key, hash, inserted)
+    }
+
+    #[inline(always)]
+    pub fn insert_hash_key(&mut self, key: &Key, hash: u64, inserted: &mut bool) -> *mut Entity {
         let bucket = self.get_bucket_from_hash(&hash);
         self.hash_tables[bucket].insert_hash_key(key, hash, inserted)
     }

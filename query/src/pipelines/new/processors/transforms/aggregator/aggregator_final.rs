@@ -132,7 +132,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        if !self.state.is_two_level() && block.num_rows() >= group_by_two_level_threshold {
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
             self.state.convert_to_two_level();
         }
 
@@ -230,7 +230,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        if !self.state.is_two_level() && block.num_rows() >= group_by_two_level_threshold {
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
             self.state.convert_to_two_level();
         }
 

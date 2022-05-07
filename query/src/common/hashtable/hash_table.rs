@@ -136,7 +136,7 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrowe
 
             let mut place_value = grower.place(hash_value);
 
-            while std::intrinsics::likely(!self.entities.offset(place_value).is_zero())
+            while !self.entities.offset(place_value).is_zero()
                 && !self
                     .entities
                     .offset(place_value)
