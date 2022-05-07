@@ -10,6 +10,14 @@ edition = "2021"
 doctest = false
 test = false
 
+[features]
+# Phony feature 
+#
+# Prevents the integration tests from running if "hive" not enabled 
+#   The integration tests need hive-meta-store service, which is not available 
+#   in the normal testing setup.
+hive-it = []
+
 [dependencies] # In alphabetical order
 # Workspace dependencies
 
