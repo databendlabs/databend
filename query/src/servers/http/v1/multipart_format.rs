@@ -14,17 +14,16 @@
 
 use std::mem::replace;
 use std::sync::Arc;
-use poem::error::ParseMultipartError;
 
 use common_base::tokio::io::AsyncReadExt;
-use common_base::tokio::sync::mpsc::{Receiver, Sender};
+use common_base::tokio::sync::mpsc::Receiver;
+use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use poem::web::Multipart;
-use common_base::{Runtime, TrySpawn};
 
 use crate::formats::FormatFactory;
 use crate::formats::InputFormat;
@@ -33,7 +32,6 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::sessions::QueryContext;
 
 pub struct MultipartFormat;
 
@@ -48,17 +46,24 @@ impl MultipartWorker {
             'outer: loop {
                 match self.multipart.next_field().await {
                     Err(cause) => {
-                        if let Err(cause) = tx.send(Err(ErrorCode::BadBytes(format!("Parse multipart error, cause {:?}", cause))))
-                            .await {
+                        if let Err(cause) = tx
+                            .send(Err(ErrorCode::BadBytes(format!(
+                                "Parse multipart error, cause {:?}",
+                                cause
+                            ))))
+                            .await
+                        {
                             common_tracing::tracing::warn!(
-                                    "Multipart channel disconnect. {}",
-                                    cause
-                                );
+                                "Multipart channel disconnect. {}",
+                                cause
+                            );
 
                             break 'outer;
                         }
                     }
-                    Ok(None) => { break 'outer; }
+                    Ok(None) => {
+                        break 'outer;
+                    }
                     Ok(Some(field)) => {
                         let mut async_reader = field.into_async_read();
 
@@ -94,9 +99,9 @@ impl MultipartWorker {
                                         .await
                                     {
                                         common_tracing::tracing::warn!(
-                                    "Multipart channel disconnect. {}",
-                                    cause
-                                );
+                                            "Multipart channel disconnect. {}",
+                                            cause
+                                        );
                                         break 'outer;
                                     }
 
@@ -114,7 +119,7 @@ impl MultipartWorker {
 impl MultipartFormat {
     pub fn input_sources(
         name: &str,
-        mut multipart: Multipart,
+        multipart: Multipart,
         schema: DataSchemaRef,
         settings: FormatSettings,
         ports: Vec<Arc<OutputPort>>,
@@ -129,11 +134,17 @@ impl MultipartFormat {
 
         let (tx, rx) = common_base::tokio::sync::mpsc::channel(2);
 
-        Ok((MultipartWorker { multipart, tx: Some(tx) }, vec![SequentialInputFormatSource::create(
-            ports[0].clone(),
-            input_format,
-            rx,
-        )?]))
+        Ok((
+            MultipartWorker {
+                multipart,
+                tx: Some(tx),
+            },
+            vec![SequentialInputFormatSource::create(
+                ports[0].clone(),
+                input_format,
+                rx,
+            )?],
+        ))
     }
 }
 
@@ -215,7 +226,9 @@ impl Processor for SequentialInputFormatSource {
 
                 if !self.skipped_header {
                     let len = data_slice.len();
-                    let skip_size = self.input_format.skip_header(data_slice, &mut self.input_state)?;
+                    let skip_size = self
+                        .input_format
+                        .skip_header(data_slice, &mut self.input_state)?;
 
                     data_slice = &data_slice[skip_size..];
 
@@ -240,7 +253,8 @@ impl Processor for SequentialInputFormatSource {
                 }
             }
             State::NeedDeserialize => {
-                self.data_block.push(self.input_format.deserialize_data(&mut self.input_state)?);
+                self.data_block
+                    .push(self.input_format.deserialize_data(&mut self.input_state)?);
             }
             _ => {
                 return Err(ErrorCode::LogicalError(

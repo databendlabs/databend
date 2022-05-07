@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
+use std::io::Read;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -21,7 +22,7 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::{BufferRead, CpBufferReader};
+use common_io::prelude::BufferRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
 use common_io::prelude::CheckpointReader;
@@ -57,11 +58,14 @@ pub struct CsvInputFormat {
 
 impl CsvInputFormat {
     pub fn register(factory: &mut FormatFactory) {
-        factory.register_input("csv", Box::new(
-            |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
-                CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
-            },
-        ))
+        factory.register_input(
+            "csv",
+            Box::new(
+                |name: &str, schema: DataSchemaRef, settings: FormatSettings| {
+                    CsvInputFormat::try_create(name, schema, settings, 8192, 10 * 1024 * 1024)
+                },
+            ),
+        )
     }
 
     pub fn try_create(
@@ -80,7 +84,8 @@ impl CsvInputFormat {
 
         if !settings.record_delimiter.is_empty()
             && settings.record_delimiter[0] != b'\n'
-            && settings.record_delimiter[0] != b'\r' {
+            && settings.record_delimiter[0] != b'\r'
+        {
             row_delimiter = Some(settings.record_delimiter[0]);
         }
 
@@ -118,12 +123,10 @@ impl CsvInputFormat {
                 if buf[index] == *b {
                     return self.accept_row::<0>(buf, pos, state, index);
                 }
-            } else {
-                if buf[index] == b'\r' {
-                    return self.accept_row::<b'\n'>(buf, pos, state, index);
-                } else if buf[index] == b'\n' {
-                    return self.accept_row::<b'\r'>(buf, pos, state, index);
-                }
+            } else if buf[index] == b'\r' {
+                return self.accept_row::<b'\n'>(buf, pos, state, index);
+            } else if buf[index] == b'\n' {
+                return self.accept_row::<b'\r'>(buf, pos, state, index);
             }
         }
 
@@ -131,9 +134,15 @@ impl CsvInputFormat {
     }
 
     #[inline(always)]
-    fn accept_row<const C: u8>(&self, buf: &[u8], pos: usize, state: &mut CsvInputState, index: usize) -> usize {
+    fn accept_row<const C: u8>(
+        &self,
+        buf: &[u8],
+        pos: usize,
+        state: &mut CsvInputState,
+        index: usize,
+    ) -> usize {
         state.accepted_rows += 1;
-        state.accepted_bytes += (index - pos);
+        state.accepted_bytes += index - pos;
 
         if state.accepted_rows >= self.min_accepted_rows
             || (state.accepted_bytes + index) >= self.min_accepted_bytes
@@ -186,10 +195,12 @@ impl InputFormat for CsvInputFormat {
                 if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default();
                 } else {
-                    deserializers[column_index].de_text_csv(&mut checkpoint_reader, self.field_delimiter)?;
+                    deserializers[column_index]
+                        .de_text_csv(&mut checkpoint_reader, self.field_delimiter)?;
 
                     if column_index + 1 != deserializers.len() {
-                        checkpoint_reader.must_ignore_white_spaces_and_byte(self.field_delimiter)?;
+                        checkpoint_reader
+                            .must_ignore_white_spaces_and_byte(self.field_delimiter)?;
                     }
                 }
             }
@@ -203,7 +214,9 @@ impl InputFormat for CsvInputFormat {
                         row_index
                     )));
                 }
-            } else if !checkpoint_reader.ignore_white_spaces_and_byte(b'\n')? & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')? {
+            } else if !checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
+                & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?
+            {
                 return Err(ErrorCode::BadBytes(format!(
                     "Parse csv error at line {}",
                     row_index

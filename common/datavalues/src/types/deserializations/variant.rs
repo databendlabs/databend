@@ -92,7 +92,11 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _delimiter: u8) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _delimiter: u8,
+    ) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'"')?;
 

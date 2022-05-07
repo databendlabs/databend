@@ -28,10 +28,10 @@ pub struct DateDeserializer<T: PrimitiveType> {
 pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
 
 impl<T> TypeDeserializer for DateDeserializer<T>
-    where
-        i32: AsPrimitive<T>,
-        T: PrimitiveType,
-        T: Unmarshal<T> + StatBuffer + FromLexical,
+where
+    i32: AsPrimitive<T>,
+    T: PrimitiveType,
+    T: Unmarshal<T> + StatBuffer + FromLexical,
 {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
@@ -97,7 +97,11 @@ impl<T> TypeDeserializer for DateDeserializer<T>
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, _delimiter: u8) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _delimiter: u8,
+    ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -138,9 +142,9 @@ impl<T> TypeDeserializer for DateDeserializer<T>
 
 #[inline]
 fn uniform<T>(date: NaiveDate) -> T
-    where
-        i32: AsPrimitive<T>,
-        T: PrimitiveType,
+where
+    i32: AsPrimitive<T>,
+    T: PrimitiveType,
 {
     (date.num_days_from_ce() - EPOCH_DAYS_FROM_CE).as_()
 }

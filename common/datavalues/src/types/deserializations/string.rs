@@ -92,7 +92,11 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>, delimiter: u8) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        delimiter: u8,
+    ) -> Result<()> {
         self.buffer.clear();
         if reader.ignore_byte(b'"')? {
             reader.keep_read(&mut self.buffer, |b| b != b'"')?;

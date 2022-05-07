@@ -17,12 +17,15 @@ use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_stream::stream;
-use common_base::{ProgressValues, Thread, TrySpawn};
+use common_base::ProgressValues;
+use common_base::TrySpawn;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::parse_escape_string;
 use common_io::prelude::FormatSettings;
-use common_planners::{InsertInputSource, InsertPlan};
+use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSourceBuilder;
 use common_streams::NDJsonSourceBuilder;
@@ -40,18 +43,17 @@ use poem::web::Multipart;
 use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
-use common_datavalues::{DataSchema, DataSchemaRef};
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::v1::multipart_format::{MultipartFormat, MultipartWorker};
+use crate::servers::http::v1::multipart_format::MultipartFormat;
+use crate::servers::http::v1::multipart_format::MultipartWorker;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
-use common_exception::Result;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoadResponse {
@@ -66,12 +68,16 @@ fn get_input_format(node: &PlanNode) -> Result<&str> {
         PlanNode::Insert(insert) => match &insert.source {
             InsertInputSource::StreamingWithFormat(format) => Ok(format),
             _ => Err(ErrorCode::UnknownFormat("Not found format name in plan")),
-        }
+        },
         _ => Err(ErrorCode::UnknownFormat("Not found format name in plan")),
     }
 }
 
-fn execute_query(context: Arc<QueryContext>, node: PlanNode, source_builder: SourcePipeBuilder) -> impl Future<Output=Result<()>> {
+fn execute_query(
+    context: Arc<QueryContext>,
+    node: PlanNode,
+    source_builder: SourcePipeBuilder,
+) -> impl Future<Output = Result<()>> {
     async move {
         let interpreter = InterpreterFactory::get(context, node)?;
 
@@ -95,7 +101,11 @@ fn execute_query(context: Arc<QueryContext>, node: PlanNode, source_builder: Sou
     }
 }
 
-async fn new_processor_format(ctx: &Arc<QueryContext>, node: &PlanNode, mut multipart: Multipart) -> Result<Json<LoadResponse>> {
+async fn new_processor_format(
+    ctx: &Arc<QueryContext>,
+    node: &PlanNode,
+    multipart: Multipart,
+) -> Result<Json<LoadResponse>> {
     let format = get_input_format(node)?;
     let format_settings = ctx.get_format_settings()?;
 
@@ -103,7 +113,6 @@ async fn new_processor_format(ctx: &Arc<QueryContext>, node: &PlanNode, mut mult
         format_source_pipe_builder(format, node.schema(), multipart, &format_settings)?;
 
     let handler = ctx.spawn(execute_query(ctx.clone(), node.clone(), builder));
-
 
     worker.work().await;
 
@@ -122,7 +131,11 @@ async fn new_processor_format(ctx: &Arc<QueryContext>, node: &PlanNode, mut mult
 }
 
 #[poem::handler]
-pub async fn streaming_load(ctx: &HttpQueryContext, req: &Request, mut multipart: Multipart) -> PoemResult<Json<LoadResponse>> {
+pub async fn streaming_load(
+    ctx: &HttpQueryContext,
+    req: &Request,
+    mut multipart: Multipart,
+) -> PoemResult<Json<LoadResponse>> {
     let session = ctx
         .create_session(SessionType::HTTPStreamingLoad)
         .await
