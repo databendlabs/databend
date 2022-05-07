@@ -30,6 +30,5 @@ pub use kv_api_key::KVApiKeyError;
 pub use kv_api_test_suite::KVApiTestSuite;
 pub use meta_api::MetaApi;
 pub use meta_api_test_suite::MetaApiTestSuite;
-pub use schema_api_impl::SchemaApiImpl;
 pub use schema_api_keys::DatabaseIdGen;
 pub use schema_api_keys::TableIdGen;

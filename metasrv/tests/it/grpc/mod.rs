@@ -19,6 +19,5 @@ pub mod metasrv_grpc_kv_api_restart_cluster;
 pub mod metasrv_grpc_meta_api;
 pub mod metasrv_grpc_meta_api_follower_follower;
 pub mod metasrv_grpc_meta_api_leader_follower;
-pub mod metasrv_grpc_meta_api_on_kv;
 pub mod metasrv_grpc_tls;
 pub mod metasrv_grpc_watch;
