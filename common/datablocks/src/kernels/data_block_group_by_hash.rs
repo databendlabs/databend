@@ -20,6 +20,7 @@ use std::ops::Not;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::DataBlock;
 
@@ -226,14 +227,14 @@ impl HashMethodSerializer {
         let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
 
         let rows = keys.len();
-
+        let format = FormatSettings::default();
         let mut res = Vec::with_capacity(group_fields.len());
         for f in group_fields.iter() {
             let data_type = f.data_type();
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_row, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key)?;
+                deserializer.de_binary(key, &format)?;
             }
             res.push(deserializer.finish_to_column());
         }
@@ -325,9 +326,10 @@ where T: PrimitiveType
             let mut deserializer = non_null_type.create_deserializer(rows);
             let reader = vec8.as_slice();
 
+            let format = FormatSettings::default();
             let col = match f.is_nullable() {
                 false => {
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
                     deserializer.finish_to_column()
                 }
 
@@ -337,6 +339,7 @@ where T: PrimitiveType
                         &reader[null_offsize..],
                         step,
                         rows,
+                        &format,
                     )?;
 
                     null_offsize += 1;
@@ -346,7 +349,7 @@ where T: PrimitiveType
 
                     // we store 1 for nulls in fixed_hash
                     let bitmap = col.values().not();
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
                     let inner = deserializer.finish_to_column();
                     NullableColumn::wrap_inner(inner, Some(bitmap))
                 }

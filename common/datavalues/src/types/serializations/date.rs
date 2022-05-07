@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::marker::PhantomData;
 use std::ops::AddAssign;
 
@@ -20,6 +19,7 @@ use chrono::Duration;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use common_exception::*;
+use common_io::prelude::FormatSettings;
 use num::cast::AsPrimitive;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
@@ -43,14 +43,18 @@ impl<T: PrimitiveType + AsPrimitive<i64>> Default for DateSerializer<T> {
 const DATE_FMT: &str = "%Y-%m-%d";
 
 impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+    fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
         let mut date = NaiveDate::from_ymd(1970, 1, 1);
         let d = Duration::days(value.as_i64()?);
         date.add_assign(d);
         Ok(date.format(DATE_FMT).to_string())
     }
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+    fn serialize_column(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<Vec<String>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
 
         let result: Vec<String> = column
@@ -65,7 +69,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Value> = array
             .iter()
@@ -83,6 +87,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
+        _format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let tz: Tz = "UTC".parse().unwrap();
