@@ -28,19 +28,19 @@ use databend_query::formats::format_csv::CsvInputState;
 #[test]
 fn test_accepted_multi_lines() -> Result<()> {
     assert_complete_line("")?;
-    assert_complete_line("first\tsecond\n")?;
-    assert_complete_line("first\tsecond\r")?;
-    assert_complete_line("first\tsecond\r\n")?;
-    assert_complete_line("first\tsecond\n\r")?;
-    assert_complete_line("first\t\"\n\"second\n")?;
-    assert_complete_line("first\t\"\r\"second\n")?;
+    assert_complete_line("first,second\n")?;
+    assert_complete_line("first,second\r")?;
+    assert_complete_line("first,second\r\n")?;
+    assert_complete_line("first,second\n\r")?;
+    assert_complete_line("first,\"\n\"second\n")?;
+    assert_complete_line("first,\"\r\"second\n")?;
 
     assert_broken_line("first", 5)?;
-    assert_broken_line("first\t", 6)?;
-    assert_broken_line("first\ts", 7)?;
-    assert_broken_line("first\ts\"\n", 9)?;
-    assert_broken_line("first\ts\"\r", 9)?;
-    assert_broken_line("first\tsecond\ns", 13)?;
+    assert_broken_line("first,", 6)?;
+    assert_broken_line("first,s", 7)?;
+    assert_broken_line("first,s\"\n", 9)?;
+    assert_broken_line("first,s\"\r", 9)?;
+    assert_broken_line("first,second\ns", 13)?;
 
     let csv_input_format = CsvInputFormat::try_create(
         "csv",
@@ -52,7 +52,7 @@ fn test_accepted_multi_lines() -> Result<()> {
 
     let mut csv_input_state = csv_input_format.create_state();
 
-    let bytes = "first\tsecond\nfirst\t".as_bytes();
+    let bytes = "first,second\nfirst,".as_bytes();
     assert_eq!(
         bytes.len(),
         csv_input_format.read_buf(bytes, &mut csv_input_state)?
@@ -66,10 +66,10 @@ fn test_accepted_multi_lines() -> Result<()> {
             .memory
     );
 
-    let bytes = "second\nfirst\t".as_bytes();
+    let bytes = "second\nfirst,".as_bytes();
     assert_eq!(7, csv_input_format.read_buf(bytes, &mut csv_input_state)?);
     assert_eq!(
-        "first\tsecond\nfirst\tsecond\n".as_bytes(),
+        "first,second\nfirst,second\n".as_bytes(),
         csv_input_state
             .as_any()
             .downcast_mut::<CsvInputState>()
@@ -94,14 +94,14 @@ fn test_deserialize_multi_lines() -> Result<()> {
 
     let mut csv_input_state = csv_input_format.create_state();
 
-    csv_input_format.read_buf("1\t\"second\"\n".as_bytes(), &mut csv_input_state)?;
+    csv_input_format.read_buf("1,\"second\"\n".as_bytes(), &mut csv_input_state)?;
     assert_blocks_eq(
         vec![
-            "+---+----------+",
-            "| a | b        |",
-            "+---+----------+",
-            "| 1 | \"second\" |",
-            "+---+----------+",
+            "+---+--------+",
+            "| a | b      |",
+            "+---+--------+",
+            "| 1 | second |",
+            "+---+--------+",
         ],
         &[csv_input_format.deserialize_data(&mut csv_input_state)?],
     );
@@ -119,14 +119,14 @@ fn test_deserialize_multi_lines() -> Result<()> {
 
     let mut csv_input_state = csv_input_format.create_state();
 
-    csv_input_format.read_buf("1\t\"second\"\n".as_bytes(), &mut csv_input_state)?;
+    csv_input_format.read_buf("1,\"second\"\n".as_bytes(), &mut csv_input_state)?;
     assert_blocks_eq(
         vec![
-            "+---+----------+",
-            "| a | b        |",
-            "+---+----------+",
-            "| 1 | \"second\" |",
-            "+---+----------+",
+            "+---+--------+",
+            "| a | b      |",
+            "+---+--------+",
+            "| 1 | second |",
+            "+---+--------+",
         ],
         &[csv_input_format.deserialize_data(&mut csv_input_state)?],
     );
