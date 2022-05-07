@@ -58,6 +58,7 @@ where
     Key: HashTableKeyable,
     Value: Sized + Copy,
 {
+    #[inline(always)]
     unsafe fn is_zero(self: *mut Self) -> bool {
         (*self).key.is_zero()
     }
