@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_datablocks::InMemoryData;
 use common_infallible::RwLock;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 
 /// Storage Context.
 #[derive(Clone)]
 pub struct StorageContext {
-    pub meta: Arc<dyn MetaApi>,
+    pub meta: Arc<dyn SchemaApi>,
     // For shared data in memory.
     pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }

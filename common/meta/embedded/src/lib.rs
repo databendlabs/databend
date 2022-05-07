@@ -20,7 +20,6 @@
 //! a embedded raft `StateMachine`.
 
 mod kv_api_impl;
-mod meta_api_impl;
 mod meta_embedded;
 
 pub use meta_embedded::MetaEmbedded;

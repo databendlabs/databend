@@ -16,7 +16,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
@@ -42,7 +42,7 @@ use common_meta_types::UpsertTableOptionReq;
 
 use crate::common::MetaClientProvider;
 
-/// A `MetaApi` impl with MetaApi RPC.
+/// A `SchemaApi` impl with SchemaApi RPC.
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct MetaBackend {
@@ -68,7 +68,7 @@ impl MetaBackend {
     async fn query_backend<F, T, ResFut>(&self, f: F) -> std::result::Result<T, MetaError>
     where
         ResFut: Future<Output = std::result::Result<T, MetaError>> + Send + 'static,
-        F: FnOnce(Arc<dyn MetaApi>) -> ResFut,
+        F: FnOnce(Arc<dyn SchemaApi>) -> ResFut,
         F: Send + Sync + 'static,
         T: Send + Sync + 'static,
     {
@@ -81,7 +81,7 @@ impl MetaBackend {
 }
 
 #[async_trait::async_trait]
-impl MetaApi for MetaBackend {
+impl SchemaApi for MetaBackend {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
