@@ -33,6 +33,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
@@ -82,10 +83,6 @@ impl FuseSnapshotTable {
             arg_table_name,
         }))
     }
-
-    fn get_catalog_name(&self) -> Result<String> {
-        FuseTable::get_catalog_name(&self.table_info)
-    }
 }
 
 #[async_trait::async_trait]
@@ -120,7 +117,10 @@ impl Table for FuseSnapshotTable {
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog(self.get_catalog_name()?)?
+            // TODO (dantengsky) the name of catalog should be passed in:
+            //  - select * from fuse_snapshot([cat,] [db,] table_name)
+            //  - if "cat" and "db" are not specified, use the corresponding default values of `ctx`
+            .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),
@@ -158,7 +158,7 @@ impl Table for FuseSnapshotTable {
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
-                self.get_catalog_name()?,
+                CATALOG_DEFAULT.to_owned(),
             )?],
         });
 
