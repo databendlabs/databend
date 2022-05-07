@@ -21,7 +21,8 @@ use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
 
 lazy_static! {
-    static ref DEFAULT_IMPLEMENT_RULES: Vec<RuleID> = vec![RuleID::ImplementGet];
+    static ref DEFAULT_IMPLEMENT_RULES: Vec<RuleID> =
+        vec![RuleID::ImplementGet, RuleID::ImplementHashJoin];
 }
 
 pub struct HeuristicImplementor {

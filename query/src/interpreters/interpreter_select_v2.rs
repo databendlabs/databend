@@ -21,6 +21,7 @@ use common_tracing::tracing;
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::sessions::QueryContext;
 use crate::sql::Planner;
@@ -52,9 +53,17 @@ impl Interpreter for SelectInterpreterV2 {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let mut planner = Planner::new(self.ctx.clone());
-        let pipeline = planner.plan_sql(self.query.as_str()).await?;
+        let (root_pipeline, pipelines) = planner.plan_sql(self.query.as_str()).await?;
         let async_runtime = self.ctx.get_storage_runtime();
-        let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
+
+        // Spawn sub-pipelines
+        for pipeline in pipelines {
+            let executor = PipelineExecutor::create(async_runtime.clone(), pipeline)?;
+            executor.execute()?;
+        }
+
+        // Spawn root pipeline
+        let executor = PipelinePullingExecutor::try_create(async_runtime, root_pipeline)?;
         let executor_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
         Ok(Box::pin(self.ctx.try_create_abortable(executor_stream)?))
     }

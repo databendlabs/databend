@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use metrics::histogram;
@@ -45,6 +44,8 @@ use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::users::CertifiedInfo;
 
@@ -282,40 +283,42 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                 let context = self.session.create_query_context().await?;
                 context.attach_query_str(query);
 
-                let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
-                if let (Some(hint_error_code), Err(error_code)) = (
-                    hints
-                        .iter()
-                        .find(|v| v.error_code.is_some())
-                        .and_then(|x| x.error_code),
-                    &plan,
-                ) {
-                    // Pre-check if parsing error can be ignored
-                    if hint_error_code == error_code.code() {
-                        return Ok((vec![DataBlock::empty()], String::from("")));
-                    }
-                }
-
-                let plan = match plan {
-                    Ok(p) => p,
-                    Err(e) => {
-                        InterpreterQueryLog::fail_to_start(context, e.clone()).await;
-                        return Err(e);
-                    }
-                };
-                tracing::debug!("Get logic plan:\n{:?}", plan);
-
                 let settings = context.get_settings();
+
+                let (stmts, hints) =
+                    DfParser::parse_sql(query, context.get_current_session().get_type())?;
 
                 let interpreter: Arc<dyn Interpreter> =
                     if settings.get_enable_new_processor_framework()? != 0
                         && context.get_cluster().is_empty()
                         && settings.get_enable_planner_v2()? != 0
-                        && matches!(plan, PlanNode::Select(..))
+                        && matches!(stmts.get(0), Some(DfStatement::Query(_)))
                     {
                         // New planner is enabled, and the statement is ensured to be `SELECT` statement.
                         SelectInterpreterV2::try_create(context.clone(), query)?
                     } else {
+                        let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
+                        if let (Some(hint_error_code), Err(error_code)) = (
+                            hints
+                                .iter()
+                                .find(|v| v.error_code.is_some())
+                                .and_then(|x| x.error_code),
+                            &plan,
+                        ) {
+                            // Pre-check if parsing error can be ignored
+                            if hint_error_code == error_code.code() {
+                                return Ok((vec![DataBlock::empty()], String::from("")));
+                            }
+                        }
+
+                        let plan = match plan {
+                            Ok(p) => p,
+                            Err(e) => {
+                                InterpreterQueryLog::fail_to_start(context, e.clone()).await;
+                                return Err(e);
+                            }
+                        };
+                        tracing::debug!("Get logic plan:\n{:?}", plan);
                         InterpreterFactory::get(context.clone(), plan)?
                     };
 

@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::BasePlan;
@@ -24,19 +23,18 @@ use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 
 #[derive(Clone)]
-pub struct FilterPlan {
-    pub predicates: Vec<Scalar>,
-    // True if the plan represents having, else the plan represents where
-    pub is_having: bool,
+pub struct LogicalInnerJoin {
+    pub left_conditions: Vec<Scalar>,
+    pub right_conditions: Vec<Scalar>,
 }
 
-impl BasePlan for FilterPlan {
+impl BasePlan for LogicalInnerJoin {
     fn plan_type(&self) -> PlanType {
-        PlanType::Filter
+        PlanType::LogicalInnerJoin
     }
 
     fn is_physical(&self) -> bool {
-        true
+        false
     }
 
     fn is_logical(&self) -> bool {
@@ -44,11 +42,11 @@ impl BasePlan for FilterPlan {
     }
 
     fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
+        None
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
+        Some(self)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -56,13 +54,7 @@ impl BasePlan for FilterPlan {
     }
 }
 
-impl PhysicalPlan for FilterPlan {
-    fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
-        todo!()
-    }
-}
-
-impl LogicalPlan for FilterPlan {
+impl LogicalPlan for LogicalInnerJoin {
     fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
         todo!()
     }

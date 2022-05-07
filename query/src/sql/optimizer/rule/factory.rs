@@ -15,6 +15,7 @@
 use common_exception::Result;
 
 use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
+use crate::sql::optimizer::rule::rule_implement_hash_join::RuleImplementHashJoin;
 use crate::sql::optimizer::rule::RuleID;
 use crate::sql::optimizer::rule::RulePtr;
 
@@ -28,6 +29,7 @@ impl RuleFactory {
     pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {
         match id {
             RuleID::ImplementGet => Ok(Box::new(RuleImplementGet::create())),
+            RuleID::ImplementHashJoin => Ok(Box::new(RuleImplementHashJoin::create())),
         }
     }
 }
