@@ -15,15 +15,12 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use sqlparser::ast::Value;
-
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
@@ -66,21 +63,46 @@ pub enum Expr {
         target_type: TypeName,
         pg_style: bool,
     },
-
     /// `TRY_CAST` expression`
     TryCast {
         expr: Box<Expr>,
         target_type: TypeName,
     },
+    /// EXTRACT(DateTimeField FROM <expr>)
+    Extract {
+        field: DateTimeField,
+        expr: Box<Expr>,
+    },
+    /// POSITION(<expr> IN <expr>)
+    Position {
+        substr_expr: Box<Expr>,
+        str_expr: Box<Expr>,
+    },
+    /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
+    Substring {
+        expr: Box<Expr>,
+        substring_from: Option<Box<Expr>>,
+        substring_for: Option<Box<Expr>>,
+    },
+    /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
+    /// Or
+    /// TRIM(<expr>)
+    Trim {
+        expr: Box<Expr>,
+        // ([BOTH | LEADING | TRAILING], <expr>)
+        trim_where: Option<(TrimWhere, Box<Expr>)>,
+    },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
     /// `COUNT(*)` expression
     CountAll,
+    /// `(foo, bar)`
+    Tuple { exprs: Vec<Expr> },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: String,
+        name: Identifier,
         args: Vec<Expr>,
         params: Vec<Literal>,
     },
@@ -95,26 +117,12 @@ pub enum Expr {
     Exists(Box<Query>),
     /// Scalar subquery, which will only return a single row with a single column.
     Subquery(Box<Query>),
-    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0][1]`, or `obj:k1:k2`
-    MapAccess { expr: Box<Expr>, keys: Vec<Value> },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TypeName {
-    Boolean,
-    TinyInt { unsigned: bool },
-    SmallInt { unsigned: bool },
-    Int { unsigned: bool },
-    BigInt { unsigned: bool },
-    Float,
-    Double,
-    Date,
-    DateTime { precision: Option<u64> },
-    Timestamp,
-    Varchar,
-    Array { item_type: Box<TypeName> },
-    Object,
-    Variant,
+    // TODO(andylokandy): allow interval, function, and others alike to be a key
+    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
+    MapAccess {
+        expr: Box<Expr>,
+        accessor: MapAccessor,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -124,7 +132,81 @@ pub enum Literal {
     // Quoted string literal value
     String(String),
     Boolean(bool),
+    Interval(Interval),
+    CurrentTimestamp,
     Null,
+}
+
+/// The display style for a map access expression
+#[derive(Debug, Clone, PartialEq)]
+pub enum MapAccessor {
+    /// `[0][1]`
+    Bracket { key: Literal },
+    /// `.a.b`
+    Period { key: Identifier },
+    /// `:a:b`
+    Colon { key: Identifier },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeName {
+    Boolean,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+    Date,
+    DateTime { precision: Option<u64> },
+    Timestamp,
+    String,
+    Array { item_type: Option<Box<TypeName>> },
+    Object,
+    Variant,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Interval {
+    pub value: String,
+    pub field: DateTimeField,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DateTimeField {
+    Year,
+    Month,
+    Week,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Century,
+    Decade,
+    Dow,
+    Doy,
+    Epoch,
+    Isodow,
+    Isoyear,
+    Julian,
+    Microseconds,
+    Millenium,
+    Milliseconds,
+    Quarter,
+    Timezone,
+    TimezoneHour,
+    TimezoneMinute,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TrimWhere {
+    Both,
+    Leading,
+    Trailing,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -148,8 +230,13 @@ pub enum BinaryOperator {
     NotEq,
     And,
     Or,
+    Xor,
     Like,
     NotLike,
+    Regexp,
+    RLike,
+    NotRegexp,
+    NotRLike,
     BitwiseOr,
     BitwiseAnd,
     BitwiseXor,
@@ -226,11 +313,26 @@ impl Display for BinaryOperator {
             BinaryOperator::Or => {
                 write!(f, "OR")
             }
+            BinaryOperator::Xor => {
+                write!(f, "XOR")
+            }
             BinaryOperator::Like => {
                 write!(f, "LIKE")
             }
             BinaryOperator::NotLike => {
                 write!(f, "NOT LIKE")
+            }
+            BinaryOperator::Regexp => {
+                write!(f, "REGEXP")
+            }
+            BinaryOperator::RLike => {
+                write!(f, "RLIKE")
+            }
+            BinaryOperator::NotRegexp => {
+                write!(f, "NOT REGEXP")
+            }
+            BinaryOperator::NotRLike => {
+                write!(f, "NOT RLIKE")
             }
             BinaryOperator::BitwiseOr => {
                 write!(f, "|")
@@ -251,35 +353,35 @@ impl Display for TypeName {
             TypeName::Boolean => {
                 write!(f, "BOOLEAN")?;
             }
-            TypeName::TinyInt { unsigned } => {
-                write!(f, "TINYINT")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt8 => {
+                write!(f, "UInt8")?;
             }
-            TypeName::SmallInt { unsigned } => {
-                write!(f, "SMALLINT")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt16 => {
+                write!(f, "UInt16")?;
             }
-            TypeName::Int { unsigned } => {
-                write!(f, "INTEGER")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt32 => {
+                write!(f, "UInt32")?;
             }
-            TypeName::BigInt { unsigned } => {
-                write!(f, "BIGINT")?;
-                if *unsigned {
-                    write!(f, " UNSIGNED")?;
-                }
+            TypeName::UInt64 => {
+                write!(f, "UInt64")?;
             }
-            TypeName::Float => {
-                write!(f, "FLOAT")?;
+            TypeName::Int8 => {
+                write!(f, "Int8")?;
             }
-            TypeName::Double => {
-                write!(f, "DOUBLE")?;
+            TypeName::Int16 => {
+                write!(f, "Int16")?;
+            }
+            TypeName::Int32 => {
+                write!(f, "Int32")?;
+            }
+            TypeName::Int64 => {
+                write!(f, "Int64")?;
+            }
+            TypeName::Float32 => {
+                write!(f, "Float32")?;
+            }
+            TypeName::Float64 => {
+                write!(f, "Float64")?;
             }
             TypeName::Date => {
                 write!(f, "DATE")?;
@@ -293,11 +395,14 @@ impl Display for TypeName {
             TypeName::Timestamp => {
                 write!(f, "TIMESTAMP")?;
             }
-            TypeName::Varchar => {
-                write!(f, "VARCHAR")?;
+            TypeName::String => {
+                write!(f, "STRING")?;
             }
             TypeName::Array { item_type } => {
-                write!(f, "ARRAY({})", item_type)?;
+                write!(f, "ARRAY")?;
+                if let Some(item_type) = item_type {
+                    write!(f, "({})", *item_type)?;
+                }
             }
             TypeName::Object => {
                 write!(f, "OBJECT")?;
@@ -310,14 +415,53 @@ impl Display for TypeName {
     }
 }
 
+impl Display for DateTimeField {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            DateTimeField::Year => "YEAR",
+            DateTimeField::Month => "MONTH",
+            DateTimeField::Week => "WEEK",
+            DateTimeField::Day => "DAY",
+            DateTimeField::Hour => "HOUR",
+            DateTimeField::Minute => "MINUTE",
+            DateTimeField::Second => "SECOND",
+            DateTimeField::Century => "CENTURY",
+            DateTimeField::Decade => "DECADE",
+            DateTimeField::Dow => "DOW",
+            DateTimeField::Doy => "DOY",
+            DateTimeField::Epoch => "EPOCH",
+            DateTimeField::Isodow => "ISODOW",
+            DateTimeField::Isoyear => "ISOYEAR",
+            DateTimeField::Julian => "JULIAN",
+            DateTimeField::Microseconds => "MICROSECONDS",
+            DateTimeField::Millenium => "MILLENIUM",
+            DateTimeField::Milliseconds => "MILLISECONDS",
+            DateTimeField::Quarter => "QUARTER",
+            DateTimeField::Timezone => "TIMEZONE",
+            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
+            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
+        })
+    }
+}
+
+impl Display for TrimWhere {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            TrimWhere::Both => "BOTH",
+            TrimWhere::Leading => "LEADING",
+            TrimWhere::Trailing => "TRAILING",
+        })
+    }
+}
+
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal::Number(val) => {
-                write!(f, "{}", val)
+                write!(f, "{val}")
             }
             Literal::String(val) => {
-                write!(f, "\'{}\'", val)
+                write!(f, "\'{val}\'")
             }
             Literal::Boolean(val) => {
                 if *val {
@@ -325,6 +469,12 @@ impl Display for Literal {
                 } else {
                     write!(f, "FALSE")
                 }
+            }
+            Literal::CurrentTimestamp => {
+                write!(f, "CURRENT_TIMESTAMP")
+            }
+            Literal::Interval(interval) => {
+                write!(f, "INTERVAL {} {}", interval.value, interval.field)
             }
             Literal::Null => {
                 write!(f, "NULL")
@@ -344,18 +494,18 @@ impl Display for Expr {
                 write_period_separated_list(f, database.iter().chain(table).chain(Some(column)))?;
             }
             Expr::IsNull { expr, not } => {
-                write!(f, "{} IS ", expr)?;
+                write!(f, "{expr} IS")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "NULL")?;
+                write!(f, " NULL")?;
             }
             Expr::InList { expr, list, not } => {
-                write!(f, "{} ", expr)?;
+                write!(f, "{expr}")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "IN(")?;
+                write!(f, " IN(")?;
                 write_comma_separated_list(f, list)?;
                 write!(f, ")")?;
             }
@@ -364,11 +514,11 @@ impl Display for Expr {
                 subquery,
                 not,
             } => {
-                write!(f, "{} ", expr)?;
+                write!(f, "{expr}")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "IN({})", subquery)?;
+                write!(f, " IN({subquery})")?;
             }
             Expr::Between {
                 expr,
@@ -376,17 +526,17 @@ impl Display for Expr {
                 high,
                 not,
             } => {
-                write!(f, "{} ", expr)?;
+                write!(f, "{expr}")?;
                 if *not {
-                    write!(f, "NOT ")?;
+                    write!(f, " NOT")?;
                 }
-                write!(f, "BETWEEN {} AND {}", low, high)?;
-            }
-            Expr::BinaryOp { op, left, right } => {
-                write!(f, "{} {} {}", left, op, right)?;
+                write!(f, " BETWEEN {low} AND {high}")?;
             }
             Expr::UnaryOp { op, expr } => {
-                write!(f, "{} {}", op, expr)?;
+                write!(f, "{op} {expr}")?;
+            }
+            Expr::BinaryOp { op, left, right } => {
+                write!(f, "{left} {op} {right}")?;
             }
             Expr::Cast {
                 expr,
@@ -394,19 +544,57 @@ impl Display for Expr {
                 pg_style,
             } => {
                 if *pg_style {
-                    write!(f, "{}::{}", expr, target_type)?;
+                    write!(f, "{expr}::{target_type}")?;
                 } else {
-                    write!(f, "CAST({} AS {})", expr, target_type)?;
+                    write!(f, "CAST({expr} AS {target_type})")?;
                 }
             }
             Expr::TryCast { expr, target_type } => {
-                write!(f, "TRY_CAST({} AS {})", expr, target_type)?;
+                write!(f, "TRY_CAST({expr} AS {target_type})")?;
+            }
+            Expr::Extract { field, expr } => {
+                write!(f, "EXTRACT({field} FROM {expr})")?;
+            }
+            Expr::Position {
+                substr_expr,
+                str_expr,
+            } => {
+                write!(f, "POSITION({substr_expr} IN {str_expr})")?;
+            }
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => {
+                write!(f, "SUBSTRING({expr}")?;
+                if let Some(substring_from) = substring_from {
+                    write!(f, " FROM {substring_from}")?;
+                }
+                if let Some(substring_for) = substring_for {
+                    write!(f, " FOR {substring_for}")?;
+                }
+                write!(f, ")")?;
+            }
+            Expr::Trim { expr, trim_where } => {
+                write!(f, "TRIM(")?;
+                if let Some((trim_where, trim_str)) = trim_where {
+                    write!(f, "{trim_where} {trim_str} FROM ")?;
+                }
+                write!(f, "{expr})")?;
             }
             Expr::Literal(lit) => {
-                write!(f, "{}", lit)?;
+                write!(f, "{lit}")?;
             }
             Expr::CountAll => {
                 write!(f, "COUNT(*)")?;
+            }
+            Expr::Tuple { exprs } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, exprs)?;
+                if exprs.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")?;
             }
             Expr::FunctionCall {
                 distinct,
@@ -414,7 +602,7 @@ impl Display for Expr {
                 args,
                 params,
             } => {
-                write!(f, "{}", name)?;
+                write!(f, "{name}")?;
                 if !params.is_empty() {
                     write!(f, "(")?;
                     write_comma_separated_list(f, params)?;
@@ -433,34 +621,30 @@ impl Display for Expr {
                 results,
                 else_result,
             } => {
-                write!(f, "CASE ")?;
+                write!(f, "CASE")?;
                 if let Some(op) = operand {
-                    write!(f, "{} ", op)?;
+                    write!(f, " {op} ")?;
                 }
                 for (cond, res) in conditions.iter().zip(results) {
-                    write!(f, "WHEN {} THEN {} ", cond, res)?;
+                    write!(f, " WHEN {cond} THEN {res}")?;
                 }
                 if let Some(el) = else_result {
-                    write!(f, "ELSE {} ", el)?;
+                    write!(f, " ELSE {el}")?;
                 }
-                write!(f, "END")?;
+                write!(f, " END")?;
             }
             Expr::Exists(subquery) => {
-                write!(f, "EXITS ({})", subquery)?;
+                write!(f, "EXITS ({subquery})")?;
             }
             Expr::Subquery(subquery) => {
-                write!(f, "({})", subquery)?;
+                write!(f, "({subquery})")?;
             }
-            Expr::MapAccess { expr, keys } => {
+            Expr::MapAccess { expr, accessor } => {
                 write!(f, "{}", expr)?;
-                for k in keys {
-                    match k {
-                        k @ Value::Number(_, _) => write!(f, "[{}]", k)?,
-                        Value::SingleQuotedString(s) => write!(f, "[\"{}\"]", s)?,
-                        Value::ColonString(s) => write!(f, ":{}", s)?,
-                        Value::PeriodString(s) => write!(f, ".{}", s)?,
-                        _ => write!(f, "[{}]", k)?,
-                    }
+                match accessor {
+                    MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
+                    MapAccessor::Period { key } => write!(f, ".{key}")?,
+                    MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }
         }

@@ -359,13 +359,30 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_remove_node_cmd(
+        &self,
+        node_id: &u64,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let sm_nodes = txn_tree.key_space::<Nodes>();
+
+        let prev = sm_nodes.get(node_id)?;
+
+        if prev.is_some() {
+            tracing::info!("applied RemoveNode: {}={:?}", node_id, prev);
+            sm_nodes.remove(node_id)?;
+        }
+        Ok((prev, None).into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_database_cmd(
         &self,
         req: &CreateDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let tenant = &req.tenant;
-        let name = &req.db_name;
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
         let meta = &req.meta;
 
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
@@ -429,8 +446,8 @@ impl StateMachine {
         req: &DropDatabaseReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let tenant = &req.tenant;
-        let name = &req.db_name;
+        let tenant = &req.name_ident.tenant;
+        let name = &req.name_ident.db_name;
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
@@ -474,10 +491,10 @@ impl StateMachine {
         req: &CreateTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(req.tenant(), req.db_name(), txn_tree)?;
 
         let (table_id, prev, result) =
-            self.txn_create_table(txn_tree, db_id, None, &req.table_name, &req.table_meta)?;
+            self.txn_create_table(txn_tree, db_id, None, req.table_name(), &req.table_meta)?;
         let table_id = table_id.unwrap();
 
         if prev.is_some() {
@@ -500,9 +517,9 @@ impl StateMachine {
         req: &DropTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(req.tenant(), req.db_name(), txn_tree)?;
 
-        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
+        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, req.table_name())?;
         if prev.is_none() {
             return Ok(Change::<TableMeta>::new(None, None).into());
         }
@@ -518,17 +535,17 @@ impl StateMachine {
         req: &RenameTableReq,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
-        let db_id = self.txn_get_database_id(&req.tenant, &req.db_name, txn_tree)?;
-        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, &req.table_name)?;
+        let db_id = self.txn_get_database_id(req.tenant(), req.db_name(), txn_tree)?;
+        let (table_id, prev, result) = self.txn_drop_table(txn_tree, db_id, req.table_name())?;
         if prev.is_none() {
             return Err(MetaStorageError::AppError(AppError::UnknownTable(
-                UnknownTable::new(&req.table_name, "apply_rename_table_cmd"),
+                UnknownTable::new(req.table_name(), "apply_rename_table_cmd"),
             )));
         }
         assert!(result.is_none());
 
         let table_meta = &prev.as_ref().unwrap().data;
-        let db_id = self.txn_get_database_id(&req.tenant, &req.new_db_name, txn_tree)?;
+        let db_id = self.txn_get_database_id(req.tenant(), &req.new_db_name, txn_tree)?;
         let (new_table_id, new_prev, new_result) =
             self.txn_create_table(txn_tree, db_id, table_id, &req.new_table_name, table_meta)?;
         if new_prev.is_some() {
@@ -610,12 +627,14 @@ impl StateMachine {
         }
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, cond))]
     fn txn_execute_one_condition(
         &self,
         txn_tree: &TransactionSledTree,
         cond: &TxnCondition,
     ) -> MetaStorageResult<bool> {
+        tracing::debug!(cond = display(cond), "txn_execute_one_condition");
+
         let key = cond.key.clone();
 
         let sub_tree = txn_tree.key_space::<GenericKV>();
@@ -623,37 +642,42 @@ impl StateMachine {
 
         tracing::debug!("txn_execute_one_condition: {:?} {:?}", key, sv);
 
-        if let Some(sv) = sv {
-            if let Some(target) = &cond.target {
-                match target {
-                    txn_condition::Target::Seq(target_seq) => {
-                        return Ok(self.return_seq_condition_result(
-                            cond.expected,
-                            target_seq,
-                            &sv,
-                        ));
-                    }
-                    txn_condition::Target::Value(target_value) => {
+        if let Some(target) = &cond.target {
+            match target {
+                txn_condition::Target::Seq(target_seq) => {
+                    return Ok(self.return_seq_condition_result(
+                        cond.expected,
+                        target_seq,
+                        // seq is 0 if the record does not exist.
+                        &sv.unwrap_or_default(),
+                    ));
+                }
+                txn_condition::Target::Value(target_value) => {
+                    if let Some(sv) = sv {
                         return Ok(self.return_value_condition_result(
                             cond.expected,
                             target_value,
                             &sv,
                         ));
+                    } else {
+                        return Ok(false);
                     }
                 }
-            };
-        }
+            }
+        };
 
         Ok(false)
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, condition))]
     fn txn_execute_condition(
         &self,
         txn_tree: &TransactionSledTree,
         condition: &Vec<TxnCondition>,
     ) -> MetaStorageResult<bool> {
         for cond in condition {
+            tracing::debug!(condition = display(cond), "txn_execute_condition");
+
             if !self.txn_execute_one_condition(txn_tree, cond)? {
                 return Ok(false);
             }
@@ -748,13 +772,14 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, op, resp))]
     fn txn_execute_operation(
         &self,
         txn_tree: &TransactionSledTree,
         op: &TxnOp,
         resp: &mut TxnReply,
     ) -> MetaStorageResult<()> {
+        tracing::debug!(op = display(op), "txn execute TxnOp");
         match &op.request {
             Some(txn_op::Request::Get(get)) => {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
@@ -771,12 +796,14 @@ impl StateMachine {
         Ok(())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, txn_tree, req))]
     fn apply_txn_cmd(
         &self,
         req: &TxnRequest,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
+        tracing::debug!(txn = display(req), "apply txn cmd");
+
         let condition = &req.condition;
 
         let ops: &Vec<TxnOp>;
@@ -874,6 +901,8 @@ impl StateMachine {
                 ref node_id,
                 ref node,
             } => self.apply_add_node_cmd(node_id, node, txn_tree),
+
+            Cmd::RemoveNode { ref node_id } => self.apply_remove_node_cmd(node_id, txn_tree),
 
             Cmd::CreateDatabase(req) => self.apply_create_database_cmd(req, txn_tree),
 

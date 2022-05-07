@@ -17,9 +17,9 @@ use std::simd::Simd;
 use std::simd::SimdElement;
 use std::simd::SupportedLaneCount;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::comparison::Simd8Lanes;
-use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 

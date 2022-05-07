@@ -56,40 +56,40 @@ async fn test_bloom_add_find_string() -> Result<()> {
     bloom.add(col, ctx.clone())?;
     assert!(bloom.find(
         DataValue::String(b"Alice".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx.clone()
     )?);
     assert!(bloom.find(
         DataValue::String(b"Bob".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx.clone()
     )?);
     assert!(bloom.find(
         DataValue::String(b"Batman".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx.clone()
     )?);
     assert!(bloom.find(
         DataValue::String(b"Superman".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx.clone()
     )?);
-    assert!(bloom.find(DataValue::UInt64(123), StringType::arc(), ctx.clone())?); // cast will happen to convert 123 to "123"
+    assert!(bloom.find(DataValue::UInt64(123), StringType::new_impl(), ctx.clone())?); // cast will happen to convert 123 to "123"
 
     // this case no false positive
     assert!(!bloom.find(
         DataValue::String(b"alice1".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx.clone()
     )?);
     assert!(!bloom.find(
         DataValue::String(b"alice2".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx.clone()
     )?);
     assert!(!bloom.find(
         DataValue::String(b"alice3".to_vec()),
-        StringType::arc(),
+        StringType::new_impl(),
         ctx
     )?);
 
@@ -100,7 +100,7 @@ async fn test_bloom_add_find_string() -> Result<()> {
 async fn test_bloom_interval() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "Nullable(Interval)",
-        wrap_nullable(&IntervalType::arc(IntervalKind::Second)),
+        wrap_nullable(&IntervalType::new_impl(IntervalKind::Second)),
     )]);
 
     let block = DataBlock::create(schema, vec![Series::from_data([
@@ -121,12 +121,12 @@ async fn test_bloom_interval() -> Result<()> {
     bloom.add(col, ctx.clone())?;
     assert!(bloom.find(
         DataValue::Int64(1234_i64),
-        IntervalType::arc(IntervalKind::Second),
+        IntervalType::new_impl(IntervalKind::Second),
         ctx.clone()
     )?);
     assert!(bloom.find(
         DataValue::Int64(-4321_i64),
-        IntervalType::arc(IntervalKind::Second),
+        IntervalType::new_impl(IntervalKind::Second),
         ctx
     )?);
     Ok(())
@@ -136,7 +136,7 @@ async fn test_bloom_interval() -> Result<()> {
 async fn test_bloom_u8() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "UInt8",
-        wrap_nullable(&UInt8Type::arc()),
+        wrap_nullable(&UInt8Type::new_impl()),
     )]);
 
     let block = DataBlock::create(schema, vec![Series::from_data([
@@ -156,10 +156,10 @@ async fn test_bloom_u8() -> Result<()> {
     let buf = bloom.to_vec()?;
     let bloom = BloomFilter::from_vec(buf.as_slice())?;
 
-    assert!(bloom.find(DataValue::UInt64(5), UInt8Type::arc(), ctx.clone())?);
+    assert!(bloom.find(DataValue::UInt64(5), UInt8Type::new_impl(), ctx.clone())?);
 
     // Although the same value, different data type will result in different hashes.
-    assert!(!bloom.find(DataValue::UInt64(5), UInt16Type::arc(), ctx)?);
+    assert!(!bloom.find(DataValue::UInt64(5), UInt16Type::new_impl(), ctx)?);
 
     Ok(())
 }
@@ -168,7 +168,7 @@ async fn test_bloom_u8() -> Result<()> {
 async fn test_bloom_f64_serialization() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "Float64",
-        wrap_nullable(&Float64Type::arc()),
+        wrap_nullable(&Float64Type::new_impl()),
     )]);
 
     let block = DataBlock::create(schema, vec![Series::from_data([
@@ -192,28 +192,32 @@ async fn test_bloom_f64_serialization() -> Result<()> {
 
     assert!(bloom.find(
         DataValue::Float64(1234.1234_f64),
-        Float64Type::arc(),
+        Float64Type::new_impl(),
         ctx.clone()
     )?);
     assert!(bloom.find(
         DataValue::Float64(-4321.4321_f64),
-        Float64Type::arc(),
+        Float64Type::new_impl(),
         ctx.clone()
     )?);
     assert!(bloom.find(
         DataValue::Float64(88.88_f64),
-        Float64Type::arc(),
+        Float64Type::new_impl(),
         ctx.clone()
     )?);
 
     // a random number not exist
-    assert!(!bloom.find(DataValue::Float64(88.88001_f64), Float64Type::arc(), ctx)?);
+    assert!(!bloom.find(
+        DataValue::Float64(88.88001_f64),
+        Float64Type::new_impl(),
+        ctx
+    )?);
     Ok(())
 }
 
 // A helper function to create a bloom filter, with the same bits and hashes as other.
 async fn create_bloom(
-    data_type: DataTypePtr,
+    data_type: DataTypeImpl,
     column: ColumnRef,
     other: &BloomFilter,
 ) -> Result<BloomFilter> {
@@ -239,11 +243,14 @@ fn create_blocks() -> Vec<DataBlock> {
         DataField::new_nullable("ColumnInt64", i64::to_data_type()),
         DataField::new_nullable("ColumnFloat32", f32::to_data_type()),
         DataField::new_nullable("ColumnFloat64", f64::to_data_type()),
-        DataField::new_nullable("ColumnDate16", DateType::arc()),
-        DataField::new_nullable("ColumnDate32", DateType::arc()),
-        DataField::new_nullable("ColumnDateTime32", TimestampType::arc(0, None)),
-        DataField::new_nullable("ColumnDateTime64", TimestampType::arc(3, None)),
-        DataField::new_nullable("ColumnIntervalDays", IntervalType::arc(IntervalKind::Day)),
+        DataField::new_nullable("ColumnDate16", DateType::new_impl()),
+        DataField::new_nullable("ColumnDate32", DateType::new_impl()),
+        DataField::new_nullable("ColumnDateTime32", TimestampType::new_impl(0)),
+        DataField::new_nullable("ColumnDateTime64", TimestampType::new_impl(3)),
+        DataField::new_nullable(
+            "ColumnIntervalDays",
+            IntervalType::new_impl(IntervalKind::Day),
+        ),
         DataField::new_nullable("ColumnString", Vu8::to_data_type()),
     ]);
 

@@ -18,7 +18,6 @@ mod setting;
 mod stage;
 mod udf;
 mod user;
-mod warehouse;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
@@ -32,5 +31,3 @@ pub use udf::UdfApi;
 pub use udf::UdfMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
-pub use warehouse::WarehouseApi;
-pub use warehouse::WarehouseMgr;

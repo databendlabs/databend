@@ -55,7 +55,6 @@ async fn test_tables_table() -> Result<()> {
         r"\| system             \| tables       \| SystemTables       \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| tracing      \| SystemTracing      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| users        \| SystemUsers        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| warehouses   \| SystemWarehouses   \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
     ];
     common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());

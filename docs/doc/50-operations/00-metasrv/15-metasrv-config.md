@@ -1,5 +1,5 @@
 ---
-title: Databend Meta Service Config
+title: Databend Meta Service Configuration
 ---
 
 :::tip

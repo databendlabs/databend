@@ -16,19 +16,16 @@ mod catalog;
 mod config;
 mod context;
 mod number;
-#[allow(dead_code)]
-mod parquet;
+
 mod sessions;
 pub(crate) mod tls_constants;
 
 pub use catalog::create_catalog;
 pub use config::ConfigBuilder;
-pub use context::create_catalog_context;
 pub use context::create_query_context;
 pub use context::create_query_context_with_cluster;
 pub use context::create_query_context_with_config;
 pub use context::create_storage_context;
 pub use context::ClusterDescriptor;
 pub use number::NumberTestData;
-pub use parquet::ParquetTestData;
 pub use sessions::SessionManagerBuilder;

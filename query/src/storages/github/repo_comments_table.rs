@@ -18,6 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
+use common_meta_types::TableNameIdent;
 use octocrab::models;
 
 use crate::storages::github::github_client::create_github_client;
@@ -48,9 +49,11 @@ impl RepoCommentsTable {
         options.table_type = GithubTableType::Comments.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            tenant: tenant.to_string(),
-            db_name: options.owner.clone(),
-            table_name: format!("{}_{}", options.repo.clone(), "comments"),
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: options.owner.clone(),
+                table_name: format!("{}_{}", options.repo.clone(), "comments"),
+            },
             table_meta: TableMeta {
                 schema: RepoCommentsTable::schema(),
                 engine: "GITHUB".into(),

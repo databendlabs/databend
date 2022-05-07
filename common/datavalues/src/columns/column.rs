@@ -23,7 +23,7 @@ use common_exception::Result;
 
 use crate::prelude::*;
 use crate::BooleanColumn;
-use crate::DataTypePtr;
+use crate::DataTypeImpl;
 use crate::DataValue;
 use crate::NullColumn;
 use crate::TypeID;
@@ -36,7 +36,7 @@ pub trait Column: Send + Sync {
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
-    fn data_type(&self) -> DataTypePtr;
+    fn data_type(&self) -> DataTypeImpl;
 
     fn column_type_name(&self) -> String;
 
@@ -158,7 +158,7 @@ where A: AsRef<dyn Array>
 {
     fn into_column(self) -> ColumnRef {
         use TypeID::*;
-        let data_type: DataTypePtr = from_arrow_type(self.as_ref().data_type());
+        let data_type: DataTypeImpl = from_arrow_type(self.as_ref().data_type());
         match data_type.data_type_id() {
             // arrow type has no nullable type
             Nullable => unimplemented!(),

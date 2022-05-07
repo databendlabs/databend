@@ -1,5 +1,5 @@
 ---
-title: Visualization Databend data in Jupyter Notebook
+title: Visualization Databend Data in Jupyter Notebook
 sidebar_label: Jupyter
 description:
   Visualization Databend data in Jupyter Notebook.

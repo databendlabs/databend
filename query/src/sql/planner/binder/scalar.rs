@@ -12,85 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::sync::Arc;
-
-use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
-use common_datavalues::DataTypePtr;
-use common_exception::ErrorCode;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::sql::planner::binder::BindContext;
+use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::Scalar;
 
 /// Helper for binding scalar expression with `BindContext`.
-pub struct ScalarBinder;
-
-impl ScalarBinder {
-    pub fn new() -> Self {
-        ScalarBinder {}
-    }
-
-    pub fn bind_expr(&self, expr: &Expr, bind_context: &BindContext) -> Result<ScalarExprRef> {
-        match expr {
-            Expr::ColumnRef { table, column, .. } => {
-                let table_name: Option<String> = table.clone().map(|ident| ident.name);
-                let column_name = column.name.clone();
-                let column_binding = bind_context.resolve_column(table_name, column_name)?;
-
-                Ok(Arc::new(Scalar::ColumnRef {
-                    index: column_binding.index,
-                    data_type: column_binding.data_type.clone(),
-                    nullable: column_binding.nullable,
-                }))
-            }
-            Expr::BinaryOp { op, left, right } => {
-                self.bind_binary_op(op, left.as_ref(), right.as_ref(), bind_context)
-            }
-            _ => Err(ErrorCode::UnImplement(format!(
-                "Unsupported expr: {:?}",
-                expr
-            ))),
-        }
-    }
-
-    fn bind_binary_op(
-        &self,
-        op: &BinaryOperator,
-        left_child: &Expr,
-        right_child: &Expr,
-        bind_context: &BindContext,
-    ) -> Result<ScalarExprRef> {
-        let left_scalar = self.bind_expr(left_child, bind_context)?;
-        let right_scalar = self.bind_expr(right_child, bind_context)?;
-        match op {
-            BinaryOperator::Eq => Ok(Arc::new(Scalar::Equal {
-                left: left_scalar,
-                right: right_scalar,
-            })),
-            _ => Err(ErrorCode::UnImplement(format!(
-                "Unsupported binary operator: {op}",
-            ))),
-        }
-    }
+pub struct ScalarBinder<'a> {
+    bind_context: &'a BindContext,
 }
 
-pub type ScalarExprRef = Arc<dyn ScalarExpr>;
+impl<'a> ScalarBinder<'a> {
+    pub fn new(bind_context: &'a BindContext) -> Self {
+        ScalarBinder { bind_context }
+    }
 
-pub trait ScalarExpr: Any {
-    /// Get return type and nullability
-    fn data_type(&self) -> (DataTypePtr, bool);
-
-    // TODO: implement this in the future
-    // fn used_columns(&self) -> ColumnSet;
-
-    // TODO: implement this in the future
-    // fn outer_columns(&self) -> ColumnSet;
-
-    fn contains_aggregate(&self) -> bool;
-
-    fn contains_subquery(&self) -> bool;
-
-    fn as_any(&self) -> &dyn Any;
+    pub fn bind_expr(&self, expr: &Expr) -> Result<(Scalar, DataTypeImpl)> {
+        let type_checker = TypeChecker::new(self.bind_context);
+        type_checker.resolve(expr, None)
+    }
 }

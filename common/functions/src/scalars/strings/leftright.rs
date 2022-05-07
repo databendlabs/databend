@@ -58,7 +58,7 @@ pub struct LeftRightFunction<const IS_LEFT: bool> {
 }
 
 impl<const IS_LEFT: bool> LeftRightFunction<IS_LEFT> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_string(args[0])?;
         assert_numeric(args[1])?;
         Ok(Box::new(Self {
@@ -77,7 +77,7 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         Vu8::to_data_type()
     }
 

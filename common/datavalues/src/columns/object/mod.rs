@@ -96,7 +96,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
+    fn data_type(&self) -> DataTypeImpl {
         T::data_type()
     }
 

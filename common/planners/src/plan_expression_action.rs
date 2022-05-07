@@ -30,33 +30,33 @@ pub enum ExpressionAction {
 #[derive(Debug, Clone)]
 pub struct ActionInput {
     pub name: String,
-    pub return_type: DataTypePtr,
+    pub return_type: DataTypeImpl,
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionConstant {
     pub name: String,
     pub value: DataValue,
-    pub data_type: DataTypePtr,
+    pub data_type: DataTypeImpl,
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionAlias {
     pub name: String,
     pub arg_name: String,
-    pub arg_type: DataTypePtr,
+    pub arg_type: DataTypeImpl,
 }
 
 #[derive(Clone)]
 pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
-    pub return_type: DataTypePtr,
+    pub return_type: DataTypeImpl,
     pub func: Box<dyn Function>,
 
     // for functions
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataTypePtr>,
+    pub arg_types: Vec<DataTypeImpl>,
 }
 
 impl ExpressionAction {

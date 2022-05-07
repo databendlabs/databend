@@ -139,8 +139,8 @@ impl Column for StringColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn data_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn column_type_name(&self) -> String {

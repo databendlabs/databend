@@ -7,16 +7,22 @@ Convert a value from one data type to another data type.
 ## Syntax
 
 ```sql
-CAST(x AS t)
-x::t
+CAST( <expr> AS <type>)
+<expr>::<type>
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| x | A value to convert. |
-| t | The target data type. |
+| `<expr>` | A value to convert. |
+| `<type>` | The target data type |
+
+:::tip
+
+[Databend Data Types](../../10-data-types/index.md)
+
+:::
 
 ## Return Type
 

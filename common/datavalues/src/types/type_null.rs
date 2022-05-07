@@ -23,12 +23,11 @@ use crate::prelude::*;
 pub struct NullType {}
 
 impl NullType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc() -> DataTypeImpl {
+        DataTypeImpl::Null(Self {})
     }
 }
 
-#[typetag::serde]
 impl DataType for NullType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Null

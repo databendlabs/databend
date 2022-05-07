@@ -7,16 +7,17 @@ Converts a date with time to a UInt8 number containing the number of the minute 
 ## Syntax
 
 ```sql
-toMinute(expr)
+toMinute( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+|  `<expr>` | datetime |
 
 ## Return Type
+
  `UInt8` datatype.
 
 ## Examples
@@ -29,9 +30,9 @@ SELECT toMinute(now());
 |              17 |
 +-----------------+
 
-SELECT toMinute(toDateTime(1630812366));
+SELECT toMinute(to_datetime(1630812366));
 +----------------------------------+
-| toMinute(toDateTime(1630812366)) |
+| toMinute(to_datetime(1630812366)) |
 +----------------------------------+
 |                               26 |
 +----------------------------------+

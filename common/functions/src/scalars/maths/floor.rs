@@ -35,7 +35,7 @@ pub struct FloorFunction {
 }
 
 impl FloorFunction {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         assert_numeric(args[0])?;
         Ok(Box::new(FloorFunction {
             display_name: display_name.to_string(),
@@ -62,8 +62,8 @@ impl Function for FloorFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        Float64Type::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        Float64Type::new_impl()
     }
 
     fn eval(

@@ -28,7 +28,7 @@ pub struct TypeOfFunction {
 }
 
 impl TypeOfFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(TypeOfFunction {
             _display_name: display_name.to_string(),
         }))
@@ -49,8 +49,8 @@ impl Function for TypeOfFunction {
         "TypeOfFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn eval(
@@ -62,7 +62,7 @@ impl Function for TypeOfFunction {
         let non_null_type = remove_nullable(columns[0].data_type());
         let type_name = format_data_type_sql(&non_null_type);
         let value = DataValue::String(type_name.as_bytes().to_vec());
-        let data_type = StringType::arc();
+        let data_type = StringType::new_impl();
         value.as_const_column(&data_type, input_rows)
     }
 }

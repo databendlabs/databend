@@ -29,8 +29,8 @@ const DATE_FMT: &str = "%Y-%m-%d";
 
 pub fn cast_from_date(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
@@ -49,10 +49,7 @@ pub fn cast_from_date(
         }
 
         TypeID::Timestamp => {
-            let ts = data_type.as_any().downcast_ref::<TimestampType>().unwrap();
-            let it = c
-                .iter()
-                .map(|v| ts.from_nano_seconds(*v as i64 * 24 * 3600 * 1_000_000_000));
+            let it = c.iter().map(|v| *v as i64 * 24 * 3600 * 1_000_000);
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
@@ -63,8 +60,8 @@ pub fn cast_from_date(
 
 pub fn cast_from_timestamp(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
@@ -95,16 +92,7 @@ pub fn cast_from_timestamp(
         }
 
         TypeID::Timestamp => {
-            // TODO(veeupup): optimize convert different precisions, will be done in next pr
-            let to_precision = data_type
-                .as_any()
-                .downcast_ref::<TimestampType>()
-                .unwrap()
-                .precision();
-            let x = 10_i64.pow(9 - to_precision as u32);
-            let it = c
-                .iter()
-                .map(|v| date_time64.utc_timestamp(*v).timestamp_nanos() / x);
+            let it = c.iter().copied();
             let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }

@@ -1,5 +1,5 @@
 ---
-title: Databend On Alibaba Cloud ECS OSS Performance
+title: Databend on Alibaba Cloud ECS OSS Performance
 draft: true
 sidebar_label: On Alibaba OSS Performance
 description:
@@ -681,7 +681,7 @@ Read 1 rows, 1 B in 0.002 sec., 459.88 rows/sec., 459.88 B/sec.
 ## Block Statistics
 
 ```sql
-CALL system$fuse_history('default', 'ontime');
+CALL system$fuse_snapshot('default', 'ontime');
 ```
 
 ```text

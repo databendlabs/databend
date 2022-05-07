@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use chrono::DateTime;
 use chrono_tz::Tz;
 use common_exception::*;
@@ -24,47 +22,38 @@ use serde_json::Value;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct TimestampSerializer<T: PrimitiveType> {
-    _marker: PhantomData<T>,
-    precision: u32,
+pub struct TimestampSerializer {
     tz: Tz,
 }
 
-impl<T: PrimitiveType> TimestampSerializer<T> {
-    pub fn create(tz: Tz, precision: u32) -> Self {
-        Self {
-            _marker: PhantomData,
-            precision,
-            tz,
-        }
+impl Default for TimestampSerializer {
+    fn default() -> Self {
+        let tz = "UTC".parse::<Tz>().unwrap();
+        Self { tz }
     }
+}
 
-    pub fn to_date_time(&self, value: &T) -> DateTime<Tz> {
-        let value = value.to_i64().unwrap();
-
-        match T::SIZE {
-            4 => value.to_date_time(&self.tz),
-            8 => value.to_date_time64(self.precision as usize, &self.tz),
-            _ => unreachable!(),
-        }
+impl TimestampSerializer {
+    pub fn to_timestamp(&self, value: &i64) -> DateTime<Tz> {
+        value.to_timestamp(&self.tz)
     }
 }
 
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
-impl<T: PrimitiveType> TypeSerializer for TimestampSerializer<T> {
+impl TypeSerializer for TimestampSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         let value = DFTryFrom::try_from(value.clone())?;
-        let dt = self.to_date_time(&value);
+        let dt = self.to_timestamp(&value);
         Ok(dt.format(TIME_FMT).to_string())
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let column: &PrimitiveColumn<i64> = Series::check_get(column)?;
         let result: Vec<String> = column
             .iter()
             .map(|v| {
-                let dt = self.to_date_time(v);
+                let dt = self.to_timestamp(v);
                 dt.format(TIME_FMT).to_string()
             })
             .collect();
@@ -72,11 +61,11 @@ impl<T: PrimitiveType> TypeSerializer for TimestampSerializer<T> {
     }
 
     fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
-        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
         let result: Vec<Value> = array
             .iter()
             .map(|v| {
-                let dt = self.to_date_time(v);
+                let dt = self.to_timestamp(v);
                 serde_json::to_value(dt.format(TIME_FMT).to_string()).unwrap()
             })
             .collect();
@@ -87,8 +76,8 @@ impl<T: PrimitiveType> TypeSerializer for TimestampSerializer<T> {
         &self,
         column: &ColumnRef,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let values: Vec<DateTime<Tz>> = array.iter().map(|v| self.to_date_time(v)).collect();
+        let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
+        let values: Vec<DateTime<Tz>> = array.iter().map(|v| self.to_timestamp(v)).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

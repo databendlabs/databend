@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -87,8 +87,8 @@ impl Default for MutableStringColumn {
 }
 
 impl MutableColumn for MutableStringColumn {
-    fn data_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn data_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

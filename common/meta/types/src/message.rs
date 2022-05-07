@@ -30,7 +30,6 @@ use crate::Endpoint;
 use crate::GetDatabaseReq;
 use crate::GetKVActionReply;
 use crate::GetKVReq;
-use crate::GetShareReq;
 use crate::GetTableReq;
 use crate::ListDatabaseReq;
 use crate::ListKVReq;
@@ -42,6 +41,8 @@ use crate::NodeId;
 use crate::PrefixListReply;
 use crate::ShareInfo;
 use crate::TableInfo;
+use crate::TxnOpResponse;
+use crate::TxnReply;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RetryableError {
@@ -57,11 +58,18 @@ pub struct JoinRequest {
     pub endpoint: Endpoint,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct LeaveRequest {
+    pub node_id: NodeId,
+}
+
 #[derive(
     Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
 )]
 pub enum ForwardRequestBody {
     Join(JoinRequest),
+    Leave(LeaveRequest),
+
     Write(LogEntry),
 
     ListDatabase(ListDatabaseReq),
@@ -72,8 +80,7 @@ pub enum ForwardRequestBody {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
     ListKV(ListKVReq),
-
-    GetShare(GetShareReq),
+    // GetShare(GetShareReq),
 }
 
 /// A request that is forwarded from one raft node to another
@@ -95,6 +102,7 @@ impl ForwardRequest {
 #[allow(clippy::large_enum_variant)]
 pub enum ForwardResponse {
     Join(()),
+    Leave(()),
     AppliedState(AppliedState),
     ListDatabase(Vec<Arc<DatabaseInfo>>),
     DatabaseInfo(Arc<DatabaseInfo>),
@@ -230,6 +238,21 @@ where
                     error,
                 }
             }
+        }
+    }
+}
+
+/// Convert txn response to `success` and a series of `TxnOpResponse`.
+/// If `success` is false, then the vec is empty
+impl<E> From<TxnReply> for Result<(bool, Vec<TxnOpResponse>), E>
+where E: DeserializeOwned
+{
+    fn from(msg: TxnReply) -> Self {
+        if msg.error.is_empty() {
+            Ok((msg.success, msg.responses))
+        } else {
+            let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
         }
     }
 }

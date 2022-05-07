@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::Column;
 use common_datavalues::ConstColumn;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::NewColumn;
 use common_datavalues::StringColumn;
 use common_datavalues::StringType;
@@ -41,7 +41,7 @@ pub struct UUIDCreatorFunction<T> {
 impl<T> UUIDCreatorFunction<T>
 where T: UUIDCreator + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDCreatorFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -89,8 +89,8 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        StringType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        StringType::new_impl()
     }
 
     fn eval(

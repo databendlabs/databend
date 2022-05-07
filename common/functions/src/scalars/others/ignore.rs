@@ -18,7 +18,8 @@ use std::str;
 use common_datavalues::BooleanType;
 use common_datavalues::ColumnRef;
 use common_datavalues::ColumnsWithField;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -29,14 +30,14 @@ use crate::scalars::FunctionFeatures;
 
 // ignore(...) is a function that takes any arguments, and always returns 0.
 // it can be used in performance tests
-// eg: SELECT count() FROM numbers(1000000000) WHERE NOT ignore( toString(number) );
+// eg: SELECT count() FROM numbers(1000000000) WHERE NOT ignore( to_varchar(number) );
 #[derive(Clone)]
 pub struct IgnoreFunction {
     display_name: String,
 }
 
 impl IgnoreFunction {
-    pub fn try_create(display_name: &str, _args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, _args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         Ok(Box::new(IgnoreFunction {
             display_name: display_name.to_string(),
         }))
@@ -46,7 +47,6 @@ impl IgnoreFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .bool_function()
                 .disable_passthrough_null()
                 .variadic_arguments(0, usize::MAX),
         )
@@ -64,8 +64,8 @@ impl Function for IgnoreFunction {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        BooleanType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -74,7 +74,7 @@ impl Function for IgnoreFunction {
         _columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let return_type = BooleanType::arc();
+        let return_type = BooleanType::new_impl();
         let return_value = DataValue::try_from(false)?;
         return_type.create_constant_column(&return_value, input_rows)
     }

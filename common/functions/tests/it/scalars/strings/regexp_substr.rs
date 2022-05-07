@@ -99,9 +99,9 @@ fn test_regexp_instr_function() -> Result<()> {
 fn test_regexp_substr_constant_column() -> Result<()> {
     let data_type = DataValue::String("[a-z]+".as_bytes().into());
     let mt_type = DataValue::String("-i".as_bytes().into());
-    let data_value1 = StringType::arc().create_constant_column(&data_type, 2)?;
-    let data_value2 = StringType::arc().create_constant_column(&data_type, 2)?;
-    let mt_value = StringType::arc().create_constant_column(&mt_type, 2)?;
+    let data_value1 = StringType::new_impl().create_constant_column(&data_type, 2)?;
+    let data_value2 = StringType::new_impl().create_constant_column(&data_type, 2)?;
+    let mt_value = StringType::new_impl().create_constant_column(&mt_type, 2)?;
 
     let tests = vec![
         ScalarFunctionTest {

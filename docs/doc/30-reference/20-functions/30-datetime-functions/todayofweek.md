@@ -7,14 +7,14 @@ Converts a date or date with time to a UInt8 number containing the number of the
 ## Syntax
 
 ```sql
-toDayOfWeek(expr)
+toDayOfWeek( <expr> )
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | date16/date32/datetime |
+| `<expr>` | date/datetime |
 
 ## Return Type
 `UInt8` datatype.
@@ -22,9 +22,9 @@ toDayOfWeek(expr)
 ## Examples
 
 ```sql
-SELECT toDayOfWeek(toDate(18869));
+SELECT toDayOfWeek(to_date(18869));
 +----------------------------+
-| toDayOfWeek(toDate(18869)) |
+| toDayOfWeek(to_date(18869)) |
 +----------------------------+
 |                          1 |
 +----------------------------+

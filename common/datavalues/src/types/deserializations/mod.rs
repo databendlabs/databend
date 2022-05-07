@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_io::prelude::CpBufferReader;
+use common_io::prelude::*;
 use enum_dispatch::enum_dispatch;
 use serde_json::Value;
 
@@ -53,17 +53,17 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_whole_text(&mut self, reader: &[u8]) -> Result<()>;
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()>;
+    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()>;
 
-    fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         self.de_text(reader)
     }
 
-    fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_json<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         self.de_text(reader)
     }
 
-    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
         self.de_text(reader)
     }
 
@@ -93,7 +93,7 @@ pub enum TypeDeserializerImpl {
 
     Date(DateDeserializer<i32>),
     Interval(DateDeserializer<i64>),
-    Timestamp(TimestampDeserializer<i64>),
+    Timestamp(TimestampDeserializer),
     String(StringDeserializer),
     // TODO
     // Array(ArrayDeserializer),

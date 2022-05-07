@@ -29,7 +29,7 @@ pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 /// In AggregateFunction, all datablock columns are not ConstantColumn, we take the column as Full columns
 pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
-    fn return_type(&self) -> Result<DataTypePtr>;
+    fn return_type(&self) -> Result<DataTypeImpl>;
 
     fn init_state(&self, place: StateAddr);
     fn state_layout(&self) -> Layout;
@@ -69,6 +69,14 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     // TODO append the value into the column builder
     fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
+
+    fn need_manual_drop_state(&self) -> bool {
+        false
+    }
+
+    /// # Safety
+    /// The caller must ensure that the [`_place`] has defined memory.
+    unsafe fn drop_state(&self, _place: StateAddr) {}
 
     fn get_own_null_adaptor(
         &self,

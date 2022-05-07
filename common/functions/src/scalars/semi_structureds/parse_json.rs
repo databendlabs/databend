@@ -30,11 +30,11 @@ pub type ParseJsonFunction = ParseJsonFunctionImpl<false>;
 #[derive(Clone)]
 pub struct ParseJsonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
     display_name: String,
-    result_type: DataTypePtr,
+    result_type: DataTypeImpl,
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERROR> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let data_type = remove_nullable(args[0]);
         if data_type.data_type_id() == TypeID::VariantArray
             || data_type.data_type_id() == TypeID::VariantObject
@@ -42,16 +42,16 @@ impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERRO
             return Err(ErrorCode::BadDataValueType(format!(
                 "Invalid argument types for function '{}': ({})",
                 display_name,
-                data_type.name()
+                data_type.data_type_id()
             )));
         }
 
         let result_type = if args[0].data_type_id() == TypeID::Null {
             NullType::arc()
         } else if args[0].is_nullable() || SUPPRESS_PARSE_ERROR {
-            NullableType::arc(VariantType::arc())
+            NullableType::new_impl(VariantType::new_impl())
         } else {
-            VariantType::arc()
+            VariantType::new_impl()
         };
 
         Ok(Box::new(ParseJsonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
@@ -76,7 +76,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         self.result_type.clone()
     }
 

@@ -31,7 +31,7 @@ impl DefaultDatabase {
 
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
-        &self.db_info.db
+        &self.db_info.name_ident.db_name
     }
 
     fn get_db_info(&self) -> &DatabaseInfo {

@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
-use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -64,19 +64,20 @@ impl CastOptions {
 
 pub fn cast_column_field(
     column_with_field: &ColumnWithField,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    target_type: &DataTypeImpl,
 ) -> Result<ColumnRef> {
     cast_with_type(
         column_with_field.column(),
-        column_with_field.data_type(),
-        data_type,
+        from_type,
+        target_type,
         &DEFAULT_CAST_OPTIONS,
     )
 }
 
 // No logical type is specified
 // Use Default options
-pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Result<ColumnRef> {
+pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
     cast_with_type(
         column,
         &column.data_type(),
@@ -87,23 +88,23 @@ pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Resul
 
 pub fn cast_with_type(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    target_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<ColumnRef> {
     // they are pyhsically the same type
-    if &column.data_type() == data_type {
+    if &column.data_type() == target_type {
         return Ok(column.clone());
     }
 
-    if data_type.data_type_id() == TypeID::Null {
+    if target_type.data_type_id() == TypeID::Null {
         return Ok(Arc::new(NullColumn::new(column.len())));
     }
 
     if from_type.data_type_id() == TypeID::Null {
         //all is null
-        if data_type.is_nullable() {
-            return data_type.create_constant_column(&DataValue::Null, column.len());
+        if target_type.is_nullable() {
+            return target_type.create_constant_column(&DataValue::Null, column.len());
         }
         return Err(ErrorCode::BadDataValueType(
             "Can't cast column from null into non-nullable type".to_string(),
@@ -113,12 +114,12 @@ pub fn cast_with_type(
     if column.is_const() {
         let col: &ConstColumn = Series::check_get(column)?;
         let inner = col.inner();
-        let res = cast_with_type(inner, from_type, data_type, cast_options)?;
+        let res = cast_with_type(inner, from_type, target_type, cast_options)?;
         return Ok(ConstColumn::new(res, column.len()).arc());
     }
 
     let nonull_from_type = remove_nullable(from_type);
-    let nonull_data_type = remove_nullable(data_type);
+    let nonull_data_type = remove_nullable(target_type);
 
     let (result, valids) = match nonull_from_type.data_type_id() {
         TypeID::String => {
@@ -135,9 +136,22 @@ pub fn cast_with_type(
         _ => arrow_cast_compute(column, &nonull_from_type, &nonull_data_type, cast_options),
     }?;
 
+    // check date/timestamp bound
+    if nonull_data_type.data_type_id() == TypeID::Date {
+        let viewer = i32::try_create_viewer(&result)?;
+        for x in viewer {
+            let _ = check_date(x)?;
+        }
+    } else if nonull_data_type.data_type_id() == TypeID::Timestamp {
+        let viewer = i64::try_create_viewer(&result)?;
+        for x in viewer {
+            let _ = check_timestamp(x)?;
+        }
+    }
+
     let (all_nulls, source_valids) = column.validity();
     let bitmap = combine_validities_2(source_valids.cloned(), valids);
-    if data_type.is_nullable() {
+    if target_type.is_nullable() {
         return Ok(NullableColumn::wrap_inner(result, bitmap));
     }
 
@@ -157,7 +171,7 @@ pub fn cast_with_type(
             return Err(ErrorCode::BadDataValueType(format!(
                 "Cast error happens in casting from {} to {}",
                 from_type.name(),
-                data_type.name()
+                target_type.name()
             )));
         }
     }
@@ -167,8 +181,8 @@ pub fn cast_with_type(
 
 pub fn cast_to_variant(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let column = Series::remove_nullable(column);
     let size = column.len();
@@ -207,8 +221,8 @@ pub fn cast_to_variant(
 // cast using arrow's cast compute
 pub fn arrow_cast_compute(
     column: &ColumnRef,
-    from_type: &DataTypePtr,
-    data_type: &DataTypePtr,
+    from_type: &DataTypeImpl,
+    data_type: &DataTypeImpl,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     if data_type.data_type_id().is_variant() {

@@ -51,6 +51,11 @@ pub trait ScalarRef<'a>: std::fmt::Debug + Clone + Copy + Send + 'a {
 
     /// Convert the reference into an owned value.
     fn to_owned_scalar(&self) -> Self::ScalarType;
+
+    /// Whether to_owned_scalar has heap allocation which is unhandled by Bumplao
+    fn has_alloc_beyond_bump() -> bool {
+        false
+    }
 }
 
 macro_rules! impl_primitive_scalar_type {
@@ -147,6 +152,10 @@ impl<'a> ScalarRef<'a> for &'a [u8] {
     fn to_owned_scalar(&self) -> Vec<u8> {
         self.to_vec()
     }
+
+    fn has_alloc_beyond_bump() -> bool {
+        true
+    }
 }
 
 impl Scalar for VariantValue {
@@ -173,5 +182,9 @@ impl<'a> ScalarRef<'a> for &'a VariantValue {
     #[inline]
     fn to_owned_scalar(&self) -> VariantValue {
         (*self).clone()
+    }
+
+    fn has_alloc_beyond_bump() -> bool {
+        true
     }
 }

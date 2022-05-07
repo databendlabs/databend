@@ -59,7 +59,7 @@ pub trait LogicExpression: Sync + Send {
 impl<F> LogicFunctionImpl<F>
 where F: LogicExpression + Clone + 'static
 {
-    pub fn try_create(op: LogicOperator, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(op: LogicOperator, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let nullable = match op {
             LogicOperator::And | LogicOperator::Or
                 if args[0].is_nullable()
@@ -87,11 +87,11 @@ where F: LogicExpression + Clone
         "LogicFunction"
     }
 
-    fn return_type(&self) -> DataTypePtr {
+    fn return_type(&self) -> DataTypeImpl {
         if self.nullable {
-            NullableType::arc(BooleanType::arc())
+            NullableType::new_impl(BooleanType::new_impl())
         } else {
-            BooleanType::arc()
+            BooleanType::new_impl()
         }
     }
 

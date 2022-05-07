@@ -25,8 +25,6 @@ use common_management::UdfApi;
 use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
-use common_management::WarehouseApi;
-use common_management::WarehouseMgr;
 use common_meta_api::KVApi;
 
 use crate::common::MetaClientProvider;
@@ -63,9 +61,5 @@ impl UserApiProvider {
 
     pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
         Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
-    }
-
-    pub fn get_warehouse_api_client(&self, tenant: &str) -> Result<Arc<dyn WarehouseApi>> {
-        Ok(Arc::new(WarehouseMgr::create(self.client.clone(), tenant)?))
     }
 }

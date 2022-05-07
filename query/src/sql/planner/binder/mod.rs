@@ -18,8 +18,6 @@ pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
 use common_exception::Result;
-pub use scalar::ScalarExpr;
-pub use scalar::ScalarExprRef;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
@@ -27,9 +25,12 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
 use crate::storages::Table;
 
+mod aggregate;
 mod bind_context;
 mod project;
 mod scalar;
+mod scalar_common;
+mod scalar_visitor;
 mod select;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -40,29 +41,34 @@ mod select;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
+    ctx: Arc<QueryContext>,
     catalog: Arc<dyn Catalog>,
     metadata: Metadata,
-    context: Arc<QueryContext>,
 }
 
 impl Binder {
-    pub fn new(catalog: Arc<dyn Catalog>, context: Arc<QueryContext>) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, catalog: Arc<dyn Catalog>) -> Self {
         Binder {
+            ctx,
             catalog,
             metadata: Metadata::create(),
-            context,
         }
     }
 
     pub async fn bind<'a>(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
-        let bind_context = self.bind_statement(stmt).await?;
+        let init_bind_context = BindContext::create();
+        let bind_context = self.bind_statement(stmt, &init_bind_context).await?;
         Ok(BindResult::create(bind_context, self.metadata))
     }
 
-    async fn bind_statement<'a>(&mut self, stmt: &Statement<'a>) -> Result<BindContext> {
+    async fn bind_statement<'a>(
+        &mut self,
+        stmt: &Statement<'a>,
+        bind_context: &BindContext,
+    ) -> Result<BindContext> {
         match stmt {
-            Statement::Select(stmt) => {
-                let bind_context = self.bind_query(stmt).await?;
+            Statement::Query(query) => {
+                let bind_context = self.bind_query(query, bind_context).await?;
                 Ok(bind_context)
             }
             _ => todo!(),

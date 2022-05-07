@@ -1,5 +1,5 @@
 ---
-title: Databend On Tencent Cloud CVM COS Performance
+title: Databend on Tencent Cloud CVM COS Performance
 sidebar_label: On Tencent COS Performance
 description:
   Sub-second analytics on Tencent Cloud CVM + COS experience.
@@ -679,7 +679,7 @@ FROM ontime;
 ## Block Statistics
 
 ```sql
-CALL system$fuse_history('default', 'ontime');
+CALL system$fuse_snapshot('default', 'ontime');
 ```
 
 ```text

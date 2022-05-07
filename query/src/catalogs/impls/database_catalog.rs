@@ -130,7 +130,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        if req.tenant.is_empty() {
+        if req.name_ident.tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while create database)",
             ));
@@ -139,12 +139,12 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                req.db_name
+                req.name_ident.db_name
             )));
         }
         // create db in BOTTOM layer only
@@ -152,7 +152,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
-        if req.tenant.is_empty() {
+        if req.name_ident.tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while drop database)",
             ));
@@ -162,7 +162,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -257,7 +257,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        if req.tenant.is_empty() {
+        if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while create table)",
             ));
@@ -266,7 +266,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(req.tenant(), req.db_name())
             .await?
         {
             return self.immutable_catalog.create_table(req).await;
@@ -275,7 +275,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        if req.tenant.is_empty() {
+        if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while drop table)",
             ));
@@ -284,7 +284,7 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(req.tenant(), req.db_name())
             .await?
         {
             return self.immutable_catalog.drop_table(req).await;
@@ -293,7 +293,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        if req.tenant.is_empty() {
+        if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while rename table)",
             ));
@@ -302,11 +302,11 @@ impl Catalog for DatabaseCatalog {
 
         if self
             .immutable_catalog
-            .exists_database(&req.tenant, &req.db_name)
+            .exists_database(req.tenant(), req.db_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(&req.tenant, &req.new_db_name)
+                .exists_database(req.tenant(), &req.new_db_name)
                 .await?
         {
             return Err(ErrorCode::UnImplement(

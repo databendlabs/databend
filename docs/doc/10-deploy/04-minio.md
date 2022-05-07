@@ -4,6 +4,7 @@ sidebar_label: With MinIO
 description:
   How to deploy Databend with MinIO.
 ---
+import GetLatest from '@site/src/components/GetLatest';
 
 :::tip
 
@@ -54,14 +55,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-x86_64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -69,7 +70,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nightly/databend-v0.7.26-nightly-aarch64-unknown-linux-musl.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -79,14 +80,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.26-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.7.26-nightly-x86_64-unknown-linux-musl.tar.gz
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -94,7 +95,7 @@ tar xzvf databend-v0.7.26-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.7.26-nightly-aarch64-unknown-linux-musl.tar.gz
+tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -167,10 +168,9 @@ tenant_id = "tenant1"
 cluster_id = "cluster1"
 
 [meta]
-# databend-meta grpc api address. 
-meta_address = "127.0.0.1:9101"
-meta_username = "root"
-meta_password = "root"
+address = "127.0.0.1:9101"
+username = "root"
+password = "root"
 
 
 [storage]
@@ -226,3 +226,4 @@ SELECT * FROM t1
 |    2 |
 +------+
 ```
+<GetLatest/>

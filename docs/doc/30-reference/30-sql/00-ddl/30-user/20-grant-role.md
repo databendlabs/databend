@@ -1,5 +1,5 @@
 ---
-title: GRANT ROLE To a User
+title: GRANT ROLE to a User
 sidebar_label: GRANT ROLE
 description: Assigns a role to a user.
 ---

@@ -1,0 +1,25 @@
+[package]
+name = "common-proto-conv"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-datavalues = { path = "../../common/datavalues" }
+common-meta-types = { path = "../../common/meta/types" }
+common-protos = { path = "../../common/protos" }
+
+num = "0.4"
+thiserror = "1.0.30"
+
+[build-dependencies]
+
+[dev-dependencies]
+anyhow = "1.0.56"
+maplit = "1.0.2"

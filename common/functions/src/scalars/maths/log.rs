@@ -70,7 +70,7 @@ pub struct GenericLogFunction<T> {
 }
 
 impl<T: Base> GenericLogFunction<T> {
-    pub fn try_create(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         for arg in args {
             assert_numeric(*arg)?;
         }
@@ -107,8 +107,8 @@ impl<T: Base> Function for GenericLogFunction<T> {
         &*self.display_name
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        Float64Type::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        Float64Type::new_impl()
     }
 
     fn eval(

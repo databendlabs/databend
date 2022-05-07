@@ -28,9 +28,9 @@ SELECT FIND_IN_SET('ab', 'ab');
 
 SELECT '=== series ===';
 SELECT '=== FIND_IN_SET(3, number) ===';
-SELECT FIND_IN_SET('3', toString(number))  FROM numbers(5) ORDER BY number;
+SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number;
 SELECT '=== FIND_IN_SET(number, 1,2,3,4,5) ===';
-SELECT FIND_IN_SET(toString(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY number;
+SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY number;
 
 SELECT '=== null ===';
 SELECT FIND_IN_SET(NULL, NULL);

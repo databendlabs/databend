@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::remove_nullable;
+use common_datavalues::DataType;
 use common_datavalues::TypeID;
 use common_exception::Result;
 

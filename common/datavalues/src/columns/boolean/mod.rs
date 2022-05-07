@@ -18,8 +18,8 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::bitmap::MutableBitmap;
 
 use crate::prelude::*;
 
@@ -71,8 +71,8 @@ impl Column for BooleanColumn {
         self
     }
 
-    fn data_type(&self) -> DataTypePtr {
-        BooleanType::arc()
+    fn data_type(&self) -> DataTypeImpl {
+        BooleanType::new_impl()
     }
 
     fn column_type_name(&self) -> String {

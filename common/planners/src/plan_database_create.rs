@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseMeta;
-
-pub type DatabaseOptions = HashMap<String, String>;
+use common_meta_types::DatabaseNameIdent;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabasePlan {
@@ -34,8 +32,10 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
-            tenant: p.tenant,
-            db_name: p.db,
+            name_ident: DatabaseNameIdent {
+                tenant: p.tenant,
+                db_name: p.db,
+            },
             meta: p.meta,
         }
     }
@@ -45,8 +45,10 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
-            tenant: p.tenant.clone(),
-            db_name: p.db.clone(),
+            name_ident: DatabaseNameIdent {
+                tenant: p.tenant.clone(),
+                db_name: p.db.clone(),
+            },
             meta: p.meta.clone(),
         }
     }

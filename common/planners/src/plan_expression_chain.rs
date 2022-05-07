@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypePtr;
+use common_datavalues::DataType;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
@@ -125,7 +126,7 @@ impl ExpressionChain {
                 expr: nested_expr,
             } => {
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
-                let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
+                let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type();
 
@@ -147,7 +148,7 @@ impl ExpressionChain {
                     right.to_data_type(&self.schema)?,
                 ];
 
-                let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
+                let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type();
 
@@ -169,7 +170,7 @@ impl ExpressionChain {
                     .map(|action| action.to_data_type(&self.schema))
                     .collect::<Result<Vec<_>>>()?;
 
-                let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
+                let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type();
@@ -198,13 +199,14 @@ impl ExpressionChain {
                 ..
             } => {
                 let func_name = "cast".to_string();
+                let from_type = sub_expr.to_data_type(&self.schema)?;
                 let return_type = data_type.clone();
-                let type_name = format!("{:?}", data_type);
+                let type_name = data_type.name();
 
                 let func = if data_type.is_nullable() {
-                    CastFunction::create_try(&func_name, &type_name)
+                    CastFunction::create_try(&func_name, &type_name, from_type)
                 } else {
-                    CastFunction::create(&func_name, &type_name)
+                    CastFunction::create(&func_name, &type_name, from_type)
                 }?;
 
                 let function = ActionFunction {
@@ -224,7 +226,7 @@ impl ExpressionChain {
                     .map(|action| action.to_data_type(&self.schema))
                     .collect::<Result<Vec<_>>>()?;
 
-                let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
+                let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
                 let func_name = "get_path";
                 let func = FunctionFactory::instance().get(func_name, &arg_types2)?;

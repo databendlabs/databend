@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
 use common_arrow::arrow::compute::comparison;
 use common_arrow::arrow::compute::comparison::Simd8Lanes;
 use common_arrow::arrow::compute::comparison::Simd8PartialEq;
 use common_arrow::arrow::types::NativeType;
-use common_arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::with_match_physical_primitive_type_error;
@@ -136,7 +136,7 @@ fn databend_eq_simd(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
     Ok(NullableColumn::wrap_inner(col, validity))
 }
 
-fn cast(column: &ColumnRef, data_type: &DataTypePtr) -> Result<ColumnRef> {
+fn cast(column: &ColumnRef, data_type: &DataTypeImpl) -> Result<ColumnRef> {
     let arrow_array = column.as_arrow_array();
     let arrow_options = ArrowOption {
         wrapped: true,

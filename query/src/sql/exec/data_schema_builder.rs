@@ -17,7 +17,9 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_planners::Expression;
 
 use crate::sql::exec::util::format_field_name;
 use crate::sql::plans::PhysicalScan;
@@ -34,6 +36,27 @@ impl<'a> DataSchemaBuilder<'a> {
         DataSchemaBuilder { metadata }
     }
 
+    pub fn build_aggregate(
+        &self,
+        data_fields: Vec<DataField>,
+        input_schema: &DataSchemaRef,
+    ) -> Result<DataSchemaRef> {
+        let mut new_data_fields = Vec::with_capacity(data_fields.len());
+        for data_field in data_fields {
+            if input_schema.has_field(data_field.name()) {
+                new_data_fields.push(data_field);
+                continue;
+            }
+            let field = if data_field.is_nullable() {
+                DataField::new_nullable(data_field.name(), data_field.data_type().clone())
+            } else {
+                DataField::new(data_field.name(), data_field.data_type().clone())
+            };
+            new_data_fields.push(field);
+        }
+        Ok(Arc::new(DataSchema::new(new_data_fields)))
+    }
+
     pub fn build_project(
         &self,
         plan: &ProjectPlan,
@@ -44,11 +67,7 @@ impl<'a> DataSchemaBuilder<'a> {
             let index = item.index;
             let column_entry = self.metadata.column(index);
             let field_name = format_field_name(column_entry.name.as_str(), index);
-            let field = if column_entry.nullable {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
+            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
         }
 
@@ -60,7 +79,7 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in plan.columns.iter() {
             let column_entry = self.metadata.column(*index);
             let field_name = format_field_name(column_entry.name.as_str(), *index);
-            let field = if column_entry.nullable {
+            let field = if matches!(column_entry.data_type, DataTypeImpl::Nullable(_)) {
                 DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
             } else {
                 DataField::new(field_name.as_str(), column_entry.data_type.clone())
@@ -77,7 +96,7 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in columns {
             let column_entry = self.metadata.column(*index);
             let field_name = column_entry.name.clone();
-            let field = if column_entry.nullable {
+            let field = if matches!(column_entry.data_type, DataTypeImpl::Nullable(_)) {
                 DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
             } else {
                 DataField::new(field_name.as_str(), column_entry.data_type.clone())
@@ -87,5 +106,32 @@ impl<'a> DataSchemaBuilder<'a> {
         }
 
         Arc::new(DataSchema::new(fields))
+    }
+
+    pub fn build_group_by(
+        &self,
+        input_schema: DataSchemaRef,
+        exprs: &[Expression],
+    ) -> Result<DataSchemaRef> {
+        if !exprs
+            .iter()
+            .any(|expr| !matches!(expr, Expression::Column(_)))
+        {
+            return Ok(input_schema);
+        }
+        let mut fields = input_schema.fields().clone();
+        for expr in exprs.iter() {
+            let expr_name = expr.column_name().clone();
+            if input_schema.has_field(expr_name.as_str()) {
+                continue;
+            }
+            let field = if expr.nullable(&input_schema)? {
+                DataField::new_nullable(expr_name.as_str(), expr.to_data_type(&input_schema)?)
+            } else {
+                DataField::new(expr_name.as_str(), expr.to_data_type(&input_schema)?)
+            };
+            fields.push(field);
+        }
+        Ok(Arc::new(DataSchema::new(fields)))
     }
 }

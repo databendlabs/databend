@@ -87,8 +87,8 @@ impl Function for ComparisonFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self) -> DataTypePtr {
-        BooleanType::arc()
+    fn return_type(&self) -> DataTypeImpl {
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -113,7 +113,10 @@ pub struct ComparisonFunctionCreator<T> {
 }
 
 impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
-    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        display_name: &str,
+        args: &[&DataTypeImpl],
+    ) -> Result<Box<dyn Function>> {
         // expect array & struct
         let has_array_struct = args
             .iter()
@@ -172,7 +175,6 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -183,7 +185,10 @@ pub struct StringSearchCreator<const NEGATED: bool, T> {
 }
 
 impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
-    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        display_name: &str,
+        args: &[&DataTypeImpl],
+    ) -> Result<Box<dyn Function>> {
         for arg in args {
             assert_string(*arg)?;
         }
@@ -202,7 +207,6 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -266,7 +270,7 @@ where
 }
 
 pub struct ComparisonPrimitiveImpl<T: PrimitiveType, F> {
-    least_supertype: DataTypePtr,
+    least_supertype: DataTypeImpl,
     need_cast: bool,
     func: F,
     _phantom: PhantomData<T>,
@@ -277,7 +281,7 @@ where
     T: PrimitiveType + comparison::Simd8,
     F: Fn(T::Simd, T::Simd) -> u8,
 {
-    pub fn new(least_supertype: DataTypePtr, need_cast: bool, func: F) -> Self {
+    pub fn new(least_supertype: DataTypeImpl, need_cast: bool, func: F) -> Self {
         Self {
             least_supertype,
             need_cast,
@@ -294,13 +298,13 @@ where
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, &self.least_supertype)?
+            cast_column_field(l, l.data_type(), &self.least_supertype)?
         } else {
             l.column().clone()
         };
 
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, &self.least_supertype)?
+            cast_column_field(r, r.data_type(), &self.least_supertype)?
         } else {
             r.column().clone()
         };

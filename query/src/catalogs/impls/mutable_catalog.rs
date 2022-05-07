@@ -21,8 +21,10 @@ use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
@@ -100,8 +102,10 @@ impl MutableCatalog {
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
-            tenant,
-            db_name: "default".to_string(),
+            name_ident: DatabaseNameIdent {
+                tenant,
+                db_name: "default".to_string(),
+            },
             meta: DatabaseMeta {
                 engine: "".to_string(),
                 ..Default::default()
@@ -163,19 +167,24 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
-        tracing::error!("db name: {}, engine: {}", &req.db_name, &req.meta.engine);
+        tracing::error!(
+            "db name: {}, engine: {}",
+            &req.name_ident.db_name,
+            &req.meta.engine
+        );
 
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
-            database_id: res.database_id,
-            db: req.db_name.clone(),
+            ident: DatabaseIdent {
+                db_id: res.db_id,
+                seq: 0, // TODO
+            },
+            name_ident: req.name_ident.clone(),
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database(&req.tenant).await?;
-        Ok(CreateDatabaseReply {
-            database_id: res.database_id,
-        })
+        database.init_database(&req.name_ident.tenant).await?;
+        Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
