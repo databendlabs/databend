@@ -34,4 +34,13 @@ select sum(a) from t group by a having sum(a) > 1;
 select sum(a+1) from t group by a+1 having sum(a+1) = 2;
 select sum(a+1) from t group by a+1, b having sum(a+1) > 3;
 drop table t;
+
+select 1, sum(number) from numbers_mt(1000000);
+select count(*) = count(1) from numbers(1000);
+select count(1) from numbers(1000);
+select sum(3) from numbers(1000);
+select count(null) from numbers(1000);
+
+SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
+SELECT max(number) FROM numbers_mt (10) where number > 2;
 set enable_planner_v2 = 0;
