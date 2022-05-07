@@ -1270,6 +1270,7 @@ dependencies = [
  "common-meta-types",
  "common-protos",
  "maplit",
+ "num",
  "thiserror",
 ]
 
@@ -1277,6 +1278,8 @@ dependencies = [
 name = "common-protos"
 version = "0.1.0"
 dependencies = [
+ "num-derive",
+ "num-traits",
  "prost 0.10.1",
  "prost-build 0.10.1",
  "tonic",

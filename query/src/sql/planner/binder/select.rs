@@ -76,7 +76,7 @@ impl Binder {
         };
 
         if let Some(expr) = &stmt.selection {
-            self.bind_where(expr, &mut input_context)?;
+            self.bind_where(expr, &mut input_context, false)?;
         }
 
         // Output of current `SELECT` statement.
@@ -87,6 +87,11 @@ impl Binder {
         if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
         {
             self.bind_group_by(&stmt.group_by, &mut input_context)?;
+            output_context.expression = input_context.expression.clone();
+        }
+
+        if let Some(expr) = &stmt.having {
+            self.bind_where(expr, &mut input_context, true)?;
             output_context.expression = input_context.expression.clone();
         }
 
@@ -200,10 +205,18 @@ impl Binder {
         Ok(bind_context)
     }
 
-    pub(super) fn bind_where(&mut self, expr: &Expr, bind_context: &mut BindContext) -> Result<()> {
+    pub(super) fn bind_where(
+        &mut self,
+        expr: &Expr,
+        bind_context: &mut BindContext,
+        is_having: bool,
+    ) -> Result<()> {
         let scalar_binder = ScalarBinder::new(bind_context);
         let (scalar, _) = scalar_binder.bind_expr(expr)?;
-        let filter_plan = FilterPlan { predicate: scalar };
+        let filter_plan = FilterPlan {
+            predicate: scalar,
+            is_having,
+        };
         let new_expr =
             SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
         bind_context.expression = Some(new_expr);

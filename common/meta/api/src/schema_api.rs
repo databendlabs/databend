@@ -38,8 +38,9 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
+/// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
-pub trait MetaApi: Send + Sync {
+pub trait SchemaApi: Send + Sync {
     // database
 
     async fn create_database(

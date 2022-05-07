@@ -23,6 +23,8 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::find_aggregate_exprs;
+use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
 pub use util::decode_field_name;
@@ -31,6 +33,7 @@ pub use util::format_field_name;
 use super::plans::BasePlan;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
+use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
@@ -183,7 +186,16 @@ impl PipelineBuilder {
         let output_schema = input_schema.clone();
         let eb = ExpressionBuilder::create(&self.metadata);
         let scalar = &filter.predicate;
-        let pred = eb.build(scalar)?;
+        let mut pred = eb.build(scalar)?;
+        let no_agg_expression = find_aggregate_exprs_in_expr(&pred).is_empty();
+        if !no_agg_expression && !filter.is_having {
+            return Err(ErrorCode::SyntaxException(
+                "WHERE clause cannot contain aggregate functions",
+            ));
+        }
+        if !no_agg_expression && filter.is_having {
+            pred = eb.normalize_aggr_to_col(pred.clone())?;
+        }
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformFilter::try_create(
@@ -247,16 +259,42 @@ impl PipelineBuilder {
             agg_expressions.push(expr);
         }
 
-        let schema_builder = DataSchemaBuilder::new(&self.metadata);
-        let partial_data_fields =
-            RewriteHelper::exprs_to_fields(agg_expressions.as_slice(), &input_schema)?;
-        let partial_schema = schema_builder.build_aggregate(partial_data_fields, &input_schema)?;
-
         let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
         for scalar in aggregate.group_expr.iter() {
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
         }
+
+        if !find_aggregate_exprs(&group_expressions).is_empty() {
+            return Err(ErrorCode::SyntaxException(
+                "Group by clause cannot contain aggregate functions",
+            ));
+        }
+
+        // Process group by with scalar expression, such as `a+1`
+        // TODO(xudong963): move to aggregate transform
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let pre_input_schema = input_schema.clone();
+        let input_schema =
+            schema_builder.build_group_by(input_schema, group_expressions.as_slice())?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    pre_input_schema.clone(),
+                    input_schema.clone(),
+                    group_expressions.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+
+        // Get partial schema from agg_expressions
+        let partial_data_fields =
+            RewriteHelper::exprs_to_fields(agg_expressions.as_slice(), &input_schema)?;
+        let partial_schema = schema_builder.build_aggregate(partial_data_fields, &input_schema)?;
+
+        // Get final schema from agg_expression and group expression
         let mut final_exprs = agg_expressions.to_owned();
         final_exprs.extend_from_slice(group_expressions.as_slice());
         let final_data_fields =
@@ -279,6 +317,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         &partial_aggr_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })?;
 
@@ -288,7 +327,6 @@ impl PipelineBuilder {
             &input_schema,
             &final_schema,
         )?;
-
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformAggregator::try_create_final(
@@ -299,6 +337,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         &final_aggr_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })?;
 

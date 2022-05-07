@@ -39,6 +39,7 @@ use crate::pipelines::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::transforms::group_by::KeysColumnIter;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::transforms::group_by::StateEntity;
+use crate::sessions::QueryContext;
 
 pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
@@ -60,15 +61,15 @@ pub struct FinalAggregator<
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
-
     // used for deserialization only, so we can reuse it during the loop
     temp_place: StateAddr,
+    ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     FinalAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
+    pub fn create(method: Method, params: Arc<AggregatorParams>, ctx: Arc<QueryContext>) -> Self {
         let state = method.aggregate_state();
         let temp_place = if params.aggregate_functions.is_empty() {
             0.into()
@@ -83,6 +84,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             method,
             params,
             temp_place,
+            ctx,
         }
     }
 }
@@ -127,6 +129,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let aggregate_function_len = self.params.aggregate_functions.len();
         let keys_column = block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
+
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
 
         // first state places of current block
         let places = Self::lookup_state(&self.params, &mut self.state, keys_iter.get_slice());
@@ -204,6 +212,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 }
 
                 columns.extend_from_slice(&group_columns_builder.finish()?);
+
                 Ok(Some(DataBlock::create(self.params.schema.clone(), columns)))
             }
         }
@@ -218,6 +227,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);
         let keys_iter = self.method.keys_iter_from_column(key_array)?;
+
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
 
         let mut inserted = true;
         for keys_ref in keys_iter.get_slice() {

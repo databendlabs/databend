@@ -36,17 +36,17 @@ use common_meta_types::TableNameIdent;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::MetaApi;
+use crate::SchemaApi;
 
-/// Test suite of `MetaApi`.
+/// Test suite of `SchemaApi`.
 ///
-/// It is not used by this crate, but is used by other crate that impl `MetaApi`,
+/// It is not used by this crate, but is used by other crate that impl `SchemaApi`,
 /// to ensure an impl works as expected,
 /// such as `common/meta/embedded` and `metasrv`.
-pub struct MetaApiTestSuite {}
+pub struct SchemaApiTestSuite {}
 
-impl MetaApiTestSuite {
-    pub async fn database_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+impl SchemaApiTestSuite {
+    pub async fn database_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         tracing::info!("--- create db1");
         {
@@ -198,7 +198,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_create_get_drop_in_diff_tenant<MT: MetaApi>(
+    pub async fn database_create_get_drop_in_diff_tenant<MT: SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -339,7 +339,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
         let db_names = vec!["db1", "db2"];
@@ -377,7 +377,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list_in_diff_tenant<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
@@ -424,7 +424,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -700,7 +700,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_rename<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -844,6 +844,22 @@ impl MetaApiTestSuite {
             );
         }
 
+        tracing::info!("--- rename table again, with if_exist=true, OK");
+        {
+            let req = RenameTableReq {
+                if_exists: true,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            // Ok
+            mt.rename_table(req.clone()).await?;
+        }
+
         tracing::info!("--- create table again after rename, ok");
         let tb_ident2 = {
             mt.create_table(req.clone()).await?;
@@ -949,7 +965,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_upsert_option<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_upsert_option<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1092,7 +1108,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn get_table_by_id<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn get_table_by_id<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1194,7 +1210,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
 
@@ -1265,7 +1281,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    // pub async fn share_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    // pub async fn share_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
     //     let tenant1 = "tenant1";
     //     let share_name1 = "share1";
     //     let share_name2 = "share2";
@@ -1402,8 +1418,8 @@ impl MetaApiTestSuite {
     //
 }
 
-impl MetaApiTestSuite {
-    async fn create_database<MT: MetaApi>(
+impl SchemaApiTestSuite {
+    async fn create_database<MT: SchemaApi>(
         &self,
         mt: &MT,
         tenant: &str,
@@ -1431,10 +1447,10 @@ impl MetaApiTestSuite {
 }
 
 // Test write and read meta on different nodes
-// This is meant for testing distributed MetaApi impl, to ensure a read-after-write consistency.
-impl MetaApiTestSuite {
+// This is meant for testing distributed SchemaApi impl, to ensure a read-after-write consistency.
+impl SchemaApiTestSuite {
     /// Create db one node, get db on another
-    pub async fn database_get_diff_nodes<MT: MetaApi>(
+    pub async fn database_get_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1491,13 +1507,15 @@ impl MetaApiTestSuite {
     }
 
     /// Create dbs on node_a, list dbs on node_b
-    pub async fn list_database_diff_nodes<MT: MetaApi>(
+    pub async fn list_database_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
     ) -> anyhow::Result<()> {
         tracing::info!("--- create db1 and db3 on node_a");
         let tenant = "tenant1";
+
+        let mut db_ids = vec![];
         {
             let dbs = vec!["db1", "db3"];
             for db_name in dbs {
@@ -1512,9 +1530,8 @@ impl MetaApiTestSuite {
                         ..Default::default()
                     },
                 };
-                let res = node_a.create_database(req).await;
-                tracing::info!("create database res: {:?}", res);
-                assert!(res.is_ok());
+                let res = node_a.create_database(req).await?;
+                db_ids.push(res.db_id);
             }
         }
 
@@ -1528,9 +1545,9 @@ impl MetaApiTestSuite {
             tracing::debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(1, res[0].ident.db_id, "db1 id is 1");
+            assert_eq!(db_ids[0], res[0].ident.db_id, "db1 id");
             assert_eq!("db1", res[0].name_ident.db_name, "db1.name is db1");
-            assert_eq!(2, res[1].ident.db_id, "db3 id is 2");
+            assert_eq!(db_ids[1], res[1].ident.db_id, "db3 id");
             assert_eq!("db3", res[1].name_ident.db_name, "db3.name is db3");
         }
 
@@ -1538,7 +1555,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create table on node_a, list table on node_b
-    pub async fn list_table_diff_nodes<MT: MetaApi>(
+    pub async fn list_table_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1546,6 +1563,9 @@ impl MetaApiTestSuite {
         tracing::info!("--- create db1 and tb1, tb2 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
+
+        let mut tb_ids = vec![];
+
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1584,9 +1604,8 @@ impl MetaApiTestSuite {
                         ..Default::default()
                     },
                 };
-                let res = node_a.create_table(req).await;
-                tracing::info!("create table res: {:?}", res);
-                assert!(res.is_ok());
+                let res = node_a.create_table(req).await?;
+                tb_ids.push(res.table_id);
             }
         }
 
@@ -1596,9 +1615,9 @@ impl MetaApiTestSuite {
             tracing::debug!("get table list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "table list len is 2");
-            assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
+            assert_eq!(tb_ids[0], res[0].ident.table_id, "tb1 id");
             assert_eq!("tb1", res[0].name, "tb1.name is tb1");
-            assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
+            assert_eq!(tb_ids[1], res[1].ident.table_id, "tb2 id");
             assert_eq!("tb2", res[1].name, "tb2.name is tb2");
         }
 
@@ -1606,7 +1625,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create table on node_a, get table on node_b
-    pub async fn table_get_diff_nodes<MT: MetaApi>(
+    pub async fn table_get_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1614,7 +1633,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- create table tb1 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
-        {
+        let tb_id = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -1652,10 +1671,9 @@ impl MetaApiTestSuite {
                 },
             };
 
-            let res = node_a.create_table(req).await;
-            tracing::info!("create table res: {:?}", res);
-            assert!(res.is_ok());
-        }
+            let res = node_a.create_table(req).await?;
+            res.table_id
+        };
 
         tracing::info!("--- get tb1 on node_b");
         {
@@ -1664,7 +1682,7 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present table res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.table_id, "tb1 id is 1");
+            assert_eq!(tb_id, res.ident.table_id, "tb1 id is 1");
             assert_eq!("tb1", res.name, "tb1.name is tb1");
         }
 

@@ -13,4 +13,4 @@
 //  limitations under the License.
 
 mod kv_api_impl;
-mod meta_api_impl;
+mod schema_api_impl;
