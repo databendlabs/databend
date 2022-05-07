@@ -15,7 +15,7 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
 use pretty_assertions::assert_eq;
 

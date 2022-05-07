@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_base::tokio;
-use common_meta_api::MetaApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 use common_meta_raft_store::state_machine::StateMachine;
 
 use crate::testing::new_raft_test_context;
@@ -25,7 +25,7 @@ async fn test_meta_embedded_database_create_get_drop() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.database_create_get_drop(&sm).await
+    SchemaApiTestSuite {}.database_create_get_drop(&sm).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -35,7 +35,7 @@ async fn test_meta_embedded_database_create_get_drop_in_diff_tenant() -> anyhow:
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(&sm)
         .await
 }
@@ -47,7 +47,7 @@ async fn test_meta_embedded_database_list() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.database_list(&sm).await
+    SchemaApiTestSuite {}.database_list(&sm).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -57,7 +57,9 @@ async fn test_meta_embedded_database_list_in_diff_tenant() -> anyhow::Result<()>
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.database_list_in_diff_tenant(&sm).await
+    SchemaApiTestSuite {}
+        .database_list_in_diff_tenant(&sm)
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -67,7 +69,7 @@ async fn test_meta_embedded_table_create_get_drop() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.table_create_get_drop(&sm).await
+    SchemaApiTestSuite {}.table_create_get_drop(&sm).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -77,7 +79,7 @@ async fn test_meta_embedded_table_rename() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.table_rename(&sm).await
+    SchemaApiTestSuite {}.table_rename(&sm).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -87,7 +89,7 @@ async fn test_meta_embedded_table_upsert_option() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.table_upsert_option(&sm).await
+    SchemaApiTestSuite {}.table_upsert_option(&sm).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -97,7 +99,7 @@ async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    MetaApiTestSuite {}.table_list(&sm).await
+    SchemaApiTestSuite {}.table_list(&sm).await
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -107,5 +109,5 @@ async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
 //     let tc = new_raft_test_context();
 //     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 //
-//     MetaApiTestSuite {}.share_create_get_drop(&sm).await
+//     SchemaApiTestSuite {}.share_create_get_drop(&sm).await
 // }

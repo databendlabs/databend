@@ -23,7 +23,7 @@ pub use common_meta_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 use once_cell::sync::Lazy;
 
-/// Local storage that provides the API defined by `KVApi+MetaApi`.
+/// Local storage that provides the API defined by `KVApi+SchemaApi`.
 ///
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven metasrv.
 /// For a local kv, there is no distributed WAL involved,
