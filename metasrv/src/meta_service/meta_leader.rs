@@ -15,7 +15,6 @@
 use std::collections::BTreeSet;
 
 use common_meta_api::KVApi;
-use common_meta_api::SchemaApi;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::ClientWriteError;
 use common_meta_sled_store::openraft::raft::EntryPayload;
@@ -71,27 +70,6 @@ impl<'a> MetaLeader<'a> {
                 Ok(ForwardResponse::AppliedState(res))
             }
 
-            ForwardRequestBody::ListDatabase(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.list_databases(req).await?;
-                Ok(ForwardResponse::ListDatabase(res))
-            }
-
-            ForwardRequestBody::GetDatabase(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_database(req).await?;
-                Ok(ForwardResponse::DatabaseInfo(res))
-            }
-            ForwardRequestBody::ListTable(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.list_tables(req).await?;
-                Ok(ForwardResponse::ListTable(res))
-            }
-            ForwardRequestBody::GetTable(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_table(req).await?;
-                Ok(ForwardResponse::TableInfo(res))
-            }
             ForwardRequestBody::GetKV(req) => {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.get_kv(&req.key).await?;
@@ -106,11 +84,7 @@ impl<'a> MetaLeader<'a> {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.prefix_list_kv(&req.prefix).await?;
                 Ok(ForwardResponse::ListKV(res))
-            } // ForwardRequestBody::GetShare(req) => {
-              //     let sm = self.meta_node.get_state_machine().await;
-              //     let res = sm.get_share(req).await?;
-              //     Ok(ForwardResponse::ShareInfo(res))
-              // }
+            }
         }
     }
 

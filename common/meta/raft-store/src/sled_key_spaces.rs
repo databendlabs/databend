@@ -14,35 +14,23 @@
 
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::SledKeySpace;
-use common_meta_types::DatabaseMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
-use common_meta_types::ShareInfo;
-use common_meta_types::TableMeta;
 use openraft::raft::Entry;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
-use crate::state_machine::share_inbound::ShareInboundKey;
-use crate::state_machine::share_inbound::ShareInboundValue;
-use crate::state_machine::share_lookup::ShareLookupKey;
-use crate::state_machine::share_lookup::ShareLookupValue;
-use crate::state_machine::share_outbound::ShareOutboundKey;
-use crate::state_machine::share_outbound::ShareOutboundValue;
-use crate::state_machine::table_lookup::TableLookupValue;
 use crate::state_machine::ClientLastRespValue;
-use crate::state_machine::DatabaseLookupKey;
 use crate::state_machine::LogMetaKey;
 use crate::state_machine::LogMetaValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
-use crate::state_machine::TableLookupKey;
 
 /// Types for raft log in SledTree
 pub struct Logs {}
@@ -113,77 +101,12 @@ impl SledKeySpace for Sequences {
     type V = SeqNum;
 }
 
-/// Key-Value Types for storing general purpose kv in sled::Tree:
-pub struct Databases {}
-impl SledKeySpace for Databases {
-    const PREFIX: u8 = 8;
-    const NAME: &'static str = "databases";
-    type K = u64;
-    type V = SeqV<DatabaseMeta>;
-}
-
-pub struct DatabaseLookup {}
-impl SledKeySpace for DatabaseLookup {
-    const PREFIX: u8 = 12;
-    const NAME: &'static str = "database-lookup";
-    type K = DatabaseLookupKey;
-    type V = SeqV<u64>;
-}
-
-pub struct Tables {}
-impl SledKeySpace for Tables {
-    const PREFIX: u8 = 9;
-    const NAME: &'static str = "tables";
-    type K = u64;
-    type V = SeqV<TableMeta>;
-}
-
 pub struct ClientLastResps {}
 impl SledKeySpace for ClientLastResps {
     const PREFIX: u8 = 10;
     const NAME: &'static str = "client-last-resp";
     type K = String;
     type V = ClientLastRespValue;
-}
-
-pub struct TableLookup {}
-impl SledKeySpace for TableLookup {
-    const PREFIX: u8 = 11;
-    const NAME: &'static str = "table-lookup";
-    type K = TableLookupKey;
-    type V = SeqV<TableLookupValue>;
-}
-
-pub struct Shares {}
-impl SledKeySpace for Shares {
-    const PREFIX: u8 = 20;
-    const NAME: &'static str = "shares";
-    type K = u64;
-    type V = SeqV<ShareInfo>;
-}
-
-pub struct ShareLookup {}
-impl SledKeySpace for ShareLookup {
-    const PREFIX: u8 = 21;
-    const NAME: &'static str = "share-look-up";
-    type K = ShareLookupKey;
-    type V = SeqV<ShareLookupValue>;
-}
-
-pub struct ShareOutbounds {}
-impl SledKeySpace for ShareOutbounds {
-    const PREFIX: u8 = 22;
-    const NAME: &'static str = "share-outbounds";
-    type K = ShareOutboundKey;
-    type V = SeqV<ShareOutboundValue>;
-}
-
-pub struct ShareInbounds {}
-impl SledKeySpace for ShareInbounds {
-    const PREFIX: u8 = 23;
-    const NAME: &'static str = "share-inbounds";
-    type K = ShareInboundKey;
-    type V = SeqV<ShareInboundValue>;
 }
 
 /// Enum of key-value pair types of all key spaces.
@@ -213,44 +136,12 @@ pub enum KeySpaceKV {
         key: <Sequences as SledKeySpace>::K,
         value: <Sequences as SledKeySpace>::V,
     },
-    Databases {
-        key: <Databases as SledKeySpace>::K,
-        value: <Databases as SledKeySpace>::V,
-    },
-    Tables {
-        key: <Tables as SledKeySpace>::K,
-        value: <Tables as SledKeySpace>::V,
-    },
     ClientLastResps {
         key: <ClientLastResps as SledKeySpace>::K,
         value: <ClientLastResps as SledKeySpace>::V,
     },
-    TableLookup {
-        key: <TableLookup as SledKeySpace>::K,
-        value: <TableLookup as SledKeySpace>::V,
-    },
-    DatabaseLookup {
-        key: <DatabaseLookup as SledKeySpace>::K,
-        value: <DatabaseLookup as SledKeySpace>::V,
-    },
     LogMeta {
         key: <LogMeta as SledKeySpace>::K,
         value: <LogMeta as SledKeySpace>::V,
-    },
-    Share {
-        key: <Shares as SledKeySpace>::K,
-        value: <Shares as SledKeySpace>::V,
-    },
-    ShareLookup {
-        key: <ShareLookup as SledKeySpace>::K,
-        value: <ShareLookup as SledKeySpace>::V,
-    },
-    ShareOutbound {
-        key: <ShareOutbounds as SledKeySpace>::K,
-        value: <ShareOutbounds as SledKeySpace>::V,
-    },
-    ShareInbound {
-        key: <ShareInbounds as SledKeySpace>::K,
-        value: <ShareInbounds as SledKeySpace>::V,
     },
 }
