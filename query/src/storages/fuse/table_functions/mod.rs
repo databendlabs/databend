@@ -13,7 +13,13 @@
 //  limitations under the License.
 //
 
+mod fuse_segments;
 mod fuse_snapshots;
+mod table_args;
 
+pub use fuse_segments::FuseSegment;
+pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;
 pub use fuse_snapshots::FuseSnapshotTable;
+pub use table_args::string_literal;
+pub use table_args::string_value;

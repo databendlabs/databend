@@ -53,8 +53,8 @@ use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
 mod database_lookup;
-mod meta_api_impl;
 mod placement;
+mod schema_api_impl;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {

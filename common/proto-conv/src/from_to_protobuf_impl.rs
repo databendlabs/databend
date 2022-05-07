@@ -26,6 +26,7 @@ use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseNameIdent;
 use common_protos::pb;
 use common_protos::pb::data_type::Dt;
+use num::FromPrimitive;
 
 use crate::FromToProto;
 use crate::Incompatible;
@@ -203,7 +204,7 @@ impl FromToProto<pb::TableIdent> for mt::TableIdent {
 
         let v = Self {
             table_id: p.table_id,
-            version: p.seq,
+            seq: p.seq,
         };
         Ok(v)
     }
@@ -212,7 +213,7 @@ impl FromToProto<pb::TableIdent> for mt::TableIdent {
         let p = pb::TableIdent {
             ver: VER,
             table_id: self.table_id,
-            seq: self.version,
+            seq: self.seq,
         };
 
         Ok(p)
@@ -350,6 +351,11 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 x.as_ref().clone(),
             )?)),
             Dt::VariantType(_) => Ok(dv::DataTypeImpl::Variant(dv::VariantType {})),
+            Dt::VariantArrayType(_) => Ok(dv::DataTypeImpl::VariantArray(dv::VariantArrayType {})),
+            Dt::VariantObjectType(_) => {
+                Ok(dv::DataTypeImpl::VariantObject(dv::VariantObjectType {}))
+            }
+            Dt::IntervalType(x) => Ok(dv::DataTypeImpl::Interval(dv::IntervalType::from_pb(x)?)),
         }
     }
 
@@ -494,14 +500,32 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
                 };
                 Ok(p)
             }
-            dv::DataTypeImpl::VariantArray(_x) => {
-                todo!()
+            dv::DataTypeImpl::VariantArray(x) => {
+                let inn = x.to_pb()?;
+
+                let p = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::VariantArrayType(inn)),
+                };
+                Ok(p)
             }
-            dv::DataTypeImpl::VariantObject(_x) => {
-                todo!()
+            dv::DataTypeImpl::VariantObject(x) => {
+                let inn = x.to_pb()?;
+
+                let p = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::VariantObjectType(inn)),
+                };
+                Ok(p)
             }
-            dv::DataTypeImpl::Interval(_x) => {
-                todo!()
+            dv::DataTypeImpl::Interval(x) => {
+                let inn = x.to_pb()?;
+
+                let p = pb::DataType {
+                    ver: VER,
+                    dt: Some(Dt::IntervalType(inn)),
+                };
+                Ok(p)
             }
         }
     }
@@ -610,6 +634,85 @@ impl FromToProto<pb::Array> for dv::ArrayType {
             inner: Some(Box::new(inner_pb_type)),
         };
 
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::VariantArray> for dv::VariantArrayType {
+    fn from_pb(p: pb::VariantArray) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver)?;
+
+        Ok(Self {})
+    }
+
+    fn to_pb(&self) -> Result<pb::VariantArray, Incompatible> {
+        let p = pb::VariantArray { ver: VER };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::VariantObject> for dv::VariantObjectType {
+    fn from_pb(p: pb::VariantObject) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver)?;
+
+        Ok(Self {})
+    }
+
+    fn to_pb(&self) -> Result<pb::VariantObject, Incompatible> {
+        let p = pb::VariantObject { ver: VER };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::IntervalKind> for dv::IntervalKind {
+    fn from_pb(p: pb::IntervalKind) -> Result<Self, Incompatible>
+    where Self: Sized {
+        let dv_kind = match p {
+            pb::IntervalKind::Year => dv::IntervalKind::Year,
+            pb::IntervalKind::Month => dv::IntervalKind::Month,
+            pb::IntervalKind::Day => dv::IntervalKind::Day,
+            pb::IntervalKind::Hour => dv::IntervalKind::Hour,
+            pb::IntervalKind::Minute => dv::IntervalKind::Minute,
+            pb::IntervalKind::Second => dv::IntervalKind::Second,
+        };
+
+        Ok(dv_kind)
+    }
+
+    fn to_pb(&self) -> Result<pb::IntervalKind, Incompatible> {
+        let pb_kind = match self {
+            dv::IntervalKind::Year => pb::IntervalKind::Year,
+            dv::IntervalKind::Month => pb::IntervalKind::Month,
+            dv::IntervalKind::Day => pb::IntervalKind::Day,
+            dv::IntervalKind::Hour => pb::IntervalKind::Hour,
+            dv::IntervalKind::Minute => pb::IntervalKind::Minute,
+            dv::IntervalKind::Second => pb::IntervalKind::Second,
+        };
+        Ok(pb_kind)
+    }
+}
+impl FromToProto<pb::IntervalType> for dv::IntervalType {
+    fn from_pb(p: pb::IntervalType) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver)?;
+
+        let pb_kind: pb::IntervalKind =
+            FromPrimitive::from_i32(p.kind).ok_or_else(|| Incompatible {
+                reason: format!("invalid IntervalType: {}", p.kind),
+            })?;
+
+        let dv_kind = dv::IntervalKind::from_pb(pb_kind)?;
+        Ok(Self::new(dv_kind))
+    }
+
+    fn to_pb(&self) -> Result<pb::IntervalType, Incompatible> {
+        let pb_kind = self.kind().to_pb()?;
+        let p = pb::IntervalType {
+            ver: VER,
+            kind: pb_kind as i32,
+        };
         Ok(p)
     }
 }

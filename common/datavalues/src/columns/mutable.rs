@@ -14,7 +14,7 @@
 
 use std::any::Any;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
 use crate::prelude::*;

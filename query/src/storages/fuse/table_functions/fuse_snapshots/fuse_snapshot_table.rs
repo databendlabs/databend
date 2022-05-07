@@ -33,7 +33,6 @@ use common_streams::SendableDataBlockStream;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
-use super::table_args::string_literal;
 use crate::catalogs::Catalog;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -42,6 +41,7 @@ use crate::pipelines::new::processors::AsyncSourcer;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::table_functions::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
@@ -208,13 +208,7 @@ impl AsyncSource for FuseHistorySource {
                 )
                 .await?;
 
-            let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                ErrorCode::BadArguments(format!(
-                    "expecting fuse table, but got table of engine type: {}",
-                    tbl.get_table_info().meta.engine
-                ))
-            })?;
-
+            let tbl = FuseTable::try_from_table(tbl.as_ref())?;
             Ok(Some(
                 FuseSnapshot::new(self.ctx.clone(), tbl)
                     .get_history()

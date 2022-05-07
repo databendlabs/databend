@@ -19,15 +19,12 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateShareReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
-use common_meta_types::DropShareReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetShareReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
@@ -39,17 +36,17 @@ use common_meta_types::TableNameIdent;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::MetaApi;
+use crate::SchemaApi;
 
-/// Test suite of `MetaApi`.
+/// Test suite of `SchemaApi`.
 ///
-/// It is not used by this crate, but is used by other crate that impl `MetaApi`,
+/// It is not used by this crate, but is used by other crate that impl `SchemaApi`,
 /// to ensure an impl works as expected,
 /// such as `common/meta/embedded` and `metasrv`.
-pub struct MetaApiTestSuite {}
+pub struct SchemaApiTestSuite {}
 
-impl MetaApiTestSuite {
-    pub async fn database_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+impl SchemaApiTestSuite {
+    pub async fn database_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         tracing::info!("--- create db1");
         {
@@ -68,7 +65,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create db1 again with if_not_exists=false");
@@ -111,7 +108,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "db1 id is 1");
+            assert_eq!(1, res.db_id, "db1 id is 1");
         }
 
         tracing::info!("--- get db1");
@@ -141,7 +138,7 @@ impl MetaApiTestSuite {
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
-                4, res.database_id,
+                4, res.db_id,
                 "second database id is 4: seq increment but no used"
             );
         }
@@ -201,7 +198,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_create_get_drop_in_diff_tenant<MT: MetaApi>(
+    pub async fn database_create_get_drop_in_diff_tenant<MT: SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -224,8 +221,8 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "first database id is 1");
-            res.database_id
+            assert_eq!(1, res.db_id, "first database id is 1");
+            res.db_id
         };
 
         tracing::info!("--- tenant1 create db2");
@@ -245,12 +242,8 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert!(
-                res.database_id > db_id_1,
-                "second database id is > {}",
-                db_id_1
-            );
-            res.database_id
+            assert!(res.db_id > db_id_1, "second database id is > {}", db_id_1);
+            res.db_id
         };
 
         tracing::info!("--- tenant2 create db1");
@@ -270,8 +263,8 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert!(res.database_id > db_id_2, "third database id > {}", db_id_2);
-            res.database_id
+            assert!(res.db_id > db_id_2, "third database id > {}", db_id_2);
+            res.db_id
         };
 
         tracing::info!("--- tenant1 get db1");
@@ -346,7 +339,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
         let db_names = vec!["db1", "db2"];
@@ -354,12 +347,12 @@ impl MetaApiTestSuite {
         let tenant = "tenant1";
         {
             let res = self.create_database(mt, tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.database_id);
-            db_ids.push(res.database_id);
+            assert_eq!(1, res.db_id);
+            db_ids.push(res.db_id);
 
             let res = self.create_database(mt, tenant, "db2", "eng2").await?;
-            assert!(res.database_id > 1);
-            db_ids.push(res.database_id);
+            assert!(res.db_id > 1);
+            db_ids.push(res.db_id);
         }
 
         tracing::info!("--- list_databases");
@@ -384,7 +377,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn database_list_in_diff_tenant<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let tenant1 = "tenant1";
         let tenant2 = "tenant2";
@@ -392,17 +385,17 @@ impl MetaApiTestSuite {
         let mut db_ids = vec![];
         {
             let res = self.create_database(mt, tenant1, "db1", "eng1").await?;
-            assert_eq!(1, res.database_id);
-            db_ids.push(res.database_id);
+            assert_eq!(1, res.db_id);
+            db_ids.push(res.db_id);
 
             let res = self.create_database(mt, tenant1, "db2", "eng2").await?;
-            assert!(res.database_id > 1);
-            db_ids.push(res.database_id);
+            assert!(res.db_id > 1);
+            db_ids.push(res.db_id);
         }
 
         let db_id_3 = {
             let res = self.create_database(mt, tenant2, "db3", "eng1").await?;
-            res.database_id
+            res.db_id
         };
 
         tracing::info!("--- get_databases by tenant1");
@@ -431,7 +424,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -531,7 +524,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create tb2 and get table");
@@ -554,7 +547,7 @@ impl MetaApiTestSuite {
                 let tb_id = res.table_id;
 
                 let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let seq = got.ident.version;
+                let seq = got.ident.seq;
 
                 let ident = TableIdent::new(tb_id, seq);
 
@@ -707,7 +700,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_rename<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -769,8 +762,6 @@ impl MetaApiTestSuite {
 
             let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
-
-            assert_eq!(1, res.database_id, "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -785,20 +776,11 @@ impl MetaApiTestSuite {
         };
 
         tracing::info!("--- create table for rename");
-        {
-            let res = mt.create_table(req.clone()).await?;
-            assert_eq!(1, res.table_id, "table id is 1");
-
+        let tb_ident = {
+            mt.create_table(req.clone()).await?;
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-            let want = TableInfo {
-                ident: TableIdent::new(1, 1),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                name: tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get created table after drop");
-        }
+            got.ident.clone()
+        };
 
         tracing::info!("--- rename table, ok");
         {
@@ -816,7 +798,13 @@ impl MetaApiTestSuite {
 
             let got = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
             let want = TableInfo {
-                ident: TableIdent::new(1, 2),
+                // TODO: use this after kv-txn rename-table replaces metasrv rename-table:
+                //    `ident: tb_ident.clone(),`
+                //     rename-table should not change the seq.
+                ident: TableIdent {
+                    table_id: tb_ident.table_id,
+                    seq: got.ident.seq,
+                },
                 desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
                 name: new_tbl_name.into(),
                 meta: table_meta(created_on),
@@ -856,21 +844,31 @@ impl MetaApiTestSuite {
             );
         }
 
-        tracing::info!("--- create table again after rename, ok");
+        tracing::info!("--- rename table again, with if_exist=true, OK");
         {
-            let res = mt.create_table(req.clone()).await?;
-            assert_eq!(2, res.table_id, "table id should be 2");
+            let req = RenameTableReq {
+                if_exists: true,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                new_db_name: db_name.to_string(),
+                new_table_name: new_tbl_name.to_string(),
+            };
+            // Ok
+            mt.rename_table(req.clone()).await?;
+        }
+
+        tracing::info!("--- create table again after rename, ok");
+        let tb_ident2 = {
+            mt.create_table(req.clone()).await?;
 
             let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-
-            let want = TableInfo {
-                ident: TableIdent::new(2, 3),
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
-                name: tbl_name.into(),
-                meta: table_meta(created_on),
-            };
-            assert_eq!(want, got.as_ref().clone(), "get created table after rename");
-        }
+            assert_ne!(tb_ident.table_id, got.ident.table_id);
+            assert_ne!(tb_ident.seq, got.ident.seq);
+            got.ident.clone()
+        };
 
         tracing::info!("--- rename table again after recreate, error");
         {
@@ -894,7 +892,7 @@ impl MetaApiTestSuite {
             );
         }
 
-        tracing::info!("--- rename table to other db, error");
+        tracing::info!("--- rename table to unknown db, error");
         {
             let req = RenameTableReq {
                 if_exists: false,
@@ -930,10 +928,7 @@ impl MetaApiTestSuite {
                 },
             };
 
-            let res = mt.create_database(plan).await?;
-            tracing::info!("create database res: {:?}", res);
-
-            assert_eq!(2, res.database_id, "database id is 2");
+            mt.create_database(plan).await?;
         }
 
         tracing::info!("--- rename table to other db, ok");
@@ -954,7 +949,12 @@ impl MetaApiTestSuite {
                 .get_table((tenant, new_db_name, new_tbl_name).into())
                 .await?;
             let want = TableInfo {
-                ident: TableIdent::new(2, 4),
+                // TODO similar: version should not change.
+                //   ident: tb_ident2,
+                ident: TableIdent {
+                    table_id: tb_ident2.table_id,
+                    seq: got.ident.seq,
+                },
                 desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
                 name: new_tbl_name.into(),
                 meta: table_meta(created_on),
@@ -965,7 +965,7 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
-    pub async fn table_upsert_option<MT: MetaApi>(self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn table_upsert_option<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -1004,7 +1004,7 @@ impl MetaApiTestSuite {
             let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
 
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create and get table");
@@ -1027,7 +1027,7 @@ impl MetaApiTestSuite {
                 let tb_id = res.table_id;
 
                 let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
-                let seq = got.ident.version;
+                let seq = got.ident.seq;
 
                 let ident = TableIdent::new(tb_id, seq);
 
@@ -1063,7 +1063,7 @@ impl MetaApiTestSuite {
                     .upsert_table_option(UpsertTableOptionReq::new(
                         &TableIdent {
                             table_id: table.ident.table_id,
-                            version: table.ident.version - 1,
+                            seq: table.ident.seq - 1,
                         },
                         "key1",
                         "val2",
@@ -1079,11 +1079,138 @@ impl MetaApiTestSuite {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
+
+            tracing::info!("--- upsert table options with not exist table id");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let got = mt
+                    .upsert_table_option(UpsertTableOptionReq::new(
+                        &TableIdent {
+                            table_id: 1024,
+                            seq: table.ident.seq - 1,
+                        },
+                        "key1",
+                        "val2",
+                    ))
+                    .await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+
+                // table is not affected.
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+            }
         }
         Ok(())
     }
 
-    pub async fn table_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    pub async fn get_table_by_id<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        tracing::info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let _tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.seq;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+        }
+
+        tracing::info!("--- get_table_by_id ");
+        {
+            tracing::info!("--- get_table_by_id ");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let (table_id, table_meta) = mt.get_table_by_id(table.ident.table_id).await?;
+
+                assert_eq!(table_meta.options.get("opt‐1"), Some(&"val-1".into()));
+                assert_eq!(table_id.table_id, table.ident.table_id);
+            }
+
+            tracing::info!("--- get_table_by_id with not exists table_id");
+            {
+                let got = mt.get_table_by_id(1024).await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownTableId("").code(), err.code());
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
 
@@ -1100,7 +1227,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- prepare db");
         {
             let res = self.create_database(mt, tenant, db_name, "eng1").await?;
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- create 2 tables: tb1 tb2");
@@ -1128,164 +1255,171 @@ impl MetaApiTestSuite {
                 },
             };
 
-            {
+            let tb_ids = {
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(1, res.table_id, "table id is 1");
+                assert!(res.table_id >= 1, "table id >= 1");
+
+                let tb_id1 = res.table_id;
 
                 req.name_ident.table_name = "tb2".to_string();
                 let res = mt.create_table(req.clone()).await?;
-                assert_eq!(2, res.table_id, "table id is 2");
-            }
+                assert!(res.table_id > tb_id1, "table id > tb_id1: {}", tb_id1);
+                let tb_id2 = res.table_id;
+
+                vec![tb_id1, tb_id2]
+            };
 
             tracing::info!("--- get_tables");
             {
                 let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await?;
-                assert_eq!(1, res[0].ident.table_id);
-                assert_eq!(2, res[1].ident.table_id);
+                assert_eq!(tb_ids.len(), res.len());
+                assert_eq!(tb_ids[0], res[0].ident.table_id);
+                assert_eq!(tb_ids[1], res[1].ident.table_id);
             }
         }
 
         Ok(())
     }
 
-    pub async fn share_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant1 = "tenant1";
-        let share_name1 = "share1";
-        let share_name2 = "share2";
-        tracing::info!("--- create {}", share_name1);
-        {
-            let req = CreateShareReq {
-                if_not_exists: false,
-                tenant: tenant1.to_string(),
-                share_name: share_name1.to_string(),
-            };
-
-            let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(1, res.share_id, "first share id is 1");
-        }
-
-        tracing::info!("--- get share1");
-        {
-            let res = mt.get_share(GetShareReq::new(tenant1, share_name1)).await;
-            tracing::debug!("get present share res: {:?}", res);
-            let res = res?;
-            assert_eq!(1, res.id, "db1 id is 1");
-            assert_eq!(
-                share_name1.to_string(),
-                res.name,
-                "share1.db is {}",
-                share_name1
-            );
-        }
-
-        tracing::info!("--- create share1 again with if_not_exists=false");
-        {
-            let req = CreateShareReq {
-                if_not_exists: false,
-                tenant: tenant1.to_string(),
-                share_name: share_name1.to_string(),
-            };
-
-            let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::ShareAlreadyExists("").code(),
-                ErrorCode::from(err).code()
-            );
-        }
-
-        tracing::info!("--- create share1 again with if_not_exists=true");
-        {
-            let req = CreateShareReq {
-                if_not_exists: true,
-                tenant: tenant1.to_string(),
-                share_name: share_name1.to_string(),
-            };
-
-            let res = mt.create_share(req).await;
-            tracing::info!("create database res: {:?}", res);
-
-            let res = res.unwrap();
-            assert_eq!(1, res.share_id, "share1 id is 1");
-        }
-
-        tracing::info!("--- create share2");
-        {
-            let req = CreateShareReq {
-                if_not_exists: false,
-                tenant: tenant1.to_string(),
-                share_name: share_name2.to_string(),
-            };
-
-            let res = mt.create_share(req).await;
-            tracing::info!("create share res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(2, res.share_id, "second share id is 2 ");
-        }
-
-        tracing::info!("--- get share2");
-        {
-            let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await?;
-            assert_eq!(2, res.id, "share2 id is 2");
-            assert_eq!(
-                share_name2.to_string(),
-                res.name,
-                "share2.name is {}",
-                share_name2
-            );
-        }
-
-        tracing::info!("--- get absent share");
-        {
-            let res = mt.get_share(GetShareReq::new(tenant1, "absent")).await;
-            tracing::debug!("=== get absent share res: {:?}", res);
-            assert!(res.is_err());
-            let err = res.unwrap_err();
-            let err_code = ErrorCode::from(err);
-
-            assert_eq!(ErrorCode::unknown_share_code(), err_code.code());
-            assert!(err_code.message().contains("absent"));
-        }
-
-        tracing::info!("--- drop share2");
-        {
-            mt.drop_share(DropShareReq {
-                if_exists: false,
-                tenant: tenant1.to_string(),
-                share_name: share_name2.to_string(),
-            })
-            .await?;
-        }
-
-        tracing::info!("--- get share2 should not found");
-        {
-            let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await;
-            let err = res.unwrap_err();
-            assert_eq!(
-                ErrorCode::UnknownShare("").code(),
-                ErrorCode::from(err).code()
-            );
-        }
-
-        tracing::info!("--- drop share2 with if_exists=true returns no error");
-        {
-            mt.drop_share(DropShareReq {
-                if_exists: true,
-                tenant: tenant1.to_string(),
-                share_name: share_name2.to_string(),
-            })
-            .await?;
-        }
-
-        Ok(())
-    }
+    // pub async fn share_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    //     let tenant1 = "tenant1";
+    //     let share_name1 = "share1";
+    //     let share_name2 = "share2";
+    //     tracing::info!("--- create {}", share_name1);
+    //     {
+    //         let req = CreateShareReq {
+    //             if_not_exists: false,
+    //             tenant: tenant1.to_string(),
+    //             share_name: share_name1.to_string(),
+    //         };
+    //
+    //         let res = mt.create_share(req).await;
+    //         tracing::info!("create share res: {:?}", res);
+    //         let res = res.unwrap();
+    //         assert_eq!(1, res.share_id, "first share id is 1");
+    //     }
+    //
+    //     tracing::info!("--- get share1");
+    //     {
+    //         let res = mt.get_share(GetShareReq::new(tenant1, share_name1)).await;
+    //         tracing::debug!("get present share res: {:?}", res);
+    //         let res = res?;
+    //         assert_eq!(1, res.id, "db1 id is 1");
+    //         assert_eq!(
+    //             share_name1.to_string(),
+    //             res.name,
+    //             "share1.db is {}",
+    //             share_name1
+    //         );
+    //     }
+    //
+    //     tracing::info!("--- create share1 again with if_not_exists=false");
+    //     {
+    //         let req = CreateShareReq {
+    //             if_not_exists: false,
+    //             tenant: tenant1.to_string(),
+    //             share_name: share_name1.to_string(),
+    //         };
+    //
+    //         let res = mt.create_share(req).await;
+    //         tracing::info!("create share res: {:?}", res);
+    //         let err = res.unwrap_err();
+    //         assert_eq!(
+    //             ErrorCode::ShareAlreadyExists("").code(),
+    //             ErrorCode::from(err).code()
+    //         );
+    //     }
+    //
+    //     tracing::info!("--- create share1 again with if_not_exists=true");
+    //     {
+    //         let req = CreateShareReq {
+    //             if_not_exists: true,
+    //             tenant: tenant1.to_string(),
+    //             share_name: share_name1.to_string(),
+    //         };
+    //
+    //         let res = mt.create_share(req).await;
+    //         tracing::info!("create database res: {:?}", res);
+    //
+    //         let res = res.unwrap();
+    //         assert_eq!(1, res.share_id, "share1 id is 1");
+    //     }
+    //
+    //     tracing::info!("--- create share2");
+    //     {
+    //         let req = CreateShareReq {
+    //             if_not_exists: false,
+    //             tenant: tenant1.to_string(),
+    //             share_name: share_name2.to_string(),
+    //         };
+    //
+    //         let res = mt.create_share(req).await;
+    //         tracing::info!("create share res: {:?}", res);
+    //         let res = res.unwrap();
+    //         assert_eq!(2, res.share_id, "second share id is 2 ");
+    //     }
+    //
+    //     tracing::info!("--- get share2");
+    //     {
+    //         let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await?;
+    //         assert_eq!(2, res.id, "share2 id is 2");
+    //         assert_eq!(
+    //             share_name2.to_string(),
+    //             res.name,
+    //             "share2.name is {}",
+    //             share_name2
+    //         );
+    //     }
+    //
+    //     tracing::info!("--- get absent share");
+    //     {
+    //         let res = mt.get_share(GetShareReq::new(tenant1, "absent")).await;
+    //         tracing::debug!("=== get absent share res: {:?}", res);
+    //         assert!(res.is_err());
+    //         let err = res.unwrap_err();
+    //         let err_code = ErrorCode::from(err);
+    //
+    //         assert_eq!(ErrorCode::unknown_share_code(), err_code.code());
+    //         assert!(err_code.message().contains("absent"));
+    //     }
+    //
+    //     tracing::info!("--- drop share2");
+    //     {
+    //         mt.drop_share(DropShareReq {
+    //             if_exists: false,
+    //             tenant: tenant1.to_string(),
+    //             share_name: share_name2.to_string(),
+    //         })
+    //         .await?;
+    //     }
+    //
+    //     tracing::info!("--- get share2 should not found");
+    //     {
+    //         let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await;
+    //         let err = res.unwrap_err();
+    //         assert_eq!(
+    //             ErrorCode::UnknownShare("").code(),
+    //             ErrorCode::from(err).code()
+    //         );
+    //     }
+    //
+    //     tracing::info!("--- drop share2 with if_exists=true returns no error");
+    //     {
+    //         mt.drop_share(DropShareReq {
+    //             if_exists: true,
+    //             tenant: tenant1.to_string(),
+    //             share_name: share_name2.to_string(),
+    //         })
+    //         .await?;
+    //     }
+    //
+    //     Ok(())
+    // }
+    //
 }
 
-impl MetaApiTestSuite {
-    async fn create_database<MT: MetaApi>(
+impl SchemaApiTestSuite {
+    async fn create_database<MT: SchemaApi>(
         &self,
         mt: &MT,
         tenant: &str,
@@ -1313,10 +1447,10 @@ impl MetaApiTestSuite {
 }
 
 // Test write and read meta on different nodes
-// This is meant for testing distributed MetaApi impl, to ensure a read-after-write consistency.
-impl MetaApiTestSuite {
+// This is meant for testing distributed SchemaApi impl, to ensure a read-after-write consistency.
+impl SchemaApiTestSuite {
     /// Create db one node, get db on another
-    pub async fn database_get_diff_nodes<MT: MetaApi>(
+    pub async fn database_get_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1339,7 +1473,7 @@ impl MetaApiTestSuite {
             let res = node_a.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(1, res.database_id, "first database id is 1");
+            assert_eq!(1, res.db_id, "first database id is 1");
         }
 
         tracing::info!("--- get db1 on node_b");
@@ -1373,13 +1507,15 @@ impl MetaApiTestSuite {
     }
 
     /// Create dbs on node_a, list dbs on node_b
-    pub async fn list_database_diff_nodes<MT: MetaApi>(
+    pub async fn list_database_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
     ) -> anyhow::Result<()> {
         tracing::info!("--- create db1 and db3 on node_a");
         let tenant = "tenant1";
+
+        let mut db_ids = vec![];
         {
             let dbs = vec!["db1", "db3"];
             for db_name in dbs {
@@ -1394,9 +1530,8 @@ impl MetaApiTestSuite {
                         ..Default::default()
                     },
                 };
-                let res = node_a.create_database(req).await;
-                tracing::info!("create database res: {:?}", res);
-                assert!(res.is_ok());
+                let res = node_a.create_database(req).await?;
+                db_ids.push(res.db_id);
             }
         }
 
@@ -1410,9 +1545,9 @@ impl MetaApiTestSuite {
             tracing::debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
-            assert_eq!(1, res[0].ident.db_id, "db1 id is 1");
+            assert_eq!(db_ids[0], res[0].ident.db_id, "db1 id");
             assert_eq!("db1", res[0].name_ident.db_name, "db1.name is db1");
-            assert_eq!(2, res[1].ident.db_id, "db3 id is 2");
+            assert_eq!(db_ids[1], res[1].ident.db_id, "db3 id");
             assert_eq!("db3", res[1].name_ident.db_name, "db3.name is db3");
         }
 
@@ -1420,7 +1555,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create table on node_a, list table on node_b
-    pub async fn list_table_diff_nodes<MT: MetaApi>(
+    pub async fn list_table_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1428,6 +1563,9 @@ impl MetaApiTestSuite {
         tracing::info!("--- create db1 and tb1, tb2 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
+
+        let mut tb_ids = vec![];
+
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
@@ -1466,9 +1604,8 @@ impl MetaApiTestSuite {
                         ..Default::default()
                     },
                 };
-                let res = node_a.create_table(req).await;
-                tracing::info!("create table res: {:?}", res);
-                assert!(res.is_ok());
+                let res = node_a.create_table(req).await?;
+                tb_ids.push(res.table_id);
             }
         }
 
@@ -1478,9 +1615,9 @@ impl MetaApiTestSuite {
             tracing::debug!("get table list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "table list len is 2");
-            assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
+            assert_eq!(tb_ids[0], res[0].ident.table_id, "tb1 id");
             assert_eq!("tb1", res[0].name, "tb1.name is tb1");
-            assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
+            assert_eq!(tb_ids[1], res[1].ident.table_id, "tb2 id");
             assert_eq!("tb2", res[1].name, "tb2.name is tb2");
         }
 
@@ -1488,7 +1625,7 @@ impl MetaApiTestSuite {
     }
 
     /// Create table on node_a, get table on node_b
-    pub async fn table_get_diff_nodes<MT: MetaApi>(
+    pub async fn table_get_diff_nodes<MT: SchemaApi>(
         &self,
         node_a: &MT,
         node_b: &MT,
@@ -1496,7 +1633,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- create table tb1 on node_a");
         let tenant = "tenant1";
         let db_name = "db1";
-        {
+        let tb_id = {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
@@ -1534,10 +1671,9 @@ impl MetaApiTestSuite {
                 },
             };
 
-            let res = node_a.create_table(req).await;
-            tracing::info!("create table res: {:?}", res);
-            assert!(res.is_ok());
-        }
+            let res = node_a.create_table(req).await?;
+            res.table_id
+        };
 
         tracing::info!("--- get tb1 on node_b");
         {
@@ -1546,7 +1682,7 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present table res: {:?}", res);
             let res = res?;
-            assert_eq!(1, res.ident.table_id, "tb1 id is 1");
+            assert_eq!(tb_id, res.ident.table_id, "tb1 id is 1");
             assert_eq!("tb1", res.name, "tb1.name is tb1");
         }
 

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(unused_unsafe)]
-mod mutable;
-mod util;
+mod management_mode_access;
 
-pub use mutable::MutableBitmap;
+pub use management_mode_access::ManagementModeAccess;

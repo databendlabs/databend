@@ -56,9 +56,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             .await?;
 
         // get the latest tbl
-        let prev_version = table.get_table_info().ident.version;
+        let prev_version = table.get_table_info().ident.seq;
         table = fixture.latest_default_table().await?;
-        assert_ne!(prev_version, table.get_table_info().ident.version);
+        assert_ne!(prev_version, table.get_table_info().ident.seq);
 
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
@@ -113,9 +113,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             .await?;
 
         // get the latest tbl
-        let prev_version = table.get_table_info().ident.version;
+        let prev_version = table.get_table_info().ident.seq;
         let table = fixture.latest_default_table().await?;
-        assert_ne!(prev_version, table.get_table_info().ident.version);
+        assert_ne!(prev_version, table.get_table_info().ident.seq);
 
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
@@ -173,11 +173,11 @@ async fn test_fuse_table_truncate() -> Result<()> {
     };
 
     // 1. truncate empty table
-    let prev_version = table.get_table_info().ident.version;
+    let prev_version = table.get_table_info().ident.seq;
     let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
     let table = fixture.latest_default_table().await?;
     // no side effects
-    assert_eq!(prev_version, table.get_table_info().ident.version);
+    assert_eq!(prev_version, table.get_table_info().ident.seq);
     assert!(r.is_ok());
 
     // 2. truncate table which has data
@@ -194,9 +194,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl
-    let prev_version = table.get_table_info().ident.version;
+    let prev_version = table.get_table_info().ident.seq;
     let table = fixture.latest_default_table().await?;
-    assert_ne!(prev_version, table.get_table_info().ident.version);
+    assert_ne!(prev_version, table.get_table_info().ident.seq);
 
     // ensure data ingested
     let (stats, _) = table
@@ -209,9 +209,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert!(r.is_ok());
 
     // get the latest tbl
-    let prev_version = table.get_table_info().ident.version;
+    let prev_version = table.get_table_info().ident.seq;
     let table = fixture.latest_default_table().await?;
-    assert_ne!(prev_version, table.get_table_info().ident.version);
+    assert_ne!(prev_version, table.get_table_info().ident.seq);
     let (stats, parts) = table
         .read_partitions(ctx.clone(), source_plan.push_downs.clone())
         .await?;

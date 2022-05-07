@@ -73,6 +73,7 @@ fn get_input_format(node: &PlanNode) -> Result<&str> {
     }
 }
 
+#[allow(clippy::manual_async_fn)]
 fn execute_query(
     context: Arc<QueryContext>,
     node: PlanNode,
@@ -353,7 +354,7 @@ fn build_ndjson_stream(
     plan: &PlanNode,
     mut multipart: Multipart,
 ) -> PoemResult<SendableDataBlockStream> {
-    let builder = NDJsonSourceBuilder::create(plan.schema());
+    let builder = NDJsonSourceBuilder::create(plan.schema(), FormatSettings::default());
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
@@ -454,7 +455,7 @@ async fn ndjson_source_pipe_builder(
     plan: &PlanNode,
     mut multipart: Multipart,
 ) -> PoemResult<SourcePipeBuilder> {
-    let builder = NDJsonSourceBuilder::create(plan.schema());
+    let builder = NDJsonSourceBuilder::create(plan.schema(), FormatSettings::default());
     let mut source_pipe_builder = SourcePipeBuilder::create();
     while let Ok(Some(field)) = multipart.next_field().await {
         let bytes = field

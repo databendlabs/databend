@@ -31,7 +31,6 @@ use crate::configs::Config;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
-use crate::servers::http::v1::statement_router;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
@@ -66,7 +65,6 @@ echo '{}' | curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEac
                 get(poem::endpoint::make_sync(move |_| Self::usage(sock))),
             )
             .nest("/clickhouse", clickhouse_router())
-            .nest("/v1/statement", statement_router())
             .nest("/v1/query", query_route())
             .at("/v1/streaming_load", put(streaming_load))
             .at("/v1/upload_to_stage", put(upload_to_stage))

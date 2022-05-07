@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test metasrv MetaApi by writing to one node and then reading from another,
+//! Test metasrv SchemaApi by writing to one node and then reading from another,
 //! on a restarted cluster.
 
 use std::time::Duration;

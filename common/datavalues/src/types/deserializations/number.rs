@@ -28,17 +28,23 @@ where
     T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
 {
-    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
     }
 
-    fn de_default(&mut self) {
+    fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.append_value(T::default());
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
@@ -47,7 +53,7 @@ where
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::Number(v) => {
                 let v = v.to_string();
@@ -65,11 +71,11 @@ where
         }
     }
 
-    fn de_null(&mut self) -> bool {
+    fn de_null(&mut self, _format: &FormatSettings) -> bool {
         false
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let v: T = if !T::FLOATING {
             reader.read_int_text()
@@ -82,7 +88,11 @@ where
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(&mut self, reader: &mut CheckpointReader<R>) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let v: T = if !T::FLOATING {
             reader.read_int_text()
         } else {
@@ -95,7 +105,7 @@ where
     fn de_text_csv<R: BufferRead>(
         &mut self,
         reader: &mut CheckpointReader<R>,
-        _delimiter: u8,
+        _format: &FormatSettings,
     ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let v: T = if !T::FLOATING {
@@ -112,7 +122,7 @@ where
         Ok(())
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }
 

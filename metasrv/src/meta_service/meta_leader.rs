@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 
 use common_meta_api::KVApi;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::error::ClientWriteError;
 use common_meta_sled_store::openraft::raft::EntryPayload;
@@ -106,12 +106,11 @@ impl<'a> MetaLeader<'a> {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.prefix_list_kv(&req.prefix).await?;
                 Ok(ForwardResponse::ListKV(res))
-            }
-            ForwardRequestBody::GetShare(req) => {
-                let sm = self.meta_node.get_state_machine().await;
-                let res = sm.get_share(req).await?;
-                Ok(ForwardResponse::ShareInfo(res))
-            }
+            } // ForwardRequestBody::GetShare(req) => {
+              //     let sm = self.meta_node.get_state_machine().await;
+              //     let res = sm.get_share(req).await?;
+              //     Ok(ForwardResponse::ShareInfo(res))
+              // }
         }
     }
 

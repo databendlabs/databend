@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use common_base::tokio;
-use common_meta_api::MetaApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_create_get_drop() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.database_create_get_drop(&mt).await
+    SchemaApiTestSuite {}.database_create_get_drop(&mt).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}
+    SchemaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(&mt)
         .await
 }
@@ -33,41 +33,43 @@ async fn test_meta_embedded_database_create_get_drop_in_diff_tenant() -> anyhow:
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_list() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.database_list(&mt).await
+    SchemaApiTestSuite {}.database_list(&mt).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_list_in_diff_tenant() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.database_list_in_diff_tenant(&mt).await
+    SchemaApiTestSuite {}
+        .database_list_in_diff_tenant(&mt)
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_create_get_drop() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.table_create_get_drop(&mt).await
+    SchemaApiTestSuite {}.table_create_get_drop(&mt).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_rename() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.table_rename(&mt).await
+    SchemaApiTestSuite {}.table_rename(&mt).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_upsert_option() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.table_upsert_option(&mt).await
+    SchemaApiTestSuite {}.table_upsert_option(&mt).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.table_list(&mt).await
+    SchemaApiTestSuite {}.table_list(&mt).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_embedded_share_create_get_dro() -> anyhow::Result<()> {
-    let mt = MetaEmbedded::new_temp().await?;
-    MetaApiTestSuite {}.share_create_get_drop(&mt).await
-}
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_meta_embedded_share_create_get_dro() -> anyhow::Result<()> {
+//     let mt = MetaEmbedded::new_temp().await?;
+//     SchemaApiTestSuite {}.share_create_get_drop(&mt).await
+// }

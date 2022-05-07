@@ -14,6 +14,10 @@
 
 use std::fs::File;
 
+use common_arrow::arrow::io::parquet::write::RowGroupIterator;
+use common_arrow::arrow::io::parquet::write::Version;
+use common_arrow::arrow::io::parquet::write::WriteOptions;
+use common_arrow::parquet::compression::CompressionOptions;
 use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
@@ -36,10 +40,9 @@ async fn test_source_parquet() -> Result<()> {
 
     let arrow_schema = schema.to_arrow();
 
-    use common_arrow::arrow::io::parquet::write::*;
     let options = WriteOptions {
         write_statistics: true,
-        compression: Compression::Lz4Raw,
+        compression: CompressionOptions::Lz4Raw,
         version: Version::V2,
     };
 
@@ -58,6 +61,12 @@ async fn test_source_parquet() -> Result<()> {
     let name = "test-parquet";
     let dir = tempfile::tempdir().unwrap();
 
+    use common_arrow::parquet::write::WriteOptions as FileWriteOption;
+    let file_options = FileWriteOption {
+        write_statistics: false,
+        version: Version::V2,
+    };
+
     // write test parquet
     // write test parquet
     let (len, _file_meta) = {
@@ -66,7 +75,7 @@ async fn test_source_parquet() -> Result<()> {
         let path = dir.path().join(name);
         let mut writer = File::create(path).unwrap();
 
-        common_arrow::write_parquet_file(&mut writer, row_groups, arrow_schema, options)
+        common_arrow::write_parquet_file(&mut writer, row_groups, arrow_schema, file_options)
             .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
     };
 

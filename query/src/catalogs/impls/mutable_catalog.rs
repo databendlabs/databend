@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
@@ -82,7 +82,7 @@ impl MutableCatalog {
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.address.is_empty();
 
-        let meta: Arc<dyn MetaApi> = if local_mode {
+        let meta: Arc<dyn SchemaApi> = if local_mode {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 
@@ -176,7 +176,7 @@ impl Catalog for MutableCatalog {
         // Initial the database after creating.
         let db_info = Arc::new(DatabaseInfo {
             ident: DatabaseIdent {
-                db_id: res.database_id,
+                db_id: res.db_id,
                 seq: 0, // TODO
             },
             name_ident: req.name_ident.clone(),
@@ -184,9 +184,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(&req.name_ident.tenant).await?;
-        Ok(CreateDatabaseReply {
-            database_id: res.database_id,
-        })
+        Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {

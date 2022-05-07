@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::io::Cursor;
-use std::io::Read;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -54,6 +53,7 @@ pub struct CsvInputFormat {
     row_delimiter: Option<u8>,
     min_accepted_rows: usize,
     min_accepted_bytes: usize,
+    settings: FormatSettings,
 }
 
 impl CsvInputFormat {
@@ -93,6 +93,7 @@ impl CsvInputFormat {
 
         Ok(Box::new(CsvInputFormat {
             schema,
+            settings,
             row_delimiter,
             field_delimiter,
             need_skip_header,
@@ -158,7 +159,7 @@ impl CsvInputFormat {
             }
         }
 
-        return index + 1;
+        index + 1
     }
 }
 
@@ -193,10 +194,10 @@ impl InputFormat for CsvInputFormat {
 
             for column_index in 0..deserializers.len() {
                 if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
-                    deserializers[column_index].de_default();
+                    deserializers[column_index].de_default(&self.settings);
                 } else {
                     deserializers[column_index]
-                        .de_text_csv(&mut checkpoint_reader, self.field_delimiter)?;
+                        .de_text_csv(&mut checkpoint_reader, &self.settings)?;
 
                     if column_index + 1 != deserializers.len() {
                         checkpoint_reader

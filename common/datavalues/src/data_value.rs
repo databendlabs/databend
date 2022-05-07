@@ -26,7 +26,7 @@ use serde_json::json;
 use crate::prelude::*;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -177,6 +177,19 @@ impl DataValue {
         matches!(self, DataValue::UInt64(_))
     }
 
+    #[inline]
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            DataValue::Int64(_) | DataValue::UInt64(_) | DataValue::Float64(_)
+        )
+    }
+
+    #[inline]
+    pub fn is_float(&self) -> bool {
+        matches!(self, DataValue::Float64(_))
+    }
+
     pub fn as_u64(&self) -> Result<u64> {
         match self {
             DataValue::Int64(v) if *v >= 0 => Ok(*v as u64),
@@ -257,6 +270,8 @@ impl DataValue {
         Ok(ret)
     }
 }
+
+impl Eq for DataValue {}
 
 // Did not use std::convert:TryFrom
 // Because we do not need custom type error.

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::combine_validities;
 use common_datavalues::combine_validities_2;
 use common_datavalues::remove_nullable;
