@@ -271,7 +271,7 @@ impl PipelineBuilder {
             ));
         }
 
-        // Process group by with scalar expression, such as `a+1`
+        // Process group by with non-column expression, such as `a+1`
         // TODO(xudong963): move to aggregate transform
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let pre_input_schema = input_schema.clone();
@@ -285,6 +285,23 @@ impl PipelineBuilder {
                     pre_input_schema.clone(),
                     input_schema.clone(),
                     group_expressions.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+
+        // Process aggregation function with non-column expression, such as sum(3)
+        let pre_input_schema = input_schema.clone();
+        let res =
+            schema_builder.build_agg_func(pre_input_schema.clone(), agg_expressions.as_slice())?;
+        let input_schema = res.0;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    pre_input_schema.clone(),
+                    input_schema.clone(),
+                    res.1.clone(),
                     self.ctx.clone(),
                 )
             })?;
@@ -321,6 +338,7 @@ impl PipelineBuilder {
                 )
             })?;
 
+        self.pipeline.resize(1)?;
         let final_aggr_params = AggregatorParams::try_create_v2(
             &agg_expressions,
             &group_expressions,
