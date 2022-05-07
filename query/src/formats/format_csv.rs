@@ -182,6 +182,7 @@ impl InputFormat for CsvInputFormat {
             deserializers.push(data_type.create_deserializer(self.min_accepted_rows));
         }
 
+        let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
         let cursor = Cursor::new(&state.memory);
         let reader: Box<dyn BufferRead> = Box::new(BufferReader::new(cursor));
