@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_query::common::Grower;
+use databend_query::common::HashMapKind;
+use databend_query::common::HashTableGrower;
+use databend_query::common::SingleLevelGrower;
 
 #[test]
 fn test_hash_table_grower() {
-    let mut grower = Grower::default();
+    let mut grower = SingleLevelGrower::default();
 
     assert_eq!(grower.max_size(), 256);
 
@@ -35,4 +37,29 @@ fn test_hash_table_grower() {
 
     grower.increase_size();
     assert_eq!(grower.max_size(), 1024);
+}
+
+#[test]
+fn test_two_level_hash_table() {
+    let mut hashtable = HashMapKind::<u64, u64>::create_hash_table();
+    let mut inserted = true;
+    let entity = hashtable.insert_key(&1u64, &mut inserted);
+    if inserted {
+        entity.set_value(2);
+    }
+
+    unsafe {
+        hashtable.convert_to_two_level();
+    }
+
+    let is_two_level = match hashtable {
+        HashMapKind::HashTable(_) => false,
+        HashMapKind::TwoLevelHashTable(_) => true,
+    };
+    assert!(is_two_level);
+
+    let entity = hashtable.insert_key(&1u64, &mut inserted);
+    assert!(!inserted);
+
+    assert_eq!(entity.get_value(), &2);
 }

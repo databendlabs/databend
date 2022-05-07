@@ -317,6 +317,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         &partial_aggr_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })?;
 
@@ -336,6 +337,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         &final_aggr_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })?;
 

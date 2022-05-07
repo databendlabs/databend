@@ -37,6 +37,7 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 use crate::pipelines::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::transforms::group_by::StateEntity;
+use crate::sessions::QueryContext;
 
 pub type KeysU8PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU8>;
@@ -61,12 +62,13 @@ pub struct PartialAggregator<
     method: Method,
     state: Method::State,
     params: Arc<AggregatorParams>,
+    ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
+    pub fn create(method: Method, params: Arc<AggregatorParams>, ctx: Arc<QueryContext>) -> Self {
         let state = method.aggregate_state();
         Self {
             is_generated: false,
@@ -74,6 +76,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             state,
             method,
             params,
+            ctx,
         }
     }
 
@@ -224,6 +227,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
         let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
 
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
+
         let places = Self::lookup_state(&self.params, group_keys, &mut self.state);
         Self::execute(&self.params, &block, &places)
     }
@@ -242,6 +251,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns_name, &block)?;
         let group_keys = self.method.build_keys(&group_columns, block.num_rows())?;
+
+        let group_by_two_level_threshold =
+            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
+            self.state.convert_to_two_level();
+        }
+
         Self::lookup_key(group_keys, &mut self.state);
         Ok(())
     }
