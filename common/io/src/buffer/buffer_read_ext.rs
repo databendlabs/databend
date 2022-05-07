@@ -126,7 +126,7 @@ pub trait BufferReadExt: BufferRead {
 }
 
 impl<R> BufferReadExt for R
-where R: BufferRead
+    where R: BufferRead
 {
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> Result<usize> {
         let mut bytes = 0;
@@ -191,10 +191,10 @@ where R: BufferRead
     }
 
     fn ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<bool> {
-        self.ignores(|c: u8| c == b' ' || c == b'\t')?;
+        self.ignores(|c: u8| c == b' ')?;
 
         if self.ignore_byte(b)? {
-            self.ignores(|c: u8| c == b' ' || c == b'\t')?;
+            self.ignores(|c: u8| c == b' ')?;
             return Ok(true);
         }
 
