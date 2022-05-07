@@ -91,7 +91,7 @@ pub fn try_handle() -> Option<PrometheusHandle> {
     PROMETHEUS_HANDLE.as_ref().read().clone()
 }
 
-pub fn register_counter<'a>(opt: MetricOption) -> Counter {
+pub fn register_counter(opt: MetricOption) -> Counter {
     let labels = [
         (LABEL_NAMESPACE, opt.namespace.to_string()),
         (LABEL_SUBSYSTEM, opt.subsystem.to_string()),

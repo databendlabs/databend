@@ -27,6 +27,12 @@ pub struct MetaMetrics {
 
 static INSTANCE: OnceCell<MetaMetrics> = OnceCell::new();
 
+impl Default for MetaMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MetaMetrics {
     pub fn new() -> MetaMetrics {
         MetaMetrics { has_leader: None }
