@@ -18,19 +18,11 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::CreateDatabaseReq;
-use crate::CreateShareReq;
-use crate::CreateTableReq;
-use crate::DropDatabaseReq;
-use crate::DropShareReq;
-use crate::DropTableReq;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
-use crate::RenameTableReq;
 use crate::TxnRequest;
-use crate::UpsertTableOptionReq;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -52,35 +44,6 @@ pub enum Cmd {
     RemoveNode {
         node_id: NodeId,
     },
-
-    /// Add a database if absent
-    CreateDatabase(CreateDatabaseReq),
-
-    /// Drop a database if absent
-    DropDatabase(DropDatabaseReq),
-
-    /// Create a table if absent
-    CreateTable(CreateTableReq),
-
-    /// Drop a table if absent
-    DropTable(DropTableReq),
-
-    /// Rename a table
-    RenameTable(RenameTableReq),
-
-    /// Create a share if absent
-    CreateShare(CreateShareReq),
-
-    DropShare(DropShareReq),
-
-    /// Update, remove or insert table options.
-    ///
-    /// This Cmd requires a present table to operate on.
-    /// Otherwise an `UnknownTableId` is returned.
-    ///
-    /// With mismatched seq, it returns a unchanged state: (prev:TableMeta, prev:TableMeta)
-    /// Otherwise it returns the TableMeta before and after update.
-    UpsertTableOptions(UpsertTableOptionReq),
 
     /// Update or insert a general purpose kv store
     UpsertKV {
@@ -115,14 +78,6 @@ impl fmt::Display for Cmd {
                 write!(f, "remove_node:{}", node_id)
             }
 
-            Cmd::CreateDatabase(req) => req.fmt(f),
-            Cmd::DropDatabase(req) => req.fmt(f),
-            Cmd::CreateTable(req) => req.fmt(f),
-            Cmd::DropTable(req) => req.fmt(f),
-            Cmd::RenameTable(req) => req.fmt(f),
-            Cmd::UpsertTableOptions(req) => req.fmt(f),
-            Cmd::CreateShare(req) => req.fmt(f),
-            Cmd::DropShare(req) => req.fmt(f),
             Cmd::UpsertKV {
                 key,
                 seq,

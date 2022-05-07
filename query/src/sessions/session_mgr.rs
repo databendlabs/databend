@@ -405,7 +405,8 @@ impl SessionManager {
             }
         };
 
-        Ok(Operator::new(accessor))
+        // Enable exponential backoff by default
+        Ok(Operator::new(accessor).with_backoff(backon::ExponentialBackoff::default()))
     }
 
     pub async fn reload_config(&self) -> Result<()> {

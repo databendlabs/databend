@@ -23,11 +23,8 @@ use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_grpc::DNSResolver;
-use common_meta_api::SchemaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
-use common_meta_raft_store::state_machine::TableLookupKey;
-use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
@@ -40,7 +37,6 @@ use common_meta_types::Endpoint;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
-use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -49,9 +45,6 @@ use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::SeqV;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 use common_meta_types::ToMetaError;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
@@ -720,42 +713,6 @@ impl MetaNode {
 
     pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
         self.sto.state_machine.read().await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn lookup_table_id(
-        &self,
-        db_id: u64,
-        name: &str,
-    ) -> Result<Option<SeqV<TableLookupValue>>, MetaError> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        match sm.table_lookup().get(
-            &(TableLookupKey {
-                database_id: db_id,
-                table_name: name.to_string(),
-            }),
-        ) {
-            Ok(e) => Ok(e),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.list_tables(req).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_table_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, MetaError> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_table_meta_by_id(tid)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
