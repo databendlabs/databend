@@ -108,6 +108,7 @@ impl ValueSource {
             ));
         }
 
+        let format = self.ctx.get_format_settings()?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces()?;
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
@@ -117,7 +118,7 @@ impl ValueSource {
                 .ok_or_else(|| ErrorCode::BadBytes("Deserializer is None"))?;
 
             let (need_fallback, pop_count) = deser
-                .de_text_quoted(reader)
+                .de_text_quoted(reader, &format)
                 .and_then(|_| {
                     let _ = reader.ignore_white_spaces()?;
                     let need_fallback = reader.ignore_byte(col_end)?.not();
@@ -142,7 +143,7 @@ impl ValueSource {
                         .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone())?;
+                    deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
 
                 return Ok(());

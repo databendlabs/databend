@@ -72,7 +72,7 @@ impl Function for ExportSetFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -94,6 +94,7 @@ impl Function for ExportSetFunction {
             &number_bits_column.data_type(),
             &t,
             &DEFAULT_CAST_OPTIONS,
+            &func_ctx,
         )?;
 
         let bits_column = cast_with_type(
@@ -101,6 +102,7 @@ impl Function for ExportSetFunction {
             &columns[0].column().data_type(),
             &t,
             &DEFAULT_CAST_OPTIONS,
+            &func_ctx,
         )?;
 
         if input_rows != 1
