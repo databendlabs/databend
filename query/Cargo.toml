@@ -87,7 +87,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
 once_cell = "1.10.0"
-opendal = "0.5.2"
+opendal = { version = "0.6.0", features = ["retry"] }
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
@@ -113,6 +113,7 @@ tonic = "=0.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+backon = "0.0.2"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
