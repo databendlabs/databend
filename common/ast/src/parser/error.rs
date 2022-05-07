@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Write;
 
 use logos::Span;
@@ -65,14 +66,14 @@ impl<'a> nom::error::ParseError<Input<'a>> for Error<'a> {
 
     // Select the farthest parse tree while brancing by the `alt` function.
     fn or(mut self, mut other: Self) -> Self {
-        if self.span.span.start == other.span.span.start {
-            self.errors.append(&mut other.errors);
-            self.contexts.clear();
-            self
-        } else if other.span.span.start > self.span.span.start {
-            other
-        } else {
-            self
+        match self.span.span.start.cmp(&other.span.span.start) {
+            Ordering::Equal => {
+                self.errors.append(&mut other.errors);
+                self.contexts.clear();
+                self
+            }
+            Ordering::Less => other,
+            Ordering::Greater => self,
         }
     }
 }
@@ -126,7 +127,7 @@ impl<'a> Error<'a> {
         expected_text.sort();
         expected_text.dedup();
 
-        let msg: String = if expected_tokens.len() + expected_text.len() > 0 {
+        let msg = if expected_tokens.len() + expected_text.len() > 0 {
             let mut msg = String::new();
             let mut iter = expected_tokens
                 .iter()
