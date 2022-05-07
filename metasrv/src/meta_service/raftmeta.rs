@@ -65,6 +65,7 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
+use crate::metrics::set_meta_metrics_has_leader;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
 use crate::watcher::WatcherManager;
@@ -400,6 +401,9 @@ impl MetaNode {
                                         );
                                     }
                                 }
+                                set_meta_metrics_has_leader(true);
+                            } else {
+                                set_meta_metrics_has_leader(false);
                             }
                         } else {
                             // shutting down

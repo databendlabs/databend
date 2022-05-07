@@ -28,6 +28,7 @@ common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
 common-containers = { path = "../common/containers" }
 common-exception = { path = "../common/exception" }
+common-infallible = { path = "../common/infallible" }
 common-grpc = { path = "../common/grpc" }
 common-macros = { path = "../common/macros" }
 common-meta-api = { path = "../common/meta/api" }
@@ -50,6 +51,7 @@ clap = { version = "3.1.8", features = ["derive", "env"] }
 futures = "0.3.21"
 metrics = "0.18.1"
 num = "0.4.0"
+once_cell = "1.10.0"
 poem = { version = "=1.3.16", features = ["rustls"] }
 prost = "=0.9.0"
 serde = { version = "1.0.136", features = ["derive"] }
