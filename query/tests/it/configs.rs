@@ -52,8 +52,6 @@ rpc_tls_server_cert = ""
 rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
-table_engine_csv_enabled = false
-table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
 database_engine_github_enabled = true
 wait_timeout_mills = 5000
@@ -140,8 +138,6 @@ fn test_env_config() -> Result<()> {
             ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
             ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
             ("STORAGE_S3_BUCKET", Some("us.bucket")),
-            ("QUERY_TABLE_ENGINE_CSV_ENABLED", Some("true")),
-            ("QUERY_TABLE_ENGINE_PARQUET_ENABLED", Some("true")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
             ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
@@ -175,8 +171,6 @@ fn test_env_config() -> Result<()> {
             assert_eq!("us.key", configured.storage.s3.secret_access_key);
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
-            assert!(configured.query.table_engine_csv_enabled);
-            assert!(configured.query.table_engine_parquet_enabled);
             assert!(configured.query.table_engine_memory_enabled);
             assert!(!configured.query.database_engine_github_enabled);
 
@@ -224,8 +218,6 @@ rpc_tls_server_cert = ""
 rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
-table_engine_csv_enabled = false
-table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
 database_engine_github_enabled = true
 wait_timeout_mills = 5000
