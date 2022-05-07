@@ -53,7 +53,7 @@ pub struct BindContext {
 }
 
 impl BindContext {
-    pub fn create() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 

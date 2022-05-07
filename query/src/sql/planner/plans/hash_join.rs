@@ -15,7 +15,6 @@
 use std::any::Any;
 
 use crate::sql::optimizer::PhysicalProperty;
-use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
@@ -24,15 +23,14 @@ use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 
 #[derive(Clone)]
-pub struct FilterPlan {
-    pub predicates: Vec<Scalar>,
-    // True if the plan represents having, else the plan represents where
-    pub is_having: bool,
+pub struct PhysicalHashJoin {
+    pub build_keys: Vec<Scalar>,
+    pub probe_keys: Vec<Scalar>,
 }
 
-impl BasePlan for FilterPlan {
+impl BasePlan for PhysicalHashJoin {
     fn plan_type(&self) -> PlanType {
-        PlanType::Filter
+        PlanType::PhysicalHashJoin
     }
 
     fn is_physical(&self) -> bool {
@@ -40,15 +38,15 @@ impl BasePlan for FilterPlan {
     }
 
     fn is_logical(&self) -> bool {
-        true
+        false
     }
 
     fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
+        Some(self)
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
+        None
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -56,14 +54,8 @@ impl BasePlan for FilterPlan {
     }
 }
 
-impl PhysicalPlan for FilterPlan {
+impl PhysicalPlan for PhysicalHashJoin {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
-        todo!()
-    }
-}
-
-impl LogicalPlan for FilterPlan {
-    fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
         todo!()
     }
 }

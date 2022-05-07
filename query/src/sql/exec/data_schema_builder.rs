@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -55,7 +53,7 @@ impl<'a> DataSchemaBuilder<'a> {
             };
             new_data_fields.push(field);
         }
-        Ok(Arc::new(DataSchema::new(new_data_fields)))
+        Ok(DataSchemaRefExt::create(new_data_fields))
     }
 
     pub fn build_project(
@@ -72,7 +70,7 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
 
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(DataSchemaRefExt::create(fields))
     }
 
     pub fn build_physical_scan(&self, plan: &PhysicalScan) -> Result<DataSchemaRef> {
@@ -89,7 +87,7 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
 
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(DataSchemaRefExt::create(fields))
     }
 
     pub fn build_canonical_schema(&self, columns: &[IndexType]) -> DataSchemaRef {
@@ -106,7 +104,7 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
 
-        Arc::new(DataSchema::new(fields))
+        DataSchemaRefExt::create(fields)
     }
 
     pub fn build_group_by(
@@ -133,7 +131,7 @@ impl<'a> DataSchemaBuilder<'a> {
             };
             fields.push(field);
         }
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(DataSchemaRefExt::create(fields))
     }
 
     pub fn build_agg_func(
@@ -174,10 +172,23 @@ impl<'a> DataSchemaBuilder<'a> {
                 _ => {
                     return Err(ErrorCode::LogicalError(
                         "Expression must be aggregated function",
-                    ))
+                    ));
                 }
             }
         }
-        Ok((Arc::new(DataSchema::new(fields)), agg_inner_expressions))
+        Ok((DataSchemaRefExt::create(fields), agg_inner_expressions))
+    }
+
+    pub fn build_join(&self, left: DataSchemaRef, right: DataSchemaRef) -> DataSchemaRef {
+        // TODO: NATURAL JOIN and USING
+        let mut fields = Vec::with_capacity(left.num_fields() + right.num_fields());
+        for field in left.fields().iter() {
+            fields.push(field.clone());
+        }
+        for field in right.fields().iter() {
+            fields.push(field.clone());
+        }
+
+        DataSchemaRefExt::create(fields)
     }
 }

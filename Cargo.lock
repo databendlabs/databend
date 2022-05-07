@@ -1866,6 +1866,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "twox-hash",
  "typetag",
  "url",
  "uuid",

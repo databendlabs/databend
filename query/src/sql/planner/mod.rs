@@ -47,7 +47,7 @@ impl Planner {
         Planner { ctx }
     }
 
-    pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<NewPipeline> {
+    pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<(NewPipeline, Vec<NewPipeline>)> {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
         let stmts = parse_sql(&tokens)?;
@@ -71,8 +71,8 @@ impl Planner {
             bind_result.metadata,
             optimized_expr,
         );
-        let pipeline = pb.spawn()?;
+        let pipelines = pb.spawn()?;
 
-        Ok(pipeline)
+        Ok(pipelines)
     }
 }
