@@ -73,7 +73,7 @@ impl Binder {
         select_list: &[SelectTarget],
         input_context: &BindContext,
     ) -> Result<BindContext> {
-        let mut output_context = BindContext::create();
+        let mut output_context = BindContext::new();
         output_context.expression = input_context.expression.clone();
         for select_target in select_list {
             match select_target {

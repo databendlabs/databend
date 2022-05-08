@@ -55,7 +55,7 @@ common-tracing = { path = "../common/tracing" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "967477f1", package = "opensrv-mysql" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "fee0056" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "8db5b12" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
@@ -64,6 +64,7 @@ async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = "0.1.53"
 backoff = "0.4.0"
+backon = "0.0.2"
 base64 = "0.13.0"
 bit-vec = { version = "0.6.3", features = ["serde_std"] }
 bumpalo = "3.9.1"
@@ -87,7 +88,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
 once_cell = "1.10.0"
-opendal = "0.5.2"
+opendal = { version = "0.6.0", features = ["retry"] }
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
@@ -110,6 +111,7 @@ time = "0.3.9"
 tokio-rustls = "0.23.3"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 tonic = "=0.6.2"
+twox-hash = "1.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"

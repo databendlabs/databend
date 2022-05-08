@@ -294,6 +294,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f334d8b7d003e7d4e17844b81ffbfcd24ad955777997440701c08a834e407105"
+dependencies = [
+ "futures",
+ "pin-project",
+ "rand 0.8.5",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1769,6 +1781,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
+ "backon",
  "base64 0.13.0",
  "bincode",
  "bit-vec",
@@ -1853,6 +1866,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "twox-hash",
  "typetag",
  "url",
  "uuid",
@@ -4010,13 +4024,14 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "496b6dff08ea23239dcf173c95c0fe276a4b577d5aab71b1baaadfea3fd4fa41"
+checksum = "1b485a8d622cabe87171f51f0d6ae91ffa4425137097b0d69197a763f5cf7d0b"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-trait",
+ "backon",
  "base64 0.13.0",
  "bytes 1.1.0",
  "futures",
@@ -5883,7 +5898,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=fee0056#fee00567b17af62cfe43bc8e9cfe528084a3ab76"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=8db5b12#8db5b126bd9185d0ca97adfcdff1ce679fdf5307"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

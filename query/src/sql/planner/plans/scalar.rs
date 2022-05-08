@@ -21,14 +21,14 @@ use common_exception::Result;
 use enum_dispatch::enum_dispatch;
 
 use crate::sql::binder::ColumnBinding;
+use crate::sql::optimizer::ColumnSet;
 
 #[enum_dispatch]
 pub trait ScalarExpr {
     /// Get return type and nullability
     fn data_type(&self) -> DataTypeImpl;
 
-    // TODO: implement this in the future
-    // fn used_columns(&self) -> ColumnSet;
+    fn used_columns(&self) -> ColumnSet;
 
     // TODO: implement this in the future
     // fn outer_columns(&self) -> ColumnSet;
@@ -60,6 +60,10 @@ impl ScalarExpr for BoundColumnRef {
     fn data_type(&self) -> DataTypeImpl {
         self.column.data_type.clone()
     }
+
+    fn used_columns(&self) -> ColumnSet {
+        ColumnSet::from([self.column.index])
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -70,6 +74,10 @@ pub struct ConstantExpr {
 impl ScalarExpr for ConstantExpr {
     fn data_type(&self) -> DataTypeImpl {
         self.value.data_type()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        ColumnSet::new()
     }
 }
 
@@ -83,6 +91,12 @@ impl ScalarExpr for AndExpr {
     fn data_type(&self) -> DataTypeImpl {
         BooleanType::new_impl()
     }
+
+    fn used_columns(&self) -> ColumnSet {
+        let left: ColumnSet = self.left.used_columns();
+        let right: ColumnSet = self.right.used_columns();
+        left.union(&right).cloned().collect()
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -94,6 +108,12 @@ pub struct OrExpr {
 impl ScalarExpr for OrExpr {
     fn data_type(&self) -> DataTypeImpl {
         BooleanType::new_impl()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        let left: ColumnSet = self.left.used_columns();
+        let right: ColumnSet = self.right.used_columns();
+        left.union(&right).cloned().collect()
     }
 }
 
@@ -159,6 +179,12 @@ impl ScalarExpr for ComparisonExpr {
     fn data_type(&self) -> DataTypeImpl {
         BooleanType::new_impl()
     }
+
+    fn used_columns(&self) -> ColumnSet {
+        let left: ColumnSet = self.left.used_columns();
+        let right: ColumnSet = self.right.used_columns();
+        left.union(&right).cloned().collect()
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -174,13 +200,20 @@ impl ScalarExpr for AggregateFunction {
     fn data_type(&self) -> DataTypeImpl {
         self.return_type.clone()
     }
+
+    fn used_columns(&self) -> ColumnSet {
+        let mut result = ColumnSet::new();
+        for scalar in self.args.iter() {
+            result = result.union(&scalar.used_columns()).cloned().collect();
+        }
+        result
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct FunctionCall {
     pub arguments: Vec<Scalar>,
 
-    // pub function: Box<dyn Function>,
     pub func_name: String,
     pub arg_types: Vec<DataTypeImpl>,
     pub return_type: DataTypeImpl,
@@ -189,6 +222,14 @@ pub struct FunctionCall {
 impl ScalarExpr for FunctionCall {
     fn data_type(&self) -> DataTypeImpl {
         self.return_type.clone()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        let mut result = ColumnSet::new();
+        for scalar in self.arguments.iter() {
+            result = result.union(&scalar.used_columns()).cloned().collect();
+        }
+        result
     }
 }
 
@@ -202,5 +243,9 @@ pub struct CastExpr {
 impl ScalarExpr for CastExpr {
     fn data_type(&self) -> DataTypeImpl {
         self.target_type.clone()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        self.argument.used_columns()
     }
 }

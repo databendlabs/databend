@@ -25,8 +25,7 @@ use crate::sql::plans::Scalar;
 
 #[derive(Clone)]
 pub struct FilterPlan {
-    // TODO: split predicate into conjunctions
-    pub predicate: Scalar,
+    pub predicates: Vec<Scalar>,
     // True if the plan represents having, else the plan represents where
     pub is_having: bool,
 }

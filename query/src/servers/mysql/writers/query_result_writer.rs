@@ -88,6 +88,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
+                TypeID::Array => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::VariantArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -153,6 +154,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 }
                                 (TypeID::String, DataValue::String(v)) => {
                                     row_writer.write_col(v)?
+                                }
+                                (TypeID::Array, DataValue::Array(_)) => {
+                                    let serializer = data_type.create_serializer();
+                                    row_writer
+                                        .write_col(serializer.serialize_value(&val, format)?)?
                                 }
                                 (TypeID::Struct, DataValue::Struct(_)) => {
                                     let serializer = data_type.create_serializer();

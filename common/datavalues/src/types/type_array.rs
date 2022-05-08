@@ -30,6 +30,10 @@ pub struct ArrayType {
 }
 
 impl ArrayType {
+    pub fn new_impl(inner: DataTypeImpl) -> DataTypeImpl {
+        DataTypeImpl::Array(Self::create(inner))
+    }
+
     pub fn create(inner: DataTypeImpl) -> Self {
         ArrayType {
             inner: Box::new(inner),
@@ -57,10 +61,6 @@ impl DataType for ArrayType {
 
     fn default_value(&self) -> DataValue {
         DataValue::Array(vec![])
-    }
-
-    fn can_inside_nullable(&self) -> bool {
-        false
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
@@ -119,12 +119,23 @@ impl DataType for ArrayType {
         .into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {
-        todo!()
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        ArrayDeserializer {
+            inner: Box::new(self.inner.create_deserializer(capacity)),
+            builder: MutableArrayColumn::with_capacity_meta(capacity, ColumnMeta::Array {
+                data_type: *self.inner.clone(),
+            }),
+        }
+        .into()
     }
 
-    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
-        todo!()
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableArrayColumn::with_capacity_meta(
+            capacity,
+            ColumnMeta::Array {
+                data_type: *self.inner.clone(),
+            },
+        ))
     }
 }
 

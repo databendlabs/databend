@@ -19,6 +19,7 @@ use serde_json::Value;
 
 use crate::prelude::*;
 
+mod array;
 mod boolean;
 mod date;
 mod null;
@@ -28,6 +29,7 @@ mod string;
 mod timestamp;
 mod variant;
 
+pub use array::*;
 pub use boolean::*;
 pub use date::*;
 pub use null::*;
@@ -101,6 +103,7 @@ pub trait TypeDeserializer: Send + Sync {
 pub enum TypeDeserializerImpl {
     Null(NullDeserializer),
     Nullable(NullableDeserializer),
+    Array(ArrayDeserializer),
     Boolean(BooleanDeserializer),
     Int8(NumberDeserializer<i8>),
     Int16(NumberDeserializer<i16>),
