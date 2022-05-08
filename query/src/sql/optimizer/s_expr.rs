@@ -18,7 +18,7 @@ use crate::sql::plans::PlanType;
 use crate::sql::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SExpr {
     plan: BasePlanImpl,
     children: Vec<SExpr>,

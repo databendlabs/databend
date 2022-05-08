@@ -22,7 +22,7 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LogicalInnerJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
