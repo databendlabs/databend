@@ -25,7 +25,8 @@ use crate::parser::token::*;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
-/// Input tokens slice with a backtrace that records all recovered errors.
+/// Input tokens slice with a backtrace that records all errors including
+/// the optional branch.
 #[derive(Debug, Clone, Copy)]
 pub struct Input<'a>(pub &'a [Token<'a>], pub &'a Backtrace<'a>);
 

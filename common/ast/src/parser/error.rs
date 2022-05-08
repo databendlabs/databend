@@ -37,7 +37,7 @@ pub struct Error<'a> {
     errors: Vec<ErrorKind>,
     /// The backtrace stack of the error.
     contexts: Vec<(Token<'a>, &'static str)>,
-    /// The exrta backtrace of recovered error.
+    /// The exrta backtrace of error in optional branches.
     backtrace: &'a Backtrace<'a>,
 }
 
@@ -54,7 +54,7 @@ pub enum ErrorKind {
 /// Record the farthest position in the input before encountering an error.
 ///
 /// This is similar to the `Error`, but the information will not get lost
-/// even the error is recovered by `opt` or `many0`, etc.
+/// even the error is from a optional branch.
 #[derive(Debug, Clone, Default)]
 pub struct Backtrace<'a> {
     inner: RefCell<Option<BacktraceInner<'a>>>,
