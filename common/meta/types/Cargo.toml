@@ -22,7 +22,6 @@ derive_more = "0.99.17"
 enumflags2 = { version = "0.7.4", features = ["serde"] }
 hex = "0.4.3"
 maplit = "1.0.2"
-nanoid = "0.4.0"
 num = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
