@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ expected ")"
+  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ expected ")"
+  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
   | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
@@ -31,7 +31,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^
   | |               | |
-  | |               | expected `ARRAY`, `BIGINT`, `BOOLEAN`, `BOOL`, `DATETIME`, or 26 more ...
+  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, or 26 more ...
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
@@ -95,7 +95,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ expected `DATABASE`, `FUNCTION`, `SCHEMA`, `TABLE`, `USER`, or 1 more ...
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or 1 more ...
 
 
 ---------- Input ----------
