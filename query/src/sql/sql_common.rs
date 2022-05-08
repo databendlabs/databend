@@ -65,6 +65,10 @@ impl SQLCommon {
                     )))
                 }
             }
+            SQLDataType::Array(sql_type) => {
+                let inner_data_type = Self::make_data_type(sql_type)?;
+                Ok(ArrayType::new_impl(inner_data_type))
+            }
 
             // Custom types for databend:
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])

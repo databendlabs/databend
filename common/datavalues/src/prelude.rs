@@ -17,6 +17,7 @@ use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::MutableBinaryArray;
 use smallvec::SmallVec;
 
+pub use crate::array_value::*;
 pub use crate::columns::*;
 pub use crate::data_group_value::*;
 pub use crate::data_value::DFTryFrom;
