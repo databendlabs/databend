@@ -15,9 +15,9 @@
 use std::mem::replace;
 use std::sync::Arc;
 
-use common_base::tokio::io::AsyncReadExt;
-use common_base::tokio::sync::mpsc::Receiver;
-use common_base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::io::AsyncReadExt;
+use common_base::base::tokio::sync::mpsc::Receiver;
+use common_base::base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -141,7 +141,7 @@ impl MultipartFormat {
             ));
         }
 
-        let (tx, rx) = common_base::tokio::sync::mpsc::channel(2);
+        let (tx, rx) = common_base::base::tokio::sync::mpsc::channel(2);
 
         Ok((
             MultipartWorker {
