@@ -179,7 +179,7 @@ impl<'a> Error<'a> {
     }
 }
 
-pub fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
+pub fn pretty_print_error(source: &str, labels: Vec<(Span, String)>) -> String {
     use codespan_reporting::diagnostic::Diagnostic;
     use codespan_reporting::diagnostic::Label;
     use codespan_reporting::files::SimpleFile;
@@ -196,7 +196,7 @@ pub fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
         ..Default::default()
     };
 
-    let lables = lables
+    let labels = labels
         .into_iter()
         .enumerate()
         .map(|(i, (span, msg))| {
@@ -208,11 +208,9 @@ pub fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
         })
         .collect();
 
-    let diagnostic = Diagnostic::error().with_labels(lables);
+    let diagnostic = Diagnostic::error().with_labels(labels);
 
     term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
 
-    std::str::from_utf8(&writer.into_inner())
-        .unwrap()
-        .to_string()
+    String::from_utf8_lossy(&writer.into_inner()).to_string()
 }
