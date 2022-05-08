@@ -14,7 +14,7 @@
 
 use async_trait::async_trait;
 use common_ast::udfs::*;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use pretty_assertions::assert_eq;

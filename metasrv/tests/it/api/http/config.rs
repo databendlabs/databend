@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-use common_base::tokio;
+use common_base::base::tokio;
 use databend_meta::api::http::v1::config::config_handler;
 use databend_meta::configs::Config;
 use poem::get;

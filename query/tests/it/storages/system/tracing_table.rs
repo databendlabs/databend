@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::TracingTable;
 use databend_query::storages::Table;

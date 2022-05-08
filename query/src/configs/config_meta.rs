@@ -15,7 +15,7 @@
 use std::fmt;
 
 use clap::Args;
-use common_base::mask_string;
+use common_base::base::mask_string;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_grpc::MetaGrpcClientConf;

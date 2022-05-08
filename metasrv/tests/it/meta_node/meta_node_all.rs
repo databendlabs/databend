@@ -15,8 +15,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::tokio::time::Duration;
+use common_base::base::tokio;
+use common_base::base::tokio::time::Duration;
 use common_meta_api::KVApi;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::LogIdOptionExt;

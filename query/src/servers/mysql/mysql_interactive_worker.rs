@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::TrySpawn;
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

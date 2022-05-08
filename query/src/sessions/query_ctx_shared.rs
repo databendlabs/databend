@@ -18,13 +18,13 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_base::Progress;
-use common_base::Runtime;
+use common_base::base::Progress;
+use common_base::base::Runtime;
+use common_base::infallible::Mutex;
+use common_base::infallible::RwLock;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;

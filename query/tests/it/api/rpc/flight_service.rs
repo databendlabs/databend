@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;

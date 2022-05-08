@@ -17,10 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::Mutex as TokioMutex;
-use common_base::tokio::sync::RwLock;
-use common_base::ProgressValues;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::Mutex as TokioMutex;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;

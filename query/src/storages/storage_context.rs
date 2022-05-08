@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_datablocks::InMemoryData;
-use common_infallible::RwLock;
 use common_meta_api::SchemaApi;
 
 /// Storage Context.

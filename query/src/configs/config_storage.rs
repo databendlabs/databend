@@ -16,7 +16,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use clap::Args;
-use common_base::mask_string;
+use common_base::base::mask_string;
 use serde::Deserialize;
 use serde::Serialize;
 

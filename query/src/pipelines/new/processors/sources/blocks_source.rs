@@ -15,9 +15,9 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_infallible::Mutex;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;

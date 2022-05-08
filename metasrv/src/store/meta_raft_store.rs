@@ -19,8 +19,8 @@ use std::io::ErrorKind;
 use std::ops::RangeBounds;
 
 use anyerror::AnyError;
-use common_base::tokio::sync::RwLock;
-use common_base::tokio::sync::RwLockWriteGuard;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::tokio::sync::RwLockWriteGuard;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;

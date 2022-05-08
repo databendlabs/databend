@@ -21,7 +21,7 @@ test = false
 default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
-memory-profiling = ["common-mem-allocator/memory-profiling", "tempfile"]
+memory-profiling = ["common-base/memory-profiling", "tempfile"]
 
 [dependencies]
 # Workspace dependencies
@@ -35,11 +35,9 @@ common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
 common-functions = { path = "../common/functions" }
 common-grpc = { path = "../common/grpc" }
-common-infallible = { path = "../common/infallible" }
 common-io = { path = "../common/io" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
-common-mem-allocator = { path = "../common/mem-allocator" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-grpc = { path = "../common/meta/grpc" }

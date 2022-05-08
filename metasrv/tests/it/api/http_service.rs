@@ -15,8 +15,8 @@
 use std::fs::File;
 use std::io::Read;
 
-use common_base::tokio;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::Stoppable;
 use common_exception::Result;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;

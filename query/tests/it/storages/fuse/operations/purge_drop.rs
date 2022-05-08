@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;

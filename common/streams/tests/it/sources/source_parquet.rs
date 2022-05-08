@@ -18,7 +18,7 @@ use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::Version;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::parquet::compression::CompressionOptions;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;

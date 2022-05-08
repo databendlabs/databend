@@ -14,8 +14,8 @@
 
 use std::net::SocketAddr;
 
-use common_base::tokio::sync::oneshot;
-use common_base::tokio::task::JoinHandle;
+use common_base::base::tokio::sync::oneshot;
+use common_base::base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -76,7 +76,7 @@ impl HttpShutdownHandler {
         }
 
         let (tx, rx) = oneshot::channel();
-        let join_handle = common_base::tokio::spawn(
+        let join_handle = common_base::base::tokio::spawn(
             poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
                 ep,
                 rx.map(|_| ()),
