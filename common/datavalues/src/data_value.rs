@@ -26,7 +26,7 @@ use serde_json::json;
 use crate::prelude::*;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, PartialOrd)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -92,36 +92,36 @@ impl DataValue {
     pub fn data_type(&self) -> DataTypeImpl {
         match self {
             DataValue::Null => DataTypeImpl::Null(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
-                    return Int8Type::arc();
+                    return Int8Type::new_impl();
                 }
                 if *n >= i16::MIN as i64 && *n <= i16::MAX as i64 {
-                    return Int16Type::arc();
+                    return Int16Type::new_impl();
                 }
                 if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
-                    return Int32Type::arc();
+                    return Int32Type::new_impl();
                 }
-                Int64Type::arc()
+                Int64Type::new_impl()
             }
             DataValue::UInt64(n) => {
                 if *n <= u8::MAX as u64 {
-                    return UInt8Type::arc();
+                    return UInt8Type::new_impl();
                 }
                 if *n <= u16::MAX as u64 {
-                    return UInt16Type::arc();
+                    return UInt16Type::new_impl();
                 }
                 if *n <= u32::MAX as u64 {
-                    return UInt32Type::arc();
+                    return UInt32Type::new_impl();
                 }
-                UInt64Type::arc()
+                UInt64Type::new_impl()
             }
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
+            DataValue::Float64(_) => Float64Type::new_impl(),
+            DataValue::String(_) => StringType::new_impl(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
+                    UInt8Type::new_impl()
                 } else {
                     x[0].data_type()
                 };
@@ -132,7 +132,7 @@ impl DataValue {
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Variant(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::new_impl(),
         }
     }
 
@@ -140,14 +140,14 @@ impl DataValue {
     pub fn max_data_type(&self) -> DataTypeImpl {
         match self {
             DataValue::Null => DataTypeImpl::Null(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
-            DataValue::Int64(_) => Int64Type::arc(),
-            DataValue::UInt64(_) => UInt64Type::arc(),
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
+            DataValue::Boolean(_) => BooleanType::new_impl(),
+            DataValue::Int64(_) => Int64Type::new_impl(),
+            DataValue::UInt64(_) => UInt64Type::new_impl(),
+            DataValue::Float64(_) => Float64Type::new_impl(),
+            DataValue::String(_) => StringType::new_impl(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
+                    UInt8Type::new_impl()
                 } else {
                     x[0].data_type()
                 };
@@ -158,7 +158,7 @@ impl DataValue {
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 DataTypeImpl::Struct(StructType::create(names, types))
             }
-            DataValue::Variant(_) => VariantType::arc(),
+            DataValue::Variant(_) => VariantType::new_impl(),
         }
     }
 
@@ -175,6 +175,19 @@ impl DataValue {
     #[inline]
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(self, DataValue::UInt64(_))
+    }
+
+    #[inline]
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            DataValue::Int64(_) | DataValue::UInt64(_) | DataValue::Float64(_)
+        )
+    }
+
+    #[inline]
+    pub fn is_float(&self) -> bool {
+        matches!(self, DataValue::Float64(_))
     }
 
     pub fn as_u64(&self) -> Result<u64> {
@@ -257,6 +270,8 @@ impl DataValue {
         Ok(ret)
     }
 }
+
+impl Eq for DataValue {}
 
 // Did not use std::convert:TryFrom
 // Because we do not need custom type error.

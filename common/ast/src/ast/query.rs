@@ -126,7 +126,7 @@ pub enum TableReference {
         alias: Option<TableAlias>,
     },
     // `TABLE(expr)[ AS alias ]`
-    SetReturningFunction {
+    TableFunction {
         name: Identifier,
         params: Vec<Expr>,
         alias: Option<TableAlias>,
@@ -219,7 +219,7 @@ impl Display for TableReference {
                     write!(f, " AS {alias}")?;
                 }
             }
-            TableReference::SetReturningFunction {
+            TableReference::TableFunction {
                 name,
                 params,
                 alias,

@@ -24,7 +24,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::aggregator_groups_builder::SingleStringGroupColumnsBuilder;
-use crate::common::HashTable;
+use crate::common::HashMapKind;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
 use crate::pipelines::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
@@ -155,7 +155,8 @@ impl PolymorphicKeysHelper<HashMethodKeysU32> for HashMethodKeysU32 {
     fn aggregate_state(&self) -> Self::State {
         LongerFixedKeysAggregatorState::<u32> {
             area: Bump::new(),
-            data: HashTable::create(),
+            data: HashMapKind::create_hash_table(),
+            two_level_flag: false,
         }
     }
 
@@ -186,7 +187,8 @@ impl PolymorphicKeysHelper<HashMethodKeysU64> for HashMethodKeysU64 {
     fn aggregate_state(&self) -> Self::State {
         LongerFixedKeysAggregatorState::<u64> {
             area: Bump::new(),
-            data: HashTable::create(),
+            data: HashMapKind::create_hash_table(),
+            two_level_flag: false,
         }
     }
 
@@ -218,7 +220,8 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
         SerializedKeysAggregatorState {
             keys_area: Bump::new(),
             state_area: Bump::new(),
-            data_state_map: HashTable::create(),
+            data_state_map: HashMapKind::create_hash_table(),
+            two_level_flag: false,
         }
     }
 
@@ -250,7 +253,8 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         SerializedKeysAggregatorState {
             keys_area: Bump::new(),
             state_area: Bump::new(),
-            data_state_map: HashTable::create(),
+            data_state_map: HashMapKind::create_hash_table(),
+            two_level_flag: false,
         }
     }
 

@@ -89,6 +89,11 @@ const config = {
                      label: 'Contributing',
                      position: 'right',
                   },
+                  {
+                      href: 'https://perf.databend.rs',
+                      label: 'Benchmarking',
+                      position: 'right',
+                  },
                   {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
                   {
                       href: 'https://github.com/datafuselabs/databend',

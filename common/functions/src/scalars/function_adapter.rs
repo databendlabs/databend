@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::combine_validities;
 use common_datavalues::combine_validities_2;
 use common_datavalues::remove_nullable;
@@ -152,7 +152,7 @@ impl Function for FunctionAdapter {
                     return Ok(NullableColumn::wrap_inner(
                         inner_type
                             .create_constant_column(&inner_type.default_value(), input_rows)?,
-                        Some(valid.unwrap().clone()),
+                        valid.cloned(),
                     ));
                 }
                 validity = combine_validities_2(validity.clone(), valid.cloned());

@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::tokio::sync::RwLock;
-use common_containers::ItemManager;
-use common_containers::Pool;
+use common_base::base::tokio::sync::RwLock;
+use common_base::containers::ItemManager;
+use common_base::containers::Pool;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
@@ -239,11 +239,16 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcReadReq = v.into();
+
+        tracing::debug!(req = debug(&act), "MetaGrpcClient::do_read request");
+
         let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
         let result = client.read_msg(req).await;
+
+        tracing::debug!(reply = debug(&result), "MetaGrpcClient::do_read reply");
 
         let rpc_res: std::result::Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
@@ -268,18 +273,21 @@ impl MetaGrpcClient {
         res
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, req))]
     pub(crate) async fn transaction(
         &self,
         req: TxnRequest,
     ) -> std::result::Result<TxnReply, MetaError> {
         let txn: TxnRequest = req;
 
+        tracing::debug!(req = display(&txn), "MetaGrpcClient::transaction request");
+
         let req: Request<TxnRequest> = Request::new(txn.clone());
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
         let result = client.transaction(req).await;
+
         let result: std::result::Result<TxnReply, Status> = match result {
             Ok(r) => return Ok(r.into_inner()),
             Err(s) => {
@@ -300,6 +308,8 @@ impl MetaGrpcClient {
         };
 
         let reply = result?;
+
+        tracing::debug!(reply = display(&reply), "MetaGrpcClient::transaction reply");
 
         Ok(reply)
     }

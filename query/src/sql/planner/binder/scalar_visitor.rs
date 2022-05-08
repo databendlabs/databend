@@ -14,6 +14,12 @@
 
 use common_exception::Result;
 
+use crate::sql::plans::AggregateFunction;
+use crate::sql::plans::AndExpr;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
+use crate::sql::plans::FunctionCall;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 
 /// Controls how the visitor recursion should proceed.
@@ -46,17 +52,34 @@ pub trait ScalarVisitor: Sized {
                         Recursion::Stop(visitor) => visitor,
                         Recursion::Continue(visitor) => {
                             match scalar {
-                                Scalar::AggregateFunction { args, .. } => {
+                                Scalar::AggregateFunction(AggregateFunction { args, .. }) => {
                                     for arg in args {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Scalar::Equal { left, right } => {
-                                    stack.push(RecursionProcessing::Call(left));
-                                    stack.push(RecursionProcessing::Call(right));
+                                Scalar::ComparisonExpr(ComparisonExpr { left, right, .. }) => {
+                                    stack.push(RecursionProcessing::Call(&**left));
+                                    stack.push(RecursionProcessing::Call(&**right));
                                 }
-                                Scalar::ColumnRef { .. } => {}
-                            };
+                                Scalar::AndExpr(AndExpr { left, right }) => {
+                                    stack.push(RecursionProcessing::Call(&**left));
+                                    stack.push(RecursionProcessing::Call(&**right));
+                                }
+                                Scalar::OrExpr(OrExpr { left, right }) => {
+                                    stack.push(RecursionProcessing::Call(&**left));
+                                    stack.push(RecursionProcessing::Call(&**right));
+                                }
+                                Scalar::FunctionCall(FunctionCall { arguments, .. }) => {
+                                    for arg in arguments.iter() {
+                                        stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                }
+                                Scalar::BoundColumnRef(_) => {}
+                                Scalar::ConstantExpr(_) => {}
+                                Scalar::Cast(CastExpr { argument, .. }) => {
+                                    stack.push(RecursionProcessing::Call(argument))
+                                }
+                            }
 
                             visitor
                         }

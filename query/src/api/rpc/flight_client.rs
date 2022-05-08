@@ -18,7 +18,7 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::tokio::time::Duration;
+use common_base::base::tokio::time::Duration;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;

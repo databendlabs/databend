@@ -14,21 +14,21 @@
 
 use std::any::Any;
 
+use super::Scalar;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AggregatePlan {
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
-    pub group_expr: Vec<ScalarExprRef>,
+    pub group_expr: Vec<Scalar>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    pub agg_expr: Vec<ScalarExprRef>,
+    pub agg_expr: Vec<Scalar>,
 }
 
 impl BasePlan for AggregatePlan {

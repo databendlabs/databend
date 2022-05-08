@@ -17,12 +17,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::Mutex as TokioMutex;
-use common_base::tokio::sync::RwLock;
-use common_base::ProgressValues;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::Mutex as TokioMutex;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
 use super::HttpQueryContext;
@@ -107,7 +108,7 @@ pub struct HttpQueryResponseInternal {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) session_id: String,
-    #[allow(dead_code)]
+
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
     data: Arc<TokioMutex<ResultDataManager>>,
@@ -117,7 +118,6 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     pub(crate) async fn try_create(
-        id: &str,
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
         config: HttpQueryConfig,
@@ -153,13 +153,16 @@ impl HttpQuery {
         };
         let session_id = session.get_id().clone();
 
+        let ctx = session.create_query_context().await?;
+        let id = ctx.get_id();
+
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 
-        let state = ExecuteState::try_create(&request, session, block_tx).await?;
+        let state = ExecuteState::try_create(&request, session, ctx, block_tx).await?;
         let data = Arc::new(TokioMutex::new(ResultDataManager::new(block_rx)));
         let query = HttpQuery {
-            id: id.to_string(),
+            id,
             session_id,
             request,
             state,
@@ -175,9 +178,13 @@ impl HttpQuery {
         self.request.pagination.wait_time_secs == 0
     }
 
-    pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
+    pub async fn get_response_page(
+        &self,
+        page_no: usize,
+        format: &FormatSettings,
+    ) -> Result<HttpQueryResponseInternal> {
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no).await?),
+            data: Some(self.get_page(page_no, format).await?),
             session_id: self.session_id.clone(),
             state: self.get_state().await,
         })
@@ -202,10 +209,10 @@ impl HttpQuery {
         }
     }
 
-    async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
+    async fn get_page(&self, page_no: usize, format: &FormatSettings) -> Result<ResponseData> {
         let mut data = self.data.lock().await;
         let page = data
-            .get_a_page(page_no, &self.request.pagination.get_wait_type())
+            .get_a_page(page_no, &self.request.pagination.get_wait_type(), format)
             .await?;
         let response = ResponseData {
             page,

@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_exception::BacktraceGuard;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -41,7 +40,6 @@ pub struct ValueSource {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     analyzer: ExpressionAnalyzer,
-    backtrace_guard: BacktraceGuard,
 }
 
 impl ValueSource {
@@ -50,7 +48,6 @@ impl ValueSource {
             schema,
             ctx: ctx.clone(),
             analyzer: ExpressionAnalyzer::create(ctx),
-            backtrace_guard: BacktraceGuard::new(true),
         }
     }
 
@@ -111,6 +108,7 @@ impl ValueSource {
             ));
         }
 
+        let format = self.ctx.get_format_settings()?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces()?;
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
@@ -119,18 +117,14 @@ impl ValueSource {
                 .get_mut(col_idx)
                 .ok_or_else(|| ErrorCode::BadBytes("Deserializer is None"))?;
 
-            // Disable backtrace here.
-            self.backtrace_guard.disable();
             let (need_fallback, pop_count) = deser
-                .de_text_quoted(reader)
+                .de_text_quoted(reader, &format)
                 .and_then(|_| {
                     let _ = reader.ignore_white_spaces()?;
                     let need_fallback = reader.ignore_byte(col_end)?.not();
                     Ok((need_fallback, col_idx + 1))
                 })
                 .unwrap_or((true, col_idx));
-            // Enable backtrace again.
-            self.backtrace_guard.enable();
 
             // Deserializer and expr-parser both will eat the end ')' of the row.
             if need_fallback {
@@ -149,7 +143,7 @@ impl ValueSource {
                         .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone())?;
+                    deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
 
                 return Ok(());
@@ -236,12 +230,12 @@ async fn exprs_to_datavalue(
     let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
     let one_row_block = DataBlock::create(dummy.clone(), vec![Series::from_data(vec![1u8])]);
     let executor = ExpressionExecutor::try_create(
+        ctx,
         "Insert into from values",
         dummy,
         schema.clone(),
         expressions,
         true,
-        ctx,
     )?;
 
     let res = executor.execute(&one_row_block)?;

@@ -78,6 +78,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
                 ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
                 ExprRPNItem::MapAccess(v) => self.analyze_map_access(v, &mut stack)?,
+                ExprRPNItem::Array(v) => self.analyze_array(*v, &mut stack)?,
             }
         }
 
@@ -492,6 +493,33 @@ impl ExpressionAnalyzer {
             }
         }
     }
+
+    fn analyze_array(&self, nums: usize, args: &mut Vec<Expression>) -> Result<()> {
+        let mut values = Vec::with_capacity(nums);
+        for _ in 0..nums {
+            match args.pop() {
+                None => {
+                    break;
+                }
+                Some(inner_expr) => {
+                    if let Expression::Literal { value, .. } = inner_expr {
+                        values.push(value);
+                    }
+                }
+            };
+        }
+        if values.len() != nums {
+            return Err(ErrorCode::LogicalError(format!(
+                "Array must have {} children.",
+                nums
+            )));
+        }
+        values.reverse();
+
+        let array_value = Expression::create_literal(DataValue::Array(values));
+        args.push(array_value);
+        Ok(())
+    }
 }
 
 enum OperatorKind {
@@ -526,6 +554,7 @@ enum ExprRPNItem {
     Between(bool),
     InList(InListInfo),
     MapAccess(Vec<Value>),
+    Array(usize),
 }
 
 impl ExprRPNItem {
@@ -640,7 +669,7 @@ impl ExprRPNBuilder {
             Expr::TryCast { data_type, .. } => {
                 let mut ty = SQLCommon::make_data_type(data_type)?;
                 if ty.can_inside_nullable() {
-                    ty = NullableType::arc(ty)
+                    ty = NullableType::new_impl(ty)
                 }
                 self.rpn.push(ExprRPNItem::Cast(ty, false));
             }
@@ -716,6 +745,18 @@ impl ExprRPNBuilder {
             },
             Expr::MapAccess { keys, .. } => {
                 self.rpn.push(ExprRPNItem::MapAccess(keys.to_owned()));
+            }
+            Expr::Trim { trim_where, .. } => match trim_where {
+                None => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("trim"), 1)),
+                Some(_) => {
+                    self.rpn
+                        .push(ExprRPNItem::function(String::from("trim"), 2));
+                }
+            },
+            Expr::Array(exprs) => {
+                self.rpn.push(ExprRPNItem::Array(exprs.len()));
             }
             _ => (),
         }

@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
@@ -22,7 +22,7 @@ use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
-async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
+async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
@@ -50,8 +50,8 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         .add_role(&tenant, RoleInfo::new("role1"), false)
         .await?;
 
-    #[allow(dead_code)]
     struct Test {
+        #[allow(dead_code)]
         name: &'static str,
         query: String,
         principal_identity: Option<PrincipalIdentity>,

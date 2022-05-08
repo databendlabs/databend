@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -57,7 +57,6 @@ async fn test_fuse_table_block_appender() {
     let segments = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
-        schema.clone(),
         DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs.clone(),
@@ -77,14 +76,13 @@ async fn test_fuse_table_block_appender() {
     let number_of_blocks = 30;
     let max_rows_per_block = 3;
     let max_blocks_per_segment = 1;
-    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
+    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
     let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
     let block_stream = futures::stream::iter(blocks);
 
     let segments = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
-        schema.clone(),
         max_rows_per_block,
         max_blocks_per_segment,
         locs.clone(),
@@ -104,7 +102,6 @@ async fn test_fuse_table_block_appender() {
     let segments = BlockStreamWriter::write_block_stream(
         local_fs,
         Box::pin(block_stream),
-        schema,
         DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs,
@@ -262,7 +259,6 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
                      max_rows_per_block,
                      max_blocks_per_segment,
                      num_blocks,
-                     schema,
                      case_name: &'static str| async move {
         let sample_block = gen_block(gen_rows(rows_per_sample_block));
         let block_stream =
@@ -274,7 +270,6 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
         let stream = BlockStreamWriter::write_block_stream(
             operator,
             Box::pin(block_stream),
-            schema,
             max_rows_per_block,
             max_blocks_per_segment,
             locs,
@@ -307,7 +302,6 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
         rows_per_block,
         blocks_per_segment,
         number_of_blocks,
-        schema.clone(),
         "simple regular data",
     )
     .await?;
@@ -321,7 +315,6 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
         rows_per_block,
         blocks_per_segment,
         number_of_blocks,
-        schema.clone(),
         "with remainder",
     )
     .await?;
@@ -343,7 +336,7 @@ fn test_meta_locations() -> Result<()> {
     Ok(())
 }
 
-use common_infallible::Mutex;
+use common_base::infallible::Mutex;
 
 #[derive(Debug)]
 struct MockDataAccessor {

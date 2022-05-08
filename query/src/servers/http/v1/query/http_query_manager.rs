@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::tokio;
-use common_base::tokio::sync::RwLock;
-use common_base::tokio::time::sleep;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::tokio::time::sleep;
+use common_base::infallible::Mutex;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_tracing::tracing;
 
 use super::expiring_map::ExpiringMap;
@@ -55,18 +55,13 @@ impl HttpQueryManager {
         }))
     }
 
-    pub(crate) fn next_query_id(self: &Arc<Self>) -> String {
-        uuid::Uuid::new_v4().to_string()
-    }
-
     pub(crate) async fn try_create_query(
         self: &Arc<Self>,
-        id: &str,
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
     ) -> Result<Arc<HttpQuery>> {
-        let query = HttpQuery::try_create(id, ctx, request, self.config).await?;
-        self.add_query(id, query.clone()).await;
+        let query = HttpQuery::try_create(ctx, request, self.config).await?;
+        self.add_query(&query.id, query.clone()).await;
         Ok(query)
     }
 

@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::sql::binder::scalar_visitor::Recursion;
 use crate::sql::binder::scalar_visitor::ScalarVisitor;
+use crate::sql::plans::AndExpr;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
+use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::ScalarExpr;
 use crate::sql::BindContext;
 
 // Visitor that find Expressions that match a particular predicate
@@ -63,7 +69,7 @@ where F: Fn(&Scalar) -> bool {
     scalars
 }
 
-fn find_scalars_in_scalars<F>(scalars: &[&Scalar], find_fn: &F) -> Vec<Scalar>
+fn find_scalars_in_scalars<F>(scalars: &[Scalar], find_fn: &F) -> Vec<Scalar>
 where F: Fn(&Scalar) -> bool {
     scalars
         .iter()
@@ -76,7 +82,7 @@ where F: Fn(&Scalar) -> bool {
         })
 }
 
-pub fn find_aggregate_scalars(scalars: &[&Scalar]) -> Vec<Scalar> {
+pub fn find_aggregate_scalars(scalars: &[Scalar]) -> Vec<Scalar> {
     find_scalars_in_scalars(scalars, &|nest_scalar| {
         matches!(nest_scalar, Scalar::AggregateFunction { .. })
     })
@@ -86,16 +92,42 @@ pub fn find_aggregate_scalars_from_bind_context(bind_context: &BindContext) -> R
     let scalars = bind_context
         .all_column_bindings()
         .iter()
-        .filter(|col_binding| col_binding.scalar.is_some())
-        .map(|col_binding| {
-            col_binding
-                .scalar
-                .as_ref()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<Scalar>()
-                .unwrap()
-        })
-        .collect::<Vec<&Scalar>>();
+        .flat_map(|col_binding| col_binding.scalar.clone().map(|s| *s))
+        .collect::<Vec<Scalar>>();
     Ok(find_aggregate_scalars(&scalars))
+}
+
+pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {
+    match scalar {
+        Scalar::AndExpr(AndExpr { left, right }) => {
+            vec![split_conjunctions(left), split_conjunctions(right)].concat()
+        }
+        _ => {
+            vec![scalar.clone()]
+        }
+    }
+}
+
+pub fn split_equivalent_predicate(scalar: &Scalar) -> Option<(Scalar, Scalar)> {
+    match scalar {
+        Scalar::ComparisonExpr(ComparisonExpr { op, left, right })
+            if *op == ComparisonOp::Equal =>
+        {
+            Some((*left.clone(), *right.clone()))
+        }
+        _ => None,
+    }
+}
+
+pub fn wrap_cast_if_needed(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar {
+    if scalar.data_type() != *target_type {
+        let cast = CastExpr {
+            from_type: scalar.data_type(),
+            argument: Box::new(scalar),
+            target_type: target_type.clone(),
+        };
+        cast.into()
+    } else {
+        scalar
+    }
 }

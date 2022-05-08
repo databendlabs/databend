@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;

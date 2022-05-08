@@ -12,45 +12,96 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub trait HashTableGrower: Default + Clone {
+    fn max_size(&self) -> isize;
+    fn overflow(&self, size: usize) -> bool;
+    fn place(&self, hash_value: u64) -> isize;
+    fn next_place(&self, old_place: isize) -> isize;
+    fn increase_size(&mut self);
+}
+
 #[derive(Clone)]
-pub struct Grower {
+pub struct SingleLevelGrower {
     size_degree: u8,
     max_size: isize,
 }
 
-impl Default for Grower {
+impl Default for SingleLevelGrower {
     fn default() -> Self {
-        Grower {
+        SingleLevelGrower {
             size_degree: 8,
             max_size: 1_isize << 8,
         }
     }
 }
 
-impl Grower {
+impl HashTableGrower for SingleLevelGrower {
     #[inline(always)]
-    pub fn max_size(&self) -> isize {
+    fn max_size(&self) -> isize {
         self.max_size
     }
 
     #[inline(always)]
-    pub fn overflow(&self, size: usize) -> bool {
+    fn overflow(&self, size: usize) -> bool {
         size > ((1_usize) << (self.size_degree - 1))
     }
 
     #[inline(always)]
-    pub fn place(&self, hash_value: u64) -> isize {
+    fn place(&self, hash_value: u64) -> isize {
         hash_value as isize & (self.max_size() - 1)
     }
 
     #[inline(always)]
-    pub fn next_place(&self, old_place: isize) -> isize {
+    fn next_place(&self, old_place: isize) -> isize {
         (old_place + 1) & (self.max_size() - 1)
     }
 
     #[inline(always)]
-    pub fn increase_size(&mut self) {
+    fn increase_size(&mut self) {
         self.size_degree += if self.size_degree >= 23 { 1 } else { 2 };
+        self.max_size = 1_isize << self.size_degree;
+    }
+}
+
+#[derive(Clone)]
+pub struct TwoLevelGrower {
+    size_degree: u8,
+    max_size: isize,
+}
+
+impl Default for TwoLevelGrower {
+    fn default() -> Self {
+        TwoLevelGrower {
+            size_degree: 8,
+            max_size: 1_isize << 8,
+        }
+    }
+}
+
+impl HashTableGrower for TwoLevelGrower {
+    #[inline(always)]
+    fn max_size(&self) -> isize {
+        self.max_size
+    }
+
+    #[inline(always)]
+    fn overflow(&self, size: usize) -> bool {
+        size > ((1_usize) << (self.size_degree - 1))
+    }
+
+    #[inline(always)]
+    fn place(&self, hash_value: u64) -> isize {
+        hash_value as isize & (self.max_size() - 1)
+    }
+
+    #[inline(always)]
+    fn next_place(&self, old_place: isize) -> isize {
+        (old_place + 1) & (self.max_size() - 1)
+    }
+
+    #[inline(always)]
+    fn increase_size(&mut self) {
+        self.size_degree += if self.size_degree >= 15 { 1 } else { 2 };
         self.max_size = 1_isize << self.size_degree;
     }
 }

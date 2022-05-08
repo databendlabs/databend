@@ -14,25 +14,20 @@
 //
 
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use common_datavalues::ColumnWithField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::aggregates::eval_aggr;
 
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Statistics;
-use crate::storages::index::BlockStatistics;
+use crate::storages::index::ClusterStatistics;
 use crate::storages::index::ColumnStatistics;
+use crate::storages::index::ColumnsStatistics;
 
-pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
-    stats: &[T],
-    schema: &DataSchema,
-) -> Result<BlockStatistics> {
+pub fn reduce_block_stats<T: Borrow<ColumnsStatistics>>(stats: &[T]) -> Result<ColumnsStatistics> {
     let len = stats.len();
 
     // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
@@ -72,38 +67,22 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
                 in_memory_size += col_stats.in_memory_size;
             }
 
-            // TODO panic
-            let data_type = schema.field((*id) as usize).data_type();
-
-            let mut min = DataValue::Null;
-            let mut max = DataValue::Null;
-
-            let field = schema.field((*id) as usize);
             // TODO
             // for some data types, we shall balance the accuracy and the length
             // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
-            let min_column = data_type.create_column(&min_stats)?;
-            let max_column = data_type.create_column(&max_stats)?;
+            let min = min_stats
+                .iter()
+                .filter(|s| !s.is_null())
+                .min_by(|&x, &y| x.partial_cmp(y).unwrap_or(Ordering::Equal))
+                .cloned()
+                .unwrap_or(DataValue::Null);
 
-            let mins = eval_aggr(
-                "min",
-                vec![],
-                &[ColumnWithField::new(min_column.clone(), field.clone())],
-                min_column.len(),
-            )?;
-            let maxs = eval_aggr(
-                "max",
-                vec![],
-                &[ColumnWithField::new(max_column.clone(), field.clone())],
-                max_column.len(),
-            )?;
-
-            if mins.len() > 0 {
-                min = mins.get(0);
-            }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
-            }
+            let max = max_stats
+                .iter()
+                .filter(|s| !s.is_null())
+                .max_by(|&x, &y| x.partial_cmp(y).unwrap_or(Ordering::Equal))
+                .cloned()
+                .unwrap_or(DataValue::Null);
 
             acc.insert(*id, ColumnStatistics {
                 min,
@@ -115,13 +94,73 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
         })
 }
 
-pub fn merge_statistics(schema: &DataSchema, l: &Statistics, r: &Statistics) -> Result<Statistics> {
+pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
+    stats: &[T],
+) -> Option<ClusterStatistics> {
+    if stats.iter().any(|s| s.borrow().is_none()) {
+        return None;
+    }
+
+    let stat = stats[0].borrow().clone().unwrap();
+    let mut min = stat.min.clone();
+    let mut max = stat.max;
+    for stat in stats.iter().skip(1) {
+        let stat = stat.borrow().clone().unwrap();
+        for (l, r) in min.iter().zip(stat.min.iter()) {
+            match (l.is_null(), r.is_null()) {
+                (true, _) => {
+                    min = stat.min.clone();
+                    break;
+                }
+                (_, true) => break,
+                _ => {
+                    if let Some(cmp) = l.partial_cmp(r) {
+                        match cmp {
+                            Ordering::Equal => continue,
+                            Ordering::Less => break,
+                            Ordering::Greater => {
+                                min = stat.min.clone();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (l, r) in max.iter().zip(stat.max.iter()) {
+            match (l.is_null(), r.is_null()) {
+                (true, _) => {
+                    max = stat.max.clone();
+                    break;
+                }
+                (_, true) => break,
+                _ => {
+                    if let Some(cmp) = l.partial_cmp(r) {
+                        match cmp {
+                            Ordering::Equal => continue,
+                            Ordering::Less => {
+                                max = stat.max.clone();
+                                break;
+                            }
+                            Ordering::Greater => break,
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Some(ClusterStatistics { min, max })
+}
+
+pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
     let s = Statistics {
         row_count: l.row_count + r.row_count,
         block_count: l.block_count + r.block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
-        col_stats: reduce_block_stats(&[&l.col_stats, &r.col_stats], schema)?,
+        col_stats: reduce_block_stats(&[&l.col_stats, &r.col_stats])?,
+        cluster_stats: reduce_cluster_stats(&[&l.cluster_stats, &r.cluster_stats]),
     };
     Ok(s)
 }

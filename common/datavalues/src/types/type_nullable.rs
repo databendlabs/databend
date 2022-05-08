@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 
 use super::data_type::DataType;
@@ -30,7 +30,7 @@ pub struct NullableType {
 }
 
 impl NullableType {
-    pub fn arc(inner: DataTypeImpl) -> DataTypeImpl {
+    pub fn new_impl(inner: DataTypeImpl) -> DataTypeImpl {
         DataTypeImpl::Nullable(Self::create(inner))
     }
 

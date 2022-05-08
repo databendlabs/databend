@@ -158,8 +158,8 @@ fn test_regexp_instr_function() -> Result<()> {
 #[test]
 fn test_regexp_instr_constant_column() -> Result<()> {
     let data = DataValue::String("dog".as_bytes().into());
-    let data_value1 = StringType::arc().create_constant_column(&data, 3)?;
-    let data_value2 = StringType::arc().create_constant_column(&data, 3)?;
+    let data_value1 = StringType::new_impl().create_constant_column(&data, 3)?;
+    let data_value2 = StringType::new_impl().create_constant_column(&data, 3)?;
 
     let tests = vec![
         ScalarFunctionTest {

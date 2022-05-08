@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
@@ -42,26 +42,26 @@ async fn test_call_interpreter() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_call_fuse_history_interpreter() -> Result<()> {
+async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_history()").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `FUSE_HISTORY` expect to have 2 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `FUSE_SNAPSHOT` expect to have 2 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
     // UnknownTable
     {
         let plan =
-            PlanParser::parse(ctx.clone(), "call system$fuse_history(default, test)").await?;
+            PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, test)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
@@ -75,7 +75,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
     // BadArguments
     {
         let plan =
-            PlanParser::parse(ctx.clone(), "call system$fuse_history(system, tables)").await?;
+            PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(system, tables)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
@@ -98,7 +98,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
 
     // FuseHistory
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_history(default, a)").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, a)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }

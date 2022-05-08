@@ -13,6 +13,5 @@
 // limitations under the License.
 
 mod action_handler;
-mod meta_handlers;
 
 pub use action_handler::ActionHandler;

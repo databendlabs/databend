@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use futures::TryStreamExt;
 
@@ -27,17 +27,17 @@ use crate::storages::fuse::table_test_fixture::history_should_have_only_one_item
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
-async fn test_fuse_history_optimize() -> Result<()> {
+async fn test_fuse_snapshot_optimize() -> Result<()> {
     do_purge_test("implicit pure", "").await
 }
 
 #[tokio::test]
-async fn test_fuse_history_optimize_purge() -> Result<()> {
+async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
     do_purge_test("explicit pure", "purge").await
 }
 
 #[tokio::test]
-async fn test_fuse_history_optimize_all() -> Result<()> {
+async fn test_fuse_snapshot_optimize_all() -> Result<()> {
     do_purge_test("explicit pure", "all").await
 }
 
@@ -65,7 +65,7 @@ async fn insert_test_data(qry: &str, fixture: &TestFixture) -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_fuse_history_optimize_compact() -> Result<()> {
+async fn test_fuse_snapshot_optimize_compact() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
@@ -97,7 +97,7 @@ async fn test_fuse_history_optimize_compact() -> Result<()> {
         "| 6       |",
         "+---------+",
     ];
-    let qry = format!("select count(*) from fuse_history('{}', '{}')", db, tbl);
+    let qry = format!("select count(*) from fuse_snapshot('{}', '{}')", db, tbl);
 
     expects_ok(
         "count_should_be_1",

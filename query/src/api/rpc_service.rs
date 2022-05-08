@@ -17,9 +17,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
-use common_base::tokio;
-use common_base::tokio::net::TcpListener;
-use common_base::tokio::sync::Notify;
+use common_base::base::tokio;
+use common_base::base::tokio::net::TcpListener;
+use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -97,7 +97,7 @@ impl RpcService {
             .add_service(FlightServiceServer::new(flight_api_service))
             .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
 
-        common_base::tokio::spawn(server);
+        common_base::base::tokio::spawn(server);
         Ok(())
     }
 }

@@ -25,35 +25,48 @@ use crate::scalars::FunctionContext;
 pub struct CastFunction {
     _display_name: String,
     /// The data type to cast to
-    cast_type: DataTypeImpl,
+    target_type: DataTypeImpl,
+    /// The data type cast from
+    from_type: DataTypeImpl,
 }
 
 impl CastFunction {
-    pub fn create(display_name: &str, type_name: &str) -> Result<Box<dyn Function>> {
+    pub fn create(
+        display_name: &str,
+        type_name: &str,
+        from_type: DataTypeImpl,
+    ) -> Result<Box<dyn Function>> {
         let factory = TypeFactory::instance();
         let data_type = factory.get(type_name)?;
 
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
-            cast_type: data_type.clone(),
+            target_type: data_type.clone(),
+            from_type,
         }))
     }
 
-    pub fn create_try(display_name: &str, type_name: &str) -> Result<Box<dyn Function>> {
+    pub fn create_try(
+        display_name: &str,
+        type_name: &str,
+        from_type: DataTypeImpl,
+    ) -> Result<Box<dyn Function>> {
         let factory = TypeFactory::instance();
         let data_type = factory.get(type_name)?;
 
         if data_type.is_nullable() || !data_type.can_inside_nullable() {
             return Ok(Box::new(Self {
                 _display_name: display_name.to_string(),
-                cast_type: data_type.clone(),
+                target_type: data_type.clone(),
+                from_type,
             }));
         }
 
         let nullable_type = NullableType::create(data_type.clone());
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
-            cast_type: DataTypeImpl::Nullable(nullable_type),
+            target_type: DataTypeImpl::Nullable(nullable_type),
+            from_type,
         }))
     }
 }
@@ -64,16 +77,16 @@ impl Function for CastFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        self.cast_type.clone()
+        self.target_type.clone()
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        cast_column_field(&columns[0], &self.cast_type)
+        cast_column_field(&columns[0], &self.from_type, &self.target_type, &func_ctx)
     }
 }
 

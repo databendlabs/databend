@@ -16,7 +16,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;

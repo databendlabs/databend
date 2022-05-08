@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
-use common_io::prelude::BufferReadExt;
-use common_io::prelude::CpBufferReader;
+use common_io::prelude::*;
 
 use crate::ColumnRef;
 use crate::DataValue;
@@ -31,84 +29,98 @@ pub struct NullableDeserializer {
 }
 
 impl TypeDeserializer for NullableDeserializer {
-    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         let valid: bool = reader.read_scalar()?;
         if valid {
-            self.inner.de_binary(reader)?;
+            self.inner.de_binary(reader, format)?;
         } else {
-            self.inner.de_default();
+            self.inner.de_default(format);
         }
         self.bitmap.push(valid);
         Ok(())
     }
 
-    fn de_default(&mut self) {
-        self.inner.de_default();
+    fn de_default(&mut self, format: &FormatSettings) {
+        self.inner.de_default(format);
         self.bitmap.push(false);
     }
 
-    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, _rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        _rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         // it's covered outside
         unreachable!()
     }
 
-    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::Null => {
-                self.de_null();
+                self.de_null(format);
                 Ok(())
             }
             other => {
                 self.bitmap.push(true);
-                self.inner.de_json(other)
+                self.inner.de_json(other, format)
             }
         }
     }
 
     // TODO: support null text setting
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         if reader.ignore_insensitive_bytes(b"null")? {
-            self.de_default();
+            self.de_default(format);
             return Ok(());
         }
-        self.inner.de_text(reader)?;
+        self.inner.de_text(reader, format)?;
         self.bitmap.push(true);
         Ok(())
     }
 
-    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
         if reader.ignore_insensitive_bytes(b"null")? {
-            self.de_default();
+            self.de_default(format);
             return Ok(());
         }
-        self.inner.de_text_quoted(reader)?;
+        self.inner.de_text_quoted(reader, format)?;
         self.bitmap.push(true);
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         if reader.eq_ignore_ascii_case(b"null") {
-            self.de_default();
+            self.de_default(format);
             return Ok(());
         }
 
-        self.inner.de_whole_text(reader)?;
+        self.inner.de_whole_text(reader, format)?;
         self.bitmap.push(true);
         Ok(())
     }
 
-    fn de_null(&mut self) -> bool {
-        self.inner.de_default();
+    fn de_null(&mut self, format: &FormatSettings) -> bool {
+        self.inner.de_default(format);
         self.bitmap.push(false);
         true
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue, format: &FormatSettings) -> Result<()> {
         if value.is_null() {
-            self.inner.de_default();
+            self.inner.de_default(format);
             self.bitmap.push(false);
         } else {
-            self.inner.append_data_value(value)?;
+            self.inner.append_data_value(value, format)?;
             self.bitmap.push(true);
         }
         Ok(())

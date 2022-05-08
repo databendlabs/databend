@@ -13,8 +13,6 @@
 // limitations under the License.
 
 pub use client_last_resp::ClientLastRespValue;
-pub use database_lookup::DatabaseLookupKey;
-pub use database_lookup::DatabaseLookupValue;
 pub use log_meta::LogMetaKey;
 pub use log_meta::LogMetaValue;
 pub use sm::SerializableSnapshot;
@@ -24,22 +22,14 @@ pub use sm::StateMachineSubscriber;
 pub use snapshot::Snapshot;
 pub use state_machine_meta::StateMachineMetaKey;
 pub use state_machine_meta::StateMachineMetaValue;
-pub use table_lookup::TableLookupKey;
-pub use table_lookup::TableLookupValue;
 
 pub mod client_last_resp;
-pub mod database_lookup;
 pub mod log_meta;
 pub mod placement;
-pub mod share_inbound;
-pub mod share_lookup;
-pub mod share_outbound;
 pub mod sm;
 mod sm_kv_api_impl;
-mod sm_meta_api_impl;
 pub mod snapshot;
 pub mod state_machine_meta;
-pub mod table_lookup;
 
 // will be accessed by other crate, can not cfg(test)
 pub mod testing;

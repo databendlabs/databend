@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod backtrace_guard;
+#![feature(backtrace)]
+
 pub mod exception;
 mod exception_code;
 mod exception_into;
 
-pub use backtrace_guard::BacktraceGuard;
 pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;

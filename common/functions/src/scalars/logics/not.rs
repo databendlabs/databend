@@ -20,6 +20,7 @@ use super::logic::LogicFunctionImpl;
 use super::logic::LogicOperator;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
+use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
@@ -27,8 +28,18 @@ use crate::scalars::FunctionFeatures;
 pub struct LogicNotExpression;
 
 impl LogicExpression for LogicNotExpression {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, _nullable: bool) -> Result<ColumnRef> {
-        let col = cast_column_field(&columns[0], &BooleanType::arc())?;
+    fn eval(
+        func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        _nullable: bool,
+    ) -> Result<ColumnRef> {
+        let col = cast_column_field(
+            &columns[0],
+            columns[0].data_type(),
+            &BooleanType::new_impl(),
+            &func_ctx,
+        )?;
 
         let col_viewer = bool::try_create_viewer(&col)?;
 

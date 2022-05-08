@@ -19,7 +19,7 @@ use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PatternPlan {
     pub plan_type: PlanType,
 }

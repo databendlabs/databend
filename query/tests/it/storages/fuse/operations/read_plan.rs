@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 use std::iter::Iterator;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
@@ -68,6 +68,7 @@ fn test_to_partitions() -> Result<()> {
         file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
+        cluster_stats: None,
         location: ("".to_owned(), 0),
         compression: Compression::Lz4Raw,
     };

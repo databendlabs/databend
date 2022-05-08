@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -137,6 +137,10 @@ where
             data_type,
             values: Vec::<T>::with_capacity(capacity),
         }
+    }
+
+    fn with_capacity_meta(capacity: usize, _meta: ColumnMeta) -> Self {
+        Self::with_capacity(capacity)
     }
 
     fn push(&mut self, value: <T as Scalar>::RefType<'_>) {

@@ -16,10 +16,10 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -63,8 +63,8 @@ impl QueryLogTable {
             DataField::new("query_id", Vu8::to_data_type()),
             DataField::new("query_kind", Vu8::to_data_type()),
             DataField::new("query_text", Vu8::to_data_type()),
-            DataField::new("event_date", DateType::arc()),
-            DataField::new("event_time", TimestampType::arc(3)),
+            DataField::new("event_date", DateType::new_impl()),
+            DataField::new("event_time", TimestampType::new_impl(3)),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),
             DataField::new("databases", Vu8::to_data_type()),

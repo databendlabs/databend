@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -80,9 +80,7 @@ async fn test_configs_table() -> Result<()> {
         "| query   | table_cache_snapshot_count           | 256                      |             |",
         "| query   | table_disk_cache_mb_size             | 1024                     |             |",
         "| query   | table_disk_cache_root                | _cache                   |             |",
-        "| query   | table_engine_csv_enabled             | false                    |             |",
         "| query   | table_engine_memory_enabled          | true                     |             |",
-        "| query   | table_engine_parquet_enabled         | false                    |             |",
         "| query   | table_memory_cache_mb_size           | 256                      |             |",
         "| query   | tenant_id                            | test                     |             |",
         "| query   | wait_timeout_mills                   | 5000                     |             |",
@@ -169,9 +167,7 @@ async fn test_configs_table_redact() -> Result<()> {
         "| query   | table_cache_snapshot_count           | 256                      |             |",
         "| query   | table_disk_cache_mb_size             | 1024                     |             |",
         "| query   | table_disk_cache_root                | _cache                   |             |",
-        "| query   | table_engine_csv_enabled             | false                    |             |",
         "| query   | table_engine_memory_enabled          | true                     |             |",
-        "| query   | table_engine_parquet_enabled         | false                    |             |",
         "| query   | table_memory_cache_mb_size           | 256                      |             |",
         "| query   | tenant_id                            | test                     |             |",
         "| query   | wait_timeout_mills                   | 5000                     |             |",

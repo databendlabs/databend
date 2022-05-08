@@ -66,12 +66,12 @@ impl Function for Sha2HashFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
@@ -118,13 +118,18 @@ impl Function for Sha2HashFunction {
                     return Err(ErrorCode::BadArguments(format!(
                         "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got {}",
                         v
-                    )))
+                    )));
                 }
             };
 
             Ok(Arc::new(col))
         } else {
-            let l = cast_column_field(&columns[1], &UInt16Type::arc())?;
+            let l = cast_column_field(
+                &columns[1],
+                columns[1].data_type(),
+                &UInt16Type::new_impl(),
+                &func_ctx,
+            )?;
             let l_viewer = u16::try_create_viewer(&l)?;
 
             let mut col_builder = MutableStringColumn::with_capacity(l.len());
@@ -158,7 +163,7 @@ impl Function for Sha2HashFunction {
                         return Err(ErrorCode::BadArguments(format!(
                             "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got {}",
                             v
-                        )))
+                        )));
                     }
                 }
             }

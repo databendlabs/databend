@@ -64,9 +64,9 @@ pub fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenSt
         }
 
         let path = if conditional {
-            quote! { common_mem_allocator::MallocConditionalSizeOf::conditional_size_of }
+            quote! { common_base::mem_allocator::MallocConditionalSizeOf::conditional_size_of }
         } else {
-            quote! { common_mem_allocator::MallocSizeOf::size_of }
+            quote! { common_base::mem_allocator::MallocSizeOf::size_of }
         };
 
         if let syn::Type::Array(..) = binding.ast().ty {
@@ -90,14 +90,14 @@ pub fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenSt
         let ident = &param.ident;
         where_clause
             .predicates
-            .push(parse_quote!(#ident: common_mem_allocator::MallocSizeOf));
+            .push(parse_quote!(#ident: common_base::mem_allocator::MallocSizeOf));
     }
 
     let tokens = quote! {
-        impl #impl_generics common_mem_allocator::MallocSizeOf for #name #ty_generics #where_clause {
+        impl #impl_generics common_base::mem_allocator::MallocSizeOf for #name #ty_generics #where_clause {
             #[inline]
             #[allow(unused_variables, unused_mut, unreachable_code)]
-            fn size_of(&self, ops: &mut common_mem_allocator::MallocSizeOfOps) -> usize {
+            fn size_of(&self, ops: &mut common_base::mem_allocator::MallocSizeOfOps) -> usize {
                 let mut sum = 0;
                 match *self {
                     #match_body

@@ -29,7 +29,6 @@ use crate::parser::token::Token;
 
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum Statement<'a> {
     Explain {
         kind: ExplainKind,

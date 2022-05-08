@@ -27,7 +27,6 @@ use maplit::hashmap;
 
 use crate::database::DatabaseNameIdent;
 use crate::MatchSeq;
-use crate::MetaVersion;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -35,47 +34,86 @@ pub struct TableIdent {
     /// Globally unique id to identify a table.
     pub table_id: u64,
 
-    /// version of this table snapshot.
+    /// seq AKA version of this table snapshot.
     ///
-    /// Any change to a table causes the version to increment, e.g. insert or delete rows, update schema etc.
-    /// But renaming a table should not affect the version, since the table itself does not change.
-    /// The tuple (database_id, table_id, version) identifies a unique and consistent table snapshot.
+    /// Any change to a table causes the seq to increment, e.g. insert or delete rows, update schema etc.
+    /// But renaming a table should not affect the seq, since the table itself does not change.
+    /// The tuple (table_id, seq) identifies a unique and consistent table snapshot.
     ///
-    /// A version is not guaranteed to be consecutive.
-    ///
-    pub version: MetaVersion,
+    /// A seq is not guaranteed to be consecutive.
+    pub seq: u64,
 }
 
 impl TableIdent {
-    pub fn new(table_id: u64, version: MetaVersion) -> Self {
-        TableIdent { table_id, version }
+    pub fn new(table_id: u64, seq: u64) -> Self {
+        TableIdent { table_id, seq }
     }
 }
 
 impl Display for TableIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "table_id:{}, ver:{}", self.table_id, self.version)
+        write!(f, "table_id:{}, ver:{}", self.table_id, self.seq)
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
-pub struct TableNameIndent {
+pub struct TableNameIdent {
     pub tenant: String,
     pub db_name: String,
     pub table_name: String,
 }
 
-impl TableNameIndent {
+impl TableNameIdent {
     pub fn new(
         tenant: impl Into<String>,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
-    ) -> TableNameIndent {
-        TableNameIndent {
+    ) -> TableNameIdent {
+        TableNameIdent {
             tenant: tenant.into(),
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
+    }
+
+    pub fn db_name_ident(&self) -> DatabaseNameIdent {
+        DatabaseNameIdent {
+            tenant: self.tenant.clone(),
+            db_name: self.db_name.clone(),
+        }
+    }
+}
+
+impl Display for TableNameIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "'{}'.'{}'.'{}'",
+            self.tenant, self.db_name, self.table_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct DBIdTableName {
+    pub db_id: u64,
+    pub table_name: String,
+}
+
+impl Display for DBIdTableName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.'{}'", self.db_id, self.table_name)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableId {
+    pub table_id: u64,
+}
+
+impl Display for TableId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.table_id)
     }
 }
 
@@ -199,10 +237,20 @@ impl Display for TableInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTableReq {
     pub if_not_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
-    pub table_name: String,
+    pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
+}
+
+impl CreateTableReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+    pub fn table_name(&self) -> &str {
+        &self.name_ident.table_name
+    }
 }
 
 impl Display for CreateTableReq {
@@ -210,7 +258,11 @@ impl Display for CreateTableReq {
         write!(
             f,
             "create_table(if_not_exists={}):{}/{}-{}={}",
-            self.if_not_exists, self.tenant, self.db_name, self.table_name, self.table_meta
+            self.if_not_exists,
+            self.tenant(),
+            self.db_name(),
+            self.table_name(),
+            self.table_meta
         )
     }
 }
@@ -223,9 +275,19 @@ pub struct CreateTableReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
-    pub table_name: String,
+    pub name_ident: TableNameIdent,
+}
+
+impl DropTableReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+    pub fn table_name(&self) -> &str {
+        &self.name_ident.table_name
+    }
 }
 
 impl Display for DropTableReq {
@@ -233,7 +295,10 @@ impl Display for DropTableReq {
         write!(
             f,
             "drop_table(if_exists={}):{}/{}-{}",
-            self.if_exists, self.tenant, self.db_name, self.table_name
+            self.if_exists,
+            self.tenant(),
+            self.db_name(),
+            self.table_name()
         )
     }
 }
@@ -244,11 +309,21 @@ pub struct DropTableReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTableReq {
     pub if_exists: bool,
-    pub tenant: String,
-    pub db_name: String,
-    pub table_name: String,
+    pub name_ident: TableNameIdent,
     pub new_db_name: String,
     pub new_table_name: String,
+}
+
+impl RenameTableReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+    pub fn table_name(&self) -> &str {
+        &self.name_ident.table_name
+    }
 }
 
 impl Display for RenameTableReq {
@@ -256,7 +331,11 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant, self.db_name, self.table_name, self.new_db_name, self.new_table_name
+            self.tenant(),
+            self.db_name(),
+            self.table_name(),
+            self.new_db_name,
+            self.new_table_name
         )
     }
 }
@@ -286,7 +365,7 @@ impl UpsertTableOptionReq {
     ) -> UpsertTableOptionReq {
         UpsertTableOptionReq {
             table_id: table_ident.table_id,
-            seq: MatchSeq::Exact(table_ident.version),
+            seq: MatchSeq::Exact(table_ident.seq),
             options: hashmap! {key.into() => Some(value.into())},
         }
     }
@@ -307,11 +386,11 @@ pub struct UpsertTableOptionReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct GetTableReq {
-    pub inner: TableNameIndent,
+    pub inner: TableNameIdent,
 }
 
 impl Deref for GetTableReq {
-    type Target = TableNameIndent;
+    type Target = TableNameIdent;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -331,7 +410,7 @@ impl GetTableReq {
         table_name: impl Into<String>,
     ) -> GetTableReq {
         GetTableReq {
-            inner: TableNameIndent::new(tenant, db_name, table_name),
+            inner: TableNameIdent::new(tenant, db_name, table_name),
         }
     }
 }

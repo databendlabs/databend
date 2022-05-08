@@ -16,9 +16,16 @@ use common_io::prelude::*;
 
 #[test]
 fn convert_test() {
-    assert_eq!(convert_byte_size(1_f64), "1 B");
-    assert_eq!(convert_byte_size(1022_f64), "1.02 KB");
-    assert_eq!(convert_byte_size(1022_f64 * 10000000f64), "10.22 GB");
+    assert_eq!(convert_byte_size(0_f64), "0.00 B");
+    assert_eq!(convert_byte_size(0.1_f64), "0.10 B");
+    assert_eq!(convert_byte_size(1_f64), "1.00 B");
+    assert_eq!(convert_byte_size(1023_f64), "1023.00 B");
+    assert_eq!(convert_byte_size(1024_f64), "1.00 KiB");
+    assert_eq!(convert_byte_size(1229_f64), "1.20 KiB");
+    assert_eq!(
+        convert_byte_size(1024_f64 * 1024_f64 * 1024_f64),
+        "1.00 GiB"
+    );
 
     assert_eq!(convert_number_size(1_f64), "1");
     assert_eq!(convert_number_size(1022_f64), "1.02 thousand");

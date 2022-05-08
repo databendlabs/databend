@@ -24,7 +24,6 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
-use crate::sql::plans::Scalar;
 
 impl Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
@@ -35,7 +34,7 @@ impl Binder {
         for column_binding in output_context.all_column_bindings() {
             if let Some(expr) = &column_binding.scalar {
                 projections.push(ProjectItem {
-                    expr: expr.clone(),
+                    expr: *expr.clone(),
                     index: column_binding.index,
                 });
             }
@@ -74,7 +73,7 @@ impl Binder {
         select_list: &[SelectTarget],
         input_context: &BindContext,
     ) -> Result<BindContext> {
-        let mut output_context = BindContext::create();
+        let mut output_context = BindContext::new();
         output_context.expression = input_context.expression.clone();
         for select_target in select_list {
             match select_target {
@@ -103,56 +102,26 @@ impl Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let scalar_binder = ScalarBinder::new();
-                    let bound_expr = scalar_binder.bind_expr(expr, input_context)?;
-                    let (data_type, nullable) = bound_expr.data_type();
+                    let scalar_binder = ScalarBinder::new(input_context);
+                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr)?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
-                    let mut expr_name = match alias {
+                    let expr_name = match alias {
                         Some(alias) => alias.name.clone(),
-                        None => self.metadata.get_expr_display_string(expr, true)?,
+                        None => self.metadata.get_expr_display_string(expr)?,
                     };
 
-                    // If expr is a ColumnRef, then it's a pass-through column. There is no need to
-                    // generate a new ColumnEntry for it.
-                    let column_binding = match bound_expr.as_any().downcast_ref::<Scalar>().unwrap()
-                    {
-                        Scalar::ColumnRef {
-                            index,
-                            data_type,
-                            nullable,
-                        } => {
-                            let table_name = self
-                                .metadata
-                                .column(*index)
-                                .table_index
-                                .map(|idx| self.metadata.table(idx).name.clone());
-                            ColumnBinding {
-                                table_name,
-                                column_name: expr_name,
-                                index: *index,
-                                data_type: data_type.clone(),
-                                nullable: *nullable,
-                                scalar: None,
-                            }
-                        }
-                        _ => {
-                            expr_name = self.metadata.get_expr_display_string(expr, true)?;
-                            let index = self.metadata.add_column(
-                                expr_name.clone(),
-                                data_type.clone(),
-                                nullable,
-                                None,
-                            );
-                            ColumnBinding {
-                                table_name: None,
-                                column_name: expr_name,
-                                index,
-                                data_type,
-                                nullable,
-                                scalar: Some(bound_expr),
-                            }
-                        }
+                    // TODO(leiysky): If expr is a ColumnRef, then it's a pass-through column.
+                    // There is no need to generate a new ColumnEntry for it.
+                    let index =
+                        self.metadata
+                            .add_column(expr_name.clone(), data_type.clone(), None);
+                    let column_binding = ColumnBinding {
+                        table_name: None,
+                        column_name: expr_name,
+                        index,
+                        data_type,
+                        scalar: Some(Box::new(bound_expr)),
                     };
                     output_context.add_column_binding(column_binding);
                 }

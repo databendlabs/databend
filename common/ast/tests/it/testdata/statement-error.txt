@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ expected token ")"
+  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ expected token ")"
+  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, or `,`
   | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
 
@@ -31,7 +31,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^
   | |               | |
-  | |               | expected keyword `BOOLEAN`
+  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, or 26 more ...
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
@@ -83,7 +83,7 @@ error:
   --> SQL:1:10
   |
 1 | truncate a
-  | -------- ^ expected keyword `TABLE`
+  | -------- ^ expected `TABLE`
   | |         
   | while parsing `TRUNCATE TABLE [<database>.]<table> [PURGE]`
 
@@ -95,9 +95,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  | ---- ^ expected keyword `DATABASE`
-  | |     
-  | while parsing `DROP DATABASE [IF EXISTS] <database>`
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or 1 more ...
 
 
 ---------- Input ----------
@@ -107,7 +105,7 @@ error:
   --> SQL:1:21
   |
 1 | insert into t format
-  | ------              ^ expected token <Ident>
+  | ------              ^ expected <Ident> or <QuotedIdent>
   | |                   
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 

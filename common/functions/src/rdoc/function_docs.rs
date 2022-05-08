@@ -57,7 +57,6 @@ impl FunctionDocs {
     }
 }
 
-#[allow(dead_code)]
 #[macro_export]
 macro_rules! doc {
     ( $($key:ident => $value:expr),+ ) => {
@@ -71,7 +70,6 @@ macro_rules! doc {
      };
 }
 
-#[allow(dead_code)]
 #[macro_export]
 macro_rules! set_doc {
     ($doc: expr, category, $v: expr) => {{

@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::RwLock;
-use common_base::ProgressValues;
-use common_base::TrySpawn;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::ProgressValues;
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -66,7 +66,7 @@ pub(crate) struct ExecuteRunning {
     // used to kill query
     session: SessionRef,
     // mainly used to get progress for now
-    context: Arc<QueryContext>,
+    ctx: Arc<QueryContext>,
     interpreter: Arc<dyn Interpreter>,
 }
 
@@ -84,7 +84,7 @@ pub(crate) struct Executor {
 impl Executor {
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
-            Running(r) => Some(r.context.get_scan_progress_value()),
+            Running(r) => Some(r.ctx.get_scan_progress_value()),
             Stopped(f) => f.progress.clone(),
         }
     }
@@ -100,7 +100,7 @@ impl Executor {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
-            let progress = Some(r.context.get_scan_progress_value());
+            let progress = Some(r.ctx.get_scan_progress_value());
             if kill {
                 r.session.force_kill_query();
             }
@@ -145,11 +145,11 @@ impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
         session: SessionRef,
+        ctx: Arc<QueryContext>,
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<Arc<RwLock<Executor>>> {
         let sql = &request.sql;
         let start_time = Instant::now();
-        let ctx = session.create_query_context().await?;
         ctx.attach_query_str(sql);
         let plan = match PlanParser::parse(ctx.clone(), sql).await {
             Ok(p) => p,
@@ -173,7 +173,7 @@ impl ExecuteState {
 
         let running_state = ExecuteRunning {
             session,
-            context: ctx.clone(),
+            ctx: ctx.clone(),
             interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {

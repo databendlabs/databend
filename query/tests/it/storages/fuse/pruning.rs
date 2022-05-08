@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -48,7 +48,7 @@ async fn apply_block_pruning(
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
     BlockPruner::new(table_snapshot)
-        .apply(schema, push_down, ctx.as_ref())
+        .apply(ctx.as_ref(), schema, push_down)
         .await
 }
 

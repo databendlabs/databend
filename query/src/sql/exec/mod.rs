@@ -23,29 +23,40 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::find_aggregate_exprs;
+use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::Expression;
 use common_planners::RewriteHelper;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
 use super::plans::BasePlan;
+use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
+use crate::pipelines::new::processors::ChainHashTable;
+use crate::pipelines::new::processors::ExpressionTransform;
+use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::SinkBuildHashTable;
+use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
+use crate::pipelines::new::processors::TransformHashJoinProbe;
 use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SinkPipeBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
+use crate::sql::plans::AndExpr;
 use crate::sql::plans::FilterPlan;
+use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
-use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
 
@@ -55,7 +66,8 @@ pub struct PipelineBuilder {
     metadata: Metadata,
     result_columns: Vec<(IndexType, String)>,
     expression: SExpr,
-    pipeline: NewPipeline,
+
+    pipelines: Vec<NewPipeline>,
 }
 
 impl PipelineBuilder {
@@ -70,21 +82,29 @@ impl PipelineBuilder {
             metadata,
             result_columns,
             expression,
-            pipeline: NewPipeline::create(),
+
+            pipelines: vec![],
         }
     }
 
-    pub fn spawn(mut self) -> Result<NewPipeline> {
+    pub fn spawn(mut self) -> Result<(NewPipeline, Vec<NewPipeline>)> {
         let expr = self.expression.clone();
-        let schema = self.build_pipeline(&expr)?;
-        self.align_data_schema(schema)?;
+        let mut pipeline = NewPipeline::create();
+        let schema = self.build_pipeline(self.ctx.clone(), &expr, &mut pipeline)?;
+        self.align_data_schema(schema, &mut pipeline)?;
         let settings = self.ctx.get_settings();
-        self.pipeline
-            .set_max_threads(settings.get_max_threads()? as usize);
-        Ok(self.pipeline)
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        for pipeline in self.pipelines.iter_mut() {
+            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        }
+        Ok((pipeline, self.pipelines))
     }
 
-    fn align_data_schema(&mut self, input_schema: DataSchemaRef) -> Result<()> {
+    fn align_data_schema(
+        &mut self,
+        input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
         let mut projections = Vec::with_capacity(self.result_columns.len());
         let mut output_fields = Vec::with_capacity(self.result_columns.len());
         for (index, name) in self.result_columns.iter() {
@@ -97,30 +117,30 @@ impl PipelineBuilder {
                     *index,
                 ))),
             ));
-            let field = if column_entry.nullable {
-                DataField::new_nullable(name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(name.as_str(), column_entry.data_type.clone())
-            };
+            let field = DataField::new(name.as_str(), column_entry.data_type.clone());
             output_fields.push(field);
         }
         let output_schema = Arc::new(DataSchema::new(output_fields));
 
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                ProjectionTransform::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    input_schema.clone(),
-                    output_schema.clone(),
-                    projections.clone(),
-                    self.ctx.clone(),
-                )
-            })?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ProjectionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                input_schema.clone(),
+                output_schema.clone(),
+                projections.clone(),
+                self.ctx.clone(),
+            )
+        })?;
         Ok(())
     }
 
-    fn build_pipeline(&mut self, expression: &SExpr) -> Result<DataSchemaRef> {
+    fn build_pipeline(
+        &mut self,
+        context: Arc<QueryContext>,
+        expression: &SExpr,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
         if !check_physical(expression) {
             return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
@@ -130,22 +150,43 @@ impl PipelineBuilder {
         match plan.plan_type() {
             PlanType::PhysicalScan => {
                 let physical_scan: PhysicalScan = plan.try_into()?;
-                self.build_physical_scan(&physical_scan)
+                self.build_physical_scan(&physical_scan, pipeline)
             }
             PlanType::Project => {
                 let project: ProjectPlan = plan.try_into()?;
-                let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_project(&project, input_schema)
+                let input_schema =
+                    self.build_pipeline(context, &expression.children()[0], pipeline)?;
+                self.build_project(&project, input_schema, pipeline)
             }
             PlanType::Filter => {
                 let filter: FilterPlan = plan.try_into()?;
-                let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_filter(&filter, input_schema)
+                let input_schema =
+                    self.build_pipeline(context, &expression.children()[0], pipeline)?;
+                self.build_filter(&filter, input_schema, pipeline)
             }
             PlanType::Aggregate => {
                 let aggregate: AggregatePlan = plan.try_into()?;
-                let input_schema = self.build_pipeline(&expression.children()[0])?;
-                self.build_aggregate(&aggregate, input_schema)
+                let input_schema =
+                    self.build_pipeline(context, &expression.children()[0], pipeline)?;
+                self.build_aggregate(&aggregate, input_schema, pipeline)
+            }
+            PlanType::PhysicalHashJoin => {
+                let hash_join: PhysicalHashJoin = plan.try_into()?;
+                let probe_schema =
+                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                let mut child_pipeline = NewPipeline::create();
+                let build_schema = self.build_pipeline(
+                    QueryContext::create_from(context),
+                    &expression.children()[1],
+                    &mut child_pipeline,
+                )?;
+                self.build_hash_join(
+                    &hash_join,
+                    build_schema,
+                    probe_schema,
+                    child_pipeline,
+                    pipeline,
+                )
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -155,34 +196,27 @@ impl PipelineBuilder {
         &mut self,
         project: &ProjectPlan,
         input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        for expr in project.items.iter() {
-            let scalar = expr.expr.as_any().downcast_ref::<Scalar>().unwrap();
-            let expression = expr_builder.build(scalar)?;
-            expressions.push(match expression {
-                Expression::Column(_) => expression.clone(),
-                _ => {
-                    let col_name = expression.column_name();
-                    let idx = self.metadata.column_idx_by_column_name(col_name.as_str())?;
-                    Expression::Column(format_field_name(col_name.as_str(), idx))
-                }
-            });
+        for item in project.items.iter() {
+            let scalar = &item.expr;
+            let expression = expr_builder.build_and_rename(scalar, item.index)?;
+            expressions.push(expression);
         }
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                ProjectionTransform::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    input_schema.clone(),
-                    output_schema.clone(),
-                    expressions.clone(),
-                    self.ctx.clone(),
-                )
-            })?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ProjectionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                input_schema.clone(),
+                output_schema.clone(),
+                expressions.clone(),
+                self.ctx.clone(),
+            )
+        })?;
 
         Ok(output_schema)
     }
@@ -191,31 +225,51 @@ impl PipelineBuilder {
         &mut self,
         filter: &FilterPlan,
         input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let output_schema = input_schema.clone();
         let eb = ExpressionBuilder::create(&self.metadata);
-        let scalar = filter.predicate.as_any().downcast_ref::<Scalar>().unwrap();
-        let pred = eb.build(scalar)?;
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformFilter::try_create(
-                    input_schema.clone(),
-                    pred.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    self.ctx.clone(),
-                )
-            })?;
+        let scalars = &filter.predicates;
+        let pred = scalars.iter().cloned().reduce(|acc, v| {
+            AndExpr {
+                left: Box::new(acc),
+                right: Box::new(v),
+            }
+            .into()
+        });
+        let mut pred = eb.build(&pred.unwrap())?;
+        let no_agg_expression = find_aggregate_exprs_in_expr(&pred).is_empty();
+        if !no_agg_expression && !filter.is_having {
+            return Err(ErrorCode::SyntaxException(
+                "WHERE clause cannot contain aggregate functions",
+            ));
+        }
+        if !no_agg_expression && filter.is_having {
+            pred = eb.normalize_aggr_to_col(pred.clone())?;
+        }
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformFilter::try_create(
+                input_schema.clone(),
+                pred.clone(),
+                transform_input_port,
+                transform_output_port,
+                self.ctx.clone(),
+            )
+        })?;
         Ok(output_schema)
     }
 
-    fn build_physical_scan(&mut self, scan: &PhysicalScan) -> Result<DataSchemaRef> {
+    fn build_physical_scan(
+        &mut self,
+        scan: &PhysicalScan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
         let table_entry = self.metadata.table(scan.table_index);
         let plan = table_entry.source.clone();
 
         let table = self.ctx.build_table_from_source_plan(&plan)?;
         self.ctx.try_set_partitions(plan.parts.clone())?;
-        table.read2(self.ctx.clone(), &plan, &mut self.pipeline)?;
+        table.read2(self.ctx.clone(), &plan, pipeline)?;
         let columns: Vec<IndexType> = scan.columns.iter().cloned().collect();
         let projections: Vec<Expression> = columns
             .iter()
@@ -231,17 +285,16 @@ impl PipelineBuilder {
         let input_schema = schema_builder.build_canonical_schema(&columns);
         let output_schema = schema_builder.build_physical_scan(scan)?;
 
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                ProjectionTransform::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    input_schema.clone(),
-                    output_schema.clone(),
-                    projections.clone(),
-                    self.ctx.clone(),
-                )
-            })?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ProjectionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                input_schema.clone(),
+                output_schema.clone(),
+                projections.clone(),
+                self.ctx.clone(),
+            )
+        })?;
 
         Ok(output_schema)
     }
@@ -250,26 +303,66 @@ impl PipelineBuilder {
         &mut self,
         aggregate: &AggregatePlan,
         input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        for scalar_expr in aggregate.agg_expr.iter() {
-            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
+        for scalar in aggregate.agg_expr.iter() {
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
 
+        let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
+        for scalar in aggregate.group_expr.iter() {
+            let expr = expr_builder.build(scalar)?;
+            group_expressions.push(expr);
+        }
+
+        if !find_aggregate_exprs(&group_expressions).is_empty() {
+            return Err(ErrorCode::SyntaxException(
+                "Group by clause cannot contain aggregate functions",
+            ));
+        }
+
+        // Process group by with non-column expression, such as `a+1`
+        // TODO(xudong963): move to aggregate transform
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let pre_input_schema = input_schema.clone();
+        let input_schema =
+            schema_builder.build_group_by(input_schema, group_expressions.as_slice())?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ExpressionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                pre_input_schema.clone(),
+                input_schema.clone(),
+                group_expressions.clone(),
+                self.ctx.clone(),
+            )
+        })?;
+
+        // Process aggregation function with non-column expression, such as sum(3)
+        let pre_input_schema = input_schema.clone();
+        let res =
+            schema_builder.build_agg_func(pre_input_schema.clone(), agg_expressions.as_slice())?;
+        let input_schema = res.0;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ExpressionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                pre_input_schema.clone(),
+                input_schema.clone(),
+                res.1.clone(),
+                self.ctx.clone(),
+            )
+        })?;
+
+        // Get partial schema from agg_expressions
         let partial_data_fields =
             RewriteHelper::exprs_to_fields(agg_expressions.as_slice(), &input_schema)?;
         let partial_schema = schema_builder.build_aggregate(partial_data_fields, &input_schema)?;
 
-        let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
-        for scalar_expr in aggregate.group_expr.iter() {
-            let scalar = scalar_expr.as_any().downcast_ref::<Scalar>().unwrap();
-            let expr = expr_builder.build(scalar)?;
-            group_expressions.push(expr);
-        }
+        // Get final schema from agg_expression and group expression
         let mut final_exprs = agg_expressions.to_owned();
         final_exprs.extend_from_slice(group_expressions.as_slice());
         let final_data_fields =
@@ -282,19 +375,20 @@ impl PipelineBuilder {
             &input_schema,
             &partial_schema,
         )?;
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformAggregator::try_create_partial(
-                    transform_input_port.clone(),
-                    transform_output_port.clone(),
-                    AggregatorTransformParams::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        &partial_aggr_params,
-                    )?,
-                )
-            })?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAggregator::try_create_partial(
+                transform_input_port.clone(),
+                transform_output_port.clone(),
+                AggregatorTransformParams::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    &partial_aggr_params,
+                )?,
+                self.ctx.clone(),
+            )
+        })?;
 
+        pipeline.resize(1)?;
         let final_aggr_params = AggregatorParams::try_create_v2(
             &agg_expressions,
             &group_expressions,
@@ -302,19 +396,90 @@ impl PipelineBuilder {
             &final_schema,
         )?;
 
-        self.pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformAggregator::try_create_final(
-                    transform_input_port.clone(),
-                    transform_output_port.clone(),
-                    AggregatorTransformParams::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        &final_aggr_params,
-                    )?,
-                )
-            })?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAggregator::try_create_final(
+                transform_input_port.clone(),
+                transform_output_port.clone(),
+                AggregatorTransformParams::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    &final_aggr_params,
+                )?,
+                self.ctx.clone(),
+            )
+        })?;
 
         Ok(final_schema)
+    }
+
+    fn build_hash_join(
+        &mut self,
+        hash_join: &PhysicalHashJoin,
+        build_schema: DataSchemaRef,
+        probe_schema: DataSchemaRef,
+        mut child_pipeline: NewPipeline,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
+        let builder = DataSchemaBuilder::new(&self.metadata);
+        let output_schema = builder.build_join(probe_schema.clone(), build_schema.clone());
+
+        let eb = ExpressionBuilder::create(&self.metadata);
+        let build_expressions = hash_join
+            .build_keys
+            .iter()
+            .map(|scalar| eb.build(scalar))
+            .collect::<Result<Vec<Expression>>>()?;
+        let probe_expressions = hash_join
+            .probe_keys
+            .iter()
+            .map(|scalar| eb.build(scalar))
+            .collect::<Result<Vec<Expression>>>()?;
+
+        let hash_join_state = Arc::new(ChainHashTable::try_create(
+            build_expressions,
+            probe_expressions,
+            build_schema,
+            probe_schema,
+            self.ctx.clone(),
+        )?);
+
+        // Build side
+        self.build_sink_hash_table(hash_join_state.clone(), &mut child_pipeline)?;
+
+        // Probe side
+        pipeline.add_transform(|input, output| {
+            Ok(TransformHashJoinProbe::create(
+                self.ctx.clone(),
+                input,
+                output,
+                hash_join_state.clone(),
+                output_schema.clone(),
+            ))
+        })?;
+
+        self.pipelines.push(child_pipeline);
+
+        Ok(output_schema)
+    }
+
+    fn build_sink_hash_table(
+        &mut self,
+        state: Arc<dyn HashJoinState>,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let mut sink_pipeline_builder = SinkPipeBuilder::create();
+        for _ in 0..pipeline.output_len() {
+            let input_port = InputPort::create();
+            sink_pipeline_builder.add_sink(
+                input_port.clone(),
+                Sinker::<SinkBuildHashTable>::create(
+                    input_port,
+                    SinkBuildHashTable::try_create(state.clone())?,
+                ),
+            );
+        }
+
+        pipeline.add_pipe(sink_pipeline_builder.finalize());
+        Ok(())
     }
 }

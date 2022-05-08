@@ -14,6 +14,10 @@
 
 use std::fmt;
 
+use chrono_tz::Tz;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Timelike;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,17 +28,29 @@ use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::Monotonicity;
 
+#[derive(Clone, Copy)]
+pub enum Round {
+    Second,
+    Minute,
+    FiveMinutes,
+    TenMinutes,
+    FifteenMinutes,
+    TimeSlot,
+    Hour,
+    Day,
+}
+
 #[derive(Clone)]
 pub struct RoundFunction {
     display_name: String,
-    round: u32,
+    round: Round,
 }
 
 impl RoundFunction {
     pub fn try_create(
         display_name: &str,
         args: &[&DataTypeImpl],
-        round: u32,
+        round: Round,
     ) -> Result<Box<dyn Function>> {
         if args[0].data_type_id() != TypeID::Timestamp {
             return Err(ErrorCode::BadDataValueType(format!(
@@ -56,9 +72,39 @@ impl RoundFunction {
     // Consider about the timezones/offsets
     // Currently: assuming timezone offset is a multiple of round.
     #[inline]
-    fn execute(&self, time: i64) -> i64 {
-        let round = self.round as i64;
-        time / MICROSECONDS / round * round * MICROSECONDS
+    fn execute(&self, time: i64, tz: &Tz) -> i64 {
+        let dt = tz.timestamp(time / MICROSECONDS, 0_u32);
+        match self.round {
+            Round::Second => dt.timestamp_micros(),
+            Round::Minute => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute(), 0, 0)
+                .timestamp_micros(),
+            Round::FiveMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 5 * 5, 0, 0)
+                .timestamp_micros(),
+            Round::TenMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 10 * 10, 0, 0)
+                .timestamp_micros(),
+            Round::FifteenMinutes => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 15 * 15, 0, 0)
+                .timestamp_micros(),
+            Round::TimeSlot => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), dt.minute() / 30 * 30, 0, 0)
+                .timestamp_micros(),
+            Round::Hour => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(dt.hour(), 0, 0, 0)
+                .timestamp_micros(),
+            Round::Day => tz
+                .ymd(dt.year(), dt.month(), dt.day())
+                .and_hms_micro(0, 0, 0, 0)
+                .timestamp_micros(),
+        }
     }
 }
 
@@ -68,18 +114,21 @@ impl Function for RoundFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        TimestampType::arc(0)
+        TimestampType::new_impl(0)
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let func = |val: i64, _ctx: &mut EvalContext| self.execute(val);
-        let col =
-            scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
+        let func = |val: i64, ctx: &mut EvalContext| self.execute(val, &ctx.tz);
+        let mut eval_context = EvalContext {
+            tz: func_ctx.tz,
+            ..Default::default()
+        };
+        let col = scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
         for micros in col.iter() {
             let _ = check_timestamp(*micros)?;
         }

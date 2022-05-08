@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::RuntimeTracker;
-use common_base::StopHandle;
-use common_base::Stoppable;
+use common_base::base::RuntimeTracker;
+use common_base::base::StopHandle;
+use common_base::base::Stoppable;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_metrics::init_default_metrics_recorder;

@@ -160,3 +160,59 @@ impl<'a> DFHash for &'a VariantValue {
         Hash::hash(&u, state);
     }
 }
+
+impl<'a> DFHash for ArrayValueRef<'a> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(&'[', state);
+        match self {
+            ArrayValueRef::Indexed { column, idx } => {
+                let value = column.get(*idx);
+                if let DataValue::Array(vals) = value {
+                    for v in vals {
+                        DFHash::hash(&v, state);
+                        Hash::hash(&',', state);
+                    }
+                }
+            }
+            ArrayValueRef::ValueRef { val } => {
+                for v in &val.values {
+                    DFHash::hash(v, state);
+                    Hash::hash(&',', state);
+                }
+            }
+        }
+        Hash::hash(&']', state);
+    }
+}
+
+impl DFHash for DataValue {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            DataValue::Null => {}
+            DataValue::Boolean(v) => DFHash::hash(v, state),
+            DataValue::Int64(v) => DFHash::hash(v, state),
+            DataValue::UInt64(v) => DFHash::hash(v, state),
+            DataValue::Float64(v) => DFHash::hash(v, state),
+            DataValue::String(vals) => {
+                for v in vals {
+                    DFHash::hash(v, state);
+                }
+            }
+            DataValue::Array(vals) => {
+                for v in vals {
+                    v.hash(state);
+                    Hash::hash(&',', state);
+                }
+            }
+            DataValue::Struct(vals) => {
+                for v in vals {
+                    v.hash(state);
+                    Hash::hash(&',', state);
+                }
+            }
+            DataValue::Variant(v) => DFHash::hash(&v, state),
+        }
+    }
+}

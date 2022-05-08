@@ -19,13 +19,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::tokio;
-use common_base::Runtime;
-use common_base::SignalStream;
+use common_base::base::tokio;
+use common_base::base::Runtime;
+use common_base::base::SignalStream;
+use common_base::infallible::RwLock;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_metrics::label_counter;
 use common_tracing::init_query_logger;
 use common_tracing::tracing;
@@ -405,7 +405,8 @@ impl SessionManager {
             }
         };
 
-        Ok(Operator::new(accessor))
+        // Enable exponential backoff by default
+        Ok(Operator::new(accessor).with_backoff(backon::ExponentialBackoff::default()))
     }
 
     pub async fn reload_config(&self) -> Result<()> {

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
@@ -90,14 +91,18 @@ impl Processor for SinkTransform {
 
         if let Some(cast_schema) = &self.cast_schema {
             let mut functions = Vec::with_capacity(cast_schema.fields().len());
-            for field in cast_schema.fields() {
+            for (i, field) in cast_schema.fields().iter().enumerate() {
                 let name = field.data_type().name();
-                let cast_function = CastFunction::create("cast", &name).unwrap();
+                let from_type = self.input_schema.field(i).data_type().clone();
+                let cast_function = CastFunction::create("cast", &name, from_type).unwrap();
                 functions.push(cast_function);
             }
             let tz = self.ctx.get_settings().get_timezone()?;
             let tz = String::from_utf8(tz).map_err(|_| {
                 ErrorCode::LogicalError("Timezone has beeen checked and should be valid.")
+            })?;
+            let tz = tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
             })?;
             let func_ctx = FunctionContext { tz };
             input_stream = Box::pin(CastStream::try_create(

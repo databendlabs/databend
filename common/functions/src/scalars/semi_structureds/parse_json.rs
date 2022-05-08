@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
@@ -49,9 +50,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> ParseJsonFunctionImpl<SUPPRESS_PARSE_ERRO
         let result_type = if args[0].data_type_id() == TypeID::Null {
             NullType::arc()
         } else if args[0].is_nullable() || SUPPRESS_PARSE_ERROR {
-            NullableType::arc(VariantType::arc())
+            NullableType::new_impl(VariantType::new_impl())
         } else {
-            VariantType::arc()
+            VariantType::new_impl()
         };
 
         Ok(Box::new(ParseJsonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
@@ -91,6 +92,8 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
 
+        // TODO(veeupup): check if we can use default format_settings
+        let format = FormatSettings::default();
         let column = columns[0].column();
         if SUPPRESS_PARSE_ERROR {
             let mut builder = NullableColumnBuilder::<VariantValue>::with_capacity(input_rows);
@@ -100,7 +103,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
                 || data_type.data_type_id() == TypeID::Boolean
             {
                 let serializer = data_type.create_serializer();
-                match serializer.serialize_json_object_suppress_error(column) {
+                match serializer.serialize_json_object_suppress_error(column, &format) {
                     Ok(values) => {
                         for v in values {
                             match v {
@@ -132,7 +135,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
                 || data_type.data_type_id() == TypeID::Boolean
             {
                 let serializer = data_type.create_serializer();
-                match serializer.serialize_json_object(column, valids) {
+                match serializer.serialize_json_object(column, valids, &format) {
                     Ok(values) => {
                         for (i, v) in values.iter().enumerate() {
                             if let Some(valids) = valids {
@@ -162,7 +165,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             || data_type.data_type_id() == TypeID::Boolean
         {
             let serializer = data_type.create_serializer();
-            match serializer.serialize_json_object(column, None) {
+            // TODO(veeupup): check if we can use default format_settings
+            let format = FormatSettings::default();
+            match serializer.serialize_json_object(column, None, &format) {
                 Ok(values) => {
                     for v in values {
                         builder.append(&VariantValue::from(v));

@@ -14,11 +14,12 @@
 
 use std::sync::Arc;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
+use crate::prelude::*;
 use crate::types::BooleanType;
 use crate::types::DataTypeImpl;
 use crate::BooleanColumn;
@@ -82,7 +83,7 @@ impl MutableBooleanColumn {
     pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
         }
     }
 
@@ -103,8 +104,12 @@ impl ScalarColumnBuilder for MutableBooleanColumn {
     fn with_capacity(capacity: usize) -> Self {
         Self {
             values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
         }
+    }
+
+    fn with_capacity_meta(capacity: usize, _meta: ColumnMeta) -> Self {
+        Self::with_capacity(capacity)
     }
 
     fn push(&mut self, value: bool) {

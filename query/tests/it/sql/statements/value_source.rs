@@ -14,7 +14,7 @@
 
 use std::io::Cursor;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -29,7 +29,7 @@ async fn test_parse_value_source() -> Result<()> {
         DataField::new("name", Vu8::to_data_type()),
         DataField::new("age", u8::to_data_type()),
         DataField::new("country", Vu8::to_data_type()),
-        DataField::new("born_time", TimestampType::arc(0)),
+        DataField::new("born_time", TimestampType::new_impl(0)),
     ]);
 
     let parser = ValueSource::new(ctx, schema);

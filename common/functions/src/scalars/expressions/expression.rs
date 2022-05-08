@@ -1,3 +1,4 @@
+use common_datavalues::TypeFactory;
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,42 +30,24 @@ impl ToCastFunction {
             .monotonicity()
             .disable_passthrough_null();
 
-        // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
+        // TODO(zhyass): complete DateTime
         features = match type_name {
-            "Boolean" => features.num_arguments(1).bool_function(),
             "Timestamp" | "DateTime" => features.variadic_arguments(1, 3),
             _ => features.num_arguments(1),
         };
 
-        let function_creator: FactoryCreator =
-            Box::new(move |display_name, _args| CastFunction::create(display_name, type_name));
+        let function_creator: FactoryCreator = Box::new(move |display_name, args| {
+            CastFunction::create(display_name, type_name, args[0].clone())
+        });
 
         Ok(FunctionDescription::creator(function_creator).features(features))
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        let names = vec![
-            "Null",
-            "Boolean",
-            "UInt8",
-            "UInt16",
-            "UInt32",
-            "UInt64",
-            "Int8",
-            "Int16",
-            "Int32",
-            "Int64",
-            "Float32",
-            "Float64",
-            "Date",
-            "String",
-            "DateTime",
-            "Timestamp",
-        ];
+        let type_factory = TypeFactory::instance();
 
-        for name in names {
-            let to_name = format!("to{}", name);
-
+        for name in type_factory.register_names() {
+            let to_name = format!("to_{}", name.to_lowercase());
             factory.register(&to_name, Self::cast_function_creator(name).unwrap());
         }
     }

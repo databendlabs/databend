@@ -14,7 +14,7 @@
 
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserIdentity;
 use databend_query::users::auth::jwt::CustomClaims;
@@ -130,7 +130,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     // with create user again
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
-            roles: vec!["role1".to_string()],
+            roles: Some(vec!["role1".to_string()]),
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -145,7 +145,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let user_name = "test-user2";
         let role_name = "test-role";
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
-            roles: vec![role_name.to_string()],
+            roles: Some(vec![role_name.to_string()]),
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());

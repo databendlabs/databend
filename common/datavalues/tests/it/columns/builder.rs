@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_scalar_types_error;
 use common_exception::Result;
@@ -132,27 +132,27 @@ fn test_pop_data_value() -> Result<()> {
     let tests = vec![
         Test {
             name: "test bool column",
-            data_type: BooleanType::arc(),
+            data_type: BooleanType::new_impl(),
             column: Series::from_data(&[true, true, false]),
             expected_err: "Code: 1018, displayText = Bool column is empty when pop data value.",
         },
         Test {
             name: "test primitive(u64) column",
-            data_type: UInt64Type::arc(),
+            data_type: UInt64Type::new_impl(),
             column: Series::from_data(&[1u64, 2, 3]),
             expected_err:
                 "Code: 1018, displayText = Primitive column array is empty when pop data value.",
         },
         Test {
             name: "test string column",
-            data_type: StringType::arc(),
+            data_type: StringType::new_impl(),
             column: Series::from_data(&["1", "22", "333"]),
             expected_err:
                 "Code: 1018, displayText = String column array is empty when pop data value.",
         },
         Test {
             name: "test object column",
-            data_type: VariantType::arc(),
+            data_type: VariantType::new_impl(),
             column: Series::from_data(vec![
                 VariantValue::from(json!(10u64)),
                 VariantValue::from(JsonValue::Bool(true)),
@@ -210,7 +210,7 @@ fn test_nullable_pop() -> Result<()> {
     let tests = vec![
         Test {
             name: "test nullable(bool)",
-            data_type: NullableType::arc(BooleanType::arc()),
+            data_type: NullableType::new_impl(BooleanType::new_impl()),
             values_vec: vec![
                 DataValue::Boolean(true),
                 DataValue::Null,
@@ -220,7 +220,7 @@ fn test_nullable_pop() -> Result<()> {
         },
         Test {
             name: "test nullable(u64)",
-            data_type: NullableType::arc(UInt64Type::arc()),
+            data_type: NullableType::new_impl(UInt64Type::new_impl()),
             values_vec: vec![
                 DataValue::UInt64(1),
                 DataValue::Null,
@@ -230,7 +230,7 @@ fn test_nullable_pop() -> Result<()> {
         },
         Test {
             name: "test nullable(string)",
-            data_type: NullableType::arc(StringType::arc()),
+            data_type: NullableType::new_impl(StringType::new_impl()),
             values_vec: vec![
                 DataValue::String("1".as_bytes().to_vec()),
                 DataValue::Null,
@@ -240,7 +240,7 @@ fn test_nullable_pop() -> Result<()> {
         },
         Test {
             name: "test nullable(object)",
-            data_type: NullableType::arc(VariantType::arc()),
+            data_type: NullableType::new_impl(VariantType::new_impl()),
             values_vec: vec![
                 DataValue::Variant(VariantValue::from(json!(10u64))),
                 DataValue::Null,

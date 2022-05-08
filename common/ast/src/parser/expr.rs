@@ -96,7 +96,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     iter.next()
                         .map(|elem| elem.span)
                         // It's safe to slice one more token because EOI is always added.
-                        .unwrap_or(&rest[..1]),
+                        .unwrap_or(Input(&rest.0[..1], i.1)),
                     err,
                 )
             })
@@ -158,7 +158,6 @@ pub struct WithSpan<'a> {
 /// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
 /// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum ExprElement {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
@@ -715,7 +714,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let input_ptr = i.as_ptr();
     let rest_ptr = rest.as_ptr();
     let offset = (rest_ptr as usize - input_ptr as usize) / std::mem::size_of::<Token>();
-    let span = &i[..offset];
+    let span = Input(&i.0[..offset], i.1);
 
     Ok((rest, WithSpan { elem, span }))
 }
@@ -728,19 +727,19 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     alt((
         alt((
-            value(BinaryOperator::Plus, rule! { Plus }),
-            value(BinaryOperator::Minus, rule! { Minus }),
-            value(BinaryOperator::Multiply, rule! { Multiply }),
-            value(BinaryOperator::Divide, rule! { Divide }),
+            value(BinaryOperator::Plus, rule! { "+" }),
+            value(BinaryOperator::Minus, rule! { "-" }),
+            value(BinaryOperator::Multiply, rule! { "*" }),
+            value(BinaryOperator::Divide, rule! { "/" }),
             value(BinaryOperator::Div, rule! { DIV }),
-            value(BinaryOperator::Modulo, rule! { Modulo }),
-            value(BinaryOperator::StringConcat, rule! { StringConcat }),
-            value(BinaryOperator::Gt, rule! { Gt }),
-            value(BinaryOperator::Lt, rule! { Lt }),
-            value(BinaryOperator::Gte, rule! { Gte }),
-            value(BinaryOperator::Lte, rule! { Lte }),
-            value(BinaryOperator::Eq, rule! { Eq }),
-            value(BinaryOperator::NotEq, rule! { NotEq }),
+            value(BinaryOperator::Modulo, rule! { "%" }),
+            value(BinaryOperator::StringConcat, rule! { "||" }),
+            value(BinaryOperator::Gt, rule! { ">" }),
+            value(BinaryOperator::Lt, rule! { "<" }),
+            value(BinaryOperator::Gte, rule! { ">=" }),
+            value(BinaryOperator::Lte, rule! { "<=" }),
+            value(BinaryOperator::Eq, rule! { "=" }),
+            value(BinaryOperator::NotEq, rule! { "<>" | "!=" }),
         )),
         alt((
             value(BinaryOperator::And, rule! { AND }),

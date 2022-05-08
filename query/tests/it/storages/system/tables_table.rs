@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::TablesTable;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -55,7 +55,6 @@ async fn test_tables_table() -> Result<()> {
         r"\| system             \| tables       \| SystemTables       \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| tracing      \| SystemTracing      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| users        \| SystemUsers        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| warehouses   \| SystemWarehouses   \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
     ];
     common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());

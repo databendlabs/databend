@@ -50,7 +50,6 @@ impl RegexpLikeFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .bool_function()
                 .variadic_arguments(2, 3),
         )
     }
@@ -62,7 +61,7 @@ impl Function for RegexpLikeFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(

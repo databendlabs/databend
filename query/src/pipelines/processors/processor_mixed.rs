@@ -18,12 +18,12 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::tokio::sync::mpsc;
-use common_base::TrySpawn;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::TrySpawn;
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use tokio_stream::wrappers::ReceiverStream;

@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -103,7 +103,7 @@ impl FuseTable {
                                 name.as_str(),
                                 tbl.table_info.ident
                             );
-                        common_base::tokio::time::sleep(d).await;
+                        common_base::base::tokio::time::sleep(d).await;
 
                         let catalog = ctx.get_catalog();
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
@@ -145,7 +145,7 @@ impl FuseTable {
         let prev = self.read_table_snapshot(ctx).await?;
         let prev_version = self.snapshot_format_version();
         let schema = self.table_info.meta.schema.as_ref().clone();
-        let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
+        let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
         let progress_values = ProgressValues {
             rows: summary.row_count as usize,
@@ -215,7 +215,7 @@ impl FuseTable {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
             let summary = &snapshot.summary;
-            statistics::merge_statistics(schema, &statistics, summary)?
+            statistics::merge_statistics(&statistics, summary)?
         } else {
             statistics
         };
@@ -254,7 +254,7 @@ impl FuseTable {
         self::utils::gather_legacy_options(table_info, &mut options);
 
         let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.version;
+        let table_version = table_info.ident.seq;
         let req = UpsertTableOptionReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
@@ -265,7 +265,6 @@ impl FuseTable {
     }
 
     pub fn merge_append_operations(
-        schema: &DataSchema,
         append_log_entries: &[AppendOperationLogEntry],
     ) -> Result<(Vec<String>, Statistics)> {
         let (s, seg_locs) = append_log_entries.iter().try_fold(
@@ -280,8 +279,17 @@ impl FuseTable {
                 acc.block_count += stats.block_count;
                 acc.uncompressed_byte_size += stats.uncompressed_byte_size;
                 acc.compressed_byte_size += stats.compressed_byte_size;
-                acc.col_stats =
-                    statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats], schema)?;
+                (acc.col_stats, acc.cluster_stats) = if acc.col_stats.is_empty() {
+                    (stats.col_stats.clone(), stats.cluster_stats.clone())
+                } else {
+                    (
+                        statistics::reduce_block_stats(&[&acc.col_stats, &stats.col_stats])?,
+                        statistics::reduce_cluster_stats(&[
+                            &acc.cluster_stats,
+                            &stats.cluster_stats,
+                        ]),
+                    )
+                };
                 seg_acc.push(loc.clone());
                 Ok::<_, ErrorCode>((acc, seg_acc))
             },

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::pipelines::processors::*;
@@ -40,10 +40,10 @@ async fn test_transform_projection() -> Result<()> {
         let ctx = create_query_context().await?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
+                ctx.clone(),
                 plan.input.schema(),
                 plan.schema.clone(),
                 plan.expr.clone(),
-                ctx.clone(),
             )?))
         })?;
         pipeline.add_simple_transform(|| {

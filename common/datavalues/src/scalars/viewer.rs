@@ -15,7 +15,7 @@
 use std::iter::TrustedLen;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -258,6 +258,63 @@ where T: Scalar<Viewer<'a> = Self> + ObjectType
     #[inline]
     fn value_at(&self, index: usize) -> <Self::ScalarItem as Scalar>::RefType<'a> {
         self.values[index & self.non_const_mask].as_scalar_ref()
+    }
+
+    #[inline]
+    fn valid_at(&self, i: usize) -> bool {
+        unsafe { self.validity.get_bit_unchecked(i & self.null_mask) }
+    }
+
+    #[inline]
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn iter(&self) -> Self {
+        let mut res = self.clone();
+        res.pos = 0;
+        res
+    }
+}
+
+#[derive(Clone)]
+pub struct ArrayViewer<'a> {
+    pub(crate) col: &'a ArrayColumn,
+    pub(crate) null_mask: usize,
+    pub(crate) non_const_mask: usize,
+    pub(crate) size: usize,
+    pub(crate) pos: usize,
+    pub(crate) validity: Bitmap,
+}
+
+impl<'a> ScalarViewer<'a> for ArrayViewer<'a> {
+    type ScalarItem = ArrayValue;
+    type Iterator = Self;
+
+    fn try_create(column: &'a ColumnRef) -> Result<Self> {
+        let (inner, validity) = try_extract_inner(column)?;
+        let col: &'a ArrayColumn = Series::check_get(inner)?;
+
+        let null_mask = get_null_mask(column);
+        let non_const_mask = non_const_mask(column);
+        let size = column.len();
+
+        Ok(Self {
+            col,
+            null_mask,
+            non_const_mask,
+            validity,
+            size,
+            pos: 0,
+        })
+    }
+
+    #[inline]
+    fn value_at(&self, index: usize) -> <Self::ScalarItem as Scalar>::RefType<'a> {
+        ArrayValueRef::Indexed {
+            column: self.col,
+            idx: index,
+        }
     }
 
     #[inline]

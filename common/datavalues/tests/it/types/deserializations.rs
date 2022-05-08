@@ -14,6 +14,7 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 #[test]
 fn test_nullable_deserializer_pop() -> Result<()> {
@@ -23,12 +24,13 @@ fn test_nullable_deserializer_pop() -> Result<()> {
         DataValue::Boolean(false),
         DataValue::Null,
     ];
-    let data_type = NullableType::arc(BooleanType::arc());
+    let data_type = NullableType::new_impl(BooleanType::new_impl());
     let mut deserializer = data_type.create_deserializer(4);
+    let format = FormatSettings::default();
 
     // Append data value
     for value in values_vec.iter() {
-        deserializer.append_data_value(value.clone())?;
+        deserializer.append_data_value(value.clone(), &format)?;
     }
 
     // Pop all data value

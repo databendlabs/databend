@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -88,7 +88,7 @@ impl Default for MutableStringColumn {
 
 impl MutableColumn for MutableStringColumn {
     fn data_type(&self) -> DataTypeImpl {
-        StringType::arc()
+        StringType::new_impl()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -137,6 +137,10 @@ impl ScalarColumnBuilder for MutableStringColumn {
 
     fn with_capacity(capacity: usize) -> Self {
         Self::with_values_capacity(capacity * 3, capacity)
+    }
+
+    fn with_capacity_meta(capacity: usize, _meta: ColumnMeta) -> Self {
+        Self::with_capacity(capacity)
     }
 
     fn push(&mut self, value: &[u8]) {

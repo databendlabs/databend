@@ -24,6 +24,7 @@ use sqlparser::ast::FunctionArg;
 use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
+use sqlparser::ast::TrimWhereField;
 use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
@@ -85,6 +86,8 @@ pub trait UDFExprVisitor: Sized + Send {
             Expr::InList { expr, list, .. } => self.visit_inlist(expr, list).await,
             Expr::Extract { field, expr } => self.visit_extract(field, expr).await,
             Expr::MapAccess { column, keys } => self.visit_map_access(column, keys).await,
+            Expr::Trim { expr, trim_where } => self.visit_trim(expr, trim_where).await,
+            Expr::Array(exprs) => self.visit_array(exprs).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -252,5 +255,32 @@ pub trait UDFExprVisitor: Sized + Send {
 
     async fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
         UDFExprTraverser::accept(expr, self).await
+    }
+
+    async fn visit_trim(
+        &mut self,
+        expr: &Expr,
+        trim_where: &Option<(TrimWhereField, Box<Expr>)>,
+    ) -> Result<()> {
+        UDFExprTraverser::accept(expr, self).await?;
+
+        if let Some(trim_where) = trim_where {
+            UDFExprTraverser::accept(&trim_where.1, self).await?;
+        }
+        Ok(())
+    }
+
+    async fn visit_array(&mut self, exprs: &[Expr]) -> Result<()> {
+        match exprs.len() {
+            0 => Err(ErrorCode::SyntaxException(
+                "Array must have at least one element.",
+            )),
+            _ => {
+                for expr in exprs {
+                    UDFExprTraverser::accept(expr, self).await?;
+                }
+                Ok(())
+            }
+        }
     }
 }

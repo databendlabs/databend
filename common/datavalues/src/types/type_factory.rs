@@ -29,31 +29,31 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     let mut type_factory = TypeFactory::create();
 
     type_factory.register(NullType::arc());
-    type_factory.register(BooleanType::arc());
-    type_factory.register(StringType::arc());
+    type_factory.register(BooleanType::new_impl());
+    type_factory.register(StringType::new_impl());
 
-    type_factory.register(UInt8Type::arc());
-    type_factory.register(UInt16Type::arc());
-    type_factory.register(UInt32Type::arc());
-    type_factory.register(UInt64Type::arc());
+    type_factory.register(UInt8Type::new_impl());
+    type_factory.register(UInt16Type::new_impl());
+    type_factory.register(UInt32Type::new_impl());
+    type_factory.register(UInt64Type::new_impl());
 
-    type_factory.register(Int8Type::arc());
-    type_factory.register(Int16Type::arc());
-    type_factory.register(Int32Type::arc());
-    type_factory.register(Int64Type::arc());
+    type_factory.register(Int8Type::new_impl());
+    type_factory.register(Int16Type::new_impl());
+    type_factory.register(Int32Type::new_impl());
+    type_factory.register(Int64Type::new_impl());
 
-    type_factory.register(Float32Type::arc());
-    type_factory.register(Float64Type::arc());
+    type_factory.register(Float32Type::new_impl());
+    type_factory.register(Float64Type::new_impl());
 
-    type_factory.register(DateType::arc());
-    type_factory.register(VariantType::arc());
-    type_factory.register(VariantArrayType::arc());
-    type_factory.register(VariantObjectType::arc());
+    type_factory.register(DateType::new_impl());
+    type_factory.register(VariantType::new_impl());
+    type_factory.register(VariantArrayType::new_impl());
+    type_factory.register(VariantObjectType::new_impl());
 
     // Timestamp is a special case
     {
         for precision in 0..7 {
-            type_factory.register(TimestampType::arc(precision));
+            type_factory.register(TimestampType::new_impl(precision));
         }
     }
 
@@ -84,6 +84,13 @@ impl TypeFactory {
             })
     }
 
+    pub fn register_names(&self) -> Vec<&str> {
+        self.case_insensitive_types
+            .keys()
+            .map(|s| s.as_str())
+            .collect()
+    }
+
     pub fn register(&mut self, data_type: DataTypeImpl) {
         let mut names = vec![data_type.name()];
 
@@ -99,7 +106,7 @@ impl TypeFactory {
     pub fn add_array_wrapper(&mut self) {
         let mut arrays = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
-            let data_type: DataTypeImpl = DataTypeImpl::Array(ArrayType::create(v.clone()));
+            let data_type: DataTypeImpl = ArrayType::new_impl(v.clone());
             arrays.insert(
                 format!("Array({})", k).to_ascii_lowercase(),
                 data_type.clone(),
@@ -112,7 +119,7 @@ impl TypeFactory {
         let mut nulls = HashMap::new();
         for (k, v) in self.case_insensitive_types.iter() {
             if v.can_inside_nullable() {
-                let data_type: DataTypeImpl = NullableType::arc(v.clone());
+                let data_type: DataTypeImpl = NullableType::new_impl(v.clone());
                 nulls.insert(
                     format!("Nullable({})", k).to_ascii_lowercase(),
                     data_type.clone(),

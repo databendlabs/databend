@@ -53,7 +53,12 @@ pub struct LogicFunctionImpl<F> {
 }
 
 pub trait LogicExpression: Sync + Send {
-    fn eval(columns: &ColumnsWithField, input_rows: usize, nullable: bool) -> Result<ColumnRef>;
+    fn eval(
+        func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+        nullable: bool,
+    ) -> Result<ColumnRef>;
 }
 
 impl<F> LogicFunctionImpl<F>
@@ -89,19 +94,19 @@ where F: LogicExpression + Clone
 
     fn return_type(&self) -> DataTypeImpl {
         if self.nullable {
-            NullableType::arc(BooleanType::arc())
+            NullableType::new_impl(BooleanType::new_impl())
         } else {
-            BooleanType::arc()
+            BooleanType::new_impl()
         }
     }
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        F::eval(columns, input_rows, self.nullable)
+        F::eval(func_ctx, columns, input_rows, self.nullable)
     }
 }
 

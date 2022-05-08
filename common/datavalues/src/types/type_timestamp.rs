@@ -18,7 +18,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -59,7 +58,7 @@ impl TimestampType {
         TimestampType { precision }
     }
 
-    pub fn arc(precision: usize) -> DataTypeImpl {
+    pub fn new_impl(precision: usize) -> DataTypeImpl {
         DataTypeImpl::Timestamp(TimestampType { precision })
     }
 
@@ -151,10 +150,8 @@ impl DataType for TimestampType {
     }
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
-        let tz = "UTC".parse::<Tz>().unwrap();
         TimestampDeserializer {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
-            tz,
             precision: self.precision,
         }
         .into()

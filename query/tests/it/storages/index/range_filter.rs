@@ -14,14 +14,14 @@
 
 use std::collections::HashMap;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;
-use databend_query::storages::index::range_filter::BlockStatistics;
+use databend_query::storages::index::range_filter::ColumnsStatistics;
 use databend_query::storages::index::range_filter::StatColumns;
 use databend_query::storages::index::ColumnStatistics;
 use databend_query::storages::index::RangeFilter;
@@ -36,7 +36,7 @@ async fn test_range_filter() -> Result<()> {
         DataField::new("c", Vu8::to_data_type()),
     ]);
 
-    let mut stats: BlockStatistics = HashMap::new();
+    let mut stats: ColumnsStatistics = HashMap::new();
     stats.insert(0u32, ColumnStatistics {
         min: DataValue::Int64(1),
         max: DataValue::Int64(20),
@@ -173,7 +173,7 @@ async fn test_range_filter() -> Result<()> {
 
     let ctx = create_query_context().await?;
     for test in tests {
-        let prune = RangeFilter::try_create(&test.expr, schema.clone(), ctx.clone())?;
+        let prune = RangeFilter::try_create(ctx.clone(), &test.expr, schema.clone())?;
 
         match prune.eval(&stats) {
             Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),

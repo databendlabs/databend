@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 use crate::scalars::semi_structureds::get::extract_value_by_path;
 use crate::scalars::semi_structureds::get::parse_path_keys;
@@ -61,7 +62,7 @@ impl Function for JsonExtractPathTextFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::arc(StringType::arc())
+        NullableType::new_impl(StringType::new_impl())
     }
 
     fn eval(
@@ -83,7 +84,9 @@ impl Function for JsonExtractPathTextFunction {
 
         let mut builder = ColumnBuilder::<VariantValue>::with_capacity(input_rows);
         let serializer = data_type.create_serializer();
-        match serializer.serialize_json_object(columns[0].column(), None) {
+        // TODO(veeupup): check if we can use default format_settings
+        let format = FormatSettings::default();
+        match serializer.serialize_json_object(columns[0].column(), None, &format) {
             Ok(values) => {
                 for v in values {
                     builder.append(&VariantValue::from(v));

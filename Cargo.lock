@@ -131,8 +131,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.10.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=36b0824#36b08249dd03c8b8f88f454158fcf3401c647a49"
+version = "0.11.1"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=2d70fbf46fd37f4ef532945c588be69a71998e44#2d70fbf46fd37f4ef532945c588be69a71998e44"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -291,6 +291,18 @@ dependencies = [
  "getrandom 0.2.4",
  "instant",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "backon"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f334d8b7d003e7d4e17844b81ffbfcd24ad955777997440701c08a834e407105"
+dependencies = [
+ "futures",
+ "pin-project",
+ "rand 0.8.5",
+ "tokio",
 ]
 
 [[package]]
@@ -845,17 +857,23 @@ dependencies = [
 name = "common-base"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "common-exception",
+ "common-macros",
  "common-tracing",
  "ctrlc",
  "futures",
  "hyper",
+ "libc",
+ "parking_lot 0.12.0",
  "poem",
  "pprof",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tikv-jemalloc-ctl",
+ "tikv-jemalloc-sys",
  "tokio",
  "toml",
  "uuid",
@@ -886,16 +904,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-containers"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "common-base",
- "common-tracing",
-]
-
-[[package]]
 name = "common-contexts"
 version = "0.1.0"
 dependencies = [
@@ -912,9 +920,10 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
+ "common-base",
  "common-datavalues",
  "common-exception",
- "common-infallible",
+ "common-io",
  "pretty_assertions",
  "regex",
 ]
@@ -926,10 +935,10 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
+ "common-base",
  "common-exception",
  "common-io",
  "common-macros",
- "common-mem-allocator",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -952,7 +961,6 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "backtrace",
  "bincode",
  "common-arrow",
  "octocrab",
@@ -975,6 +983,7 @@ dependencies = [
  "bstr",
  "bumpalo",
  "bytes 1.1.0",
+ "chrono-tz",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
@@ -1026,13 +1035,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-infallible"
-version = "0.1.0"
-dependencies = [
- "parking_lot 0.12.0",
-]
-
-[[package]]
 name = "common-io"
 version = "0.1.0"
 dependencies = [
@@ -1077,30 +1079,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-mem-allocator"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-infallible",
- "common-macros",
- "libc",
- "parking_lot 0.12.0",
- "tikv-jemalloc-ctl",
- "tikv-jemalloc-sys",
-]
-
-[[package]]
 name = "common-meta-api"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-trait",
  "common-base",
  "common-datavalues",
  "common-exception",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "common-tracing",
  "maplit",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tonic",
 ]
 
 [[package]]
@@ -1126,11 +1122,12 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
- "common-containers",
  "common-exception",
  "common-grpc",
  "common-meta-api",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "common-tracing",
  "derive_more",
  "futures",
@@ -1138,6 +1135,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "thiserror",
  "tonic",
 ]
 
@@ -1199,7 +1197,6 @@ dependencies = [
  "enumflags2",
  "hex",
  "maplit",
- "nanoid",
  "num",
  "num-derive",
  "num-traits",
@@ -1221,8 +1218,8 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
+ "common-base",
  "common-exception",
- "common-infallible",
  "common-tracing",
  "metrics",
  "metrics-exporter-prometheus",
@@ -1241,7 +1238,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-infallible",
  "common-meta-types",
  "once_cell",
  "pretty_assertions",
@@ -1259,6 +1255,7 @@ dependencies = [
  "common-meta-types",
  "common-protos",
  "maplit",
+ "num",
  "thiserror",
 ]
 
@@ -1266,6 +1263,8 @@ dependencies = [
 name = "common-protos"
 version = "0.1.0"
 dependencies = [
+ "num-derive",
+ "num-traits",
  "prost 0.10.1",
  "prost-build 0.10.1",
  "tonic",
@@ -1273,22 +1272,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-range-map"
-version = "0.1.0"
-
-[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
  "async-stream",
  "async-trait",
+ "chrono-tz",
  "common-arrow",
  "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-infallible",
  "common-io",
  "common-tracing",
  "csv-async",
@@ -1303,7 +1298,6 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "backtrace",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
@@ -1696,7 +1690,6 @@ dependencies = [
  "clap 3.1.8",
  "common-arrow",
  "common-base",
- "common-containers",
  "common-exception",
  "common-grpc",
  "common-macros",
@@ -1706,7 +1699,6 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
- "common-range-map",
  "common-tracing",
  "futures",
  "maplit",
@@ -1755,6 +1747,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
+ "backon",
  "base64 0.13.0",
  "bincode",
  "bit-vec",
@@ -1776,11 +1769,9 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-grpc",
- "common-infallible",
  "common-io",
  "common-macros",
  "common-management",
- "common-mem-allocator",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-grpc",
@@ -1839,6 +1830,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "twox-hash",
  "typetag",
  "url",
  "uuid",
@@ -3715,15 +3707,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fce7b49e1e6d8aa67232ef1c4c936c0af58756eb2db6f65c40bacb39035e7f42"
 
 [[package]]
-name = "nanoid"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
-dependencies = [
- "rand 0.8.5",
-]
-
-[[package]]
 name = "native-tls"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3996,13 +3979,14 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "496b6dff08ea23239dcf173c95c0fe276a4b577d5aab71b1baaadfea3fd4fa41"
+checksum = "1b485a8d622cabe87171f51f0d6ae91ffa4425137097b0d69197a763f5cf7d0b"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-trait",
+ "backon",
  "base64 0.13.0",
  "bytes 1.1.0",
  "futures",
@@ -4301,8 +4285,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.10.3"
-source = "git+https://github.com/datafuse-extras/parquet2?rev=daae989#daae98961c5b6243465f176518d849d9297fdb74"
+version = "0.12.0"
+source = "git+https://github.com/datafuse-extras/parquet2?rev=03c108b#03c108bfcae58a6ba2b6a54132888dea964b3950"
 dependencies = [
  "async-stream",
  "bitpacking",
@@ -5869,7 +5853,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=fee0056#fee00567b17af62cfe43bc8e9cfe528084a3ab76"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=8db5b12#8db5b126bd9185d0ca97adfcdff1ce679fdf5307"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

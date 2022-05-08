@@ -112,6 +112,7 @@ impl PlanVisitor for QueryPipelineBuilder {
                         transform_output_port,
                         &aggregator_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })
     }
@@ -131,13 +132,13 @@ impl PlanVisitor for QueryPipelineBuilder {
                         transform_output_port,
                         &aggregator_params,
                     )?,
+                    self.ctx.clone(),
                 )
             })
     }
 
     fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
-
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 ProjectionTransform::try_create(

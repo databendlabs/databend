@@ -117,7 +117,7 @@ impl ValueExprAnalyzer {
         Ok(Expression::Literal {
             value: DataValue::Int64(num as i64),
             column_name: Some(num.to_string()),
-            data_type: IntervalType::arc(kind),
+            data_type: IntervalType::new_impl(kind),
         })
     }
 }

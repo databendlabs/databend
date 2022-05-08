@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_base::tokio::sync::mpsc::error::SendError;
+use common_base::base::tokio::sync::mpsc::error::SendError;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchResponse;
 use tonic::Status;

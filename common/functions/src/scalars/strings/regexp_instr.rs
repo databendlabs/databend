@@ -74,13 +74,13 @@ impl Function for RegexpInStrFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::arc(u64::to_data_type())
+        NullableType::new_impl(u64::to_data_type())
     }
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -96,18 +96,37 @@ impl Function for RegexpInStrFunction {
 
         for i in 2..columns.len() {
             match i {
-                2 => pos = cast_column_field(&columns[2], &NullableType::arc(Int64Type::arc()))?,
+                2 => {
+                    pos = cast_column_field(
+                        &columns[2],
+                        columns[2].data_type(),
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                        &func_ctx,
+                    )?
+                }
                 3 => {
-                    occurrence =
-                        cast_column_field(&columns[3], &NullableType::arc(Int64Type::arc()))?
+                    occurrence = cast_column_field(
+                        &columns[3],
+                        columns[3].data_type(),
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                        &func_ctx,
+                    )?
                 }
                 4 => {
-                    return_option =
-                        cast_column_field(&columns[4], &NullableType::arc(Int64Type::arc()))?
+                    return_option = cast_column_field(
+                        &columns[4],
+                        columns[4].data_type(),
+                        &NullableType::new_impl(Int64Type::new_impl()),
+                        &func_ctx,
+                    )?
                 }
                 _ => {
-                    match_type =
-                        cast_column_field(&columns[5], &NullableType::arc(StringType::arc()))?
+                    match_type = cast_column_field(
+                        &columns[5],
+                        columns[5].data_type(),
+                        &NullableType::new_impl(StringType::new_impl()),
+                        &func_ctx,
+                    )?
                 }
             }
         }

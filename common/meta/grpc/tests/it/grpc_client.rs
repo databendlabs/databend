@@ -14,9 +14,9 @@
 
 use std::time::Duration;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::GetDatabaseReq;
 

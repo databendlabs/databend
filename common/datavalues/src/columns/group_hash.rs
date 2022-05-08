@@ -291,3 +291,4 @@ impl GroupHash for StringColumn {
 
 // TODO(b41sh): implement GroupHash for VariantColumn
 impl GroupHash for VariantColumn {}
+impl GroupHash for ArrayColumn {}

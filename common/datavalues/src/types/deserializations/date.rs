@@ -33,18 +33,24 @@ where
     T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
 {
-    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: T = reader.read_scalar()?;
         let _ = check_date(value.as_i32())?;
         self.builder.append_value(value);
         Ok(())
     }
 
-    fn de_default(&mut self) {
+    fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.append_value(T::default());
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
@@ -54,7 +60,7 @@ where
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::String(v) => {
                 let mut reader = BufferReader::new(v.as_bytes());
@@ -68,7 +74,7 @@ where
         }
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -78,7 +84,11 @@ where
         Ok(())
     }
 
-    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_quoted<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -89,7 +99,11 @@ where
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let date = reader.read_date_text()?;
         let days = uniform(date);
         let _ = check_date(days.as_i32())?;
@@ -97,7 +111,11 @@ where
         Ok(())
     }
 
-    fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -109,7 +127,11 @@ where
         Ok(())
     }
 
-    fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text_json<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
@@ -120,7 +142,7 @@ where
         Ok(())
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()? as i32;
         let _ = check_date(v)?;
         self.builder.append_value(v.as_());

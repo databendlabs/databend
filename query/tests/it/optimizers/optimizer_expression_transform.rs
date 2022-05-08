@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::*;
 use databend_query::sql::PlanParser;
@@ -36,11 +36,11 @@ async fn test_expression_transform_optimizer() -> Result<()> {
             },
             Test {
                 name: "Complex expression",
-                query: "select number from numbers_mt(10) where not(number>=5 or number<3 and toBoolean(number))",
+                query: "select number from numbers_mt(10) where not(number>=5 or number<3 and to_boolean(number))",
                 expect: "\
                 Projection: number:UInt64\
-                \n  Filter: ((number < 5) and ((number >= 3) or (NOT toBoolean(number))))\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT ((number >= 5) OR ((number < 3) AND toBoolean(number))))]]",
+                \n  Filter: ((number < 5) and ((number >= 3) or (NOT to_boolean(number))))\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT ((number >= 5) OR ((number < 3) AND to_boolean(number))))]]",
             },
             Test {
                 name: "Like and is_not_null expression",
@@ -76,11 +76,11 @@ async fn test_expression_transform_optimizer() -> Result<()> {
             },
             Test {
                 name: "Not expression",
-                query: "select number from numbers_mt(10) where not(NOT toBoolean(number))",
+                query: "select number from numbers_mt(10) where not(NOT to_boolean(number))",
                 expect: "\
                 Projection: number:UInt64\
-                \n  Filter: toBoolean(number)\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT (NOT toBoolean(number)))]]",
+                \n  Filter: to_boolean(number)\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NOT (NOT to_boolean(number)))]]",
             },
             Test {
                 name: "Boolean transform",
@@ -199,7 +199,6 @@ async fn test_expression_transform_optimizer() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::create_query_context().await?;
-
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = ExprTransformOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;

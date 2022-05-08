@@ -56,31 +56,11 @@ pub trait RequestFor {
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcWriteReq {
-    CreateDatabase(CreateDatabaseReq),
-    DropDatabase(DropDatabaseReq),
-
-    CreateTable(CreateTableReq),
-    DropTable(DropTableReq),
-    RenameTable(RenameTableReq),
-    CommitTable(UpsertTableOptionReq),
-
-    CreateShare(CreateShareReq),
-    DropShare(DropShareReq),
-
     UpsertKV(UpsertKVAction),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcReadReq {
-    GetDatabase(GetDatabaseReq),
-    ListDatabases(ListDatabaseReq),
-
-    GetTable(GetTableReq),
-    GetTableExt(GetTableExtReq),
-    ListTables(ListTableReq),
-
-    GetShare(GetShareReq),
-
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),

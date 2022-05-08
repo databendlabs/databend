@@ -23,17 +23,23 @@ pub struct BooleanDeserializer {
 }
 
 impl TypeDeserializer for BooleanDeserializer {
-    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
     }
 
-    fn de_default(&mut self) {
+    fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.append_value(false);
     }
 
-    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: bool = reader.read_scalar()?;
@@ -43,7 +49,7 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         if reader.eq_ignore_ascii_case(b"true") {
             self.builder.append_value(true);
         } else if reader.eq_ignore_ascii_case(b"false") {
@@ -54,7 +60,11 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+    fn de_text<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
         let v = if BufferReadExt::ignore_insensitive_bytes(reader, b"true")? {
             Ok(true)
         } else if BufferReadExt::ignore_insensitive_bytes(reader, b"false")? {
@@ -67,7 +77,7 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::Bool(v) => self.builder.append_value(*v),
             _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
@@ -75,7 +85,7 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_value(value.as_bool()?);
         Ok(())
     }

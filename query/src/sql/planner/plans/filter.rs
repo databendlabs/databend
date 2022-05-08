@@ -17,16 +17,17 @@ use std::any::Any;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::binder::ScalarExprRef;
 use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
+use crate::sql::plans::Scalar;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FilterPlan {
-    // TODO: split predicate into conjunctions
-    pub predicate: ScalarExprRef,
+    pub predicates: Vec<Scalar>,
+    // True if the plan represents having, else the plan represents where
+    pub is_having: bool,
 }
 
 impl BasePlan for FilterPlan {

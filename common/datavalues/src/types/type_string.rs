@@ -24,7 +24,7 @@ use crate::prelude::*;
 pub struct StringType {}
 
 impl StringType {
-    pub fn arc() -> DataTypeImpl {
+    pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::String(Self {})
     }
 }

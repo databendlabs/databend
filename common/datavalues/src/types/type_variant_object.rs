@@ -27,7 +27,7 @@ use crate::prelude::*;
 pub struct VariantObjectType {}
 
 impl VariantObjectType {
-    pub fn arc() -> DataTypeImpl {
+    pub fn new_impl() -> DataTypeImpl {
         DataTypeImpl::VariantObject(Self {})
     }
 }

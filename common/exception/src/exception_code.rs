@@ -14,10 +14,8 @@
 
 #![allow(non_snake_case)]
 
-use std::cell::Cell;
+use std::backtrace::Backtrace;
 use std::sync::Arc;
-
-use backtrace::Backtrace;
 
 use crate::exception::ErrorCodeBacktrace;
 use crate::ErrorCode;
@@ -25,16 +23,12 @@ use crate::ErrorCode;
 pub static ABORT_SESSION: u16 = 1042;
 pub static ABORT_QUERY: u16 = 1043;
 
-thread_local! {
-    pub static ENABLE_BACKTRACE: Cell<bool> = Cell::new(true);
-}
-
 macro_rules! build_exceptions {
     ($($body:ident($code:expr)),*$(,)*) => {
             impl ErrorCode {
                 $(
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
-                    let bt = ENABLE_BACKTRACE.with(|v| v.get()).then(|| ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new())));
+                    let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
                     ErrorCode::create(
                         $code,
                         display_text.into(),
@@ -200,12 +194,6 @@ build_exceptions! {
 
     // Variable error codes.
     UnknownVariable(2801),
-
-    // Warehouse error codes
-    UnknownWarehouse(2901),
-    WarehouseAlreadyExists(2902),
-    IllegalWarehouseMetaFormat(2903),
-    IllegalWarehouseInfoFormat(2904),
 }
 
 // Storage errors [3001, 4000].

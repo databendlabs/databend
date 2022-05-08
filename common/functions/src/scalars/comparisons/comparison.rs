@@ -88,7 +88,7 @@ impl Function for ComparisonFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        BooleanType::arc()
+        BooleanType::new_impl()
     }
 
     fn eval(
@@ -175,7 +175,6 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -208,7 +207,6 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -299,14 +297,15 @@ where
     F: Fn(T::Simd, T::Simd) -> u8 + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
+        let func_ctx = FunctionContext::default();
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, &self.least_supertype)?
+            cast_column_field(l, l.data_type(), &self.least_supertype, &func_ctx)?
         } else {
             l.column().clone()
         };
 
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, &self.least_supertype)?
+            cast_column_field(r, r.data_type(), &self.least_supertype, &func_ctx)?
         } else {
             r.column().clone()
         };

@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::cast_column_field;
+use super::FunctionContext;
 
 #[derive(Clone)]
 pub struct Monotonicity {
@@ -102,7 +103,8 @@ impl Monotonicity {
         };
 
         if let (Some(max), Some(min)) = (max, min) {
-            let col = cast_column_field(&min, &f64::to_data_type())?;
+            let func_ctx = FunctionContext::default();
+            let col = cast_column_field(&min, min.data_type(), &f64::to_data_type(), &func_ctx)?;
             let min_val = col.get_f64(0)?;
 
             if min_val >= 0.0 {
@@ -113,7 +115,7 @@ impl Monotonicity {
                 return Ok(-1);
             }
 
-            let col = cast_column_field(&max, &f64::to_data_type())?;
+            let col = cast_column_field(&max, max.data_type(), &f64::to_data_type(), &func_ctx)?;
             let max_val = col.get_f64(0)?;
 
             if max_val <= 0.0 {
