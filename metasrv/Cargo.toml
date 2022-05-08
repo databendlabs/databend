@@ -26,7 +26,6 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-containers = { path = "../common/containers" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
 common-macros = { path = "../common/macros" }
@@ -36,7 +35,6 @@ common-meta-raft-store = { path = "../common/meta/raft-store" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-metrics = { path = "../common/metrics" }
-common-range-map = { path = "../common/range-map" }
 common-tracing = { path = "../common/tracing" }
 
 # Github dependencies

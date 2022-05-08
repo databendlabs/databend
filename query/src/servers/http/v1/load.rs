@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_stream::stream;
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_io::prelude::parse_escape_string;

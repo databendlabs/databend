@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::sync::Once;
 
-use common_infallible::RwLock;
+use common_base::infallible::RwLock;
 use common_tracing::tracing;
 use metrics::counter;
 use metrics_exporter_prometheus::PrometheusBuilder;

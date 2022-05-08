@@ -14,7 +14,7 @@
 
 //! Test metasrv SchemaApi on a single node.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_grpc::MetaGrpcClient;
 

@@ -16,8 +16,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use common_base::Runtime;
-use common_base::Thread;
+use common_base::base::Runtime;
+use common_base::base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;

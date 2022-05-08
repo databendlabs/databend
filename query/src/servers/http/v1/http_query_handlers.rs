@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;

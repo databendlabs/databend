@@ -15,7 +15,7 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;

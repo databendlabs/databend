@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::tokio::sync::RwLock;
-use common_containers::ItemManager;
-use common_containers::Pool;
+use common_base::base::tokio::sync::RwLock;
+use common_base::containers::ItemManager;
+use common_base::containers::Pool;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;

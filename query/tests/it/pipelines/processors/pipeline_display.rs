@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
 use databend_query::sql::PlanParser;

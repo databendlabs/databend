@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_base::tokio;
-use common_base::GlobalSequence;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::GlobalSequence;
+use common_base::base::Stoppable;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;

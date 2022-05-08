@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use clickhouse_driver::prelude::*;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::servers::ClickHouseHandler;

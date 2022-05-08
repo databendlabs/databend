@@ -18,11 +18,11 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;

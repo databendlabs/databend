@@ -16,8 +16,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_infallible::Condvar;
-use common_infallible::Mutex;
+use common_base::infallible::Condvar;
+use common_base::infallible::Mutex;
 
 struct WorkerNotify {
     waiting: Mutex<bool>,

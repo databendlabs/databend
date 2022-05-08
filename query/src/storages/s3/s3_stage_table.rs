@@ -16,9 +16,9 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;

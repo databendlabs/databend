@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
 

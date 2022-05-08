@@ -15,8 +15,8 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use common_base::infallible::Mutex;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_planners::PlanNode;
 use common_streams::ErrorStream;
 use common_streams::ProgressStream;

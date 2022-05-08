@@ -16,11 +16,11 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
+use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
-use common_mem_allocator::malloc_size;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -146,7 +146,7 @@ impl Session {
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
 
-        common_base::tokio::spawn(async move {
+        common_base::base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
                 (io_shutdown)();
                 tx.send(()).ok();

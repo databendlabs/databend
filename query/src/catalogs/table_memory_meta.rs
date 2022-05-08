@@ -18,9 +18,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_types::MetaId;
 
 use crate::storages::Table;

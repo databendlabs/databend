@@ -16,11 +16,11 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;

@@ -12,8 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod derive;
 mod format;
+mod malloc_size;
+mod mutex;
+mod pool;
 mod progress;
+mod range_key_test;
+mod range_map_test;
 mod runtime;
+mod rwlock;
 mod stoppable;
 mod string_func;

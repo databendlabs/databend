@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use clap::Parser;
-use common_base::Format;
+use common_base::base::Format;
 use common_meta_raft_store::config as raft_config;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaError;

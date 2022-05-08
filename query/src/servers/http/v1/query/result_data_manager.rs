@@ -14,9 +14,9 @@
 
 use std::time::Instant;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::mpsc::error::TryRecvError;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::mpsc::error::TryRecvError;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

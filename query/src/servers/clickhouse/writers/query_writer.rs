@@ -14,7 +14,7 @@
 
 use std::borrow::Cow;
 
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;

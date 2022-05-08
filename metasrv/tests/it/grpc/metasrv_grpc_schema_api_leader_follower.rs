@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Test metasrv SchemaApi by writing to leader and then reading from a follower.
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 
 use crate::init_meta_ut;

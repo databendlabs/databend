@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
+use common_base::mem_allocator::malloc_size;
 use common_exception::Result;
-use common_mem_allocator::malloc_size;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
