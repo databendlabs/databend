@@ -124,7 +124,7 @@ pub trait BufferReadExt: BufferRead {
 }
 
 impl<R> BufferReadExt for R
-    where R: BufferRead
+where R: BufferRead
 {
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> Result<usize> {
         let mut bytes = 0;
