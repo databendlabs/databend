@@ -176,6 +176,7 @@ impl HashJoinState for ChainHashTable {
                 })
                 .collect::<Result<Vec<ColumnRef>>>()?;
 
+            // TODO(leiysky): replicate `probe_keys` with the `probe_keys` in outer scope
             let probe_keys = self
                 .probe_expressions
                 .iter()
