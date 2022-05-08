@@ -21,7 +21,6 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BufferRead;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::BufferReader;
 use common_io::prelude::CheckpointReader;
@@ -32,7 +31,7 @@ use crate::formats::InputFormat;
 use crate::formats::InputState;
 
 pub struct CsvInputState {
-    pub quotes: bool,
+    pub quotes: u8,
     pub memory: Vec<u8>,
     pub accepted_rows: usize,
     pub accepted_bytes: usize,
@@ -104,8 +103,8 @@ impl CsvInputFormat {
 
     fn find_quotes(buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
         for (index, byte) in buf.iter().enumerate().skip(pos) {
-            if *byte == b'"' {
-                state.quotes = false;
+            if *byte == b'"' || *byte == b'\'' {
+                state.quotes = 0;
                 return index + 1;
             }
         }
@@ -115,8 +114,8 @@ impl CsvInputFormat {
 
     fn find_delimiter(&self, buf: &[u8], pos: usize, state: &mut CsvInputState) -> usize {
         for index in pos..buf.len() {
-            if buf[index] == b'"' {
-                state.quotes = true;
+            if buf[index] == b'"' || buf[index] == b'\'' {
+                state.quotes = buf[index];
                 return index + 1;
             }
 
@@ -166,7 +165,7 @@ impl CsvInputFormat {
 impl InputFormat for CsvInputFormat {
     fn create_state(&self) -> Box<dyn InputState> {
         Box::new(CsvInputState {
-            quotes: false,
+            quotes: 0,
             memory: vec![],
             accepted_rows: 0,
             accepted_bytes: 0,
@@ -185,7 +184,7 @@ impl InputFormat for CsvInputFormat {
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
         let cursor = Cursor::new(&state.memory);
-        let reader: Box<dyn BufferRead> = Box::new(BufferReader::new(cursor));
+        let reader = BufferReader::new(cursor);
         let mut checkpoint_reader = CheckpointReader::new(reader);
 
         for row_index in 0..self.min_accepted_rows {
@@ -254,7 +253,7 @@ impl InputFormat for CsvInputFormat {
 
         state.need_more_data = true;
         while index < buf.len() && state.need_more_data {
-            index = match state.quotes {
+            index = match state.quotes != 0 {
                 true => Self::find_quotes(buf, index, state),
                 false => self.find_delimiter(buf, index, state),
             }
@@ -270,7 +269,7 @@ impl InputFormat for CsvInputFormat {
             let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
 
             while index < buf.len() {
-                index = match state.quotes {
+                index = match state.quotes != 0 {
                     true => Self::find_quotes(buf, index, state),
                     false => self.find_delimiter(buf, index, state),
                 };
