@@ -17,11 +17,13 @@ use common_ast::ast::Expr;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
+use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
+use crate::sql::binder::scalar_common::wrap_cast_if_needed;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -211,7 +213,7 @@ impl<'a> JoinConditionResolver<'a> {
         //
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
         // For the predicates that aren't equi-predicate, we will lift them as a `Filter` operator.
-        if let Some((left, right)) = split_equivalent_predicate(predicate) {
+        if let Some((mut left, mut right)) = split_equivalent_predicate(predicate) {
             let left_used_columns = left.used_columns();
             let right_used_columns = right.used_columns();
             let left_columns: ColumnSet = self.left_context.all_column_bindings().iter().fold(
@@ -229,7 +231,13 @@ impl<'a> JoinConditionResolver<'a> {
                 },
             );
 
-            // TODO(leiysky): bump types of left conditions and right conditions
+            // Bump types of left conditions and right conditions
+            let left_type = left.data_type();
+            let right_type = right.data_type();
+            let least_super_type = merge_types(&left_type, &right_type)?;
+            left = wrap_cast_if_needed(left, &least_super_type);
+            right = wrap_cast_if_needed(right, &least_super_type);
+
             if left_used_columns.is_subset(&left_columns)
                 && right_used_columns.is_subset(&right_columns)
             {
