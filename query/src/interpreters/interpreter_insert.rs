@@ -16,12 +16,12 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_base::infallible::Mutex;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-use common_infallible::Mutex;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::InsertInputSource;

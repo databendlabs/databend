@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
+use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use futures::Stream;
 use pin_project_lite::pin_project;
 

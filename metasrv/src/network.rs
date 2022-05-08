@@ -15,8 +15,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_containers::ItemManager;
-use common_containers::Pool;
+use common_base::containers::ItemManager;
+use common_base::containers::Pool;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;

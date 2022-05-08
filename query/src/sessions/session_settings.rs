@@ -18,10 +18,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_types::UserSetting;
 use itertools::Itertools;
 

@@ -22,7 +22,7 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PhysicalHashJoin {
     pub build_keys: Vec<Scalar>,
     pub probe_keys: Vec<Scalar>,

@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::RwLock;
-use common_base::ProgressValues;
-use common_base::TrySpawn;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::RwLock;
+use common_base::base::ProgressValues;
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

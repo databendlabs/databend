@@ -24,12 +24,12 @@ use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProjectPlan {
     pub items: Vec<ProjectItem>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProjectItem {
     pub expr: Scalar,
     pub index: IndexType,

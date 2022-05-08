@@ -15,12 +15,14 @@
 use std::io::Write;
 
 use common_ast::parser::error::pretty_print_error;
+use common_ast::parser::error::Backtrace;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
 use common_ast::parser::statement::*;
 use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
+use common_ast::parser::util::Input;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
@@ -28,7 +30,8 @@ use nom::Parser;
 macro_rules! test_parse {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
-        match $parser.parse(&(tokens)) {
+        let backtrace = Backtrace::new();
+        match $parser.parse(Input(&tokens, &backtrace)) {
             Ok((i, output)) if i[0].kind == TokenKind::EOI => {
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
@@ -114,7 +117,8 @@ fn test_statement() {
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let stmts = parse_sql(&tokens).unwrap();
+        let backtrace = Backtrace::new();
+        let stmts = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         for stmt in stmts {
@@ -150,7 +154,8 @@ fn test_statements_in_legacy_suites() {
         .into_owned();
 
         let tokens = tokenize_sql(&file_str).unwrap();
-        parse_sql(&tokens).unwrap();
+        let backtrace = Backtrace::new();
+        parse_sql(&tokens, &backtrace).unwrap();
     }
 }
 

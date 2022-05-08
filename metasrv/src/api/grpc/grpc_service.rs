@@ -18,7 +18,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;

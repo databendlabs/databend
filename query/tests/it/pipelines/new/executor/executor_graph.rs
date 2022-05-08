@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc::channel;
-use common_base::tokio::sync::mpsc::Receiver;
-use common_base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc::channel;
+use common_base::base::tokio::sync::mpsc::Receiver;
+use common_base::base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use databend_query::pipelines::new::executor::RunningGraph;

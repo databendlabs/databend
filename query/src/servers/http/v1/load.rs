@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_stream::stream;
-use common_base::ProgressValues;
-use common_base::TrySpawn;
+use common_base::base::ProgressValues;
+use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;

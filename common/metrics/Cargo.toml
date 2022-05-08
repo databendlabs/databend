@@ -12,8 +12,8 @@ test = false
 
 [dependencies]
 # Workspace dependencies
+common-base = { path = "../base" }
 common-exception = { path = "../exception" }
-common-infallible = { path = "../infallible" }
 common-tracing = { path = "../tracing" }
 
 # Crates.io dependencies

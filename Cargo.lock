@@ -857,17 +857,23 @@ dependencies = [
 name = "common-base"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "common-exception",
+ "common-macros",
  "common-tracing",
  "ctrlc",
  "futures",
  "hyper",
+ "libc",
+ "parking_lot 0.12.0",
  "poem",
  "pprof",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tikv-jemalloc-ctl",
+ "tikv-jemalloc-sys",
  "tokio",
  "toml",
  "uuid",
@@ -898,16 +904,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-containers"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "common-base",
- "common-tracing",
-]
-
-[[package]]
 name = "common-contexts"
 version = "0.1.0"
 dependencies = [
@@ -924,9 +920,9 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
+ "common-base",
  "common-datavalues",
  "common-exception",
- "common-infallible",
  "common-io",
  "pretty_assertions",
  "regex",
@@ -939,10 +935,10 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
+ "common-base",
  "common-exception",
  "common-io",
  "common-macros",
- "common-mem-allocator",
  "criterion",
  "dyn-clone",
  "enum_dispatch",
@@ -1039,13 +1035,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-infallible"
-version = "0.1.0"
-dependencies = [
- "parking_lot 0.12.0",
-]
-
-[[package]]
 name = "common-io"
 version = "0.1.0"
 dependencies = [
@@ -1087,19 +1076,6 @@ dependencies = [
  "common-meta-types",
  "mockall",
  "serde_json",
-]
-
-[[package]]
-name = "common-mem-allocator"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-infallible",
- "common-macros",
- "libc",
- "parking_lot 0.12.0",
- "tikv-jemalloc-ctl",
- "tikv-jemalloc-sys",
 ]
 
 [[package]]
@@ -1146,7 +1122,6 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
- "common-containers",
  "common-exception",
  "common-grpc",
  "common-meta-api",
@@ -1222,7 +1197,6 @@ dependencies = [
  "enumflags2",
  "hex",
  "maplit",
- "nanoid",
  "num",
  "num-derive",
  "num-traits",
@@ -1244,8 +1218,8 @@ dependencies = [
 name = "common-metrics"
 version = "0.1.0"
 dependencies = [
+ "common-base",
  "common-exception",
- "common-infallible",
  "common-tracing",
  "metrics",
  "metrics-exporter-prometheus",
@@ -1264,7 +1238,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-infallible",
  "common-meta-types",
  "once_cell",
  "pretty_assertions",
@@ -1299,10 +1272,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-range-map"
-version = "0.1.0"
-
-[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -1315,7 +1284,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-infallible",
  "common-io",
  "common-tracing",
  "csv-async",
@@ -1722,7 +1690,6 @@ dependencies = [
  "clap 3.1.8",
  "common-arrow",
  "common-base",
- "common-containers",
  "common-exception",
  "common-grpc",
  "common-macros",
@@ -1732,7 +1699,6 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
- "common-range-map",
  "common-tracing",
  "futures",
  "maplit",
@@ -1803,11 +1769,9 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-grpc",
- "common-infallible",
  "common-io",
  "common-macros",
  "common-management",
- "common-mem-allocator",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-grpc",
@@ -3741,15 +3705,6 @@ name = "naive-cityhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fce7b49e1e6d8aa67232ef1c4c936c0af58756eb2db6f65c40bacb39035e7f42"
-
-[[package]]
-name = "nanoid"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
-dependencies = [
- "rand 0.8.5",
-]
 
 [[package]]
 name = "native-tls"

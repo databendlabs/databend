@@ -14,7 +14,7 @@
 
 //! Test metasrv SchemaApi by writing to one follower and then reading from another follower.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::SchemaApiTestSuite;
 
 use crate::init_meta_ut;

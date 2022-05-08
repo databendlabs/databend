@@ -152,7 +152,7 @@ impl Function for FunctionAdapter {
                     return Ok(NullableColumn::wrap_inner(
                         inner_type
                             .create_constant_column(&inner_type.default_value(), input_rows)?,
-                        Some(valid.unwrap().clone()),
+                        valid.cloned(),
                     ));
                 }
                 validity = combine_validities_2(validity.clone(), valid.cloned());

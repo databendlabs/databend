@@ -16,7 +16,7 @@ use std::pin::Pin;
 use std::thread::sleep;
 use std::time::Duration;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::ExportedChunk;

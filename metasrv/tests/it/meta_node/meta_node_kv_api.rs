@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::KVApiBuilder;
 use common_meta_api::KVApiTestSuite;
 use common_tracing::tracing::Instrument;

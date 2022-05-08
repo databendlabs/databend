@@ -15,7 +15,7 @@
 use std::fs::File;
 use std::io::Write;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;

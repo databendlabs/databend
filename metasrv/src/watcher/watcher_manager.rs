@@ -14,9 +14,11 @@
 //
 use core::ops::Range;
 
-use common_base::tokio;
-use common_base::tokio::sync::mpsc;
-use common_base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::rangemap::RangeMap;
+use common_base::rangemap::RangeMapKey;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
@@ -24,8 +26,6 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::PbSeqV;
 use common_meta_types::SeqV;
-use common_range_map::RangeKey;
-use common_range_map::RangeMap;
 use common_tracing::tracing;
 use tonic::Status;
 
@@ -115,7 +115,7 @@ impl WatcherManagerCore {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    fn close_stream(&mut self, key: RangeKey<String, WatcherId>) {
+    fn close_stream(&mut self, key: RangeMapKey<String, WatcherId>) {
         self.watcher_range_map.remove_by_key(&key);
     }
 
@@ -129,7 +129,7 @@ impl WatcherManagerCore {
         let prev = kv.prev;
 
         let is_delete_event = current.is_none();
-        let mut remove_range_keys: Vec<RangeKey<String, WatcherId>> = vec![];
+        let mut remove_range_keys: Vec<RangeMapKey<String, WatcherId>> = vec![];
 
         for range_key_stream in set.iter() {
             let filter = range_key_stream.1.filter_type;
@@ -158,7 +158,7 @@ impl WatcherManagerCore {
                     watcher_id,
                     err
                 );
-                remove_range_keys.push(RangeKey::new(
+                remove_range_keys.push(RangeMapKey::new(
                     stream.key.clone()..stream.key_end.clone(),
                     watcher_id,
                 ));

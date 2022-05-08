@@ -18,8 +18,8 @@ use std::time::Duration;
 
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
-use common_base::get_free_tcp_port;
-use common_base::tokio;
+use common_base::base::get_free_tcp_port;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;

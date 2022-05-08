@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -336,7 +336,7 @@ fn test_meta_locations() -> Result<()> {
     Ok(())
 }
 
-use common_infallible::Mutex;
+use common_base::infallible::Mutex;
 
 #[derive(Debug)]
 struct MockDataAccessor {

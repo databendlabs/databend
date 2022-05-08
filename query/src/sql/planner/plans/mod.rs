@@ -88,7 +88,7 @@ pub enum PlanType {
 }
 
 #[enum_dispatch(BasePlan)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BasePlanImpl {
     LogicalGet(LogicalGet),
     LogicalInnerJoin(LogicalInnerJoin),

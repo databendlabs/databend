@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_base::Progress;
-use common_base::ProgressValues;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Future;

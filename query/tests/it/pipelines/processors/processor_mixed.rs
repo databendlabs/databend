@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
 use databend_query::pipelines::transforms::SourceTransform;

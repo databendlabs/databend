@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-use common_base::tokio;
+use common_base::base::tokio;
 use databend_meta::api::http::v1::health::health_handler;
 use poem::get;
 use poem::http::Method;

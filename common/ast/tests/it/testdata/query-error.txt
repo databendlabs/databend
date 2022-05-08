@@ -44,7 +44,7 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected <Ident>, <QuotedIdent>, `SELECT`, or "("
+  | ------        ^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedIdent>
   | |              
   | while parsing `SELECT ...`
 
@@ -121,7 +121,7 @@ error:
   --> SQL:1:45
   |
 1 | select number + 5 as a, cast(number as float(255))
-  | ------                  ----                ^ expected ")"
+  | ------                  ----                ^ expected `)`
   | |                       |                    
   | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression

@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::tokio::sync::mpsc;
-use common_base::TrySpawn;
+use common_base::base::tokio::sync::mpsc;
+use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

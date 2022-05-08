@@ -70,7 +70,7 @@ fn parse_knobs(mut input: syn::ItemFn, is_test: bool, has_tracker: bool) -> Toke
     };
 
     let rt = quote::quote_spanned! {last_stmt_start_span =>
-        common_base::Runtime::with_default_worker_threads().unwrap()
+        common_base::base::Runtime::with_default_worker_threads().unwrap()
     };
 
     let wait_in_future = match has_tracker {
@@ -85,7 +85,7 @@ fn parse_knobs(mut input: syn::ItemFn, is_test: bool, has_tracker: bool) -> Toke
 
     let header = if is_test {
         quote::quote! {
-            use common_base::Runtime;
+            use common_base::base::Runtime;
             #[::core::prelude::v1::test]
         }
     } else {

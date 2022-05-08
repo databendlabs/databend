@@ -16,7 +16,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::tokio::sync::Mutex;
+use common_base::base::tokio::sync::Mutex;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;

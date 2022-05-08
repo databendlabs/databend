@@ -15,13 +15,13 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::tokio::task::JoinHandle;
-use common_base::TrySpawn;
+use common_base::base::tokio::task::JoinHandle;
+use common_base::base::TrySpawn;
+use common_base::infallible::Mutex;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SubQueriesStream;

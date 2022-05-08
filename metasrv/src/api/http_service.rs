@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::tokio::sync::broadcast;
-use common_base::HttpShutdownHandler;
-use common_base::Stoppable;
+use common_base::base::tokio::sync::broadcast;
+use common_base::base::HttpShutdownHandler;
+use common_base::base::Stoppable;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
