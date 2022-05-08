@@ -49,6 +49,14 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
+        match value {
+            serde_json::Value::Bool(v) => self.builder.append_value(*v),
+            _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
+        }
+        Ok(())
+    }
+
     fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         if reader.eq_ignore_ascii_case(b"true") {
             self.builder.append_value(true);
@@ -74,14 +82,6 @@ impl TypeDeserializer for BooleanDeserializer {
         }?;
 
         self.builder.append_value(v);
-        Ok(())
-    }
-
-    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::Bool(v) => self.builder.append_value(*v),
-            _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
-        }
         Ok(())
     }
 

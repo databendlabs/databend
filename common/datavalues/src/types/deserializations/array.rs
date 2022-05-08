@@ -85,8 +85,37 @@ impl TypeDeserializer for ArrayDeserializer {
         }
         let mut values = Vec::with_capacity(idx);
         for _ in 0..idx {
-            let value = self.inner.pop_data_value().unwrap();
-            values.push(value);
+            values.push(self.inner.pop_data_value()?);
+        }
+        values.reverse();
+        self.builder.append_value(ArrayValue::new(values));
+        Ok(())
+    }
+
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut CheckpointReader<R>,
+        format: &FormatSettings,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'[')?;
+        let mut idx = 0;
+        loop {
+            let _ = reader.ignore_white_spaces()?;
+            if let Ok(res) = reader.ignore_byte(b']') {
+                if res {
+                    break;
+                }
+            }
+            if idx != 0 {
+                let _ = reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces()?;
+            self.inner.de_text_csv(reader, format)?;
+            idx += 1;
+        }
+        let mut values = Vec::with_capacity(idx);
+        for _ in 0..idx {
+            values.push(self.inner.pop_data_value()?);
         }
         values.reverse();
         self.builder.append_value(ArrayValue::new(values));
