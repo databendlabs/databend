@@ -23,7 +23,7 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FilterPlan {
     pub predicates: Vec<Scalar>,
     // True if the plan represents having, else the plan represents where

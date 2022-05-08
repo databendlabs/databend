@@ -23,7 +23,7 @@ use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AggregatePlan {
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
     pub group_expr: Vec<Scalar>,
