@@ -53,7 +53,6 @@ pub mod error_context;
 mod principal_identity;
 mod proto_display;
 mod share;
-mod warehouse_meta;
 
 // reexport
 
@@ -194,5 +193,3 @@ pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
 pub use user_setting::UserSetting;
 pub use user_stage::*;
-pub use warehouse_meta::WarehouseInfo;
-pub use warehouse_meta::WarehouseMeta;
