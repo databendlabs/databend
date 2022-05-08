@@ -210,19 +210,27 @@ impl InputFormat for CsvInputFormat {
             checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
 
             if let Some(delimiter) = &self.row_delimiter {
-                if !checkpoint_reader.ignore_white_spaces_and_byte(*delimiter)? {
+                if !checkpoint_reader.ignore_white_spaces_and_byte(*delimiter)?
+                    && !checkpoint_reader.eof()?
+                {
                     return Err(ErrorCode::BadBytes(format!(
                         "Parse csv error at line {}",
                         row_index
                     )));
                 }
-            } else if !checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
-                & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?
-            {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Parse csv error at line {}",
-                    row_index
-                )));
+            } else {
+                if (!checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
+                    & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?)
+                    && !checkpoint_reader.eof()?
+                {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Parse csv error at line {}",
+                        row_index
+                    )));
+                }
+
+                // \r\n
+                checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
             }
         }
 

@@ -65,6 +65,15 @@ impl MultipartWorker {
                         break 'outer;
                     }
                     Ok(Some(field)) => {
+                        if let Err(cause) = tx.send(Ok(vec![])).await {
+                            common_tracing::tracing::warn!(
+                                "Multipart channel disconnect. {}",
+                                cause
+                            );
+
+                            break 'outer;
+                        }
+
                         let mut async_reader = field.into_async_read();
 
                         'read: loop {
@@ -269,7 +278,15 @@ impl Processor for SequentialInputFormatSource {
     async fn async_process(&mut self) -> Result<()> {
         if let State::NeedReceiveData = replace(&mut self.state, State::NeedReceiveData) {
             if let Some(receive_res) = self.data_receiver.recv().await {
-                self.state = State::ReceivedData(receive_res?);
+                let receive_bytes = receive_res?;
+
+                if !receive_bytes.is_empty() {
+                    self.state = State::ReceivedData(receive_bytes);
+                } else {
+                    self.skipped_header = false;
+                    self.state = State::NeedDeserialize;
+                }
+
                 return Ok(());
             }
         }

@@ -84,10 +84,9 @@ pub trait BufferReadExt: BufferRead {
 
     fn must_ignore_byte(&mut self, b: u8) -> Result<()> {
         if !self.ignore_byte(b)? {
-            let buf = self.fill_buf()?;
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
-                format!("Expected to have char {}, {}", b as char, buf[0] as char),
+                format!("Expected to have char {}.", b as char),
             ));
         }
         Ok(())
@@ -95,10 +94,9 @@ pub trait BufferReadExt: BufferRead {
 
     fn must_ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<()> {
         if !self.ignore_white_spaces_and_byte(b)? {
-            let buf = self.fill_buf()?;
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
-                format!("Expected to have char {}, {}", b as char, buf[0] as char),
+                format!("Expected to have char {}", b as char),
             ));
         }
         Ok(())

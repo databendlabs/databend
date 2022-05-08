@@ -105,14 +105,9 @@ where
     fn de_text_csv<R: BufferRead>(
         &mut self,
         reader: &mut CheckpointReader<R>,
-        settings: &FormatSettings,
+        _settings: &FormatSettings,
     ) -> Result<()> {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
-
-        if maybe_quote && reader.ignore(|f| f == b'\'' || f == b'"')? && settings.empty_as_default {
-            self.de_default(settings);
-            return Ok(());
-        }
 
         let v: T = if !T::FLOATING {
             reader.read_int_text()
