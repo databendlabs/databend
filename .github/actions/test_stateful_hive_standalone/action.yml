@@ -1,0 +1,46 @@
+name: "(hive) Test Stateful Standalone"
+description: "(hive) Running stateful tests in standalone mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        image: multiarch
+
+    # we need a custom build which enables hive related features
+    # - hive : for crate databend-query to enable hive catalog
+    #
+    # besides
+    # - for the time being, only databend-query is needed
+    # - default target is used
+    - shell: bash
+      run: cargo build --bin databend-query --features hive
+
+    - name: Hive Setup for (ubuntu-latest only)
+      shell: bash
+      run: |
+        
+        docker-compose up -d -f "./docker/it-hive/hive-docker-compose.yml"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://localhost:10000 -e 'CREATE TABLE if not exists pokes (foo INT);'"
+
+    - name: Run Stateful Tests with Standalone mode (ubuntu-latest only)
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-stateful-hive-tests-standalone-embed-meta.sh
+
+    - name: Stop containers
+      if: always()
+      run: docker-compose -f "./docker/it/hive-docker-compose.yml" down

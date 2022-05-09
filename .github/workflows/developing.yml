@@ -110,3 +110,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateful_standalone
+
+  test_stateful_hive_standalone:
+    runs-on: ubuntu-latest
+    # temporarily commented out, for quicker test
+    #needs: check
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_stateful_hive_standalone
