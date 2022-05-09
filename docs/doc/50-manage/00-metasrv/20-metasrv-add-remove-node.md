@@ -1,6 +1,8 @@
 ---
 title: Manage a Databend Meta Service Cluster
-sidebar_label: Manage a Databend Meta Service Cluster
+sidebar_label: Manage a Meta Service Cluster
+description: 
+  How to add/remove nodes from the Databend Meta Service cluster
 ---
 
 :::tip

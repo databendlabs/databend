@@ -130,10 +130,8 @@ username = "root"
 password = "root"
 
 [storage]
-# fs|s3
+# s3
 type = "s3"
-
-[storage.fs]
 
 [storage.s3]
 # How to create a bucket:
@@ -150,8 +148,6 @@ endpoint_url = "https://s3.us-east-2.wasabisys.com"
 access_key_id = "<your-key-id>"
 // highlight-next-line
 secret_access_key = "<your-access-key>"
-
-[storage.azblob]
 ```
 
 :::tip

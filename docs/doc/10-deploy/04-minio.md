@@ -172,12 +172,9 @@ address = "127.0.0.1:9101"
 username = "root"
 password = "root"
 
-
 [storage]
-# fs|s3
+# s3
 type = "s3"
-
-[storage.fs]
 
 [storage.s3]
 bucket = "databend"
