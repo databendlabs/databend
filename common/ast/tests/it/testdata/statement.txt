@@ -92,6 +92,7 @@ describe a;
 DESCRIBE a
 ---------- AST ------------
 Describe {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "a",
@@ -106,6 +107,7 @@ describe a; describe b
 DESCRIBE a
 ---------- AST ------------
 Describe {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "a",
@@ -118,6 +120,7 @@ Describe {
 DESCRIBE b
 ---------- AST ------------
 Describe {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "b",

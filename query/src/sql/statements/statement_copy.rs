@@ -26,8 +26,8 @@ use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3StageTableInfo;
 use common_planners::SourceInfo;
+use common_planners::StageTableInfo;
 use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
@@ -112,7 +112,7 @@ impl AnalyzableStatement for DfCopy {
         // Read source plan.
         let from = ReadDataSourcePlan {
             catalog: catalog_name.clone(),
-            source_info: SourceInfo::S3StageSource(S3StageTableInfo {
+            source_info: SourceInfo::StageSource(StageTableInfo {
                 schema: schema.clone(),
                 stage_info,
                 path,

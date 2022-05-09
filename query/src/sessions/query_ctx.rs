@@ -41,8 +41,8 @@ use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3StageTableInfo;
 use common_planners::SourceInfo;
+use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
@@ -60,7 +60,7 @@ use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
-use crate::storages::S3StageTable;
+use crate::storages::stage::StageTable;
 use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
@@ -106,7 +106,7 @@ impl QueryContext {
             SourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
             }
-            SourceInfo::S3StageSource(s3_table_info) => self.build_s3_external_by_table_info(
+            SourceInfo::StageSource(s3_table_info) => self.build_external_by_table_info(
                 &plan.catalog,
                 s3_table_info,
                 plan.tbl_args.clone(),
@@ -131,16 +131,16 @@ impl QueryContext {
         }
     }
 
-    // Build s3 external table by stage info, this is used in:
+    // Build external table by stage info, this is used in:
     // COPY INTO t1 FROM 's3://'
     // 's3://' here is a s3 external stage, and build it to the external table.
-    fn build_s3_external_by_table_info(
+    fn build_external_by_table_info(
         &self,
         _catalog: &str,
-        table_info: &S3StageTableInfo,
+        table_info: &StageTableInfo,
         _table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
-        S3StageTable::try_create(table_info.clone())
+        StageTable::try_create(table_info.clone())
     }
 
     pub fn get_scan_progress(&self) -> Arc<Progress> {

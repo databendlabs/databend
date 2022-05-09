@@ -1,6 +1,8 @@
 ---
 title: Back Up and Restore Databend Schema Data
-sidebar_label: Back Up and Restore Databend Schema Data
+sidebar_label: Backup and Restore Schema Data
+description:
+  How to back up and restore schema data
 ---
 
 This guideline will introduce how to back up and restore the schema data which in meta service with mydumper tool.
