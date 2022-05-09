@@ -159,10 +159,6 @@ type = "fs"
 
 [storage.fs]
 data_path = "benddata/datas"
-
-[storage.s3]
-
-[storage.azblob]
 ```
 
 ### 3.2 Start databend-query
