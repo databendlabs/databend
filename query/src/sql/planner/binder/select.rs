@@ -49,15 +49,17 @@ impl Binder {
         query: &Query,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
-        let bind_context = match &query.body {
+        let mut bind_context = match &query.body {
             SetExpr::Select(stmt) => self.bind_select_stmt(stmt, bind_context).await,
             SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
             _ => Err(ErrorCode::UnImplement("Unsupported query type")),
         }?;
 
-        // TODO: support ORDER BY
         if !query.order_by.is_empty() {
-            return Err(ErrorCode::UnImplement("Unsupported ORDER BY"));
+            let bind_context_cols = bind_context.columns.clone();
+            bind_context.columns = bind_context.group_by_columns.clone();
+            self.bind_order_by(&query.order_by, &mut bind_context)?;
+            bind_context.columns = bind_context_cols;
         }
 
         if !query.limit.is_empty() {

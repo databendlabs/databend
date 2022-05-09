@@ -22,8 +22,10 @@ use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
+use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
+use crate::sql::plans::Scalar;
 
 impl Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
@@ -74,6 +76,7 @@ impl Binder {
         input_context: &BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
+        output_context.group_by_columns = input_context.columns.clone();
         output_context.expression = input_context.expression.clone();
         for select_target in select_list {
             match select_target {
@@ -121,8 +124,11 @@ impl Binder {
                         column_name: expr_name,
                         index,
                         data_type,
-                        scalar: Some(Box::new(bound_expr)),
+                        scalar: Some(Box::new(bound_expr.clone())),
                     };
+                    if !matches!(bound_expr, Scalar::BoundColumnRef(BoundColumnRef { .. })) {
+                        output_context.group_by_columns.push(column_binding.clone());
+                    }
                     output_context.add_column_binding(column_binding);
                 }
             }

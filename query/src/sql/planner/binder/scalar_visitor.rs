@@ -20,6 +20,7 @@ use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
+use crate::sql::plans::OrderExpr;
 use crate::sql::plans::Scalar;
 
 /// Controls how the visitor recursion should proceed.
@@ -74,10 +75,12 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Scalar::BoundColumnRef(_) => {}
-                                Scalar::ConstantExpr(_) => {}
+                                Scalar::BoundColumnRef(_) | Scalar::ConstantExpr(_) => {}
                                 Scalar::Cast(CastExpr { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))
+                                }
+                                Scalar::Order(OrderExpr { expr, .. }) => {
+                                    stack.push(RecursionProcessing::Call(expr))
                                 }
                             }
 

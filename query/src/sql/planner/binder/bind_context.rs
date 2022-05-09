@@ -43,13 +43,18 @@ pub struct ColumnBinding {
 #[derive(Clone, Default)]
 pub struct BindContext {
     _parent: Option<Box<BindContext>>,
-    columns: Vec<ColumnBinding>,
+    pub columns: Vec<ColumnBinding>,
 
     /// The relational operator in current context
     pub expression: Option<SExpr>,
 
     /// Aggregation scalar expression
     pub agg_scalar_exprs: Option<Vec<Scalar>>,
+
+    /// Order by columnBinding, consider the sql: select a as c from t1 order by c, a,
+    /// Order by requires not just the columns in the selection,
+    /// but the columns of the entire table as well as the columns of the selection
+    pub group_by_columns: Vec<ColumnBinding>,
 }
 
 impl BindContext {
@@ -63,6 +68,7 @@ impl BindContext {
             columns: vec![],
             expression: None,
             agg_scalar_exprs: None,
+            group_by_columns: vec![],
         }
     }
 

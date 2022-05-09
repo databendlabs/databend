@@ -68,12 +68,20 @@ select * from t1 inner join t on t.a = t1.b;
 select * from t2 inner join t on t.a = t2.c;
 select * from t2 inner join t on t.a = t2.c + 1;
 select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
+select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
+-- order by
+select '====ORDER_BY====';
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
+SELECT number, null from numbers(3) order by number desc;
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
+SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s
+create table t3(a int, b int);
+insert into t3 values(1,2),(2,3);
+select a from t order by a + b;
 drop table t;
 drop table t1;
 drop table t2;
-
-select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
 -- Select without from
 select '====SELECT_WITHOUT_FROM====';
