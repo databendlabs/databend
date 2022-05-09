@@ -15,7 +15,9 @@
 mod fuse_segment;
 mod fuse_snapshot;
 mod system;
+mod clustering_information;
 
 pub use fuse_segment::FuseSegmentProcedure;
 pub use fuse_snapshot::FuseSnapshotProcedure;
 pub use system::SystemProcedure;
+pub use clustering_information::ClusteringInformationProcedure;
