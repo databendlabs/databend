@@ -161,6 +161,19 @@ impl fmt::Debug for AzblobStorageConfig {
     }
 }
 
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default, Args, Debug)]
+#[serde(default)]
+pub struct HdfsConfig {
+    #[clap(long = "storage-hdfs-name-node", default_value_t)]
+    pub name_node: String,
+    /// # TODO(xuanwo)
+    ///
+    /// Clap doesn't allow us to use root directly.
+    #[clap(long = "storage-hdfs-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub hdfs_root: String,
+}
+
 /// Storage config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -185,6 +198,10 @@ pub struct StorageConfig {
     // azure storage blob config.
     #[clap(flatten)]
     pub azblob: AzblobStorageConfig,
+
+    // hdfs storage backend config
+    #[clap(flatten)]
+    pub hdfs: HdfsConfig,
 }
 
 impl Default for StorageConfig {
@@ -196,6 +213,7 @@ impl Default for StorageConfig {
             fs: FsStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azblob: AzblobStorageConfig::default(),
+            hdfs: HdfsConfig::default(),
         }
     }
 }
