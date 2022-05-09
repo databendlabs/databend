@@ -82,6 +82,7 @@ select a from t order by a + b;
 drop table t;
 drop table t1;
 drop table t2;
+drop table t3;
 
 -- Select without from
 select '====SELECT_WITHOUT_FROM====';

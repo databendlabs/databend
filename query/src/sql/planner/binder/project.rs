@@ -135,7 +135,9 @@ impl Binder {
                         output_context
                             .order_by_columns
                             .as_mut()
-                            .unwrap()
+                            .ok_or_else(|| {
+                                ErrorCode::SemanticError("Order by should have order by columns")
+                            })?
                             .push(column_binding.clone());
                     }
                     output_context.add_column_binding(column_binding);

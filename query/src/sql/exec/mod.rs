@@ -500,12 +500,25 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let output_schema = input_schema.clone();
         let eb = ExpressionBuilder::create(&self.metadata);
         let mut expressions = Vec::with_capacity(sort_plan.items.len());
         for item in sort_plan.items.iter() {
             expressions.push(eb.build(item)?);
         }
+
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let output_schema = schema_builder.build_sort(&input_schema, expressions.as_slice())?;
+
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ExpressionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                input_schema.clone(),
+                output_schema.clone(),
+                expressions.clone(),
+                self.ctx.clone(),
+            )
+        })?;
 
         //TODO(xudong963): Add rows_limit
 
@@ -517,7 +530,7 @@ impl PipelineBuilder {
                 transform_input_port,
                 transform_output_port,
                 None,
-                get_sort_descriptions(&input_schema, expressions.as_slice())?,
+                get_sort_descriptions(&output_schema, expressions.as_slice())?,
             )
         })?;
 
@@ -530,7 +543,7 @@ impl PipelineBuilder {
                 transform_output_port,
                 SortMergeCompactor::new(
                     None,
-                    get_sort_descriptions(&input_schema, expressions.as_slice())?,
+                    get_sort_descriptions(&output_schema, expressions.as_slice())?,
                 ),
             )
         })?;
@@ -547,11 +560,11 @@ impl PipelineBuilder {
                 transform_output_port,
                 SortMergeCompactor::new(
                     None,
-                    get_sort_descriptions(&input_schema, expressions.as_slice())?,
+                    get_sort_descriptions(&output_schema, expressions.as_slice())?,
                 ),
             )
         })?;
 
-        Ok(output_schema)
+        Ok(output_schema.clone())
     }
 }
