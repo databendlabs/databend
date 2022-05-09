@@ -111,7 +111,7 @@ async fn new_processor_format(
     let format_settings = ctx.get_format_settings()?;
 
     let (mut worker, builder) =
-        format_source_pipe_builder(format, node.schema(), multipart, &format_settings)?;
+        format_source_pipe_builder(format, ctx, node.schema(), multipart, &format_settings)?;
 
     let handler = ctx.spawn(execute_query(ctx.clone(), node.clone(), builder));
 
@@ -405,6 +405,7 @@ fn build_csv_stream(
 
 fn format_source_pipe_builder(
     format: &str,
+    context: &Arc<QueryContext>,
     schema: DataSchemaRef,
     multipart: Multipart,
     format_settings: &FormatSettings,
@@ -413,6 +414,7 @@ fn format_source_pipe_builder(
     let mut source_pipe_builder = SourcePipeBuilder::create();
     let (worker, sources) = MultipartFormat::input_sources(
         format,
+        context.clone(),
         multipart,
         schema,
         format_settings.clone(),
