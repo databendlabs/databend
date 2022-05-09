@@ -113,8 +113,6 @@ impl ItemManager for MetaChannelManager {
 }
 
 pub struct MetaGrpcClient {
-    // todo(ariesdevil): consider reuse this
-    #[allow(dead_code)]
     conn_pool: Pool<MetaChannelManager>,
     endpoints: RwLock<Vec<String>>,
     #[allow(dead_code)]
@@ -137,9 +135,16 @@ impl MetaGrpcClient {
 
         let (tx, rx) = oneshot::channel();
 
+        let addr = conf.meta_service_config.address.to_string();
+        let endpoints = if !conf.meta_service_config.endpoints.is_empty() {
+            conf.meta_service_config.endpoints.clone()
+        } else {
+            vec![addr]
+        };
+
         let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            endpoints: RwLock::new(conf.meta_service_config.endpoints.clone()),
+            endpoints: RwLock::new(endpoints),
             cancel_tx: tx,
             username: conf.meta_service_config.username.to_string(),
             password: conf.meta_service_config.password.to_string(),
@@ -151,6 +156,7 @@ impl MetaGrpcClient {
         Ok(client)
     }
 
+    // This method is just for tests using.
     #[tracing::instrument(level = "debug", skip(password))]
     pub async fn try_create(
         endpoints: Vec<String>,
