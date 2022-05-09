@@ -34,6 +34,20 @@ runs:
       with:
         sharedKey: debug-${{ inputs.target }}-v2
 
+    # Java temurin-11 is widely use (and pre-installed) across github actions.
+    # So most of the time, this action will just setup `JAVA_HOME` for us.
+    # Don't worry about the running time.
+    - name: Setup java env
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: '11'
+
+    # Building with features for test.
+    - shell: bash
+      run: cargo build --target ${{ inputs.target }} --features storage-hdfs
+
+    # Use this binary for testing.
     - shell: bash
       run: cargo build --target ${{ inputs.target }}
 

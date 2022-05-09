@@ -34,7 +34,20 @@ runs:
 
     - name: Clippy
       shell: bash
-      run: cargo clippy --tests -- -D warnings
+      run: cargo clippy --all-targets -- -D warnings
+
+    # Java temurin-11 is widely use (and pre-installed) across github actions.
+    # So most of the time, this action will just setup `JAVA_HOME` for us.
+    # Don't worry about the running time.
+    - name: Setup java env
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: '11'
+
+    - name: Clippy All features
+      shell: bash
+      run: cargo clippy --all-features --all-targets -- -D warnings
 
     - name: Audit dependencies
       shell: bash
