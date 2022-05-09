@@ -108,7 +108,7 @@ impl Binder {
             if let SelectTarget::QualifiedName(names) = select_target {
                 for indirect in names {
                     if indirect == &Indirection::Star {
-                        return Err(ErrorCode::LogicalError(
+                        return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid",
                         ));
                     }
