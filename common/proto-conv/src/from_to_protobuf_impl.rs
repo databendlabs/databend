@@ -28,6 +28,8 @@ use common_protos::pb;
 use common_protos::pb::data_type::Dt;
 use num::FromPrimitive;
 
+use crate::check_ver;
+use crate::missing;
 use crate::FromToProto;
 use crate::Incompatible;
 
@@ -36,7 +38,7 @@ const OLDEST_COMPATIBLE_VER: u64 = 1;
 
 impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
     fn from_pb(p: pb::DatabaseInfo) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let meta = match p.meta {
             None => {
@@ -71,7 +73,7 @@ impl FromToProto<pb::DatabaseInfo> for mt::DatabaseInfo {
 
 impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
     fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let v = Self {
             tenant: p.tenant,
@@ -92,7 +94,7 @@ impl FromToProto<pb::DatabaseNameIdent> for mt::DatabaseNameIdent {
 
 impl FromToProto<pb::DatabaseIdent> for mt::DatabaseIdent {
     fn from_pb(p: pb::DatabaseIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let v = Self {
             db_id: p.db_id,
@@ -113,7 +115,7 @@ impl FromToProto<pb::DatabaseIdent> for mt::DatabaseIdent {
 
 impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
     fn from_pb(p: pb::DatabaseMeta) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let v = Self {
             engine: p.engine,
@@ -142,7 +144,7 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
 
 impl FromToProto<pb::TableInfo> for mt::TableInfo {
     fn from_pb(p: pb::TableInfo) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let ident = match p.ident {
             None => {
@@ -177,7 +179,7 @@ impl FromToProto<pb::TableInfo> for mt::TableInfo {
 
 impl FromToProto<pb::TableNameIdent> for mt::TableNameIdent {
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let v = Self {
             tenant: p.tenant,
@@ -200,7 +202,7 @@ impl FromToProto<pb::TableNameIdent> for mt::TableNameIdent {
 
 impl FromToProto<pb::TableIdent> for mt::TableIdent {
     fn from_pb(p: pb::TableIdent) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let v = Self {
             table_id: p.table_id,
@@ -222,7 +224,7 @@ impl FromToProto<pb::TableIdent> for mt::TableIdent {
 
 impl FromToProto<pb::TableMeta> for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let schema = match p.schema {
             None => {
@@ -264,7 +266,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
 
 impl FromToProto<pb::DataSchema> for dv::DataSchema {
     fn from_pb(p: pb::DataSchema) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let mut fs = Vec::with_capacity(p.fields.len());
         for f in p.fields.into_iter() {
@@ -292,7 +294,7 @@ impl FromToProto<pb::DataSchema> for dv::DataSchema {
 
 impl FromToProto<pb::DataField> for dv::DataField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let v = dv::DataField::new(
             &p.name,
@@ -317,7 +319,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
 
 impl FromToProto<pb::DataType> for dv::DataTypeImpl {
     fn from_pb(p: pb::DataType) -> Result<Self, Incompatible> {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let dt = match p.dt {
             None => {
@@ -534,7 +536,7 @@ impl FromToProto<pb::DataType> for dv::DataTypeImpl {
 impl FromToProto<pb::NullableType> for dv::NullableType {
     fn from_pb(p: pb::NullableType) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let inner = p.inner.ok_or_else(|| Incompatible {
             reason: "NullableType.inner can not be None".to_string(),
@@ -561,7 +563,7 @@ impl FromToProto<pb::NullableType> for dv::NullableType {
 impl FromToProto<pb::Timestamp> for dv::TimestampType {
     fn from_pb(p: pb::Timestamp) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
         let v = dv::TimestampType::create(p.precision as usize);
         Ok(v)
     }
@@ -580,7 +582,7 @@ impl FromToProto<pb::Timestamp> for dv::TimestampType {
 impl FromToProto<pb::Struct> for dv::StructType {
     fn from_pb(p: pb::Struct) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
         let names = p.names.clone();
 
         let mut types = Vec::with_capacity(p.types.len());
@@ -614,7 +616,7 @@ impl FromToProto<pb::Struct> for dv::StructType {
 impl FromToProto<pb::Array> for dv::ArrayType {
     fn from_pb(p: pb::Array) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let inner = p.inner.ok_or_else(|| Incompatible {
             reason: "Array.inner can not be None".to_string(),
@@ -641,7 +643,7 @@ impl FromToProto<pb::Array> for dv::ArrayType {
 impl FromToProto<pb::VariantArray> for dv::VariantArrayType {
     fn from_pb(p: pb::VariantArray) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         Ok(Self {})
     }
@@ -655,7 +657,7 @@ impl FromToProto<pb::VariantArray> for dv::VariantArrayType {
 impl FromToProto<pb::VariantObject> for dv::VariantObjectType {
     fn from_pb(p: pb::VariantObject) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         Ok(Self {})
     }
@@ -696,7 +698,7 @@ impl FromToProto<pb::IntervalKind> for dv::IntervalKind {
 impl FromToProto<pb::IntervalType> for dv::IntervalType {
     fn from_pb(p: pb::IntervalType) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         let pb_kind: pb::IntervalKind =
             FromPrimitive::from_i32(p.kind).ok_or_else(|| Incompatible {
@@ -720,7 +722,7 @@ impl FromToProto<pb::IntervalType> for dv::IntervalType {
 impl FromToProto<pb::Variant> for dv::VariantType {
     fn from_pb(p: pb::Variant) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver)?;
+        check_ver(p.ver, VER, OLDEST_COMPATIBLE_VER)?;
 
         Ok(Self {})
     }
@@ -743,21 +745,4 @@ impl FromToProto<String> for DateTime<Utc> {
         let p = self.to_string();
         Ok(p)
     }
-}
-
-fn check_ver(ver: u64) -> Result<(), Incompatible> {
-    if ver > VER || ver < OLDEST_COMPATIBLE_VER {
-        return Err(Incompatible {
-            reason: format!(
-                "ver={} is not compatible with [{}, {}]",
-                ver, OLDEST_COMPATIBLE_VER, VER
-            ),
-        });
-    }
-    Ok(())
-}
-
-fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
-    let s = reason.to_string();
-    move || Incompatible { reason: s }
 }

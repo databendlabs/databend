@@ -18,8 +18,13 @@
 //! I.e., a protobuf message is able to contain several different versions of metadata in one format.
 //! This mod will convert protobuf message to the current version of meta data used in databend-query.
 
+mod data_from_to_protobuf_impl;
 mod from_to_protobuf;
 mod from_to_protobuf_impl;
+mod user_from_to_protobuf_impl;
+mod util;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::Incompatible;
+pub use util::check_ver;
+pub use util::missing;

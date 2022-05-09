@@ -26,7 +26,11 @@ fn build_proto() -> Result<()> {
     let pwd = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
     let proto_path = Path::new(&pwd).join("proto");
 
-    let proto_defs = [&Path::new(&proto_path).join(Path::new("metadata.proto"))];
+    let proto_defs = [
+        &Path::new(&proto_path).join(Path::new("datatype.proto")),
+        &Path::new(&proto_path).join(Path::new("metadata.proto")),
+        &Path::new(&proto_path).join(Path::new("user.proto")),
+    ];
 
     for proto in proto_defs.iter() {
         println!("cargo:rerun-if-changed={}", proto.to_str().unwrap());

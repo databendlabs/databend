@@ -75,6 +75,14 @@ impl GrantEntry {
         Self { object, privileges }
     }
 
+    pub fn object(&self) -> &GrantObject {
+        &self.object
+    }
+
+    pub fn privileges(&self) -> &BitFlags<UserPrivilegeType> {
+        &self.privileges
+    }
+
     pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         // the verified object should be smaller than the object inside my grant entry.
         if !self.object.contains(object) {
@@ -114,6 +122,10 @@ pub struct UserGrantSet {
 }
 
 impl UserGrantSet {
+    pub fn new(entries: Vec<GrantEntry>, roles: HashSet<String>) -> Self {
+        UserGrantSet { entries, roles }
+    }
+
     pub fn empty() -> Self {
         Self {
             entries: vec![],
