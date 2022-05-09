@@ -1,3 +1,4 @@
+====SELECT_FROM_NUMBERS====
 0
 1
 2
@@ -8,12 +9,18 @@
 7
 8
 9
+====COMPARSION====
 5
+====CAST====
 5
+====BINARY_OPERATOR====
 -0.75
+====FUNCTIONS====
 0.8414709848078965
+====IN_LIST====
 1
 3
+====AGGREGATER====
 2
 4
 3
@@ -45,6 +52,7 @@
 0
 0
 9
+====INNER_JOIN====
 1	1
 2	2
 3	3
@@ -64,3 +72,7 @@
 1	2
 2	3
 1000
+====SELECT_WITHOUT_FROM====
+2
+8
+new_planner

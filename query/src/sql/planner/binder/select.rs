@@ -16,8 +16,10 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
+use common_ast::ast::Indirection;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
+use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_datavalues::DataTypeImpl;
@@ -73,7 +75,7 @@ impl Binder {
         let mut input_context = if let Some(from) = &stmt.from {
             self.bind_table_reference(from, bind_context).await?
         } else {
-            BindContext::new()
+            self.bind_one_table(stmt).await?
         };
 
         if let Some(expr) = &stmt.selection {
@@ -99,6 +101,32 @@ impl Binder {
         self.bind_projection(&mut output_context)?;
 
         Ok(output_context)
+    }
+
+    pub(super) async fn bind_one_table(&mut self, stmt: &SelectStmt) -> Result<BindContext> {
+        for select_target in &stmt.select_list {
+            if let SelectTarget::QualifiedName(names) = select_target {
+                for indirect in names {
+                    if indirect == &Indirection::Star {
+                        return Err(ErrorCode::SemanticError(
+                            "SELECT * with no tables specified is not valid",
+                        ));
+                    }
+                }
+            }
+        }
+        let database = "system";
+        let tenant = self.ctx.get_tenant();
+        let table_meta: Arc<dyn Table> = self
+            .resolve_data_source(tenant.as_str(), database, "one")
+            .await?;
+        let source = table_meta.read_plan(self.ctx.clone(), None).await?;
+        let table_index = self
+            .metadata
+            .add_table(database.to_string(), table_meta, source);
+
+        let result = self.bind_base_table(table_index).await?;
+        Ok(result)
     }
 
     pub(super) async fn bind_table_reference(
