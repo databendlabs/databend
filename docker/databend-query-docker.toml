@@ -50,9 +50,3 @@ type = "fs"
 # fs storage.
 [storage.fs]
 data_path = "stateless_test_data"
-
-# S3 storage.
-[storage.s3]
-
-# Azure storage
-[storage.azblob]

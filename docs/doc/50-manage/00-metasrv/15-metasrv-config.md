@@ -1,5 +1,8 @@
 ---
 title: Databend Meta Service Configuration
+sidebar_label: Meta Service Configuration
+description: 
+  Databend Meta Service Configuration
 ---
 
 :::tip
