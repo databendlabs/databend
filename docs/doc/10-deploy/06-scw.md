@@ -126,10 +126,8 @@ username = "root"
 password = "root"
 
 [storage]
-# fs|s3
+# s3
 type = "s3"
-
-[storage.fs]
 
 [storage.s3]
 # How to create a bucket:
@@ -150,8 +148,6 @@ endpoint_url = "https://s3.nl-ams.scw.cloud"
 access_key_id = "<your-access-key>"
 // highlight-next-line
 secret_access_key = "<your-secret-key>"
-
-[storage.azblob]
 ```
 
 :::tip

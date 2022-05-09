@@ -1,6 +1,8 @@
 ---
 title: Back Up and Restore Databend Meta Service Cluster
-sidebar_label: Back Up and Restore Databend Meta Service Cluster
+sidebar_label: Backup and Restore Meta Service
+description:
+  How to back up and restore Meta Service cluster data
 ---
 
 This guideline will introduce how to back up and restore the meta service cluster data.

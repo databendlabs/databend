@@ -1,8 +1,8 @@
 ---
 title: Deploy a Databend Meta Service Cluster
-sidebar_label: Deploy a Databend Meta Service Cluster
-description:
-  How to deploy Databend Meta Service Cluster.
+sidebar_label: Deploy a Meta Service Cluster
+description: 
+  How to deploy Databend Meta Service Cluster
 ---
 
 :::tip

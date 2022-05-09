@@ -70,8 +70,8 @@ title: How-to Guides
 
 ## Back up
 
-* [How to Back up Meta Data](../50-operations/00-metasrv/30-metasrv-backup-restore.md)
-* [How to Back up Databases](../50-operations/10-backup-restore/10-backup-and-restore-schema.md)
+* [How to Back up Meta Data](../50-manage/00-metasrv/30-metasrv-backup-restore.md)
+* [How to Back up Databases](../50-manage/10-backup-restore/10-backup-and-restore-schema.md)
 
 ## Performance
 
