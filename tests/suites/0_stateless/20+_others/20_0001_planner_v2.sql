@@ -75,7 +75,7 @@ select '====ORDER_BY====';
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
 SELECT number, null from numbers(3) order by number desc;
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
-SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s
+SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
 select a from t3 order by a + b;
