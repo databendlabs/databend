@@ -201,10 +201,10 @@ impl<'a> DataSchemaBuilder<'a> {
         for expr in exprs.iter() {
             let expr_name = expr.column_name().clone();
             if !input_schema.has_field(expr_name.as_str()) {
-                let field = if expr.nullable(&input_schema)? {
-                    DataField::new_nullable(expr_name.as_str(), expr.to_data_type(&input_schema)?)
+                let field = if expr.nullable(input_schema)? {
+                    DataField::new_nullable(expr_name.as_str(), expr.to_data_type(input_schema)?)
                 } else {
-                    DataField::new(expr_name.as_str(), expr.to_data_type(&input_schema)?)
+                    DataField::new(expr_name.as_str(), expr.to_data_type(input_schema)?)
                 };
                 fields.push(field);
             }
