@@ -57,7 +57,7 @@ impl Binder {
 
         if !query.order_by.is_empty() {
             let bind_context_cols = bind_context.columns.clone();
-            bind_context.columns = bind_context.group_by_columns.clone();
+            bind_context.columns = bind_context.order_by_columns.clone();
             self.bind_order_by(&query.order_by, &mut bind_context)?;
             bind_context.columns = bind_context_cols;
         }

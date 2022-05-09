@@ -51,10 +51,11 @@ pub struct BindContext {
     /// Aggregation scalar expression
     pub agg_scalar_exprs: Option<Vec<Scalar>>,
 
-    /// Order by columnBinding, consider the sql: select a as c from t1 order by c, a,
+    /// Order by columnBinding, consider the sql: select sum(a) from t group by a,b order by b;,
     /// Order by requires not just the columns in the selection,
     /// but the columns of the entire table as well as the columns of the selection
-    pub group_by_columns: Vec<ColumnBinding>,
+    ///
+    pub order_by_columns: Vec<ColumnBinding>,
 }
 
 impl BindContext {
@@ -68,7 +69,7 @@ impl BindContext {
             columns: vec![],
             expression: None,
             agg_scalar_exprs: None,
-            group_by_columns: vec![],
+            order_by_columns: vec![],
         }
     }
 

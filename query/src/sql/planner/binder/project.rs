@@ -76,7 +76,7 @@ impl Binder {
         input_context: &BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
-        output_context.group_by_columns = input_context.columns.clone();
+        output_context.order_by_columns = input_context.columns.clone();
         output_context.expression = input_context.expression.clone();
         for select_target in select_list {
             match select_target {
@@ -127,7 +127,7 @@ impl Binder {
                         scalar: Some(Box::new(bound_expr.clone())),
                     };
                     if !matches!(bound_expr, Scalar::BoundColumnRef(BoundColumnRef { .. })) {
-                        output_context.group_by_columns.push(column_binding.clone());
+                        output_context.order_by_columns.push(column_binding.clone());
                     }
                     output_context.add_column_binding(column_binding);
                 }
