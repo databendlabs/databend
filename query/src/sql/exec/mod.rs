@@ -40,11 +40,15 @@ use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::new::processors::ProjectionTransform;
 use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
+use crate::pipelines::new::processors::SortMergeCompactor;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::processors::TransformHashJoinProbe;
+use crate::pipelines::new::processors::TransformSortMerge;
+use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SinkPipeBuilder;
+use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_builder::DataSchemaBuilder;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
@@ -57,6 +61,7 @@ use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::ProjectPlan;
+use crate::sql::plans::SortPlan;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
 
@@ -187,6 +192,12 @@ impl PipelineBuilder {
                     child_pipeline,
                     pipeline,
                 )
+            }
+            PlanType::Sort => {
+                let sort_plan: SortPlan = plan.try_into()?;
+                let input_schema =
+                    self.build_pipeline(context, &expression.children()[0], pipeline)?;
+                self.build_order_by(&sort_plan, input_schema, pipeline)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -481,5 +492,79 @@ impl PipelineBuilder {
 
         pipeline.add_pipe(sink_pipeline_builder.finalize());
         Ok(())
+    }
+
+    fn build_order_by(
+        &mut self,
+        sort_plan: &SortPlan,
+        input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
+        let eb = ExpressionBuilder::create(&self.metadata);
+        let mut expressions = Vec::with_capacity(sort_plan.items.len());
+        for item in sort_plan.items.iter() {
+            expressions.push(eb.build(item)?);
+        }
+
+        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let output_schema = schema_builder.build_sort(&input_schema, expressions.as_slice())?;
+
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ExpressionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                input_schema.clone(),
+                output_schema.clone(),
+                expressions.clone(),
+                self.ctx.clone(),
+            )
+        })?;
+
+        //TODO(xudong963): Add rows_limit
+
+        // processor 1: block ---> sort_stream
+        // processor 2: block ---> sort_stream
+        // processor 3: block ---> sort_stream
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformSortPartial::try_create(
+                transform_input_port,
+                transform_output_port,
+                None,
+                get_sort_descriptions(&output_schema, expressions.as_slice())?,
+            )
+        })?;
+
+        // processor 1: [sorted blocks ...] ---> merge to one sorted block
+        // processor 2: [sorted blocks ...] ---> merge to one sorted block
+        // processor 3: [sorted blocks ...] ---> merge to one sorted block
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformSortMerge::try_create(
+                transform_input_port,
+                transform_output_port,
+                SortMergeCompactor::new(
+                    None,
+                    get_sort_descriptions(&output_schema, expressions.as_slice())?,
+                ),
+            )
+        })?;
+
+        // processor1 sorted block --
+        //                             \
+        // processor2 sorted block ----> processor  --> merge to one sorted block
+        //                             /
+        // processor3 sorted block --
+        pipeline.resize(1)?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformSortMerge::try_create(
+                transform_input_port,
+                transform_output_port,
+                SortMergeCompactor::new(
+                    None,
+                    get_sort_descriptions(&output_schema, expressions.as_slice())?,
+                ),
+            )
+        })?;
+
+        Ok(output_schema.clone())
     }
 }

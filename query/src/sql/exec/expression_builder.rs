@@ -25,6 +25,7 @@ use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
+use crate::sql::plans::OrderExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
@@ -106,6 +107,22 @@ impl<'a> ExpressionBuilder<'a> {
                     expr: Box::new(arg),
                     data_type: target_type.clone(),
                     pg_style: false,
+                })
+            }
+            Scalar::Order(OrderExpr {
+                expr,
+                asc,
+                nulls_first,
+            }) => {
+                let expr = self.build(expr)?;
+                let asc = asc.unwrap_or(true);
+                // NULLS FIRST is the default for DESC order, and NULLS LAST otherwise
+                let nulls_first = nulls_first.unwrap_or(!asc);
+                Ok(Expression::Sort {
+                    expr: Box::new(expr.clone()),
+                    asc,
+                    nulls_first,
+                    origin_expr: Box::new(expr),
                 })
             }
         }

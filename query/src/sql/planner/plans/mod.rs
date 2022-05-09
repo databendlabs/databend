@@ -21,6 +21,7 @@ mod pattern;
 mod physical_scan;
 mod project;
 mod scalar;
+mod sort;
 
 use std::any::Any;
 
@@ -35,6 +36,7 @@ pub use physical_scan::PhysicalScan;
 pub use project::ProjectItem;
 pub use project::ProjectPlan;
 pub use scalar::*;
+pub use sort::SortPlan;
 
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
@@ -82,6 +84,7 @@ pub enum PlanType {
     Project,
     Filter,
     Aggregate,
+    Sort,
 
     // Pattern
     Pattern,
@@ -99,6 +102,7 @@ pub enum BasePlanImpl {
     Project(ProjectPlan),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
+    Sort(SortPlan),
 
     Pattern(PatternPlan),
 }
