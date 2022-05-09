@@ -16,7 +16,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
-use common_base::Runtime;
+use common_base::base::Runtime;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

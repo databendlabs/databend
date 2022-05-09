@@ -82,7 +82,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Logos, Clone, Copy, Debug, PartialEq)]
+#[derive(Logos, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     #[error]
     Error,

@@ -15,8 +15,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::tokio::time::Duration;
+use common_base::base::tokio;
+use common_base::base::tokio::time::Duration;
 use common_meta_api::KVApi;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::LogIdOptionExt;
@@ -25,9 +25,6 @@ use common_meta_sled_store::openraft::State;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
@@ -175,68 +172,6 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
                         panic!("expect MetaRaftError::ForwardToLeader")
                     }
                 }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
-async fn test_meta_node_add_database() -> anyhow::Result<()> {
-    // - Start a leader, 2 followers and a non-voter;
-    // - Assert that every node handles AddDatabase request correctly.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let tenant = "tenant1";
-
-    {
-        let (_nlog, all_tc) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
-        let all = all_tc.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>();
-
-        // ensure cluster works
-        assert_upsert_kv_synced(all.clone(), "foo").await?;
-
-        // - db name to create
-        // - expected db id
-        let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
-
-        // Sending AddDatabase request to any node is ok.
-        for (i, (name, want_id)) in cases.iter().enumerate() {
-            let mn = &all[i as usize];
-
-            let last_applied = mn.raft.metrics().borrow().last_applied;
-
-            let rst = mn
-                .write(LogEntry {
-                    txid: None,
-                    cmd: Cmd::CreateDatabase(CreateDatabaseReq {
-                        if_not_exists: false,
-                        name_ident: DatabaseNameIdent {
-                            tenant: tenant.to_string(),
-                            db_name: name.to_string(),
-                        },
-                        meta: DatabaseMeta {
-                            engine: "default".to_string(),
-                            ..Default::default()
-                        },
-                    }),
-                })
-                .await;
-
-            assert!(rst.is_ok());
-
-            // No matter if a db is created, the log that tries to create db always applies.
-            assert_applied_index(all.clone(), last_applied.next_index()).await?;
-
-            for (i, mn) in all.iter().enumerate() {
-                let got = mn
-                    .get_state_machine()
-                    .await
-                    .get_database_id(tenant, name.as_ref())?;
-
-                assert_eq!(*want_id, got, "n{} applied AddDatabase", i);
             }
         }
     }

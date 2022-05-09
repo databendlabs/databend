@@ -82,11 +82,11 @@ impl Function for CastFunction {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        cast_column_field(&columns[0], &self.from_type, &self.target_type)
+        cast_column_field(&columns[0], &self.from_type, &self.target_type, &func_ctx)
     }
 }
 

@@ -14,7 +14,7 @@
 
 use std::mem::size_of;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;

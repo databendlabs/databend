@@ -16,6 +16,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use databend_query::servers::http::v1::json_block::JsonBlock;
 use pretty_assertions::assert_eq;
 use serde::Serialize;
@@ -67,12 +68,30 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     } else {
         block
     };
-
-    let json_block = JsonBlock::new(&block)?;
+    let format = FormatSettings::default();
+    let json_block = JsonBlock::new(&block, &format)?;
     let expect = vec![
-        vec![val(1), val("a"), val(true), val(1.1), val("1970-01-02")],
-        vec![val(2), val("b"), val(true), val(2.2), val("1970-01-03")],
-        vec![val(3), val("c"), val(false), val(3.3), val("1970-01-04")],
+        vec![
+            val(1_i32),
+            val("a"),
+            val(true),
+            val(1.1_f64),
+            val("1970-01-02"),
+        ],
+        vec![
+            val(2_i32),
+            val("b"),
+            val(true),
+            val(2.2_f64),
+            val("1970-01-03"),
+        ],
+        vec![
+            val(3_i32),
+            val("c"),
+            val(false),
+            val(3.3_f64),
+            val("1970-01-04"),
+        ],
     ];
 
     assert_eq!(json_block.data().clone(), expect);

@@ -13,10 +13,10 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../arrow" }
+common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 common-macros = { path = "../macros" }
-common-mem-allocator = { path = "../mem-allocator" }
 
 # Github dependencies
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }

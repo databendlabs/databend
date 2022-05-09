@@ -18,10 +18,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_types::UserSetting;
 use itertools::Itertools;
 
@@ -148,6 +148,12 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: UTC,",
             },
+            SettingValue {
+                default_value: DataValue::UInt64(10000),
+                user_setting: UserSetting::create("group_by_two_level_threshold", DataValue::UInt64(10000)),
+                level: ScopeLevel::Session,
+                desc: "The threshold of keys to open two-level aggregation, default value: 10000",
+            }
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
@@ -247,6 +253,18 @@ impl Settings {
         let key = "timezone";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    // Get group by two level threshold
+    pub fn get_group_by_two_level_threshold(&self) -> Result<u64> {
+        let key = "group_by_two_level_threshold";
+        self.try_get_u64(key)
+    }
+
+    // Set group by two level threshold
+    pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
+        let key = "group_by_two_level_threshold";
+        self.try_set_u64(key, val, false)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

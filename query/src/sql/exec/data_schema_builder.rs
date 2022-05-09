@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -54,7 +53,7 @@ impl<'a> DataSchemaBuilder<'a> {
             };
             new_data_fields.push(field);
         }
-        Ok(Arc::new(DataSchema::new(new_data_fields)))
+        Ok(DataSchemaRefExt::create(new_data_fields))
     }
 
     pub fn build_project(
@@ -71,7 +70,7 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
 
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(DataSchemaRefExt::create(fields))
     }
 
     pub fn build_physical_scan(&self, plan: &PhysicalScan) -> Result<DataSchemaRef> {
@@ -88,7 +87,7 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
 
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(DataSchemaRefExt::create(fields))
     }
 
     pub fn build_canonical_schema(&self, columns: &[IndexType]) -> DataSchemaRef {
@@ -105,7 +104,7 @@ impl<'a> DataSchemaBuilder<'a> {
             fields.push(field);
         }
 
-        Arc::new(DataSchema::new(fields))
+        DataSchemaRefExt::create(fields)
     }
 
     pub fn build_group_by(
@@ -132,6 +131,64 @@ impl<'a> DataSchemaBuilder<'a> {
             };
             fields.push(field);
         }
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    pub fn build_agg_func(
+        &self,
+        input_schema: DataSchemaRef,
+        exprs: &[Expression],
+    ) -> Result<(DataSchemaRef, Vec<Expression>)> {
+        let mut fields = input_schema.fields().clone();
+        let mut agg_inner_expressions = vec![];
+        for arg_expr in exprs.iter() {
+            match arg_expr {
+                Expression::AggregateFunction { args, .. } => {
+                    for arg_inner_expr in args.iter() {
+                        if matches!(arg_inner_expr, Expression::AggregateFunction { .. }) {
+                            return Err(ErrorCode::SyntaxException(
+                                "Aggregation function cannot contain aggregate function",
+                            ));
+                        }
+                        let expr_name = arg_inner_expr.column_name().clone();
+                        if input_schema.has_field(expr_name.as_str()) {
+                            continue;
+                        }
+                        let field = if arg_inner_expr.nullable(&input_schema)? {
+                            DataField::new_nullable(
+                                expr_name.as_str(),
+                                arg_inner_expr.to_data_type(&input_schema)?,
+                            )
+                        } else {
+                            DataField::new(
+                                expr_name.as_str(),
+                                arg_inner_expr.to_data_type(&input_schema)?,
+                            )
+                        };
+                        fields.push(field);
+                        agg_inner_expressions.push(arg_inner_expr.clone())
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::LogicalError(
+                        "Expression must be aggregated function",
+                    ));
+                }
+            }
+        }
+        Ok((DataSchemaRefExt::create(fields), agg_inner_expressions))
+    }
+
+    pub fn build_join(&self, left: DataSchemaRef, right: DataSchemaRef) -> DataSchemaRef {
+        // TODO: NATURAL JOIN and USING
+        let mut fields = Vec::with_capacity(left.num_fields() + right.num_fields());
+        for field in left.fields().iter() {
+            fields.push(field.clone());
+        }
+        for field in right.fields().iter() {
+            fields.push(field.clone());
+        }
+
+        DataSchemaRefExt::create(fields)
     }
 }

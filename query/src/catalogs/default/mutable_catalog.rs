@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
@@ -85,7 +85,7 @@ impl MutableCatalog {
     pub async fn try_create_with_config(conf: Config, catalog_name: String) -> Result<Self> {
         let local_mode = conf.meta.address.is_empty();
 
-        let meta: Arc<dyn MetaApi> = if local_mode {
+        let meta: Arc<dyn SchemaApi> = if local_mode {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 

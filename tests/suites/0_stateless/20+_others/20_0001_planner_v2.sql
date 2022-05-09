@@ -34,4 +34,35 @@ select sum(a) from t group by a having sum(a) > 1;
 select sum(a+1) from t group by a+1 having sum(a+1) = 2;
 select sum(a+1) from t group by a+1, b having sum(a+1) > 3;
 drop table t;
+
+select 1, sum(number) from numbers_mt(1000000);
+select count(*) = count(1) from numbers(1000);
+select count(1) from numbers(1000);
+select sum(3) from numbers(1000);
+select count(null) from numbers(1000);
+
+SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
+SELECT max(number) FROM numbers_mt (10) where number > 2;
+
+-- Inner join
+create table t(a int);
+insert into t values(1),(2),(3);
+create table t1(b float);
+insert into t1 values(1.0),(2.0),(3.0);
+create table t2(c smallint unsigned null);
+insert into t2 values(1),(2),(null);
+
+select * from t inner join t1 on t.a = t1.b;
+select * from t inner join t2 on t.a = t2.c;
+select * from t inner join t2 on t.a = t2.c + 1;
+select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c;
+select * from t1 inner join t on t.a = t1.b;
+select * from t2 inner join t on t.a = t2.c;
+select * from t2 inner join t on t.a = t2.c + 1;
+select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
+
+drop table t;
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;

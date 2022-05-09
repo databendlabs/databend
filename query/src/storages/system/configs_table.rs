@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::mask_string;
+use common_base::base::mask_string;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;

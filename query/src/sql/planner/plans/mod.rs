@@ -14,7 +14,9 @@
 
 mod aggregate;
 mod filter;
+mod hash_join;
 mod logical_get;
+mod logical_join;
 mod pattern;
 mod physical_scan;
 mod project;
@@ -25,7 +27,9 @@ use std::any::Any;
 pub use aggregate::AggregatePlan;
 use enum_dispatch::enum_dispatch;
 pub use filter::FilterPlan;
+pub use hash_join::PhysicalHashJoin;
 pub use logical_get::LogicalGet;
+pub use logical_join::LogicalInnerJoin;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::ProjectItem;
@@ -68,9 +72,11 @@ pub trait PhysicalPlan {
 pub enum PlanType {
     // Logical operators
     LogicalGet,
+    LogicalInnerJoin,
 
     // Physical operators
     PhysicalScan,
+    PhysicalHashJoin,
 
     // Operators that are both logical and physical
     Project,
@@ -82,12 +88,17 @@ pub enum PlanType {
 }
 
 #[enum_dispatch(BasePlan)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BasePlanImpl {
     LogicalGet(LogicalGet),
+    LogicalInnerJoin(LogicalInnerJoin),
+
     PhysicalScan(PhysicalScan),
+    PhysicalHashJoin(PhysicalHashJoin),
+
     Project(ProjectPlan),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
+
     Pattern(PatternPlan),
 }

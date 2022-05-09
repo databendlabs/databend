@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::catalogs::CATALOG_DEFAULT;
+use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
@@ -73,7 +74,7 @@ impl Binder {
         let mut input_context = if let Some(from) = &stmt.from {
             self.bind_table_reference(from, bind_context).await?
         } else {
-            BindContext::create()
+            BindContext::new()
         };
 
         if let Some(expr) = &stmt.selection {
@@ -101,7 +102,7 @@ impl Binder {
         Ok(output_context)
     }
 
-    async fn bind_table_reference(
+    pub(super) async fn bind_table_reference(
         &mut self,
         stmt: &TableReference,
         bind_context: &BindContext,
@@ -173,6 +174,7 @@ impl Binder {
 
                 let table_args = Some(expressions);
 
+                // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
                     .catalogs
                     .get_catalog(CATALOG_DEFAULT)?
@@ -193,12 +195,13 @@ impl Binder {
                 }
                 Ok(result)
             }
+            TableReference::Join(join) => self.bind_join(bind_context, join).await,
             _ => Err(ErrorCode::UnImplement("Unsupported table reference type")),
         }
     }
 
     async fn bind_base_table(&mut self, table_index: IndexType) -> Result<BindContext> {
-        let mut bind_context = BindContext::create();
+        let mut bind_context = BindContext::new();
         let columns = self.metadata.columns_by_table_index(table_index);
         let table = self.metadata.table(table_index);
         for column in columns.iter() {
@@ -231,7 +234,7 @@ impl Binder {
         let scalar_binder = ScalarBinder::new(bind_context);
         let (scalar, _) = scalar_binder.bind_expr(expr)?;
         let filter_plan = FilterPlan {
-            predicate: scalar,
+            predicates: split_conjunctions(&scalar),
             is_having,
         };
         let new_expr =

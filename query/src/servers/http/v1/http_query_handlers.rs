@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
@@ -175,9 +176,11 @@ async fn query_page_handler(
     let http_query_manager = ctx.session_mgr.get_http_query_manager();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
+            // TODO(veeupup): get query_ctx here to get format_settings
+            let format = FormatSettings::default();
             query.clear_expire_time().await;
             let resp = query
-                .get_response_page(page_no)
+                .get_response_page(page_no, &format)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;
@@ -196,10 +199,12 @@ pub(crate) async fn query_handler(
     let http_query_manager = ctx.session_mgr.get_http_query_manager();
     let query = http_query_manager.try_create_query(ctx, req).await;
 
+    // TODO(veeupup): get global query_ctx's format_settings, because we cann't set session settings now
+    let format = FormatSettings::default();
     match query {
         Ok(query) => {
             let resp = query
-                .get_response_page(0)
+                .get_response_page(0, &format)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             query.update_expire_time().await;

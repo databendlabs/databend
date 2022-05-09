@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::GlobalSequence;
+use common_base::base::GlobalSequence;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;

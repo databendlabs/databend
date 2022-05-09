@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
 use pretty_assertions::assert_eq;
 

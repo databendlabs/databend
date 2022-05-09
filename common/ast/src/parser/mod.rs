@@ -24,18 +24,23 @@ use common_exception::Result;
 
 use crate::ast::Statement;
 use crate::parser::error::pretty_print_error;
+use crate::parser::error::Backtrace;
 use crate::parser::statement::statements;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
+use crate::parser::util::Input;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
 }
 
 /// Parse a SQL string into `Statement`s.
-pub fn parse_sql<'a>(sql_tokens: &'a [Token<'a>]) -> Result<Vec<Statement<'a>>> {
-    match statements(sql_tokens) {
+pub fn parse_sql<'a>(
+    sql_tokens: &'a [Token<'a>],
+    backtrace: &'a Backtrace<'a>,
+) -> Result<Vec<Statement<'a>>> {
+    match statements(Input(sql_tokens, backtrace)) {
         Ok((rest, stmts)) if rest[0].kind == TokenKind::EOI => Ok(stmts),
         Ok((rest, _)) => Err(ErrorCode::SyntaxException(pretty_print_error(
             sql_tokens[0].source,

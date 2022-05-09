@@ -17,8 +17,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_exception::Result;
-use common_infallible::Mutex;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;

@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_infallible::RwLock;
+use common_base::infallible::RwLock;
 
 use crate::DataBlock;
 

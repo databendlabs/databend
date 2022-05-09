@@ -27,6 +27,7 @@ use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod join;
 mod project;
 mod scalar;
 mod scalar_common;
@@ -56,7 +57,7 @@ impl Binder {
     }
 
     pub async fn bind<'a>(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
-        let init_bind_context = BindContext::create();
+        let init_bind_context = BindContext::new();
         let bind_context = self.bind_statement(stmt, &init_bind_context).await?;
         Ok(BindResult::create(bind_context, self.metadata))
     }

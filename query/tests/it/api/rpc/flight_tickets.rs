@@ -15,7 +15,7 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow_format::flight::data::Ticket;
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::api::FlightTicket;
 use databend_query::api::StreamTicket;

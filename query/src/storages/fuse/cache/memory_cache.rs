@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio::sync::RwLock;
+use common_base::base::tokio::sync::RwLock;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;

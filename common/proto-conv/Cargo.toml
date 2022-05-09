@@ -15,6 +15,7 @@ common-datavalues = { path = "../../common/datavalues" }
 common-meta-types = { path = "../../common/meta/types" }
 common-protos = { path = "../../common/protos" }
 
+num = "0.4"
 thiserror = "1.0.30"
 
 [build-dependencies]

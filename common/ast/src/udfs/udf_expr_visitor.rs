@@ -87,6 +87,7 @@ pub trait UDFExprVisitor: Sized + Send {
             Expr::Extract { field, expr } => self.visit_extract(field, expr).await,
             Expr::MapAccess { column, keys } => self.visit_map_access(column, keys).await,
             Expr::Trim { expr, trim_where } => self.visit_trim(expr, trim_where).await,
+            Expr::Array(exprs) => self.visit_array(exprs).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -258,5 +259,19 @@ pub trait UDFExprVisitor: Sized + Send {
             UDFExprTraverser::accept(&trim_where.1, self).await?;
         }
         Ok(())
+    }
+
+    async fn visit_array(&mut self, exprs: &[Expr]) -> Result<()> {
+        match exprs.len() {
+            0 => Err(ErrorCode::SyntaxException(
+                "Array must have at least one element.",
+            )),
+            _ => {
+                for expr in exprs {
+                    UDFExprTraverser::accept(expr, self).await?;
+                }
+                Ok(())
+            }
+        }
     }
 }

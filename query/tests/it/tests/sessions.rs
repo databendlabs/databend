@@ -15,8 +15,8 @@
 use std::env;
 use std::sync::Arc;
 
-use common_base::tokio::runtime::Runtime;
-use common_base::Thread;
+use common_base::base::tokio::runtime::Runtime;
+use common_base::base::Thread;
 use common_exception::Result;
 use databend_query::configs::Config;
 use databend_query::sessions::SessionManager;

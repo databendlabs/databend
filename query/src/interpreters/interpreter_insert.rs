@@ -15,12 +15,13 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
+use common_base::infallible::Mutex;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-use common_infallible::Mutex;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::InsertInputSource;
@@ -119,6 +120,9 @@ impl InsertInterpreter {
                     let tz = self.ctx.get_settings().get_timezone()?;
                     let tz = String::from_utf8(tz).map_err(|_| {
                         ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+                    })?;
+                    let tz = tz.parse::<Tz>().map_err(|_| {
+                        ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
                     })?;
                     let func_ctx = FunctionContext { tz };
                     pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -289,8 +293,8 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let new_pipeline = NewPipeline::create();
-        Ok(new_pipeline)
+        let insert_pipeline = NewPipeline::create();
+        Ok(insert_pipeline)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

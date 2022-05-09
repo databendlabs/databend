@@ -35,5 +35,7 @@ fn build_proto() -> Result<()> {
     let mut config = prost_build::Config::new();
     config.btree_map(&["."]);
     config.protoc_arg("--experimental_allow_proto3_optional");
-    tonic_build::configure().compile_with_config(config, &proto_defs, &[&proto_path])
+    tonic_build::configure()
+        .type_attribute("IntervalKind", "#[derive(num_derive::FromPrimitive)]")
+        .compile_with_config(config, &proto_defs, &[&proto_path])
 }

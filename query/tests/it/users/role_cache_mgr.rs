@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;

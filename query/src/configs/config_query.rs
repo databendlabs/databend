@@ -97,14 +97,6 @@ pub struct QueryConfig {
     #[clap(long, default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
-    /// Table engine csv enabled
-    #[clap(long)]
-    pub table_engine_csv_enabled: bool,
-
-    /// Table engine parquet enabled
-    #[clap(long)]
-    pub table_engine_parquet_enabled: bool,
-
     /// Table engine memory enabled
     #[clap(long, parse(try_from_str), default_value = "true")]
     pub table_engine_memory_enabled: bool,
@@ -182,8 +174,6 @@ impl Default for QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
-            table_engine_csv_enabled: false,
-            table_engine_parquet_enabled: false,
             table_engine_memory_enabled: true,
             database_engine_github_enabled: true,
             wait_timeout_mills: 5000,

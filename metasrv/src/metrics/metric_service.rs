@@ -14,9 +14,9 @@
 
 use std::net::SocketAddr;
 
-use common_base::tokio::sync::broadcast;
-use common_base::HttpShutdownHandler;
-use common_base::Stoppable;
+use common_base::base::tokio::sync::broadcast;
+use common_base::base::HttpShutdownHandler;
+use common_base::base::Stoppable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::PrometheusHandle;

@@ -78,6 +78,8 @@ pub trait ScalarColumnBuilder: MutableColumn {
 
     fn with_capacity(capacity: usize) -> Self;
 
+    fn with_capacity_meta(capacity: usize, meta: ColumnMeta) -> Self;
+
     /// Append a value to builder.
     fn push(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>);
 
@@ -95,4 +97,10 @@ pub trait ScalarColumnBuilder: MutableColumn {
     /// Finish build and return a new array.
     /// Did not consume itself, we can reuse this builder
     fn finish(&mut self) -> Self::ColumnType;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ColumnMeta {
+    Simple,
+    Array { data_type: DataTypeImpl },
 }

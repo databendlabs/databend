@@ -16,9 +16,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_types::MetaId;
 use common_planners::Expression;
 

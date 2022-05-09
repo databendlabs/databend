@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_base::escape_for_key;
-use common_base::tokio;
+use common_base::base::escape_for_key;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_management::*;
 use common_meta_api::KVApi;

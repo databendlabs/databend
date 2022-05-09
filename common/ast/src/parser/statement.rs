@@ -31,9 +31,9 @@ pub fn statements(i: Input) -> IResult<Vec<Statement>> {
 
     map(
         rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi })
+            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
         ),
-        |stmts| stmts.into_iter().flatten().collect(),
+        |(stmts, _)| stmts.into_iter().flatten().collect(),
     )(i)
 }
 
@@ -596,13 +596,13 @@ pub fn engine(i: Input) -> IResult<Engine> {
     )(i)
 }
 
-pub fn values_tokens(i: Input) -> IResult<Input> {
+pub fn values_tokens(i: Input) -> IResult<&[Token]> {
     let semicolon_pos = i
         .iter()
         .position(|token| token.text() == ";")
         .unwrap_or(i.len() - 1);
-    let (value_tokens, rest_tokens) = i.split_at(semicolon_pos);
-    Ok((rest_tokens, value_tokens))
+    let (value_tokens, rest_tokens) = i.0.split_at(semicolon_pos);
+    Ok((Input(rest_tokens, i.1), value_tokens))
 }
 
 pub fn role_option(i: Input) -> IResult<RoleOption> {

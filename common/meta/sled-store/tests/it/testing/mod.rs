@@ -15,7 +15,7 @@
 pub mod fake_key_spaces;
 pub mod fake_state_machine_meta;
 
-use common_base::GlobalSequence;
+use common_base::base::GlobalSequence;
 use common_meta_sled_store::get_sled_db;
 
 /// 1. Open a temp sled::Db for all tests.

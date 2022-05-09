@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -102,7 +102,7 @@ impl FuseTable {
                                 name.as_str(),
                                 tbl.table_info.ident
                             );
-                        common_base::tokio::time::sleep(d).await;
+                        common_base::base::tokio::time::sleep(d).await;
 
                         let catalog = ctx.get_catalog(tbl.catalog_name()?.as_str())?;
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;

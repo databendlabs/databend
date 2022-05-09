@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
+use common_base::infallible::RwLock;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
 use common_datavalues::prelude::MutableColumn;
@@ -26,7 +27,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
-use common_infallible::RwLock;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;

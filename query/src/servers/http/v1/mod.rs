@@ -15,6 +15,7 @@
 mod http_query_handlers;
 pub mod json_block;
 mod load;
+mod multipart_format;
 mod query;
 mod stage;
 

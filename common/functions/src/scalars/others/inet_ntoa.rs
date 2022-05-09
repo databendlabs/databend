@@ -70,7 +70,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -86,6 +86,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
                 columns[0].data_type(),
                 &cast_to,
                 &cast_options,
+                &func_ctx,
             )?;
             let viewer = u32::try_create_viewer(&column)?;
             let viewer_iter = viewer.iter();
@@ -109,6 +110,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
                 columns[0].data_type(),
                 &cast_to,
                 &cast_options,
+                &func_ctx,
             )?;
 
             let viewer = u32::try_create_viewer(&column)?;
