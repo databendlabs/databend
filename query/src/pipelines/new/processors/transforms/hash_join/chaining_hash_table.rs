@@ -87,7 +87,7 @@ impl ChainingHashTable {
         // The next power of 2
         let mut power = 1;
         while power < rows_count {
-            power = power << 1;
+            power <<= 1;
         }
         power
     }
