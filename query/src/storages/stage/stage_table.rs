@@ -23,28 +23,28 @@ use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3StageTableInfo;
+use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
+use super::StageSource;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
-use crate::storages::StageSource;
 use crate::storages::Table;
 
-pub struct S3StageTable {
-    table_info: S3StageTableInfo,
+pub struct StageTable {
+    table_info: StageTableInfo,
     // This is no used but a placeholder.
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
 }
 
-impl S3StageTable {
-    pub fn try_create(table_info: S3StageTableInfo) -> Result<Arc<dyn Table>> {
+impl StageTable {
+    pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
         let table_info_placeholder = TableInfo::default();
         Ok(Arc::new(Self {
             table_info,
@@ -54,12 +54,12 @@ impl S3StageTable {
 }
 
 #[async_trait::async_trait]
-impl Table for S3StageTable {
+impl Table for StageTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    // S3 external has no table info yet.
+    // External stage has no table info yet.
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info_placeholder
     }
@@ -72,7 +72,7 @@ impl Table for S3StageTable {
         Ok((Statistics::default(), vec![]))
     }
 
-    // S3 external only supported new pipeline.
+    // External stage only supported new pipeline.
     // TODO(bohu): Remove after new pipeline ready.
     async fn read(
         &self,
@@ -118,7 +118,7 @@ impl Table for S3StageTable {
         Ok(())
     }
 
-    // Write data to s3 file.
+    // Write data to stage file.
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
@@ -129,7 +129,7 @@ impl Table for S3StageTable {
         ))
     }
 
-    // Truncate the s3 file.
+    // Truncate the stage file.
     async fn truncate(
         &self,
         _ctx: Arc<QueryContext>,

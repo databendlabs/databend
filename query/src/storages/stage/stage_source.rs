@@ -26,7 +26,7 @@ use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_planners::S3StageTableInfo;
+use common_planners::StageTableInfo;
 use common_streams::CsvSourceBuilder;
 use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
@@ -45,7 +45,7 @@ use crate::sessions::QueryContext;
 pub struct StageSource {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    table_info: S3StageTableInfo,
+    table_info: StageTableInfo,
     initialized: bool,
     source: Option<Box<dyn Source>>,
     files: Arc<Mutex<VecDeque<String>>>,
@@ -57,7 +57,7 @@ impl StageSource {
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        table_info: S3StageTableInfo,
+        table_info: StageTableInfo,
         files: Arc<Mutex<VecDeque<String>>>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, StageSource {

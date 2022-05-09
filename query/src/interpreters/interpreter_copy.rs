@@ -35,7 +35,7 @@ use crate::pipelines::new::executor::PipelineCompleteExecutor;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::storages::StageSource;
+use crate::storages::stage::StageSource;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -55,7 +55,7 @@ impl CopyInterpreter {
     //     2.2 If the path is a folder, S3File::list() will return all the files in it.
     async fn list_files(&self) -> Result<Vec<String>> {
         let files = match &self.plan.from.source_info {
-            SourceInfo::S3StageSource(table_info) => {
+            SourceInfo::StageSource(table_info) => {
                 let path = &table_info.path;
                 // Here we add the path to the file: /path/to/path/file1.
                 let files_with_path = if !self.plan.files.is_empty() {
@@ -86,7 +86,7 @@ impl CopyInterpreter {
         mut plan: ReadDataSourcePlan,
         files: Vec<String>,
     ) -> ReadDataSourcePlan {
-        if let SourceInfo::S3StageSource(ref mut s3) = plan.source_info {
+        if let SourceInfo::StageSource(ref mut s3) = plan.source_info {
             s3.files = files
         }
         plan
