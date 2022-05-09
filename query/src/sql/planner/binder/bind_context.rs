@@ -54,8 +54,7 @@ pub struct BindContext {
     /// Order by columnBinding, consider the sql: select sum(a) from t group by a,b order by b;,
     /// Order by requires not just the columns in the selection,
     /// but the columns of the entire table as well as the columns of the selection
-    ///
-    pub order_by_columns: Vec<ColumnBinding>,
+    pub order_by_columns: Option<Vec<ColumnBinding>>,
 }
 
 impl BindContext {
@@ -69,7 +68,7 @@ impl BindContext {
             columns: vec![],
             expression: None,
             agg_scalar_exprs: None,
-            order_by_columns: vec![],
+            order_by_columns: Some(Vec::new()),
         }
     }
 
