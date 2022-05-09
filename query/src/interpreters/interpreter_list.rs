@@ -30,7 +30,7 @@ use regex::Regex;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
-use crate::storages::StageSource;
+use crate::storages::stage::StageSource;
 
 pub struct ListInterpreter {
     ctx: Arc<QueryContext>,

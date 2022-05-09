@@ -12,8 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod s3_stage_source;
-mod s3_stage_table;
+mod stage_source;
+mod stage_table;
 
-pub use s3_stage_source::StageSource;
-pub use s3_stage_table::S3StageTable;
+pub use stage_source::StageSource;
+pub use stage_table::StageTable;
