@@ -50,12 +50,6 @@ impl AuthMgr {
         })
     }
 
-    pub async fn no_auth(&self) -> Result<UserInfo> {
-        self.user_mgr
-            .get_user(&self.tenant, UserIdentity::new("root", "127.0.0.1"))
-            .await
-    }
-
     pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {
         match credential {
             Credential::Jwt { token: t } => {
