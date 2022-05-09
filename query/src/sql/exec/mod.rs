@@ -34,7 +34,7 @@ use super::plans::BasePlan;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
-use crate::pipelines::new::processors::ChainHashTable;
+use crate::pipelines::new::processors::ChainingHashTable;
 use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::HashJoinState;
 use crate::pipelines::new::processors::ProjectionTransform;
@@ -435,7 +435,7 @@ impl PipelineBuilder {
             .map(|scalar| eb.build(scalar))
             .collect::<Result<Vec<Expression>>>()?;
 
-        let hash_join_state = Arc::new(ChainHashTable::try_create(
+        let hash_join_state = Arc::new(ChainingHashTable::try_create(
             build_expressions,
             probe_expressions,
             build_schema,
