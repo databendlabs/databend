@@ -23,30 +23,30 @@ use common_meta_types::TableInfo;
 use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
-use crate::S3StageTableInfo;
+use crate::StageTableInfo;
 use crate::Statistics;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SourceInfo {
-    // Normal table source, 'fuse/system'.
+    // Normal table source, `fuse/system`.
     TableSource(TableInfo),
 
-    // S3 internal/external source, 's3://'.
-    S3StageSource(S3StageTableInfo),
+    // Internal/External source, like `s3://` or `azblob://`.
+    StageSource(StageTableInfo),
 }
 
 impl SourceInfo {
     pub fn schema(&self) -> Arc<DataSchema> {
         match self {
             SourceInfo::TableSource(table_info) => table_info.schema(),
-            SourceInfo::S3StageSource(table_info) => table_info.schema(),
+            SourceInfo::StageSource(table_info) => table_info.schema(),
         }
     }
 
     pub fn desc(&self) -> String {
         match self {
             SourceInfo::TableSource(table_info) => table_info.desc.clone(),
-            SourceInfo::S3StageSource(table_info) => table_info.desc(),
+            SourceInfo::StageSource(table_info) => table_info.desc(),
         }
     }
 }

@@ -19,14 +19,14 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct S3StageTableInfo {
+pub struct StageTableInfo {
     pub schema: DataSchemaRef,
     pub stage_info: UserStageInfo,
     pub path: String,
     pub files: Vec<String>,
 }
 
-impl S3StageTableInfo {
+impl StageTableInfo {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }
@@ -36,7 +36,7 @@ impl S3StageTableInfo {
     }
 }
 
-impl Debug for S3StageTableInfo {
+impl Debug for StageTableInfo {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.stage_info)
