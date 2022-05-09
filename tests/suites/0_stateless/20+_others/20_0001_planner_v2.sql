@@ -65,6 +65,7 @@ drop table t;
 drop table t1;
 drop table t2;
 
+select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 -- Select without from
 select 1 + 1;
 select to_int(8);

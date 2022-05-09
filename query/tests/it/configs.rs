@@ -101,6 +101,10 @@ account_key = ""
 container = ""
 endpoint_url = ""
 root = ""
+
+[storage.hdfs]
+name_node = ""
+root = ""
 "#;
 
     let tom_actual = toml::to_string(&actual).unwrap();
@@ -266,6 +270,10 @@ account_name = ""
 account_key = ""
 container = ""
 endpoint_url = ""
+root = ""
+
+[storage.hdfs]
+name_node = ""
 root = ""
     "#
         .as_bytes(),

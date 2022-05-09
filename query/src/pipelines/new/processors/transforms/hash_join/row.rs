@@ -30,7 +30,6 @@ use crate::sessions::QueryContext;
 pub struct Chunk {
     pub data_block: DataBlock,
     pub hash_values: HashVector,
-    pub next_ptr: Vec<Option<RowPtr>>,
 }
 
 impl Chunk {
@@ -59,11 +58,9 @@ impl RowSpace {
     }
 
     pub fn push(&self, data_block: DataBlock, hash_values: HashVector) -> Result<()> {
-        let row_count = data_block.num_rows();
         let chunk = Chunk {
             data_block,
             hash_values,
-            next_ptr: vec![None; row_count],
         };
 
         {
@@ -83,13 +80,8 @@ impl RowSpace {
             .fold(0, |acc, v| acc + v.num_rows())
     }
 
-    pub fn get_next(&self, row_ptr: &RowPtr) -> Option<RowPtr> {
-        self.chunks.read().unwrap()[row_ptr.chunk_index as usize].next_ptr
-            [row_ptr.row_index as usize]
-    }
-
+    // TODO(leiysky): gather into multiple blocks, since there are possibly massive results
     pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
-        let _row_count = row_ptrs.len();
         let mut data_blocks = vec![];
 
         {
@@ -119,6 +111,7 @@ impl RowSpace {
     }
 }
 
+// TODO(leiysky): compare in a more efficient way
 pub fn compare_and_combine(
     probe_input: DataBlock,
     probe_result: DataBlock,

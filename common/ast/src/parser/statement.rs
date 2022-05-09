@@ -31,9 +31,9 @@ pub fn statements(i: Input) -> IResult<Vec<Statement>> {
 
     map(
         rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi })
+            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
         ),
-        |stmts| stmts.into_iter().flatten().collect(),
+        |(stmts, _)| stmts.into_iter().flatten().collect(),
     )(i)
 }
 

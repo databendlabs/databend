@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod chaining_hash_table;
 mod hash;
 mod hash_table;
 mod row;
 
-pub use hash_table::ChainHashTable;
+pub use chaining_hash_table::ChainingHashTable;
 pub use hash_table::HashJoinState;

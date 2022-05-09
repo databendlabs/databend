@@ -24,7 +24,7 @@ use logos::Span;
 use crate::parser::token::*;
 use crate::parser::util::Input;
 
-const MAX_DISPLAY_ERROR_COUNT: usize = 5;
+const MAX_DISPLAY_ERROR_COUNT: usize = 6;
 
 /// This error type accumulates errors and their position when backtracking
 /// through a parse tree. This take a deepest error at `alt` combinator.
@@ -168,6 +168,7 @@ impl<'a> Error<'a> {
                 .iter()
                 .chain(&inner.errors)
                 .filter_map(|kind| match kind {
+                    ErrorKind::ExpectToken(EOI) => None,
                     ErrorKind::ExpectToken(token) if token.is_keyword() => {
                         Some(format!("`{:?}`", token))
                     }
