@@ -102,6 +102,10 @@ container = ""
 endpoint_url = ""
 root = ""
 
+[storage.hdfs]
+name_node = ""
+root = ""
+
 [catalog]
 meta_store_address = "127.0.0.1:9083"
 protocol = "Binary"
@@ -270,6 +274,10 @@ account_name = ""
 account_key = ""
 container = ""
 endpoint_url = ""
+root = ""
+
+[storage.hdfs]
+name_node = ""
 root = ""
 
 [catalog]

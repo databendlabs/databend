@@ -130,6 +130,7 @@ impl TypeDeserializer for StringDeserializer {
                             .values_mut()
                             .extend_from_slice(&read_buffer[begin..index]);
                         self.builder.add_offset(bytes + index - begin);
+
                         reader.consume(index + 1);
                         return Ok(());
                     }
@@ -141,7 +142,7 @@ impl TypeDeserializer for StringDeserializer {
                 self.builder
                     .values_mut()
                     .extend_from_slice(&read_buffer[begin..]);
-                reader.consume(index - begin);
+                reader.consume(index);
 
                 index = 0;
                 read_buffer = reader.fill_buf()?;

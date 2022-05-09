@@ -34,6 +34,8 @@ use futures::future::Either;
 use futures::StreamExt;
 use opendal::services::azblob;
 use opendal::services::fs;
+#[cfg(feature = "storage-hdfs")]
+use opendal::services::hdfs;
 use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Accessor;
@@ -370,6 +372,23 @@ impl SessionManager {
                 }
 
                 fs::Backend::build().root(&path).finish().await?
+            }
+            #[cfg(feature = "storage-hdfs")]
+            DalSchema::Hdfs => {
+                let conf = &storage_conf.hdfs;
+                let mut builder = hdfs::Backend::build();
+
+                // Endpoint.
+                {
+                    builder.name_node(&conf.name_node);
+                }
+
+                // Root
+                {
+                    builder.root(&conf.hdfs_root);
+                }
+
+                builder.finish().await?
             }
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
