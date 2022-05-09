@@ -44,7 +44,6 @@ impl Procedure for FuseSnapshotProcedure {
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
-        // TODO pass in catalog_name
         let catalog_name = ctx.get_current_catalog();
         let database_name = args[0].clone();
         let table_name = args[1].clone();
