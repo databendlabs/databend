@@ -19,7 +19,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
-use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -88,7 +87,7 @@ impl Interpreter for DescribeTableInterpreter {
             });
             match field.default_expr() {
                 Some(expr) => {
-                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                    let expression = PlanParser::parse_expr(expr)?;
                     default_exprs.push(format!("{:?}", expression));
                 }
 
