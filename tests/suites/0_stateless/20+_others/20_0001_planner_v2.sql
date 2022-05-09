@@ -65,4 +65,10 @@ drop table t;
 drop table t1;
 drop table t2;
 
+-- Select without from
+select 1 + 1;
+select to_int(8);
+select "new_planner";
+select *; -- {ErrorCode 1015}
+
 set enable_planner_v2 = 0;
