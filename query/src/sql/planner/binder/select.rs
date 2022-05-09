@@ -116,15 +116,19 @@ impl Binder {
                 }
             }
         }
+        let catalog = CATALOG_DEFAULT;
         let database = "system";
         let tenant = self.ctx.get_tenant();
         let table_meta: Arc<dyn Table> = self
-            .resolve_data_source(tenant.as_str(), database, "one")
+            .resolve_data_source(tenant.as_str(), catalog, database, "one")
             .await?;
         let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-        let table_index = self
-            .metadata
-            .add_table(database.to_string(), table_meta, source);
+        let table_index = self.metadata.add_table(
+            CATALOG_DEFAULT.to_owned(),
+            database.to_string(),
+            table_meta,
+            source,
+        );
 
         let result = self.bind_base_table(table_index).await?;
         Ok(result)
