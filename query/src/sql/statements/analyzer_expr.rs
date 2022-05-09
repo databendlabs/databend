@@ -434,37 +434,39 @@ impl ExpressionAnalyzer {
                 "MapAccess operator must be one children.",
             )),
             Some(inner_expr) => {
-                let path_name: String = keys
-                    .iter()
-                    .enumerate()
-                    .map(|(i, k)| match k {
-                        k @ Value::Number(_, _) => format!("[{}]", k),
-                        Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
-                        Value::ColonString(s) => {
-                            let key = if i == 0 {
-                                s.to_string()
-                            } else {
-                                format!(":{}", s)
-                            };
-                            key
-                        }
-                        Value::PeriodString(s) => format!(".{}", s),
-                        _ => format!("[{}]", k),
-                    })
-                    .collect();
-
-                let name = match keys[0] {
-                    Value::ColonString(_) => format!("{}:{}", inner_expr.column_name(), path_name),
-                    _ => format!("{}{}", inner_expr.column_name(), path_name),
+                let name = match &keys[0] {
+                    k @ Value::Number(_, _) => format!("{}[{}]", inner_expr.column_name(), k),
+                    Value::SingleQuotedString(s) => {
+                        format!("{}['{}']", inner_expr.column_name(), s)
+                    }
+                    Value::DoubleQuotedString(s) => {
+                        format!("{}[\"{}\"]", inner_expr.column_name(), s)
+                    }
+                    Value::ColonString(s) => format!("{}:{}", inner_expr.column_name(), s),
+                    Value::PeriodString(s) => format!("{}.{}", inner_expr.column_name(), s),
+                    _ => format!("{}[{}]", inner_expr.column_name(), keys[0]),
                 };
-                let path =
-                    Expression::create_literal(DataValue::String(path_name.as_bytes().to_vec()));
-                let arguments = vec![inner_expr, path];
+
+                let path_expr = match &keys[0] {
+                    Value::Number(value, _) => Expression::create_literal(
+                        DataValue::try_from_literal(value, None).unwrap(),
+                    ),
+                    Value::SingleQuotedString(s)
+                    | Value::DoubleQuotedString(s)
+                    | Value::ColonString(s)
+                    | Value::PeriodString(s) => Expression::create_literal(s.as_bytes().into()),
+                    _ => Expression::create_literal(keys[0].to_string().as_bytes().into()),
+                };
+                let arguments = vec![inner_expr, path_expr];
 
                 args.push(Expression::MapAccess {
                     name,
                     args: arguments,
                 });
+                // convert map access v[0][1] to function get(get(v, 0), 1)
+                if keys.len() > 1 {
+                    self.analyze_map_access(&keys[1..], args)?;
+                }
                 Ok(())
             }
         }

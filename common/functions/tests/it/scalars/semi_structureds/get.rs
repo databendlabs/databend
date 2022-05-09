@@ -136,3 +136,75 @@ fn test_get_path_function() -> Result<()> {
 
     test_scalar_functions("get_path", &tests)
 }
+
+#[test]
+fn test_array_get_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "array_get_int64",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                    ArrayValue::new(vec![4_i64.into(), 5_i64.into(), 6_i64.into()]),
+                    ArrayValue::new(vec![7_i64.into(), 8_i64.into(), 9_i64.into()]),
+                ]),
+                Series::from_data(vec![0_u32, 0, 0]),
+            ],
+            expect: Series::from_data(vec![Some(1_i64), Some(4_i64), Some(7_i64)]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "array_get_string",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![
+                        "a1".as_bytes().into(),
+                        "a2".as_bytes().into(),
+                        "a3".as_bytes().into(),
+                    ]),
+                    ArrayValue::new(vec![
+                        "b1".as_bytes().into(),
+                        "b2".as_bytes().into(),
+                        "b3".as_bytes().into(),
+                    ]),
+                    ArrayValue::new(vec![
+                        "c1".as_bytes().into(),
+                        "c2".as_bytes().into(),
+                        "c3".as_bytes().into(),
+                    ]),
+                ]),
+                Series::from_data(vec![0_u32, 0, 0]),
+            ],
+            expect: Series::from_data(vec![Some("a1"), Some("b1"), Some("c1")]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "array_get_out_of_bounds",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                    ArrayValue::new(vec![4_i64.into(), 5_i64.into(), 6_i64.into()]),
+                    ArrayValue::new(vec![7_i64.into(), 8_i64.into(), 9_i64.into()]),
+                ]),
+                Series::from_data(vec![3_u32, 3, 3]),
+            ],
+            expect: Series::from_data(vec![None::<&str>]),
+            error: "Index out of array column bounds: the len is 3 but the index is 3",
+        },
+        ScalarFunctionTest {
+            name: "array_get_error_type",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                    ArrayValue::new(vec![4_i64.into(), 5_i64.into(), 6_i64.into()]),
+                    ArrayValue::new(vec![7_i64.into(), 8_i64.into(), 9_i64.into()]),
+                ]),
+                Series::from_data(vec!["a", "a", "a"]),
+            ],
+            expect: Series::from_data(vec![None::<&str>]),
+            error: "Invalid argument types for function 'GET': (Array, String)",
+        },
+    ];
+
+    test_scalar_functions("get", &tests)
+}

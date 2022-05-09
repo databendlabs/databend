@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod array_get;
 mod array_length;
 mod check_json;
 mod get;
@@ -20,6 +21,7 @@ mod length;
 mod parse_json;
 mod semi_structured;
 
+pub use array_get::ArrayGetFunction;
 pub use array_length::ArrayLengthFunction;
 pub use check_json::CheckJsonFunction;
 pub use get::GetFunction;
