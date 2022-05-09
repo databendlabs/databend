@@ -296,8 +296,6 @@ impl DataValue {
     }
 }
 
-impl Eq for DataValue {}
-
 // Did not use std::convert:TryFrom
 // Because we do not need custom type error.
 pub trait DFTryFrom<T>: Sized {

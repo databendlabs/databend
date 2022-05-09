@@ -30,6 +30,12 @@ use common_planners::RequireColumnsVisitor;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::index::range_filter::check_maybe_monotonic;
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ClusterStatistics {
+    pub min: Vec<DataValue>,
+    pub max: Vec<DataValue>,
+}
+
 #[derive(Clone)]
 pub struct Points {
     blocks: Vec<BlockMeta>,
