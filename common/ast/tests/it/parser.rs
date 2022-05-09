@@ -19,10 +19,10 @@ use common_ast::parser::error::Backtrace;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
-use common_ast::parser::statement::*;
 use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
 use common_ast::parser::util::Input;
+use common_ast::rule;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
@@ -31,25 +31,17 @@ macro_rules! test_parse {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
         let backtrace = Backtrace::new();
-        match $parser.parse(Input(&tokens, &backtrace)) {
-            Ok((i, output)) if i[0].kind == TokenKind::EOI => {
+        let parser = $parser;
+        let mut parser = rule! { #parser ~ &EOI };
+        match parser.parse(Input(&tokens, &backtrace)) {
+            Ok((i, (output, _))) => {
+                assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
                 writeln!($file, "---------- Output ---------").unwrap();
                 writeln!($file, "{}", output).unwrap();
                 writeln!($file, "---------- AST ------------").unwrap();
                 writeln!($file, "{:#?}", output).unwrap();
-                writeln!($file, "\n").unwrap();
-            }
-            Ok((i, output)) => {
-                writeln!($file, "---------- Input ----------").unwrap();
-                writeln!($file, "{}", $source).unwrap();
-                writeln!($file, "---------- Output ---------").unwrap();
-                writeln!($file, "{}", output).unwrap();
-                writeln!($file, "---------- AST ------------").unwrap();
-                writeln!($file, "{:#?}", output).unwrap();
-                writeln!($file, "---------- REST -----------").unwrap();
-                writeln!($file, "{}", &$source[i[0].span.start..]).unwrap();
                 writeln!($file, "\n").unwrap();
             }
             Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
@@ -176,7 +168,13 @@ fn test_statement_error() {
     ];
 
     for case in cases {
-        test_parse!(file, statement, case);
+        let tokens = tokenize_sql(case).unwrap();
+        let backtrace = Backtrace::new();
+        let err = parse_sql(&tokens, &backtrace).unwrap_err();
+        writeln!(file, "---------- Input ----------").unwrap();
+        writeln!(file, "{}", case).unwrap();
+        writeln!(file, "---------- Output ---------").unwrap();
+        writeln!(file, "{}", err.message()).unwrap();
     }
 }
 
@@ -219,8 +217,10 @@ fn test_query_error() {
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
+        r#"select * from t inner join t1"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
+        r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
     ];
 

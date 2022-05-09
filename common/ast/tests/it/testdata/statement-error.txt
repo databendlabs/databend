@@ -31,7 +31,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^
   | |               | |
-  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, or 26 more ...
+  | |               | expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 25 more ...
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [NOT NULL | NULL] [DEFAULT <default value>]`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [ENGINE = <engine>]`
@@ -40,40 +40,21 @@ error:
 ---------- Input ----------
 drop table if a.b
 ---------- Output ---------
-DROP TABLE if
----------- AST ------------
-DropTable {
-    if_exists: false,
-    database: None,
-    table: Identifier {
-        name: "if",
-        quote: None,
-    },
-}
----------- REST -----------
-a.b
+error: 
+  --> SQL:1:15
+  |
+1 | drop table if a.b
+  |               ^ expected `EXISTS`, `.`, or `;`
 
 
 ---------- Input ----------
 truncate table a.b.c.d
 ---------- Output ---------
-TRUNCATE TABLE a.b
----------- AST ------------
-TruncateTable {
-    database: Some(
-        Identifier {
-            name: "a",
-            quote: None,
-        },
-    ),
-    table: Identifier {
-        name: "b",
-        quote: None,
-    },
-    purge: false,
-}
----------- REST -----------
-.c.d
+error: 
+  --> SQL:1:19
+  |
+1 | truncate table a.b.c.d
+  |                   ^ expected `PURGE` or `;`
 
 
 ---------- Input ----------
@@ -95,7 +76,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or 1 more ...
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, or `FUNCTION`
 
 
 ---------- Input ----------
