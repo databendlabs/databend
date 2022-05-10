@@ -11,5 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod proto_conv;
-mod user_proto_conv;
+
+use crate::Incompatible;
+
+pub const VER: u64 = 1;
+const OLDEST_COMPATIBLE_VER: u64 = 1;
+
+pub fn check_ver(ver: u64) -> Result<(), Incompatible> {
+    if ver > VER || ver < OLDEST_COMPATIBLE_VER {
+        return Err(Incompatible {
+            reason: format!(
+                "ver={} is not compatible with [{}, {}]",
+                ver, OLDEST_COMPATIBLE_VER, VER
+            ),
+        });
+    }
+    Ok(())
+}
+
+pub fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
+    let s = reason.to_string();
+    move || Incompatible { reason: s }
+}

@@ -241,7 +241,16 @@ impl Default for AuthInfo {
 }
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    num_derive::FromPrimitive,
 )]
 pub enum PasswordHashMethod {
     PlainText = 0,
