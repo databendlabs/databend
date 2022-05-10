@@ -19,7 +19,7 @@ done
 BIN=${1:-debug}
 
 echo 'Start databend-meta...'
-nohup target/${BIN}/databend-meta --single --log-level=ERROR &
+nohup target/${BIN}/databend-meta --single --log-level=DEBUG &
 echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
