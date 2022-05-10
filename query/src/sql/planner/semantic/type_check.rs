@@ -71,7 +71,7 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     pub async fn resolve(
         &self,
-        expr: &Expr,
+        expr: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match expr {
@@ -82,7 +82,7 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let column = self
                     .bind_context
-                    .resolve_column(table.clone().map(|ident| ident.name), column.name.clone())?;
+                    .resolve_column(table.clone().map(|ident| ident.name), column)?;
                 let data_type = column.data_type.clone();
 
                 Ok((BoundColumnRef { column }.into(), data_type))
@@ -296,7 +296,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_function(
         &self,
         func_name: &str,
-        arguments: &[&Expr],
+        arguments: &[&Expr<'a>],
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         let mut args = vec![];
@@ -329,8 +329,8 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_binary_op(
         &self,
         op: &BinaryOperator,
-        left: &Expr,
-        right: &Expr,
+        left: &Expr<'a>,
+        right: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match op {
@@ -407,7 +407,7 @@ impl<'a> TypeChecker<'a> {
     pub async fn resolve_unary_op(
         &self,
         op: &UnaryOperator,
-        child: &Expr,
+        child: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         self.resolve_function(op.to_string().as_str(), &[child], required_type)
@@ -416,7 +416,7 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_subquery(
         &self,
-        subquery: &Query,
+        subquery: &Query<'a>,
         allow_multi_rows: bool,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {

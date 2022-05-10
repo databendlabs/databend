@@ -22,10 +22,10 @@ use crate::sql::plans::SortItem;
 use crate::sql::plans::SortPlan;
 use crate::sql::BindContext;
 
-impl Binder {
+impl<'a> Binder {
     pub(super) async fn bind_order_by(
         &mut self,
-        order_by: &[OrderByExpr],
+        order_by: &[OrderByExpr<'a>],
         bind_context: &mut BindContext,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());

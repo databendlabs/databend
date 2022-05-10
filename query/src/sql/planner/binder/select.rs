@@ -22,6 +22,7 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
+use common_ast::parser::error::DisplayError as _;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -42,7 +43,7 @@ use crate::storages::Table;
 use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
 
-impl Binder {
+impl<'a> Binder {
     #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
@@ -83,7 +84,7 @@ impl Binder {
 
     pub(super) async fn bind_select_stmt(
         &mut self,
-        stmt: &SelectStmt,
+        stmt: &SelectStmt<'a>,
         has_order_by: bool,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
@@ -122,14 +123,14 @@ impl Binder {
         Ok(output_context)
     }
 
-    pub(super) async fn bind_one_table(&mut self, stmt: &SelectStmt) -> Result<BindContext> {
+    pub(super) async fn bind_one_table(&mut self, stmt: &SelectStmt<'a>) -> Result<BindContext> {
         for select_target in &stmt.select_list {
             if let SelectTarget::QualifiedName(names) = select_target {
                 for indirect in names {
                     if indirect == &Indirection::Star {
-                        return Err(ErrorCode::SemanticError(
-                            "SELECT * with no tables specified is not valid",
-                        ));
+                        return Err(ErrorCode::SemanticError(stmt.span.display_error(
+                            "SELECT * with no tables specified is not valid".to_string(),
+                        )));
                     }
                 }
             }
@@ -154,7 +155,7 @@ impl Binder {
 
     pub(super) async fn bind_table_reference(
         &mut self,
-        stmt: &TableReference,
+        stmt: &TableReference<'a>,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
         match stmt {
@@ -278,7 +279,7 @@ impl Binder {
 
     pub(super) async fn bind_where(
         &mut self,
-        expr: &Expr,
+        expr: &Expr<'a>,
         bind_context: &mut BindContext,
         is_having: bool,
     ) -> Result<()> {

@@ -34,7 +34,7 @@ impl<'a> ScalarBinder<'a> {
         ScalarBinder { bind_context, ctx }
     }
 
-    pub async fn bind_expr(&self, expr: &Expr) -> Result<(Scalar, DataTypeImpl)> {
+    pub async fn bind_expr(&self, expr: &Expr<'a>) -> Result<(Scalar, DataTypeImpl)> {
         let type_checker = TypeChecker::new(self.bind_context, self.ctx.clone());
         type_checker.resolve(expr, None).await
     }

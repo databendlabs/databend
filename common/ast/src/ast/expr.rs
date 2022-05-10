@@ -21,107 +21,110 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
+pub enum Expr<'a> {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        database: Option<Identifier>,
-        table: Option<Identifier>,
-        column: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Option<Identifier<'a>>,
+        column: Identifier<'a>,
     },
     /// `IS [ NOT ] NULL` expression
-    IsNull { expr: Box<Expr>, not: bool },
+    IsNull { expr: Box<Expr<'a>>, not: bool },
     /// `[ NOT ] IN (expr, ...)`
     InList {
-        expr: Box<Expr>,
-        list: Vec<Expr>,
+        expr: Box<Expr<'a>>,
+        list: Vec<Expr<'a>>,
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
-        expr: Box<Expr>,
-        subquery: Box<Query>,
+        expr: Box<Expr<'a>>,
+        subquery: Box<Query<'a>>,
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
-        expr: Box<Expr>,
-        low: Box<Expr>,
-        high: Box<Expr>,
+        expr: Box<Expr<'a>>,
+        low: Box<Expr<'a>>,
+        high: Box<Expr<'a>>,
         not: bool,
     },
     /// Binary operation
     BinaryOp {
         op: BinaryOperator,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: Box<Expr<'a>>,
+        right: Box<Expr<'a>>,
     },
     /// Unary operation
-    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    UnaryOp {
+        op: UnaryOperator,
+        expr: Box<Expr<'a>>,
+    },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
     /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
         field: DateTimeField,
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        substr_expr: Box<Expr>,
-        str_expr: Box<Expr>,
+        substr_expr: Box<Expr<'a>>,
+        str_expr: Box<Expr<'a>>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
-        expr: Box<Expr>,
-        substring_from: Option<Box<Expr>>,
-        substring_for: Option<Box<Expr>>,
+        expr: Box<Expr<'a>>,
+        substring_from: Option<Box<Expr<'a>>>,
+        substring_for: Option<Box<Expr<'a>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr>)>,
+        trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
     },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
     /// `COUNT(*)` expression
     CountAll,
     /// `(foo, bar)`
-    Tuple { exprs: Vec<Expr> },
+    Tuple { exprs: Vec<Expr<'a>> },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: Identifier,
-        args: Vec<Expr>,
+        name: Identifier<'a>,
+        args: Vec<Expr<'a>>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
+        operand: Option<Box<Expr<'a>>>,
+        conditions: Vec<Expr<'a>>,
+        results: Vec<Expr<'a>>,
+        else_result: Option<Box<Expr<'a>>>,
     },
     /// `EXISTS` expression
-    Exists(Box<Query>),
+    Exists(Box<Query<'a>>),
     /// Scalar subquery, which will only return a single row with a single column.
-    Subquery(Box<Query>),
+    Subquery(Box<Query<'a>>),
     // TODO(andylokandy): allow interval, function, and others alike to be a key
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
-        expr: Box<Expr>,
-        accessor: MapAccessor,
+        expr: Box<Expr<'a>>,
+        accessor: MapAccessor<'a>,
     },
 }
 
@@ -139,13 +142,13 @@ pub enum Literal {
 
 /// The display style for a map access expression
 #[derive(Debug, Clone, PartialEq)]
-pub enum MapAccessor {
+pub enum MapAccessor<'a> {
     /// `[0][1]`
     Bracket { key: Literal },
     /// `.a.b`
-    Period { key: Identifier },
+    Period { key: Identifier<'a> },
     /// `:a:b`
-    Colon { key: Identifier },
+    Colon { key: Identifier<'a> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -483,7 +486,7 @@ impl Display for Literal {
     }
 }
 
-impl Display for Expr {
+impl<'a> Display for Expr<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::ColumnRef {

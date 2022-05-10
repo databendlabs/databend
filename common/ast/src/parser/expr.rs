@@ -17,6 +17,8 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom::Offset as _;
+use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattError;
@@ -96,7 +98,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     iter.next()
                         .map(|elem| elem.span)
                         // It's safe to slice one more token because EOI is always added.
-                        .unwrap_or(Input(&rest.0[..1], i.1)),
+                        .unwrap_or_else(|| rest.slice(..1)),
                     err,
                 )
             })
@@ -144,7 +146,7 @@ fn map_pratt_error<'a>(
 
 #[derive(Debug, Clone)]
 pub struct WithSpan<'a> {
-    elem: ExprElement,
+    elem: ExprElement<'a>,
     span: Input<'a>,
 }
 
@@ -158,24 +160,24 @@ pub struct WithSpan<'a> {
 /// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
 /// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprElement {
+pub enum ExprElement<'a> {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        database: Option<Identifier>,
-        table: Option<Identifier>,
-        column: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Option<Identifier<'a>>,
+        column: Identifier<'a>,
     },
     /// `IS NULL` expression
     IsNull { not: bool },
     /// `IS NOT NULL` expression
     /// `[ NOT ] IN (list, ...)`
-    InList { list: Vec<Expr>, not: bool },
+    InList { list: Vec<Expr<'a>>, not: bool },
     /// `[ NOT ] IN (SELECT ...)`
-    InSubquery { subquery: Box<Query>, not: bool },
+    InSubquery { subquery: Box<Query<'a>>, not: bool },
     /// `BETWEEN ... AND ...`
     Between {
-        low: Box<Expr>,
-        high: Box<Expr>,
+        low: Box<Expr<'a>>,
+        high: Box<Expr<'a>>,
         not: bool,
     },
     /// Binary operation
@@ -184,12 +186,12 @@ pub enum ExprElement {
     UnaryOp { op: UnaryOperator },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
     /// `::<type_name>` expression
@@ -197,56 +199,56 @@ pub enum ExprElement {
     /// EXTRACT(DateTimeField FROM <expr>)
     Extract {
         field: DateTimeField,
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        substr_expr: Box<Expr>,
-        str_expr: Box<Expr>,
+        substr_expr: Box<Expr<'a>>,
+        str_expr: Box<Expr<'a>>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     SubString {
-        expr: Box<Expr>,
-        substring_from: Option<Box<Expr>>,
-        substring_for: Option<Box<Expr>>,
+        expr: Box<Expr<'a>>,
+        substring_from: Option<Box<Expr<'a>>>,
+        substring_for: Option<Box<Expr<'a>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr>)>,
+        trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
     },
     /// A literal value, such as string, number, date or NULL
     Literal(Literal),
     /// `Count(*)` expression
     CountAll,
     /// `(foo, bar)`
-    Tuple { exprs: Vec<Expr> },
+    Tuple { exprs: Vec<Expr<'a>> },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: Identifier,
-        args: Vec<Expr>,
+        name: Identifier<'a>,
+        args: Vec<Expr<'a>>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
+        operand: Option<Box<Expr<'a>>>,
+        conditions: Vec<Expr<'a>>,
+        results: Vec<Expr<'a>>,
+        else_result: Option<Box<Expr<'a>>>,
     },
     /// `EXISTS` expression
-    Exists(Query),
+    Exists(Query<'a>),
     /// Scalar subquery, which will only return a single row with a single column.
-    Subquery(Query),
+    Subquery(Query<'a>),
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
-    MapAccess { accessor: MapAccessor },
+    MapAccess { accessor: MapAccessor<'a> },
     /// An expression between parentheses
-    Group(Expr),
+    Group(Expr<'a>),
 }
 
 struct ExprParser;
@@ -254,7 +256,7 @@ struct ExprParser;
 impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     type Error = pratt::NoError;
     type Input = WithSpan<'a>;
-    type Output = Expr;
+    type Output = Expr<'a>;
 
     fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
@@ -308,7 +310,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan) -> pratt::Result<Expr> {
+    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
@@ -376,7 +378,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn infix(&mut self, lhs: Expr, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
+    fn infix(
+        &mut self,
+        lhs: Expr<'a>,
+        elem: WithSpan<'a>,
+        rhs: Expr<'a>,
+    ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
                 left: Box::new(lhs),
@@ -388,7 +395,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
+    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 op,
@@ -399,7 +406,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr, elem: WithSpan) -> pratt::Result<Expr> {
+    fn postfix(&mut self, lhs: Expr<'a>, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
                 expr: Box::new(lhs),
@@ -711,9 +718,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
         ),
     ))(i)?;
 
-    let input_ptr = i.as_ptr();
-    let rest_ptr = rest.as_ptr();
-    let offset = (rest_ptr as usize - input_ptr as usize) / std::mem::size_of::<Token>();
+    let offset = i.offset(&rest);
     let span = Input(&i.0[..offset], i.1);
 
     Ok((rest, WithSpan { elem, span }))

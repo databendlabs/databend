@@ -25,7 +25,7 @@ use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 
-impl Binder {
+impl<'a> Binder {
     pub(crate) fn analyze_aggregate(
         &self,
         output_context: &BindContext,
@@ -63,7 +63,7 @@ impl Binder {
 
     pub(super) async fn bind_group_by(
         &mut self,
-        group_by_expr: &[Expr],
+        group_by_expr: &[Expr<'a>],
         input_context: &mut BindContext,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());

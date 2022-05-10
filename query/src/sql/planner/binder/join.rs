@@ -37,12 +37,12 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::BindContext;
 
-impl Binder {
+impl<'a> Binder {
     #[async_recursion]
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
-        join: &Join,
+        join: &Join<'a>,
     ) -> Result<BindContext> {
         let left_child = self.bind_table_reference(&join.left, bind_context).await?;
         let right_child = self.bind_table_reference(&join.right, bind_context).await?;
@@ -141,7 +141,7 @@ struct JoinConditionResolver<'a> {
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a BindContext,
-    join_condition: &'a JoinCondition,
+    join_condition: &'a JoinCondition<'a>,
 }
 
 impl<'a> JoinConditionResolver<'a> {
@@ -150,7 +150,7 @@ impl<'a> JoinConditionResolver<'a> {
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a BindContext,
-        join_condition: &'a JoinCondition,
+        join_condition: &'a JoinCondition<'a>,
     ) -> Self {
         Self {
             ctx,
@@ -192,7 +192,7 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn resolve_on(
         &self,
-        condition: &Expr,
+        condition: &Expr<'a>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,

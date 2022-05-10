@@ -27,7 +27,7 @@ use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
 
-impl Binder {
+impl<'a> Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
     /// If `output_context` can already be satisfied by `input_context`(e.g. `SELECT * FROM t`),
     /// then it won't build a `ProjectPlan`.
@@ -71,7 +71,7 @@ impl Binder {
     /// in this function.
     pub(super) async fn normalize_select_list(
         &mut self,
-        select_list: &[SelectTarget],
+        select_list: &[SelectTarget<'a>],
         has_order_by: bool,
         input_context: &BindContext,
     ) -> Result<BindContext> {
@@ -89,7 +89,7 @@ impl Binder {
                         match indirection {
                             Indirection::Identifier(ident) => {
                                 let mut column_binding =
-                                    input_context.resolve_column(None, ident.name.clone())?;
+                                    input_context.resolve_column(None, ident)?;
                                 column_binding.column_name = ident.name.clone();
                                 output_context.add_column_binding(column_binding);
                             }
