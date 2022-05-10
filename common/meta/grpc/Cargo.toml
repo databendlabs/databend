@@ -16,6 +16,7 @@ test = false
 [dependencies]
 common-arrow = { path = "../../arrow" }
 common-base = { path = "../../base" }
+common-configs = { path = "../../configs" }
 common-exception = { path = "../../exception" }
 common-grpc = { path = "../../grpc" }
 common-meta-api = { path = "../api" }
@@ -23,7 +24,6 @@ common-meta-types = { path = "../types" }
 common-proto-conv = { path = "../../proto-conv" }
 common-protos = { path = "../../protos" }
 common-tracing = { path = "../../tracing" }
-common-configs = {path = "../../configs"}
 
 derive_more = "0.99.17"
 futures = "0.3.21"
