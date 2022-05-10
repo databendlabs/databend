@@ -124,12 +124,14 @@ impl FromToProto<pb::GrantObject> for mt::GrantObject {
                 Ok(mt::GrantObject::Global)
             }
             Some(pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
+                catalog,
                 db,
-            })) => Ok(mt::GrantObject::Database(db)),
+            })) => Ok(mt::GrantObject::Database(catalog, db)),
             Some(pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
+                catalog,
                 db,
                 table,
-            })) => Ok(mt::GrantObject::Table(db, table)),
+            })) => Ok(mt::GrantObject::Table(catalog, db, table)),
             _ => Err(Incompatible {
                 reason: "GrantObject cannot be None".to_string(),
             }),
@@ -141,11 +143,15 @@ impl FromToProto<pb::GrantObject> for mt::GrantObject {
             mt::GrantObject::Global => Some(pb::grant_object::Object::Global(
                 pb::grant_object::GrantGlobalObject {},
             )),
-            mt::GrantObject::Database(db) => Some(pb::grant_object::Object::Database(
-                pb::grant_object::GrantDatabaseObject { db: db.clone() },
+            mt::GrantObject::Database(catalog, db) => Some(pb::grant_object::Object::Database(
+                pb::grant_object::GrantDatabaseObject {
+                    catalog: catalog.clone(),
+                    db: db.clone(),
+                },
             )),
-            mt::GrantObject::Table(db, table) => Some(pb::grant_object::Object::Table(
+            mt::GrantObject::Table(catalog, db, table) => Some(pb::grant_object::Object::Table(
                 pb::grant_object::GrantTableObject {
+                    catalog: catalog.clone(),
                     db: db.clone(),
                     table: table.clone(),
                 },

@@ -45,11 +45,15 @@ message GrantObject {
 
   message GrantGlobalObject {}
 
-  message GrantDatabaseObject { string db = 1; }
+  message GrantDatabaseObject {
+    string catalog = 1;
+    string db = 2;
+  }
 
   message GrantTableObject {
-    string db = 1;
-    string table = 2;
+    string catalog = 1;
+    string db = 2;
+    string table = 3;
   }
 
   oneof object {

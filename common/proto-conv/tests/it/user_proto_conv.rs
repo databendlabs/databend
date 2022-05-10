@@ -58,7 +58,6 @@ fn test_user_info() -> UserInfo {
 }
 
 fn test_user_stage_info() -> mt::UserStageInfo {
-    //mt::UserStageInfo::default()
     mt::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::StageType::External,
