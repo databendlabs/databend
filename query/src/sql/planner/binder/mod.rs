@@ -19,7 +19,7 @@ pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
 use common_exception::Result;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
@@ -33,6 +33,7 @@ mod scalar;
 mod scalar_common;
 mod scalar_visitor;
 mod select;
+mod sort;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
@@ -43,15 +44,15 @@ mod select;
 /// - Build `Metadata`
 pub struct Binder {
     ctx: Arc<QueryContext>,
-    catalog: Arc<dyn Catalog>,
+    catalogs: Arc<CatalogManager>,
     metadata: Metadata,
 }
 
 impl Binder {
-    pub fn new(ctx: Arc<QueryContext>, catalog: Arc<dyn Catalog>) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, catalogs: Arc<CatalogManager>) -> Self {
         Binder {
             ctx,
-            catalog,
+            catalogs,
             metadata: Metadata::create(),
         }
     }
@@ -79,11 +80,13 @@ impl Binder {
     async fn resolve_data_source(
         &self,
         tenant: &str,
-        database: &str,
-        table: &str,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let table_meta = self.catalog.get_table(tenant, database, table).await?;
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
         Ok(table_meta)
     }
 }

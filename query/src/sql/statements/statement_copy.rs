@@ -26,8 +26,8 @@ use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3StageTableInfo;
 use common_planners::SourceInfo;
+use common_planners::StageTableInfo;
 use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
@@ -36,6 +36,7 @@ use super::location_to_stage_path;
 use super::parse_copy_file_format_options;
 use super::parse_stage_storage;
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -57,15 +58,8 @@ pub struct DfCopy {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCopy {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let mut db_name = ctx.get_current_database();
-        let mut tbl_name = self.name.0[0].value.clone();
-
-        if self.name.0.len() > 1 {
-            db_name = tbl_name;
-            tbl_name = self.name.0[1].value.clone();
-        }
-
-        let table = ctx.get_table(&db_name, &tbl_name).await?;
+        let (catalog_name, db_name, tbl_name) = resolve_table(&ctx, &self.name, "COPY")?;
+        let table = ctx.get_table(&catalog_name, &db_name, &tbl_name).await?;
         let mut schema = table.schema();
         let tbl_id = table.get_id();
 
@@ -117,7 +111,8 @@ impl AnalyzableStatement for DfCopy {
 
         // Read source plan.
         let from = ReadDataSourcePlan {
-            source_info: SourceInfo::S3StageSource(S3StageTableInfo {
+            catalog: catalog_name.clone(),
+            source_info: SourceInfo::StageSource(StageTableInfo {
                 schema: schema.clone(),
                 stage_info,
                 path,
@@ -136,6 +131,7 @@ impl AnalyzableStatement for DfCopy {
 
         // Copy plan.
         let plan_node = CopyPlan {
+            catalog_name,
             db_name,
             tbl_name,
             tbl_id,

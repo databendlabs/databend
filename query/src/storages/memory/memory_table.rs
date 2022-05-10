@@ -264,6 +264,7 @@ impl Table for MemoryTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<QueryContext>,
+        _catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {

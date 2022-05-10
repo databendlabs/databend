@@ -27,8 +27,7 @@ use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
 use opendal::Operator;
 
-use crate::catalogs::DatabaseCatalog;
-use crate::configs::Config;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -36,6 +35,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::Config;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
@@ -162,6 +162,10 @@ impl Session {
         self.session_ctx.get_current_database()
     }
 
+    pub fn get_current_catalog(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_catalog()
+    }
+
     pub fn get_current_tenant(self: &Arc<Self>) -> String {
         self.session_ctx.get_current_tenant()
     }
@@ -221,8 +225,8 @@ impl Session {
         self.session_mgr.clone()
     }
 
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.session_mgr.get_catalog()
+    pub fn get_catalogs(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.session_mgr.get_catalog_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

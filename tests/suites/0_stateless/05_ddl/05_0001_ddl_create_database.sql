@@ -12,7 +12,7 @@ DROP DATABASE IF EXISTS db;
 CREATE DATABASE system; -- {ErrorCode 2301}
 DROP DATABASE system; -- {ErrorCode 1002}
 
-CREATE DATABASE db.t; -- {ErrorCode 1005}
+CREATE DATABASE catalog_not_exist.t; -- {ErrorCode 1006}
 
 DROP SCHEMA IF EXISTS db;
 
@@ -28,4 +28,4 @@ DROP SCHEMA IF EXISTS db;
 CREATE SCHEMA system; -- {ErrorCode 2301}
 DROP SCHEMA system; -- {ErrorCode 1002}
 
-CREATE SCHEMA db.t; -- {ErrorCode 1005}
+CREATE SCHEMA catalog_not_exist.t; -- {ErrorCode 1006}

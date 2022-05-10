@@ -320,7 +320,10 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             write!(
                 f,
                 "{:}.{:} to {:}.{:}",
-                entity.db, entity.table_name, entity.new_db, entity.new_table_name
+                entity.database_name,
+                entity.table_name,
+                entity.new_database_name,
+                entity.new_table_name
             )?;
 
             if i + 1 != plan.entities.len() {

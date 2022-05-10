@@ -26,7 +26,7 @@ use common_planners::CreateTablePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
-use databend_query::catalogs::Catalog;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
@@ -68,6 +68,7 @@ impl TestFixture {
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
+            catalog: "default".to_owned(),
             tenant,
             if_not_exists: false,
             db: db_name,
@@ -76,7 +77,8 @@ impl TestFixture {
                 ..Default::default()
             },
         };
-        ctx.get_catalog()
+        ctx.get_catalog("default")
+            .unwrap()
             .create_database(plan.into())
             .await
             .unwrap();
@@ -100,6 +102,10 @@ impl TestFixture {
         gen_db_name(&self.prefix)
     }
 
+    pub fn default_catalog_name(&self) -> String {
+        "default".to_owned()
+    }
+
     pub fn default_table_name(&self) -> String {
         format!("tbl_{}", self.prefix)
     }
@@ -112,6 +118,7 @@ impl TestFixture {
         CreateTablePlan {
             if_not_exists: false,
             tenant: self.default_tenant(),
+            catalog: self.default_catalog_name(),
             db: self.default_db_name(),
             table: self.default_table_name(),
             table_meta: TableMeta {
@@ -175,7 +182,7 @@ impl TestFixture {
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
         self.ctx
-            .get_catalog()
+            .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
@@ -294,7 +301,7 @@ pub async fn append_sample_data_overwrite(
     let ctx = fixture.ctx();
     let stream = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx, stream.try_collect().await?, overwrite)
+        .commit_insertion(ctx, CATALOG_DEFAULT, stream.try_collect().await?, overwrite)
         .await
 }
 

@@ -32,7 +32,7 @@ mod transform_sort_partial;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
-pub use hash_join::ChainHashTable;
+pub use hash_join::ChainingHashTable;
 pub use hash_join::HashJoinState;
 pub use transform_addon::TransformAddOn;
 pub use transform_aggregator::TransformAggregator;

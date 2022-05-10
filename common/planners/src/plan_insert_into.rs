@@ -33,6 +33,7 @@ pub struct InsertValueBlock {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InsertPlan {
+    pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
     pub table_id: MetaId,
@@ -43,7 +44,8 @@ pub struct InsertPlan {
 
 impl PartialEq for InsertPlan {
     fn eq(&self, other: &Self) -> bool {
-        self.database_name == other.database_name
+        self.catalog_name == other.catalog_name
+            && self.database_name == other.database_name
             && self.table_name == other.table_name
             && self.schema == other.schema
     }

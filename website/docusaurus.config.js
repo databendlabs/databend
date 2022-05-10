@@ -166,8 +166,8 @@ const config = {
             },
             algolia: {
                 appId: 'RL7MS9PKE8',
-                apiKey: '78bb6be96bb0361a4be9dab6bd83936c',
-                indexName: 'databend-rs',
+                apiKey: 'cb5d6af612410c0fced698ff39ccd47a',
+                indexName: 'databend-rs-docs',
                 contextualSearch: true,
             }
         }),

@@ -25,9 +25,9 @@ use common_exception::Result;
 use common_meta_types::UserSetting;
 use itertools::Itertools;
 
-use crate::configs::Config;
 use crate::sessions::SessionContext;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 #[derive(Clone)]
 enum ScopeLevel {

@@ -33,7 +33,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::fuse_snapshot::FuseSnapshot;
 use super::table_args::parse_func_history_args;
-use crate::catalogs::Catalog;
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
@@ -117,7 +117,10 @@ impl Table for FuseSnapshotTable {
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog()
+            // TODO (dantengsky) the name of catalog should be passed in:
+            //  - select * from fuse_snapshot([cat,] [db,] table_name)
+            //  - if "cat" and "db" are not specified, use the corresponding default values of `ctx`
+            .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),
@@ -155,6 +158,7 @@ impl Table for FuseSnapshotTable {
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
+                CATALOG_DEFAULT.to_owned(),
             )?],
         });
 
@@ -167,6 +171,7 @@ struct FuseHistorySource {
     ctx: Arc<QueryContext>,
     arg_database_name: String,
     arg_table_name: String,
+    catalog_name: String,
 }
 
 impl FuseHistorySource {
@@ -175,12 +180,14 @@ impl FuseHistorySource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
+        catalog_name: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
+            catalog_name,
         })
     }
 }
@@ -200,7 +207,7 @@ impl AsyncSource for FuseHistorySource {
             let tenant_id = self.ctx.get_tenant();
             let tbl = self
                 .ctx
-                .get_catalog()
+                .get_catalog(&self.catalog_name)?
                 .get_table(
                     tenant_id.as_str(),
                     self.arg_database_name.as_str(),

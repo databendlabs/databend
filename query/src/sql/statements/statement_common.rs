@@ -26,6 +26,7 @@ use common_meta_types::StageS3Storage;
 use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 
@@ -162,4 +163,57 @@ pub fn parse_copy_file_format_options(
         record_delimiter,
         compression: Default::default(),
     })
+}
+
+pub fn resolve_table(
+    ctx: &QueryContext,
+    object_name: &ObjectName,
+    statement_name: &str,
+) -> Result<(String, String, String)> {
+    let idents = &object_name.0;
+    match idents.len() {
+        0 => Err(ErrorCode::SyntaxException(format!(
+            "table name must be specified in statement `{}`",
+            statement_name
+        ))),
+        1 => Ok((
+            ctx.get_current_catalog(),
+            ctx.get_current_database(),
+            idents[0].value.clone(),
+        )),
+        2 => Ok((
+            ctx.get_current_catalog(),
+            idents[0].value.clone(),
+            idents[1].value.clone(),
+        )),
+        3 => Ok((
+            idents[0].value.clone(),
+            idents[1].value.clone(),
+            idents[2].value.clone(),
+        )),
+        _ => Err(ErrorCode::SyntaxException(format!(
+            "table name should be [`catalog`].[`db`].`table` in statement {}",
+            statement_name
+        ))),
+    }
+}
+
+pub fn resolve_database(
+    ctx: &QueryContext,
+    name: &ObjectName,
+    statement_name: &str,
+) -> Result<(String, String)> {
+    let idents = &name.0;
+    match idents.len() {
+        0 => Err(ErrorCode::SyntaxException(format!(
+            "database name must be specified in statement `{}`",
+            statement_name
+        ))),
+        1 => Ok((ctx.get_current_catalog(), idents[0].value.clone())),
+        2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
+        _ => Err(ErrorCode::SyntaxException(format!(
+            "database name should be [`catalog`].`db` in statement {}",
+            statement_name
+        ))),
+    }
 }

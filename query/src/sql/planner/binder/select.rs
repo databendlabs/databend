@@ -16,8 +16,10 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
+use common_ast::ast::Indirection;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
+use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_datavalues::DataTypeImpl;
@@ -25,6 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -47,15 +50,28 @@ impl Binder {
         query: &Query,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
-        let bind_context = match &query.body {
-            SetExpr::Select(stmt) => self.bind_select_stmt(stmt, bind_context).await,
+        let mut has_order_by = false;
+        if !query.order_by.is_empty() {
+            has_order_by = true;
+        };
+        let mut bind_context = match &query.body {
+            SetExpr::Select(stmt) => {
+                self.bind_select_stmt(stmt, has_order_by, bind_context)
+                    .await
+            }
             SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
             _ => Err(ErrorCode::UnImplement("Unsupported query type")),
         }?;
 
-        // TODO: support ORDER BY
-        if !query.order_by.is_empty() {
-            return Err(ErrorCode::UnImplement("Unsupported ORDER BY"));
+        if has_order_by {
+            let bind_context_cols = bind_context.columns.clone();
+            bind_context.columns = bind_context
+                .order_by_columns
+                .as_ref()
+                .ok_or_else(|| ErrorCode::SemanticError("Order by should have order by columns"))?
+                .clone();
+            self.bind_order_by(&query.order_by, &mut bind_context)?;
+            bind_context.columns = bind_context_cols;
         }
 
         if !query.limit.is_empty() {
@@ -68,12 +84,13 @@ impl Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
         stmt: &SelectStmt,
+        has_order_by: bool,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
         let mut input_context = if let Some(from) = &stmt.from {
             self.bind_table_reference(from, bind_context).await?
         } else {
-            BindContext::new()
+            self.bind_one_table(stmt).await?
         };
 
         if let Some(expr) = &stmt.selection {
@@ -81,7 +98,8 @@ impl Binder {
         }
 
         // Output of current `SELECT` statement.
-        let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
+        let mut output_context =
+            self.normalize_select_list(&stmt.select_list, has_order_by, &input_context)?;
 
         self.analyze_aggregate(&output_context, &mut input_context)?;
 
@@ -101,6 +119,36 @@ impl Binder {
         Ok(output_context)
     }
 
+    pub(super) async fn bind_one_table(&mut self, stmt: &SelectStmt) -> Result<BindContext> {
+        for select_target in &stmt.select_list {
+            if let SelectTarget::QualifiedName(names) = select_target {
+                for indirect in names {
+                    if indirect == &Indirection::Star {
+                        return Err(ErrorCode::SemanticError(
+                            "SELECT * with no tables specified is not valid",
+                        ));
+                    }
+                }
+            }
+        }
+        let catalog = CATALOG_DEFAULT;
+        let database = "system";
+        let tenant = self.ctx.get_tenant();
+        let table_meta: Arc<dyn Table> = self
+            .resolve_data_source(tenant.as_str(), catalog, database, "one")
+            .await?;
+        let source = table_meta.read_plan(self.ctx.clone(), None).await?;
+        let table_index = self.metadata.add_table(
+            CATALOG_DEFAULT.to_owned(),
+            database.to_string(),
+            table_meta,
+            source,
+        );
+
+        let result = self.bind_base_table(table_index).await?;
+        Ok(result)
+    }
+
     pub(super) async fn bind_table_reference(
         &mut self,
         stmt: &TableReference,
@@ -108,6 +156,7 @@ impl Binder {
     ) -> Result<BindContext> {
         match stmt {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
@@ -116,6 +165,10 @@ impl Binder {
                     .as_ref()
                     .map(|ident| ident.name.clone())
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                let catalog = catalog
+                    .as_ref()
+                    .map(|id| id.name.clone())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
@@ -123,10 +176,17 @@ impl Binder {
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
-                    .resolve_data_source(tenant.as_str(), database.as_str(), table.as_str())
+                    .resolve_data_source(
+                        tenant.as_str(),
+                        catalog.as_str(),
+                        database.as_str(),
+                        table.as_str(),
+                    )
                     .await?;
                 let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-                let table_index = self.metadata.add_table(database, table_meta, source);
+                let table_index = self
+                    .metadata
+                    .add_table(catalog, database, table_meta, source);
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
@@ -161,15 +221,20 @@ impl Binder {
 
                 let table_args = Some(expressions);
 
+                // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
-                    .catalog
+                    .catalogs
+                    .get_catalog(CATALOG_DEFAULT)?
                     .get_table_function(name.name.as_str(), table_args)?;
                 let table = table_meta.as_table();
 
                 let source = table.read_plan(self.ctx.clone(), None).await?;
-                let table_index =
-                    self.metadata
-                        .add_table("system".to_string(), table.clone(), source);
+                let table_index = self.metadata.add_table(
+                    CATALOG_DEFAULT.to_string(),
+                    "system".to_string(),
+                    table.clone(),
+                    source,
+                );
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {

@@ -18,6 +18,8 @@ use std::sync::Arc;
 use common_base::base::tokio::io::AsyncReadExt;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -32,6 +34,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
+use crate::sessions::QueryContext;
 
 pub struct MultipartFormat;
 
@@ -87,7 +90,7 @@ impl MultipartWorker {
                                 }
                                 Ok(sz) => {
                                     if sz != buf.len() {
-                                        buf = buf[..sz].to_vec();
+                                        buf.truncate(sz);
                                     }
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {
@@ -128,6 +131,7 @@ impl MultipartWorker {
 impl MultipartFormat {
     pub fn input_sources(
         name: &str,
+        ctx: Arc<QueryContext>,
         multipart: Multipart,
         schema: DataSchemaRef,
         settings: FormatSettings,
@@ -152,6 +156,7 @@ impl MultipartFormat {
                 ports[0].clone(),
                 input_format,
                 rx,
+                ctx.get_scan_progress(),
             )?],
         ))
     }
@@ -169,6 +174,7 @@ pub struct SequentialInputFormatSource {
     skipped_header: bool,
     output: Arc<OutputPort>,
     data_block: Vec<DataBlock>,
+    scan_progress: Arc<Progress>,
     input_state: Box<dyn InputState>,
     input_format: Box<dyn InputFormat>,
     data_receiver: Receiver<Result<Vec<u8>>>,
@@ -179,6 +185,7 @@ impl SequentialInputFormatSource {
         output: Arc<OutputPort>,
         input_format: Box<dyn InputFormat>,
         data_receiver: Receiver<Result<Vec<u8>>>,
+        scan_progress: Arc<Progress>,
     ) -> Result<ProcessorPtr> {
         let input_state = input_format.create_state();
         Ok(ProcessorPtr::create(Box::new(
@@ -187,6 +194,7 @@ impl SequentialInputFormatSource {
                 input_state,
                 input_format,
                 data_receiver,
+                scan_progress,
                 finished: false,
                 state: State::NeedReceiveData,
                 data_block: vec![],
@@ -229,9 +237,11 @@ impl Processor for SequentialInputFormatSource {
     }
 
     fn process(&mut self) -> Result<()> {
+        let mut progress_values = ProgressValues::default();
         match replace(&mut self.state, State::NeedReceiveData) {
             State::ReceivedData(data) => {
                 let mut data_slice: &[u8] = &data;
+                progress_values.bytes += data.len();
 
                 if !self.skipped_header {
                     let len = data_slice.len();
@@ -256,14 +266,26 @@ impl Processor for SequentialInputFormatSource {
                     data_slice = &data_slice[read_size..];
 
                     if read_size < len {
-                        self.data_block
-                            .push(self.input_format.deserialize_data(&mut self.input_state)?);
+                        let state = &mut self.input_state;
+                        let mut blocks = self.input_format.deserialize_data(state)?;
+
+                        self.data_block.reserve(blocks.len());
+                        while let Some(block) = blocks.pop() {
+                            progress_values.rows += block.num_rows();
+                            self.data_block.push(block);
+                        }
                     }
                 }
             }
             State::NeedDeserialize => {
-                self.data_block
-                    .push(self.input_format.deserialize_data(&mut self.input_state)?);
+                let state = &mut self.input_state;
+                let mut blocks = self.input_format.deserialize_data(state)?;
+
+                self.data_block.reserve(blocks.len());
+                while let Some(block) = blocks.pop() {
+                    progress_values.rows += block.num_rows();
+                    self.data_block.push(block);
+                }
             }
             _ => {
                 return Err(ErrorCode::LogicalError(
@@ -272,6 +294,7 @@ impl Processor for SequentialInputFormatSource {
             }
         }
 
+        self.scan_progress.incr(&progress_values);
         Ok(())
     }
 

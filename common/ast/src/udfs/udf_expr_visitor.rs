@@ -31,63 +31,60 @@ use sqlparser::ast::Value;
 pub struct UDFExprTraverser;
 
 impl UDFExprTraverser {
-    pub async fn accept<V: UDFExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
-        let expr = visitor.pre_visit(expr).await?;
-        visitor.visit(&expr).await?;
-        visitor.post_visit(&expr).await
+    pub fn accept<V: UDFExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
+        let expr = visitor.pre_visit(expr)?;
+        visitor.visit(&expr)?;
+        visitor.post_visit(&expr)
     }
 }
 
 #[async_trait]
 pub trait UDFExprVisitor: Sized + Send {
-    async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         Ok(expr.clone())
     }
 
-    async fn visit(&mut self, expr: &Expr) -> Result<()> {
+    fn visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Nested(expr) => UDFExprTraverser::accept(expr, self).await,
+            Expr::Nested(expr) => UDFExprTraverser::accept(expr, self),
             Expr::Value(value) => self.visit_value(value),
             Expr::Identifier(ident) => self.visit_identifier(ident),
             Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
-            Expr::IsNull(expr) => self.visit_simple_function(expr, "is_null").await,
-            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "is_not_null").await,
-            Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr).await,
-            Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right).await,
+            Expr::IsNull(expr) => self.visit_simple_function(expr, "is_null"),
+            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "is_not_null"),
+            Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr),
+            Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right),
             Expr::Exists(subquery) => self.visit_exists(subquery),
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
-            Expr::Function(function) => self.visit_function(function).await,
-            Expr::TryCast { expr, data_type } => self.visit_try_cast(expr, data_type).await,
+            Expr::Function(function) => self.visit_function(function),
+            Expr::TryCast { expr, data_type } => self.visit_try_cast(expr, data_type),
             Expr::Cast {
                 expr,
                 data_type,
                 pg_style,
-            } => self.visit_cast(expr, data_type, pg_style).await,
+            } => self.visit_cast(expr, data_type, pg_style),
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
             Expr::Position {
                 substr_expr,
                 str_expr,
-            } => self.visit_position(substr_expr, str_expr).await,
+            } => self.visit_position(substr_expr, str_expr),
             Expr::Substring {
                 expr,
                 substring_from,
                 substring_for,
-            } => {
-                self.visit_substring(expr, substring_from, substring_for)
-                    .await
-            }
+            } => self.visit_substring(expr, substring_from, substring_for),
             Expr::Between {
                 expr,
                 negated,
                 low,
                 high,
-            } => self.visit_between(expr, negated, low, high).await,
-            Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
-            Expr::InList { expr, list, .. } => self.visit_inlist(expr, list).await,
-            Expr::Extract { field, expr } => self.visit_extract(field, expr).await,
-            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys).await,
-            Expr::Trim { expr, trim_where } => self.visit_trim(expr, trim_where).await,
-            Expr::Array(exprs) => self.visit_array(exprs).await,
+            } => self.visit_between(expr, negated, low, high),
+            Expr::Tuple(exprs) => self.visit_tuple(exprs),
+            Expr::InList { expr, list, .. } => self.visit_inlist(expr, list),
+            Expr::Extract { field, expr } => self.visit_extract(field, expr),
+            Expr::MapAccess { column, keys } => self.visit_map_access(column, keys),
+            Expr::Trim { expr, trim_where } => self.visit_trim(expr, trim_where),
+            Expr::Array(exprs) => self.visit_array(exprs),
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -95,27 +92,27 @@ pub trait UDFExprVisitor: Sized + Send {
         }
     }
 
-    async fn post_visit(&mut self, _expr: &Expr) -> Result<()> {
+    fn post_visit(&mut self, _expr: &Expr) -> Result<()> {
         Ok(())
     }
 
-    async fn visit_inlist(&mut self, expr: &Expr, list: &[Expr]) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await?;
+    fn visit_inlist(&mut self, expr: &Expr, list: &[Expr]) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)?;
         for expr in list {
-            UDFExprTraverser::accept(expr, self).await?;
+            UDFExprTraverser::accept(expr, self)?;
         }
         Ok(())
     }
 
-    async fn visit_tuple(&mut self, exprs: &[Expr]) -> Result<()> {
+    fn visit_tuple(&mut self, exprs: &[Expr]) -> Result<()> {
         match exprs.len() {
             0 => Err(ErrorCode::SyntaxException(
                 "Tuple must have at least one element.",
             )),
-            1 => UDFExprTraverser::accept(&exprs[0], self).await,
+            1 => UDFExprTraverser::accept(&exprs[0], self),
             _ => {
                 for expr in exprs {
-                    UDFExprTraverser::accept(expr, self).await?;
+                    UDFExprTraverser::accept(expr, self)?;
                 }
 
                 Ok(())
@@ -147,9 +144,9 @@ pub trait UDFExprVisitor: Sized + Send {
         Ok(())
     }
 
-    async fn visit_function_arg(&mut self, arg_expr: &FunctionArgExpr) -> Result<()> {
+    fn visit_function_arg(&mut self, arg_expr: &FunctionArgExpr) -> Result<()> {
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => UDFExprTraverser::accept(expr, self).await,
+            FunctionArgExpr::Expr(expr) => UDFExprTraverser::accept(expr, self),
             FunctionArgExpr::Wildcard => self.visit_wildcard(),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported QualifiedWildcard: {}",
@@ -158,117 +155,107 @@ pub trait UDFExprVisitor: Sized + Send {
         }
     }
 
-    async fn visit_function(&mut self, function: &Function) -> Result<()> {
+    fn visit_function(&mut self, function: &Function) -> Result<()> {
         for function_arg in &function.args {
             match function_arg {
-                FunctionArg::Named { arg, .. } => self.visit_function_arg(arg).await?,
-                FunctionArg::Unnamed(arg) => self.visit_function_arg(arg).await?,
+                FunctionArg::Named { arg, .. } => self.visit_function_arg(arg)?,
+                FunctionArg::Unnamed(arg) => self.visit_function_arg(arg)?,
             };
         }
 
         Ok(())
     }
 
-    async fn visit_cast(
-        &mut self,
-        expr: &Expr,
-        _data_type: &DataType,
-        _pg_style: &bool,
-    ) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await
+    fn visit_cast(&mut self, expr: &Expr, _data_type: &DataType, _pg_style: &bool) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)
     }
 
-    async fn visit_try_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await
+    fn visit_try_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)
     }
 
     fn visit_typed_string(&mut self, _data_type: &DataType, _value: &str) -> Result<()> {
         Ok(())
     }
 
-    async fn visit_simple_function(&mut self, expr: &Expr, _name: &str) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await
+    fn visit_simple_function(&mut self, expr: &Expr, _name: &str) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)
     }
 
-    async fn visit_unary_expr(&mut self, _op: &UnaryOperator, expr: &Expr) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await
+    fn visit_unary_expr(&mut self, _op: &UnaryOperator, expr: &Expr) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)
     }
 
-    async fn visit_binary_expr(
-        &mut self,
-        left: &Expr,
-        _op: &BinaryOperator,
-        right: &Expr,
-    ) -> Result<()> {
-        UDFExprTraverser::accept(left, self).await?;
-        UDFExprTraverser::accept(right, self).await
+    fn visit_binary_expr(&mut self, left: &Expr, _op: &BinaryOperator, right: &Expr) -> Result<()> {
+        UDFExprTraverser::accept(left, self)?;
+        UDFExprTraverser::accept(right, self)
     }
 
-    async fn visit_between(
+    fn visit_between(
         &mut self,
         expr: &Expr,
         _negated: &bool,
         low: &Expr,
         high: &Expr,
     ) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await?;
-        UDFExprTraverser::accept(low, self).await?;
-        UDFExprTraverser::accept(high, self).await
+        UDFExprTraverser::accept(expr, self)?;
+        UDFExprTraverser::accept(low, self)?;
+        UDFExprTraverser::accept(high, self)
     }
 
-    async fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
-        UDFExprTraverser::accept(substr_expr, self).await?;
-        UDFExprTraverser::accept(str_expr, self).await
+    fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
+        UDFExprTraverser::accept(substr_expr, self)?;
+        UDFExprTraverser::accept(str_expr, self)
     }
 
-    async fn visit_substring(
+    fn visit_substring(
         &mut self,
         expr: &Expr,
         from: &Option<Box<Expr>>,
         length: &Option<Box<Expr>>,
     ) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await?;
+        UDFExprTraverser::accept(expr, self)?;
 
         if let Some(from) = from {
-            UDFExprTraverser::accept(from, self).await?;
+            UDFExprTraverser::accept(from, self)?;
         }
 
         if let Some(length) = length {
-            UDFExprTraverser::accept(length, self).await?;
+            UDFExprTraverser::accept(length, self)?;
         }
 
         Ok(())
     }
 
-    async fn visit_extract(&mut self, _field: &DateTimeField, expr: &Expr) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await
+    fn visit_extract(&mut self, _field: &DateTimeField, expr: &Expr) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)
     }
 
-    async fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await
+    fn visit_map_access(&mut self, expr: &Expr, _keys: &[Value]) -> Result<()> {
+        UDFExprTraverser::accept(expr, self)
     }
 
-    async fn visit_trim(
+    fn visit_trim(
         &mut self,
         expr: &Expr,
         trim_where: &Option<(TrimWhereField, Box<Expr>)>,
     ) -> Result<()> {
-        UDFExprTraverser::accept(expr, self).await?;
+        UDFExprTraverser::accept(expr, self)?;
 
         if let Some(trim_where) = trim_where {
-            UDFExprTraverser::accept(&trim_where.1, self).await?;
+            UDFExprTraverser::accept(&trim_where.1, self)?;
         }
         Ok(())
     }
 
-    async fn visit_array(&mut self, exprs: &[Expr]) -> Result<()> {
+    fn visit_array(&mut self, exprs: &[Expr]) -> Result<()> {
         match exprs.len() {
             0 => Err(ErrorCode::SyntaxException(
                 "Array must have at least one element.",
             )),
             _ => {
                 for expr in exprs {
-                    UDFExprTraverser::accept(expr, self).await?;
+                    UDFExprTraverser::accept(expr, self)?;
                 }
                 Ok(())
             }

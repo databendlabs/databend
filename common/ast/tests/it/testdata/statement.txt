@@ -64,6 +64,7 @@ Explain {
                     ],
                     from: Some(
                         Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "b",
@@ -91,6 +92,7 @@ describe a;
 DESCRIBE a
 ---------- AST ------------
 Describe {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "a",
@@ -105,6 +107,7 @@ describe a; describe b
 DESCRIBE a
 ---------- AST ------------
 Describe {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "a",
@@ -117,6 +120,7 @@ Describe {
 DESCRIBE b
 ---------- AST ------------
 Describe {
+    catalog: None,
     database: None,
     table: Identifier {
         name: "b",
@@ -242,6 +246,7 @@ CreateTable {
                     ],
                     from: Some(
                         Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t",
@@ -736,6 +741,7 @@ Query(
                 ],
                 from: Some(
                     Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "t",
@@ -848,6 +854,7 @@ Query(
                 ],
                 from: Some(
                     Table {
+                        catalog: None,
                         database: None,
                         table: Identifier {
                             name: "t4",
@@ -887,6 +894,7 @@ Query(
                 ],
                 from: Some(
                     Table {
+                        catalog: None,
                         database: Some(
                             Identifier {
                                 name: "aa",
@@ -939,6 +947,7 @@ Query(
                                     op: CrossJoin,
                                     condition: None,
                                     left: Table {
+                                        catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "a",
@@ -947,6 +956,7 @@ Query(
                                         alias: None,
                                     },
                                     right: Table {
+                                        catalog: None,
                                         database: None,
                                         table: Identifier {
                                             name: "b",
@@ -957,6 +967,7 @@ Query(
                                 },
                             ),
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "c",
@@ -1032,6 +1043,7 @@ Query(
                                 },
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1040,6 +1052,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1115,6 +1128,7 @@ Query(
                                 },
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1123,6 +1137,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1198,6 +1213,7 @@ Query(
                                 },
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1206,6 +1222,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1281,6 +1298,7 @@ Query(
                                 },
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1289,6 +1307,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1364,6 +1383,7 @@ Query(
                                 },
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1372,6 +1392,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1424,6 +1445,7 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1432,6 +1454,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1484,6 +1507,7 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1492,6 +1516,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1544,6 +1569,7 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1552,6 +1578,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1604,6 +1631,7 @@ Query(
                                 ],
                             ),
                             left: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "a",
@@ -1612,6 +1640,7 @@ Query(
                                 alias: None,
                             },
                             right: Table {
+                                catalog: None,
                                 database: None,
                                 table: Identifier {
                                     name: "b",
@@ -1763,6 +1792,7 @@ Insert {
                     ],
                     from: Some(
                         Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "t2",

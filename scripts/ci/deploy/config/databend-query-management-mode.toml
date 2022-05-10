@@ -51,8 +51,3 @@ type = "fs"
 [storage.fs]
 data_path = "management_data"
 
-# S3 storage.
-[storage.s3]
-
-# Azure storage
-[storage.azblob]

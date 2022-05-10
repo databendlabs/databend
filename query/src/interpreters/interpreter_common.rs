@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 
 pub async fn validate_grant_object_exists(
@@ -25,10 +24,10 @@ pub async fn validate_grant_object_exists(
     object: &GrantObject,
 ) -> Result<()> {
     let tenant = ctx.get_tenant();
-    let catalog = ctx.get_catalog();
 
     match &object {
-        GrantObject::Table(database_name, table_name) => {
+        GrantObject::Table(catalog_name, database_name, table_name) => {
+            let catalog = ctx.get_catalog(catalog_name)?;
             if !catalog
                 .exists_table(tenant.as_str(), database_name, table_name)
                 .await?
@@ -39,7 +38,8 @@ pub async fn validate_grant_object_exists(
                 )));
             }
         }
-        GrantObject::Database(database_name) => {
+        GrantObject::Database(catalog_name, database_name) => {
+            let catalog = ctx.get_catalog(catalog_name)?;
             if !catalog
                 .exists_database(tenant.as_str(), database_name)
                 .await?

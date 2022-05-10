@@ -26,7 +26,7 @@ use crate::TypeID;
 pub struct DataField {
     name: String,
     /// default_expr is serialized representation from PlanExpression
-    default_expr: Option<Vec<u8>>,
+    default_expr: Option<String>,
     #[ignore_malloc_size_of = "insignificant"]
     data_type: DataTypeImpl,
 }
@@ -50,7 +50,7 @@ impl DataField {
     }
 
     #[must_use]
-    pub fn with_default_expr(mut self, default_expr: Option<Vec<u8>>) -> Self {
+    pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
         self
     }
@@ -63,8 +63,8 @@ impl DataField {
         &self.data_type
     }
 
-    pub fn default_expr(&self) -> &Option<Vec<u8>> {
-        &self.default_expr
+    pub fn default_expr(&self) -> Option<&String> {
+        self.default_expr.as_ref()
     }
 
     #[inline]
@@ -118,10 +118,7 @@ impl std::fmt::Debug for DataField {
             .field("data_type", &remove_nullable.data_type_id())
             .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
-            debug_struct.field(
-                "default_expr",
-                &String::from_utf8(default_expr.to_owned()).unwrap(),
-            );
+            debug_struct.field("default_expr", default_expr);
         }
         debug_struct.finish()
     }

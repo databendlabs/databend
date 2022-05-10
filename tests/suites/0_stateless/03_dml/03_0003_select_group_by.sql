@@ -43,9 +43,9 @@ select created_time, sum(count) from t_datetime group by created_time order by c
 drop table t_datetime;
 
 --
-SELECT number, count(*) FROM numbers_mt(10000000) group by number order by number limit 5;
+SELECT number, count(*) FROM numbers_mt(10000) group by number order by number limit 5;
 set group_by_two_level_threshold=10;
-SELECT number, count(*) FROM numbers_mt(10000000) group by number order by number limit 5;
+SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
 set group_by_two_level_threshold=1000000000;
-SELECT number, count(*) FROM numbers_mt(10000000) group by number order by number limit 5;
-set group_by_two_level_threshold=10000;
+SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
+

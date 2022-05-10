@@ -74,10 +74,8 @@ meta_password = "root"
 
 
 [storage]
-# fs|s3
+# s3
 type = "s3"
-
-[storage.fs]
 
 # The storage should be same for the cluster.
 [storage.s3]

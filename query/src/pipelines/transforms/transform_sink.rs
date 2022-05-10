@@ -27,7 +27,6 @@ use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::AddOnStream;
@@ -35,6 +34,7 @@ use crate::sessions::QueryContext;
 
 pub struct SinkTransform {
     ctx: Arc<QueryContext>,
+    catalog_name: String,
     table_info: TableInfo,
     input: Arc<dyn Processor>,
     cast_schema: Option<DataSchemaRef>,
@@ -44,12 +44,14 @@ pub struct SinkTransform {
 impl SinkTransform {
     pub fn create(
         ctx: Arc<QueryContext>,
+        catalog_name: String,
         table_info: TableInfo,
         cast_schema: Option<DataSchemaRef>,
         input_schema: DataSchemaRef,
     ) -> Self {
         Self {
             ctx,
+            catalog_name,
             table_info,
             input: Arc::new(EmptyProcessor::create()),
             cast_schema,
@@ -85,7 +87,7 @@ impl Processor for SinkTransform {
         tracing::debug!("executing sinks transform");
         let tbl = self
             .ctx
-            .get_catalog()
+            .get_catalog(&self.catalog_name)?
             .get_table_by_info(self.table_info())?;
         let mut input_stream = self.input.execute().await?;
 

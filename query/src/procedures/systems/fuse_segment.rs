@@ -19,7 +19,6 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::catalogs::Catalog;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -50,7 +49,7 @@ impl Procedure for FuseSegmentProcedure {
         let snapshot_id = args[2].clone();
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog()
+            .get_catalog(ctx.get_current_catalog())?
             .get_table(
                 tenant_id.as_str(),
                 database_name.as_str(),

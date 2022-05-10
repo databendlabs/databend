@@ -22,6 +22,8 @@ default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "tempfile"]
+storage-hdfs = ["opendal/services-hdfs"]
+hive = ["common-hive-meta-store", "thrift"]
 
 [dependencies]
 # Workspace dependencies
@@ -29,12 +31,14 @@ common-arrow = { path = "../common/arrow" }
 common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
+common-configs = { path = "../common/configs" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
 common-functions = { path = "../common/functions" }
 common-grpc = { path = "../common/grpc" }
+common-hive-meta-store = { path = "../common/hive-meta-store", optional = true }
 common-io = { path = "../common/io" }
 common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
@@ -76,7 +80,6 @@ enum_dispatch = "0.3.8"
 futures = "0.3.21"
 headers = "0.3.7"
 http = "0.2.6"
-hyper = "0.14.18"
 itertools = "0.10.3"
 jwtk = "0.2.3"
 lazy_static = "1.4.0"
@@ -86,7 +89,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
 once_cell = "1.10.0"
-opendal = { version = "0.6.0", features = ["retry"] }
+opendal = { version = "0.6.1", features = ["retry"] }
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
@@ -105,6 +108,7 @@ sha2 = "0.10.2"
 tempfile = { version = "3.3.0", optional = true }
 thiserror = "1.0.30"
 threadpool = "1.8.1"
+thrift = { version = "0.15", optional = true }
 time = "0.3.9"
 tokio-rustls = "0.23.3"
 tokio-stream = { version = "0.1.8", features = ["net"] }
