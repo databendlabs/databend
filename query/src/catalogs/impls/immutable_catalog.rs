@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
@@ -35,7 +36,6 @@ use crate::catalogs::catalog::Catalog;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_DB_ID_BEGIN;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;

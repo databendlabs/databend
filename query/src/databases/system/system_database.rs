@@ -15,13 +15,13 @@
 
 use std::sync::Arc;
 
+use common_configs::Config;
 use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
 
 use crate::catalogs::InMemoryMetas;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::system;
 use crate::storages::Table;

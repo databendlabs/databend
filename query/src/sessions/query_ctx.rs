@@ -27,6 +27,7 @@ use common_base::base::Runtime;
 use common_base::base::TrySpawn;
 use common_base::infallible::Mutex;
 use common_base::infallible::RwLock;
+use common_configs::Config;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
@@ -52,7 +53,6 @@ use opendal::Operator;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -88,7 +88,7 @@ impl QueryContext {
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *common_configs::DATABEND_COMMIT_VERSION),
             shared,
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
         })

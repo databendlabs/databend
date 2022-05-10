@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_base::infallible::RwLock;
 use common_base::mem_allocator::malloc_size;
+use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
@@ -28,7 +29,6 @@ use futures::channel::*;
 use opendal::Operator;
 
 use crate::catalogs::DatabaseCatalog;
-use crate::configs::Config;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;

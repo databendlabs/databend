@@ -16,7 +16,6 @@ use std::env;
 
 use clap::Parser;
 use common_exception::Result;
-use common_grpc::RpcClientTlsConfig;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,10 +24,10 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
-use crate::configs::LogConfig;
-use crate::configs::MetaConfig;
-use crate::configs::QueryConfig;
-use crate::configs::StorageConfig;
+use crate::LogConfig;
+use crate::MetaConfig;
+use crate::QueryConfig;
+use crate::StorageConfig;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let git_tag = option_env!("VERGEN_GIT_SEMVER");
@@ -102,13 +101,6 @@ impl Config {
         builder = builder.collect(from_self(arg_conf));
 
         Ok(builder.build()?)
-    }
-
-    pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {
-        RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.query.rpc_tls_query_server_root_ca_cert.to_string(),
-            domain_name: self.query.rpc_tls_query_service_domain_name.to_string(),
-        }
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_configs::Config;
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::AuthInfo;
@@ -23,7 +24,6 @@ use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use databend_query::clusters::Cluster;
-use databend_query::configs::Config;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionType;

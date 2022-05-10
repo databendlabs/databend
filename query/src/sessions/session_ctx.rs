@@ -18,12 +18,12 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::infallible::RwLock;
+use common_configs::Config;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
-use crate::configs::Config;
 use crate::sessions::QueryContextShared;
 
 #[derive(MallocSizeOf)]

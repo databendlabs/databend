@@ -13,17 +13,17 @@
 // limitations under the License.
 
 mod config;
-pub mod config_log;
-pub mod config_meta;
-pub mod config_query;
-pub mod config_storage;
+pub mod log;
+pub mod meta;
+pub mod query;
+pub mod storage;
 
 pub use config::Config;
 pub use config::DATABEND_COMMIT_VERSION;
-pub use config_log::LogConfig;
-pub use config_meta::MetaConfig;
-pub use config_query::QueryConfig;
-pub use config_storage::AzblobStorageConfig;
-pub use config_storage::FsStorageConfig;
-pub use config_storage::S3StorageConfig;
-pub use config_storage::StorageConfig;
+pub use log::LogConfig;
+pub use meta::MetaConfig;
+pub use query::QueryConfig;
+pub use storage::AzblobStorageConfig;
+pub use storage::FsStorageConfig;
+pub use storage::S3StorageConfig;
+pub use storage::StorageConfig;

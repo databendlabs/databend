@@ -49,6 +49,7 @@ common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
+common-configs = {path ="../common/configs"}
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
@@ -123,7 +124,6 @@ maplit = "1.0.2"
 mysql_async = "0.29.0"
 pretty_assertions = "1.2.1"
 reqwest = { version = "0.11.10", features = ["json", "native-tls"] }
-temp-env = "0.2.0"
 tempfile = "3.3.0"
 toml = { version = "0.5.8", default-features = false }
 url = "2.2.2"

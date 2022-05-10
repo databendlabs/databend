@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
@@ -36,7 +37,6 @@ use common_tracing::tracing;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;

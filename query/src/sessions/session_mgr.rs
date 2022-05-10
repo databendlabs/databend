@@ -23,6 +23,7 @@ use common_base::base::tokio;
 use common_base::base::Runtime;
 use common_base::base::SignalStream;
 use common_base::infallible::RwLock;
+use common_configs::Config;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,7 +45,6 @@ use opendal::Scheme as DalSchema;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;

@@ -904,6 +904,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-configs"
+version = "0.1.0"
+dependencies = [
+ "clap 3.1.8",
+ "common-base",
+ "common-exception",
+ "once_cell",
+ "pretty_assertions",
+ "serde",
+ "serde-bridge",
+ "serde_json",
+ "serfig",
+ "temp-env",
+ "toml",
+]
+
+[[package]]
 name = "common-contexts"
 version = "0.1.0"
 dependencies = [
@@ -1023,6 +1040,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "common-base",
+ "common-configs",
  "common-exception",
  "common-tracing",
  "hyper",
@@ -1122,6 +1140,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-configs",
  "common-exception",
  "common-grpc",
  "common-meta-api",
@@ -1763,6 +1782,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
+ "common-configs",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
@@ -1821,7 +1841,6 @@ dependencies = [
  "sha1",
  "sha2 0.10.2",
  "sqlparser",
- "temp-env",
  "tempfile",
  "thiserror",
  "threadpool",

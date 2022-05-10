@@ -15,9 +15,11 @@
 
 use std::sync::Arc;
 
+use common_configs::Config;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_grpc::MetaGrpcClientConf;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
@@ -46,7 +48,6 @@ use crate::catalogs::backends::MetaBackend;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::CatalogContext;
 use crate::common::MetaClientProvider;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
@@ -91,8 +92,9 @@ impl MutableCatalog {
         } else {
             tracing::info!("use remote meta");
 
-            let meta_client_provider =
-                Arc::new(MetaClientProvider::new(conf.meta.to_grpc_client_config()));
+            let meta_client_provider = Arc::new(MetaClientProvider::new(MetaGrpcClientConf::from(
+                &conf.meta,
+            )));
             let meta_backend = MetaBackend::create(meta_client_provider);
             Arc::new(meta_backend)
         };

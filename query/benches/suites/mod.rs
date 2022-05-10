@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_base::base::tokio;
+use common_configs::Config;
 use common_exception::Result;
 use common_planners::PlanNode;
 use criterion::Criterion;
-use databend_query::configs::Config;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;

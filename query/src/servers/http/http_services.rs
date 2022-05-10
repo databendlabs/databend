@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
+use common_configs::Config;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
@@ -27,7 +28,6 @@ use poem::Route;
 
 use super::v1::upload_to_stage;
 use crate::common::service::HttpShutdownHandler;
-use crate::configs::Config;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;

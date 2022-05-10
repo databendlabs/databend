@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
+pub use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 
-pub use crate::configs::Config;
 use crate::users::auth::jwt::JwtAuthenticator;
 use crate::users::UserApiProvider;
 

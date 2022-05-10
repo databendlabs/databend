@@ -14,14 +14,13 @@
 
 use std::time::Duration;
 
+use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use jwtk::jwk::RemoteJwksVerifier;
 use jwtk::HeaderAndClaims;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::configs::Config;
 
 pub struct JwtAuthenticator {
     //Todo(youngsofun): verify settings, like issuer

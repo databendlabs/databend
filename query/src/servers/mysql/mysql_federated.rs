@@ -31,7 +31,7 @@ impl MySQLFederated {
     pub fn create() -> Self {
         MySQLFederated {
             mysql_version: MYSQL_VERSION.to_string(),
-            databend_version: crate::configs::DATABEND_COMMIT_VERSION.to_string(),
+            databend_version: common_configs::DATABEND_COMMIT_VERSION.to_string(),
         }
     }
 

@@ -15,6 +15,7 @@ test = false
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-tracing = { path = "../tracing" }
+common-configs = {path = "../configs"}
 
 # Github dependencies
 
