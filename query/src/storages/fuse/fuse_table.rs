@@ -33,7 +33,6 @@ use futures::StreamExt;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::sql::OPT_KEY_CATALOG;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -96,28 +95,28 @@ impl FuseTable {
         Ok(format!("{}/{}", db_id, table_id))
     }
 
-    pub fn catalog_name(&self) -> Result<String> {
-        Self::get_catalog_name(&self.table_info)
-    }
-
-    pub fn get_catalog_name(table_info: &TableInfo) -> Result<String> {
-        // Gets catalog name from table table_info.options().
-        //
-        // - This is a temporary workaround
-        // - Later, catalog id should be kept in meta layer (persistent in KV server)
-
-        let table_id = table_info.ident.table_id;
-        table_info
-            .options()
-            .get(OPT_KEY_CATALOG)
-            .cloned()
-            .ok_or_else(|| {
-                ErrorCode::LogicalError(format!(
-                    "NO Catalog specified. Table identity: {}",
-                    table_id
-                ))
-            })
-    }
+    //    pub fn catalog_name(&self) -> Result<String> {
+    //        Self::get_catalog_name(&self.table_info)
+    //    }
+    //
+    //    pub fn get_catalog_name(table_info: &TableInfo) -> Result<String> {
+    //        // Gets catalog name from table table_info.options().
+    //        //
+    //        // - This is a temporary workaround
+    //        // - Later, catalog id should be kept in meta layer (persistent in KV server)
+    //
+    //        let table_id = table_info.ident.table_id;
+    //        table_info
+    //            .options()
+    //            .get(OPT_KEY_CATALOG)
+    //            .cloned()
+    //            .ok_or_else(|| {
+    //                ErrorCode::LogicalError(format!(
+    //                    "NO Catalog specified. Table identity: {}",
+    //                    table_id
+    //                ))
+    //            })
+    //    }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub(crate) async fn read_table_snapshot(
@@ -235,16 +234,18 @@ impl Table for FuseTable {
 
     async fn commit_insertion(
         &self,
-        ctx: Arc<QueryContext>,
-        operations: Vec<DataBlock>,
-        overwrite: bool,
+        _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
+        _operations: Vec<DataBlock>,
+        _overwrite: bool,
     ) -> Result<()> {
         // only append operation supported currently
-        let append_log_entries = operations
+        let append_log_entries = _operations
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, overwrite).await
+        self.do_commit(_ctx, _catalog_name, append_log_entries, _overwrite)
+            .await
     }
 
     async fn truncate(

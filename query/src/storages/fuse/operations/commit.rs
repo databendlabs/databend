@@ -54,6 +54,7 @@ impl FuseTable {
     pub async fn do_commit(
         &self,
         ctx: Arc<QueryContext>,
+        catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -104,7 +105,7 @@ impl FuseTable {
                             );
                         common_base::base::tokio::time::sleep(d).await;
 
-                        let catalog = ctx.get_catalog(tbl.catalog_name()?.as_str())?;
+                        let catalog = ctx.get_catalog(catalog_name.as_ref())?;
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                         let table_info: TableInfo = TableInfo {
                             ident,

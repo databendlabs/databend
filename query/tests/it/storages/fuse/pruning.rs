@@ -26,6 +26,7 @@ use common_planners::lit;
 use common_planners::sub;
 use common_planners::CreateTablePlan;
 use common_planners::Extras;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::OPT_KEY_DATABASE_ID;
@@ -124,7 +125,7 @@ async fn test_block_pruner() -> Result<()> {
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl
@@ -261,7 +262,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl

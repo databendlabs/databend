@@ -50,7 +50,6 @@ use crate::common::MetaClientProvider;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
-use crate::sql::OPT_KEY_CATALOG;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
@@ -65,8 +64,6 @@ use crate::Config;
 #[derive(Clone)]
 pub struct MutableCatalog {
     ctx: CatalogContext,
-    /// name of the catalog,
-    catalog_name: String,
 }
 
 impl MutableCatalog {
@@ -83,7 +80,7 @@ impl MutableCatalog {
     ///
     /// MetaEmbedded
     /// ```
-    pub async fn try_create_with_config(conf: Config, catalog_name: String) -> Result<Self> {
+    pub async fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.address.is_empty();
 
         let meta: Arc<dyn SchemaApi> = if local_mode {
@@ -130,7 +127,7 @@ impl MutableCatalog {
             database_factory: Arc::new(database_factory),
             in_memory_data: Arc::new(Default::default()),
         };
-        Ok(MutableCatalog { ctx, catalog_name })
+        Ok(MutableCatalog { ctx })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -139,13 +136,6 @@ impl MutableCatalog {
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
-    }
-
-    fn set_catalog_to_table_info(&self, table_info: &mut TableInfo) {
-        table_info
-            .meta
-            .options
-            .insert(OPT_KEY_CATALOG.to_owned(), self.catalog_name.clone());
     }
 }
 
@@ -210,9 +200,7 @@ impl Catalog for MutableCatalog {
             meta: self.ctx.meta.clone(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
-        let mut info = table_info.clone();
-        self.set_catalog_to_table_info(&mut info);
-        storage.get_table(ctx, &info)
+        storage.get_table(ctx, table_info)
     }
 
     async fn get_table_meta_by_id(

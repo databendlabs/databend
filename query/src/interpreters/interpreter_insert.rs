@@ -162,7 +162,12 @@ impl InsertInterpreter {
 
         let append_entries = self.ctx.consume_precommit_blocks();
         table
-            .commit_insertion(self.ctx.clone(), append_entries, self.plan.overwrite)
+            .commit_insertion(
+                self.ctx.clone(),
+                &self.plan.catalog_name,
+                append_entries,
+                self.plan.overwrite,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(
@@ -280,6 +285,7 @@ impl Interpreter for InsertInterpreter {
         table
             .commit_insertion(
                 self.ctx.clone(),
+                &self.plan.catalog_name,
                 append_logs.try_collect().await?,
                 self.plan.overwrite,
             )

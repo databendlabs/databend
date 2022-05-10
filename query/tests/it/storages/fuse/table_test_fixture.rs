@@ -301,7 +301,7 @@ pub async fn append_sample_data_overwrite(
     let ctx = fixture.ctx();
     let stream = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx, stream.try_collect().await?, overwrite)
+        .commit_insertion(ctx, CATALOG_DEFAULT, stream.try_collect().await?, overwrite)
         .await
 }
 

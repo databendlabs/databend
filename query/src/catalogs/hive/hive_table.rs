@@ -134,6 +134,7 @@ impl Table for HiveTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
         _operations: Vec<DataBlock>,
         _overwrite: bool,
     ) -> Result<()> {

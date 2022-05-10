@@ -14,11 +14,10 @@
 
 use common_exception::Result;
 use databend_query::catalogs::DatabaseCatalog;
-use databend_query::catalogs::CATALOG_DEFAULT;
 
 pub fn create_catalog() -> Result<DatabaseCatalog> {
     futures::executor::block_on(async move {
         let conf = crate::tests::ConfigBuilder::create().config();
-        DatabaseCatalog::try_create_with_config(conf, CATALOG_DEFAULT).await
+        DatabaseCatalog::try_create_with_config(conf).await
     })
 }

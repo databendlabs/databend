@@ -26,7 +26,6 @@ use super::hive_database::HiveDatabase;
 use crate::catalogs::hive::HiveTable;
 use crate::catalogs::Catalog;
 use crate::databases::Database;
-use crate::sql::OPT_KEY_CATALOG;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
@@ -36,17 +35,12 @@ use crate::table_functions::TableFunction;
 pub struct HiveCatalog {
     /// address of hive meta store service
     client_address: String,
-    catalog_name: String,
 }
 
 impl HiveCatalog {
-    pub fn try_create(
-        hms_address: impl Into<String>,
-        name: impl Into<String>,
-    ) -> Result<HiveCatalog> {
+    pub fn try_create(hms_address: impl Into<String>) -> Result<HiveCatalog> {
         Ok(HiveCatalog {
             client_address: hms_address.into(),
-            catalog_name: name.into(),
         })
     }
 
@@ -60,13 +54,6 @@ impl HiveCatalog {
         let i_prot = TBinaryInputProtocol::new(i_tran, true);
         let o_prot = TBinaryOutputProtocol::new(o_tran, true);
         Ok(ThriftHiveMetastoreSyncClient::new(i_prot, o_prot))
-    }
-
-    fn set_catalog_to_table_info(&self, table_info: &mut TableInfo) {
-        table_info
-            .meta
-            .options
-            .insert(OPT_KEY_CATALOG.to_owned(), self.catalog_name.clone());
     }
 }
 
@@ -105,9 +92,7 @@ impl Catalog for HiveCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let mut info = table_info.clone();
-        self.set_catalog_to_table_info(&mut info);
-        let res: Arc<dyn Table> = Arc::new(HiveTable::create(info));
+        let res: Arc<dyn Table> = Arc::new(HiveTable::create(table_info.clone()));
         Ok(res)
     }
 
@@ -134,8 +119,7 @@ impl Catalog for HiveCatalog {
         let fields = client
             .get_schema(db_name.to_owned(), table_name.to_owned())
             .map_err(from_thrift_error)?;
-        let mut table_info: TableInfo = super::converters::try_into_table_info(table_meta, fields)?;
-        self.set_catalog_to_table_info(&mut table_info);
+        let table_info: TableInfo = super::converters::try_into_table_info(table_meta, fields)?;
         let res: Arc<dyn Table> = Arc::new(HiveTable::create(table_info));
         Ok(res)
     }

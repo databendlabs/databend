@@ -197,7 +197,12 @@ impl Interpreter for CopyInterpreter {
 
         // Commit.
         table
-            .commit_insertion(self.ctx.clone(), write_results, false)
+            .commit_insertion(
+                self.ctx.clone(),
+                &self.plan.catalog_name,
+                write_results,
+                false,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

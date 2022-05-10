@@ -16,13 +16,6 @@ use std::collections::HashSet;
 
 use lazy_static::lazy_static;
 
-// Table option key for the catalog that the table belongs to
-// - This is a temporary workaround
-// - The value of this key (the name of catalog) will be set by the `catalog`
-//   that load the table, not persistent in the meta layer.
-// - Later, catalog id should be kept in meta layer (persistent in KV server)
-pub const OPT_KEY_CATALOG: &str = "catalog_name";
-
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 
@@ -44,7 +37,6 @@ lazy_static! {
         let mut r = HashSet::new();
         r.insert(OPT_KEY_DATABASE_ID);
         r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-        r.insert(OPT_KEY_CATALOG);
         r
     };
 
@@ -53,7 +45,6 @@ lazy_static! {
         let mut r = HashSet::new();
         r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
         r.insert(OPT_KEY_DATABASE_ID);
-        r.insert(OPT_KEY_CATALOG);
         r
     };
 }
