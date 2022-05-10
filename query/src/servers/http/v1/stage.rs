@@ -90,7 +90,7 @@ pub async fn upload_to_stage(
         // It's  external, so we need to join the root path
         StageType::External => match stage.stage_params.storage {
             StageStorage::S3(ref s3) => {
-                final_related_path = get_abs_path(s3.path.as_str(), relative_path);
+                final_related_path = get_abs_path(s3.root.as_str(), relative_path);
             }
         },
     }

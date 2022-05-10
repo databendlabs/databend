@@ -16,13 +16,13 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_configs::S3StorageConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::get_abs_path;
 use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
-use common_meta_types::StageS3Storage;
 use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -51,7 +51,7 @@ pub async fn location_to_stage_path(
         // It's  external, so we need to join the root path
         StageType::External => match stage.stage_params.storage {
             StageStorage::S3(ref s3) => {
-                related_path = get_abs_path(s3.path.as_str(), path);
+                related_path = get_abs_path(s3.root.as_str(), path);
             }
         },
     }
@@ -65,6 +65,9 @@ pub fn parse_stage_storage(
     credential_options: &BTreeMap<String, String>,
     encryption_options: &BTreeMap<String, String>,
 ) -> Result<(StageStorage, String)> {
+    // TODO(xuanwo): we should implement parser in config.
+    // TODO(xuanwo): we should support use non-aws s3 as stage like oss.
+
     // Parse uri.
     // 's3://<bucket>[/<path>]'
     let uri = location.parse::<http::Uri>().map_err(|_e| {
@@ -72,6 +75,7 @@ pub fn parse_stage_storage(
             "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
         )
     })?;
+
     let bucket = uri
         .host()
         .ok_or_else(|| {
@@ -91,28 +95,25 @@ pub fn parse_stage_storage(
         Some(v) => match v {
             // AWS s3 plan.
             "s3" => {
-                let credentials_aws_key_id = credential_options
-                    .get("aws_key_id")
-                    .unwrap_or(&"".to_string())
-                    .clone();
-                let credentials_aws_secret_key = credential_options
-                    .get("aws_secret_key")
-                    .unwrap_or(&"".to_string())
-                    .clone();
-                let encryption_master_key = encryption_options
-                    .get("master_key")
-                    .unwrap_or(&"".to_string())
-                    .clone();
-
-                let storage_stage = StageStorage::S3(StageS3Storage {
+                let cfg = S3StorageConfig {
                     bucket,
-                    path: path.clone(),
-                    credentials_aws_key_id,
-                    credentials_aws_secret_key,
-                    encryption_master_key,
-                });
+                    root: path.clone(),
+                    access_key_id: credential_options
+                        .get("aws_key_id")
+                        .cloned()
+                        .unwrap_or_default(),
+                    secret_access_key: credential_options
+                        .get("aws_secret_key")
+                        .cloned()
+                        .unwrap_or_default(),
+                    master_key: encryption_options
+                        .get("master_key")
+                        .cloned()
+                        .unwrap_or_default(),
+                    ..Default::default()
+                };
 
-                Ok((storage_stage, path))
+                Ok((StageStorage::S3(cfg), path))
             }
 
             // Others.

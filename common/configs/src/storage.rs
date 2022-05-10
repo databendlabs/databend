@@ -13,33 +13,11 @@
 // limitations under the License.
 
 use std::fmt;
-use std::str::FromStr;
 
 use clap::Args;
 use common_base::base::mask_string;
 use serde::Deserialize;
 use serde::Serialize;
-
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub enum StorageType {
-    Fs,
-    S3,
-    AzureStorageBlob,
-}
-
-// Implement the trait
-impl FromStr for StorageType {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> std::result::Result<StorageType, &'static str> {
-        match s {
-            "fs" => Ok(StorageType::Fs),
-            "s3" => Ok(StorageType::S3),
-            "azure_storage_blob" => Ok(StorageType::AzureStorageBlob),
-            _ => Err("no match for storage type"),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -57,7 +35,7 @@ impl Default for FsStorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Eq, Args)]
 #[serde(default)]
 pub struct S3StorageConfig {
     /// Region for S3 storage
@@ -71,7 +49,7 @@ pub struct S3StorageConfig {
     )]
     pub endpoint_url: String,
 
-    // Access key for S3 storage
+    /// Access key for S3 storage
     #[clap(long = "storage-s3-access-key-id", default_value_t)]
     pub access_key_id: String,
 
@@ -86,6 +64,10 @@ pub struct S3StorageConfig {
     /// <root>
     #[clap(long = "storage-s3-root", default_value_t)]
     pub root: String,
+
+    // TODO(xuanwo): We should support both AWS SSE and CSE in the future.
+    #[clap(long = "storage-s3-master-key", default_value_t)]
+    pub master_key: String,
 }
 
 impl Default for S3StorageConfig {
@@ -97,6 +79,7 @@ impl Default for S3StorageConfig {
             secret_access_key: "".to_string(),
             bucket: "".to_string(),
             root: "".to_string(),
+            master_key: "".to_string(),
         }
     }
 }
@@ -113,6 +96,7 @@ impl fmt::Debug for S3StorageConfig {
                 "secret_access_key",
                 &mask_string(&self.secret_access_key, 3),
             )
+            .field("master_key", &mask_string(&self.master_key, 3))
             .finish()
     }
 }

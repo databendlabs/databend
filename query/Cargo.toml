@@ -22,7 +22,7 @@ default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "tempfile"]
-storage-hdfs = ["opendal/services-hdfs"]
+storage-hdfs = ["opendal/services-hdfs", "common-io/storage-hdfs"]
 
 [dependencies]
 # Workspace dependencies
