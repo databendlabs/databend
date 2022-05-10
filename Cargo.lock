@@ -1254,8 +1254,10 @@ dependencies = [
  "common-datavalues",
  "common-meta-types",
  "common-protos",
+ "enumflags2",
  "maplit",
  "num",
+ "serde_json",
  "thiserror",
 ]
 

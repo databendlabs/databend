@@ -19,7 +19,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
-use common_datavalues as dv;
 use common_meta_types as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
@@ -28,14 +27,12 @@ use num::FromPrimitive;
 use crate::check_ver;
 use crate::FromToProto;
 use crate::Incompatible;
-
-const USER_VER: u64 = 1;
-const OLDEST_USER_COMPATIBLE_VER: u64 = 1;
+use crate::VER;
 
 impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
     fn from_pb(p: pb::AuthInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         match p.info {
             Some(pb::auth_info::Info::None(pb::auth_info::None {})) => Ok(mt::AuthInfo::None),
@@ -49,11 +46,9 @@ impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
                     reason: format!("invalid PasswordHashMethod: {}", hash_method),
                 })?,
             }),
-            None => {
-                return Err(Incompatible {
-                    reason: format!("AuthInfo error"),
-                });
-            }
+            None => Err(Incompatible {
+                reason: "AuthInfo cannot be None".to_string(),
+            }),
         }
     }
 
@@ -69,21 +64,18 @@ impl FromToProto<pb::AuthInfo> for mt::AuthInfo {
                 hash_method: *hash_method as i32,
             })),
         };
-        Ok(pb::AuthInfo {
-            ver: USER_VER,
-            info,
-        })
+        Ok(pb::AuthInfo { ver: VER, info })
     }
 }
 
 impl FromToProto<pb::UserOption> for mt::UserOption {
     fn from_pb(p: pb::UserOption) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         let flags = BitFlags::<mt::UserOptionFlag, u64>::from_bits(p.flags);
         match flags {
-            Ok(flags) => return Ok(mt::UserOption::new(flags)),
+            Ok(flags) => Ok(mt::UserOption::new(flags)),
             Err(e) => {
                 return Err(Incompatible {
                     reason: format!("UserOptionFlag error: {}", e),
@@ -94,7 +86,7 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
 
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
         Ok(pb::UserOption {
-            ver: USER_VER,
+            ver: VER,
             flags: self.flags().bits(),
         })
     }
@@ -103,7 +95,7 @@ impl FromToProto<pb::UserOption> for mt::UserOption {
 impl FromToProto<pb::UserQuota> for mt::UserQuota {
     fn from_pb(p: pb::UserQuota) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         Ok(Self {
             max_cpu: p.max_cpu,
@@ -114,7 +106,7 @@ impl FromToProto<pb::UserQuota> for mt::UserQuota {
 
     fn to_pb(&self) -> Result<pb::UserQuota, Incompatible> {
         Ok(pb::UserQuota {
-            ver: USER_VER,
+            ver: VER,
             max_cpu: self.max_cpu,
             max_memory_in_bytes: self.max_memory_in_bytes,
             max_storage_in_bytes: self.max_storage_in_bytes,
@@ -125,7 +117,7 @@ impl FromToProto<pb::UserQuota> for mt::UserQuota {
 impl FromToProto<pb::GrantObject> for mt::GrantObject {
     fn from_pb(p: pb::GrantObject) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         match p.object {
             Some(pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {})) => {
@@ -139,7 +131,7 @@ impl FromToProto<pb::GrantObject> for mt::GrantObject {
                 table,
             })) => Ok(mt::GrantObject::Table(db, table)),
             _ => Err(Incompatible {
-                reason: format!("GrantObject error"),
+                reason: "GrantObject cannot be None".to_string(),
             }),
         }
     }
@@ -159,28 +151,23 @@ impl FromToProto<pb::GrantObject> for mt::GrantObject {
                 },
             )),
         };
-        Ok(pb::GrantObject {
-            ver: USER_VER,
-            object,
-        })
+        Ok(pb::GrantObject { ver: VER, object })
     }
 }
 
 impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
     fn from_pb(p: pb::GrantEntry) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         let privileges = BitFlags::<mt::UserPrivilegeType, u64>::from_bits(p.privileges);
         match privileges {
-            Ok(privileges) => {
-                return Ok(mt::GrantEntry::new(
-                    mt::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
-                        reason: "GrantEntry.object can not be None".to_string(),
-                    })?)?,
-                    privileges,
-                ))
-            }
+            Ok(privileges) => Ok(mt::GrantEntry::new(
+                mt::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
+                    reason: "GrantEntry.object can not be None".to_string(),
+                })?)?,
+                privileges,
+            )),
             Err(e) => {
                 return Err(Incompatible {
                     reason: format!("UserPrivilegeType error: {}", e),
@@ -191,7 +178,7 @@ impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
 
     fn to_pb(&self) -> Result<pb::GrantEntry, Incompatible> {
         Ok(pb::GrantEntry {
-            ver: USER_VER,
+            ver: VER,
             object: Some(self.object().to_pb()?),
             privileges: self.privileges().bits(),
         })
@@ -201,7 +188,7 @@ impl FromToProto<pb::GrantEntry> for mt::GrantEntry {
 impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
     fn from_pb(p: pb::UserGrantSet) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         let mut entries = Vec::new();
         for entry in p.entries.iter() {
@@ -226,29 +213,45 @@ impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
         }
 
         Ok(pb::UserGrantSet {
-            ver: USER_VER,
+            ver: VER,
             entries,
             roles,
         })
     }
 }
 
-impl FromToProto<pb::UserSetting> for mt::UserSetting {
-    fn from_pb(p: pb::UserSetting) -> Result<Self, Incompatible>
+impl FromToProto<pb::UserInfo> for mt::UserInfo {
+    fn from_pb(p: pb::UserInfo) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
-        let value = dv::DataValue::from_pb(p.value.ok_or_else(|| Incompatible {
-            reason: "DataValue.value can not be None".to_string(),
-        })?)?;
-        let v = mt::UserSetting::create(&p.name, value);
-        Ok(v)
+        check_ver(p.ver)?;
+
+        Ok(mt::UserInfo {
+            name: p.name.clone(),
+            hostname: p.hostname.clone(),
+            auth_info: mt::AuthInfo::from_pb(p.auth_info.ok_or_else(|| Incompatible {
+                reason: "UserInfo.auth_info cannot be None".to_string(),
+            })?)?,
+            grants: mt::UserGrantSet::from_pb(p.grants.ok_or_else(|| Incompatible {
+                reason: "UserInfo.grants cannot be None".to_string(),
+            })?)?,
+            quota: mt::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
+                reason: "UserInfo.quota cannot be None".to_string(),
+            })?)?,
+            option: mt::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
+                reason: "UserInfo.option cannot be None".to_string(),
+            })?)?,
+        })
     }
 
-    fn to_pb(&self) -> Result<pb::UserSetting, Incompatible> {
-        Ok(pb::UserSetting {
-            ver: USER_VER,
+    fn to_pb(&self) -> Result<pb::UserInfo, Incompatible> {
+        Ok(pb::UserInfo {
+            ver: VER,
             name: self.name.clone(),
-            value: Some(dv::DataValue::to_pb(&self.value)?),
+            hostname: self.hostname.clone(),
+            auth_info: Some(mt::AuthInfo::to_pb(&self.auth_info)?),
+            grants: Some(mt::UserGrantSet::to_pb(&self.grants)?),
+            quota: Some(mt::UserQuota::to_pb(&self.quota)?),
+            option: Some(mt::UserOption::to_pb(&self.option)?),
         })
     }
 }
@@ -379,7 +382,7 @@ impl FromToProto<pb::user_stage_info::StageStorage> for mt::StageStorage {
                 Ok(mt::StageStorage::S3(mt::StageS3Storage::from_pb(s)?))
             }
             None => Err(Incompatible {
-                reason: format!("StageStorage.storage cannot beNone"),
+                reason: "StageStorage.storage cannot be None".to_string(),
             }),
         }
     }
@@ -400,7 +403,7 @@ impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
     where Self: Sized {
         Ok(mt::StageParams {
             storage: mt::StageStorage::from_pb(p.storage.ok_or_else(|| Incompatible {
-                reason: format!("pb::user_stage_info::StageParams.storage cannot be None"),
+                reason: "pb::user_stage_info::StageParams.storage cannot be None".to_string(),
             })?)?,
         })
     }
@@ -415,7 +418,7 @@ impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
 impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptions {
     fn from_pb(p: pb::user_stage_info::FileFormatOptions) -> Result<Self, Incompatible>
     where Self: Sized {
-        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+        check_ver(p.ver)?;
 
         let format = mt::StageFileFormatType::from_pb(
             FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
@@ -433,7 +436,7 @@ impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptio
             format,
             skip_header: p.skip_header,
             field_delimiter: p.field_delimiter.clone(),
-            record_delimiter: p.record_delimiter.clone(),
+            record_delimiter: p.record_delimiter,
             compression,
         })
     }
@@ -442,9 +445,9 @@ impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptio
         let format = mt::StageFileFormatType::to_pb(&self.format)? as i32;
         let compression = mt::StageFileCompression::to_pb(&self.compression)? as i32;
         Ok(pb::user_stage_info::FileFormatOptions {
-            ver: USER_VER,
+            ver: VER,
             format,
-            skip_header: self.skip_header.clone(),
+            skip_header: self.skip_header,
             field_delimiter: self.field_delimiter.clone(),
             record_delimiter: self.record_delimiter.clone(),
             compression,
@@ -470,7 +473,7 @@ impl FromToProto<pb::user_stage_info::OnErrorMode> for mt::OnErrorMode {
                 Ok(mt::OnErrorMode::AbortStatement)
             }
             None => Err(Incompatible {
-                reason: format!("OnErrorMode.mode cannot beNone"),
+                reason: "OnErrorMode.mode cannot be None".to_string(),
             }),
         }
     }
@@ -506,7 +509,7 @@ impl FromToProto<pb::user_stage_info::CopyOptions> for mt::CopyOptions {
     fn from_pb(p: pb::user_stage_info::CopyOptions) -> Result<Self, Incompatible>
     where Self: Sized {
         let on_error = mt::OnErrorMode::from_pb(p.on_error.ok_or_else(|| Incompatible {
-            reason: format!("CopyOptions.on_error cannot be None"),
+            reason: "CopyOptions.on_error cannot be None".to_string(),
         })?)?;
         let size_limit = usize::try_from(p.size_limit).map_err(|err| Incompatible {
             reason: format!("CopyOptions.size_limit cannot be convert to usize: {}", err),
@@ -532,6 +535,7 @@ impl FromToProto<pb::user_stage_info::CopyOptions> for mt::CopyOptions {
 impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
     fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
     where Self: Sized {
+        check_ver(p.ver)?;
         Ok(mt::UserStageInfo {
             stage_name: p.stage_name.clone(),
             stage_type: mt::StageType::from_pb(FromPrimitive::from_i32(p.stage_type).ok_or_else(
@@ -541,26 +545,26 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
             )?)?,
             stage_params: mt::StageParams::from_pb(p.stage_params.ok_or_else(|| {
                 Incompatible {
-                    reason: format!("UserStageInfo.stage_params cannot be None"),
+                    reason: "UserStageInfo.stage_params cannot be None".to_string(),
                 }
             })?)?,
             file_format_options: mt::FileFormatOptions::from_pb(
                 p.file_format_options.ok_or_else(|| Incompatible {
-                    reason: format!("UserStageInfo.file_format_options cannot be None"),
+                    reason: "UserStageInfo.file_format_options cannot be None".to_string(),
                 })?,
             )?,
             copy_options: mt::CopyOptions::from_pb(p.copy_options.ok_or_else(|| {
                 Incompatible {
-                    reason: format!("UserStageInfo.copy_options cannot be None"),
+                    reason: "UserStageInfo.copy_options cannot be None".to_string(),
                 }
             })?)?,
-            comment: p.comment.clone(),
+            comment: p.comment,
         })
     }
 
     fn to_pb(&self) -> Result<pb::UserStageInfo, Incompatible> {
         Ok(pb::UserStageInfo {
-            ver: USER_VER,
+            ver: VER,
             stage_name: self.stage_name.clone(),
             stage_type: mt::StageType::to_pb(&self.stage_type)? as i32,
             stage_params: Some(mt::StageParams::to_pb(&self.stage_params)?),

@@ -14,12 +14,15 @@
 
 use crate::Incompatible;
 
-pub fn check_ver(ver: u64, now_ver: u64, oldest_compatible_ver: u64) -> Result<(), Incompatible> {
-    if ver > now_ver || ver < oldest_compatible_ver {
+pub const VER: u64 = 1;
+const OLDEST_COMPATIBLE_VER: u64 = 1;
+
+pub fn check_ver(ver: u64) -> Result<(), Incompatible> {
+    if ver > VER || ver < OLDEST_COMPATIBLE_VER {
         return Err(Incompatible {
             reason: format!(
                 "ver={} is not compatible with [{}, {}]",
-                ver, oldest_compatible_ver, now_ver
+                ver, OLDEST_COMPATIBLE_VER, VER
             ),
         });
     }

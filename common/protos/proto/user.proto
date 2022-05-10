@@ -40,12 +40,6 @@ message AuthInfo {
   }
 }
 
-message User {
-  string name = 1;
-  string hostname = 2;
-  AuthInfo auth_data = 3;
-}
-
 message GrantObject {
   uint64 ver = 100;
 
@@ -89,14 +83,15 @@ message UserOption {
   uint64 flags = 1;
 }
 
-message UserSetting {
+message UserInfo {
   uint64 ver = 100;
 
-  // The name of the setting.
   string name = 1;
-
-  // The value of the setting.
-  DataValue value = 2;
+  string hostname = 2;
+  AuthInfo auth_info = 3;
+  UserGrantSet grants = 4;
+  UserQuota quota = 5;
+  UserOption option = 6;
 }
 
 message UserStageInfo {
