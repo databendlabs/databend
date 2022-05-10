@@ -55,7 +55,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     set_panic_hook();
     tracing::info!("{:?}", conf);
-    tracing::info!("DatabendQuery {}", *common_configs::DATABEND_COMMIT_VERSION);
+    tracing::info!("DatabendQuery {}", *databend_query::DATABEND_COMMIT_VERSION);
 
     let session_manager = SessionManager::from_conf(conf.clone()).await?;
     let mut shutdown_handle = ShutdownHandle::create(session_manager.clone());

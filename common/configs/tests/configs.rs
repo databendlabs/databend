@@ -300,10 +300,3 @@ root = ""
 
     Ok(())
 }
-
-#[test]
-fn test_fuse_commit_version() -> Result<()> {
-    let v = &common_configs::DATABEND_COMMIT_VERSION;
-    assert!(v.len() > 0);
-    Ok(())
-}

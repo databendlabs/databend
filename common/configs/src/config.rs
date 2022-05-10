@@ -16,7 +16,6 @@ use std::env;
 
 use clap::Parser;
 use common_exception::Result;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -28,24 +27,6 @@ use crate::LogConfig;
 use crate::MetaConfig;
 use crate::QueryConfig;
 use crate::StorageConfig;
-
-pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
-    let git_tag = option_env!("VERGEN_GIT_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-    let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-
-    let ver = match (git_tag, git_sha, rustc_semver, timestamp) {
-        #[cfg(not(feature = "simd"))]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}(rust-{}-{})", v1, v2, v3, v4),
-        #[cfg(feature = "simd")]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd(rust-{}-{})", v1, v2, v3, v4)
-        }
-        _ => String::new(),
-    };
-    ver
-});
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]

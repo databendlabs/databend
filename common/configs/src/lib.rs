@@ -13,13 +13,12 @@
 // limitations under the License.
 
 mod config;
-pub mod log;
-pub mod meta;
-pub mod query;
-pub mod storage;
+mod log;
+mod meta;
+mod query;
+mod storage;
 
 pub use config::Config;
-pub use config::DATABEND_COMMIT_VERSION;
 pub use log::LogConfig;
 pub use meta::MetaConfig;
 pub use query::QueryConfig;
