@@ -48,7 +48,7 @@ pub struct Binder {
     metadata: Metadata,
 }
 
-impl Binder {
+impl<'a> Binder {
     pub fn new(ctx: Arc<QueryContext>, catalogs: Arc<CatalogManager>) -> Self {
         Binder {
             ctx,
@@ -57,13 +57,13 @@ impl Binder {
         }
     }
 
-    pub async fn bind<'a>(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
+    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
         let init_bind_context = BindContext::new();
         let bind_context = self.bind_statement(stmt, &init_bind_context).await?;
         Ok(BindResult::create(bind_context, self.metadata))
     }
 
-    async fn bind_statement<'a>(
+    async fn bind_statement(
         &mut self,
         stmt: &Statement<'a>,
         bind_context: &BindContext,

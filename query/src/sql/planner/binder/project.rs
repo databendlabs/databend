@@ -27,7 +27,7 @@ use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
 
-impl Binder {
+impl<'a> Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
     /// If `output_context` can already be satisfied by `input_context`(e.g. `SELECT * FROM t`),
     /// then it won't build a `ProjectPlan`.
@@ -69,7 +69,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    pub(super) async fn normalize_select_list<'a>(
+    pub(super) async fn normalize_select_list(
         &mut self,
         select_list: &[SelectTarget<'a>],
         has_order_by: bool,

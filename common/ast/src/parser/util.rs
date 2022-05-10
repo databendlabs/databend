@@ -301,6 +301,6 @@ impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
 
 impl<'a> nom::Slice<RangeFull> for Input<'a> {
     fn slice(&self, _: RangeFull) -> Self {
-        Input(self.0, self.1)
+        *self
     }
 }
