@@ -43,9 +43,9 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::catalogs::backends::MetaBackend;
+use super::backends::MetaBackend;
+use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::CatalogContext;
 use crate::common::MetaClientProvider;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;

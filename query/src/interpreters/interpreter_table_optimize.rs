@@ -21,7 +21,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
@@ -50,7 +49,10 @@ impl Interpreter for OptimizeTableInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
-        let mut table = self.ctx.get_table(&plan.database, &plan.table).await?;
+        let mut table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
         let operation = &plan.operation;
 
         let do_purge = operation.contains(Optimization::PURGE);
@@ -72,7 +74,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 let tenant = self.ctx.get_tenant();
                 table = self
                     .ctx
-                    .get_catalog()
+                    .get_catalog(&plan.catalog)?
                     .get_table(tenant.as_str(), &plan.database, &plan.table)
                     .await?;
             }

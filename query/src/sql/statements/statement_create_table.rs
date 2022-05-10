@@ -33,9 +33,9 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::is_reserved_opt_key;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -65,8 +65,10 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (db, table) = Self::resolve_table(ctx.clone(), &self.name, "Table")?;
-        let mut table_meta = self.table_meta(ctx.clone(), db.as_str()).await?;
+        let (catalog, db, table) = resolve_table(&ctx, &self.name, "CREATE TABLE")?;
+        let mut table_meta = self
+            .table_meta(ctx.clone(), catalog.as_str(), db.as_str())
+            .await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
 
@@ -111,6 +113,7 @@ impl AnalyzableStatement for DfCreateTable {
             PlanNode::CreateTable(CreateTablePlan {
                 if_not_exists,
                 tenant,
+                catalog,
                 db,
                 table,
                 table_meta,
@@ -122,27 +125,12 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    pub fn resolve_table(
+    async fn table_meta(
+        &self,
         ctx: Arc<QueryContext>,
-        table_name: &ObjectName,
-        table_type: &str,
-    ) -> Result<(String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException(format!(
-                "{} name is empty",
-                table_type
-            ))),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(format!(
-                "{} name must be [`db`].`{}`",
-                table_type, table_type
-            ))),
-        }
-    }
-
-    async fn table_meta(&self, ctx: Arc<QueryContext>, db_name: &str) -> Result<TableMeta> {
+        catalog_name: &str,
+        db_name: &str,
+    ) -> Result<TableMeta> {
         let engine = self.engine.clone();
         let schema = self.table_schema(ctx.clone()).await?;
 
@@ -155,7 +143,8 @@ impl DfCreateTable {
             options: self.options.clone(),
             ..Default::default()
         };
-        self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
+        self.plan_with_db_id(ctx.as_ref(), catalog_name, db_name, meta)
+            .await
     }
 
     async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
@@ -164,11 +153,13 @@ impl DfCreateTable {
             // we use the original table's schema.
             Some(like_table_name) => {
                 // resolve database and table name from 'like statement'
-                let (origin_db_name, origin_table_name) =
-                    Self::resolve_table(ctx.clone(), like_table_name, "Table")?;
+                let (origin_catalog_name, origin_db_name, origin_table_name) =
+                    resolve_table(&ctx, like_table_name, "Table")?;
 
                 // use the origin table's schema for the table to create
-                let origin_table = ctx.get_table(&origin_db_name, &origin_table_name).await?;
+                let origin_table = ctx
+                    .get_table(&origin_catalog_name, &origin_db_name, &origin_table_name)
+                    .await?;
                 Ok(origin_table.schema())
             }
             None => {
@@ -212,6 +203,7 @@ impl DfCreateTable {
     async fn plan_with_db_id(
         &self,
         ctx: &QueryContext,
+        catalog_name: &str,
         database_name: &str,
         mut meta: TableMeta,
     ) -> Result<TableMeta> {
@@ -224,7 +216,7 @@ impl DfCreateTable {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = ctx.get_catalog();
+            let catalog = ctx.get_catalog(catalog_name)?;
             let db = catalog
                 .get_database(ctx.get_tenant().as_str(), database_name)
                 .await?;

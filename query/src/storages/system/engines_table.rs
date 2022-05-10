@@ -21,25 +21,26 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::system::table::SyncOneBlockSystemTable;
-use crate::storages::system::table::SyncSystemTable;
+use crate::storages::system::table::AsyncOneBlockSystemTable;
+use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
 
 pub struct EnginesTable {
     table_info: TableInfo,
 }
 
-impl SyncSystemTable for EnginesTable {
+#[async_trait::async_trait]
+impl AsyncSystemTable for EnginesTable {
     const NAME: &'static str = "system.engines";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
-        let table_engine_descriptors = ctx.get_catalog().get_table_engines();
+    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+        // TODO passin catalog name
+        let table_engine_descriptors = ctx.get_catalog("default")?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {
@@ -72,6 +73,6 @@ impl EnginesTable {
             },
         };
 
-        SyncOneBlockSystemTable::create(EnginesTable { table_info })
+        AsyncOneBlockSystemTable::create(EnginesTable { table_info })
     }
 }

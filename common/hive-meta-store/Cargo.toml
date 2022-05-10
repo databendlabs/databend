@@ -1,0 +1,29 @@
+[package]
+name = "common-hive-meta-store"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[features]
+# Phony feature 
+#
+# Prevents the integration tests from running if "hive" not enabled 
+#   The integration tests need hive-meta-store service, which is not available 
+#   in the normal testing setup.
+hive-it = []
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+
+# Github dependencies
+
+# Crates.io dependencies
+thrift = "0.15"
+
+[build-dependencies]

@@ -67,6 +67,7 @@ impl Test {
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
+            catalog: "default".to_owned(),
             source_info: SourceInfo::TableSource(TableInfo::simple("system", "numbers_mt", schema)),
             scan_fields: None,
             parts: Self::generate_partitions(8, total as u64),

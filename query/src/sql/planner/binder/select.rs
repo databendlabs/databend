@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -130,15 +131,19 @@ impl Binder {
                 }
             }
         }
+        let catalog = CATALOG_DEFAULT;
         let database = "system";
         let tenant = self.ctx.get_tenant();
         let table_meta: Arc<dyn Table> = self
-            .resolve_data_source(tenant.as_str(), database, "one")
+            .resolve_data_source(tenant.as_str(), catalog, database, "one")
             .await?;
         let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-        let table_index = self
-            .metadata
-            .add_table(database.to_string(), table_meta, source);
+        let table_index = self.metadata.add_table(
+            CATALOG_DEFAULT.to_owned(),
+            database.to_string(),
+            table_meta,
+            source,
+        );
 
         let result = self.bind_base_table(table_index).await?;
         Ok(result)
@@ -151,6 +156,7 @@ impl Binder {
     ) -> Result<BindContext> {
         match stmt {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
@@ -159,6 +165,10 @@ impl Binder {
                     .as_ref()
                     .map(|ident| ident.name.clone())
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                let catalog = catalog
+                    .as_ref()
+                    .map(|id| id.name.clone())
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
@@ -166,10 +176,17 @@ impl Binder {
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = self
-                    .resolve_data_source(tenant.as_str(), database.as_str(), table.as_str())
+                    .resolve_data_source(
+                        tenant.as_str(),
+                        catalog.as_str(),
+                        database.as_str(),
+                        table.as_str(),
+                    )
                     .await?;
                 let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-                let table_index = self.metadata.add_table(database, table_meta, source);
+                let table_index = self
+                    .metadata
+                    .add_table(catalog, database, table_meta, source);
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
@@ -204,15 +221,20 @@ impl Binder {
 
                 let table_args = Some(expressions);
 
+                // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
-                    .catalog
+                    .catalogs
+                    .get_catalog(CATALOG_DEFAULT)?
                     .get_table_function(name.name.as_str(), table_args)?;
                 let table = table_meta.as_table();
 
                 let source = table.read_plan(self.ctx.clone(), None).await?;
-                let table_index =
-                    self.metadata
-                        .add_table("system".to_string(), table.clone(), source);
+                let table_index = self.metadata.add_table(
+                    CATALOG_DEFAULT.to_string(),
+                    "system".to_string(),
+                    table.clone(),
+                    source,
+                );
 
                 let mut result = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {

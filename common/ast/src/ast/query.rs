@@ -115,7 +115,7 @@ pub enum Indirection {
 pub enum TableReference {
     // Table name
     Table {
-        // Could be `db.table` or `table`
+        catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
         alias: Option<TableAlias>,
@@ -204,11 +204,15 @@ impl Display for TableReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
             } => {
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(table)),
+                )?;
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

@@ -34,8 +34,8 @@ use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::impls::ImmutableCatalog;
-use crate::catalogs::impls::MutableCatalog;
+use crate::catalogs::default::ImmutableCatalog;
+use crate::catalogs::default::MutableCatalog;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;

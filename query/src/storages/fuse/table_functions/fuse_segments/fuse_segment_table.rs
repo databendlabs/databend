@@ -33,7 +33,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::fuse_segment::FuseSegment;
 use super::table_args::parse_func_history_args;
-use crate::catalogs::Catalog;
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
@@ -121,7 +121,7 @@ impl Table for FuseSegmentTable {
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog()
+            .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 tenant_id.as_str(),
                 self.arg_database_name.as_str(),
@@ -212,7 +212,7 @@ impl AsyncSource for FuseHistorySource {
             let tenant_id = self.ctx.get_tenant();
             let tbl = self
                 .ctx
-                .get_catalog()
+                .get_catalog(CATALOG_DEFAULT)?
                 .get_table(
                     tenant_id.as_str(),
                     self.arg_database_name.as_str(),
