@@ -40,7 +40,7 @@ You can explore more flags with `./databend-query -h`.
 
 ### password
 
-* Meta service password when connecting to it.
+* Meta service password when connecting to it, `password` is not recommended here, please use Env variable instead.
 * Default: `"root"`
 * Env variable: `META_PASSWORD`
 
