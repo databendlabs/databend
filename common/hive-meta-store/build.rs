@@ -20,11 +20,24 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
+use which::which;
+
 #[allow(clippy::expect_fun_call)]
 fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir);
 
+    which("thrift").expect(
+        "
+              *********************************
+              thrift not found, which is required to build this crate
+              please install it by using your favorite package manager,
+              e.g.
+              - apt-get install thrift
+              - brew install thrift
+              *********************************
+       ",
+    );
     // thrift -out my_rust_program/src --gen rs -r Tutorial.thrift
     Command::new("thrift")
         .args(&[
