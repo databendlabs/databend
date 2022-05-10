@@ -203,7 +203,7 @@ impl Binder {
                 alias,
             } => {
                 let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
-                let mut args = vec![];
+                let mut args = Vec::with_capacity(params.len());
                 for arg in params.iter() {
                     args.push(scalar_binder.bind_expr(arg).await?);
                 }

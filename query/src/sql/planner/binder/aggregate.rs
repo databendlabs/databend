@@ -53,7 +53,7 @@ impl Binder {
                 _ => {
                     return Err(ErrorCode::LogicalError(
                         "scalar expr must be Aggregation scalar expr",
-                    ))
+                    ));
                 }
             }
         }
@@ -67,7 +67,7 @@ impl Binder {
         input_context: &mut BindContext,
     ) -> Result<()> {
         let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
-        let mut group_expr = vec![];
+        let mut group_expr = Vec::with_capacity(group_by_expr.len());
         for expr in group_by_expr.iter() {
             group_expr.push(scalar_binder.bind_expr(expr).await?);
         }
