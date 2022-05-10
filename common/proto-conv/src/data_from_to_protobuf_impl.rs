@@ -146,3 +146,109 @@ fn convert_pb_variant_value_to_value(
         }),
     }
 }
+
+impl FromToProto<pb::DataValue> for dv::DataValue {
+    fn from_pb(p: pb::DataValue) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, DATA_VER, OLDEST_DATA_COMPATIBLE_VER)?;
+
+        Ok(convert_pb_data_value_to_value(p.value)?)
+    }
+
+    fn to_pb(&self) -> Result<pb::DataValue, Incompatible> {
+        convert_value_to_pb_data_value(&self)
+    }
+}
+
+fn convert_value_to_pb_data_value(value: &dv::DataValue) -> Result<pb::DataValue, Incompatible> {
+    match value {
+        dv::DataValue::Null => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::Null(pb::Empty {})),
+        }),
+        dv::DataValue::Boolean(v) => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::BoolValue(*v)),
+        }),
+        dv::DataValue::Int64(v) => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::I64Value(*v)),
+        }),
+        dv::DataValue::UInt64(v) => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::U64Value(*v)),
+        }),
+        dv::DataValue::Float64(v) => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::F64Value(*v)),
+        }),
+        dv::DataValue::String(v) => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::StringValue(v.clone())),
+        }),
+        dv::DataValue::Array(v) => {
+            let mut array = vec![];
+            for v in v.iter() {
+                array.push(convert_value_to_pb_data_value(v)?);
+            }
+            Ok(pb::DataValue {
+                ver: DATA_VER,
+                value: Some(pb::data_value::Value::ArrayValue(
+                    pb::data_value::ArrayValue { values: array },
+                )),
+            })
+        }
+        dv::DataValue::Struct(v) => {
+            let mut array = vec![];
+            for v in v.iter() {
+                array.push(convert_value_to_pb_data_value(v)?);
+            }
+            Ok(pb::DataValue {
+                ver: DATA_VER,
+                value: Some(pb::data_value::Value::StructValue(
+                    pb::data_value::StructValue { values: array },
+                )),
+            })
+        }
+        dv::DataValue::Variant(v) => Ok(pb::DataValue {
+            ver: DATA_VER,
+            value: Some(pb::data_value::Value::VariantValue(
+                dv::VariantValue::to_pb(v)?,
+            )),
+        }),
+    }
+}
+
+fn convert_pb_data_value_to_value(
+    pb_value: Option<pb::data_value::Value>,
+) -> Result<dv::DataValue, Incompatible> {
+    match pb_value {
+        Some(pb::data_value::Value::Null(_)) => Ok(dv::DataValue::Null),
+        Some(pb::data_value::Value::BoolValue(v)) => Ok(dv::DataValue::Boolean(v)),
+        Some(pb::data_value::Value::I64Value(v)) => Ok(dv::DataValue::Int64(v)),
+        Some(pb::data_value::Value::U64Value(v)) => Ok(dv::DataValue::UInt64(v)),
+        Some(pb::data_value::Value::F64Value(v)) => Ok(dv::DataValue::Float64(v)),
+        Some(pb::data_value::Value::StringValue(v)) => Ok(dv::DataValue::String(v)),
+        Some(pb::data_value::Value::ArrayValue(v)) => {
+            let mut array = vec![];
+            for value in v.values.iter() {
+                array.push(convert_pb_data_value_to_value(value.value.clone())?);
+            }
+            Ok(dv::DataValue::Array(array))
+        }
+        Some(pb::data_value::Value::StructValue(v)) => {
+            let mut array = vec![];
+            for value in v.values.iter() {
+                array.push(convert_pb_data_value_to_value(value.value.clone())?);
+            }
+            Ok(dv::DataValue::Struct(array))
+        }
+        Some(pb::data_value::Value::VariantValue(v)) => {
+            Ok(dv::DataValue::Variant(dv::VariantValue::from_pb(v)?))
+        }
+
+        None => Err(Incompatible {
+            reason: "pb::data_value::Value can not be None".to_string(),
+        }),
+    }
+}

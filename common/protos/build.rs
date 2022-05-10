@@ -41,5 +41,14 @@ fn build_proto() -> Result<()> {
     config.protoc_arg("--experimental_allow_proto3_optional");
     tonic_build::configure()
         .type_attribute("IntervalKind", "#[derive(num_derive::FromPrimitive)]")
+        .type_attribute(
+            "StageFileFormatType",
+            "#[derive(num_derive::FromPrimitive)]",
+        )
+        .type_attribute(
+            "StageFileCompression",
+            "#[derive(num_derive::FromPrimitive)]",
+        )
+        .type_attribute("StageType", "#[derive(num_derive::FromPrimitive)]")
         .compile_with_config(config, &proto_defs, &[&proto_path])
 }

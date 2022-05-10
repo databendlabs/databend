@@ -17,6 +17,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 
 use common_datavalues as dv;
 use common_meta_types as mt;
@@ -232,18 +233,340 @@ impl FromToProto<pb::UserGrantSet> for mt::UserGrantSet {
     }
 }
 
-/*
 impl FromToProto<pb::UserSetting> for mt::UserSetting {
     fn from_pb(p: pb::UserSetting) -> Result<Self, Incompatible>
     where Self: Sized {
         check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
-        let dv = dv::DataTypeImpl::from_pb(p.data_type.ok_or_else(|| Incompatible {
-            reason: "DataField.data_type can not be None".to_string(),
+        let value = dv::DataValue::from_pb(p.value.ok_or_else(|| Incompatible {
+            reason: "DataValue.value can not be None".to_string(),
         })?)?;
-        let v = mt::UserSetting::create(&p.name, dv);
+        let v = mt::UserSetting::create(&p.name, value);
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::UserSetting, Incompatible> {}
+    fn to_pb(&self) -> Result<pb::UserSetting, Incompatible> {
+        Ok(pb::UserSetting {
+            ver: USER_VER,
+            name: self.name.clone(),
+            value: Some(dv::DataValue::to_pb(&self.value)?),
+        })
+    }
 }
-*/
+
+impl FromToProto<pb::user_stage_info::StageFileFormatType> for mt::StageFileFormatType {
+    fn from_pb(p: pb::user_stage_info::StageFileFormatType) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p {
+            pb::user_stage_info::StageFileFormatType::Csv => Ok(mt::StageFileFormatType::Csv),
+            pb::user_stage_info::StageFileFormatType::Json => Ok(mt::StageFileFormatType::Json),
+            pb::user_stage_info::StageFileFormatType::Avro => Ok(mt::StageFileFormatType::Avro),
+            pb::user_stage_info::StageFileFormatType::Orc => Ok(mt::StageFileFormatType::Orc),
+            pb::user_stage_info::StageFileFormatType::Parquet => {
+                Ok(mt::StageFileFormatType::Parquet)
+            }
+            pb::user_stage_info::StageFileFormatType::Xml => Ok(mt::StageFileFormatType::Xml),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::StageFileFormatType, Incompatible> {
+        match *self {
+            mt::StageFileFormatType::Csv => Ok(pb::user_stage_info::StageFileFormatType::Csv),
+            mt::StageFileFormatType::Json => Ok(pb::user_stage_info::StageFileFormatType::Json),
+            mt::StageFileFormatType::Avro => Ok(pb::user_stage_info::StageFileFormatType::Avro),
+            mt::StageFileFormatType::Orc => Ok(pb::user_stage_info::StageFileFormatType::Orc),
+            mt::StageFileFormatType::Parquet => {
+                Ok(pb::user_stage_info::StageFileFormatType::Parquet)
+            }
+            mt::StageFileFormatType::Xml => Ok(pb::user_stage_info::StageFileFormatType::Xml),
+        }
+    }
+}
+
+impl FromToProto<pb::user_stage_info::StageFileCompression> for mt::StageFileCompression {
+    fn from_pb(p: pb::user_stage_info::StageFileCompression) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p {
+            pb::user_stage_info::StageFileCompression::Auto => Ok(mt::StageFileCompression::Auto),
+            pb::user_stage_info::StageFileCompression::Gzip => Ok(mt::StageFileCompression::Gzip),
+            pb::user_stage_info::StageFileCompression::Bz2 => Ok(mt::StageFileCompression::Bz2),
+            pb::user_stage_info::StageFileCompression::Brotli => {
+                Ok(mt::StageFileCompression::Brotli)
+            }
+            pb::user_stage_info::StageFileCompression::Zstd => Ok(mt::StageFileCompression::Zstd),
+            pb::user_stage_info::StageFileCompression::Deflate => {
+                Ok(mt::StageFileCompression::Deflate)
+            }
+            pb::user_stage_info::StageFileCompression::RawDeflate => {
+                Ok(mt::StageFileCompression::RawDeflate)
+            }
+            pb::user_stage_info::StageFileCompression::Lzo => Ok(mt::StageFileCompression::Lzo),
+            pb::user_stage_info::StageFileCompression::Snappy => {
+                Ok(mt::StageFileCompression::Snappy)
+            }
+            pb::user_stage_info::StageFileCompression::None => Ok(mt::StageFileCompression::None),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::StageFileCompression, Incompatible> {
+        match *self {
+            mt::StageFileCompression::Auto => Ok(pb::user_stage_info::StageFileCompression::Auto),
+            mt::StageFileCompression::Gzip => Ok(pb::user_stage_info::StageFileCompression::Gzip),
+            mt::StageFileCompression::Bz2 => Ok(pb::user_stage_info::StageFileCompression::Bz2),
+            mt::StageFileCompression::Brotli => {
+                Ok(pb::user_stage_info::StageFileCompression::Brotli)
+            }
+            mt::StageFileCompression::Zstd => Ok(pb::user_stage_info::StageFileCompression::Zstd),
+            mt::StageFileCompression::Deflate => {
+                Ok(pb::user_stage_info::StageFileCompression::Deflate)
+            }
+            mt::StageFileCompression::RawDeflate => {
+                Ok(pb::user_stage_info::StageFileCompression::RawDeflate)
+            }
+            mt::StageFileCompression::Lzo => Ok(pb::user_stage_info::StageFileCompression::Lzo),
+            mt::StageFileCompression::Snappy => {
+                Ok(pb::user_stage_info::StageFileCompression::Snappy)
+            }
+            mt::StageFileCompression::None => Ok(pb::user_stage_info::StageFileCompression::None),
+        }
+    }
+}
+
+impl FromToProto<pb::user_stage_info::StageType> for mt::StageType {
+    fn from_pb(p: pb::user_stage_info::StageType) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p {
+            pb::user_stage_info::StageType::Interval => Ok(mt::StageType::Internal),
+            pb::user_stage_info::StageType::External => Ok(mt::StageType::External),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::StageType, Incompatible> {
+        match *self {
+            mt::StageType::Internal => Ok(pb::user_stage_info::StageType::Interval),
+            mt::StageType::External => Ok(pb::user_stage_info::StageType::External),
+        }
+    }
+}
+
+impl FromToProto<pb::user_stage_info::StageS3Storage> for mt::StageS3Storage {
+    fn from_pb(p: pb::user_stage_info::StageS3Storage) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(mt::StageS3Storage {
+            bucket: p.bucket,
+            path: p.path,
+            credentials_aws_key_id: p.credentials_aws_key_id,
+            credentials_aws_secret_key: p.credentials_aws_secret_key,
+            encryption_master_key: p.encryption_master_key,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::StageS3Storage, Incompatible> {
+        Ok(pb::user_stage_info::StageS3Storage {
+            bucket: self.bucket.clone(),
+            path: self.path.clone(),
+            credentials_aws_key_id: self.credentials_aws_key_id.clone(),
+            credentials_aws_secret_key: self.credentials_aws_secret_key.clone(),
+            encryption_master_key: self.encryption_master_key.clone(),
+        })
+    }
+}
+
+impl FromToProto<pb::user_stage_info::StageStorage> for mt::StageStorage {
+    fn from_pb(p: pb::user_stage_info::StageStorage) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p.storage {
+            Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => {
+                Ok(mt::StageStorage::S3(mt::StageS3Storage::from_pb(s)?))
+            }
+            None => Err(Incompatible {
+                reason: format!("StageStorage.storage cannot beNone"),
+            }),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
+        match &*self {
+            mt::StageStorage::S3(s) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(
+                    mt::StageS3Storage::to_pb(s)?,
+                )),
+            }),
+        }
+    }
+}
+
+impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
+    fn from_pb(p: pb::user_stage_info::StageParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(mt::StageParams {
+            storage: mt::StageStorage::from_pb(p.storage.ok_or_else(|| Incompatible {
+                reason: format!("pb::user_stage_info::StageParams.storage cannot be None"),
+            })?)?,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::StageParams, Incompatible> {
+        Ok(pb::user_stage_info::StageParams {
+            storage: Some(mt::StageStorage::to_pb(&self.storage)?),
+        })
+    }
+}
+
+impl FromToProto<pb::user_stage_info::FileFormatOptions> for mt::FileFormatOptions {
+    fn from_pb(p: pb::user_stage_info::FileFormatOptions) -> Result<Self, Incompatible>
+    where Self: Sized {
+        check_ver(p.ver, USER_VER, OLDEST_USER_COMPATIBLE_VER)?;
+
+        let format = mt::StageFileFormatType::from_pb(
+            FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileFormatType: {}", p.format),
+            })?,
+        )?;
+
+        let compression = mt::StageFileCompression::from_pb(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
+                reason: format!("invalid StageFileCompression: {}", p.compression),
+            })?,
+        )?;
+
+        Ok(mt::FileFormatOptions {
+            format,
+            skip_header: p.skip_header,
+            field_delimiter: p.field_delimiter.clone(),
+            record_delimiter: p.record_delimiter.clone(),
+            compression,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::FileFormatOptions, Incompatible> {
+        let format = mt::StageFileFormatType::to_pb(&self.format)? as i32;
+        let compression = mt::StageFileCompression::to_pb(&self.compression)? as i32;
+        Ok(pb::user_stage_info::FileFormatOptions {
+            ver: USER_VER,
+            format,
+            skip_header: self.skip_header.clone(),
+            field_delimiter: self.field_delimiter.clone(),
+            record_delimiter: self.record_delimiter.clone(),
+            compression,
+        })
+    }
+}
+
+impl FromToProto<pb::user_stage_info::OnErrorMode> for mt::OnErrorMode {
+    fn from_pb(p: pb::user_stage_info::OnErrorMode) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p.mode {
+            Some(pb::user_stage_info::on_error_mode::Mode::None(_)) => Ok(mt::OnErrorMode::None),
+            Some(pb::user_stage_info::on_error_mode::Mode::Continue(_)) => {
+                Ok(mt::OnErrorMode::Continue)
+            }
+            Some(pb::user_stage_info::on_error_mode::Mode::SkipFile(_)) => {
+                Ok(mt::OnErrorMode::SkipFile)
+            }
+            Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(n)) => {
+                Ok(mt::OnErrorMode::SkipFileNum(n))
+            }
+            Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(_)) => {
+                Ok(mt::OnErrorMode::AbortStatement)
+            }
+            None => Err(Incompatible {
+                reason: format!("OnErrorMode.mode cannot beNone"),
+            }),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::OnErrorMode, Incompatible> {
+        match self {
+            mt::OnErrorMode::None => Ok(pb::user_stage_info::OnErrorMode {
+                mode: Some(pb::user_stage_info::on_error_mode::Mode::None(pb::Empty {})),
+            }),
+            mt::OnErrorMode::Continue => Ok(pb::user_stage_info::OnErrorMode {
+                mode: Some(pb::user_stage_info::on_error_mode::Mode::Continue(
+                    pb::Empty {},
+                )),
+            }),
+            mt::OnErrorMode::SkipFile => Ok(pb::user_stage_info::OnErrorMode {
+                mode: Some(pb::user_stage_info::on_error_mode::Mode::SkipFile(
+                    pb::Empty {},
+                )),
+            }),
+            mt::OnErrorMode::SkipFileNum(n) => Ok(pb::user_stage_info::OnErrorMode {
+                mode: Some(pb::user_stage_info::on_error_mode::Mode::SkipFileNum(*n)),
+            }),
+            mt::OnErrorMode::AbortStatement => Ok(pb::user_stage_info::OnErrorMode {
+                mode: Some(pb::user_stage_info::on_error_mode::Mode::AbortStatement(
+                    pb::Empty {},
+                )),
+            }),
+        }
+    }
+}
+
+impl FromToProto<pb::user_stage_info::CopyOptions> for mt::CopyOptions {
+    fn from_pb(p: pb::user_stage_info::CopyOptions) -> Result<Self, Incompatible>
+    where Self: Sized {
+        let on_error = mt::OnErrorMode::from_pb(p.on_error.ok_or_else(|| Incompatible {
+            reason: format!("CopyOptions.on_error cannot be None"),
+        })?)?;
+        let size_limit = usize::try_from(p.size_limit).map_err(|err| Incompatible {
+            reason: format!("CopyOptions.size_limit cannot be convert to usize: {}", err),
+        })?;
+        Ok(mt::CopyOptions {
+            on_error,
+            size_limit,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::user_stage_info::CopyOptions, Incompatible> {
+        let on_error = mt::OnErrorMode::to_pb(&self.on_error)?;
+        let size_limit = u64::try_from(self.size_limit).map_err(|err| Incompatible {
+            reason: format!("CopyOptions.size_limit cannot be convert to u64: {}", err),
+        })?;
+        Ok(pb::user_stage_info::CopyOptions {
+            on_error: Some(on_error),
+            size_limit,
+        })
+    }
+}
+
+impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
+    fn from_pb(p: pb::UserStageInfo) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(mt::UserStageInfo {
+            stage_name: p.stage_name.clone(),
+            stage_type: mt::StageType::from_pb(FromPrimitive::from_i32(p.stage_type).ok_or_else(
+                || Incompatible {
+                    reason: format!("invalid StageType: {}", p.stage_type),
+                },
+            )?)?,
+            stage_params: mt::StageParams::from_pb(p.stage_params.ok_or_else(|| {
+                Incompatible {
+                    reason: format!("UserStageInfo.stage_params cannot be None"),
+                }
+            })?)?,
+            file_format_options: mt::FileFormatOptions::from_pb(
+                p.file_format_options.ok_or_else(|| Incompatible {
+                    reason: format!("UserStageInfo.file_format_options cannot be None"),
+                })?,
+            )?,
+            copy_options: mt::CopyOptions::from_pb(p.copy_options.ok_or_else(|| {
+                Incompatible {
+                    reason: format!("UserStageInfo.copy_options cannot be None"),
+                }
+            })?)?,
+            comment: p.comment.clone(),
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::UserStageInfo, Incompatible> {
+        Ok(pb::UserStageInfo {
+            ver: USER_VER,
+            stage_name: self.stage_name.clone(),
+            stage_type: mt::StageType::to_pb(&self.stage_type)? as i32,
+            stage_params: Some(mt::StageParams::to_pb(&self.stage_params)?),
+            file_format_options: Some(mt::FileFormatOptions::to_pb(&self.file_format_options)?),
+            copy_options: Some(mt::CopyOptions::to_pb(&self.copy_options)?),
+            comment: self.comment.clone(),
+        })
+    }
+}

@@ -19,13 +19,9 @@ package databend_proto;
 message VariantValue {
   uint64 ver = 100;
 
-  message Array {
-    repeated VariantValue value = 1;
-  };
+  message Array { repeated VariantValue value = 1; };
 
-  message Object {
-    map<string, VariantValue> obj = 1;
-  }
+  message Object { map<string, VariantValue> obj = 1; }
 
   oneof value {
     /// Base type.
@@ -44,40 +40,34 @@ message VariantValue {
 message DataValue {
   uint64 ver = 100;
 
-  oneof dv {
+  // Array value contains multiple elements of the same type.
+  message ArrayValue {
+    // The elements of the array.
+    repeated DataValue values = 1;
+  }
+
+  // Struct is similar to a `map` with fixed keys.
+  message StructValue {
+    // The corresponding field types.
+    repeated DataValue values = 1;
+  }
+
+  oneof value {
     /// Base type.
     Empty Null = 1;
     bool bool_value = 2;
     int64 i64_value = 3;
     uint64 u64_value = 4;
     double f64_value = 5;
-    string string_value = 6;
+    bytes string_value = 6;
 
     // Container type.
     ArrayValue array_value = 7;
     StructValue struct_value = 8;
 
-    // Custom value.
+    // Custom type.
+    VariantValue variant_value = 9;
   }
-}
-
-// Array value contains multiple elements of the same type.
-message ArrayValue {
-  uint64 ver = 100;
-
-  // The elements of the array.
-  repeated DataValue values = 2;
-}
-
-// Struct is similar to a `map` with fixed keys.
-message StructValue {
-  uint64 ver = 100;
-
-  // Struct field names.
-  repeated string names = 1;
-
-  // The corresponding field types.
-  repeated DataValue values = 2;
 }
 
 // An enumeration of all supported data types.
