@@ -69,9 +69,9 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    pub(super) async fn normalize_select_list(
+    pub(super) async fn normalize_select_list<'a>(
         &mut self,
-        select_list: &[SelectTarget],
+        select_list: &[SelectTarget<'a>],
         has_order_by: bool,
         input_context: &BindContext,
     ) -> Result<BindContext> {
@@ -89,7 +89,7 @@ impl Binder {
                         match indirection {
                             Indirection::Identifier(ident) => {
                                 let mut column_binding =
-                                    input_context.resolve_column(None, ident.name.clone())?;
+                                    input_context.resolve_column(None, ident)?;
                                 column_binding.column_name = ident.name.clone();
                                 output_context.add_column_binding(column_binding);
                             }

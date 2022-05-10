@@ -438,9 +438,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
-    enum ColumnConstraint {
+    enum ColumnConstraint<'a> {
         Nullable(bool),
-        DefaultExpr(Box<Expr>),
+        DefaultExpr(Box<Expr<'a>>),
     }
 
     let nullable = alt((

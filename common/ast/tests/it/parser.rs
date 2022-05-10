@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_ast::parser::error::pretty_print_error;
 use common_ast::parser::error::Backtrace;
+use common_ast::parser::error::DisplayError as _;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
@@ -45,9 +45,7 @@ macro_rules! test_parse {
                 writeln!($file, "\n").unwrap();
             }
             Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-                let report = pretty_print_error($source, err.to_labels())
-                    .trim_end()
-                    .to_string();
+                let report = err.display_error(()).trim_end().to_string();
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
                 writeln!($file, "---------- Output ---------").unwrap();

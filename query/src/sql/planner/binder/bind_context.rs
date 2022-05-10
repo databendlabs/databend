@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
+use common_ast::parser::error::DisplayError as _;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -112,35 +114,41 @@ impl BindContext {
 
     /// Try to find a column binding with given table name and column name.
     /// This method will return error if the given names are ambiguous or invalid.
-    pub fn resolve_column(&self, table: Option<String>, column: String) -> Result<ColumnBinding> {
+    pub fn resolve_column(
+        &self,
+        table: Option<String>,
+        column: &Identifier,
+    ) -> Result<ColumnBinding> {
         // TODO: lookup parent context to support correlated subquery
         let mut result = vec![];
         if let Some(table) = table {
             for column_binding in self.columns.iter() {
                 if let Some(table_name) = &column_binding.table_name {
-                    if table_name == &table && column_binding.column_name == column {
+                    if table_name == &table && column_binding.column_name == column.name {
                         result.push(column_binding.clone());
                     }
                 }
             }
         } else {
             for column_binding in self.columns.iter() {
-                if column_binding.column_name.eq(&column) {
+                if column_binding.column_name.eq(&column.name) {
                     result.push(column_binding.clone());
                 }
             }
         }
 
         if result.is_empty() {
-            Err(ErrorCode::SemanticError(format!(
-                "column \"{}\" doesn't exist",
+            Err(ErrorCode::SemanticError(
                 column
-            )))
+                    .span
+                    .display_error("column doesn't exist".to_string()),
+            ))
         } else if result.len() > 1 {
-            Err(ErrorCode::SemanticError(format!(
-                "column reference \"{}\" is ambiguous",
+            Err(ErrorCode::SemanticError(
                 column
-            )))
+                    .span
+                    .display_error("column reference is ambiguous".to_string()),
+            ))
         } else {
             Ok(result.remove(0))
         }

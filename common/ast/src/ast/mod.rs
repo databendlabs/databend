@@ -23,15 +23,17 @@ pub use expr::*;
 pub use query::*;
 pub use statement::*;
 
+use crate::parser::token::Token;
+
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Identifier {
+pub struct Identifier<'a> {
     pub name: String,
     pub quote: Option<char>,
-    // TODO(andylokandy): add span or token
+    pub span: Token<'a>,
 }
 
-impl Display for Identifier {
+impl<'a> Display for Identifier<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {
             write!(f, "{}", c)?;

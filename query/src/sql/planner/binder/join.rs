@@ -141,7 +141,7 @@ struct JoinConditionResolver<'a> {
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a BindContext,
-    join_condition: &'a JoinCondition,
+    join_condition: &'a JoinCondition<'a>,
 }
 
 impl<'a> JoinConditionResolver<'a> {
@@ -150,7 +150,7 @@ impl<'a> JoinConditionResolver<'a> {
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a BindContext,
-        join_condition: &'a JoinCondition,
+        join_condition: &'a JoinCondition<'a>,
     ) -> Self {
         Self {
             ctx,
@@ -192,7 +192,7 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn resolve_on(
         &self,
-        condition: &Expr,
+        condition: &Expr<'a>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
