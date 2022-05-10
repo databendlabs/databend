@@ -105,6 +105,10 @@ root = ""
 [storage.hdfs]
 name_node = ""
 root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "Binary"
 "#;
 
     let tom_actual = toml::to_string(&actual).unwrap();
@@ -275,6 +279,10 @@ root = ""
 [storage.hdfs]
 name_node = ""
 root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "Binary"
     "#
         .as_bytes(),
     )?;

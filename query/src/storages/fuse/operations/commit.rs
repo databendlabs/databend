@@ -32,9 +32,8 @@ use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::sql::OPT_KEY_SNAPSHOT_LOC;
+use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -55,6 +54,7 @@ impl FuseTable {
     pub async fn do_commit(
         &self,
         ctx: Arc<QueryContext>,
+        catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -105,7 +105,7 @@ impl FuseTable {
                             );
                         common_base::base::tokio::time::sleep(d).await;
 
-                        let catalog = ctx.get_catalog();
+                        let catalog = ctx.get_catalog(catalog_name.as_ref())?;
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                         let table_info: TableInfo = TableInfo {
                             ident,
@@ -242,7 +242,8 @@ impl FuseTable {
         table_info: &TableInfo,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
-        let catalog = ctx.get_catalog();
+        // TODO catalog name
+        let catalog = ctx.get_catalog("default")?;
         let mut options = [(
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             Some(new_snapshot_location),
@@ -332,9 +333,9 @@ mod utils {
         options_of_upsert: &mut HashMap<String, Option<String>>,
     ) {
         let table_options = table_info.options();
-        if table_options.contains_key(OPT_KEY_SNAPSHOT_LOC) {
+        if table_options.contains_key(OPT_KEY_LEGACY_SNAPSHOT_LOC) {
             // remove the option by setting the value of option to None
-            options_of_upsert.insert(OPT_KEY_SNAPSHOT_LOC.to_owned(), None);
+            options_of_upsert.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC.to_owned(), None);
         }
     }
 }

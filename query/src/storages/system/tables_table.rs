@@ -21,7 +21,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
@@ -41,7 +40,8 @@ impl AsyncSystemTable for TablesTable {
 
     async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog();
+        // TODO pass catalog in or embed catalog in table info?
+        let catalog = ctx.get_catalog("default")?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let mut database_tables = vec![];

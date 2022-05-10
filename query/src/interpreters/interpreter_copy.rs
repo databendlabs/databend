@@ -115,7 +115,11 @@ impl CopyInterpreter {
         }
 
         let table = ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .get_table(
+                &self.plan.catalog_name,
+                &self.plan.db_name,
+                &self.plan.tbl_name,
+            )
             .await?;
 
         if ctx.get_settings().get_enable_new_processor_framework()? != 0
@@ -184,12 +188,21 @@ impl Interpreter for CopyInterpreter {
 
         let table = self
             .ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .get_table(
+                &self.plan.catalog_name,
+                &self.plan.db_name,
+                &self.plan.tbl_name,
+            )
             .await?;
 
         // Commit.
         table
-            .commit_insertion(self.ctx.clone(), write_results, false)
+            .commit_insertion(
+                self.ctx.clone(),
+                &self.plan.catalog_name,
+                write_results,
+                false,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

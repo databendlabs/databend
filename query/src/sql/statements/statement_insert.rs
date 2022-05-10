@@ -46,7 +46,7 @@ use crate::storages::Table;
 pub struct DfInsertStatement<'a> {
     pub or: Option<SqliteOnConflict>,
     /// TABLE
-    pub table_name: ObjectName,
+    pub object_name: ObjectName,
     /// COLUMNS
     pub columns: Vec<Ident>,
     /// Overwrite (Hive)
@@ -79,8 +79,10 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
-        let (database_name, table_name) = self.resolve_table(&ctx)?;
-        let write_table = ctx.get_table(&database_name, &table_name).await?;
+        let (catalog_name, database_name, table_name) = self.resolve_table(&ctx)?;
+        let write_table = ctx
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await?;
         let table_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
@@ -95,6 +97,7 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
             InsertPlan {
+                catalog_name,
                 database_name,
                 table_name,
                 table_id,
@@ -107,19 +110,27 @@ impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
 }
 
 impl<'a> DfInsertStatement<'a> {
-    fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String)> {
-        match self.table_name.0.len() {
+    fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String, String)> {
+        let parts = &self.object_name.0;
+        match parts.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
             1 => Ok((
+                ctx.get_current_catalog(),
                 ctx.get_current_database(),
-                self.table_name.0[0].value.clone(),
+                parts[0].value.clone(),
             )),
             2 => Ok((
-                self.table_name.0[0].value.clone(),
-                self.table_name.0[1].value.clone(),
+                ctx.get_current_catalog(),
+                parts[0].value.clone(),
+                parts[1].value.clone(),
+            )),
+            3 => Ok((
+                parts[0].value.clone(),
+                parts[1].value.clone(),
+                parts[2].value.clone(),
             )),
             _ => Err(ErrorCode::SyntaxException(
-                "Insert table name must be [`db`].`table`",
+                "Insert table name must be [`catalog`].[`db`].`table`",
             )),
         }
     }

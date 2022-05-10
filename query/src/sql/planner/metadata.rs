@@ -29,6 +29,7 @@ use crate::storages::Table;
 pub struct TableEntry {
     pub index: IndexType,
     pub name: String,
+    pub catalog: String,
     pub database: String,
 
     pub table: Arc<dyn Table>,
@@ -40,6 +41,7 @@ impl TableEntry {
     pub fn new(
         index: IndexType,
         name: String,
+        catalog: String,
         database: String,
         table: Arc<dyn Table>,
         source: ReadDataSourcePlan,
@@ -47,6 +49,7 @@ impl TableEntry {
         TableEntry {
             index,
             name,
+            catalog,
             database,
             table,
             source,
@@ -231,6 +234,7 @@ impl Metadata {
 
     pub fn add_table(
         &mut self,
+        catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
         source: ReadDataSourcePlan,
@@ -241,6 +245,7 @@ impl Metadata {
             index: table_index,
             name: table_name,
             database,
+            catalog,
             table: table_meta.clone(),
             source,
         };

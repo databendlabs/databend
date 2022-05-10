@@ -32,14 +32,26 @@ pub trait ToReadDataSourcePlan {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
+    ) -> Result<ReadDataSourcePlan> {
+        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs)
+            .await
+    }
+
+    // TODO(dantengsky) NO, we should embed catalog in TableInfo
+    async fn read_plan_with_catalog(
+        &self,
+        ctx: Arc<QueryContext>,
+        catalog: String,
+        push_downs: Option<Extras>,
     ) -> Result<ReadDataSourcePlan>;
 }
 
 #[async_trait::async_trait]
 impl ToReadDataSourcePlan for dyn Table {
-    async fn read_plan(
+    async fn read_plan_with_catalog(
         &self,
         ctx: Arc<QueryContext>,
+        catalog: String,
         push_downs: Option<Extras>,
     ) -> Result<ReadDataSourcePlan> {
         let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
@@ -60,7 +72,10 @@ impl ToReadDataSourcePlan for dyn Table {
             _ => None,
         };
 
+        // TODO pass in catalog name
+
         Ok(ReadDataSourcePlan {
+            catalog,
             source_info: SourceInfo::TableSource(table_info.clone()),
             scan_fields,
             parts,

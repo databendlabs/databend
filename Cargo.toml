@@ -27,6 +27,7 @@ members = [
     "common/codegen",
     "common/tracing",
     "common/metrics",
+    "common/hive-meta-store",
 
     # Query
     "query",

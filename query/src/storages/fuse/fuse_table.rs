@@ -35,7 +35,7 @@ use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
-use crate::sql::OPT_KEY_SNAPSHOT_LOC;
+use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
@@ -70,6 +70,18 @@ impl FuseTable {
         }))
     }
 
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "FUSE".to_string(),
+            comment: "FUSE Storage Engine".to_string(),
+            support_order_key: true,
+        }
+    }
+
+    pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
+        &self.meta_location_generator
+    }
+
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
         let table_id = table_info.ident.table_id;
         let db_id = table_info
@@ -84,12 +96,71 @@ impl FuseTable {
         Ok(format!("{}/{}", db_id, table_id))
     }
 
-    pub fn description() -> StorageDescription {
-        StorageDescription {
-            engine_name: "FUSE".to_string(),
-            comment: "FUSE Storage Engine".to_string(),
-            support_order_key: true,
+    //    pub fn catalog_name(&self) -> Result<String> {
+    //        Self::get_catalog_name(&self.table_info)
+    //    }
+    //
+    //    pub fn get_catalog_name(table_info: &TableInfo) -> Result<String> {
+    //        // Gets catalog name from table table_info.options().
+    //        //
+    //        // - This is a temporary workaround
+    //        // - Later, catalog id should be kept in meta layer (persistent in KV server)
+    //
+    //        let table_id = table_info.ident.table_id;
+    //        table_info
+    //            .options()
+    //            .get(OPT_KEY_CATALOG)
+    //            .cloned()
+    //            .ok_or_else(|| {
+    //                ErrorCode::LogicalError(format!(
+    //                    "NO Catalog specified. Table identity: {}",
+    //                    table_id
+    //                ))
+    //            })
+    //    }
+
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub(crate) async fn read_table_snapshot(
+        &self,
+        ctx: &QueryContext,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        if let Some(loc) = self.snapshot_loc() {
+            let reader = MetaReaders::table_snapshot_reader(ctx);
+            let ver = self.snapshot_format_version();
+            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+        } else {
+            Ok(None)
         }
+    }
+
+    pub fn snapshot_format_version(&self) -> u64 {
+        match self.snapshot_loc() {
+            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
+            None => {
+                // No snapshot location here, indicates that there are no data of this table yet
+                // in this case, we just returns the current snapshot version
+                TableSnapshot::VERSION
+            }
+        }
+    }
+
+    pub fn snapshot_loc(&self) -> Option<String> {
+        let options = self.table_info.options();
+
+        options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            // for backward compatibility, we check the legacy table option
+            .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+            .cloned()
+    }
+
+    pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
+        tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::LogicalError(format!(
+                "expects table of engine FUSE, but got {}",
+                tbl.engine()
+            ))
+        })
     }
 }
 
@@ -164,16 +235,18 @@ impl Table for FuseTable {
 
     async fn commit_insertion(
         &self,
-        ctx: Arc<QueryContext>,
-        operations: Vec<DataBlock>,
-        overwrite: bool,
+        _ctx: Arc<QueryContext>,
+        _catalog_name: &str,
+        _operations: Vec<DataBlock>,
+        _overwrite: bool,
     ) -> Result<()> {
         // only append operation supported currently
-        let append_log_entries = operations
+        let append_log_entries = _operations
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, overwrite).await
+        self.do_commit(_ctx, _catalog_name, append_log_entries, _overwrite)
+            .await
     }
 
     async fn truncate(
@@ -199,55 +272,5 @@ impl Table for FuseTable {
                 index_length: None,
             }
         }))
-    }
-}
-
-impl FuseTable {
-    pub fn snapshot_loc(&self) -> Option<String> {
-        let options = self.table_info.options();
-
-        options
-            .get(OPT_KEY_SNAPSHOT_LOCATION)
-            // for backward compatibility, we check the legacy table option
-            .or_else(|| options.get(OPT_KEY_SNAPSHOT_LOC))
-            .cloned()
-    }
-
-    pub fn snapshot_format_version(&self) -> u64 {
-        match self.snapshot_loc() {
-            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
-            None => {
-                // No snapshot location here, indicates that there are no data of this table yet
-                // in this case, we just returns the current snapshot version
-                TableSnapshot::VERSION
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    pub(crate) async fn read_table_snapshot(
-        &self,
-        ctx: &QueryContext,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc() {
-            let reader = MetaReaders::table_snapshot_reader(ctx);
-            let ver = self.snapshot_format_version();
-            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
-        &self.meta_location_generator
-    }
-
-    pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
-        tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::LogicalError(format!(
-                "expects table of engine FUSE, but got {}",
-                tbl.engine()
-            ))
-        })
     }
 }

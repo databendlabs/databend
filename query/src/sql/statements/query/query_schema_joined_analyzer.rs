@@ -25,10 +25,11 @@ use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -99,8 +100,8 @@ impl JoinedSchemaAnalyzer {
 
     async fn table(&self, item: &TableRPNItem) -> Result<JoinedSchema> {
         // TODO(Winter): await query_context.get_table
-        let (database, table) = self.resolve_table(&item.name)?;
-        let read_table = self.ctx.get_table(&database, &table).await?;
+        let (catalog, database, table) = resolve_table(&self.ctx, &item.name, "SELECT")?;
+        let read_table = self.ctx.get_table(&catalog, &database, &table).await?;
         let tbl_info = read_table.get_table_info();
 
         if tbl_info.engine() == VIEW_ENGINE {
@@ -124,7 +125,7 @@ impl JoinedSchemaAnalyzer {
         } else {
             match &item.alias {
                 None => {
-                    let name_prefix = vec![database, table];
+                    let name_prefix = vec![catalog, database, table];
                     JoinedSchema::from_table(read_table, name_prefix)
                 }
                 Some(table_alias) => {
@@ -153,7 +154,9 @@ impl JoinedSchemaAnalyzer {
             });
         }
 
-        let catalog = self.ctx.get_catalog();
+        // always look up table_function in the default catalog?
+        // TODO seems buggy
+        let catalog = self.ctx.get_catalog(CATALOG_DEFAULT)?;
         let table_function = catalog.get_table_function(&table_name, Some(table_args))?;
         match &item.alias {
             None => JoinedSchema::from_table(table_function.as_table(), Vec::new()),
@@ -161,17 +164,6 @@ impl JoinedSchemaAnalyzer {
                 let name_prefix = vec![table_alias.name.value.clone()];
                 JoinedSchema::from_table(table_function.as_table(), name_prefix)
             }
-        }
-    }
-
-    fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {
-        match name.0.len() {
-            0 => Err(ErrorCode::SyntaxException("Table name is empty")),
-            1 => Ok((self.ctx.get_current_database(), name.0[0].value.clone())),
-            2 => Ok((name.0[0].value.clone(), name.0[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Table name must be [`db`].`table`",
-            )),
         }
     }
 }

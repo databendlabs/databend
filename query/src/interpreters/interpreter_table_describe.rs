@@ -50,9 +50,10 @@ impl Interpreter for DescribeTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        let catalog = self.plan.catalog.as_str();
         let database = self.plan.db.as_str();
         let table = self.plan.table.as_str();
-        let table = self.ctx.get_table(database, table).await?;
+        let table = self.ctx.get_table(catalog, database, table).await?;
         let tbl_info = table.get_table_info();
 
         let schema = if tbl_info.engine() == VIEW_ENGINE {

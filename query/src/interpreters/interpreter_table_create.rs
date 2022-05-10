@@ -28,7 +28,6 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::InsertInterpreter;
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -58,23 +57,20 @@ impl Interpreter for CreateTableInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
 
         let engine = self.plan.engine();
-        let name_not_duplicate = self
-            .ctx
-            .get_catalog()
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let name_not_duplicate = catalog
             .list_tables(&*self.plan.tenant, &*self.plan.db)
             .await?
             .iter()
             .all(|table| table.name() != self.plan.table.as_str());
 
-        let engine_desc: Option<StorageDescription> = self
-            .ctx
-            .get_catalog()
+        let engine_desc: Option<StorageDescription> = catalog
             .get_table_engines()
             .iter()
             .find(|desc| {
@@ -118,7 +114,7 @@ impl CreateTableInterpreter {
         select_plan_node: Box<PlanNode>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         catalog.create_table(self.plan.clone().into()).await?;
@@ -145,6 +141,7 @@ impl CreateTableInterpreter {
             .collect();
         let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = InsertPlan {
+            catalog_name: self.plan.catalog.clone(),
             database_name: self.plan.db.clone(),
             table_name: self.plan.table.clone(),
             table_id: table.get_id(),
@@ -163,7 +160,7 @@ impl CreateTableInterpreter {
     }
 
     async fn create_table(&self) -> Result<SendableDataBlockStream> {
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
         catalog.create_table(self.plan.clone().into()).await?;
 
         Ok(Box::pin(DataBlockStream::create(

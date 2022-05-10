@@ -15,6 +15,7 @@
 use std::env;
 
 use clap::Parser;
+use common_configs::HiveCatalogConfig;
 use common_configs::LogConfig;
 use common_configs::MetaConfig;
 use common_configs::QueryConfig;
@@ -48,6 +49,12 @@ pub struct Config {
     // Storage backend config.
     #[clap(flatten)]
     pub storage: StorageConfig,
+
+    // external catalog config.
+    // - Later, catalog information SHOULD be kept in KV Service
+    // - currently only supports HIVE (via hive meta store)
+    #[clap(flatten)]
+    pub catalog: HiveCatalogConfig,
 }
 
 impl Config {
