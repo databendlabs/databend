@@ -25,7 +25,14 @@ use crate::sql::plans::Scalar;
 
 #[derive(Clone, Debug)]
 pub struct SortPlan {
-    pub items: Vec<Scalar>,
+    pub items: Vec<SortItem>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SortItem {
+    pub expr: Scalar,
+    pub asc: Option<bool>,
+    pub nulls_first: Option<bool>,
 }
 
 impl BasePlan for SortPlan {
