@@ -10,6 +10,7 @@ Databend supports SQL data types in several categories:
 * [Date & Time Data Types](20-data-type-time-date-types.md)
 * [String Data Types](30-data-type-string-types.md)
 * [Semi-structured Data Types](40-data-type-semi-structured-types.md)
+* [Array(T) Data Types](50-data-type-array-types.md)
 
 ## General-Purpose Data Types
 
