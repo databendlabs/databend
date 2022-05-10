@@ -109,6 +109,7 @@ You can explore more flags with `./databend-query -h`.
 * Which storage type(Only support `"fs"` or `"s3"`) should use for the databend-query, e.g., `"s3"`.
 * Default: `""`
 * Env variable: `STORAGE_TYPE`
+* Required.
 
 ### storage.s3
 
@@ -129,7 +130,7 @@ You can explore more flags with `./databend-query -h`.
 
 * AWS S3 access_key_id.
 * Default: `""`
-* Env variable: `STORAGE_S3_ACCESS_KEY_ID
+* Env variable: `STORAGE_S3_ACCESS_KEY_ID`
 * Required.
 
 #### secret_access_key
