@@ -282,6 +282,7 @@ where T: PrimitiveType
     pub fn get_key(&self, column: &PrimitiveColumn<T>, row: usize) -> T {
         unsafe { column.value_unchecked(row) }
     }
+
     pub fn deserialize_group_columns(
         &self,
         keys: Vec<T>,

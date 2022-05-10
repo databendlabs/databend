@@ -308,7 +308,7 @@ impl FromToProto<pb::DataField> for dv::DataField {
         let p = pb::DataField {
             ver: VER,
             name: self.name().clone(),
-            default_expr: self.default_expr().clone(),
+            default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
         };
         Ok(p)

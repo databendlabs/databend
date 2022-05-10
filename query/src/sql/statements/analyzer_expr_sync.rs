@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use common_ast::udfs::UDFDefinition;
 use common_ast::udfs::UDFExprTraverser;
@@ -37,52 +34,28 @@ use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
-use crate::procedures::ContextFunction;
-use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
-use crate::sql::statements::AnalyzableStatement;
-use crate::sql::statements::AnalyzedResult;
-use crate::sql::statements::DfQueryStatement;
-use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 
 #[derive(Clone)]
-pub struct ExpressionAnalyzer {
-    context: Arc<QueryContext>,
-    udfs: Vec<UserDefinedFunction>,
-}
+pub struct ExpressionSyncAnalyzer {}
 
-impl ExpressionAnalyzer {
-    pub fn create(context: Arc<QueryContext>) -> ExpressionAnalyzer {
-        ExpressionAnalyzer {
-            context,
-            udfs: vec![],
-        }
+impl ExpressionSyncAnalyzer {
+    pub fn create() -> ExpressionSyncAnalyzer {
+        ExpressionSyncAnalyzer {}
     }
 
-    pub fn create_with_udfs_support(
-        context: Arc<QueryContext>,
-        udfs: Vec<UserDefinedFunction>,
-    ) -> ExpressionAnalyzer {
-        ExpressionAnalyzer { context, udfs }
-    }
-
-    pub fn analyze_sync(&self, expr: &Expr) -> Result<Expression> {
+    pub fn analyze(&self, expr: &Expr) -> Result<Expression> {
         let mut stack = Vec::new();
 
         // Build RPN for expr. Because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(expr, self.udfs.clone())? {
+        for rpn_item in &ExprRPNBuilder::build(expr, vec![])? {
             match rpn_item {
-                ExprRPNItem::Value(v) => Self::analyze_value(
-                    v,
-                    &mut stack,
-                    self.context.get_current_session().get_type(),
-                )?,
+                ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack, SessionType::MySQL)?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
                 ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
                 ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
-                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
                 ExprRPNItem::Cast(v, pg_style) => self.analyze_cast(v, *pg_style, &mut stack)?,
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
                 ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
@@ -106,42 +79,9 @@ impl ExpressionAnalyzer {
         }
     }
 
-    pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
-        let mut stack = Vec::new();
-
-        // Build RPN for expr. Because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(expr, self.udfs.clone())? {
-            match rpn_item {
-                ExprRPNItem::Value(v) => Self::analyze_value(
-                    v,
-                    &mut stack,
-                    self.context.get_current_session().get_type(),
-                )?,
-                ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
-                ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
-                ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
-                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
-                ExprRPNItem::Exists(v) => self.analyze_exists(v, &mut stack).await?,
-                ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
-                ExprRPNItem::Cast(v, pg_style) => self.analyze_cast(v, *pg_style, &mut stack)?,
-                ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
-                ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
-                ExprRPNItem::MapAccess(v) => self.analyze_map_access(v, &mut stack)?,
-                ExprRPNItem::Array(v) => self.analyze_array(*v, &mut stack)?,
-            }
-        }
-
-        match stack.len() {
-            1 => Ok(stack.remove(0)),
-            _ => Err(ErrorCode::LogicalError(
-                "Logical error: this is expr rpn bug.",
-            )),
-        }
-    }
-
     pub fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => self.analyze_sync(expr),
+            FunctionArgExpr::Expr(expr) => self.analyze(expr),
             FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported arg statement: {}",
@@ -198,15 +138,28 @@ impl ExpressionAnalyzer {
 
         args.push(
             match AggregateFunctionFactory::instance().check(&info.name) {
-                true => self.aggr_function(info, &arguments),
+                true => {
+                    return Err(ErrorCode::LogicalError(
+                        "Unsupport aggregate function, it's a bug.",
+                    ))
+                }
                 false => match info.kind {
                     OperatorKind::Unary => Self::unary_function(info, &arguments),
                     OperatorKind::Binary => Self::binary_function(info, &arguments),
-                    OperatorKind::Other => self.other_function(info, &arguments),
+                    OperatorKind::Other => Self::other_function(info, &arguments),
                 },
             }?,
         );
         Ok(())
+    }
+
+    fn other_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+        let op = info.name.clone();
+        let arguments = args.to_owned();
+        Ok(Expression::ScalarFunction {
+            op,
+            args: arguments,
+        })
     }
 
     fn unary_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
@@ -233,73 +186,6 @@ impl ExpressionAnalyzer {
         }
     }
 
-    fn other_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
-        let query_context = self.context.clone();
-        let context_args = ContextFunction::build_args_from_ctx(query_context, &info.name)?;
-
-        match context_args.is_empty() {
-            true => {
-                let op = info.name.clone();
-                let arguments = args.to_owned();
-                Ok(Expression::ScalarFunction {
-                    op,
-                    args: arguments,
-                })
-            }
-            false => {
-                let op = info.name.clone();
-                Ok(Expression::ScalarFunction {
-                    op,
-                    args: context_args,
-                })
-            }
-        }
-    }
-
-    fn aggr_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
-        let mut parameters = Vec::with_capacity(info.parameters.len());
-
-        for parameter in &info.parameters {
-            match ValueExprAnalyzer::analyze(
-                parameter,
-                self.context.get_current_session().get_type(),
-            )? {
-                Expression::Literal { value, .. } => {
-                    parameters.push(value);
-                }
-                expr => {
-                    return Err(ErrorCode::SyntaxException(format!(
-                        "Unsupported value expression: {:?}, must be datavalue",
-                        expr
-                    )));
-                }
-            };
-        }
-
-        let optimize_remove_count_args = info.name.eq_ignore_ascii_case("count")
-            && !info.distinct
-            && (args.len() == 1 && matches!(args[0], Expression::Wildcard)
-                || args.iter().all(
-                    |expr| matches!(expr, Expression::Literal { value, .. } if !value.is_null()),
-                ));
-
-        if optimize_remove_count_args {
-            Ok(Expression::AggregateFunction {
-                op: info.name.clone(),
-                distinct: info.distinct,
-                args: vec![],
-                params: parameters,
-            })
-        } else {
-            Ok(Expression::AggregateFunction {
-                op: info.name.clone(),
-                distinct: info.distinct,
-                args: args.to_owned(),
-                params: parameters,
-            })
-        }
-    }
-
     fn analyze_identifier(&self, ident: &Ident, arguments: &mut Vec<Expression>) -> Result<()> {
         let column_name = ident.clone().value;
         arguments.push(Expression::Column(column_name));
@@ -314,68 +200,6 @@ impl ExpressionAnalyzer {
         }
 
         arguments.push(Expression::QualifiedColumn(names));
-        Ok(())
-    }
-
-    async fn analyze_exists(&self, subquery: &Query, args: &mut Vec<Expression>) -> Result<()> {
-        let subquery = vec![self.analyze_subquery(subquery).await?];
-        args.push(Expression::ScalarFunction {
-            op: "EXISTS".to_lowercase(),
-            args: subquery,
-        });
-        Ok(())
-    }
-
-    async fn analyze_subquery(&self, subquery: &Query) -> Result<Expression> {
-        let statement = DfQueryStatement::try_from(subquery.clone())?;
-
-        let query_context = self.context.clone();
-        let subquery_context = QueryContext::create_from(query_context.clone());
-
-        let analyze_subquery = statement.analyze(subquery_context).await;
-        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery? {
-            let subquery_plan = PlanParser::build_query_plan(&analyze_data)?;
-            return Ok(Expression::Subquery {
-                name: query_context.get_subquery_name(&subquery_plan),
-                query_plan: Arc::new(subquery_plan),
-            });
-        }
-
-        Err(ErrorCode::SyntaxException(format!(
-            "Unsupported subquery type {:?}",
-            subquery
-        )))
-    }
-
-    async fn analyze_scalar_subquery(
-        &self,
-        subquery: &Query,
-        args: &mut Vec<Expression>,
-    ) -> Result<()> {
-        let statement = DfQueryStatement::try_from(subquery.clone())?;
-
-        let query_context = self.context.clone();
-        let subquery_context = QueryContext::create_from(query_context.clone());
-
-        let analyze_subquery = statement.analyze(subquery_context).await?;
-        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery {
-            let subquery_plan = PlanParser::build_query_plan(&analyze_data)?;
-            args.push(Expression::ScalarSubquery {
-                name: query_context.get_subquery_name(&subquery_plan),
-                query_plan: Arc::new(subquery_plan),
-            });
-
-            return Ok(());
-        }
-
-        Err(ErrorCode::SyntaxException(format!(
-            "Unsupported subquery type {:?}",
-            subquery
-        )))
-    }
-
-    fn analyze_wildcard(&self, arguments: &mut Vec<Expression>) -> Result<()> {
-        arguments.push(Expression::Wildcard);
         Ok(())
     }
 
@@ -506,10 +330,8 @@ enum OperatorKind {
 
 struct FunctionExprInfo {
     name: String,
-    distinct: bool,
     args_count: usize,
     kind: OperatorKind,
-    parameters: Vec<Value>,
 }
 
 struct InListInfo {
@@ -536,30 +358,24 @@ impl ExprRPNItem {
     pub fn function(name: String, args_count: usize) -> ExprRPNItem {
         ExprRPNItem::Function(FunctionExprInfo {
             name,
-            distinct: false,
             args_count,
             kind: OperatorKind::Other,
-            parameters: Vec::new(),
         })
     }
 
     pub fn binary_operator(name: String) -> ExprRPNItem {
         ExprRPNItem::Function(FunctionExprInfo {
             name,
-            distinct: false,
             args_count: 2,
             kind: OperatorKind::Binary,
-            parameters: Vec::new(),
         })
     }
 
     pub fn unary_operator(name: String) -> ExprRPNItem {
         ExprRPNItem::Function(FunctionExprInfo {
             name,
-            distinct: false,
             args_count: 1,
             kind: OperatorKind::Unary,
-            parameters: Vec::new(),
         })
     }
 }
@@ -621,10 +437,8 @@ impl ExprRPNBuilder {
             Expr::Function(function) => {
                 self.rpn.push(ExprRPNItem::Function(FunctionExprInfo {
                     name: function.name.to_string(),
-                    distinct: function.distinct,
                     args_count: function.args.len(),
                     kind: OperatorKind::Other,
-                    parameters: function.params.to_owned(),
                 }));
             }
             Expr::Cast {

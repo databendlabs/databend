@@ -217,16 +217,16 @@ impl Expression {
                 pg_style,
             } => {
                 if *pg_style {
-                    format!("{}::{}", expr.column_name(), data_type.name())
+                    format!("{}::{}", expr.column_name(), data_type.sql_name())
                 } else if data_type.is_nullable() {
                     let ty: &NullableType = data_type.as_any().downcast_ref().unwrap();
                     format!(
                         "try_cast({} as {})",
                         expr.column_name(),
-                        ty.inner_type().name()
+                        ty.inner_type().sql_name()
                     )
                 } else {
-                    format!("cast({} as {})", expr.column_name(), data_type.name())
+                    format!("cast({} as {})", expr.column_name(), data_type.sql_name())
                 }
             }
             Expression::Subquery { name, .. } => name.clone(),
