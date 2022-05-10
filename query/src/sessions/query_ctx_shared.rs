@@ -22,7 +22,6 @@ use common_base::base::Progress;
 use common_base::base::Runtime;
 use common_base::infallible::Mutex;
 use common_base::infallible::RwLock;
-use common_configs::Config;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,6 +42,7 @@ use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 type DatabaseAndTable = (String, String);
 

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_configs::Config;
 use common_exception::Result;
 use common_management::RoleApi;
 use common_management::RoleMgr;
@@ -30,6 +29,7 @@ use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClientConf;
 
 use crate::common::MetaClientProvider;
+use crate::Config;
 
 pub struct UserApiProvider {
     client: Arc<dyn KVApi>,

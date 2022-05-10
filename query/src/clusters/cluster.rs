@@ -28,7 +28,6 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
-use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
@@ -48,6 +47,7 @@ use rand::Rng;
 
 use crate::api::FlightClient;
 use crate::common::MetaClientProvider;
+use crate::Config;
 
 pub struct ClusterDiscovery {
     local_id: String,

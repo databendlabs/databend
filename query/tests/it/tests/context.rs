@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_configs::Config;
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::AuthInfo;
@@ -28,6 +27,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionType;
 use databend_query::storages::StorageContext;
+use databend_query::Config;
 
 use crate::tests::SessionManagerBuilder;
 

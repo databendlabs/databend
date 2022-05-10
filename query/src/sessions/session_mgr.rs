@@ -23,7 +23,6 @@ use common_base::base::tokio;
 use common_base::base::Runtime;
 use common_base::base::SignalStream;
 use common_base::infallible::RwLock;
-use common_configs::Config;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -54,6 +53,7 @@ use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: RwLock<Config>,

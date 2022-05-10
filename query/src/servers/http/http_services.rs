@@ -16,7 +16,6 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
-use common_configs::Config;
 use common_exception::Result;
 use common_tracing::tracing;
 use poem::get;
@@ -34,6 +33,7 @@ use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct HttpHandler {
     session_manager: Arc<SessionManager>,

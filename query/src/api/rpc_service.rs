@@ -20,7 +20,6 @@ use common_arrow::arrow_format::flight::service::flight_service_server::FlightSe
 use common_base::base::tokio;
 use common_base::base::tokio::net::TcpListener;
 use common_base::base::tokio::sync::Notify;
-use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -33,6 +32,7 @@ use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct RpcService {
     pub sessions: Arc<SessionManager>,

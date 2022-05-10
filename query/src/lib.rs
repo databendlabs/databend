@@ -37,5 +37,8 @@ pub mod storages;
 pub mod table_functions;
 pub mod users;
 
+mod config;
 mod version;
+
+pub use config::Config;
 pub use version::DATABEND_COMMIT_VERSION;

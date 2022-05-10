@@ -15,6 +15,10 @@
 use std::env;
 
 use clap::Parser;
+use common_configs::LogConfig;
+use common_configs::MetaConfig;
+use common_configs::QueryConfig;
+use common_configs::StorageConfig;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,11 +26,6 @@ use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
-
-use crate::LogConfig;
-use crate::MetaConfig;
-use crate::QueryConfig;
-use crate::StorageConfig;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]

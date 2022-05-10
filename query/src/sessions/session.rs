@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_base::infallible::RwLock;
 use common_base::mem_allocator::malloc_size;
-use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
@@ -36,6 +35,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::Config;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {

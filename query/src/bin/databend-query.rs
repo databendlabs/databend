@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_base::base::RuntimeTracker;
-use common_configs::Config;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
@@ -31,6 +30,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
+use databend_query::Config;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {

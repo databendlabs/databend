@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_configs::Config;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_embedded::MetaEmbedded;
@@ -55,6 +54,7 @@ use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
+use crate::Config;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

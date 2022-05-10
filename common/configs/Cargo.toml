@@ -18,11 +18,3 @@ common-exception = { path = "../../common/exception" }
 # Crates.io dependencies
 clap = { version = "3.1.8", features = ["derive", "env"] }
 serde = { version = "1.0.136", features = ["derive"] }
-serde-bridge = "0.0.3"
-serde_json = "1.0.79"
-serfig = "0.0.1"
-
-[dev-dependencies]
-pretty_assertions = "1.2.1"
-toml = { version = "0.5.8", default-features = false }
-temp-env = "0.2.0"

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-pub use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -23,6 +22,7 @@ use common_meta_types::UserInfo;
 
 use crate::users::auth::jwt::JwtAuthenticator;
 use crate::users::UserApiProvider;
+pub use crate::Config;
 
 pub struct AuthMgr {
     tenant: String,

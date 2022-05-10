@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_configs::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
@@ -40,6 +39,7 @@ use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
 use crate::storages::Table;
+use crate::Config;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
