@@ -40,7 +40,7 @@ pub struct ColumnBinding {
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct BindContext {
     _parent: Option<Box<BindContext>>,
     pub columns: Vec<ColumnBinding>,
@@ -62,7 +62,7 @@ impl BindContext {
         Self::default()
     }
 
-    fn new_with_parent(parent: Box<BindContext>) -> Self {
+    pub fn with_parent(parent: Box<BindContext>) -> Self {
         BindContext {
             _parent: Some(parent),
             columns: vec![],
@@ -74,7 +74,7 @@ impl BindContext {
 
     /// Generate a new BindContext and take current BindContext as its parent.
     pub fn push(self) -> Self {
-        Self::new_with_parent(Box::new(self))
+        Self::with_parent(Box::new(self))
     }
 
     /// Returns all column bindings in current scope.

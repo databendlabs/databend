@@ -78,6 +78,7 @@ pub trait ScalarVisitor: Sized {
                                 Scalar::Cast(CastExpr { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))
                                 }
+                                Scalar::SubqueryExpr(_) => {}
                             }
 
                             visitor
