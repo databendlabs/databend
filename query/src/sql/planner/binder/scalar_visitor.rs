@@ -19,6 +19,7 @@ use crate::sql::plans::AndExpr;
 use crate::sql::plans::CastExpr;
 use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::FunctionCall;
+use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 
 /// Controls how the visitor recursion should proceed.
