@@ -36,6 +36,7 @@ pub use physical_scan::PhysicalScan;
 pub use project::ProjectItem;
 pub use project::ProjectPlan;
 pub use scalar::*;
+pub use sort::SortItem;
 pub use sort::SortPlan;
 
 use crate::sql::optimizer::PhysicalProperty;

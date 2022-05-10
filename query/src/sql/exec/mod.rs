@@ -503,7 +503,16 @@ impl PipelineBuilder {
         let eb = ExpressionBuilder::create(&self.metadata);
         let mut expressions = Vec::with_capacity(sort_plan.items.len());
         for item in sort_plan.items.iter() {
-            expressions.push(eb.build(item)?);
+            let expr = eb.build(&item.expr)?;
+            let asc = item.asc.unwrap_or(true);
+            // NULLS FIRST is the default for DESC order, and NULLS LAST otherwise
+            let nulls_first = item.nulls_first.unwrap_or(!asc);
+            expressions.push(Expression::Sort {
+                expr: Box::new(expr.clone()),
+                asc,
+                nulls_first,
+                origin_expr: Box::new(expr),
+            })
         }
 
         let schema_builder = DataSchemaBuilder::new(&self.metadata);
