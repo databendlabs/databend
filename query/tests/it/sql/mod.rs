@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod exec;
+mod expr_parser;
 mod optimizer;
 mod parsers;
 mod plan_parser;

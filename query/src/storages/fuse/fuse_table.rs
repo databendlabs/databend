@@ -33,6 +33,7 @@ use futures::StreamExt;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -59,7 +60,7 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let mut order_keys = Vec::new();
         if let Some(order) = &table_info.meta.order_keys {
-            order_keys = serde_json::from_slice(order.as_slice())?;
+            order_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {

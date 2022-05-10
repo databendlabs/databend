@@ -142,7 +142,7 @@ message TableMeta {
   map<string, string> options = 5;
 
   // Keys to sort rows in table.
-  optional bytes order_keys = 9;
+  optional string order_keys = 9;
 
   // The time table created.
   string created_on = 20;
@@ -172,8 +172,8 @@ message DataField {
   // The name of this column.
   string name = 1;
 
-  // A SQL style expression to define the default value for this field.
-  optional bytes default_expr = 2;
+  // A SQL style expression to define the default value for this field, represent as raw sql
+  optional string default_expr = 2;
 
   // Column data type
   DataType data_type = 3;

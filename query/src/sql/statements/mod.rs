@@ -15,6 +15,7 @@
 pub mod query;
 
 mod analyzer_expr;
+mod analyzer_expr_sync;
 mod analyzer_statement;
 mod analyzer_value_expr;
 mod statement_alter_table;
@@ -70,6 +71,7 @@ mod statement_use_database;
 mod value_source;
 
 pub use analyzer_expr::ExpressionAnalyzer;
+pub use analyzer_expr_sync::ExpressionSyncAnalyzer;
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::QueryAnalyzeState;
