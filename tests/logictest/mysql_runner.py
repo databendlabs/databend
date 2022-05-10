@@ -52,9 +52,10 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                             "Expected string, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'B':
-                    if not isinstance(v, bytes):
+                    # bool return int in mysql
+                    if not isinstance(v, int):
                         log.error(
-                            "Expected bytes, got type {} in query {} row {} col {} value {}"
+                            "Expected Bool, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 else:
                     log.error(

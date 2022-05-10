@@ -269,7 +269,10 @@ class SuiteRunner(object):
         )
 
     def assert_query_equal(self, f, resultset, statement):
-        assert f.strip() == resultset[2].strip(), "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
+        # use join after split instead of strip 
+        compare_f = "".join(f.split())
+        compare_result = "".join(resultset[2].split())
+        assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
                                                   "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
                                                                                       f.rstrip(),
                                                                                       str(statement), resultset[1],

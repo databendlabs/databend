@@ -46,15 +46,14 @@ class TestHttp(logictest.SuiteRunner, ABC):
                             "Expected string, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'B':
-                    if not isinstance(v, bytes):
+                    if not isinstance(v, bool):
                         log.error(
-                            "Expected bytes, got type {} in query {} row {} col {} value {}"
+                            "Expected bool, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
+                    v= str(v).lower() # bool to string in python will be True/False
                 else:
                     log.error(
                         "Unknown type {} in query {} row {} col {} value {}".
                         format(query_type[i], statement.text, ri, i, v))
                 vals.append(str(v))
         return vals
-
-

@@ -4,6 +4,27 @@ create database if not exists db1;
 statement ok
 create table if not exists t1 (a int);
 
+statement ok
+drop table if exists t4;
+
+statement ok
+create table if not exists t4(a float, b float, c text, d bool);
+
+statement ok
+insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false );
+
+statement query FFTB label(mysql)
+select a,b,c,d from t4;
+
+----  http
+     1.0 10.223999977111816 xxdsfs false
+
+----  mysql
+     1.0 10.223999977111816 xxdsfs 0
+
+statment ok
+drop table t4;
+
 statement error 1006
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
 
