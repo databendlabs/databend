@@ -84,6 +84,7 @@ pub enum Statement<'a> {
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
     Describe {
+        catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
     },
@@ -461,9 +462,16 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " AS {as_query}")?;
                 }
             }
-            Statement::Describe { database, table } => {
+            Statement::Describe {
+                catalog,
+                database,
+                table,
+            } => {
                 write!(f, "DESCRIBE ")?;
-                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                write_period_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter().chain(Some(table))),
+                )?;
             }
             Statement::DropTable {
                 if_exists,

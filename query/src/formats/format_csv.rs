@@ -174,7 +174,7 @@ impl InputFormat for CsvInputFormat {
         })
     }
 
-    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<DataBlock> {
+    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
         let mut deserializers = Vec::with_capacity(self.schema.num_fields());
         for field in self.schema.fields() {
             let data_type = field.data_type();
@@ -238,7 +238,7 @@ impl InputFormat for CsvInputFormat {
             columns.push(deserializer.finish_to_column());
         }
 
-        Ok(DataBlock::create(self.schema.clone(), columns))
+        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
     }
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {

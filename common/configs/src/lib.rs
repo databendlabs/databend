@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod catalog;
 mod log;
 mod meta;
 mod query;
 mod storage;
 
+pub use catalog::HiveCatalogConfig;
+pub use catalog::ThriftProtocol;
 pub use log::LogConfig;
 pub use meta::MetaConfig;
 pub use query::QueryConfig;

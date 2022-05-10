@@ -24,8 +24,8 @@ use crate::UserPrivilegeType;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum GrantObject {
     Global,
-    Database(String),
-    Table(String, String),
+    Database(String, String),
+    Table(String, String, String),
 }
 
 impl GrantObject {
@@ -34,13 +34,18 @@ impl GrantObject {
     pub fn contains(&self, object: &GrantObject) -> bool {
         match (self, object) {
             (GrantObject::Global, _) => true,
-            (GrantObject::Database(_), GrantObject::Global) => false,
-            (GrantObject::Database(lhs), GrantObject::Database(rhs)) => lhs == rhs,
-            (GrantObject::Database(lhs), GrantObject::Table(rhs, _)) => lhs == rhs,
-            (GrantObject::Table(lhs_db, lhs_table), GrantObject::Table(rhs_db, rhs_table)) => {
-                (lhs_db == rhs_db) && (lhs_table == rhs_table)
+            (GrantObject::Database(_, _), GrantObject::Global) => false,
+            (GrantObject::Database(lcat, ldb), GrantObject::Database(rcat, rdb)) => {
+                lcat == rcat && ldb == rdb
             }
-            (GrantObject::Table(_, _), _) => false,
+            (GrantObject::Database(lcat, ldb), GrantObject::Table(rcat, rdb, _)) => {
+                lcat == rcat && ldb == rdb
+            }
+            (
+                GrantObject::Table(lcat, lhs_db, lhs_table),
+                GrantObject::Table(rcat, rhs_db, rhs_table),
+            ) => lcat == rcat && (lhs_db == rhs_db) && (lhs_table == rhs_table),
+            (GrantObject::Table(_, _, _), _) => false,
         }
     }
 
@@ -48,8 +53,8 @@ impl GrantObject {
     pub fn available_privileges(&self) -> UserPrivilegeSet {
         match self {
             GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
-            GrantObject::Database(_) => UserPrivilegeSet::available_privileges_on_database(),
-            GrantObject::Table(_, _) => UserPrivilegeSet::available_privileges_on_table(),
+            GrantObject::Database(_, _) => UserPrivilegeSet::available_privileges_on_database(),
+            GrantObject::Table(_, _, _) => UserPrivilegeSet::available_privileges_on_table(),
         }
     }
 }
@@ -58,8 +63,10 @@ impl fmt::Display for GrantObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             GrantObject::Global => write!(f, "*.*"),
-            GrantObject::Database(ref db) => write!(f, "'{}'.*", db),
-            GrantObject::Table(ref db, ref table) => write!(f, "'{}'.'{}'", db, table),
+            GrantObject::Database(ref cat, ref db) => write!(f, "'{}'.'{}'.*", cat, db),
+            GrantObject::Table(ref cat, ref db, ref table) => {
+                write!(f, "'{}'.'{}'.'{}'", cat, db, table)
+            }
         }
     }
 }

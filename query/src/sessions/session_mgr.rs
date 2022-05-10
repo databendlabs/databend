@@ -33,7 +33,7 @@ use futures::future::Either;
 use futures::StreamExt;
 use opendal::Operator;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
@@ -49,7 +49,7 @@ use crate::Config;
 pub struct SessionManager {
     pub(in crate::sessions) conf: RwLock<Config>,
     pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
-    pub(in crate::sessions) catalog: RwLock<Arc<DatabaseCatalog>>,
+    pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
     pub(in crate::sessions) user_manager: RwLock<Arc<UserApiProvider>>,
     pub(in crate::sessions) auth_manager: RwLock<Arc<AuthMgr>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
@@ -67,7 +67,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
+        let catalogs = Arc::new(CatalogManager::new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
@@ -104,7 +104,7 @@ impl SessionManager {
 
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
-            catalog: RwLock::new(catalog),
+            catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
             user_manager: RwLock::new(user),
             http_query_manager,
@@ -141,8 +141,8 @@ impl SessionManager {
         self.user_manager.read().clone()
     }
 
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.catalog.read().clone()
+    pub fn get_catalog_manager(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.catalogs.read().clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
@@ -335,8 +335,8 @@ impl SessionManager {
         };
 
         {
-            let catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
-            *self.catalog.write() = Arc::new(catalog);
+            let catalogs = CatalogManager::new(&config).await?;
+            *self.catalogs.write() = Arc::new(catalogs);
         }
 
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));

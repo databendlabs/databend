@@ -39,13 +39,24 @@ impl AnalyzableStatement for DfRenameTable {
         let tenant = ctx.get_tenant();
         let mut entities = Vec::new();
         for (k, v) in &self.name_map {
-            let (db, table_name) = self.resolve_table(ctx.clone(), k)?;
-            let (new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
+            let (catalog_name, database_name, table_name) =
+                super::resolve_table(&ctx, k, "RENAME TABLE")?;
+            let (new_catalog_name, new_database_name, new_table_name) =
+                super::resolve_table(&ctx, v, "RENAME TABLE")?;
+
+            // TODO if catalog != new_catalog, then throws Error
+            if new_catalog_name != catalog_name {
+                return Err(ErrorCode::BadArguments(
+                    "alter catalog not allowed while reanme table",
+                ));
+            }
+
             entities.push(RenameTableEntity {
                 if_exists: false,
-                db,
+                catalog_name,
+                database_name,
                 table_name,
-                new_db,
+                new_database_name,
                 new_table_name,
             })
         }
@@ -53,23 +64,5 @@ impl AnalyzableStatement for DfRenameTable {
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
         )))
-    }
-}
-
-impl DfRenameTable {
-    fn resolve_table(
-        &self,
-        ctx: Arc<QueryContext>,
-        table_name: &ObjectName,
-    ) -> Result<(String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Rename table name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Rename table name must be [`db`].`table`",
-            )),
-        }
     }
 }

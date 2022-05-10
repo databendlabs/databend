@@ -1046,6 +1046,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-hive-meta-store"
+version = "0.1.0"
+dependencies = [
+ "thrift",
+]
+
+[[package]]
 name = "common-io"
 version = "0.1.0"
 dependencies = [
@@ -1784,6 +1791,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-grpc",
+ "common-hive-meta-store",
  "common-io",
  "common-macros",
  "common-management",
@@ -1839,6 +1847,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "threadpool",
+ "thrift",
  "time 0.3.9",
  "tokio-rustls 0.23.3",
  "tokio-stream",

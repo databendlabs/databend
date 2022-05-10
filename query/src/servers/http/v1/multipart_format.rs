@@ -266,16 +266,26 @@ impl Processor for SequentialInputFormatSource {
                     data_slice = &data_slice[read_size..];
 
                     if read_size < len {
-                        let block = self.input_format.deserialize_data(&mut self.input_state)?;
-                        progress_values.rows += block.num_rows();
-                        self.data_block.push(block);
+                        let state = &mut self.input_state;
+                        let mut blocks = self.input_format.deserialize_data(state)?;
+
+                        self.data_block.reserve(blocks.len());
+                        while let Some(block) = blocks.pop() {
+                            progress_values.rows += block.num_rows();
+                            self.data_block.push(block);
+                        }
                     }
                 }
             }
             State::NeedDeserialize => {
-                let block = self.input_format.deserialize_data(&mut self.input_state)?;
-                progress_values.rows += block.num_rows();
-                self.data_block.push(block);
+                let state = &mut self.input_state;
+                let mut blocks = self.input_format.deserialize_data(state)?;
+
+                self.data_block.reserve(blocks.len());
+                while let Some(block) = blocks.pop() {
+                    progress_values.rows += block.num_rows();
+                    self.data_block.push(block);
+                }
             }
             _ => {
                 return Err(ErrorCode::LogicalError(

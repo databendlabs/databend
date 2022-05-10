@@ -156,9 +156,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let describe = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ ( #ident ~ "." )? ~ #ident
+            ( DESC | DESCRIBE ) ~ ( #ident ~ "." )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, opt_database, table)| Statement::Describe {
+        |(_, opt_catalog, opt_database, table)| Statement::Describe {
+            catalog: opt_catalog.map(|(catalog, _)| catalog),
             database: opt_database.map(|(database, _)| database),
             table,
         },

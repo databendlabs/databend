@@ -163,6 +163,7 @@ impl QualifiedRewriter {
         }
 
         let current_database = self.ctx.get_current_database();
+        let current_catalog = self.ctx.get_current_catalog();
         for table_desc in self.tables_schema.get_tables_desc() {
             let name_parts = table_desc.get_name_parts();
             if Self::first_diff_pos(ref_names, name_parts) == name_parts.len() {
@@ -170,11 +171,20 @@ impl QualifiedRewriter {
                 return Some((name_parts.len(), table_desc.clone()));
             }
 
-            if name_parts.len() > 1
+            if name_parts.len() == 2
                 && Self::first_diff_pos(ref_names, &name_parts[1..]) == 1
                 && current_database == name_parts[0]
             {
                 // use current_database; table.column
+                return Some((1, table_desc.clone()));
+            }
+
+            if name_parts.len() == 3
+                && Self::first_diff_pos(ref_names, &name_parts[2..]) == 1
+                && current_catalog == name_parts[0]
+                && current_database == name_parts[1]
+            {
+                // use current catalog; current_database; table.column
                 return Some((1, table_desc.clone()));
             }
         }
