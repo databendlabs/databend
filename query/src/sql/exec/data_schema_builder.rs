@@ -74,7 +74,6 @@ impl<'a> DataSchemaBuilder<'a> {
             let column_entry = self.metadata.column(*index);
             let field_name = format_field_name(column_entry.name.as_str(), *index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
-            dbg!(field.clone());
             fields.push(field);
         }
 
@@ -86,9 +85,7 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in columns {
             let column_entry = self.metadata.column(*index);
             let field_name = column_entry.name.clone();
-            let field =
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone());
-
+            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
         }
 
