@@ -33,7 +33,7 @@ runs:
 #    - shell: bash
 #      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json
 
-    # simple setup for hive, to be refined
+    # hive cluster setup
     - name: Hive Cluster Setup
       shell: bash
       run: |
@@ -44,21 +44,18 @@ runs:
       run: |
         docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
 
-    # waiting for cluster to come alive
-    - uses: iFaxity/wait-on-action@v1
-      with:
-        resource: tcp:127.0.0.1:10000
-        # hive cluster startup VERY slow, after several attempts, 50s seems to be a reasonable timeout setting
-        timeout: 50000
+    # Wait for h2 to come alive
+    #  INSIDE the container of service "hive-server", wait for port 1000 being listened
+    - name: Wait for hiveserver2
+      shell: bash
+      run: |
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "timeout 50 bash -c 'until nc -z localhost 10000; do sleep 1; echo "waiting..."; done'"
 
-    # Default hive table setup, to be refined
+    # hive test data setup, to be refined
     - name: Hive Testing Data
       shell: bash
       run: |
-        echo "*** diganostic info ***"
-        docker ps
-        ss -ltn
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "timeout 50 bash -c 'until nc -z localhost 10000; do sleep 1; echo "..."; done'; /opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE if not exists pokes (foo INT);'"
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" exec -T hive-server bash -c "/opt/hive/bin/beeline -u jdbc:hive2://127.0.0.1:10000 -e 'CREATE TABLE if not exists pokes (foo INT);'"
 
 #    - name: Run Stateful Tests with Standalone mode
 #      shell: bash
