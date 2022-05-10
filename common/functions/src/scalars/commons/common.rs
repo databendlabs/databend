@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::NumberOperator;
-use super::String2NumberFunction;
+use super::length::LengthFunction;
+use crate::scalars::FunctionFactory;
 
-#[derive(Clone, Default)]
-pub struct StringLength {}
+pub struct CommonFunction;
 
-impl NumberOperator<u64> for StringLength {
-    const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = false;
-
-    fn apply<'a>(&'a mut self, value: &'a [u8]) -> u64 {
-        value.len() as u64
+impl CommonFunction {
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("length", LengthFunction::desc());
     }
 }
-
-pub type StringLengthFunction = String2NumberFunction<StringLength, u64>;

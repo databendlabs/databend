@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::NumberOperator;
-use super::String2NumberFunction;
+mod common;
+mod length;
 
-#[derive(Clone, Default)]
-pub struct StringLength {}
-
-impl NumberOperator<u64> for StringLength {
-    const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = false;
-
-    fn apply<'a>(&'a mut self, value: &'a [u8]) -> u64 {
-        value.len() as u64
-    }
-}
-
-pub type StringLengthFunction = String2NumberFunction<StringLength, u64>;
+pub use common::CommonFunction;
+pub use length::LengthFunction;
