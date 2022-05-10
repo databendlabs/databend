@@ -1,0 +1,4 @@
+mysql-connector>=2.2.9
+six>=1.16.0
+PyHamcrest>=2.0.2
+requests>=2.27.1

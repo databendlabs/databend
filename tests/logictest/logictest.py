@@ -4,6 +4,7 @@ import glob
 import os
 import re
 import logging
+
 import six
 from hamcrest import assert_that, is_, none, is_not
 

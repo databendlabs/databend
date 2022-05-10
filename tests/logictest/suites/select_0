@@ -10,7 +10,7 @@ create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
 statement query III label(mysql)
 select number, number + 1, number + 999 from numbers(10);
 
-----
+----  
      0     1   999
      1     2  1000
      2     3  1001
@@ -20,7 +20,7 @@ select number, number + 1, number + 999 from numbers(10);
      6     7  1005
      7     8  1006
      8     9  1007
-     9    10  1008.0
+     9    10  1008
 
 ----  mysql
      0     1   999

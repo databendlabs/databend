@@ -1,40 +1,34 @@
-import logging
 from abc import ABC
-
-import mysql.connector
+import logging
 
 import logictest
+import http_connector
 
 logging.basicConfig(level=logging.INFO)
 
 log = logging.getLogger(__name__)
 
-
-class TestMySQL(logictest.SuiteRunner, ABC):
+class TestHttp(logictest.SuiteRunner, ABC):
 
     def execute_ok(self, statement):
-        cnx = mysql.connector.connect(**self.driver)
-        cursor = cnx.cursor()
-        cursor.execute(statement)
+        http = http_connector.HttpConnector()
+        http.connect(**self.driver)
+        http.query_without_session(statement)
         return None
 
     def execute_error(self, statement):
-        cnx = mysql.connector.connect(**self.driver)
-        cursor = cnx.cursor()
-        try:
-            cursor.execute(statement)
-        except mysql.connector.Error as err:
-            return err
-        return None
+        http = http_connector.HttpConnector()
+        http.connect(**self.driver)
+        resp = http.query_without_session(statement)
+        return http_connector.get_error(resp)
 
     def execute_query(self, statement):
-        cnx = mysql.connector.connect(**self.driver)
-        cursor = cnx.cursor()
-        cursor.execute(statement.text)
-        r = cursor.fetchall()
+        http = http_connector.HttpConnector()
+        http.connect(**self.driver)
+        results = http.fetch_all(statement.text)
         query_type = statement.s_type.query_type
         vals = []
-        for (ri, row) in enumerate(r):
+        for (ri,row) in enumerate(results):
             for (i, v) in enumerate(row):
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
@@ -62,3 +56,5 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                         format(query_type[i], statement.text, ri, i, v))
                 vals.append(str(v))
         return vals
+
+
