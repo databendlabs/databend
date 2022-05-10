@@ -22,7 +22,7 @@ use crate::catalogs::default::DatabaseCatalog;
 #[cfg(feature = "hive")]
 use crate::catalogs::hive::HiveCatalog;
 use crate::catalogs::Catalog;
-use crate::configs::Config;
+use crate::config::Config;
 
 // TODO catalogs are hard coded
 

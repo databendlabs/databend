@@ -20,9 +20,9 @@ use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 
-pub use crate::configs::Config;
 use crate::users::auth::jwt::JwtAuthenticator;
 use crate::users::UserApiProvider;
+pub use crate::Config;
 
 pub struct AuthMgr {
     tenant: String,

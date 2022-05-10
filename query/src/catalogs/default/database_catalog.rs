@@ -33,16 +33,16 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use super::immutable_catalog::ImmutableCatalog;
-use super::mutable_catalog::MutableCatalog;
 use crate::catalogs::catalog::Catalog;
-use crate::configs::Config;
+use crate::catalogs::default::ImmutableCatalog;
+use crate::catalogs::default::MutableCatalog;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
+use crate::Config;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
@@ -59,7 +59,7 @@ pub struct DatabaseCatalog {
 }
 
 impl DatabaseCatalog {
-    fn create(
+    pub fn create(
         immutable_catalog: Arc<dyn Catalog>,
         mutable_catalog: Arc<dyn Catalog>,
         table_function_factory: Arc<TableFunctionFactory>,

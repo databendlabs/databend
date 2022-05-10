@@ -5,6 +5,7 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
+    "common/configs",
     "common/contexts",
     "common/datablocks",
     "common/datavalues",

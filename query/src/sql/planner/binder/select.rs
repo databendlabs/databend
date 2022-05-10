@@ -50,15 +50,28 @@ impl Binder {
         query: &Query,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
-        let bind_context = match &query.body {
-            SetExpr::Select(stmt) => self.bind_select_stmt(stmt, bind_context).await,
+        let mut has_order_by = false;
+        if !query.order_by.is_empty() {
+            has_order_by = true;
+        };
+        let mut bind_context = match &query.body {
+            SetExpr::Select(stmt) => {
+                self.bind_select_stmt(stmt, has_order_by, bind_context)
+                    .await
+            }
             SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
             _ => Err(ErrorCode::UnImplement("Unsupported query type")),
         }?;
 
-        // TODO: support ORDER BY
-        if !query.order_by.is_empty() {
-            return Err(ErrorCode::UnImplement("Unsupported ORDER BY"));
+        if has_order_by {
+            let bind_context_cols = bind_context.columns.clone();
+            bind_context.columns = bind_context
+                .order_by_columns
+                .as_ref()
+                .ok_or_else(|| ErrorCode::SemanticError("Order by should have order by columns"))?
+                .clone();
+            self.bind_order_by(&query.order_by, &mut bind_context)?;
+            bind_context.columns = bind_context_cols;
         }
 
         if !query.limit.is_empty() {
@@ -71,6 +84,7 @@ impl Binder {
     pub(super) async fn bind_select_stmt(
         &mut self,
         stmt: &SelectStmt,
+        has_order_by: bool,
         bind_context: &BindContext,
     ) -> Result<BindContext> {
         let mut input_context = if let Some(from) = &stmt.from {
@@ -84,7 +98,8 @@ impl Binder {
         }
 
         // Output of current `SELECT` statement.
-        let mut output_context = self.normalize_select_list(&stmt.select_list, &input_context)?;
+        let mut output_context =
+            self.normalize_select_list(&stmt.select_list, has_order_by, &input_context)?;
 
         self.analyze_aggregate(&output_context, &mut input_context)?;
 

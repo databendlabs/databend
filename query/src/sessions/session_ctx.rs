@@ -23,8 +23,8 @@ use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
-use crate::configs::Config;
 use crate::sessions::QueryContextShared;
+use crate::Config;
 
 #[derive(MallocSizeOf)]
 pub struct SessionContext {

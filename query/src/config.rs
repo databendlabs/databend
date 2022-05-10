@@ -15,39 +15,18 @@
 use std::env;
 
 use clap::Parser;
+use common_configs::HiveCatalogConfig;
+use common_configs::LogConfig;
+use common_configs::MetaConfig;
+use common_configs::QueryConfig;
+use common_configs::StorageConfig;
 use common_exception::Result;
-use common_grpc::RpcClientTlsConfig;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
-
-use crate::configs::HiveCatalogConfig;
-use crate::configs::LogConfig;
-use crate::configs::MetaConfig;
-use crate::configs::QueryConfig;
-use crate::configs::StorageConfig;
-
-pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
-    let git_tag = option_env!("VERGEN_GIT_SEMVER");
-    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-    let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-
-    let ver = match (git_tag, git_sha, rustc_semver, timestamp) {
-        #[cfg(not(feature = "simd"))]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}(rust-{}-{})", v1, v2, v3, v4),
-        #[cfg(feature = "simd")]
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd(rust-{}-{})", v1, v2, v3, v4)
-        }
-        _ => String::new(),
-    };
-    ver
-});
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]
@@ -109,13 +88,6 @@ impl Config {
         builder = builder.collect(from_self(arg_conf));
 
         Ok(builder.build()?)
-    }
-
-    pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {
-        RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.query.rpc_tls_query_server_root_ca_cert.to_string(),
-            domain_name: self.query.rpc_tls_query_service_domain_name.to_string(),
-        }
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {

@@ -17,7 +17,7 @@ use std::fs;
 use std::io::Write;
 
 use common_exception::Result;
-use databend_query::configs::Config;
+use databend_query::Config;
 use pretty_assertions::assert_eq;
 
 // Default.
@@ -306,12 +306,5 @@ protocol = "Binary"
         },
     );
 
-    Ok(())
-}
-
-#[test]
-fn test_fuse_commit_version() -> Result<()> {
-    let v = &databend_query::configs::DATABEND_COMMIT_VERSION;
-    assert!(v.len() > 0);
     Ok(())
 }

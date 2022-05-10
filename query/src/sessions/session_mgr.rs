@@ -44,7 +44,6 @@ use opendal::Scheme as DalSchema;
 
 use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -54,6 +53,7 @@ use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: RwLock<Config>,

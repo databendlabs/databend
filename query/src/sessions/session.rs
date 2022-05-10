@@ -28,7 +28,6 @@ use futures::channel::*;
 use opendal::Operator;
 
 use crate::catalogs::CatalogManager;
-use crate::configs::Config;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -36,6 +35,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::Config;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {

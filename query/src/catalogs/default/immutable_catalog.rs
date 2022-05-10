@@ -31,15 +31,15 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use super::table_id_ranges::SYS_DB_ID_BEGIN;
-use super::table_id_ranges::SYS_TBL_ID_BEGIN;
-use super::table_memory_meta::InMemoryMetas;
 use crate::catalogs::catalog::Catalog;
-use crate::configs::Config;
+use crate::catalogs::InMemoryMetas;
+use crate::catalogs::SYS_DB_ID_BEGIN;
+use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
 use crate::storages::Table;
+use crate::Config;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.

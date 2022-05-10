@@ -52,7 +52,6 @@ use opendal::Operator;
 use crate::catalogs::Catalog;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -65,6 +64,7 @@ use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -88,7 +88,7 @@ impl QueryContext {
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
         })

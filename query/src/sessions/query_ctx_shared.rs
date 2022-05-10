@@ -33,7 +33,6 @@ use uuid::Uuid;
 
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
@@ -42,6 +41,7 @@ use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 type DatabaseAndTable = (String, String, String);
 

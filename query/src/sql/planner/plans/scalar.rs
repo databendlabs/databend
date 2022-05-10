@@ -49,6 +49,7 @@ pub enum Scalar {
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
     Cast(CastExpr),
+    Order(OrderExpr),
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -247,5 +248,24 @@ impl ScalarExpr for CastExpr {
 
     fn used_columns(&self) -> ColumnSet {
         self.argument.used_columns()
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct OrderExpr {
+    pub expr: Box<Scalar>,
+    // Optional `ASC` or `DESC`
+    pub asc: Option<bool>,
+    // Optional `NULLS FIRST` or `NULLS LAST`
+    pub nulls_first: Option<bool>,
+}
+
+impl ScalarExpr for OrderExpr {
+    fn data_type(&self) -> DataTypeImpl {
+        todo!()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        self.expr.used_columns()
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,21 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use common_exception::Result;
 
-mod config;
-pub mod config_catalog;
-pub mod config_log;
-pub mod config_meta;
-pub mod config_query;
-pub mod config_storage;
-
-pub use config::Config;
-pub use config::DATABEND_COMMIT_VERSION;
-pub use config_catalog::HiveCatalogConfig;
-pub use config_log::LogConfig;
-pub use config_meta::MetaConfig;
-pub use config_query::QueryConfig;
-pub use config_storage::AzblobStorageConfig;
-pub use config_storage::FsStorageConfig;
-pub use config_storage::S3StorageConfig;
-pub use config_storage::StorageConfig;
+#[test]
+fn test_databend_commit_version() -> Result<()> {
+    let v = &databend_query::DATABEND_COMMIT_VERSION;
+    assert!(v.len() > 0);
+    Ok(())
+}

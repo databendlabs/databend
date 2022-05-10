@@ -25,9 +25,9 @@ use poem::EndpointExt;
 use poem::Route;
 
 use crate::common::service::HttpShutdownHandler;
-use crate::configs::Config;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct HttpService {
     sessions: Arc<SessionManager>,
