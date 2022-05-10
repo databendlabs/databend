@@ -24,6 +24,8 @@ use which::which;
 
 #[allow(clippy::expect_fun_call)]
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir);
 
@@ -77,6 +79,4 @@ fn main() {
             std::writeln!(output, "{}", line).expect("write line to patched file failure");
         }
     }
-
-    println!("cargo:rerun-if-changed=build.rs");
 }
