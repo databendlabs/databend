@@ -12,33 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
-#![feature(bool_to_option)]
-#![feature(generic_associated_types)]
-#![feature(type_alias_impl_trait)]
+mod log;
+mod meta;
+mod query;
+mod storage;
 
-pub mod api;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod databases;
-pub mod formats;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod procedures;
-pub mod servers;
-pub mod sessions;
-pub mod sql;
-pub mod storages;
-pub mod table_functions;
-pub mod users;
-
-mod config;
-mod version;
-
-pub use config::Config;
-pub use version::DATABEND_COMMIT_VERSION;
+pub use log::LogConfig;
+pub use meta::MetaConfig;
+pub use query::QueryConfig;
+pub use storage::AzblobStorageConfig;
+pub use storage::FsStorageConfig;
+pub use storage::S3StorageConfig;
+pub use storage::StorageConfig;

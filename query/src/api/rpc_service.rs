@@ -30,9 +30,9 @@ use tonic::transport::ServerTlsConfig;
 
 use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::rpc::DatabendQueryFlightService;
-use crate::configs::Config;
 use crate::servers::Server as DatabendQueryServer;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct RpcService {
     pub sessions: Arc<SessionManager>,

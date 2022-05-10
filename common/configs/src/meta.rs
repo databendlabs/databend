@@ -16,9 +16,6 @@ use std::fmt;
 
 use clap::Args;
 use common_base::base::mask_string;
-use common_grpc::RpcClientConf;
-use common_grpc::RpcClientTlsConfig;
-use common_meta_grpc::MetaGrpcClientConf;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -78,32 +75,6 @@ impl MetaConfig {
     pub fn is_tls_enabled(&self) -> bool {
         !self.rpc_tls_meta_server_root_ca_cert.is_empty()
             && !self.rpc_tls_meta_service_domain_name.is_empty()
-    }
-
-    pub fn to_grpc_tls_config(&self) -> Option<RpcClientTlsConfig> {
-        if !self.is_tls_enabled() {
-            return None;
-        }
-
-        Some(RpcClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert.clone(),
-            domain_name: self.rpc_tls_meta_service_domain_name.clone(),
-        })
-    }
-
-    pub fn to_grpc_client_config(&self) -> MetaGrpcClientConf {
-        let meta_config = RpcClientConf {
-            address: self.address.clone(),
-            username: self.username.clone(),
-            password: self.password.clone(),
-            tls_conf: self.to_grpc_tls_config(),
-        };
-
-        MetaGrpcClientConf {
-            meta_service_config: meta_config.clone(),
-            kv_service_config: meta_config,
-            client_timeout_in_second: self.client_timeout_in_second,
-        }
     }
 }
 

@@ -36,13 +36,13 @@ use common_tracing::tracing;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
+use crate::Config;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at

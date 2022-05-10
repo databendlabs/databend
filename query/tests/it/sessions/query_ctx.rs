@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_base::base::tokio;
+use common_configs::FsStorageConfig;
+use common_configs::S3StorageConfig;
 use common_exception::Result;
-use databend_query::configs::FsStorageConfig;
-use databend_query::configs::S3StorageConfig;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // This test need network
