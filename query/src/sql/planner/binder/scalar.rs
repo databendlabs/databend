@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::Expr;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
+use crate::sessions::QueryContext;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::Scalar;
@@ -23,15 +26,16 @@ use crate::sql::plans::Scalar;
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
+    ctx: Arc<QueryContext>,
 }
 
 impl<'a> ScalarBinder<'a> {
-    pub fn new(bind_context: &'a BindContext) -> Self {
-        ScalarBinder { bind_context }
+    pub fn new(bind_context: &'a BindContext, ctx: Arc<QueryContext>) -> Self {
+        ScalarBinder { bind_context, ctx }
     }
 
-    pub fn bind_expr(&self, expr: &Expr) -> Result<(Scalar, DataTypeImpl)> {
-        let type_checker = TypeChecker::new(self.bind_context);
-        type_checker.resolve(expr, None)
+    pub async fn bind_expr(&self, expr: &Expr) -> Result<(Scalar, DataTypeImpl)> {
+        let type_checker = TypeChecker::new(self.bind_context, self.ctx.clone());
+        type_checker.resolve(expr, None).await
     }
 }

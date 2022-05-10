@@ -69,8 +69,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    #[allow(unreachable_patterns)]
-    pub(super) fn normalize_select_list(
+    pub(super) async fn normalize_select_list(
         &mut self,
         select_list: &[SelectTarget],
         has_order_by: bool,
@@ -108,8 +107,8 @@ impl Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let scalar_binder = ScalarBinder::new(input_context);
-                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr)?;
+                    let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
+                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {

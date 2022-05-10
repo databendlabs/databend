@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -108,6 +109,7 @@ impl<'a> ExpressionBuilder<'a> {
                     pg_style: false,
                 })
             }
+            Scalar::SubqueryExpr(_) => Err(ErrorCode::UnImplement("Unsupported subquery expr")),
         }
     }
 
@@ -165,7 +167,7 @@ impl<'a> ExpressionBuilder<'a> {
                     left: Box::new(self.normalize_aggr_to_col(*left)?),
                     op,
                     right: Box::new(self.normalize_aggr_to_col(*right)?),
-                })
+                });
             }
             Expression::AggregateFunction { .. } => {
                 let col_name = expr.column_name();
@@ -178,7 +180,7 @@ impl<'a> ExpressionBuilder<'a> {
                         .iter()
                         .map(|arg| self.normalize_aggr_to_col(arg.clone()))
                         .collect::<Result<Vec<Expression>>>()?,
-                })
+                });
             }
             _ => {}
         }

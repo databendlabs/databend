@@ -22,7 +22,6 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -45,7 +44,7 @@ use crate::table_functions::TableFunction;
 
 impl Binder {
     #[async_recursion]
-    pub(super) async fn bind_query(
+    pub(crate) async fn bind_query(
         &mut self,
         query: &Query,
         bind_context: &BindContext,
@@ -70,7 +69,8 @@ impl Binder {
                 .as_ref()
                 .ok_or_else(|| ErrorCode::SemanticError("Order by should have order by columns"))?
                 .clone();
-            self.bind_order_by(&query.order_by, &mut bind_context)?;
+            self.bind_order_by(&query.order_by, &mut bind_context)
+                .await?;
             bind_context.columns = bind_context_cols;
         }
 
@@ -94,23 +94,26 @@ impl Binder {
         };
 
         if let Some(expr) = &stmt.selection {
-            self.bind_where(expr, &mut input_context, false)?;
+            self.bind_where(expr, &mut input_context, false).await?;
         }
 
         // Output of current `SELECT` statement.
-        let mut output_context =
-            self.normalize_select_list(&stmt.select_list, has_order_by, &input_context)?;
+
+        let mut output_context = self
+            .normalize_select_list(&stmt.select_list, has_order_by, &input_context)
+            .await?;
 
         self.analyze_aggregate(&output_context, &mut input_context)?;
 
         if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
         {
-            self.bind_group_by(&stmt.group_by, &mut input_context)?;
+            self.bind_group_by(&stmt.group_by, &mut input_context)
+                .await?;
             output_context.expression = input_context.expression.clone();
         }
 
         if let Some(expr) = &stmt.having {
-            self.bind_where(expr, &mut input_context, true)?;
+            self.bind_where(expr, &mut input_context, true).await?;
             output_context.expression = input_context.expression.clone();
         }
 
@@ -199,11 +202,12 @@ impl Binder {
                 params,
                 alias,
             } => {
-                let scalar_binder = ScalarBinder::new(bind_context);
-                let args = params
-                    .iter()
-                    .map(|arg| scalar_binder.bind_expr(arg))
-                    .collect::<Result<Vec<(Scalar, DataTypeImpl)>>>()?;
+                let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
+                let mut args = vec![];
+                for arg in params.iter() {
+                    args.push(scalar_binder.bind_expr(arg).await?);
+                }
+
                 let expressions = args
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
@@ -272,14 +276,14 @@ impl Binder {
         Ok(bind_context)
     }
 
-    pub(super) fn bind_where(
+    pub(super) async fn bind_where(
         &mut self,
         expr: &Expr,
         bind_context: &mut BindContext,
         is_having: bool,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(bind_context);
-        let (scalar, _) = scalar_binder.bind_expr(expr)?;
+        let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
+        let (scalar, _) = scalar_binder.bind_expr(expr).await?;
         let filter_plan = FilterPlan {
             predicates: split_conjunctions(&scalar),
             is_having,
