@@ -22,6 +22,7 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
+use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::parser::error::DisplayError as _;
 use common_exception::ErrorCode;
@@ -262,7 +263,10 @@ impl<'a> Binder {
                 Ok((s_expr, bind_context))
             }
             TableReference::Join(join) => self.bind_join(bind_context, join).await,
-            _ => Err(ErrorCode::UnImplement("Unsupported table reference type")),
+            TableReference::Subquery { subquery, alias } => {
+                self.bind_query_with_alias(subquery, alias, bind_context)
+                    .await
+            }
         }
     }
 

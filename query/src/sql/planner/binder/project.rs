@@ -14,6 +14,7 @@
 
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::TableAlias;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
