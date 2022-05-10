@@ -207,7 +207,7 @@ impl AsyncSource for FuseHistorySource {
             let tenant_id = self.ctx.get_tenant();
             let tbl = self
                 .ctx
-                .get_catalog(&self.catalog_name)? // TODO pass in this guy
+                .get_catalog(&self.catalog_name)?
                 .get_table(
                     tenant_id.as_str(),
                     self.arg_database_name.as_str(),

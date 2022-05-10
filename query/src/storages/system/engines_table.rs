@@ -21,6 +21,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::AsyncOneBlockSystemTable;
 use crate::storages::system::table::AsyncSystemTable;
@@ -40,7 +41,7 @@ impl AsyncSystemTable for EnginesTable {
 
     async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         // TODO passin catalog name
-        let table_engine_descriptors = ctx.get_catalog("default")?.get_table_engines();
+        let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {

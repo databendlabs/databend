@@ -27,3 +27,4 @@ hive-it = []
 thrift = "0.15"
 
 [build-dependencies]
+which = "4.2"
