@@ -1801,7 +1801,6 @@ dependencies = [
  "futures",
  "headers",
  "http",
- "hyper",
  "itertools",
  "jwt-simple",
  "jwtk",
