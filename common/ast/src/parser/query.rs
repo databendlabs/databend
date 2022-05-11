@@ -227,7 +227,7 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
         rule! {
             ON ~ #expr
         },
-        |(_, expr)| JoinCondition::On(expr),
+        |(_, expr)| JoinCondition::On(Box::new(expr)),
     );
     let join_condition_using = map(
         rule! {

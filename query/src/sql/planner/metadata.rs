@@ -126,9 +126,9 @@ impl Metadata {
         match expr {
             Expr::ColumnRef { column, .. } => Ok(column.name.clone()),
 
-            Expr::Literal(literal) => Ok(format!("{}", literal)),
+            Expr::Literal { lit, .. } => Ok(format!("{lit}")),
 
-            Expr::CountAll => Ok("count(*)".to_string()),
+            Expr::CountAll { .. } => Ok("count(*)".to_string()),
 
             Expr::FunctionCall {
                 name,
@@ -155,13 +155,15 @@ impl Metadata {
                 })
             }
 
-            Expr::IsNull { expr, not } => Ok(format!(
+            Expr::IsNull { expr, not, .. } => Ok(format!(
                 "{} IS {}NULL",
                 expr,
                 if *not { "NOT " } else { "" }
             )),
 
-            Expr::InList { expr, list, not } => {
+            Expr::InList {
+                expr, list, not, ..
+            } => {
                 let mut w = vec![];
                 write!(&mut w, "{} {}IN (", expr, if *not { "NOT " } else { "" })?;
                 for (i, expr) in list.iter().enumerate() {
@@ -180,6 +182,7 @@ impl Metadata {
                 low,
                 high,
                 not,
+                ..
             } => Ok(format!(
                 "{} {}BETWEEN {} AND {}",
                 expr,
@@ -188,9 +191,11 @@ impl Metadata {
                 high
             )),
 
-            Expr::BinaryOp { op, left, right } => Ok(format!("{} {} {}", left, op, right)),
+            Expr::BinaryOp {
+                op, left, right, ..
+            } => Ok(format!("{} {} {}", left, op, right)),
 
-            Expr::UnaryOp { op, expr } => Ok(format!("{} {}", op, expr)),
+            Expr::UnaryOp { op, expr, .. } => Ok(format!("{} {}", op, expr)),
 
             Expr::Cast {
                 expr, target_type, ..
@@ -200,6 +205,7 @@ impl Metadata {
                 expr,
                 substring_from,
                 substring_for,
+                ..
             } => Ok(format!(
                 "SUBSTRING({}{}{})",
                 expr,
@@ -266,5 +272,5 @@ pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) ->
         && !distinct
         && args
             .iter()
-            .all(|expr| matches!(expr, Expr::Literal(literal) if *literal!=Literal::Null))
+            .all(|expr| matches!(expr, Expr::Literal{lit,..} if *lit!=Literal::Null))
 }

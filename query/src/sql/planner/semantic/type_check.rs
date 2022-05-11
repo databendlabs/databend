@@ -79,6 +79,7 @@ impl<'a> TypeChecker<'a> {
                 database: _,
                 table,
                 column,
+                ..
             } => {
                 let column = self
                     .bind_context
@@ -88,7 +89,7 @@ impl<'a> TypeChecker<'a> {
                 Ok((BoundColumnRef { column }.into(), data_type))
             }
 
-            Expr::IsNull { expr, not } => {
+            Expr::IsNull { expr, not, .. } => {
                 let func_name = if *not {
                     "is_not_null".to_string()
                 } else {
@@ -99,7 +100,9 @@ impl<'a> TypeChecker<'a> {
                     .await
             }
 
-            Expr::InList { expr, list, not } => {
+            Expr::InList {
+                expr, list, not, ..
+            } => {
                 let func_name = if *not {
                     "not_in".to_string()
                 } else {
@@ -119,6 +122,7 @@ impl<'a> TypeChecker<'a> {
                 low,
                 high,
                 not,
+                ..
             } => {
                 if !*not {
                     // Rewrite `expr BETWEEN low AND high`
@@ -157,12 +161,16 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::BinaryOp { op, left, right } => {
+            Expr::BinaryOp {
+                op, left, right, ..
+            } => {
                 self.resolve_binary_op(op, &**left, &**right, required_type)
                     .await
             }
 
-            Expr::UnaryOp { op, expr } => self.resolve_unary_op(op, &**expr, required_type).await,
+            Expr::UnaryOp { op, expr, .. } => {
+                self.resolve_unary_op(op, &**expr, required_type).await
+            }
 
             Expr::Cast {
                 expr, target_type, ..
@@ -188,6 +196,7 @@ impl<'a> TypeChecker<'a> {
                 expr,
                 substring_from,
                 substring_for,
+                ..
             } => {
                 let mut arguments = vec![&**expr];
                 match (substring_from, substring_for) {
@@ -205,8 +214,8 @@ impl<'a> TypeChecker<'a> {
                     .await
             }
 
-            Expr::Literal(literal) => {
-                let value = self.parse_literal(literal, required_type)?;
+            Expr::Literal { lit, .. } => {
+                let value = self.parse_literal(lit, required_type)?;
                 let data_type = value.data_type();
                 Ok((ConstantExpr { value }.into(), data_type))
             }
@@ -216,6 +225,7 @@ impl<'a> TypeChecker<'a> {
                 name,
                 args,
                 params,
+                ..
             } => {
                 let args: Vec<&Expr> = args.iter().collect();
                 let func_name = name.name.as_str();
@@ -267,7 +277,7 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::CountAll => {
+            Expr::CountAll { .. } => {
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
 
                 Ok((
@@ -283,7 +293,7 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Subquery(subquery) => self.resolve_subquery(subquery, false, None).await,
+            Expr::Subquery { subquery, .. } => self.resolve_subquery(subquery, false, None).await,
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",

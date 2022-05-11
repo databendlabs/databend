@@ -221,7 +221,7 @@ pub enum ExprElement<'a> {
         trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
     },
     /// A literal value, such as string, number, date or NULL
-    Literal(Literal),
+    Literal { lit: Literal },
     /// `Count(*)` expression
     CountAll,
     /// `(foo, bar)`
@@ -361,7 +361,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 expr,
                 trim_where,
             },
-            ExprElement::Literal(lit) => Expr::Literal {
+            ExprElement::Literal { lit } => Expr::Literal {
                 span: elem.span.0,
                 lit,
             },
@@ -722,7 +722,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
-    let literal = map(literal, ExprElement::Literal);
+    let literal = map(literal, |lit| ExprElement::Literal { lit });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
 
     let (rest, (span, elem)) = consumed(alt((
