@@ -150,7 +150,7 @@ fn test_array_get_function() -> Result<()> {
                 ]),
                 Series::from_data(vec![0_u32, 0, 0]),
             ],
-            expect: Series::from_data(vec![Some(1_i64), Some(4_i64), Some(7_i64)]),
+            expect: Series::from_data(vec![1_i64, 4_i64, 7_i64]),
             error: "",
         },
         ScalarFunctionTest {
@@ -175,7 +175,7 @@ fn test_array_get_function() -> Result<()> {
                 ]),
                 Series::from_data(vec![0_u32, 0, 0]),
             ],
-            expect: Series::from_data(vec![Some("a1"), Some("b1"), Some("c1")]),
+            expect: Series::from_data(vec!["a1", "b1", "c1"]),
             error: "",
         },
         ScalarFunctionTest {
@@ -188,7 +188,7 @@ fn test_array_get_function() -> Result<()> {
                 ]),
                 Series::from_data(vec![3_u32, 3, 3]),
             ],
-            expect: Series::from_data(vec![None::<&str>]),
+            expect: Series::from_data(vec![1]),
             error: "Index out of array column bounds: the len is 3 but the index is 3",
         },
         ScalarFunctionTest {
@@ -201,7 +201,7 @@ fn test_array_get_function() -> Result<()> {
                 ]),
                 Series::from_data(vec!["a", "a", "a"]),
             ],
-            expect: Series::from_data(vec![None::<&str>]),
+            expect: Series::from_data(vec![1]),
             error: "Invalid argument types for function 'GET': (Array, String)",
         },
     ];
