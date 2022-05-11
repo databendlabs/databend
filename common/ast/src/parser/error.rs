@@ -173,7 +173,7 @@ impl<'a> DisplayError for Token<'a> {
     }
 }
 
-impl<'a, 'b> DisplayError for &'b [Token<'a>] {
+impl<'a> DisplayError for &'a [Token<'a>] {
     type Message = String;
 
     fn display_error(&self, message: String) -> String {

@@ -14,10 +14,10 @@
 
 use itertools::Itertools;
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
-use nom::Offset as _;
 use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
@@ -146,8 +146,8 @@ fn map_pratt_error<'a>(
 
 #[derive(Debug, Clone)]
 pub struct WithSpan<'a> {
-    elem: ExprElement<'a>,
     span: Input<'a>,
+    elem: ExprElement<'a>,
 }
 
 /// A 'flattened' AST of expressions.
@@ -242,9 +242,9 @@ pub enum ExprElement<'a> {
         else_result: Option<Box<Expr<'a>>>,
     },
     /// `EXISTS` expression
-    Exists(Query<'a>),
+    Exists { subquery: Query<'a> },
     /// Scalar subquery, which will only return a single row with a single column.
-    Subquery(Query<'a>),
+    Subquery { subquery: Query<'a> },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess { accessor: MapAccessor<'a> },
     /// An expression between parentheses
@@ -317,21 +317,32 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 table,
                 column,
             } => Expr::ColumnRef {
+                span: elem.span.0,
                 database,
                 table,
                 column,
             },
             ExprElement::Cast { expr, target_type } => Expr::Cast {
+                span: elem.span.0,
                 expr,
                 target_type,
                 pg_style: false,
             },
-            ExprElement::TryCast { expr, target_type } => Expr::TryCast { expr, target_type },
-            ExprElement::Extract { field, expr } => Expr::Extract { field, expr },
+            ExprElement::TryCast { expr, target_type } => Expr::TryCast {
+                span: elem.span.0,
+                expr,
+                target_type,
+            },
+            ExprElement::Extract { field, expr } => Expr::Extract {
+                span: elem.span.0,
+                field,
+                expr,
+            },
             ExprElement::Position {
                 substr_expr,
                 str_expr,
             } => Expr::Position {
+                span: elem.span.0,
                 substr_expr,
                 str_expr,
             },
@@ -340,20 +351,32 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 substring_from,
                 substring_for,
             } => Expr::Substring {
+                span: elem.span.0,
                 expr,
                 substring_from,
                 substring_for,
             },
-            ExprElement::Trim { expr, trim_where } => Expr::Trim { expr, trim_where },
-            ExprElement::Literal(lit) => Expr::Literal(lit),
-            ExprElement::CountAll => Expr::CountAll,
-            ExprElement::Tuple { exprs } => Expr::Tuple { exprs },
+            ExprElement::Trim { expr, trim_where } => Expr::Trim {
+                span: elem.span.0,
+                expr,
+                trim_where,
+            },
+            ExprElement::Literal(lit) => Expr::Literal {
+                span: elem.span.0,
+                lit,
+            },
+            ExprElement::CountAll => Expr::CountAll { span: elem.span.0 },
+            ExprElement::Tuple { exprs } => Expr::Tuple {
+                span: elem.span.0,
+                exprs,
+            },
             ExprElement::FunctionCall {
                 distinct,
                 name,
                 args,
                 params,
             } => Expr::FunctionCall {
+                span: elem.span.0,
                 distinct,
                 name,
                 args,
@@ -365,13 +388,20 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 results,
                 else_result,
             } => Expr::Case {
+                span: elem.span.0,
                 operand,
                 conditions,
                 results,
                 else_result,
             },
-            ExprElement::Exists(subquery) => Expr::Exists(Box::new(subquery)),
-            ExprElement::Subquery(subquery) => Expr::Subquery(Box::new(subquery)),
+            ExprElement::Exists { subquery } => Expr::Exists {
+                span: elem.span.0,
+                subquery: Box::new(subquery),
+            },
+            ExprElement::Subquery { subquery } => Expr::Subquery {
+                span: elem.span.0,
+                subquery: Box::new(subquery),
+            },
             ExprElement::Group(expr) => expr,
             _ => unreachable!(),
         };
@@ -386,6 +416,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
+                span: elem.span.0,
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
@@ -398,6 +429,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
+                span: elem.span.0,
                 op,
                 expr: Box::new(rhs),
             },
@@ -409,30 +441,36 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     fn postfix(&mut self, lhs: Expr<'a>, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 accessor,
             },
             ExprElement::IsNull { not } => Expr::IsNull {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 not,
             },
             ExprElement::InList { list, not } => Expr::InList {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 list,
                 not,
             },
             ExprElement::InSubquery { subquery, not } => Expr::InSubquery {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 subquery,
                 not,
             },
             ExprElement::Between { low, high, not } => Expr::Between {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 low,
                 high,
                 not,
             },
             ExprElement::PgCast { target_type } => Expr::Cast {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,
@@ -664,7 +702,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let exists = map(
         rule! { EXISTS ~ ^"(" ~ ^#query ~ ^")" },
-        |(_, _, subquery, _)| ExprElement::Exists(subquery),
+        |(_, _, subquery, _)| ExprElement::Exists { subquery },
     );
     let subquery = map(
         rule! {
@@ -672,7 +710,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             ~ #query
             ~ ^")"
         },
-        |(_, subquery, _)| ExprElement::Subquery(subquery),
+        |(_, subquery, _)| ExprElement::Subquery { subquery },
     );
     let group = map(
         rule! {
@@ -687,7 +725,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let literal = map(literal, ExprElement::Literal);
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
 
-    let (rest, elem) = alt((
+    let (rest, (span, elem)) = consumed(alt((
         rule! (
             #is_null : "`... IS [NOT] NULL`"
             | #in_list : "`[NOT] IN (<expr>, ...)`"
@@ -716,12 +754,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #group
             | #column_ref : "<column>"
         ),
-    ))(i)?;
+    )))(i)?;
 
-    let offset = i.offset(&rest);
-    let span = Input(&i.0[..offset], i.1);
-
-    Ok((rest, WithSpan { elem, span }))
+    Ok((rest, WithSpan { span, elem }))
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
