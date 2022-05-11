@@ -24,7 +24,7 @@ use thrift::transport::TTcpChannel;
 #[test]
 fn it_works() {
     let hms_service_address =
-        std::env::var("HMS_SERVER_ADDRESS").unwrap_or("127.0.0.1:9083".to_owned());
+        std::env::var("HMS_SERVER_ADDRESS").unwrap_or_else(|_| "127.0.0.1:9083".to_owned());
     let mut c = TTcpChannel::new();
     c.open(hms_service_address).unwrap();
     let (i_chan, o_chan) = c.split().unwrap();

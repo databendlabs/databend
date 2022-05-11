@@ -98,7 +98,6 @@ pub fn parse_stage_storage(
             "s3" => {
                 let cfg = S3StorageConfig {
                     bucket,
-                    root: path.clone(),
                     access_key_id: credential_options
                         .get("aws_key_id")
                         .cloned()

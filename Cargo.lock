@@ -1273,6 +1273,7 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-configs",
  "common-datavalues",
  "common-meta-types",
  "common-protos",

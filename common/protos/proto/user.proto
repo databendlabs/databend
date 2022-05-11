@@ -17,6 +17,7 @@ syntax = "proto3";
 package databend_proto;
 
 import "datatype.proto";
+import "config.proto";
 
 message AuthInfo {
   uint64 ver = 100;
@@ -106,17 +107,8 @@ message UserStageInfo {
     External = 1;
   }
 
-  message StageS3Storage {
-    // `example-bucket` in `s3://example-bucket/path/to/object`
-    string bucket = 1;
-    string path = 2;
-    string credentials_aws_key_id = 3;
-    string credentials_aws_secret_key = 4;
-    string encryption_master_key = 5;
-  }
-
   message StageStorage {
-    oneof storage { StageS3Storage s3 = 1; }
+    oneof storage { S3StorageConfig s3 = 1; }
   }
 
   message StageParams { StageStorage storage = 1; }
