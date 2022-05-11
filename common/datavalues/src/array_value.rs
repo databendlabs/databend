@@ -31,6 +31,13 @@ impl ArrayValue {
     pub fn new(values: Vec<DataValue>) -> Self {
         Self { values }
     }
+
+    pub fn inner_type(&self) -> Option<DataTypeImpl> {
+        if let Some(value) = self.values.get(0) {
+            return Some(value.max_data_type());
+        }
+        None
+    }
 }
 
 impl From<DataValue> for ArrayValue {

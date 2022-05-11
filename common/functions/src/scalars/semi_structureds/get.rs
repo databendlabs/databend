@@ -22,6 +22,7 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
+use crate::scalars::semi_structureds::array_get::ArrayGetFunction;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -42,6 +43,10 @@ impl<const BY_PATH: bool, const IGNORE_CASE: bool> GetFunctionImpl<BY_PATH, IGNO
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
         let data_type = args[0];
         let path_type = args[1];
+
+        if data_type.data_type_id().is_array() {
+            return ArrayGetFunction::try_create(display_name, args);
+        }
 
         if (IGNORE_CASE
             && (!data_type.data_type_id().is_variant_or_object()
