@@ -165,7 +165,7 @@ pub enum JoinOperator {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinCondition<'a> {
-    On(Expr<'a>),
+    On(Box<Expr<'a>>),
     Using(Vec<Identifier<'a>>),
     Natural,
     None,
