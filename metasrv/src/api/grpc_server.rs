@@ -98,13 +98,15 @@ impl GrpcServer {
                 return Err(err.into());
             }
         };
-        self.meta_node
-            .add_metasrv_addr(conf.grpc_api_address.clone(), conf.grpc_api_address.clone())
-            .await?;
+
         tracing::info!("gRPC addr: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());
         let grpc_srv = MetaServiceServer::new(grpc_impl);
+
+        // meta_node
+        //     .add_metasrv_addr(conf.grpc_api_address.clone(), conf.grpc_api_address.clone())
+        //     .await;
 
         let j = tokio::spawn(
             async move {
@@ -120,8 +122,6 @@ impl GrpcServer {
                     .await;
 
                 // gRPC server quit. Starting to shutdown meta node.
-
-                meta_node.remove_metasrv_addr(conf.grpc_api_address).await;
 
                 let _ = meta_node.stop().await;
                 let send_fin_res = fin_tx.send(());

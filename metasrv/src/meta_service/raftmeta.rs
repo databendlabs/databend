@@ -588,6 +588,13 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_meta_addrs(&self) -> MetaResult<Vec<String>> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.state_machine.read().await;
+        sm.get_metasrv_addrs()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
     where
         Request: Into<ForwardRequestBody> + Debug,

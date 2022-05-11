@@ -210,10 +210,9 @@ impl MetaService for MetaServiceImpl {
         _request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
         let meta_node = &self.action_handler.meta_node;
-        let nodes = meta_node.get_nodes().await.map_err(|e| {
+        let members = meta_node.get_meta_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
         })?;
-        let members = nodes.iter().map(|n| n.endpoint.clone().into()).collect();
         Ok(Response::new(MemberListReply { data: members }))
     }
 }

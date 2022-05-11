@@ -24,7 +24,6 @@ use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::sync::oneshot::Receiver;
 use common_base::base::tokio::sync::oneshot::Sender;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::tokio::time;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_exception::Result;
@@ -193,11 +192,13 @@ impl MetaGrpcClient {
         MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
         MetaError,
     > {
-        let eps = self.endpoints.read().await;
-        if (*eps).is_empty() {
-            return Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
-        }
-        let channel = self.conn_pool.get(&*eps).await?;
+        let channel = {
+            let eps = self.endpoints.read().await;
+            if (*eps).is_empty() {
+                return Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
+            }
+            self.conn_pool.get(&*eps).await?
+        };
         tracing::info!("connecting with channel: {:?}", channel);
 
         let mut client = MetaServiceClient::new(channel.clone());
@@ -231,7 +232,6 @@ impl MetaGrpcClient {
             (*eps).clone()
         };
         let channel = self.conn_pool.get(&endpoints).await?;
-        // let channel = Channel::balance_list(channel_eps.into_iter());
         tracing::info!("connecting with channel: {:?}", channel);
 
         let mut client = MetaServiceClient::new(channel.clone());
@@ -251,8 +251,13 @@ impl MetaGrpcClient {
                 _ = &mut cancel_rx => {
                     return;
                 }
-                _ = tokio::time::sleep(time::Duration::from_secs(10)) => {
-                    todo!();
+                _ = tokio::time::sleep(Duration::from_secs(10)) => {
+                    // let r = client.sync_endpoints();
+                    //
+                    // if let Err(e) = r.await {
+                    //     tracing::warn!("auto sync endpoints failed: {:?}", e);
+                    // }
+                    todo!()
                 }
             }
         }

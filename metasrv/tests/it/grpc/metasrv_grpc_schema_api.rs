@@ -82,7 +82,7 @@ async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     SchemaApiTestSuite {}.database_rename(&client).await
 }

@@ -348,12 +348,12 @@ impl StateMachine {
     ) -> MetaStorageResult<AppliedState> {
         let sm_metasrv_addrs = txn_tree.key_space::<MetaSrvAddrs>();
 
-        let prev = sm_metasrv_addrs.get(metasrv_name.as_ref())?;
+        let prev = sm_metasrv_addrs.get(metasrv_name)?;
         if prev.is_some() {
             Ok((prev, None).into())
         } else {
             sm_metasrv_addrs.insert(metasrv_name, addr)?;
-            tracing::info!("applied AddMetaSrvAddr: {}={}", metasrv_name., addr);
+            tracing::info!("applied AddMetaSrvAddr: {}={}", metasrv_name, addr);
             Ok((prev, Some(addr.to_string())).into())
         }
     }
@@ -838,6 +838,14 @@ impl StateMachine {
         }
     }
 
+    pub fn get_metasrv_addrs(&self) -> MetaResult<Vec<String>> {
+        let sm_nodes = self.metasrv_addrs();
+        match sm_nodes.range_values(..) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
         seq_value.and_then(Self::unexpired)
     }
@@ -882,6 +890,10 @@ impl StateMachine {
     }
 
     pub fn nodes(&self) -> AsKeySpace<Nodes> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn metasrv_addrs(&self) -> AsKeySpace<MetaSrvAddrs> {
         self.sm_tree.key_space()
     }
 
