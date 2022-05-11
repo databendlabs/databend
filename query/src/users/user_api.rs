@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_management::RoleApi;
 use common_management::RoleMgr;
-use common_management::SettingApi;
-use common_management::SettingMgr;
 use common_management::StageApi;
 use common_management::StageMgr;
 use common_management::UdfApi;
@@ -57,9 +55,5 @@ impl UserApiProvider {
 
     pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
         Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
-    }
-
-    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
-        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
     }
 }
