@@ -707,6 +707,38 @@ impl MetaNode {
         Ok(resp)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn add_metasrv_addr(
+        &self,
+        metasrv_name: String,
+        metasrv_addr: String,
+    ) -> Result<AppliedState, MetaError> {
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::AddMetaSrvAddr {
+                    metasrv_name,
+                    metasrv_addr,
+                },
+            })
+            .await?;
+        Ok(resp)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_metasrv_addr(
+        &self,
+        metasrv_name: String,
+    ) -> Result<AppliedState, MetaError> {
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::RemoveMetaSrvAddr { metasrv_name },
+            })
+            .await?;
+        Ok(resp)
+    }
+
     pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
         self.sto.state_machine.read().await
     }
