@@ -27,7 +27,6 @@ use common_meta_types::UpsertKVAction;
 use common_meta_types::UserStageInfo;
 
 use crate::serde::deserialize_struct;
-use crate::serde::encode_err;
 use crate::serde::serialize_struct;
 use crate::stage::StageApi;
 
@@ -57,7 +56,11 @@ impl StageMgr {
 impl StageApi for StageMgr {
     async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
         let seq = MatchSeq::Exact(0);
-        let val = Operation::Update(serialize_struct(&info)?);
+        let val = Operation::Update(serialize_struct(
+            &info,
+            ErrorCode::IllegalUserStageFormat,
+            || "",
+        )?);
         let key = format!(
             "{}/{}",
             self.stage_prefix,
@@ -88,8 +91,8 @@ impl StageApi for StageMgr {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
-                seq.unwrap(),
-                deserialize_struct(&seq_value.data).map_err(encode_err)?,
+                seq_value.seq,
+                deserialize_struct(&seq_value.data, ErrorCode::IllegalUserStageFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
         }
@@ -100,7 +103,8 @@ impl StageApi for StageMgr {
 
         let mut stage_infos = Vec::with_capacity(values.len());
         for (_, value) in values {
-            let stage_info = deserialize_struct(&value.data).map_err(encode_err)?;
+            let stage_info =
+                deserialize_struct(&value.data, ErrorCode::IllegalUserStageFormat, || "")?;
             stage_infos.push(stage_info);
         }
         Ok(stage_infos)

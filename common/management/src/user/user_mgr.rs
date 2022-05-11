@@ -32,7 +32,6 @@ use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
 use crate::serde::deserialize_struct;
-use crate::serde::encode_err;
 use crate::serde::serialize_struct;
 use crate::user::user_api::UserApi;
 
@@ -64,7 +63,7 @@ impl UserMgr {
     ) -> common_exception::Result<u64> {
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
-        let value = serialize_struct(user_info)?;
+        let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let match_seq = match seq {
             None => MatchSeq::GE(1),
@@ -96,7 +95,7 @@ impl UserApi for UserMgr {
         let match_seq = MatchSeq::Exact(0);
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
-        let value = serialize_struct(&user_info)?;
+        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = self.kv_api.clone();
         let upsert_kv = kv_api.upsert_kv(UpsertKVAction::new(
@@ -124,8 +123,8 @@ impl UserApi for UserMgr {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(SeqV::new(
-                seq.unwrap(),
-                deserialize_struct(&seq_value.data).map_err(encode_err)?,
+                seq_value.seq,
+                deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
             )),
             Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
         }
@@ -137,7 +136,7 @@ impl UserApi for UserMgr {
 
         let mut r = vec![];
         for (_key, val) in values {
-            let u = deserialize_struct(&val.data).map_err(encode_err)?;
+            let u = deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?;
 
             r.push(SeqV::new(val.seq, u));
         }

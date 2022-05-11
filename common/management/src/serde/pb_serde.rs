@@ -12,32 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyerror::AnyError;
+use std::fmt::Display;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::MetaError;
+use common_exception::ToErrorCode;
 use common_proto_conv::FromToProto;
 
-pub fn encode_err<E: std::error::Error + 'static>(e: E) -> ErrorCode {
-    MetaError::EncodeError(AnyError::new(&e)).into()
-}
-
-pub fn serialize_struct<PB: common_protos::prost::Message>(
+pub fn serialize_struct<PB: common_protos::prost::Message, ErrFn, CtxFn, D>(
     value: &impl FromToProto<PB>,
-) -> Result<Vec<u8>> {
-    let p = value.to_pb().map_err(encode_err)?;
+    err_code_fn: ErrFn,
+    context_fn: CtxFn,
+) -> Result<Vec<u8>>
+where
+    ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
+    D: Display,
+    CtxFn: FnOnce() -> D + std::marker::Copy,
+{
+    let p = value.to_pb().map_err_to_code(err_code_fn, context_fn)?;
     let mut buf = vec![];
-    common_protos::prost::Message::encode(&p, &mut buf).map_err(encode_err)?;
+    common_protos::prost::Message::encode(&p, &mut buf).map_err_to_code(err_code_fn, context_fn)?;
     Ok(buf)
 }
 
-pub fn deserialize_struct<PB, T>(buf: &[u8]) -> Result<T>
+pub fn deserialize_struct<PB, T, ErrFn, CtxFn, D>(
+    buf: &[u8],
+    err_code_fn: ErrFn,
+    context_fn: CtxFn,
+) -> Result<T>
 where
     PB: common_protos::prost::Message + Default,
     T: FromToProto<PB>,
+    ErrFn: FnOnce(String) -> ErrorCode + std::marker::Copy,
+    D: Display,
+    CtxFn: FnOnce() -> D + std::marker::Copy,
 {
-    let p: PB = common_protos::prost::Message::decode(buf).map_err(encode_err)?;
-    let v: T = FromToProto::from_pb(p).map_err(encode_err)?;
+    let p: PB =
+        common_protos::prost::Message::decode(buf).map_err_to_code(err_code_fn, context_fn)?;
+    let v: T = FromToProto::from_pb(p).map_err_to_code(err_code_fn, context_fn)?;
 
     Ok(v)
 }

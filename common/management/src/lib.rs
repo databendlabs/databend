@@ -24,6 +24,8 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use role::RoleApi;
 pub use role::RoleMgr;
+pub use serde::deserialize_struct;
+pub use serde::serialize_struct;
 pub use setting::SettingApi;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
