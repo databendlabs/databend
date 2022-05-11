@@ -28,6 +28,7 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -419,6 +420,120 @@ impl SchemaApiTestSuite {
             let want: Vec<u64> = vec![db_id_3];
             let got = dbs.iter().map(|x| x.ident.db_id).collect::<Vec<_>>();
             assert_eq!(want, got)
+        }
+
+        Ok(())
+    }
+
+    pub async fn database_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let db2_name = "db2";
+        let new_db_name = "db3";
+
+        tracing::info!("--- rename not exists db1 to not exists db2");
+        {
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                new_db_name: new_db_name.to_string(),
+            };
+
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(res.unwrap_err()).code()
+            );
+        }
+
+        tracing::info!("--- prepare db1 and db2");
+        {
+            // prepare db2
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
+            assert_eq!(1, res.db_id);
+
+            tracing::info!("--- rename not exists db4 to exists db1");
+            {
+                let req = RenameDatabaseReq {
+                    if_exists: false,
+                    name_ident: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: "db4".to_string(),
+                    },
+                    new_db_name: db_name.to_string(),
+                };
+
+                let res = mt.rename_database(req).await;
+                tracing::info!("rename database res: {:?}", res);
+                assert!(res.is_err());
+                assert_eq!(
+                    ErrorCode::UnknownDatabase("").code(),
+                    ErrorCode::from(res.unwrap_err()).code()
+                );
+            }
+
+            // prepare db2
+            let res = self.create_database(mt, tenant, "db2", "eng1").await?;
+            assert!(res.db_id > 1);
+        }
+
+        tracing::info!("--- rename exists db db1 to exists db db2");
+        {
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                new_db_name: db2_name.to_string(),
+            };
+
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::DatabaseAlreadyExists("").code(),
+                ErrorCode::from(res.unwrap_err()).code()
+            );
+        }
+
+        tracing::info!("--- rename exists db db1 to not exists mutable db");
+        {
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+
+                new_db_name: new_db_name.to_string(),
+            };
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let res = mt
+                .get_database(GetDatabaseReq::new(tenant, new_db_name))
+                .await;
+            tracing::debug!("get present database res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.ident.db_id, "db3 id is 1");
+            assert_eq!("db3".to_string(), res.name_ident.db_name, "db3.db is db3");
+
+            tracing::info!("--- get old database after rename");
+            {
+                let res = mt.get_database(GetDatabaseReq::new(tenant, db_name)).await;
+                let err = res.err().unwrap();
+                assert_eq!(
+                    ErrorCode::UnknownDatabase("").code(),
+                    ErrorCode::from(err).code()
+                );
+            }
         }
 
         Ok(())

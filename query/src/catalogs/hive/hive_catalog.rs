@@ -91,6 +91,12 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot rename database in HIVE catalog",
+        ))
+    }
+
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let res: Arc<dyn Table> = Arc::new(HiveTable::create(table_info.clone()));
         Ok(res)

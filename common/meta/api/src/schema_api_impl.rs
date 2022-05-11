@@ -44,6 +44,8 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::Operation;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableAlreadyExists;
@@ -187,6 +189,80 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 if succ {
                     return Ok(DropDatabaseReply {});
+                }
+            }
+        }
+    }
+
+    async fn rename_database(
+        &self,
+        req: RenameDatabaseReq,
+    ) -> Result<RenameDatabaseReply, MetaError> {
+        let tenant_dbname = &req.name_ident;
+        let tenant_newdbname = DatabaseNameIdent {
+            tenant: tenant_dbname.tenant.clone(),
+            db_name: req.new_db_name.clone(),
+        };
+
+        loop {
+            // get old db, not exists return err
+            let res = get_db_or_err(
+                self,
+                tenant_dbname,
+                format!("rename_database: {}", &tenant_dbname),
+            )
+            .await;
+
+            let (old_db_id_seq, old_db_id, _, _) = match res {
+                Ok(x) => x,
+                Err(e) => {
+                    if let MetaError::AppError(AppError::UnknownDatabase(_)) = e {
+                        if req.if_exists {
+                            return Ok(RenameDatabaseReply {});
+                        }
+                    }
+                    return Err(e);
+                }
+            };
+
+            tracing::debug!(
+                old_db_id,
+                tenant_dbname = debug(&tenant_dbname),
+                "rename_database"
+            );
+
+            // get new db, exists return err
+            let (db_id_seq, _db_id) = get_id_value(self, &tenant_newdbname).await?;
+            db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
+
+            // rename database
+            {
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        // Prevent renaming or deleting in other threads.
+                        txn_cond_seq(tenant_dbname, Eq, old_db_id_seq)?,
+                        txn_cond_seq(&tenant_newdbname, Eq, 0)?,
+                    ],
+                    if_then: vec![
+                        txn_op_del(tenant_dbname)?, // del old_db_name
+                        //Renaming db should not affect the seq of db_meta. Just modify db name.
+                        txn_op_put(&tenant_newdbname, serialize_id(old_db_id)?)?, // (tenant, new_db_name) -> old_db_id
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                tracing::debug!(
+                    name = debug(&tenant_dbname),
+                    to = debug(&tenant_newdbname),
+                    database_id = debug(&old_db_id),
+                    succ = display(succ),
+                    "rename_database"
+                );
+
+                if succ {
+                    return Ok(RenameDatabaseReply {});
                 }
             }
         }
@@ -817,6 +893,25 @@ fn table_has_to_exist(
         )))
     } else {
         Ok(())
+    }
+}
+
+/// Return OK if a db_id or db_meta does not exist by checking the seq.
+///
+/// Otherwise returns DatabaseAlreadyExists error
+fn db_has_to_not_exist(
+    seq: u64,
+    name_ident: &DatabaseNameIdent,
+    ctx: impl Display,
+) -> Result<(), MetaError> {
+    if seq == 0 {
+        Ok(())
+    } else {
+        tracing::debug!(seq, ?name_ident, "exist");
+
+        Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+            DatabaseAlreadyExists::new(&name_ident.db_name, format!("{}: {}", ctx, name_ident)),
+        )))
     }
 }
 

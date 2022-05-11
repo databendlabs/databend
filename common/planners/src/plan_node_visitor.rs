@@ -57,6 +57,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
@@ -155,6 +156,7 @@ pub trait PlanVisitor {
             PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
+            PlanNode::RenameDatabase(plan) => self.visit_rename_database(plan),
 
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
@@ -318,6 +320,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_drop_database(&mut self, _: &DropDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_rename_database(&mut self, _: &RenameDatabasePlan) -> Result<()> {
         Ok(())
     }
 

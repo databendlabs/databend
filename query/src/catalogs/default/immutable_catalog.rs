@@ -23,6 +23,8 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
@@ -93,6 +95,10 @@ impl Catalog for ImmutableCatalog {
 
     async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
+    }
+
+    async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
+        Err(ErrorCode::UnImplement("Cannot rename system database"))
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
