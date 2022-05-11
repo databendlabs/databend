@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
 use common_ast::parser::error::DisplayError as _;
@@ -52,14 +50,6 @@ pub struct BindContext {
     /// The relational operator in current context
     pub expression: Option<SExpr>,
 
-    /// Aggregation scalar expression
-    pub agg_scalar_exprs: Option<Vec<Scalar>>,
-
-    /// The origin scalar expression of Group by
-    /// For the sql: `SELECT a%3 as a1, count(1) as ct from t GROUP BY a1`;
-    /// The origin scalar expression is `a%3`.
-    pub origin_group_by: Option<HashMap<String, Scalar>>,
-
     /// Order by columnBinding, consider the sql: select sum(a) from t group by a,b order by b;,
     /// Order by requires not just the columns in the selection,
     /// but the columns of the entire table as well as the columns of the selection
@@ -76,8 +66,6 @@ impl BindContext {
             _parent: Some(parent),
             columns: vec![],
             expression: None,
-            agg_scalar_exprs: None,
-            origin_group_by: None,
             order_by_columns: Some(Vec::new()),
         }
     }

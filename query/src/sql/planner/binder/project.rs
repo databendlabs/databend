@@ -19,6 +19,7 @@ use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sql::binder::aggregate::AggregateInfo;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
@@ -75,6 +76,7 @@ impl<'a> Binder {
         &mut self,
         select_list: &[SelectTarget<'a>],
         has_order_by: bool,
+        agg_info: &mut AggregateInfo,
         input_context: &mut BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
@@ -152,7 +154,7 @@ impl<'a> Binder {
             }
         }
         if !origin_group_by.is_empty() {
-            input_context.origin_group_by = Some(origin_group_by);
+            agg_info.origin_group_by = Some(origin_group_by);
         }
         Ok(output_context)
     }
