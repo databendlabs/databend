@@ -228,7 +228,7 @@ impl ExpressionChain {
 
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
-                let func_name = "get_path";
+                let func_name = "get";
                 let func = FunctionFactory::instance().get(func_name, &arg_types2)?;
                 let return_type = func.return_type();
 
