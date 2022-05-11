@@ -101,7 +101,7 @@ impl<'a> Binder {
         // Output of current `SELECT` statement.
 
         let mut output_context = self
-            .normalize_select_list(&stmt.select_list, has_order_by, &input_context)
+            .normalize_select_list(&stmt.select_list, has_order_by, &mut input_context)
             .await?;
 
         self.analyze_aggregate(&output_context, &mut input_context)?;

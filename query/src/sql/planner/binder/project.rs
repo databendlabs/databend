@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
@@ -73,13 +75,14 @@ impl<'a> Binder {
         &mut self,
         select_list: &[SelectTarget<'a>],
         has_order_by: bool,
-        input_context: &BindContext,
+        input_context: &mut BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
         if has_order_by {
             output_context.order_by_columns = Some(input_context.columns.clone());
         }
         output_context.expression = input_context.expression.clone();
+        let mut origin_group_by = HashMap::new();
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName(names) => {
@@ -128,6 +131,11 @@ impl<'a> Binder {
                         data_type,
                         scalar: Some(Box::new(bound_expr.clone())),
                     };
+                    if alias.is_some() {
+                        input_context.columns.push(column_binding.clone());
+                        origin_group_by
+                            .insert(alias.as_ref().unwrap().name.clone(), bound_expr.clone());
+                    }
                     if has_order_by
                         && !matches!(bound_expr, Scalar::BoundColumnRef(BoundColumnRef { .. }))
                     {
@@ -143,7 +151,9 @@ impl<'a> Binder {
                 }
             }
         }
-
+        if !origin_group_by.is_empty() {
+            input_context.origin_group_by = Some(origin_group_by);
+        }
         Ok(output_context)
     }
 }

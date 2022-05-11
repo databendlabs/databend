@@ -51,6 +51,24 @@ select count(null) from numbers(1000);
 SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
 SELECT max(number) FROM numbers_mt (10) where number > 2;
 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2;
+SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
+
+CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
+INSERT INTO t(a,b, c)  SELECT if (number % 3 = 1, null, number) as a, number + 3 as b, number + 4 as c FROM numbers(10);
+-- nullable(u8)
+SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
+
+-- nullable(u8), nullable(u8)
+SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
+
+-- nullable(u8), u64
+SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
+-- u64, nullable(u8)
+SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
+
+drop table t;
+
 -- Inner join
 select '====INNER_JOIN====';
 create table t(a int);
