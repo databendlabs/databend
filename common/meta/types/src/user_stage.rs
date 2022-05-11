@@ -140,6 +140,7 @@ impl Default for FileFormatOptions {
 pub enum StageStorage {
     // Location is aws s3.
     S3(S3StorageConfig),
+    Azblob,
 }
 
 impl Default for StageStorage {
