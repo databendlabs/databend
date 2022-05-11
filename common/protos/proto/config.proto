@@ -17,6 +17,8 @@ syntax = "proto3";
 package databend_proto;
 
 message S3StorageConfig {
+  uint64 version = 100;
+
   string region = 1;
   string endpoint_url = 2;
   string access_key_id = 3;
