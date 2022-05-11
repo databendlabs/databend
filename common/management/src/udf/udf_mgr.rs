@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_ast::udfs::UDFParser;
 use common_base::base::escape_for_key;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
