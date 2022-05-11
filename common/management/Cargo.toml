@@ -20,7 +20,10 @@ common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
 common-meta-api = { path = "../meta/api" }
 common-meta-types = { path = "../meta/types" }
+common-proto-conv = { path = "../proto-conv" }
+common-protos = { path = "../protos" }
 
+anyerror = "0.1.6"
 async-trait = "0.1.53"
 serde_json = "1.0.79"
 

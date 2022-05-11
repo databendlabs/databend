@@ -12,23 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod role;
-mod serde;
-mod setting;
-mod stage;
-mod udf;
-mod user;
+mod pb_serde;
 
-pub use cluster::ClusterApi;
-pub use cluster::ClusterMgr;
-pub use role::RoleApi;
-pub use role::RoleMgr;
-pub use setting::SettingApi;
-pub use setting::SettingMgr;
-pub use stage::StageApi;
-pub use stage::StageMgr;
-pub use udf::UdfApi;
-pub use udf::UdfMgr;
-pub use user::UserApi;
-pub use user::UserMgr;
+pub use pb_serde::deserialize_struct;
+pub use pb_serde::encode_err;
+pub use pb_serde::serialize_struct;
