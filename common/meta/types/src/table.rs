@@ -146,8 +146,7 @@ pub struct TableMeta {
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub options: BTreeMap<String, String>,
-    // TODO(sundy): Save this as AST format
-    pub order_keys: Option<Vec<u8>>,
+    pub order_keys: Option<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,

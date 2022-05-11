@@ -34,126 +34,126 @@ pub enum Statement<'a> {
         kind: ExplainKind,
         query: Box<Statement<'a>>,
     },
-    Query(Box<Query>),
+    Query(Box<Query<'a>>),
 
     // Databases
     ShowDatabases {
-        limit: Option<ShowLimit>,
+        limit: Option<ShowLimit<'a>>,
     },
     ShowCreateDatabase {
-        database: Identifier,
+        database: Identifier<'a>,
     },
     CreateDatabase {
         if_not_exists: bool,
-        database: Identifier,
+        database: Identifier<'a>,
         engine: Engine,
         options: Vec<SQLProperty>,
     },
     DropDatabase {
         if_exists: bool,
-        database: Identifier,
+        database: Identifier<'a>,
     },
     UseDatabase {
-        database: Identifier,
+        database: Identifier<'a>,
     },
 
     // Tables
     ShowTables {
-        database: Option<Identifier>,
+        database: Option<Identifier<'a>>,
         full: bool,
-        limit: Option<ShowLimit>,
+        limit: Option<ShowLimit<'a>>,
     },
     ShowCreateTable {
-        database: Option<Identifier>,
-        table: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
     },
     ShowTablesStatus {
-        database: Option<Identifier>,
-        limit: Option<ShowLimit>,
+        database: Option<Identifier<'a>>,
+        limit: Option<ShowLimit<'a>>,
     },
     CreateTable {
         if_not_exists: bool,
-        database: Option<Identifier>,
-        table: Identifier,
-        source: Option<CreateTableSource>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        source: Option<CreateTableSource<'a>>,
         engine: Engine,
-        cluster_by: Vec<Expr>,
-        as_query: Option<Box<Query>>,
+        cluster_by: Vec<Expr<'a>>,
+        as_query: Option<Box<Query<'a>>>,
         comment: Option<String>,
     },
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
     Describe {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
     },
     DropTable {
         if_exists: bool,
-        database: Option<Identifier>,
-        table: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
     },
     AlterTable {
         if_exists: bool,
-        database: Option<Identifier>,
-        table: Identifier,
-        action: AlterTableAction,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        action: AlterTableAction<'a>,
     },
     RenameTable {
-        database: Option<Identifier>,
-        table: Identifier,
-        new_table: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        new_table: Identifier<'a>,
     },
     TruncateTable {
-        database: Option<Identifier>,
-        table: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
         purge: bool,
     },
     OptimizeTable {
-        database: Option<Identifier>,
-        table: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
         action: Option<OptimizeTableAction>,
     },
 
     // Views
     CreateView {
         if_not_exists: bool,
-        database: Option<Identifier>,
-        view: Identifier,
-        query: Box<Query>,
+        database: Option<Identifier<'a>>,
+        view: Identifier<'a>,
+        query: Box<Query<'a>>,
     },
     AlterView {
-        database: Option<Identifier>,
-        view: Identifier,
-        query: Box<Query>,
+        database: Option<Identifier<'a>>,
+        view: Identifier<'a>,
+        query: Box<Query<'a>>,
     },
     DropView {
         if_exists: bool,
-        database: Option<Identifier>,
-        view: Identifier,
+        database: Option<Identifier<'a>>,
+        view: Identifier<'a>,
     },
 
     ShowSettings,
     ShowProcessList,
     ShowMetrics,
     ShowFunctions {
-        limit: Option<ShowLimit>,
+        limit: Option<ShowLimit<'a>>,
     },
 
     KillStmt {
         kill_target: KillTarget,
-        object_id: Identifier,
+        object_id: Identifier<'a>,
     },
 
     SetVariable {
-        variable: Identifier,
+        variable: Identifier<'a>,
         value: Literal,
     },
 
     Insert {
-        database: Option<Identifier>,
-        table: Identifier,
-        columns: Vec<Identifier>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        columns: Vec<Identifier<'a>>,
         source: InsertSource<'a>,
         overwrite: bool,
     },
@@ -180,19 +180,19 @@ pub enum Statement<'a> {
     // UDF
     CreateUDF {
         if_not_exists: bool,
-        udf_name: Identifier,
-        parameters: Vec<Identifier>,
-        definition: Box<Expr>,
+        udf_name: Identifier<'a>,
+        parameters: Vec<Identifier<'a>>,
+        definition: Box<Expr<'a>>,
         description: Option<String>,
     },
     DropUDF {
         if_exists: bool,
-        udf_name: Identifier,
+        udf_name: Identifier<'a>,
     },
     AlterUDF {
-        udf_name: Identifier,
-        parameters: Vec<Identifier>,
-        definition: Box<Expr>,
+        udf_name: Identifier<'a>,
+        parameters: Vec<Identifier<'a>>,
+        definition: Box<Expr<'a>>,
         description: Option<String>,
     },
 }
@@ -208,15 +208,15 @@ pub enum ExplainKind {
 pub enum InsertSource<'a> {
     Streaming { format: String },
     Values { values_tokens: &'a [Token<'a>] },
-    Select { query: Box<Query> },
+    Select { query: Box<Query<'a>> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum CreateTableSource {
-    Columns(Vec<ColumnDefinition>),
+pub enum CreateTableSource<'a> {
+    Columns(Vec<ColumnDefinition<'a>>),
     Like {
-        database: Option<Identifier>,
-        table: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
     },
 }
 
@@ -236,22 +236,22 @@ pub struct SQLProperty {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ShowLimit {
+pub enum ShowLimit<'a> {
     Like { pattern: String },
-    Where { selection: Box<Expr> },
+    Where { selection: Box<Expr<'a>> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ColumnDefinition {
-    pub name: Identifier,
+pub struct ColumnDefinition<'a> {
+    pub name: Identifier<'a>,
     pub data_type: TypeName,
     pub nullable: bool,
-    pub default_expr: Option<Box<Expr>>,
+    pub default_expr: Option<Box<Expr<'a>>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AlterTableAction {
-    RenameTable { new_table: Identifier },
+pub enum AlterTableAction<'a> {
+    RenameTable { new_table: Identifier<'a> },
     // TODO(wuzhiguo): AddColumn etc
 }
 
@@ -282,7 +282,7 @@ pub enum RoleOption {
     NoConfigReload,
 }
 
-impl Display for ShowLimit {
+impl<'a> Display for ShowLimit<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ShowLimit::Like { pattern } => write!(f, "LIKE {pattern}"),
@@ -291,7 +291,7 @@ impl Display for ShowLimit {
     }
 }
 
-impl Display for ColumnDefinition {
+impl<'a> Display for ColumnDefinition<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {}", self.name, self.data_type)?;
         if self.nullable {

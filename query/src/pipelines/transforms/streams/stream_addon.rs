@@ -29,6 +29,7 @@ use futures::StreamExt;
 
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
 
 /// Add missing column into the block stream
 pub struct AddOnStream {
@@ -55,7 +56,7 @@ impl AddOnStream {
         for f in output_schema.fields() {
             if !input_schema.has_field(f.name()) {
                 if let Some(expr) = f.default_expr() {
-                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                    let expression = PlanParser::parse_expr(expr)?;
                     let expression = Expression::Alias(
                         f.name().to_string(),
                         Box::new(Expression::Cast {

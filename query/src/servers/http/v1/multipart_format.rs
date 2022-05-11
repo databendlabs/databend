@@ -90,7 +90,7 @@ impl MultipartWorker {
                                 }
                                 Ok(sz) => {
                                     if sz != buf.len() {
-                                        buf = buf[..sz].to_vec();
+                                        buf.truncate(sz);
                                     }
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {

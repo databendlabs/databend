@@ -27,7 +27,7 @@ use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
 
-impl Binder {
+impl<'a> Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
     /// If `output_context` can already be satisfied by `input_context`(e.g. `SELECT * FROM t`),
     /// then it won't build a `ProjectPlan`.
@@ -69,10 +69,9 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    #[allow(unreachable_patterns)]
-    pub(super) fn normalize_select_list(
+    pub(super) async fn normalize_select_list(
         &mut self,
-        select_list: &[SelectTarget],
+        select_list: &[SelectTarget<'a>],
         has_order_by: bool,
         input_context: &BindContext,
     ) -> Result<BindContext> {
@@ -90,7 +89,7 @@ impl Binder {
                         match indirection {
                             Indirection::Identifier(ident) => {
                                 let mut column_binding =
-                                    input_context.resolve_column(None, ident.name.clone())?;
+                                    input_context.resolve_column(None, ident)?;
                                 column_binding.column_name = ident.name.clone();
                                 output_context.add_column_binding(column_binding);
                             }
@@ -108,8 +107,8 @@ impl Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let scalar_binder = ScalarBinder::new(input_context);
-                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr)?;
+                    let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
+                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {

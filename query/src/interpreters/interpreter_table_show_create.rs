@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::Expression;
 use common_planners::ShowCreateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -27,6 +26,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::sql::is_internal_opt_key;
+use crate::sql::PlanParser;
 
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -68,7 +68,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             for field in schema.fields().iter() {
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
-                        let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                        let expression = PlanParser::parse_expr(expr)?;
                         format!(" DEFAULT {}", expression.column_name())
                     }
                     None => "".to_string(),
@@ -94,15 +94,8 @@ impl Interpreter for ShowCreateTableInterpreter {
         table_create_sql.push_str(table_engine.as_str());
 
         let table_info = table.get_table_info();
-        if let Some(order) = &table_info.meta.order_keys {
-            let expressions: Vec<Expression> = serde_json::from_slice(order.as_slice())?;
-            let order_keys_str = expressions
-                .iter()
-                .map(|expr| expr.column_name())
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            table_create_sql.push_str(format!(" CLUSTER BY ({})", order_keys_str).as_str());
+        if let Some(order_keys_str) = &table_info.meta.order_keys {
+            table_create_sql.push_str(format!(" CLUSTER BY {}", order_keys_str).as_str());
         }
 
         table_create_sql.push_str({

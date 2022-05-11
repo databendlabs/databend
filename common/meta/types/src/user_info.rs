@@ -97,6 +97,14 @@ pub struct UserOption {
 }
 
 impl UserOption {
+    pub fn new(flags: BitFlags<UserOptionFlag>) -> Self {
+        Self { flags }
+    }
+
+    pub fn flags(&self) -> &BitFlags<UserOptionFlag> {
+        &self.flags
+    }
+
     pub fn set_all_flag(&mut self) {
         self.flags = BitFlags::all();
     }
@@ -116,7 +124,7 @@ impl UserOption {
 
 #[bitflags]
 #[repr(u64)]
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum UserOptionFlag {
     TenantSetting = 1 << 0,
     ConfigReload = 1 << 1,

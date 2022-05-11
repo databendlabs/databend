@@ -16,9 +16,9 @@ use super::NumberOperator;
 use super::String2NumberFunction;
 
 #[derive(Clone, Default)]
-pub struct Length {}
+pub struct StringLength {}
 
-impl NumberOperator<u64> for Length {
+impl NumberOperator<u64> for StringLength {
     const IS_DETERMINISTIC: bool = true;
     const MAYBE_MONOTONIC: bool = false;
 
@@ -27,4 +27,4 @@ impl NumberOperator<u64> for Length {
     }
 }
 
-pub type LengthFunction = String2NumberFunction<Length, u64>;
+pub type StringLengthFunction = String2NumberFunction<StringLength, u64>;

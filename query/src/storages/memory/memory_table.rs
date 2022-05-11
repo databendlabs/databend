@@ -263,23 +263,23 @@ impl Table for MemoryTable {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         _catalog_name: &str,
-        _operations: Vec<DataBlock>,
-        _overwrite: bool,
+        operations: Vec<DataBlock>,
+        overwrite: bool,
     ) -> Result<()> {
-        let written_bytes: usize = _operations.iter().map(|b| b.memory_size()).sum();
+        let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
 
-        _ctx.get_dal_context()
+        ctx.get_dal_context()
             .get_metrics()
             .inc_write_bytes(written_bytes);
 
-        if _overwrite {
+        if overwrite {
             let mut blocks = self.blocks.write();
             blocks.clear();
         }
         let mut blocks = self.blocks.write();
-        for block in _operations {
+        for block in operations {
             blocks.push(block);
         }
         Ok(())

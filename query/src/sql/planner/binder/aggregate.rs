@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -26,7 +25,7 @@ use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::Scalar;
 use crate::sql::BindContext;
 
-impl Binder {
+impl<'a> Binder {
     pub(crate) fn analyze_aggregate(
         &self,
         output_context: &BindContext,
@@ -54,7 +53,7 @@ impl Binder {
                 _ => {
                     return Err(ErrorCode::LogicalError(
                         "scalar expr must be Aggregation scalar expr",
-                    ))
+                    ));
                 }
             }
         }
@@ -62,16 +61,16 @@ impl Binder {
         Ok(())
     }
 
-    pub(super) fn bind_group_by(
+    pub(super) async fn bind_group_by(
         &mut self,
-        group_by_expr: &[Expr],
+        group_by_expr: &[Expr<'a>],
         input_context: &mut BindContext,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(input_context);
-        let group_expr = group_by_expr
-            .iter()
-            .map(|expr| scalar_binder.bind_expr(expr))
-            .collect::<Result<Vec<(Scalar, DataTypeImpl)>>>()?;
+        let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
+        let mut group_expr = Vec::with_capacity(group_by_expr.len());
+        for expr in group_by_expr.iter() {
+            group_expr.push(scalar_binder.bind_expr(expr).await?);
+        }
 
         let aggregate_plan = AggregatePlan {
             group_expr: group_expr.into_iter().map(|(scalar, _)| scalar).collect(),

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -25,7 +26,6 @@ use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
-use crate::sql::plans::OrderExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 use crate::sql::Metadata;
@@ -109,22 +109,7 @@ impl<'a> ExpressionBuilder<'a> {
                     pg_style: false,
                 })
             }
-            Scalar::Order(OrderExpr {
-                expr,
-                asc,
-                nulls_first,
-            }) => {
-                let expr = self.build(expr)?;
-                let asc = asc.unwrap_or(true);
-                // NULLS FIRST is the default for DESC order, and NULLS LAST otherwise
-                let nulls_first = nulls_first.unwrap_or(!asc);
-                Ok(Expression::Sort {
-                    expr: Box::new(expr.clone()),
-                    asc,
-                    nulls_first,
-                    origin_expr: Box::new(expr),
-                })
-            }
+            Scalar::SubqueryExpr(_) => Err(ErrorCode::UnImplement("Unsupported subquery expr")),
         }
     }
 
@@ -177,28 +162,23 @@ impl<'a> ExpressionBuilder<'a> {
     // Transform aggregator expression to column expression
     pub(crate) fn normalize_aggr_to_col(&self, expr: Expression) -> Result<Expression> {
         match expr.clone() {
-            Expression::BinaryExpression { left, op, right } => {
-                return Ok(Expression::BinaryExpression {
-                    left: Box::new(self.normalize_aggr_to_col(*left)?),
-                    op,
-                    right: Box::new(self.normalize_aggr_to_col(*right)?),
-                })
-            }
+            Expression::BinaryExpression { left, op, right } => Ok(Expression::BinaryExpression {
+                left: Box::new(self.normalize_aggr_to_col(*left)?),
+                op,
+                right: Box::new(self.normalize_aggr_to_col(*right)?),
+            }),
             Expression::AggregateFunction { .. } => {
                 let col_name = expr.column_name();
-                return Ok(Expression::Column(col_name));
+                Ok(Expression::Column(col_name))
             }
-            Expression::ScalarFunction { op, args } => {
-                return Ok(Expression::ScalarFunction {
-                    op,
-                    args: args
-                        .iter()
-                        .map(|arg| self.normalize_aggr_to_col(arg.clone()))
-                        .collect::<Result<Vec<Expression>>>()?,
-                })
-            }
-            _ => {}
+            Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
+                op,
+                args: args
+                    .iter()
+                    .map(|arg| self.normalize_aggr_to_col(arg.clone()))
+                    .collect::<Result<Vec<Expression>>>()?,
+            }),
+            _ => Ok(expr),
         }
-        Ok(expr)
     }
 }

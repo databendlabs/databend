@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
 use common_ast::ast::Join;
@@ -21,6 +23,7 @@ use common_datavalues::type_coercion::merge_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::sessions::QueryContext;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::binder::scalar_common::split_equivalent_predicate;
 use crate::sql::binder::scalar_common::wrap_cast_if_needed;
@@ -34,12 +37,12 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::BindContext;
 
-impl Binder {
+impl<'a> Binder {
     #[async_recursion]
     pub(super) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
-        join: &Join,
+        join: &Join<'a>,
     ) -> Result<BindContext> {
         let left_child = self.bind_table_reference(&join.left, bind_context).await?;
         let right_child = self.bind_table_reference(&join.right, bind_context).await?;
@@ -55,13 +58,20 @@ impl Binder {
         let mut left_join_conditions: Vec<Scalar> = vec![];
         let mut right_join_conditions: Vec<Scalar> = vec![];
         let mut other_conditions: Vec<Scalar> = vec![];
-        let join_condition_resolver =
-            JoinConditionResolver::new(&left_child, &right_child, &bind_context, &join.condition);
-        join_condition_resolver.resolve(
-            &mut left_join_conditions,
-            &mut right_join_conditions,
-            &mut other_conditions,
-        )?;
+        let join_condition_resolver = JoinConditionResolver::new(
+            self.ctx.clone(),
+            &left_child,
+            &right_child,
+            &bind_context,
+            &join.condition,
+        );
+        join_condition_resolver
+            .resolve(
+                &mut left_join_conditions,
+                &mut right_join_conditions,
+                &mut other_conditions,
+            )
+            .await?;
 
         match &join.op {
             JoinOperator::Inner => {
@@ -126,20 +136,24 @@ impl Binder {
 }
 
 struct JoinConditionResolver<'a> {
+    ctx: Arc<QueryContext>,
+
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a BindContext,
-    join_condition: &'a JoinCondition,
+    join_condition: &'a JoinCondition<'a>,
 }
 
 impl<'a> JoinConditionResolver<'a> {
     pub fn new(
+        ctx: Arc<QueryContext>,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a BindContext,
-        join_condition: &'a JoinCondition,
+        join_condition: &'a JoinCondition<'a>,
     ) -> Self {
         Self {
+            ctx,
             left_context,
             right_context,
             join_context,
@@ -147,7 +161,7 @@ impl<'a> JoinConditionResolver<'a> {
         }
     }
 
-    pub fn resolve(
+    pub async fn resolve(
         &self,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
@@ -160,7 +174,8 @@ impl<'a> JoinConditionResolver<'a> {
                     left_join_conditions,
                     right_join_conditions,
                     other_join_conditions,
-                )?;
+                )
+                .await?;
             }
             JoinCondition::Using(_) => {
                 return Err(ErrorCode::UnImplement("USING clause is not supported yet. Please specify join condition with ON clause."));
@@ -175,15 +190,15 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
-    fn resolve_on(
+    async fn resolve_on(
         &self,
-        condition: &Expr,
+        condition: &Expr<'a>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(self.join_context);
-        let (scalar, _) = scalar_binder.bind_expr(condition)?;
+        let scalar_binder = ScalarBinder::new(self.join_context, self.ctx.clone());
+        let (scalar, _) = scalar_binder.bind_expr(condition).await?;
         let conjunctions = split_conjunctions(&scalar);
 
         for expr in conjunctions.iter() {
@@ -192,12 +207,13 @@ impl<'a> JoinConditionResolver<'a> {
                 left_join_conditions,
                 right_join_conditions,
                 other_join_conditions,
-            )?;
+            )
+            .await?;
         }
         Ok(())
     }
 
-    fn resolve_predicate(
+    async fn resolve_predicate(
         &self,
         predicate: &Scalar,
         left_join_conditions: &mut Vec<Scalar>,

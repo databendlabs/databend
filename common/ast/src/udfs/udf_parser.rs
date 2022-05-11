@@ -35,14 +35,9 @@ pub struct UDFParser {
 }
 
 impl UDFParser {
-    pub async fn parse(
-        &mut self,
-        name: &str,
-        parameters: &[String],
-        definition: &str,
-    ) -> Result<Expr> {
+    pub fn parse(&mut self, name: &str, parameters: &[String], definition: &str) -> Result<Expr> {
         let expr = self.parse_definition(definition)?;
-        self.verify_definition_expr(name, parameters, &expr).await?;
+        self.verify_definition_expr(name, parameters, &expr)?;
         Ok(expr)
     }
 
@@ -64,7 +59,7 @@ impl UDFParser {
         }
     }
 
-    async fn verify_definition_expr(
+    fn verify_definition_expr(
         &mut self,
         name: &str,
         parameters: &[String],
@@ -74,7 +69,7 @@ impl UDFParser {
         expr_params.clear();
         self.name = name.to_string();
 
-        UDFExprTraverser::accept(definition_expr, self).await?;
+        UDFExprTraverser::accept(definition_expr, self)?;
         let expr_params = &self.expr_params;
         let parameters = parameters.iter().cloned().collect::<HashSet<_>>();
         let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
@@ -102,7 +97,7 @@ impl UDFParser {
 
 #[async_trait]
 impl UDFExprVisitor for UDFParser {
-    async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
+    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
             Expr::Identifier(Ident { value, .. }) => {
                 let expr_params = &mut self.expr_params;

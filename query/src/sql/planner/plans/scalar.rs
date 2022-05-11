@@ -22,6 +22,8 @@ use enum_dispatch::enum_dispatch;
 
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::SExpr;
+use crate::sql::BindContext;
 
 #[enum_dispatch]
 pub trait ScalarExpr {
@@ -49,7 +51,7 @@ pub enum Scalar {
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
     Cast(CastExpr),
-    Order(OrderExpr),
+    SubqueryExpr(SubqueryExpr),
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -251,21 +253,26 @@ impl ScalarExpr for CastExpr {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct OrderExpr {
-    pub expr: Box<Scalar>,
-    // Optional `ASC` or `DESC`
-    pub asc: Option<bool>,
-    // Optional `NULLS FIRST` or `NULLS LAST`
-    pub nulls_first: Option<bool>,
+#[derive(Clone, Debug)]
+pub struct SubqueryExpr {
+    pub subquery: SExpr,
+    pub data_type: DataTypeImpl,
+    pub allow_multi_rows: bool,
+    pub output_context: Box<BindContext>,
 }
 
-impl ScalarExpr for OrderExpr {
+impl ScalarExpr for SubqueryExpr {
     fn data_type(&self) -> DataTypeImpl {
-        todo!()
+        self.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
-        self.expr.used_columns()
+        todo!()
+    }
+}
+
+impl PartialEq for SubqueryExpr {
+    fn eq(&self, _other: &Self) -> bool {
+        false
     }
 }

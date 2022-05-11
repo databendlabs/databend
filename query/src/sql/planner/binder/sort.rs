@@ -13,38 +13,35 @@
 // limitations under the License.
 
 use common_ast::ast::OrderByExpr;
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::OrderExpr;
-use crate::sql::plans::Scalar;
-use crate::sql::plans::Scalar::Order;
+use crate::sql::plans::SortItem;
 use crate::sql::plans::SortPlan;
 use crate::sql::BindContext;
 
-impl Binder {
-    pub(super) fn bind_order_by(
+impl<'a> Binder {
+    pub(super) async fn bind_order_by(
         &mut self,
-        order_by: &[OrderByExpr],
+        order_by: &[OrderByExpr<'a>],
         bind_context: &mut BindContext,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(bind_context);
-        let order_by_exprs = order_by
-            .iter()
-            .map(|expr| scalar_binder.bind_expr(&expr.expr))
-            .collect::<Result<Vec<(Scalar, DataTypeImpl)>>>()?;
+        let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
+        let mut order_by_exprs = vec![];
+        for expr in order_by {
+            order_by_exprs.push(scalar_binder.bind_expr(&expr.expr).await?);
+        }
 
         let mut order_by_items = Vec::with_capacity(order_by_exprs.len());
         for (idx, order_by_expr) in order_by_exprs.iter().enumerate() {
-            let order_by_item = OrderExpr {
-                expr: Box::new(order_by_expr.0.clone()),
+            let order_by_item = SortItem {
+                expr: order_by_expr.0.clone(),
                 asc: order_by[idx].asc,
                 nulls_first: order_by[idx].nulls_first,
             };
-            order_by_items.push(Order(order_by_item));
+            order_by_items.push(order_by_item);
         }
         let sort_plan = SortPlan {
             items: order_by_items,

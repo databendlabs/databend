@@ -88,9 +88,10 @@ impl FuseTable {
             .with_max_elapsed_time(Some(max_elapsed))
             .build();
 
+        let catalog_name = catalog_name.as_ref();
         loop {
             match tbl
-                .try_commit(ctx.as_ref(), &operation_log, overwrite)
+                .try_commit(ctx.as_ref(), catalog_name, &operation_log, overwrite)
                 .await
             {
                 Ok(_) => break Ok(()),
@@ -105,7 +106,7 @@ impl FuseTable {
                             );
                         common_base::base::tokio::time::sleep(d).await;
 
-                        let catalog = ctx.get_catalog(catalog_name.as_ref())?;
+                        let catalog = ctx.get_catalog(catalog_name)?;
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                         let table_info: TableInfo = TableInfo {
                             ident,
@@ -139,6 +140,7 @@ impl FuseTable {
     pub async fn try_commit(
         &self,
         ctx: &QueryContext,
+        catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -183,8 +185,13 @@ impl FuseTable {
         let operator = ctx.get_storage_operator()?;
         operator.object(&snapshot_loc).write(bytes).await?;
 
-        let result =
-            Self::commit_to_meta_server(ctx, self.get_table_info(), snapshot_loc.clone()).await;
+        let result = Self::commit_to_meta_server(
+            ctx,
+            catalog_name,
+            self.get_table_info(),
+            snapshot_loc.clone(),
+        )
+        .await;
 
         match result {
             Ok(_) => {
@@ -239,11 +246,12 @@ impl FuseTable {
 
     async fn commit_to_meta_server(
         ctx: &QueryContext,
+        catalog_name: &str,
         table_info: &TableInfo,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
         // TODO catalog name
-        let catalog = ctx.get_catalog("default")?;
+        let catalog = ctx.get_catalog(catalog_name)?;
         let mut options = [(
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             Some(new_snapshot_location),

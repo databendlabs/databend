@@ -19,33 +19,36 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::parser::token::Token;
 
 // Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]
-pub struct Query {
+pub struct Query<'a> {
+    pub span: &'a [Token<'a>],
+
     // Set operator: SELECT or UNION / EXCEPT / INTERSECT
-    pub body: SetExpr,
+    pub body: SetExpr<'a>,
 
     // The following clauses can only appear in top level of a subquery/query
     // `ORDER BY` clause
-    pub order_by: Vec<OrderByExpr>,
+    pub order_by: Vec<OrderByExpr<'a>>,
     // `LIMIT` clause
-    pub limit: Vec<Expr>,
+    pub limit: Vec<Expr<'a>>,
     // `OFFSET` expr
-    pub offset: Option<Expr>,
+    pub offset: Option<Expr<'a>>,
 }
 
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Debug, Clone, PartialEq)]
-pub enum SetExpr {
-    Select(Box<SelectStmt>),
-    Query(Box<Query>),
+pub enum SetExpr<'a> {
+    Select(Box<SelectStmt<'a>>),
+    Query(Box<Query<'a>>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation {
         op: SetOperator,
         all: bool,
-        left: Box<SetExpr>,
-        right: Box<SetExpr>,
+        left: Box<SetExpr<'a>>,
+        right: Box<SetExpr<'a>>,
     },
 }
 
@@ -58,26 +61,27 @@ pub enum SetOperator {
 
 // A subquery represented with `SELECT` statement
 #[derive(Debug, Clone, PartialEq)]
-pub struct SelectStmt {
+pub struct SelectStmt<'a> {
+    pub span: &'a [Token<'a>],
     pub distinct: bool,
     // Result set of current subquery
-    pub select_list: Vec<SelectTarget>,
+    pub select_list: Vec<SelectTarget<'a>>,
     // `FROM` clause, a list of table references.
     // The table references split by `,` will be joined with cross join,
     // and the result set is union of the joined tables by default.
-    pub from: Option<TableReference>,
+    pub from: Option<TableReference<'a>>,
     // `WHERE` clause
-    pub selection: Option<Expr>,
+    pub selection: Option<Expr<'a>>,
     // `GROUP BY` clause
-    pub group_by: Vec<Expr>,
+    pub group_by: Vec<Expr<'a>>,
     // `HAVING` clause
-    pub having: Option<Expr>,
+    pub having: Option<Expr<'a>>,
 }
 
 // `ORDER BY` clause
 #[derive(Debug, Clone, PartialEq)]
-pub struct OrderByExpr {
-    pub expr: Expr,
+pub struct OrderByExpr<'a> {
+    pub expr: Expr<'a>,
     // Optional `ASC` or `DESC`
     pub asc: Option<bool>,
     // Optional `NULLS FIRST` or `NULLS LAST`
@@ -86,66 +90,66 @@ pub struct OrderByExpr {
 
 // One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq)]
-pub enum SelectTarget {
+pub enum SelectTarget<'a> {
     // Expression with alias, e.g. `SELECT b AS a, a+1 AS b FROM t`
     AliasedExpr {
-        expr: Expr,
-        alias: Option<Identifier>,
+        expr: Box<Expr<'a>>,
+        alias: Option<Identifier<'a>>,
     },
 
     // Qualified name, e.g. `SELECT t.a, t.* FROM t`.
     // For simplicity, wildcard is involved.
-    QualifiedName(QualifiedName),
+    QualifiedName(QualifiedName<'a>),
 }
 
-pub type QualifiedName = Vec<Indirection>;
+pub type QualifiedName<'a> = Vec<Indirection<'a>>;
 
 // Indirection of a select result, like a part of `db.table.column`.
 // Can be a database name, table name, field name or wildcard star(`*`).
 #[derive(Debug, Clone, PartialEq)]
-pub enum Indirection {
+pub enum Indirection<'a> {
     // Field name
-    Identifier(Identifier),
+    Identifier(Identifier<'a>),
     // Wildcard star
     Star,
 }
 
 // A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq)]
-pub enum TableReference {
+pub enum TableReference<'a> {
     // Table name
     Table {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
-        alias: Option<TableAlias>,
+        catalog: Option<Identifier<'a>>,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+        alias: Option<TableAlias<'a>>,
     },
     // Derived table, which can be a subquery or joined tables or combination of them
     Subquery {
-        subquery: Box<Query>,
-        alias: Option<TableAlias>,
+        subquery: Box<Query<'a>>,
+        alias: Option<TableAlias<'a>>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
-        name: Identifier,
-        params: Vec<Expr>,
-        alias: Option<TableAlias>,
+        name: Identifier<'a>,
+        params: Vec<Expr<'a>>,
+        alias: Option<TableAlias<'a>>,
     },
-    Join(Join),
+    Join(Join<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TableAlias {
-    pub name: Identifier,
-    pub columns: Vec<Identifier>,
+pub struct TableAlias<'a> {
+    pub name: Identifier<'a>,
+    pub columns: Vec<Identifier<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Join {
+pub struct Join<'a> {
     pub op: JoinOperator,
-    pub condition: JoinCondition,
-    pub left: Box<TableReference>,
-    pub right: Box<TableReference>,
+    pub condition: JoinCondition<'a>,
+    pub left: Box<TableReference<'a>>,
+    pub right: Box<TableReference<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -160,14 +164,14 @@ pub enum JoinOperator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum JoinCondition {
-    On(Expr),
-    Using(Vec<Identifier>),
+pub enum JoinCondition<'a> {
+    On(Expr<'a>),
+    Using(Vec<Identifier<'a>>),
     Natural,
     None,
 }
 
-impl Display for OrderByExpr {
+impl<'a> Display for OrderByExpr<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.expr)?;
         if let Some(asc) = self.asc {
@@ -188,7 +192,7 @@ impl Display for OrderByExpr {
     }
 }
 
-impl Display for TableAlias {
+impl<'a> Display for TableAlias<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.name)?;
         if !self.columns.is_empty() {
@@ -200,7 +204,7 @@ impl Display for TableAlias {
     }
 }
 
-impl Display for TableReference {
+impl<'a> Display for TableReference<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TableReference::Table {
@@ -275,7 +279,7 @@ impl Display for TableReference {
     }
 }
 
-impl Display for Indirection {
+impl<'a> Display for Indirection<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Indirection::Identifier(ident) => {
@@ -289,7 +293,7 @@ impl Display for Indirection {
     }
 }
 
-impl Display for SelectTarget {
+impl<'a> Display for SelectTarget<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SelectTarget::AliasedExpr { expr, alias } => {
@@ -306,7 +310,7 @@ impl Display for SelectTarget {
     }
 }
 
-impl Display for SelectStmt {
+impl<'a> Display for SelectStmt<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // SELECT clause
         write!(f, "SELECT ")?;
@@ -340,7 +344,7 @@ impl Display for SelectStmt {
     }
 }
 
-impl Display for SetExpr {
+impl<'a> Display for SetExpr<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SetExpr::Select(select_stmt) => {
@@ -377,7 +381,7 @@ impl Display for SetExpr {
     }
 }
 
-impl Display for Query {
+impl<'a> Display for Query<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Query body
         write!(f, "{}", self.body)?;

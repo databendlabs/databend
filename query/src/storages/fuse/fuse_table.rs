@@ -33,6 +33,7 @@ use futures::StreamExt;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
 use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
@@ -59,7 +60,7 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let mut order_keys = Vec::new();
         if let Some(order) = &table_info.meta.order_keys {
-            order_keys = serde_json::from_slice(order.as_slice())?;
+            order_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {
@@ -94,29 +95,6 @@ impl FuseTable {
             })?;
         Ok(format!("{}/{}", db_id, table_id))
     }
-
-    //    pub fn catalog_name(&self) -> Result<String> {
-    //        Self::get_catalog_name(&self.table_info)
-    //    }
-    //
-    //    pub fn get_catalog_name(table_info: &TableInfo) -> Result<String> {
-    //        // Gets catalog name from table table_info.options().
-    //        //
-    //        // - This is a temporary workaround
-    //        // - Later, catalog id should be kept in meta layer (persistent in KV server)
-    //
-    //        let table_id = table_info.ident.table_id;
-    //        table_info
-    //            .options()
-    //            .get(OPT_KEY_CATALOG)
-    //            .cloned()
-    //            .ok_or_else(|| {
-    //                ErrorCode::LogicalError(format!(
-    //                    "NO Catalog specified. Table identity: {}",
-    //                    table_id
-    //                ))
-    //            })
-    //    }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub(crate) async fn read_table_snapshot(
@@ -234,17 +212,17 @@ impl Table for FuseTable {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<QueryContext>,
-        _catalog_name: &str,
-        _operations: Vec<DataBlock>,
-        _overwrite: bool,
+        ctx: Arc<QueryContext>,
+        catalog_name: &str,
+        operations: Vec<DataBlock>,
+        overwrite: bool,
     ) -> Result<()> {
         // only append operation supported currently
-        let append_log_entries = _operations
+        let append_log_entries = operations
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(_ctx, _catalog_name, append_log_entries, _overwrite)
+        self.do_commit(ctx, catalog_name, append_log_entries, overwrite)
             .await
     }
 

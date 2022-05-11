@@ -24,7 +24,6 @@ use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::validate_expression;
 use common_planners::CreateTablePlan;
-use common_planners::Expression;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
@@ -99,14 +98,15 @@ impl AnalyzableStatement for DfCreateTable {
 
         let mut order_keys = vec![];
         for k in self.order_keys.iter() {
-            let expr = expression_analyzer.analyze(k).await?;
+            let expr = expression_analyzer.analyze_sync(k)?;
             validate_expression(&expr, &table_meta.schema)?;
             order_keys.push(expr);
         }
 
         if !order_keys.is_empty() {
-            let order_keys_v = serde_json::to_vec(&order_keys)?;
-            table_meta.order_keys = Some(order_keys_v);
+            let order_keys: Vec<String> = order_keys.iter().map(|e| e.column_name()).collect();
+            let order_keys_sql = format!("({})", order_keys.join(", "));
+            table_meta.order_keys = Some(order_keys_sql);
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
@@ -163,6 +163,7 @@ impl DfCreateTable {
                 Ok(origin_table.schema())
             }
             None => {
+                // default expression do not need udfs
                 let expr_analyzer = ExpressionAnalyzer::create(ctx);
                 let mut fields = Vec::with_capacity(self.columns.len());
 
@@ -179,7 +180,8 @@ impl DfCreateTable {
                             }
                             ColumnOption::Default(expr) => {
                                 let expr = expr_analyzer.analyze(expr).await?;
-                                default_expr = Some(serde_json::to_vec(&expr)?);
+                                // we ensure that expr's column_name equals the raw sql (no alias inside the expression)
+                                default_expr = Some(expr.column_name());
                             }
                             _ => {}
                         }
@@ -250,10 +252,8 @@ impl DfCreateTable {
 
     fn validata_default_exprs(&self, schema: &DataSchemaRef) -> Result<()> {
         for f in schema.fields() {
-            if let Some(default_expr) = f.default_expr() {
-                let expr: Expression =
-                    serde_json::from_slice::<Expression>(default_expr.as_slice())?;
-
+            if let Some(expr) = f.default_expr() {
+                let expr = PlanParser::parse_expr(expr)?;
                 validate_expression(&expr, schema)?;
             }
         }
