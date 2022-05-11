@@ -209,6 +209,11 @@ async fn exprs_to_datavalue(
     schema: &DataSchemaRef,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<DataValue>> {
+    if exprs.len() != schema.num_fields() {
+        return Err(ErrorCode::BadDataValueType(
+            "Expression size not match schema num of cols".to_string(),
+        ));
+    }
     let mut expressions = Vec::with_capacity(exprs.len());
     for (i, expr) in exprs.iter().enumerate() {
         let expr = analyzer.analyze(expr).await?;

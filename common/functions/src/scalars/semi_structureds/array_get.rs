@@ -64,7 +64,7 @@ impl Function for ArrayGetFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        NullableType::new_impl(self.array_type.inner_type().clone())
+        self.array_type.inner_type().clone()
     }
 
     fn eval(
@@ -85,7 +85,7 @@ impl Function for ArrayGetFunction {
         with_match_scalar_types_error!(inner_type.to_physical_type(), |$T1| {
             with_match_integer_types_error!(index_type, |$T2| {
                 let inner_column: &<$T1 as Scalar>::ColumnType = Series::check_get(array_column.values())?;
-                let mut builder = NullableColumnBuilder::<$T1>::with_capacity(input_rows);
+                let mut builder = ColumnBuilder::<$T1>::with_capacity(input_rows);
                 if columns[0].column().is_const() {
                     let index_column: &PrimitiveColumn<$T2> = if columns[1].column().is_const() {
                         let const_column: &ConstColumn = Series::check_get(columns[1].column())?;
@@ -97,7 +97,7 @@ impl Function for ArrayGetFunction {
                     for (i, index) in index_column.iter().enumerate() {
                         let index = usize::try_from(*index)?;
                         let _ = check_index(index, len)?;
-                        builder.append(inner_column.get_data(index), true);
+                        builder.append(inner_column.get_data(index));
                     }
                 } else if columns[1].column().is_const() {
                     let index_column: &ConstColumn = Series::check_get(columns[1].column())?;
@@ -106,7 +106,7 @@ impl Function for ArrayGetFunction {
                     for i in 0..input_rows {
                         let len = array_column.size_at_index(i);
                         let _ = check_index(index, len)?;
-                        builder.append(inner_column.get_data(offset + index), true);
+                        builder.append(inner_column.get_data(offset + index));
                         offset += len;
                     }
                 } else {
@@ -116,7 +116,7 @@ impl Function for ArrayGetFunction {
                         let index = usize::try_from(*index)?;
                         let len = array_column.size_at_index(i);
                         let _ = check_index(index, len)?;
-                        builder.append(inner_column.get_data(offset + index), true);
+                        builder.append(inner_column.get_data(offset + index));
                         offset += len;
                     }
                 }
