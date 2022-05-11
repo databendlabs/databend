@@ -30,6 +30,7 @@ use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 
+/// Returns user's stage info and relative path towards the stage's root.
 pub async fn location_to_stage_path(
     location: &str,
     ctx: &Arc<QueryContext>,
@@ -41,17 +42,16 @@ pub async fn location_to_stage_path(
     let stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
     let path = if names.len() > 1 { names[1] } else { "" };
-    let related_path: String;
-    match stage.stage_type {
-        // It's internal, so we already have an op which has the root path
-        // need to inject a tenant path
+
+    let relative_path = match stage.stage_type {
+        // It's internal, so we should prefix with stage name.
         StageType::Internal => {
             let prefix = format!("stage/{}", stage.stage_name);
-            related_path = get_abs_path(prefix.as_str(), path);
+            get_abs_path(prefix.as_str(), path)
         }
-        StageType::External => related_path = path.to_string(),
-    }
-    Ok((stage, related_path))
+        StageType::External => path.to_string(),
+    };
+    Ok((stage, relative_path))
 }
 
 pub fn parse_stage_storage(
