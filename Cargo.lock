@@ -1061,6 +1061,7 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "chrono-tz",
+ "common-configs",
  "common-exception",
  "futures",
  "lexical-core",
@@ -1213,6 +1214,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
+ "common-configs",
  "common-datavalues",
  "common-exception",
  "derive_more",
@@ -1273,6 +1275,7 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-configs",
  "common-datavalues",
  "common-meta-types",
  "common-protos",

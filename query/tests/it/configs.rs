@@ -94,6 +94,7 @@ access_key_id = ""
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""
@@ -268,6 +269,7 @@ access_key_id = "access_key_id_from_file"
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""

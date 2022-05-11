@@ -20,7 +20,7 @@ use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::get_file_name;
-use common_io::prelude::S3File;
+use common_io::prelude::operator_list_files;
 use common_planners::ListPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -46,7 +46,7 @@ impl ListInterpreter {
         let op = StageSource::get_op(&self.ctx, &self.plan.stage).await?;
         let pattern = &self.plan.pattern;
         let path = &self.plan.path;
-        let mut files = S3File::list(&op, path).await?;
+        let mut files = operator_list_files(&op, path).await?;
 
         if !pattern.is_empty() {
             let regex = Regex::new(pattern).map_err(|e| {

@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::S3File;
+use common_io::prelude::operator_list_files;
 use common_planners::CopyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -67,7 +67,7 @@ impl CopyInterpreter {
                     files_with_path
                 } else {
                     let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
-                    S3File::list(&op, path).await?
+                    operator_list_files(&op, path).await?
                 };
 
                 Ok(files_with_path)

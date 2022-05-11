@@ -30,6 +30,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         secret_access_key: "".to_string(),
         bucket: "bucket".to_string(),
         root: "".to_string(),
+        master_key: "".to_string(),
     };
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;

@@ -25,5 +25,6 @@ pub use meta::MetaConfig;
 pub use query::QueryConfig;
 pub use storage::AzblobStorageConfig;
 pub use storage::FsStorageConfig;
+pub use storage::HdfsConfig;
 pub use storage::S3StorageConfig;
 pub use storage::StorageConfig;
