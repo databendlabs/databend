@@ -60,8 +60,7 @@ impl Session {
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings =
-            Settings::try_create(&conf, session_ctx.clone(), session_mgr.get_user_manager())?;
+        let session_settings = Settings::try_create(&conf)?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
 
