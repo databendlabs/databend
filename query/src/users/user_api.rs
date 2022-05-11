@@ -38,6 +38,7 @@ impl UserApiProvider {
         let client = MetaClientProvider::new(MetaGrpcClientConf::from(&conf.meta))
             .try_get_kv_client()
             .await?;
+
         Ok(Arc::new(UserApiProvider { client }))
     }
 
