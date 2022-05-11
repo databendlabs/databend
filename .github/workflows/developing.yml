@@ -83,13 +83,12 @@ jobs:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateless_standalone_linux
 
-  # https://github.com/datafuselabs/databend/issues/5287
-  #test_stateless_standalone_macos:
-  #  runs-on: macos-11
-  #  needs: build_macos
-  #  steps:
-  #    - uses: actions/checkout@v2
-  #    - uses: ./.github/actions/test_stateless_standalone_macos
+  test_stateless_standalone_macos:
+   runs-on: macos-11
+   needs: build_macos
+   steps:
+     - uses: actions/checkout@v2
+     - uses: ./.github/actions/test_stateless_standalone_macos
 
   test_stateless_cluster_linux:
     runs-on: ubuntu-latest
