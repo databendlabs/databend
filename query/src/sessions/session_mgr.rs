@@ -71,6 +71,7 @@ pub struct SessionManager {
     pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
+    meta_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
 }
 
@@ -88,6 +89,14 @@ impl SessionManager {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
+        };
+
+        let meta_runtime = {
+            let meta_num_cpus = std::cmp::max(1, num_cpus::get() / 4);
+            Arc::new(Runtime::with_worker_threads(
+                meta_num_cpus,
+                Some("META-worker".to_owned()),
+            )?)
         };
 
         // NOTE: Magic happens here. We will add a layer upon original storage operator
@@ -125,6 +134,7 @@ impl SessionManager {
             status,
             storage_operator: RwLock::new(storage_operator),
             storage_runtime: Arc::new(storage_runtime),
+            meta_runtime,
             _guards,
         }))
     }
@@ -164,6 +174,10 @@ impl SessionManager {
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.storage_runtime.clone()
+    }
+
+    pub fn get_meta_runtime(&self) -> Arc<Runtime> {
+        self.meta_runtime.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {

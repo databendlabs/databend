@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::Runtime;
 use common_exception::Result;
 use common_management::RoleApi;
 use common_management::RoleMgr;
@@ -40,7 +41,6 @@ impl UserApiProvider {
         let client = MetaClientProvider::new(MetaGrpcClientConf::from(&conf.meta))
             .try_get_kv_client()
             .await?;
-
         Ok(Arc::new(UserApiProvider { client }))
     }
 

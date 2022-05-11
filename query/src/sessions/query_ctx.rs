@@ -395,6 +395,10 @@ impl QueryContext {
         self.shared.session.session_mgr.get_storage_runtime()
     }
 
+    pub fn get_meta_runtime(&self) -> Arc<Runtime> {
+        self.shared.session.session_mgr.get_meta_runtime()
+    }
+
     pub async fn reload_config(&self) -> Result<()> {
         self.shared.reload_config().await
     }
@@ -423,6 +427,10 @@ impl QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         Ok(FunctionContext { tz })
+    }
+
+    pub fn block_on_meta<F: Future>(&self, future: F) -> F::Output {
+        self.get_meta_runtime().block_on(future)
     }
 }
 

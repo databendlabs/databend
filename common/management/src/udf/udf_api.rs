@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
+
 use common_exception::Result;
 use common_meta_types::SeqV;
 use common_meta_types::UserDefinedFunction;
