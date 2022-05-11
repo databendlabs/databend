@@ -41,7 +41,7 @@ impl MetaClientProvider {
         &self,
     ) -> std::result::Result<Arc<MetaGrpcClient>, Infallible> {
         let client = MetaGrpcClient::try_new(&self.grpc_conf).await?;
-        Ok(Arc::new(client))
+        Ok(client)
     }
 
     /// Get kv async client, operations trait defined in KVApi.
@@ -52,7 +52,7 @@ impl MetaClientProvider {
             Ok(meta_store)
         } else {
             let client = MetaGrpcClient::try_new(&self.grpc_conf).await?;
-            Ok(Arc::new(client))
+            Ok(client)
         }
     }
 }

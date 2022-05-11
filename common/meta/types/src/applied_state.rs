@@ -41,6 +41,11 @@ pub enum AppliedState {
         result: Option<Node>,
     },
 
+    MetaSrvAddr {
+        prev: Option<String>,
+        result: Option<String>,
+    },
+
     KV(Change<Vec<u8>>),
 
     AppError(AppError),
@@ -110,6 +115,10 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
+            AppliedState::MetaSrvAddr {
+                ref prev,
+                ref result,
+            } => prev != result,
             AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
             AppliedState::AppError(_e) => false,
@@ -137,6 +146,7 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
+            AppliedState::MetaSrvAddr { ref prev, .. } => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
             AppliedState::AppError(_e) => true,
@@ -148,6 +158,7 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
+            AppliedState::MetaSrvAddr { ref result, .. } => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::AppError(_e) => true,

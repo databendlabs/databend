@@ -83,7 +83,7 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
-        let local_mode = conf.meta.address.is_empty();
+        let local_mode = conf.meta.address.is_empty() || conf.meta.endpoints.is_empty();
 
         let meta: Arc<dyn SchemaApi> = if local_mode {
             tracing::info!("use embedded meta");

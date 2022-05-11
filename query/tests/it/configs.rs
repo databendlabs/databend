@@ -74,6 +74,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "root"
 password = ""
 client_timeout_in_second = 10
@@ -249,6 +250,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "username_from_file"
 password = "password_from_file"
 client_timeout_in_second = 10

@@ -32,11 +32,11 @@ struct Builder {
 }
 
 #[async_trait]
-impl KVApiBuilder<MetaGrpcClient> for Builder {
-    async fn build(&self) -> MetaGrpcClient {
+impl KVApiBuilder<Arc<MetaGrpcClient>> for Builder {
+    async fn build(&self) -> Arc<MetaGrpcClient> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None)
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)
             .await
             .unwrap();
 
@@ -48,7 +48,7 @@ impl KVApiBuilder<MetaGrpcClient> for Builder {
         client
     }
 
-    async fn build_cluster(&self) -> Vec<MetaGrpcClient> {
+    async fn build_cluster(&self) -> Vec<Arc<MetaGrpcClient>> {
         let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
 
         let cluster = vec![
