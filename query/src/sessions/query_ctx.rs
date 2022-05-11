@@ -19,7 +19,9 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
+
 use chrono_tz::Tz;
+
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -429,8 +431,28 @@ impl QueryContext {
         Ok(FunctionContext { tz })
     }
 
-    pub fn block_on_meta<F: Future>(&self, future: F) -> F::Output {
-        self.get_meta_runtime().block_on(future)
+    pub fn block_on_meta<F>(&self, future: F) -> Result<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let rt = self.get_meta_runtime();
+        let (tx, rx): (
+            std::sync::mpsc::Sender<F::Output>,
+            std::sync::mpsc::Receiver<F::Output>,
+        ) = std::sync::mpsc::channel();
+
+        rt.try_spawn(async move {
+            let res = future.await;
+            tx.send(res).unwrap();
+        })?;
+        match rx.recv() {
+            Ok(v) => Ok(v),
+            Err(cause) => Err(ErrorCode::LogicalError(format!(
+                "Logical error, receive error. {:?}",
+                cause
+            ))),
+        }
     }
 }
 

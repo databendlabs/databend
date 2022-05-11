@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Runtime;
+
 use common_exception::Result;
 use common_management::RoleApi;
 use common_management::RoleMgr;

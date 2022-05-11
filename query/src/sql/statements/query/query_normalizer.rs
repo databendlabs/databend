@@ -42,7 +42,10 @@ impl QueryNormalizer {
     fn try_create(ctx: Arc<QueryContext>) -> Result<QueryNormalizer> {
         let tenant = ctx.get_tenant();
         let manager = ctx.get_user_manager();
-        let udfs = ctx.block_on_meta(manager.get_udfs(&tenant))?;
+        let udfs = ctx.block_on_meta(async move {
+            let res = manager.get_udfs(&tenant);
+            res.await
+        })??;
         Ok(QueryNormalizer {
             expression_analyzer: ExpressionAnalyzer::create_with_udfs_support(ctx, udfs),
             aliases_map: HashMap::new(),
