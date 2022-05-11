@@ -49,25 +49,18 @@ pub async fn location_to_stage_path(
             let prefix = format!("stage/{}", stage.stage_name);
             related_path = get_abs_path(prefix.as_str(), path);
         }
-        // It's  external, so we need to join the root path
-        StageType::External => match stage.stage_params.storage {
-            StageStorage::S3(ref s3) => {
-                related_path = get_abs_path(s3.root.as_str(), path);
-            }
-        },
+        StageType::External => related_path = path.to_string(),
     }
     Ok((stage, related_path))
 }
 
-// path_as_root set to true when we create external stage
-// path_as_root set to false when we copy from external stage
 pub fn parse_stage_storage(
     location: &str,
     credential_options: &BTreeMap<String, String>,
     encryption_options: &BTreeMap<String, String>,
 ) -> Result<(StageStorage, String)> {
-    // TODO(xuanwo): we should implement parser in config.
     // TODO(xuanwo): we should support use non-aws s3 as stage like oss.
+    // TODO(xuanwo): we should make the path logic more clear, ref: https://github.com/datafuselabs/databend/issues/5295
 
     // Parse uri.
     // 's3://<bucket>[/<path>]'
@@ -87,6 +80,14 @@ pub fn parse_stage_storage(
         .to_string();
     // Path maybe a dir or a file.
     let path = uri.path().to_string();
+    // Path endswith `/` means it's a directory, otherwise it's a file.
+    // If the path is a directory, we will use this path as root.
+    // If the path is a file, we will use `/` as root (which is the default value)
+    let (root, path) = if path.ends_with('/') {
+        (path.as_str(), "")
+    } else {
+        ("", path.as_str())
+    };
 
     // File storage plan.
     match uri.scheme_str() {
@@ -98,6 +99,7 @@ pub fn parse_stage_storage(
             "s3" => {
                 let cfg = S3StorageConfig {
                     bucket,
+                    root: root.to_string(),
                     access_key_id: credential_options
                         .get("aws_key_id")
                         .cloned()
@@ -113,7 +115,7 @@ pub fn parse_stage_storage(
                     ..Default::default()
                 };
 
-                Ok((StageStorage::S3(cfg), path))
+                Ok((StageStorage::S3(cfg), path.to_string()))
             }
 
             // Others.
