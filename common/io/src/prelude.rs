@@ -27,7 +27,6 @@ pub use crate::buffer::BufferReader;
 pub use crate::buffer::BufferU8Reader;
 pub use crate::buffer::CheckpointRead;
 pub use crate::buffer::CheckpointReader;
-pub use crate::buffer::CpBufferReader;
 pub use crate::files::operator_list_files;
 pub use crate::format_settings::Compression;
 pub use crate::format_settings::FormatSettings;

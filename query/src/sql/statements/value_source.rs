@@ -51,7 +51,7 @@ impl ValueSource {
         }
     }
 
-    pub async fn read<'a>(&self, reader: &mut CpBufferReader<'a>) -> Result<DataBlock> {
+    pub async fn read<R: BufferRead>(&self, reader: &mut CheckpointReader<R>) -> Result<DataBlock> {
         let mut desers = self
             .schema
             .fields()
@@ -91,9 +91,9 @@ impl ValueSource {
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
-    async fn parse_next_row<'a>(
+    async fn parse_next_row<R: BufferRead>(
         &self,
-        reader: &mut CpBufferReader<'a>,
+        reader: &mut CheckpointReader<R>,
         col_size: usize,
         desers: &mut [TypeDeserializerImpl],
         session_type: &SessionType,
@@ -155,7 +155,10 @@ impl ValueSource {
 }
 
 // Values |(xxx), (yyy), (zzz)
-pub fn skip_to_next_row(reader: &mut CpBufferReader, mut balance: i32) -> Result<()> {
+pub fn skip_to_next_row<R: BufferRead>(
+    reader: &mut CheckpointReader<R>,
+    mut balance: i32,
+) -> Result<()> {
     let _ = reader.ignore_white_spaces()?;
 
     let mut quoted = false;

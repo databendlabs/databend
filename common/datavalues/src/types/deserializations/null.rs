@@ -58,11 +58,7 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
-        &mut self,
-        _reader: &mut CheckpointReader<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, _reader: &mut R, _format: &FormatSettings) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
