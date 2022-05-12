@@ -11,4 +11,4 @@ RUN dpkg --add-architecture arm64 && \
 ARG ARCH
 RUN rustup target add ${ARCH}-unknown-linux-gnu
 RUN ln -sf /usr/local/bin/mold /usr/bin/${ARCH}-linux-gnu-ld
-RUN printf "[target.${ARCH}-unknown-linux-musl]\nlinker = \"${ARCH}-linux-gnu-gcc\"\n" > ${CARGO_HOME}/config
+RUN printf "[target.${ARCH}-unknown-linux-gnu]\nlinker = \"${ARCH}-linux-gnu-gcc\"\n" > ${CARGO_HOME}/config
