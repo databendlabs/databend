@@ -85,7 +85,7 @@ jobs:
         with:
           image: ${{ matrix.target }}
       - name: set rustflags
-        if: "contains(inputs.target, 'musl')"
+        if: "contains(matrix.target, 'musl')"
         run: |
           flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
           echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
@@ -102,7 +102,7 @@ jobs:
           fi
           echo ::set-output name=OBJCOPY::${OBJCOPY}
       - name: copyobj zlib
-        if: "contains(inputs.target, 'gnu')"
+        if: "contains(matrix.target, 'gnu')"
         run:
           build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-query
           build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-meta
