@@ -1,7 +1,7 @@
 ARG RUST_TOOLCHAIN
 FROM datafuselabs/build-tool:base-${RUST_TOOLCHAIN}
 
-COPY docker/build-tool/musl/musl.sh /musl.sh
+COPY musl.sh /musl.sh
 RUN chmod +x /musl.sh && /musl.sh TARGET=${ARCH}-linux-musl
 
 ARG ARCH
