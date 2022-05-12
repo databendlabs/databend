@@ -18,11 +18,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::base::tokio;
-use common_base::base::tokio::select;
-use common_base::base::tokio::sync::oneshot;
-use common_base::base::tokio::sync::oneshot::Receiver;
-use common_base::base::tokio::sync::oneshot::Sender;
 use common_base::base::tokio::sync::RwLock;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
@@ -114,8 +109,6 @@ impl ItemManager for MetaChannelManager {
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
     endpoints: RwLock<Vec<String>>,
-    #[allow(dead_code)]
-    cancel_tx: Sender<()>, // Implicit using when client dropped, notify backgroud task to stop.
     username: String,
     password: String,
     token: RwLock<Option<Vec<u8>>>,
@@ -132,8 +125,6 @@ impl MetaGrpcClient {
             conf: conf.meta_service_config.tls_conf.clone(),
         };
 
-        let (tx, rx) = oneshot::channel();
-
         let addr = conf.meta_service_config.address.to_string();
         let endpoints = if !conf.meta_service_config.endpoints.is_empty() {
             conf.meta_service_config.endpoints.clone()
@@ -144,13 +135,10 @@ impl MetaGrpcClient {
         let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: RwLock::new(endpoints),
-            cancel_tx: tx,
             username: conf.meta_service_config.username.to_string(),
             password: conf.meta_service_config.password.to_string(),
             token: RwLock::new(None),
         });
-
-        tokio::spawn(MetaGrpcClient::auto_sync_endpoints(client.clone(), rx));
 
         Ok(client)
     }
@@ -169,18 +157,13 @@ impl MetaGrpcClient {
             conf: conf.clone(),
         };
 
-        let (tx, rx) = oneshot::channel();
-
         let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: RwLock::new(endpoints),
-            cancel_tx: tx,
             username: username.to_string(),
             password: password.to_string(),
             token: RwLock::new(None),
         });
-
-        tokio::spawn(MetaGrpcClient::auto_sync_endpoints(client.clone(), rx));
 
         Ok(client)
     }
@@ -243,24 +226,6 @@ impl MetaGrpcClient {
         let result: Vec<String> = endpoints.into_inner().data;
         self.set_endpoints(result).await?;
         Ok(())
-    }
-
-    async fn auto_sync_endpoints(_client: Arc<MetaGrpcClient>, mut cancel_rx: Receiver<()>) {
-        loop {
-            select! {
-                _ = &mut cancel_rx => {
-                    return;
-                }
-                _ = tokio::time::sleep(Duration::from_secs(10)) => {
-                    // let r = client.sync_endpoints();
-                    //
-                    // if let Err(e) = r.await {
-                    //     tracing::warn!("auto sync endpoints failed: {:?}", e);
-                    // }
-                    todo!()
-                }
-            }
-        }
     }
 
     /// Handshake.
