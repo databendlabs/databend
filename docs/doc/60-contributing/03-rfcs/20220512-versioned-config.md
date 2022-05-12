@@ -123,7 +123,7 @@ Introducing a versioned config will increase the complexity of the config handle
 
 Using `u64` is the simplest way. We don't want to introduce concept semver into our config. Think about the version of `docker-compose`! Do you remember which version to use for `docker-compose.yml` without visiting its documents?
 
-## Why use `serde` and related tools?
+## Why not use `serde` and related tools?
 
 The most important thing is that RFC intends to split `inner` and `outer` config instances. Make `inner` as simple as possible and leave the userland interactive works for `outer` to handle.
 
