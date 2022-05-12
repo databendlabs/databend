@@ -64,7 +64,7 @@ impl Function for ArrayGetFunction {
     }
 
     fn return_type(&self) -> DataTypeImpl {
-        self.array_type.inner_type().clone()
+        NullableType::new_impl(self.array_type.inner_type().clone())
     }
 
     fn eval(
@@ -85,7 +85,7 @@ impl Function for ArrayGetFunction {
         with_match_scalar_types_error!(inner_type.to_physical_type(), |$T1| {
             with_match_integer_types_error!(index_type, |$T2| {
                 let inner_column: &<$T1 as Scalar>::ColumnType = Series::check_get(array_column.values())?;
-                let mut builder = ColumnBuilder::<$T1>::with_capacity(input_rows);
+                let mut builder = NullableColumnBuilder::<$T1>::with_capacity(input_rows);
                 if columns[0].column().is_const() {
                     let index_column: &PrimitiveColumn<$T2> = if columns[1].column().is_const() {
                         let const_column: &ConstColumn = Series::check_get(columns[1].column())?;
@@ -96,8 +96,11 @@ impl Function for ArrayGetFunction {
                     let len = array_column.size_at_index(0);
                     for (i, index) in index_column.iter().enumerate() {
                         let index = usize::try_from(*index)?;
-                        let _ = check_index(index, len)?;
-                        builder.append(inner_column.get_data(index));
+                        if index >= len {
+                            builder.append_null();
+                        } else {
+                            builder.append(inner_column.get_data(index), true);
+                        }
                     }
                 } else if columns[1].column().is_const() {
                     let index_column: &ConstColumn = Series::check_get(columns[1].column())?;
@@ -105,8 +108,11 @@ impl Function for ArrayGetFunction {
                     let mut offset = 0;
                     for i in 0..input_rows {
                         let len = array_column.size_at_index(i);
-                        let _ = check_index(index, len)?;
-                        builder.append(inner_column.get_data(offset + index));
+                        if index >= len {
+                            builder.append_null();
+                        } else {
+                            builder.append(inner_column.get_data(offset + index), true);
+                        }
                         offset += len;
                     }
                 } else {
@@ -115,8 +121,12 @@ impl Function for ArrayGetFunction {
                     for (i, index) in index_column.iter().enumerate() {
                         let index = usize::try_from(*index)?;
                         let len = array_column.size_at_index(i);
-                        let _ = check_index(index, len)?;
-                        builder.append(inner_column.get_data(offset + index));
+
+                        if index >= len {
+                            builder.append_null();
+                        } else {
+                            builder.append(inner_column.get_data(offset + index), true);
+                        }
                         offset += len;
                     }
                 }
@@ -130,14 +140,4 @@ impl fmt::Display for ArrayGetFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name.to_uppercase())
     }
-}
-
-fn check_index(index: usize, len: usize) -> Result<()> {
-    if index >= len {
-        return Err(ErrorCode::BadArguments(format!(
-            "Index out of array column bounds: the len is {} but the index is {}",
-            len, index
-        )));
-    }
-    Ok(())
 }
