@@ -4,7 +4,7 @@ inputs:
   image:
     description: "Build Tool Docker Image to use"
     required: true
-    default: dev-debian-amd64
+    default: dev
   bypass_env_vars:
     description: "Environment variables bypass to docker container"
     required: false

@@ -20,8 +20,8 @@ RUN groupdel dialout && groupdel staff && \
     useradd -u 501 -g 20 macos && \
     printf "builder,runner,macos ALL=(ALL:ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/databend
 
-COPY scripts/setup/rust-toolchain.toml /build/rust-toolchain.toml
-COPY scripts/setup/dev_setup.sh /build/scripts/setup/dev_setup.sh
+COPY rust-toolchain.toml /build/rust-toolchain.toml
+COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
 RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     /build/scripts/setup/dev_setup.sh -yb && \
     rm -rf /root/.cargo/git && \
@@ -30,7 +30,7 @@ RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     mv /root/.cargo /opt/rust/cargo && \
     mv /root/.rustup /opt/rust/rustup
 
-RUN curl -qL https://github.com/rui314/mold/releases/download/v1.1.1/mold-1.1.1-$(uname -m)-linux.tar.gz -o /tmp/mold.tar.gz && \
+RUN curl -qL https://github.com/rui314/mold/releases/download/v1.2.1/mold-1.2.1-$(uname -m)-linux.tar.gz -o /tmp/mold.tar.gz && \
     tar --strip-components=1 -xzf /tmp/mold.tar.gz -C /usr/local && \
     rm -rf /tmp/mold.tar.gz && \
     ln -sf /usr/local/bin/mold /usr/bin/$(uname -m)-linux-gnu-ld

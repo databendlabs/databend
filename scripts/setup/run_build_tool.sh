@@ -38,5 +38,5 @@ exec docker run --rm --tty --net=host ${EXTRA_ARGS} \
 	--volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
 	--volume "${PWD}:/workspace" \
 	--workdir "/workspace" \
-	"${IMAGE/_/-}-${TOOLCHAIN_VERSION}" \
+	"${IMAGE}-${TOOLCHAIN_VERSION}" \
 	${COMMAND}
