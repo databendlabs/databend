@@ -69,16 +69,24 @@ jobs:
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "::set-output name=TOOLCHAIN::${version}"
 
+      - name: Get Image Name
+        run: |
+          image="datafuselabs/build-tool:${{ matrix.arch }}-unkown-linux-${{ matrix.platform }}"
+          echo "IMAGE=${image/_/-}" >> $GITHUB_ENV
+
       - name: Build and publish databend build image
         uses: docker/build-push-action@v2
         with:
           pull: true
           push: true
           tags:
-            datafuselabs/build-tool:${{ matrix.arch }}-unkown-linux-${{ matrix.platform }}
-            datafuselabs/build-tool:${{ matrix.arch }}-unkown-linux-${{ matrix.platform }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ env.IMAEG }}
+            ${{ env.IMAEG }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./docker/build-tool/${{ matrix.platform }}/
           file: ./docker/build-tool/${{ matrix.platform }}/Dockerfile
+          build-args:
+            ARCH=${{ matrix.arch }}
+            RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
 
   dev:
     runs-on: ubuntu-latest
