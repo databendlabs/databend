@@ -20,8 +20,8 @@ RUN groupdel dialout && groupdel staff && \
     useradd -u 501 -g 20 macos && \
     printf "builder,runner,macos ALL=(ALL:ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/databend
 
-COPY scripts/setup/rust-toolchain.toml /build/rust-toolchain.toml
-COPY scripts/setup/dev_setup.sh /build/scripts/setup/dev_setup.sh
+COPY rust-toolchain.toml /build/rust-toolchain.toml
+COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
 RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     /build/scripts/setup/dev_setup.sh -yb && \
     rm -rf /root/.cargo/git && \
