@@ -119,3 +119,5 @@ jobs:
             datafuselabs/build-tool:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: .
           file: ./docker/build-tool/dev/Dockerfile
+          build-args: |
+            RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
