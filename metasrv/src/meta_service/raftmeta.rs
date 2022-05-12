@@ -29,6 +29,7 @@ use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
+use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
@@ -37,7 +38,6 @@ use common_meta_types::Endpoint;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
-use common_meta_types::LeaveRequest;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
@@ -55,7 +55,9 @@ use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
 use openraft::State;
+use tonic::Status;
 
+use crate::configs::Config as MetaConfig;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
@@ -309,6 +311,7 @@ impl MetaNode {
         open: Option<()>,
         create: Option<()>,
         is_initialize: bool,
+        node: Node,
     ) -> MetaResult<Arc<MetaNode>> {
         let mut config = config.clone();
 
@@ -337,10 +340,9 @@ impl MetaNode {
 
         tracing::info!("MetaNode started: {:?}", config);
 
-        // initialize with advertise_host other than listen_host
+        // init_cluster with advertise_host other than listen_host
         if !is_open && is_initialize {
-            mn.init_cluster(config.raft_api_advertise_host_endpoint())
-                .await?;
+            mn.init_cluster(node).await?;
         }
         Ok(mn)
     }
@@ -461,7 +463,7 @@ impl MetaNode {
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
     #[tracing::instrument(level = "debug", skip(config))]
-    pub async fn start(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
+    pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
         tracing::info!(?config, "start()");
         let mn = Self::do_start(config).await?;
         tracing::info!("Done starting MetaNode: {:?}", config);
@@ -533,9 +535,8 @@ impl MetaNode {
         )))
     }
 
-    /// Join an existent cluster if `--join` is specified and this meta node is just created, i.e., not opening an already initialized store.
     #[tracing::instrument(level = "info", skip(conf, self))]
-    pub async fn join_cluster(&self, conf: &RaftConfig) -> MetaResult<()> {
+    pub async fn join_cluster(&self, conf: &RaftConfig, grpc_api_addr: String) -> MetaResult<()> {
         if conf.join.is_empty() {
             tracing::info!("'--join' is empty, do not need joining cluster");
             return Ok(());
@@ -549,7 +550,6 @@ impl MetaNode {
         }
 
         let addrs = &conf.join;
-
         // Joining cluster has to use advertise host instead of listen host.
         let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
         #[allow(clippy::never_loop)]
@@ -570,6 +570,7 @@ impl MetaNode {
                 body: ForwardRequestBody::Join(JoinRequest {
                     node_id: conf.id,
                     endpoint: advertise_endpoint.clone(),
+                    grpc_api_addr: grpc_api_addr.clone(),
                 }),
             };
 
@@ -595,15 +596,20 @@ impl MetaNode {
         )))
     }
 
-    async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
-        if conf.single {
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), true).await?;
+    async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaError> {
+        let raft_conf = &conf.raft_config;
+
+        let node = conf.get_node();
+
+        if raft_conf.single {
+            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), true, node).await?;
             return Ok(mn);
         }
 
-        if !conf.join.is_empty() {
+        if !raft_conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
-            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), false).await?;
+
+            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), false, node).await?;
 
             if mn.is_opened() {
                 return Ok(mn);
@@ -611,19 +617,24 @@ impl MetaNode {
             return Ok(mn);
         }
         // open mode
-        let mn = MetaNode::open_create_boot(conf, Some(()), None, false).await?;
+
+        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, false, node).await?;
         Ok(mn)
     }
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn boot(config: &RaftConfig) -> MetaResult<Arc<MetaNode>> {
+    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
+    pub async fn boot(config: &MetaConfig) -> MetaResult<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mn = Self::open_create_boot(config, None, Some(()), true).await?;
+        let raft_conf = &config.raft_config;
+
+        let node = config.get_node();
+
+        let mn = Self::open_create_boot(raft_conf, None, Some(()), true, node).await?;
 
         Ok(mn)
     }
@@ -632,7 +643,7 @@ impl MetaNode {
     // - Initializing raft membership.
     // - Adding current node into the meta data.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn init_cluster(&self, endpoint: Endpoint) -> MetaResult<()> {
+    pub async fn init_cluster(&self, node: Node) -> MetaResult<()> {
         let node_id = self.sto.id;
 
         let mut cluster_node_ids = BTreeSet::new();
@@ -645,7 +656,7 @@ impl MetaNode {
 
         tracing::info!("initialized cluster");
 
-        self.add_node(node_id, endpoint).await?;
+        self.add_node(node).await?;
 
         Ok(())
     }
@@ -751,7 +762,19 @@ impl MetaNode {
     pub async fn get_meta_addrs(&self) -> MetaResult<Vec<String>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
-        sm.get_metasrv_addrs()
+        let nodes = sm.get_nodes()?;
+        let endpoints: Vec<String> = nodes
+            .iter()
+            .map(|n| {
+                if let Some(addr) = n.grpc_api_addr.clone() {
+                    addr
+                } else {
+                    // for compatibility with old version that not have grpc_api_addr in NodeInfo.
+                    "".to_string()
+                }
+            })
+            .collect();
+        Ok(endpoints)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -850,21 +873,17 @@ impl MetaNode {
 
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_node(
-        &self,
-        node_id: NodeId,
-        endpoint: Endpoint,
-    ) -> Result<AppliedState, MetaError> {
+    pub async fn add_node(&self, node: Node) -> Result<AppliedState, MetaError> {
+        // TODO: use txid?
+        let node_id = node.name.parse::<u64>().map_err(|e| {
+            MetaError::MetaServiceError(format!("parse node_id error: {:?}", e.to_string()))
+        })?;
         let resp = self
             .write(LogEntry {
                 txid: None,
                 cmd: Cmd::AddNode {
-                    node_id,
-                    node: Node {
-                        name: node_id.to_string(),
-                        endpoint,
-                    },
+                    node_id: node_id as NodeId,
+                    node,
                 },
             })
             .await?;
@@ -878,38 +897,6 @@ impl MetaNode {
             .write(LogEntry {
                 txid: None,
                 cmd: Cmd::RemoveNode { node_id },
-            })
-            .await?;
-        Ok(resp)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_metasrv_addr(
-        &self,
-        metasrv_name: String,
-        metasrv_addr: String,
-    ) -> Result<AppliedState, MetaError> {
-        let resp = self
-            .write(LogEntry {
-                txid: None,
-                cmd: Cmd::AddMetaSrvAddr {
-                    metasrv_name,
-                    metasrv_addr,
-                },
-            })
-            .await?;
-        Ok(resp)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn remove_metasrv_addr(
-        &self,
-        metasrv_name: String,
-    ) -> Result<AppliedState, MetaError> {
-        let resp = self
-            .write(LogEntry {
-                txid: None,
-                cmd: Cmd::RemoveMetaSrvAddr { metasrv_name },
             })
             .await?;
         Ok(resp)

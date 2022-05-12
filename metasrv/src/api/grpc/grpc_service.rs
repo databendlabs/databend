@@ -251,8 +251,9 @@ impl MetaService for MetaServiceImpl {
 
     async fn member_list(
         &self,
-        _request: Request<MemberListRequest>,
+        request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
+        self.check_token(request.metadata())?;
         let meta_node = &self.action_handler.meta_node;
         let members = meta_node.get_meta_addrs().await.map_err(|e| {
             Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))

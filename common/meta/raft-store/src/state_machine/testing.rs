@@ -74,7 +74,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         },
     ];
     let want = vec![
-        "[2, 0, 0, 0, 0, 0, 0, 0, 5]:{\"name\":\"\",\"endpoint\":{\"addr\":\"\",\"port\":0}}", // Nodes
+        "[2, 0, 0, 0, 0, 0, 0, 0, 5]:{\"name\":\"\",\"endpoint\":{\"addr\":\"\",\"port\":0},\"grpc_api_addr\":null}", // Nodes
         "[3, 1]:{\"LogId\":{\"term\":1,\"index\":9}}",                  // sm meta: LastApplied
         "[3, 2]:{\"Bool\":true}",                                       // sm meta: init
         "[3, 3]:{\"Membership\":{\"log_id\":{\"term\":1,\"index\":5},\"membership\":{\"configs\":[[4,5,6]],\"all_nodes\":[4,5,6]}}}", // membership

@@ -33,7 +33,7 @@ use crate::tests::service::MetaSrvTestContext;
 async fn test_metrics() -> common_exception::Result<()> {
     let tc = MetaSrvTestContext::new(0);
 
-    let meta_node = MetaNode::start(&tc.config.raft_config).await?;
+    let meta_node = MetaNode::start(&tc.config).await?;
 
     let cluster_router = Route::new()
         .at("/v1/metrics", get(metrics_handler))

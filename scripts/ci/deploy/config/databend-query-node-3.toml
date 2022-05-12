@@ -53,6 +53,7 @@ address = "0.0.0.0:9191"
 username = "root"
 password = "root"
 client_timeout_in_second = 60
+auto_sync_interval = 10
 
 # Storage config.
 [storage]
