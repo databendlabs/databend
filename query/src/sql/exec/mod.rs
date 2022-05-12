@@ -223,7 +223,7 @@ impl PipelineBuilder {
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for item in project.items.iter() {
             let scalar = &item.expr;
-            let expression = expr_builder.build_and_rename(scalar, item.index)?;
+            let expression = expr_builder.build_and_rename(scalar, item.index, &input_schema)?;
             expressions.push(expression);
         }
         pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -349,32 +349,36 @@ impl PipelineBuilder {
         let pre_input_schema = input_schema.clone();
         let input_schema =
             schema_builder.build_group_by(input_schema, group_expressions.as_slice())?;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ExpressionTransform::try_create(
-                transform_input_port,
-                transform_output_port,
-                pre_input_schema.clone(),
-                input_schema.clone(),
-                group_expressions.clone(),
-                self.ctx.clone(),
-            )
-        })?;
+        if !input_schema.eq(&pre_input_schema) {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    pre_input_schema.clone(),
+                    input_schema.clone(),
+                    group_expressions.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        }
 
         // Process aggregation function with non-column expression, such as sum(3)
         let pre_input_schema = input_schema.clone();
         let res =
             schema_builder.build_agg_func(pre_input_schema.clone(), agg_expressions.as_slice())?;
         let input_schema = res.0;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ExpressionTransform::try_create(
-                transform_input_port,
-                transform_output_port,
-                pre_input_schema.clone(),
-                input_schema.clone(),
-                res.1.clone(),
-                self.ctx.clone(),
-            )
-        })?;
+        if !input_schema.eq(&pre_input_schema) {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    pre_input_schema.clone(),
+                    input_schema.clone(),
+                    res.1.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        }
 
         // Get partial schema from agg_expressions
         let partial_data_fields =
@@ -427,7 +431,6 @@ impl PipelineBuilder {
                 self.ctx.clone(),
             )
         })?;
-
         Ok(final_schema)
     }
 
