@@ -28,6 +28,7 @@ use common_datavalues::MutableColumn;
 use common_datavalues::ScalarColumn;
 use common_datavalues::Series;
 use common_datavalues::StringColumn;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
@@ -69,15 +70,21 @@ pub struct FinalAggregator<
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     FinalAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>, ctx: Arc<QueryContext>) -> Self {
+    pub fn create(
+        method: Method,
+        params: Arc<AggregatorParams>,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Self> {
         let state = method.aggregate_state();
         let temp_place = if params.aggregate_functions.is_empty() {
             0.into()
         } else {
-            state.alloc_layout2(&params)
+            state
+                .alloc_layout2(&params)
+                .ok_or_else(|| ErrorCode::LayoutError("Alloc layout should success"))?
         };
 
-        Self {
+        Ok(Self {
             is_generated: false,
             states_dropped: false,
             state,
@@ -85,7 +92,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             params,
             temp_place,
             ctx,
-        }
+        })
     }
 }
 
@@ -105,9 +112,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
 
             match inserted {
                 true => {
-                    let place = state.alloc_layout2(params);
-                    places.push(place);
-                    entity.set_state_value(place.addr());
+                    if let Some(place) = state.alloc_layout2(params) {
+                        places.push(place);
+                        entity.set_state_value(place.addr());
+                    }
                 }
                 false => {
                     let place: StateAddr = (*entity.get_state_value()).into();
