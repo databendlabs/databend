@@ -55,7 +55,7 @@ Config instances used inside databend. All logic **SHOULD** be implemented towar
 
 **`outer`**
 
-Config instances used as the front office of databend. They will have different versions and transform into an `inner` config. Other modules **SHOULD** not depend on `outer` config.
+Config instances used as the front office of databend. They will have different versions and transform into an `inner` config. Other modules **SHOULD NOT** depend on `outer` config.
 
 Take `query` for example:
 
