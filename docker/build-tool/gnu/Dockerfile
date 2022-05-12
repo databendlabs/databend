@@ -1,6 +1,6 @@
 ARG RUST_TOOLCHAIN
 ARG ARCH
-FROM datafuselabs/build-tool:base-${RUST_TOOKCHAIN}
+FROM datafuselabs/build-tool:base-${RUST_TOOLCHAIN}
 
 ENV PKG_CONFIG_ALLOW_CROSS 1
 RUN dpkg --add-architecture arm64 && \

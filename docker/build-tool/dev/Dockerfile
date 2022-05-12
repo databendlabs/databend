@@ -1,6 +1,6 @@
 ARG RUST_TOOLCHAIN
 ARG ARCH
-FROM datafuselabs/build-tool:base-${RUST_TOOKCHAIN}
+FROM datafuselabs/build-tool:base-${RUST_TOOLCHAIN}
 
 COPY scripts/setup/rust-tools.txt /build/scripts/setup/rust-tools.txt
 RUN /build/scripts/setup/dev_setup.sh -yd && \
