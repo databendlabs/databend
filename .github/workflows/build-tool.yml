@@ -72,7 +72,7 @@ jobs:
       - name: Get Image Name
         run: |
           image="datafuselabs/build-tool:${{ matrix.arch }}-unkown-linux-${{ matrix.platform }}"
-          echo "IMAGE=${image/_/-}" >> $GITHUB_ENV
+          echo "IMAGE=${image}" >> $GITHUB_ENV
 
       - name: Build and publish databend build image
         uses: docker/build-push-action@v3
