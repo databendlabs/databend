@@ -1,7 +1,7 @@
 ---
 title: Versioned Config
 description: RFC for versioned config
-rfc_pr: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/pull/0000)
+rfc_pr: [datafuselabs/databend#5324](https://github.com/datafuselabs/databend/pull/5324)
 tracking_issue: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/issues/0000)
 ---
 
