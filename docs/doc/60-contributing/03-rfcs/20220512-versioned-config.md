@@ -4,7 +4,7 @@ description: RFC for versioned config
 ---
 
 - RFC PR: [datafuselabs/databend#5324](https://github.com/datafuselabs/databend/pull/5324)
-- Tracking Issue: [datafuselabs/databend#0000](https://github.com/datafuselabs/databend/issues/0000)
+- Tracking Issue: [datafuselabs/databend#5297](https://github.com/datafuselabs/databend/issues/5297)
 
 # Summary
 
