@@ -49,8 +49,13 @@ Suppose incompatible changes happened, like config been removed/renamed/changed.
 
 Inside databend, we will split config into `inner` and `outer`:
 
-- `inner`: config instances used inside databend, all logic will be implemented towards `inner` config.
-- `outer`: config instances used as the front office of databend. They will have different versions and transform into an `inner` config.
+**`inner`**
+
+Config instances used inside databend. All logic **SHOULD** be implemented towards `inner` config.
+
+**`outer`**
+
+Config instances used as the front office of databend. They will have different versions and transform into an `inner` config. Other modules **SHOULD** not depend on `outer` config.
 
 Take `query` for example:
 
