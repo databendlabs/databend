@@ -101,7 +101,10 @@ impl FuseTable {
         }
     }
 
-    fn all_columns_partitions(metas: &[BlockMeta], limit: usize) -> (Statistics, Partitions) {
+    pub(crate) fn all_columns_partitions(
+        metas: &[BlockMeta],
+        limit: usize,
+    ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
