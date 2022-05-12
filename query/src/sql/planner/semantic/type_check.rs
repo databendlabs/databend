@@ -455,7 +455,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve literal values.
-    fn parse_literal(
+    pub fn parse_literal(
         &self,
         literal: &Literal,
         _required_type: Option<DataTypeImpl>,
