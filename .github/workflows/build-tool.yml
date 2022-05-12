@@ -37,7 +37,7 @@ jobs:
           tags: |
             datafuselabs/build-tool:base
             datafuselabs/build-tool:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
-          context: .
+          context: ./scripts/setup
           file: ./docker/build-tool/base/Dockerfile
 
   build:
@@ -71,7 +71,7 @@ jobs:
 
       - name: Get Image Name
         run: |
-          image="datafuselabs/build-tool:${{ matrix.arch }}-unkown-linux-${{ matrix.platform }}"
+          image="datafuselabs/build-tool:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}"
           echo "IMAGE=${image}" >> $GITHUB_ENV
 
       - name: Build and publish databend build image
@@ -117,7 +117,7 @@ jobs:
           tags: |
             datafuselabs/build-tool:dev
             datafuselabs/build-tool:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
-          context: .
+          context: ./scripts/setup
           file: ./docker/build-tool/dev/Dockerfile
           build-args: |
             RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
