@@ -80,8 +80,8 @@ jobs:
           pull: true
           push: true
           tags:
-            ${{ env.IMAEG }}
-            ${{ env.IMAEG }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+            ${{ env.IMAGE }}
+            ${{ env.IMAGE }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./docker/build-tool/${{ matrix.platform }}/
           file: ./docker/build-tool/${{ matrix.platform }}/Dockerfile
           build-args:
