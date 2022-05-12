@@ -38,7 +38,6 @@ jobs:
             datafuselabs/build-tool:base
             datafuselabs/build-tool:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: .
-          target: build-base
           file: ./docker/build-tool/base/Dockerfile
 
   build:
