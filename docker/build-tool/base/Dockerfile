@@ -1,4 +1,4 @@
-FROM debian:bullseye as build-base
+FROM debian:bullseye
 
 ENV TERM=dumb
 ENV DEBIAN_FRONTEND=noninteractive
@@ -40,16 +40,3 @@ ENV CARGO_HOME /opt/rust/cargo
 ENV PATH /opt/rust/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]
 
-
-FROM build-base as multiarch
-ENV PKG_CONFIG_ALLOW_CROSS 1
-COPY scripts/setup/cross_setup.sh /build/scripts/setup/cross_setup.sh
-RUN chmod +x /build/scripts/setup/cross_setup.sh && /build/scripts/setup/cross_setup.sh
-
-
-FROM build-base as dev
-COPY scripts/setup/rust-tools.txt /build/scripts/setup/rust-tools.txt
-RUN /build/scripts/setup/dev_setup.sh -yd && \
-    rm -rf /opt/rust/cargo/git && \
-    rm -rf /opt/rust/cargo/registry && \
-    rm -rf /root/.cache/*

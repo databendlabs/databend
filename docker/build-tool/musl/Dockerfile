@@ -1,8 +1,10 @@
-FROM rustembedded/cross:x86_64-unknown-linux-musl
-COPY ./openssl.sh /
-RUN bash /openssl.sh linux-x86_64 x86_64-linux-musl-
+ARG RUST_TOOLCHAIN
+ARG ARCH
+FROM datafuselabs/build-tool:base-${RUST_TOOKCHAIN}
 
-ENV OPENSSL_DIR=/openssl \
-    OPENSSL_INCLUDE_DIR=/openssl/include \
-    OPENSSL_LIB_DIR=/openssl/lib \
-    OPENSSL_STATIC=1
+COPY docker/build-tool/musl/musl.sh /musl.sh
+RUN chmod +x /musl.sh && /musl.sh TARGET=${ARCH}-linux-musl
+
+RUN rustup target add ${ARCH}-unknown-linux-musl
+RUN ln -s ${ARCH}-linux-musl-gcc /usr/local/bin/musl-gcc
+RUN printf "[target.${ARCH}-unknown-linux-musl]\nlinker = \"${ARCH}-linux-musl-gcc\"\n" > ${CARGO_HOME}/config
