@@ -133,10 +133,9 @@ impl<'a> Binder {
                         data_type,
                         scalar: Some(Box::new(bound_expr.clone())),
                     };
-                    if alias.is_some() {
+                    if let Some(alias) = alias {
                         input_context.columns.push(column_binding.clone());
-                        origin_group_by
-                            .insert(alias.as_ref().unwrap().name.clone(), bound_expr.clone());
+                        origin_group_by.insert(alias.name.clone(), bound_expr.clone());
                     }
                     if has_order_by
                         && !matches!(bound_expr, Scalar::BoundColumnRef(BoundColumnRef { .. }))
