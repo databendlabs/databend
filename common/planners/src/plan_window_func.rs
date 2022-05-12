@@ -20,7 +20,7 @@ use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct WindowAggrPlan {
+pub struct WindowFuncPlan {
     /// The window function expression
     pub window_func: Expression,
     /// The incoming logical plan
@@ -29,7 +29,7 @@ pub struct WindowAggrPlan {
     pub schema: DataSchemaRef,
 }
 
-impl WindowAggrPlan {
+impl WindowFuncPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }

@@ -23,7 +23,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::plan_window_aggr::WindowAggrPlan;
+use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -114,7 +114,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::Broadcast(plan) => self.rewrite_broadcast(plan),
             PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
-            PlanNode::WindowAggr(plan) => self.rewrite_window_aggr(plan),
+            PlanNode::WindowFunc(plan) => self.rewrite_window_func(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::Sort(plan) => self.rewrite_sort(plan),
             PlanNode::Limit(plan) => self.rewrite_limit(plan),
@@ -313,11 +313,11 @@ pub trait PlanRewriter: Sized {
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
 
-    fn rewrite_window_aggr(&mut self, plan: &WindowAggrPlan) -> Result<PlanNode> {
+    fn rewrite_window_func(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
         let new_window_func = self.rewrite_expr(&new_input.schema(), &plan.window_func)?;
         PlanBuilder::from(&new_input)
-            .window_aggr(new_window_func)?
+            .window_func(new_window_func)?
             .build()
     }
 

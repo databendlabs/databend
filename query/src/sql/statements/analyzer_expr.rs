@@ -285,6 +285,25 @@ impl ExpressionAnalyzer {
             }
         }
 
+        let mut parameters = Vec::with_capacity(info.parameters.len());
+
+        for parameter in &info.parameters {
+            match ValueExprAnalyzer::analyze(
+                parameter,
+                self.context.get_current_session().get_type(),
+            )? {
+                Expression::Literal { value, .. } => {
+                    parameters.push(value);
+                }
+                expr => {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported value expression: {:?}, must be datavalue",
+                        expr
+                    )));
+                }
+            };
+        }
+
         let mut arguments = Vec::with_capacity(info.args_count);
         for _ in 0..info.args_count {
             match args.pop() {
@@ -317,6 +336,7 @@ impl ExpressionAnalyzer {
 
         Ok(Expression::WindowFunction {
             op: info.name.clone(),
+            params: parameters,
             args: arguments,
             partition_by,
             order_by,

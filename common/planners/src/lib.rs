@@ -98,7 +98,7 @@ mod plan_user_udf_drop;
 mod plan_view_alter;
 mod plan_view_create;
 mod plan_view_drop;
-mod plan_window_aggr;
+mod plan_window_func;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
@@ -224,3 +224,4 @@ pub use plan_user_udf_drop::DropUserUDFPlan;
 pub use plan_view_alter::AlterViewPlan;
 pub use plan_view_create::CreateViewPlan;
 pub use plan_view_drop::DropViewPlan;
+pub use plan_window_func::WindowFuncPlan;

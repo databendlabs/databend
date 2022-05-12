@@ -1785,6 +1785,7 @@ dependencies = [
  "criterion",
  "dyn-clone",
  "enum_dispatch",
+ "enum_extract",
  "futures",
  "headers",
  "http",
@@ -2085,6 +2086,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "enum_extract"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11578f9e8496eeb626c549e1b340a57e479840ff7ae13fe12d4dbd97c18779d1"
 
 [[package]]
 name = "enumflags2"

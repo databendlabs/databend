@@ -224,13 +224,38 @@ impl PlanParser {
             true => Ok(plan),
             false => {
                 let exprs = data.window_expressions.to_vec();
-                Ok(exprs.into_iter().fold(plan, |input, window_func| {
-                    PlanBuilder::from(&input)
-                        .window_aggr(window_func)
-                        .unwrap()
-                        .build()
-                        .unwrap()
-                }))
+                exprs.into_iter().try_fold(plan, |input, window_func| {
+                    let mut new_plan_builder = PlanBuilder::from(&input);
+                    let mut sort_columns = vec![];
+                    match &window_func {
+                        Expression::WindowFunction {
+                            partition_by,
+                            order_by,
+                            ..
+                        } => {
+                            for expr in partition_by {
+                                sort_columns.push(Expression::Sort {
+                                    expr: Box::new(expr.to_owned()),
+                                    asc: true,
+                                    nulls_first: false,
+                                    origin_expr: Box::new(expr.to_owned()),
+                                });
+                            }
+                            for expr in order_by {
+                                sort_columns.push(expr.clone());
+                            }
+                        }
+                        _ => {
+                            return Err(ErrorCode::LogicalError(
+                                "It should be a WindowFunction expression!",
+                            ))
+                        }
+                    }
+                    if !sort_columns.is_empty() {
+                        new_plan_builder = new_plan_builder.sort(&sort_columns)?;
+                    }
+                    new_plan_builder.window_func(window_func.clone())?.build()
+                })
             }
         }
     }

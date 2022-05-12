@@ -27,10 +27,12 @@ mod transform_remote;
 mod transform_sort_merge;
 mod transform_sort_partial;
 mod transform_source;
+mod transform_window_func;
 
 pub mod group_by;
 mod streams;
 mod transform_sink;
+pub mod window_func;
 
 pub use streams::AddOnStream;
 pub use transform_aggregator_final::AggregatorFinalTransform;
@@ -52,3 +54,4 @@ pub use transform_sort_merge::SortMergeTransform;
 pub use transform_sort_partial::get_sort_descriptions;
 pub use transform_sort_partial::SortPartialTransform;
 pub use transform_source::SourceTransform;
+pub use transform_window_func::WindowFuncTransform;

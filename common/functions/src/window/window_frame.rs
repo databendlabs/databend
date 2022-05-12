@@ -103,27 +103,22 @@ impl Default for WindowFrame {
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub enum WindowFrameUnits {
-    /// The ROWS frame type means that the starting and ending boundaries for the frame are
-    /// determined by counting individual rows relative to the current row.
-    Rows,
     /// The RANGE frame type requires that the ORDER BY clause of the window have exactly one
     /// term. Call that term "X". With the RANGE frame type, the elements of the frame are
     /// determined by computing the value of expression X for all rows in the partition and framing
     /// those rows for which the value of X is within a certain range of the value of X for the
     /// current row.
     Range,
-    /// The GROUPS frame type means that the starting and ending boundaries are determine
-    /// by counting "groups" relative to the current group. A "group" is a set of rows that all have
-    /// equivalent values for all all terms of the window ORDER BY clause.
-    Groups,
+    /// The ROWS frame type means that the starting and ending boundaries for the frame are
+    /// determined by counting individual rows relative to the current row.
+    Rows,
 }
 
 impl fmt::Display for WindowFrameUnits {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
-            WindowFrameUnits::Rows => "ROWS",
             WindowFrameUnits::Range => "RANGE",
-            WindowFrameUnits::Groups => "GROUPS",
+            WindowFrameUnits::Rows => "ROWS",
         })
     }
 }
@@ -132,8 +127,8 @@ impl From<ast::WindowFrameUnits> for WindowFrameUnits {
     fn from(value: ast::WindowFrameUnits) -> Self {
         match value {
             ast::WindowFrameUnits::Range => Self::Range,
-            ast::WindowFrameUnits::Groups => Self::Groups,
             ast::WindowFrameUnits::Rows => Self::Rows,
+            _ => unimplemented!(),
         }
     }
 }

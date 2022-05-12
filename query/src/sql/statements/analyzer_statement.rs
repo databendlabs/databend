@@ -107,7 +107,7 @@ impl Debug for QueryAnalyzeState {
         }
 
         if !self.window_expressions.is_empty() {
-            debug_struct.field("window_aggr", &self.window_expressions);
+            debug_struct.field("window_func", &self.window_expressions);
         }
 
         if !self.expressions.is_empty() {

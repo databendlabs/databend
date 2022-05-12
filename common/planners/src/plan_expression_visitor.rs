@@ -72,8 +72,8 @@ pub trait ExpressionVisitor: Sized {
                                     order_by,
                                     ..
                                 } => {
-                                    for arg_exppr in args {
-                                        stack.push(RecursionProcessing::Call(arg_exppr));
+                                    for arg_expr in args {
+                                        stack.push(RecursionProcessing::Call(arg_expr));
                                     }
                                     for part_by_expr in partition_by {
                                         stack.push(RecursionProcessing::Call(part_by_expr));

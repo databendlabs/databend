@@ -318,12 +318,14 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
 
             Expression::WindowFunction {
                 op,
+                params,
                 args,
                 partition_by,
                 order_by,
                 window_frame,
             } => Ok(Expression::WindowFunction {
                 op: op.clone(),
+                params: params.clone(),
                 args: args
                     .iter()
                     .map(|e| clone_with_replacement(e, replacement_fn))

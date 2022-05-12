@@ -31,6 +31,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
+use common_planners::WindowFuncPlan;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
@@ -107,6 +108,14 @@ impl ScattersOptimizerImpl {
                 .aggregate_partial(&plan.aggr_expr, &plan.group_expr)?
                 .build(),
         }
+    }
+
+    fn cluster_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        todo!()
+    }
+
+    fn standalone_window(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        todo!()
     }
 
     fn cluster_sort(&mut self, plan: &SortPlan) -> Result<PlanNode> {
@@ -248,6 +257,17 @@ impl PlanRewriter for ScattersOptimizerImpl {
             Some(schema_before_group_by) => PlanBuilder::from(&new_input)
                 .aggregate_final(schema_before_group_by, &plan.aggr_expr, &plan.group_expr)?
                 .build(),
+        }
+    }
+
+    fn rewrite_window_func(&mut self, plan: &WindowFuncPlan) -> Result<PlanNode> {
+        let new_input = Arc::new(self.rewrite_plan_node(&plan.input)?);
+
+        self.input = Some(new_input.clone());
+
+        match self.running_mode {
+            RunningMode::Cluster => self.cluster_window(plan),
+            RunningMode::Standalone => self.standalone_window(plan),
         }
     }
 
