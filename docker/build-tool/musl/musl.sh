@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # from: https://github.com/cross-rs/cross/blob/main/docker/musl.sh
 
 set -x

@@ -1,4 +1,4 @@
-name: Platform
+name: Build Tool
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - "scripts/setup/**"
-      - "scripts/docker/**"
+      - "docker/build-tool/**"
 
 jobs:
   base:
