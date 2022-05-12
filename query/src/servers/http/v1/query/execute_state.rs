@@ -37,6 +37,8 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
+use crate::storages::result::ResultQueryInfo;
+use crate::storages::result::ResultTableWriter;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ExecuteStateKind {
@@ -209,16 +211,46 @@ async fn execute(
 ) -> Result<()> {
     let data_stream = interpreter.execute(None).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
+
+    let mut result_table_writer: Option<ResultTableWriter> = None;
     while let Some(block_r) = data_stream.next().await {
         match block_r {
-            Ok(block) => tokio::select! {
-                _ = block_tx.send(block) => { },
-                _ = abort_rx.recv() => {
-                    return Err(ErrorCode::AbortedQuery("aborted"))
-                },
-            },
-            Err(err) => return Err(err),
+            Ok(block) => {
+                if result_table_writer.is_none() {
+                    result_table_writer = Some(
+                        ResultTableWriter::new(ctx.clone(), ResultQueryInfo {
+                            query_id: ctx.get_id(),
+                            schema: block.schema().clone(),
+                            user: ctx.get_current_user()?.identity(),
+                        })
+                        .await?,
+                    )
+                };
+                result_table_writer
+                    .as_mut()
+                    .unwrap()
+                    .append_block(block.clone())
+                    .await?;
+                tokio::select! {
+                    _ = block_tx.send(block) => { },
+                    _ = abort_rx.recv() => {
+                        if let Some(writer) = result_table_writer {
+                            writer.abort().await?;
+                        }
+                        return Err(ErrorCode::AbortedQuery("aborted"))
+                    },
+                };
+            }
+            Err(err) => {
+                if let Some(writer) = result_table_writer {
+                    writer.abort().await?;
+                }
+                return Err(err);
+            }
         };
+    }
+    if let Some(mut writer) = result_table_writer {
+        writer.commit().await?;
     }
     Ok(())
 }
