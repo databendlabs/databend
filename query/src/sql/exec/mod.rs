@@ -44,6 +44,7 @@ use crate::pipelines::new::processors::SortMergeCompactor;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::processors::TransformHashJoinProbe;
+use crate::pipelines::new::processors::TransformLimit;
 use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
@@ -57,6 +58,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::FilterPlan;
+use crate::sql::plans::LimitPlan;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
@@ -198,6 +200,12 @@ impl PipelineBuilder {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
                 self.build_order_by(&sort_plan, input_schema, pipeline)
+            }
+            PlanType::Limit => {
+                let limit_plan: LimitPlan = plan.try_into()?;
+                let input_schema =
+                    self.build_pipeline(context, &expression.children()[0], pipeline)?;
+                self.build_limit(&limit_plan, input_schema, pipeline)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -574,6 +582,26 @@ impl PipelineBuilder {
             )
         })?;
 
-        Ok(output_schema.clone())
+        Ok(output_schema)
+    }
+
+    fn build_limit(
+        &mut self,
+        limit_plan: &LimitPlan,
+        input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
+        pipeline.resize(1)?;
+
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformLimit::try_create(
+                limit_plan.limit,
+                limit_plan.offset,
+                transform_input_port,
+                transform_output_port,
+            )
+        })?;
+
+        Ok(input_schema)
     }
 }
