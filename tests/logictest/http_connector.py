@@ -1,5 +1,6 @@
 import json
 import logging
+from xmlrpc.client import Boolean
 
 import requests
 from mysql.connector.errors import Error
@@ -13,19 +14,33 @@ headers = {
     'Accept': 'application/json'
 }
 
-def format_result(response):
-    # only for debug 
-    log.debug("error: {}".format(response['data'] ))
+def format_result(results):
     res = ""
-    for line in response['data']:
+    for line in results:
         lineTmp = ""
         for item in line:
+            if isinstance(item, bool):
+                item = str.lower(str(item))
             if lineTmp == "":
                 lineTmp = str(item)
             else:
                 lineTmp = lineTmp + " " + str(item)  # every item seperate by space
         res = res + lineTmp + "\n"
     return res
+
+def get_query_options(response):
+    ret = ""
+    for field in response['schema']['fields']:
+        type = str.lower(field['data_type']['type'])
+        if "int" in type:
+            ret = ret + "I"
+        elif "float" in type or "double" in type:
+            ret = ret + "F"
+        elif "boolean" in type:
+             ret = ret + "B"
+        else:
+            ret = ret + "T"
+    return ret
 
 def get_next_uri(response):
     if "next_uri" in response:
@@ -103,6 +118,7 @@ class HttpConnector():
     def fetch_all(self, statement):
         full_result = []
         resp = self.query_with_session(statement)
+        self._query_option = get_query_options(resp) # record schema
         while True:
             full_result = full_result + get_result(resp) 
             nextUri = get_next_uri(resp)
@@ -110,6 +126,9 @@ class HttpConnector():
                 break           
             resp = requests.get(nextUri)                  
         return full_result
+
+    def get_query_option(self):
+        return self._query_option
 
 
 if __name__ == '__main__':

@@ -1,20 +1,9 @@
+#!/usr/bin/env python3
+
 from mysql_runner import TestMySQL
 from http_runner import TestHttp
 
-config = {
-    'user': 'root',
-    'password': 'root',
-    'host': '127.0.0.1',
-    "port": 3307,
-    'database': 'default',
-    'raise_on_warnings': True
-}
-
-http_config = {
-    'host': '127.0.0.1',
-    "port": 8000,
-    'database': 'default',
-}
+from config import config,http_config
 
 if __name__ == '__main__':
     mySQL = TestMySQL("mysql")
