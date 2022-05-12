@@ -100,7 +100,7 @@ jobs:
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
           changelog: ${{ steps.changelog_reader.outputs.log_entry }}
 
-  publish_linux_gnu:
+  publish_linux:
     name: Release linux gnu assets
     runs-on: ubuntu-latest
     env:
@@ -114,6 +114,8 @@ jobs:
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
+          - x86_64-unknown-linux-musl
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -125,7 +127,15 @@ jobs:
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
         with:
-          image: multiarch
+          image: ${{ matrix.target }}
+      - name: set rustflags
+        if: "contains(inputs.target, 'musl')"
+        run: |
+          flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+      - name: Build Binary
+        run: |
+          cargo build --release --target=${{ matrix.target }}
       - name: get objcopy path
         id: get_objcopy
         shell: bash
@@ -135,9 +145,9 @@ jobs:
             OBJCOPY=/usr/bin/aarch64-linux-gnu-objcopy
           fi
           echo ::set-output name=OBJCOPY::${OBJCOPY}
-      - name: Build Binary
-        run: |
-          cargo build --release --target=${{ matrix.target }}
+      - name: copyobj zlib
+        if: "contains(inputs.target, 'gnu')"
+        run:
           build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-query
           build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-meta
           build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-metactl

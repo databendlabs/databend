@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::catalogs::CATALOG_DEFAULT;
+use crate::sql::binder::aggregate::AggregateInfo;
 use crate::sql::binder::scalar_common::split_conjunctions;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
@@ -76,7 +77,20 @@ impl<'a> Binder {
         }
 
         if !query.limit.is_empty() {
-            return Err(ErrorCode::UnImplement("Unsupported LIMIT"));
+            if query.limit.len() == 1 {
+                self.bind_limit(Some(&query.limit[0]), &query.offset, &mut bind_context)
+                    .await?;
+            } else {
+                self.bind_limit(
+                    Some(&query.limit[0]),
+                    &Some(query.limit[1].clone()),
+                    &mut bind_context,
+                )
+                .await?;
+            }
+        } else if query.offset.is_some() {
+            self.bind_limit(None, &query.offset, &mut bind_context)
+                .await?;
         }
 
         Ok(bind_context)
@@ -99,16 +113,19 @@ impl<'a> Binder {
         }
 
         // Output of current `SELECT` statement.
-
+        let mut agg_info = AggregateInfo::new();
         let mut output_context = self
-            .normalize_select_list(&stmt.select_list, has_order_by, &input_context)
+            .normalize_select_list(
+                &stmt.select_list,
+                has_order_by,
+                &mut agg_info,
+                &mut input_context,
+            )
             .await?;
 
-        self.analyze_aggregate(&output_context, &mut input_context)?;
-
-        if !input_context.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty()
-        {
-            self.bind_group_by(&stmt.group_by, &mut input_context)
+        self.analyze_aggregate(&output_context, &mut agg_info)?;
+        if !agg_info.agg_scalar_exprs.as_ref().unwrap().is_empty() || !stmt.group_by.is_empty() {
+            self.bind_group_by(&stmt.group_by, &mut input_context, &agg_info)
                 .await?;
             output_context.expression = input_context.expression.clone();
         }

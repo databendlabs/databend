@@ -1,0 +1,121 @@
+name: Build Tool
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/setup/**"
+      - "docker/build-tool/**"
+
+jobs:
+  base:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get rust toolchain version
+        id: toolchain
+        run: |
+          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
+          echo "::set-output name=TOOLCHAIN::${version}"
+
+      - name: Build and publish databend build base image
+        uses: docker/build-push-action@v2
+        with:
+          pull: true
+          push: true
+          tags: |
+            datafuselabs/build-tool:base
+            datafuselabs/build-tool:base-${{ steps.toolchain.outputs.TOOLCHAIN }}
+          context: .
+          file: ./docker/build-tool/base/Dockerfile
+
+  build:
+    runs-on: ubuntu-latest
+    needs: base
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+        platform:
+          - gnu
+          - musl
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get rust toolchain version
+        id: toolchain
+        run: |
+          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
+          echo "::set-output name=TOOLCHAIN::${version}"
+
+      - name: Get Image Name
+        run: |
+          image="datafuselabs/build-tool:${{ matrix.arch }}-unkown-linux-${{ matrix.platform }}"
+          echo "IMAGE=${image/_/-}" >> $GITHUB_ENV
+
+      - name: Build and publish databend build image
+        uses: docker/build-push-action@v2
+        with:
+          pull: true
+          push: true
+          tags:
+            ${{ env.IMAGE }}
+            ${{ env.IMAGE }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
+          context: ./docker/build-tool/${{ matrix.platform }}/
+          file: ./docker/build-tool/${{ matrix.platform }}/Dockerfile
+          build-args:
+            ARCH=${{ matrix.arch }}
+            RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
+
+  dev:
+    runs-on: ubuntu-latest
+    needs: base
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get rust toolchain version
+        id: toolchain
+        run: |
+          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
+          echo "::set-output name=TOOLCHAIN::${version}"
+
+      - name: Build and publish databend build base image
+        uses: docker/build-push-action@v2
+        with:
+          pull: true
+          push: true
+          tags: |
+            datafuselabs/build-tool:dev
+            datafuselabs/build-tool:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
+          context: .
+          file: ./docker/build-tool/dev/Dockerfile
