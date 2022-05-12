@@ -84,7 +84,7 @@ jobs:
             ${{ env.IMAGE }}-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./docker/build-tool/${{ matrix.platform }}/
           file: ./docker/build-tool/${{ matrix.platform }}/Dockerfile
-          build-args:
+          build-args: |
             ARCH=${{ matrix.arch }}
             RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
 
