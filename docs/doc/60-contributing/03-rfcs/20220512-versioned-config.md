@@ -143,4 +143,25 @@ None.
 
 # Future possibilities
 
-None.
+## Load different versions from config files and envs
+
+It's possible to load different versions from config files and envs.
+
+For example:
+
+Old version from config files:
+
+```toml
+version = 23
+
+a = "Version 23"
+```
+
+New version from env:
+
+```shell
+export CONFIG_VERSION=42
+export QUERY_B = "Version 42"
+```
+
+For the best situation, we can load from env via version 42 and then load from config via version 23.
