@@ -43,7 +43,7 @@ All config files, env, and args will be supported:
 
 Suppose compatible changes happened as a new config entry was added. databend will make sure that the entry has a default value.
 
-Suppose incompatible changes happened, like config been removed/renamed/changed. databend increases the config version. The older version will still load by the specified version and be converted to the latest config internally.
+Suppose incompatible changes happened, like config been removed/renamed/changed. databend increases the config version. The older version will still load by the specified version and be converted to the latest config internally. For removed config fields, a `DEPRECATED` warning will also be printed. So users can decide whether to migrate them.
 
 # Reference-level explanation
 
@@ -110,6 +110,12 @@ For example: `common-io` should provide `inner` config `StorageConfig`. If `quer
 - Implement `Into<StorageConfig> for v1::StorageConfigV1`.
 - Refer `StorageConfig` in `QueryConfig`,
 - Refer `v1::StorageConfig` and `v1::QueryConfig`.
+
+## Config Maintenance
+
+- Add config: add with new default is compatible; If the field is required, version should be bumped.
+- Remove config: remove field is incompatible, version should be bumped. It's recommended to mark them as `DEPRECATED` before bumping versions.
+- Change config: change config is incompatible, it's better to split them into adding and removing actions.
 
 # Drawbacks
 
