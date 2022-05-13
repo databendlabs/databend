@@ -1,13 +1,9 @@
-import logging
 from abc import ABC
 
 import mysql.connector
 
 import logictest
-
-logging.basicConfig(level=logging.INFO)
-
-log = logging.getLogger(__name__)
+from log import log
 
 
 class TestMySQL(logictest.SuiteRunner, ABC):

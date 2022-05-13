@@ -5,24 +5,25 @@
 import os
 import re
 import copy
-import logging
 import time
 
 import mysql.connector
 
+from log import log
 from config import mysql_config, http_config
 from logictest import is_empty_line
 from http_connector import HttpConnector, format_result
 
-logging.basicConfig(level=logging.WARNING)
-log = logging.getLogger(__name__)
-
 suite_path = "../suites/0_stateless/"
 logictest_path = "./suites/gen/"
+skip_exist = True
 
 database_regex = r"use|USE (?P<database>.*);"
 error_regex = r"(?P<statement>.*)-- {ErrorCode (?P<expectError>.*)}"
 query_statment_first_words = ["select", "show", "explain", "describe"]
+
+exception_sqls = []
+manual_cases = []
 
 STATEMENT_OK = """statement ok
 {statement}
@@ -125,6 +126,12 @@ def parse_cases(sql_file):
 
     target_dir = os.path.dirname(str.replace(sql_file,suite_path,logictest_path))
     case_name = os.path.splitext(os.path.basename(sql_file))[0]
+    target_file = os.path.join(target_dir,case_name)
+
+    if skip_exist and os.path.exists(target_file):
+        log.warning("skip case file {}, already exist.".format(target_file))
+        return
+
     log.info("Write test case to path: {}, case name is {}".format(target_dir, case_name))
 
     content_output = ""
@@ -157,8 +164,13 @@ def parse_cases(sql_file):
         if str.lower(first_word(statement)) in query_statment_first_words:      
             # query statement
             
-            http_results = format_result(http_client.fetch_all(statement))
-            query_options = http_client.get_query_option()
+            try:
+                http_results = format_result(http_client.fetch_all(statement))
+                query_options = http_client.get_query_option()
+            except Exception as err:
+                exception_sqls.append(statement)
+                log.error("Exception SQL: {}".format(statement))
+                continue
 
             if query_options == "":
                 log.warning("statement: {} type query could not get query_option change to ok statement".format(statement))
@@ -201,6 +213,8 @@ def parse_cases(sql_file):
                 # mysql excute for data
                 if str.lower(statement).startswith("drop"):
                     http_client.set_database("default")
+                if str.lower(statement).startswith("set"):
+                    http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
                 log.warning("statement {} excute error,msg {}".format(statement, str(err)))
@@ -212,10 +226,20 @@ def parse_cases(sql_file):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
-    caseFile = open(os.path.join(target_dir,case_name), 'w', encoding="UTF-8")
+    caseFile = open(target_file, 'w', encoding="UTF-8")
     caseFile.write(content_output)
     caseFile.close()
 
+def output():
+    print("=================================")
+    print("Exception sql using Http handler:")
+    print("\n".join(exception_sqls))
+    print("=================================")
+    print("\n")
+    print("=================================")
+    print("Manual suites:")
+    print("\n".join(manual_cases))
+    print("=================================")
 
 def main():
     all_cases = get_all_cases()
@@ -227,11 +251,14 @@ def main():
         
         # .py .sh will be ignore, need log
         if ".py" in file or ".sh" in file:
+            manual_cases.append(file)
             log.warning("test file {} will be ignore".format(file))
             continue
 
         parse_cases(file)
-        time.sleep(0.1)
+        time.sleep(0.01)
+
+    output()
     
 
 if __name__ == '__main__':

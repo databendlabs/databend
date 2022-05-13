@@ -3,14 +3,12 @@ import collections
 import glob
 import os
 import re
-import logging
 
 import six
 from hamcrest import assert_that, is_, none, is_not
 
-logging.basicConfig(level=logging.INFO)
+from log import log
 
-log = logging.getLogger(__name__)
 # statement is a statement in sql logic test
 state_regex = r"^\s*statement\s+(?P<statement>((?P<ok>OK)|((?P<error>)ERROR\s*(?P<expectError>.*))|(?P<query>QUERY\s*((" \
               r"ERROR\s+(?P<queryError>.*))|(?P<queryOptions>.*)))))$"

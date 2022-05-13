@@ -1,12 +1,8 @@
 import json
-import logging
 
 import requests
 from mysql.connector.errors import Error
-
-logging.basicConfig(level=logging.INFO)
-
-log = logging.getLogger(__name__)
+from log import log
 
 headers = {
     'Content-Type': 'application/json',
@@ -74,13 +70,15 @@ class HttpConnector():
     # Call connect(**driver) 
     # driver is a dict contains:
     # {
+    #   'user': 'root', 
     #   'host': '127.0.0.1',
     #   'port': 3307,
     #   'database': 'default'
     # }
-    def connect(self, host, port, database = default_database):
+    def connect(self, host, port, user ="root", database = default_database):
         self._host = host
         self._port = port 
+        self._user = user
         self._database = database
         self._session_max_idle_time = 300
         self._session = None
@@ -109,6 +107,7 @@ class HttpConnector():
         response = requests.post(
             url,
             data=json.dumps(query_sql), 
+            auth=(self._user,""),
             headers=headers
         )
         try:
@@ -150,7 +149,7 @@ class HttpConnector():
 
     def fetch_all(self, statement):
         # TODO use next_uri to get all results
-        resp = self.query_without_session(statement)
+        resp = self.query_with_session(statement)
         if resp is None:
             log.warning("fetch all with empty results")
             return None
@@ -164,12 +163,8 @@ class HttpConnector():
 if __name__ == '__main__':
     connector = HttpConnector()
     connector.connect("127.0.0.1", 8000)
-    resp = connector.query_with_session("show databases;")
-
-    print(format_result(resp))
-
-    resp = connector.query_with_session("show tables;")
-    print(format_result(resp))
-
-    resp = connector.fetch_all("select * from t3;")
-    print(resp)
+    # resp = connector.query_with_session("show databases;")
+    # resp = connector.query_with_session("show tables;")
+    # print(format_result(resp))
+    # resp = connector.fetch_all("select * from t3;")
+    # print(resp)

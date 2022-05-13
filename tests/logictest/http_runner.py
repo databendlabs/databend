@@ -1,12 +1,8 @@
 from abc import ABC
-import logging
 
 import logictest
 import http_connector
-
-logging.basicConfig(level=logging.INFO)
-
-log = logging.getLogger(__name__)
+from log import log
 
 class TestHttp(logictest.SuiteRunner, ABC):
 
