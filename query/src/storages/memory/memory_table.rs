@@ -328,7 +328,7 @@ impl MemoryTableSource {
             }
         }
 
-        Ok(None)
+        Ok(Some(data_block))
     }
 }
 
