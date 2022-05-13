@@ -148,7 +148,6 @@ pub enum Expr<'a> {
         span: &'a [Token<'a>],
         subquery: Box<Query<'a>>,
     },
-    // TODO(andylokandy): allow interval, function, and others alike to be a key
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         span: &'a [Token<'a>],
@@ -552,7 +551,14 @@ impl<'a> Display for Expr<'a> {
                 column,
                 ..
             } => {
-                write_period_separated_list(f, database.iter().chain(table).chain(Some(column)))?;
+                if f.alternate() {
+                    write!(f, "{}", column.name)?;
+                } else {
+                    write_period_separated_list(
+                        f,
+                        database.iter().chain(table).chain(Some(column)),
+                    )?;
+                }
             }
             Expr::IsNull { expr, not, .. } => {
                 write!(f, "{expr} IS")?;

@@ -103,6 +103,7 @@ fn test_statement() {
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
+        r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
     ];
 
     for case in cases {
