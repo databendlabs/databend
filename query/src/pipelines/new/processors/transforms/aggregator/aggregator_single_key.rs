@@ -53,32 +53,28 @@ pub struct SingleStateAggregator<const FINAL: bool> {
 
 impl<const FINAL: bool> SingleStateAggregator<FINAL> {
     pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
+        assert!(!params.offsets_aggregate_states.is_empty());
         let arena = Bump::new();
 
-        let mut places: Vec<StateAddr> = vec![];
-        let mut temp_places: Vec<StateAddr> = vec![];
-        if !params.offsets_aggregate_states.is_empty() {
-            let mut offsets_aggregate_states = Vec::with_capacity(params.aggregate_functions.len());
-            let layout =
-                get_layout_offsets(&params.aggregate_functions, &mut offsets_aggregate_states)?;
+        let mut offsets_aggregate_states = Vec::with_capacity(params.aggregate_functions.len());
+        let layout =
+            get_layout_offsets(&params.aggregate_functions, &mut offsets_aggregate_states)?;
+        let get_places = || -> Vec<StateAddr> {
+            let place: StateAddr = arena.alloc_layout(layout).into();
+            params
+                .aggregate_functions
+                .iter()
+                .enumerate()
+                .map(|(idx, func)| {
+                    let arg_place = place.next(offsets_aggregate_states[idx]);
+                    func.init_state(arg_place);
+                    arg_place
+                })
+                .collect()
+        };
 
-            let get_places = || -> Vec<StateAddr> {
-                let place: StateAddr = arena.alloc_layout(layout).into();
-                params
-                    .aggregate_functions
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, func)| {
-                        let arg_place = place.next(offsets_aggregate_states[idx]);
-                        func.init_state(arg_place);
-                        arg_place
-                    })
-                    .collect()
-            };
-
-            places = get_places();
-            temp_places = get_places();
-        }
+        let places = get_places();
+        let temp_places = get_places();
         Ok(Self {
             _arena: arena,
             places,
