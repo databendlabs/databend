@@ -1,6 +1,6 @@
 ---
-title: Versioned Config
-description: RFC for versioned config
+title: Config Backward Compatibility
+description: RFC for backward config compatibility
 ---
 
 - RFC PR: [datafuselabs/databend#5324](https://github.com/datafuselabs/databend/pull/5324)
@@ -33,17 +33,9 @@ With this RFC, our users will upgrade their deployments without breaking. Old co
 
 # Guide-level explanation
 
-With this RFC, users will have a new field called `version` at the top of the config file. The value of the version is an integer and defaults to `0`. If the version is not specified, we will load it as` 0`.
+No action is needed for users to take while upgrading their deployments. They upgrade databend by replacing binaries and images directly.
 
-All config files, env, and args will be supported:
-
-- config file: `version=42`
-- config env: `export CONFIG_VERSION=42`
-- args: `--config-version=42`
-
-Suppose compatible changes happened as a new config entry was added. databend will make sure that the entry has a default value.
-
-Suppose incompatible changes happened, like config been removed/renamed/changed. databend increases the config version. The older version will still load by the specified version and be converted to the latest config internally. For removed config fields, a `DEPRECATED` warning will also be printed. So users can decide whether to migrate them.
+Sometimes, they will get `DEPRECATED` warnings for some config fields. It's up to users to decide whether to migrate them. Before we introduce the versioned config formally, no config will be removed. And all config fields will work as before.
 
 # Reference-level explanation
 
@@ -51,11 +43,11 @@ Inside databend, we will split config into `inner` and `outer`:
 
 **`inner`**
 
-Config instances used inside databend. All logic **SHOULD** be implemented towards `inner` config.
+Config instances used inside databend. All logic **SHOULD** be implemented towards the `inner` config.
 
 **`outer`**
 
-Config instances used as the front office of databend. They will have different versions and transform into an `inner` config. Other modules **SHOULD NOT** depend on `outer` config.
+Config instances are used as the front office of the databend. They will have different versions and transform into an `inner` config. Other modules **SHOULD NOT** depend on `outer` config.
 
 Take `query` for example:
 
@@ -79,7 +71,7 @@ The outer config of the query will be like this:
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
-pub struct ConfigV1 {
+pub struct ConfigV0 {
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
     #[clap(long="config-version", default_value_t)]
@@ -102,32 +94,30 @@ pub struct ConfigV1 {
 }
 ```
 
-The users have to maintain the `outer` config.
+The `inner` config users have to maintain the `outer` config.
 
 For example: `common-io` should provide `inner` config `StorageConfig`. If `query` wants to include `StorageConfig` inside `QueryConfig`, `query` needs to:
 
-- Implement versioned `outer` config for `StorageConfig` called `v1::StorageConfig`.
-- Implement `Into<StorageConfig> for v1::StorageConfigV1`.
+- Implement versioned `outer` config for `StorageConfig` called `v0::StorageConfig`.
+- Implement `Into<StorageConfig> for v0::StorageConfigV1`.
 - Refer `StorageConfig` in `QueryConfig`,
-- Refer `v1::StorageConfig` and `v1::QueryConfig`.
+- Refer `v0::StorageConfig` and `v0::QueryConfig`.
 
 ## Config Maintenance
 
-- Add config: add with new default is compatible; If the field is required, version should be bumped.
-- Remove config: remove field is incompatible, version should be bumped. It's recommended to mark them as `DEPRECATED` before bumping versions.
-- Change config: change config is incompatible, it's better to split them into adding and removing actions.
+All maintenance notices **SHOULD** be applied to the `outer` config struct.
+
+- Add config: add with new default is compatible, or it's forbidden.
+- Remove config: remove field is not allowed. Mark them as `DEPRECATED` instead.
+- Change config: change config type and structure are not allowed.
 
 # Drawbacks
 
 ## Maintenance burden
 
-Introducing a versioned config will increase the complexity of the config handler.
+Introducing an `outer` config will increase the complexity of the config handler.
 
 # Rationale and alternatives
-
-## Why not use string as version?
-
-Using `u64` is the simplest way. We don't want to introduce concept semver into our config. Think about the version of `docker-compose`! Do you remember which version to use for `docker-compose.yml` without visiting its documents?
 
 ## Why not use `serde` and related tools?
 
@@ -148,6 +138,18 @@ None, this RFC is the first try for backward config compatibility.
 None.
 
 # Future possibilities
+
+## Introduce versioned config
+
+We can introduce a versioned config to allow users to specify the config versions:
+
+- config file: `version=42`
+- config env: `export CONFIG_VERSION=42`
+- args: `--config-version=42`
+
+Suppose compatible changes happened as a new config entry was added. databend will make sure that the entry has a default value.
+
+Suppose incompatible changes happened, like config been removed/renamed/changed. databend increases the config version. The older version will still load by the specified version and be converted to the latest config internally. A `DEPRECATED` warning will also be printed for removed config fields. So users can decide whether to migrate them.
 
 ## Load different versions from config files and envs
 
