@@ -125,9 +125,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
             match inserted {
                 true => {
-                    let place = state.alloc_layout(params);
-                    places.push(place);
-                    entity.set_state_value(place.addr());
+                    if let Some(place) = state.alloc_layout(params) {
+                        places.push(place);
+                        entity.set_state_value(place.addr());
+                    }
                 }
                 false => {
                     let place: StateAddr = (*entity.get_state_value()).into();
