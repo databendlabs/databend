@@ -7,6 +7,9 @@ select '====ALIAS====';
 select number as a, number + 1 as b from numbers(1);
 select number as a, number + 1 as b from numbers(1) group by a, number order by number;
 
+select '====SCALAR_EXPRESSION====';
+select interval '1' day, extract(day from to_date('2022-05-13'));
+
 -- Comparison expressions
 select '====COMPARISON====';
 select * from numbers(10) where number between 1 and 9 and number > 2 and number < 8 and number is not null and number = 5 and number >= 5 and number <= 5;
@@ -14,6 +17,7 @@ select * from numbers(10) where number between 1 and 9 and number > 2 and number
 -- Cast expression
 select '====CAST====';
 select * from numbers(10) where cast(number as string) = '5';
+select * from numbers(10) where try_cast(number as string) = '5';
 
 -- Binary operator
 select '====BINARY_OPERATOR====';

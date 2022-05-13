@@ -224,11 +224,13 @@ impl<'a> Binder {
                 let expressions = args
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value }) => Ok(Expression::Literal {
-                            value: value.clone(),
-                            column_name: None,
-                            data_type: value.data_type(),
-                        }),
+                        Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
+                            Ok(Expression::Literal {
+                                value,
+                                column_name: None,
+                                data_type,
+                            })
+                        }
                         _ => Err(ErrorCode::UnImplement(format!(
                             "Unsupported table argument type: {:?}",
                             scalar

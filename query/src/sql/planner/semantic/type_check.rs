@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::DateTimeField;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
@@ -25,6 +26,9 @@ use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::IntervalKind;
+use common_datavalues::IntervalType;
+use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -184,11 +188,8 @@ impl<'a> TypeChecker<'a> {
                 expr, target_type, ..
             } => {
                 let (scalar, data_type) = self.resolve(expr, required_type).await?;
-                let cast_func = CastFunction::create_try(
-                    "",
-                    target_type.to_string().as_str(),
-                    data_type.clone(),
-                )?;
+                let cast_func =
+                    CastFunction::create("", target_type.to_string().as_str(), data_type.clone())?;
                 Ok((
                     CastExpr {
                         argument: Box::new(scalar),
@@ -223,9 +224,15 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Literal { lit, .. } => {
-                let value = self.resolve_literal(lit, required_type)?;
-                let data_type = value.data_type();
-                Ok((ConstantExpr { value }.into(), data_type))
+                let (value, data_type) = self.resolve_literal(lit, required_type)?;
+                Ok((
+                    ConstantExpr {
+                        value,
+                        data_type: data_type.clone(),
+                    }
+                    .into(),
+                    data_type,
+                ))
             }
 
             Expr::FunctionCall {
@@ -250,7 +257,7 @@ impl<'a> TypeChecker<'a> {
                     // Check aggregate function
                     let params = params
                         .iter()
-                        .map(|literal| self.resolve_literal(literal, None))
+                        .map(|literal| self.resolve_literal(literal, None).map(|(value, _)| value))
                         .collect::<Result<Vec<DataValue>>>()?;
 
                     let mut arguments = vec![];
@@ -331,6 +338,30 @@ impl<'a> TypeChecker<'a> {
                 };
 
                 Ok(self.resolve_function("get", &[&**expr, &arg], None).await?)
+            }
+
+            Expr::TryCast {
+                expr, target_type, ..
+            } => {
+                let (scalar, data_type) = self.resolve(expr, required_type).await?;
+                let cast_func = CastFunction::create_try(
+                    "",
+                    target_type.to_string().as_str(),
+                    data_type.clone(),
+                )?;
+                Ok((
+                    CastExpr {
+                        argument: Box::new(scalar),
+                        from_type: data_type,
+                        target_type: cast_func.return_type(),
+                    }
+                    .into(),
+                    cast_func.return_type(),
+                ))
+            }
+
+            Expr::Extract { field, expr, .. } => {
+                self.resolve_extract_expr(field, expr, required_type).await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
@@ -458,8 +489,68 @@ impl<'a> TypeChecker<'a> {
         child: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        self.resolve_function(op.to_string().as_str(), &[child], required_type)
-            .await
+        match op {
+            UnaryOperator::Plus => {
+                // Omit unary + operator
+                self.resolve(child, required_type).await
+            }
+
+            UnaryOperator::Minus => {
+                self.resolve_function("negate", &[child], required_type)
+                    .await
+            }
+
+            UnaryOperator::Not => {
+                self.resolve_function(op.to_string().as_str(), &[child], required_type)
+                    .await
+            }
+        }
+    }
+
+    pub async fn resolve_extract_expr(
+        &mut self,
+        date_field: &DateTimeField,
+        arg: &Expr<'a>,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        match date_field {
+            DateTimeField::Year => {
+                self.resolve_function("toYear", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Month => {
+                self.resolve_function("toMonth", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Day => {
+                self.resolve_function("toDayOfMonth", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Hour => {
+                self.resolve_function("toHour", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Minute => {
+                self.resolve_function("toMinute", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Second => {
+                self.resolve_function("toSecond", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Dow => {
+                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            DateTimeField::Doy => {
+                self.resolve_function("toDayOfYear", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            _ => Err(ErrorCode::SemanticError(format!(
+                "Invalid time field: {}",
+                date_field
+            ))),
+        }
     }
 
     pub async fn resolve_subquery(
@@ -497,18 +588,41 @@ impl<'a> TypeChecker<'a> {
         &self,
         literal: &Literal,
         _required_type: Option<DataTypeImpl>,
-    ) -> Result<DataValue> {
+    ) -> Result<(DataValue, DataTypeImpl)> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
             Literal::Number(string) => DataValue::try_from_literal(string, None)?,
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
+            Literal::Interval(interval) => {
+                let num = interval.value.parse::<i64>()?;
+                DataValue::Int64(num)
+            }
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
 
-        Ok(value)
+        let data_type = if let Literal::Interval(interval) = literal {
+            match &interval.field {
+                DateTimeField::Year => IntervalType::new_impl(IntervalKind::Year),
+                DateTimeField::Month => IntervalType::new_impl(IntervalKind::Month),
+                DateTimeField::Day => IntervalType::new_impl(IntervalKind::Day),
+                DateTimeField::Hour => IntervalType::new_impl(IntervalKind::Hour),
+                DateTimeField::Minute => IntervalType::new_impl(IntervalKind::Minute),
+                DateTimeField::Second => IntervalType::new_impl(IntervalKind::Second),
+                _ => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid interval kind: {}",
+                        interval.field
+                    )));
+                }
+            }
+        } else {
+            value.data_type()
+        };
+
+        Ok((value, data_type))
     }
 }
