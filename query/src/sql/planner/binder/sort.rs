@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use common_ast::ast::OrderByExpr;
+use common_ast::parser::error::DisplayError;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::binder::scalar::ScalarBinder;
 use crate::sql::binder::Binder;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::Scalar;
 use crate::sql::plans::SortItem;
 use crate::sql::plans::SortPlan;
 use crate::sql::BindContext;
@@ -25,30 +28,43 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(super) async fn bind_order_by(
         &mut self,
+        child: SExpr,
         order_by: &[OrderByExpr<'a>],
-        bind_context: &mut BindContext,
-    ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
-        let mut order_by_exprs = vec![];
-        for expr in order_by {
-            order_by_exprs.push(scalar_binder.bind_expr(&expr.expr).await?);
-        }
-
-        let mut order_by_items = Vec::with_capacity(order_by_exprs.len());
-        for (idx, order_by_expr) in order_by_exprs.iter().enumerate() {
+        input_context: &BindContext,
+        output_context: &BindContext,
+    ) -> Result<SExpr> {
+        let select_scalar_binder = ScalarBinder::new(output_context, self.ctx.clone());
+        let from_scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
+        let mut order_by_items = vec![];
+        for order in order_by {
+            // First we try to resolve sort item with `SELECT` context
+            let mut res = select_scalar_binder.bind_expr(&order.expr).await;
+            // If failed, we will try to resolve sort item with `FROM` context
+            if let Err(e) = res.clone() {
+                // If still failed, the previous error will be raised
+                res = from_scalar_binder.bind_expr(&order.expr).await.or(Err(e));
+            }
+            let (scalar, _) = res?;
+            if !matches!(scalar, Scalar::BoundColumnRef(_)) {
+                return Err(ErrorCode::SemanticError(
+                    order
+                        .expr
+                        .span()
+                        .display_error("can only order by column".to_string()),
+                ));
+            }
             let order_by_item = SortItem {
-                expr: order_by_expr.0.clone(),
-                asc: order_by[idx].asc,
-                nulls_first: order_by[idx].nulls_first,
+                expr: scalar,
+                asc: order.asc,
+                nulls_first: order.nulls_first,
             };
             order_by_items.push(order_by_item);
         }
+
         let sort_plan = SortPlan {
             items: order_by_items,
         };
-        let new_expr =
-            SExpr::create_unary(sort_plan.into(), bind_context.expression.clone().unwrap());
-        bind_context.expression = Some(new_expr);
-        Ok(())
+        let new_expr = SExpr::create_unary(sort_plan.into(), child);
+        Ok(new_expr)
     }
 }

@@ -19,6 +19,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::Query;
 use common_ast::ast::UnaryOperator;
+use common_ast::parser::error::DisplayError;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
@@ -57,11 +58,17 @@ use crate::sql::BindContext;
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+
+    in_aggregate_function: bool,
 }
 
 impl<'a> TypeChecker<'a> {
     pub fn new(bind_context: &'a BindContext, ctx: Arc<QueryContext>) -> Self {
-        Self { bind_context, ctx }
+        Self {
+            bind_context,
+            ctx,
+            in_aggregate_function: false,
+        }
     }
 
     /// Resolve types of `expr` with given `required_type`.
@@ -70,7 +77,7 @@ impl<'a> TypeChecker<'a> {
     /// TODO(leiysky): choose correct overloads of functions with given required_type and arguments
     #[async_recursion::async_recursion]
     pub async fn resolve(
-        &self,
+        &mut self,
         expr: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
@@ -231,6 +238,14 @@ impl<'a> TypeChecker<'a> {
                 let func_name = name.name.as_str();
 
                 if AggregateFunctionFactory::instance().check(func_name) {
+                    if self.in_aggregate_function {
+                        // Reset the state
+                        self.in_aggregate_function = false;
+                        return Err(ErrorCode::SemanticError(expr.span().display_error(
+                            "aggregate function calls cannot be nested".to_string(),
+                        )));
+                    }
+
                     // Check aggregate function
                     let params = params
                         .iter()
@@ -238,9 +253,12 @@ impl<'a> TypeChecker<'a> {
                         .collect::<Result<Vec<DataValue>>>()?;
 
                     let mut arguments = vec![];
+
+                    self.in_aggregate_function = true;
                     for arg in args.iter() {
                         arguments.push(self.resolve(arg, None).await?);
                     }
+                    self.in_aggregate_function = false;
 
                     let data_fields = arguments
                         .iter()
@@ -304,7 +322,7 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve function call.
     pub async fn resolve_function(
-        &self,
+        &mut self,
         func_name: &str,
         arguments: &[&Expr<'a>],
         _required_type: Option<DataTypeImpl>,
@@ -337,7 +355,7 @@ impl<'a> TypeChecker<'a> {
     /// would be transformed into `FunctionCall`, except comparison
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
     pub async fn resolve_binary_op(
-        &self,
+        &mut self,
         op: &BinaryOperator,
         left: &Expr<'a>,
         right: &Expr<'a>,
@@ -415,7 +433,7 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve unary expressions.
     pub async fn resolve_unary_op(
-        &self,
+        &mut self,
         op: &UnaryOperator,
         child: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
@@ -425,7 +443,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     pub async fn resolve_subquery(
-        &self,
+        &mut self,
         subquery: &Query<'a>,
         allow_multi_rows: bool,
         _required_type: Option<DataTypeImpl>,
@@ -434,7 +452,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let output_context = binder.bind_query(subquery, &bind_context).await?;
+        let (s_expr, output_context) = binder.bind_query(subquery, &bind_context).await?;
 
         if output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
@@ -445,7 +463,7 @@ impl<'a> TypeChecker<'a> {
         let data_type = output_context.columns[0].data_type.clone();
 
         let subquery_expr = SubqueryExpr {
-            subquery: output_context.expression.clone().unwrap(),
+            subquery: s_expr,
             data_type: data_type.clone(),
             output_context: Box::new(output_context),
             allow_multi_rows,

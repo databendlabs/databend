@@ -324,15 +324,15 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
+        let mut agg_expressions = Vec::with_capacity(aggregate.aggregate_functions.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        for scalar in aggregate.agg_expr.iter() {
+        for scalar in aggregate.aggregate_functions.iter() {
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
 
-        let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
-        for scalar in aggregate.group_expr.iter() {
+        let mut group_expressions = Vec::with_capacity(aggregate.group_items.len());
+        for scalar in aggregate.group_items.iter() {
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
         }
