@@ -45,10 +45,10 @@ impl AnalyzableStatement for DfShowDatabases {
         match &self.kind {
             DfShowKind::All => {}
             DfShowKind::Like(v) => {
-                kind = PlanShowKind::Like(format!("{v}"));
+                kind = PlanShowKind::Like(v.to_string());
             }
             DfShowKind::Where(v) => {
-                kind = PlanShowKind::Where(format!("{v}"));
+                kind = PlanShowKind::Where(v.to_string());
             }
         }
 

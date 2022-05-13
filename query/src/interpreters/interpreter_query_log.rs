@@ -228,7 +228,7 @@ impl InterpreterQueryLog {
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
-        let sql_user_privileges = format!("{}", user.grants);
+        let sql_user_privileges = user.grants.to_string();
 
         // Query.
         let query_id = self.ctx.get_id();
@@ -338,7 +338,7 @@ impl InterpreterQueryLog {
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
-        let sql_user_privileges = format!("{}", user.grants);
+        let sql_user_privileges = user.grants.to_string();
 
         // Query.
         let query_id = self.ctx.get_id();

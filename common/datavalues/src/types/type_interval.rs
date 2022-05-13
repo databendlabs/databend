@@ -119,7 +119,7 @@ impl DataType for IntervalType {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
         mp.insert(ARROW_EXTENSION_NAME.to_string(), "Interval".to_string());
-        mp.insert(ARROW_EXTENSION_META.to_string(), format!("{}", self.kind));
+        mp.insert(ARROW_EXTENSION_META.to_string(), self.kind.to_string());
         Some(mp)
     }
 

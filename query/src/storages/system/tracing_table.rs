@@ -84,7 +84,7 @@ impl TracingTable {
             .filter_map(|dir_entry| match dir_entry {
                 Ok(entry) if entry.path().is_dir() => None,
                 Ok(entry) => Some(Ok(entry.path().display().to_string())),
-                Err(cause) => Some(Err(ErrorCode::UnknownException(format!("{}", cause)))),
+                Err(cause) => Some(Err(ErrorCode::UnknownException(cause.to_string()))),
             })
             .collect::<Result<VecDeque<String>>>()
     }

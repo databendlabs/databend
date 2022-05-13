@@ -206,11 +206,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
             tracing::error!("OnQuery Error: {:?}", error);
-            writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
+            writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
         } else {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
-                format!("{}", error).as_bytes(),
+                error.to_string().as_bytes(),
             )?;
         }
 

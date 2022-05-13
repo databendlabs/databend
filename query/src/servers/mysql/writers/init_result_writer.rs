@@ -44,7 +44,7 @@ impl<'a, W: std::io::Write> DFInitResultWriter<'a, W> {
 
     fn err(error: &ErrorCode, writer: InitWriter<'a, W>) -> Result<()> {
         tracing::error!("OnInit Error: {:?}", error);
-        writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
+        writer.error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())?;
         Ok(())
     }
 }
