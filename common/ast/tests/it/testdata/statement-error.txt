@@ -91,3 +91,15 @@ error:
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 
 
+---------- Input ----------
+alter database system x rename to db
+---------- Output ---------
+error: 
+  --> SQL:1:23
+  |
+1 | alter database system x rename to db
+  | -----                 ^ expected `RENAME`
+  | |                      
+  | while parsing `ALTER DATABASE [IF EXISTS] <action>`
+
+

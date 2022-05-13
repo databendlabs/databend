@@ -166,6 +166,7 @@ fn test_statement_error() {
         r#"truncate a"#,
         r#"drop a"#,
         r#"insert into t format"#,
+        r#"alter database system x rename to db"#,
     ];
 
     for case in cases {
