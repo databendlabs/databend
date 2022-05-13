@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -67,7 +68,9 @@ impl<'a> ExpressionBuilder<'a> {
             Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                 self.build_column_ref(column.index)
             }
-            Scalar::ConstantExpr(ConstantExpr { value }) => self.build_literal(value),
+            Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
+                self.build_literal(value, data_type)
+            }
             Scalar::ComparisonExpr(ComparisonExpr { op, left, right }) => {
                 self.build_binary_operator(left, right, op.to_func_name())
             }
@@ -134,8 +137,16 @@ impl<'a> ExpressionBuilder<'a> {
         )))
     }
 
-    pub fn build_literal(&self, data_value: &DataValue) -> Result<Expression> {
-        Ok(Expression::create_literal(data_value.clone()))
+    pub fn build_literal(
+        &self,
+        data_value: &DataValue,
+        data_type: &DataTypeImpl,
+    ) -> Result<Expression> {
+        Ok(Expression::Literal {
+            value: data_value.clone(),
+            column_name: None,
+            data_type: data_type.clone(),
+        })
     }
 
     pub fn build_binary_operator(
