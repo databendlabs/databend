@@ -500,10 +500,7 @@ impl<'a> TypeChecker<'a> {
                     .await
             }
 
-            UnaryOperator::Not => {
-                self.resolve_function(op.to_string().as_str(), &[child], required_type)
-                    .await
-            }
+            UnaryOperator::Not => self.resolve_function("not", &[child], required_type).await,
         }
     }
 
