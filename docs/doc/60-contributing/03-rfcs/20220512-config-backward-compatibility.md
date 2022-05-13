@@ -74,23 +74,21 @@ The outer config of the query will be like this:
 pub struct ConfigV0 {
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
-    #[clap(long="config-version", default_value_t)]
-    pub config_version: u64,
 
     #[clap(flatten)]
-    pub query: QueryConfigV1,
+    pub query: QueryConfigV0,
 
     #[clap(flatten)]
-    pub log: LogConfigV1,
+    pub log: LogConfigV0,
 
     #[clap(flatten)]
-    pub meta: MetaConfigV1,
+    pub meta: MetaConfigV0,
 
     #[clap(flatten)]
-    pub storage: StorageConfigV1,
+    pub storage: StorageConfigV0,
     
     #[clap(flatten)]
-    pub catalog: HiveCatalogConfigV1,
+    pub catalog: HiveCatalogConfigV0,
 }
 ```
 
@@ -98,10 +96,10 @@ The `inner` config users have to maintain the `outer` config.
 
 For example: `common-io` should provide `inner` config `StorageConfig`. If `query` wants to include `StorageConfig` inside `QueryConfig`, `query` needs to:
 
-- Implement versioned `outer` config for `StorageConfig` called `v0::StorageConfig`.
-- Implement `Into<StorageConfig> for v0::StorageConfigV1`.
+- Implement versioned `outer` config for `StorageConfig` called `StorageConfigV0`.
+- Implement `Into<StorageConfig> for StorageConfigV0`.
 - Refer `StorageConfig` in `QueryConfig`,
-- Refer `v0::StorageConfig` and `v0::QueryConfig`.
+- Refer `StorageConfigV0` in `QueryConfigV0`.
 
 ## Config Maintenance
 
