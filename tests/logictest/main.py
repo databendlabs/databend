@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
 
 from mysql_runner import TestMySQL
 from http_runner import TestHttp
 
-from config import config,http_config
+from config import mysql_config,http_config
 
 if __name__ == '__main__':
     mySQL = TestMySQL("mysql")
-    mySQL.set_driver(config)
+    mySQL.set_driver(mysql_config)
     mySQL.set_label("mysql")
     mySQL.run_sql_suite()
 

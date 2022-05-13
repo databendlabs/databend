@@ -13,7 +13,7 @@ create table if not exists t4(a float, b float, c text, d bool);
 statement ok
 insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false );
 
-statement query FFTB label(mysql)
+statement query FFTB label(http,mysql)
 select a,b,c,d from t4;
 
 ----  http
@@ -54,6 +54,12 @@ select number, number + 1, number + 999 from numbers(10);
      7     8  1006
      8     9  1007
      9    10  1008
+
+statement query I
+select 1;
+
+---- 
+1
 
 statement ok
 drop table if exists t1;

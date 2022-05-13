@@ -37,9 +37,9 @@ def is_empty_line(line):
 
 # iterate lines over a file and return a iterator
 def get_lines(suite_path):
-    with open(suite_path) as reader:
+    with open(suite_path, encoding="UTF-8") as reader:
         for line_idx, line in enumerate(reader.readlines()):
-            yield line_idx, line.rstrip()
+            yield line_idx, line.rstrip('\n ') # keep tab /t
 
 
 # return a single statement
@@ -59,6 +59,9 @@ def get_result(lines):
     val = 0
     for line_idx, line in lines:
         val = line_idx
+        if line.startswith('\t'):  # tab as empty row in results
+            result_lines.append(line)
+            continue
         if is_empty_line(line) and result_label is None:
             continue
         if is_empty_line(line) and result_label is not None:
@@ -188,10 +191,12 @@ def get_statements(suite_path, suite_name):
         text = get_single_statement(lines)
         results = []
         if s.type == "query" and s.query_type is not None:
-            results.append(get_result(lines))
-        if s.label is not None:
-            for i in s.label:
+            # TODO need a better way to get all results
+            if s.label is None:
                 results.append(get_result(lines))
+            else:
+                for i in s.label:
+                    results.append(get_result(lines))
         yield ParsedStatement(line_idx, s, suite_name, text, results)
 
 

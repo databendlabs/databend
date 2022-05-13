@@ -1,6 +1,5 @@
 import json
 import logging
-from xmlrpc.client import Boolean
 
 import requests
 from mysql.connector.errors import Error
@@ -14,8 +13,13 @@ headers = {
     'Accept': 'application/json'
 }
 
+default_database = "default"
+
 def format_result(results):
     res = ""
+    if results is None :
+        return ""
+    
     for line in results:
         lineTmp = ""
         for item in line:
@@ -25,11 +29,15 @@ def format_result(results):
                 lineTmp = str(item)
             else:
                 lineTmp = lineTmp + " " + str(item)  # every item seperate by space
+        if len(lineTmp) == 0:  # empty line replace with tab
+            lineTmp = "\t"
         res = res + lineTmp + "\n"
     return res
 
 def get_query_options(response):
     ret = ""
+    if get_error(response) != None:
+        return ret
     for field in response['schema']['fields']:
         type = str.lower(field['data_type']['type'])
         if "int" in type:
@@ -61,18 +69,16 @@ def get_error(response):
 
 
 class HttpConnector():
-    # Databend http hander details: https://databend.rs/doc/reference/api/rest
+    # Databend http hander doc: https://databend.rs/doc/reference/api/rest
 
     # Call connect(**driver) 
     # driver is a dict contains:
     # {
-    #   'user': 'root',
-    #   'password': 'root',
     #   'host': '127.0.0.1',
     #   'port': 3307,
     #   'database': 'default'
     # }
-    def connect(self, host, port, database = "default"):
+    def connect(self, host, port, database = default_database):
         self._host = host
         self._port = port 
         self._database = database
@@ -81,8 +87,21 @@ class HttpConnector():
 
     def query(self, statement, session=None ):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)
+
+        def parseSQL(sql):
+            # for cases like:
+            # select "false"::boolean = not "true"::boolean;  => select 'false'::boolean = not 'true'::boolean; 
+            # SELECT parse_json('"false"')::boolean;          => SELECT parse_json('\"false\"')::boolean;
+            if '"' in sql:
+                if '\'' in sql:
+                    return str.replace(sql, '"', '\\\"')  #  "  -> \"
+                return str.replace(sql,"\"","'")          #  "  -> '
+            else:
+                return sql                                #  do nothing
+
+        log.debug("http sql: " + parseSQL(statement))
         query_sql = {
-            'sql': statement
+            'sql': parseSQL(statement)
         }
         if session is not None:
             query_sql['session'] = session
@@ -92,10 +111,24 @@ class HttpConnector():
             data=json.dumps(query_sql), 
             headers=headers
         )
-        return json.loads(response.content)
+        try:
+            return json.loads(response.content)
+        except Exception as err:
+            log.error("http error, SQL: {}".format(statement))
+            log.error("content: {}".format(response.content))
+            raise
+
+    def set_database(self, database):
+        self._database = database
 
     def query_without_session(self, statement):
-        return self.query(statement)
+        return self.query(statement , {
+            "database": self._database
+        })
+
+    def reset_session(self):
+        self._database = default_database
+        self._session = None
 
     # query_with_session keep session_id for every query
     def query_with_session(self, statement):
@@ -108,24 +141,21 @@ class HttpConnector():
             }
 
         response = self.query(statement, current_session)
-        if "session_id" in response:
-            self._session = {
-                "id": response["session_id"]
-            }
+        if self._session is None:
+            if response is not None and "session_id" in response:
+                self._session = {
+                    "id": response["session_id"]
+                }
         return response 
 
-    # get all result by next_uri 
     def fetch_all(self, statement):
-        full_result = []
-        resp = self.query_with_session(statement)
-        self._query_option = get_query_options(resp) # record schema
-        while True:
-            full_result = full_result + get_result(resp) 
-            nextUri = get_next_uri(resp)
-            if nextUri is None:
-                break           
-            resp = requests.get(nextUri)                  
-        return full_result
+        # TODO use next_uri to get all results
+        resp = self.query_without_session(statement)
+        if resp is None:
+            log.warning("fetch all with empty results")
+            return None
+        self._query_option = get_query_options(resp) # record schema      
+        return get_result(resp) 
 
     def get_query_option(self):
         return self._query_option
