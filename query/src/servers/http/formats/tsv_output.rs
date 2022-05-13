@@ -17,11 +17,12 @@ use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 
 const FIELD_DELIMITER: u8 = b'\t';
 const ROW_DELIMITER: u8 = b'\n';
 
-pub fn block_to_tsv(block: &DataBlock) -> Result<Vec<u8>> {
+pub fn block_to_tsv(block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
     let rows_size = block.column(0).len();
     let columns_size = block.num_columns();
 
@@ -33,7 +34,7 @@ pub fn block_to_tsv(block: &DataBlock) -> Result<Vec<u8>> {
         let data_type = field.data_type();
         let serializer = data_type.create_serializer();
         // todo(youngsofun): escape
-        col_table.push(serializer.serialize_column(&column).map_err(|e| {
+        col_table.push(serializer.serialize_column(&column, format).map_err(|e| {
             ErrorCode::UnexpectedError(format!(
                 "fail to serialize filed {}, error = {}",
                 field.name(),

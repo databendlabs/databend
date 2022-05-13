@@ -15,7 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_contexts::DalMetrics;
 use common_meta_types::UserInfo;
 

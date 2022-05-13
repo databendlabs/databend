@@ -200,7 +200,7 @@ impl BlockReader {
     }
 
     async fn read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
-        let handler = common_base::tokio::spawn(async move {
+        let handler = common_base::base::tokio::spawn(async move {
             let mut chunk = vec![0; length as usize];
             let mut r = o.range_reader(offset..offset + length).await?;
             r.read_exact(&mut chunk).await?;

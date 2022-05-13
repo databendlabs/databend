@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
+use common_ast::ast::Query;
 use common_ast::ast::UnaryOperator;
+use common_ast::parser::error::DisplayError;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
@@ -26,6 +30,8 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
+use crate::sessions::QueryContext;
+use crate::sql::binder::Binder;
 use crate::sql::planner::metadata::optimize_remove_count_args;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
@@ -37,6 +43,7 @@ use crate::sql::plans::ConstantExpr;
 use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::SubqueryExpr;
 use crate::sql::BindContext;
 
 /// A helper for type checking.
@@ -50,20 +57,28 @@ use crate::sql::BindContext;
 /// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
+    ctx: Arc<QueryContext>,
+
+    in_aggregate_function: bool,
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(bind_context: &'a BindContext) -> Self {
-        Self { bind_context }
+    pub fn new(bind_context: &'a BindContext, ctx: Arc<QueryContext>) -> Self {
+        Self {
+            bind_context,
+            ctx,
+            in_aggregate_function: false,
+        }
     }
 
     /// Resolve types of `expr` with given `required_type`.
     /// If `required_type` is None, then there is no requirement of return type.
     ///
     /// TODO(leiysky): choose correct overloads of functions with given required_type and arguments
-    pub fn resolve(
-        &self,
-        expr: &Expr,
+    #[async_recursion::async_recursion]
+    pub async fn resolve(
+        &mut self,
+        expr: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match expr {
@@ -71,16 +86,17 @@ impl<'a> TypeChecker<'a> {
                 database: _,
                 table,
                 column,
+                ..
             } => {
                 let column = self
                     .bind_context
-                    .resolve_column(table.clone().map(|ident| ident.name), column.name.clone())?;
+                    .resolve_column(table.clone().map(|ident| ident.name), column)?;
                 let data_type = column.data_type.clone();
 
                 Ok((BoundColumnRef { column }.into(), data_type))
             }
 
-            Expr::IsNull { expr, not } => {
+            Expr::IsNull { expr, not, .. } => {
                 let func_name = if *not {
                     "is_not_null".to_string()
                 } else {
@@ -88,9 +104,12 @@ impl<'a> TypeChecker<'a> {
                 };
 
                 self.resolve_function(func_name.as_str(), &[&**expr], required_type)
+                    .await
             }
 
-            Expr::InList { expr, list, not } => {
+            Expr::InList {
+                expr, list, not, ..
+            } => {
                 let func_name = if *not {
                     "not_in".to_string()
                 } else {
@@ -102,6 +121,7 @@ impl<'a> TypeChecker<'a> {
                     args.push(expr);
                 }
                 self.resolve_function(func_name.as_str(), &args, required_type)
+                    .await
             }
 
             Expr::Between {
@@ -109,20 +129,17 @@ impl<'a> TypeChecker<'a> {
                 low,
                 high,
                 not,
+                ..
             } => {
                 if !*not {
                     // Rewrite `expr BETWEEN low AND high`
                     // into `expr >= low AND expr <= high`
-                    let (ge_func, _) = self.resolve_function(
-                        ">=",
-                        &[&**expr, &**low],
-                        Some(BooleanType::new_impl()),
-                    )?;
-                    let (le_func, _) = self.resolve_function(
-                        "<=",
-                        &[&**expr, &**high],
-                        Some(BooleanType::new_impl()),
-                    )?;
+                    let (ge_func, _) = self
+                        .resolve_function(">=", &[&**expr, &**low], Some(BooleanType::new_impl()))
+                        .await?;
+                    let (le_func, _) = self
+                        .resolve_function("<=", &[&**expr, &**high], Some(BooleanType::new_impl()))
+                        .await?;
                     Ok((
                         AndExpr {
                             left: Box::new(ge_func),
@@ -134,16 +151,12 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
-                    let (lt_func, _) = self.resolve_function(
-                        "<",
-                        &[&**expr, &**low],
-                        Some(BooleanType::new_impl()),
-                    )?;
-                    let (gt_func, _) = self.resolve_function(
-                        ">",
-                        &[&**expr, &**high],
-                        Some(BooleanType::new_impl()),
-                    )?;
+                    let (lt_func, _) = self
+                        .resolve_function("<", &[&**expr, &**low], Some(BooleanType::new_impl()))
+                        .await?;
+                    let (gt_func, _) = self
+                        .resolve_function(">", &[&**expr, &**high], Some(BooleanType::new_impl()))
+                        .await?;
                     Ok((
                         OrExpr {
                             left: Box::new(lt_func),
@@ -155,16 +168,21 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::BinaryOp { op, left, right } => {
+            Expr::BinaryOp {
+                op, left, right, ..
+            } => {
                 self.resolve_binary_op(op, &**left, &**right, required_type)
+                    .await
             }
 
-            Expr::UnaryOp { op, expr } => self.resolve_unary_op(op, &**expr, required_type),
+            Expr::UnaryOp { op, expr, .. } => {
+                self.resolve_unary_op(op, &**expr, required_type).await
+            }
 
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let (scalar, data_type) = self.resolve(expr, required_type)?;
+                let (scalar, data_type) = self.resolve(expr, required_type).await?;
                 let cast_func = CastFunction::create_try(
                     "",
                     target_type.to_string().as_str(),
@@ -185,6 +203,7 @@ impl<'a> TypeChecker<'a> {
                 expr,
                 substring_from,
                 substring_for,
+                ..
             } => {
                 let mut arguments = vec![&**expr];
                 match (substring_from, substring_for) {
@@ -199,10 +218,11 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 self.resolve_function("substring", &arguments, required_type)
+                    .await
             }
 
-            Expr::Literal(literal) => {
-                let value = self.parse_literal(literal, required_type)?;
+            Expr::Literal { lit, .. } => {
+                let value = self.parse_literal(lit, required_type)?;
                 let data_type = value.data_type();
                 Ok((ConstantExpr { value }.into(), data_type))
             }
@@ -212,20 +232,33 @@ impl<'a> TypeChecker<'a> {
                 name,
                 args,
                 params,
+                ..
             } => {
                 let args: Vec<&Expr> = args.iter().collect();
                 let func_name = name.name.as_str();
 
                 if AggregateFunctionFactory::instance().check(func_name) {
+                    if self.in_aggregate_function {
+                        // Reset the state
+                        self.in_aggregate_function = false;
+                        return Err(ErrorCode::SemanticError(expr.span().display_error(
+                            "aggregate function calls cannot be nested".to_string(),
+                        )));
+                    }
+
                     // Check aggregate function
                     let params = params
                         .iter()
                         .map(|literal| self.parse_literal(literal, None))
                         .collect::<Result<Vec<DataValue>>>()?;
-                    let arguments = args
-                        .iter()
-                        .map(|arg| self.resolve(arg, None))
-                        .collect::<Result<Vec<_>>>()?;
+
+                    let mut arguments = vec![];
+
+                    self.in_aggregate_function = true;
+                    for arg in args.iter() {
+                        arguments.push(self.resolve(arg, None).await?);
+                    }
+                    self.in_aggregate_function = false;
 
                     let data_fields = arguments
                         .iter()
@@ -258,11 +291,11 @@ impl<'a> TypeChecker<'a> {
                     ))
                 } else {
                     // Scalar function
-                    self.resolve_function(func_name, &args, required_type)
+                    self.resolve_function(func_name, &args, required_type).await
                 }
             }
 
-            Expr::CountAll => {
+            Expr::CountAll { .. } => {
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
 
                 Ok((
@@ -278,6 +311,8 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
+            Expr::Subquery { subquery, .. } => self.resolve_subquery(subquery, false, None).await,
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -286,18 +321,20 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve function call.
-    pub fn resolve_function(
-        &self,
+    pub async fn resolve_function(
+        &mut self,
         func_name: &str,
-        arguments: &[&Expr],
-        required_type: Option<DataTypeImpl>,
+        arguments: &[&Expr<'a>],
+        _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        let (args, arg_types): (Vec<Scalar>, Vec<DataTypeImpl>) = arguments
-            .iter()
-            .map(|expr| self.resolve(expr, required_type.clone()))
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .unzip();
+        let mut args = vec![];
+        let mut arg_types = vec![];
+
+        for argument in arguments {
+            let (arg, arg_type) = self.resolve(argument, None).await?;
+            args.push(arg);
+            arg_types.push(arg_type);
+        }
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
@@ -317,11 +354,11 @@ impl<'a> TypeChecker<'a> {
     /// Resolve binary expressions. Most of the binary expressions
     /// would be transformed into `FunctionCall`, except comparison
     /// expressions, conjunction(`AND`) and disjunction(`OR`).
-    pub fn resolve_binary_op(
-        &self,
+    pub async fn resolve_binary_op(
+        &mut self,
         op: &BinaryOperator,
-        left: &Expr,
-        right: &Expr,
+        left: &Expr<'a>,
+        right: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         match op {
@@ -343,6 +380,7 @@ impl<'a> TypeChecker<'a> {
             | BinaryOperator::BitwiseXor
             | BinaryOperator::Xor => {
                 self.resolve_function(op.to_string().as_str(), &[left, right], required_type)
+                    .await
             }
             BinaryOperator::Gt
             | BinaryOperator::Lt
@@ -351,8 +389,8 @@ impl<'a> TypeChecker<'a> {
             | BinaryOperator::Eq
             | BinaryOperator::NotEq => {
                 let op = ComparisonOp::try_from(op)?;
-                let (left, _) = self.resolve(left, None)?;
-                let (right, _) = self.resolve(right, None)?;
+                let (left, _) = self.resolve(left, None).await?;
+                let (right, _) = self.resolve(right, None).await?;
 
                 Ok((
                     ComparisonExpr {
@@ -365,8 +403,8 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
             BinaryOperator::And => {
-                let (left, _) = self.resolve(left, Some(BooleanType::new_impl()))?;
-                let (right, _) = self.resolve(right, Some(BooleanType::new_impl()))?;
+                let (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
+                let (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
 
                 Ok((
                     AndExpr {
@@ -378,8 +416,8 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
             BinaryOperator::Or => {
-                let (left, _) = self.resolve(left, Some(BooleanType::new_impl()))?;
-                let (right, _) = self.resolve(right, Some(BooleanType::new_impl()))?;
+                let (left, _) = self.resolve(left, Some(BooleanType::new_impl())).await?;
+                let (right, _) = self.resolve(right, Some(BooleanType::new_impl())).await?;
 
                 Ok((
                     OrExpr {
@@ -394,17 +432,48 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve unary expressions.
-    pub fn resolve_unary_op(
-        &self,
+    pub async fn resolve_unary_op(
+        &mut self,
         op: &UnaryOperator,
-        child: &Expr,
+        child: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
         self.resolve_function(op.to_string().as_str(), &[child], required_type)
+            .await
+    }
+
+    pub async fn resolve_subquery(
+        &mut self,
+        subquery: &Query<'a>,
+        allow_multi_rows: bool,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let mut binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs());
+
+        // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
+        let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let (s_expr, output_context) = binder.bind_query(subquery, &bind_context).await?;
+
+        if output_context.columns.len() > 1 {
+            return Err(ErrorCode::SemanticError(
+                "Scalar subquery must return only one column",
+            ));
+        }
+
+        let data_type = output_context.columns[0].data_type.clone();
+
+        let subquery_expr = SubqueryExpr {
+            subquery: s_expr,
+            data_type: data_type.clone(),
+            output_context: Box::new(output_context),
+            allow_multi_rows,
+        };
+
+        Ok((subquery_expr.into(), data_type))
     }
 
     /// Resolve literal values.
-    fn parse_literal(
+    pub fn parse_literal(
         &self,
         literal: &Literal,
         _required_type: Option<DataTypeImpl>,

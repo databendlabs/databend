@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod access;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_common;
 mod interpreter_copy;
 mod interpreter_database_create;
 mod interpreter_database_drop;
+mod interpreter_database_rename;
 mod interpreter_database_show_create;
 mod interpreter_empty;
 mod interpreter_explain;
@@ -71,12 +73,14 @@ mod interpreter_view_drop;
 mod plan_schedulers;
 mod stream;
 
+pub use access::ManagementModeAccess;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;
 pub use interpreter_copy::CopyInterpreter;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;
+pub use interpreter_database_rename::RenameDatabaseInterpreter;
 pub use interpreter_database_show_create::ShowCreateDatabaseInterpreter;
 pub use interpreter_empty::EmptyInterpreter;
 pub use interpreter_explain::ExplainInterpreter;

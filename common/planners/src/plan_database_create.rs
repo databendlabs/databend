@@ -24,6 +24,7 @@ use common_meta_types::DatabaseNameIdent;
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
     pub meta: DatabaseMeta,
 }

@@ -16,14 +16,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::tokio::sync::Mutex;
+use common_base::base::tokio::sync::Mutex;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
 use once_cell::sync::Lazy;
 
-/// Local storage that provides the API defined by `KVApi+MetaApi`.
+/// Local storage that provides the API defined by `KVApi+SchemaApi`.
 ///
 /// It is just a wrapped `StateMachine`, which is the same one used by raft driven metasrv.
 /// For a local kv, there is no distributed WAL involved,

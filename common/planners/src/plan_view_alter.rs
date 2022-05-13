@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AlterViewPlan {
     pub tenant: String,
+    pub catalog: String,
     pub db: String,
     pub viewname: String,
     pub subquery: String,

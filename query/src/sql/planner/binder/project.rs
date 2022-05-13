@@ -24,12 +24,17 @@ use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
 use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
+use crate::sql::plans::Scalar;
 
-impl Binder {
+impl<'a> Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
     /// If `output_context` can already be satisfied by `input_context`(e.g. `SELECT * FROM t`),
     /// then it won't build a `ProjectPlan`.
-    pub(super) fn bind_projection(&mut self, output_context: &mut BindContext) -> Result<()> {
+    pub(super) fn bind_projection(
+        &mut self,
+        child: SExpr,
+        output_context: &BindContext,
+    ) -> Result<SExpr> {
         let mut projections: Vec<ProjectItem> = vec![];
         for column_binding in output_context.all_column_bindings() {
             if let Some(expr) = &column_binding.scalar {
@@ -41,14 +46,13 @@ impl Binder {
         }
 
         if !projections.is_empty() {
-            let child = output_context.expression.clone().unwrap();
             let project_plan = ProjectPlan { items: projections };
 
             let new_expr = SExpr::create_unary(project_plan.into(), child);
-            output_context.expression = Some(new_expr);
+            Ok(new_expr)
+        } else {
+            Ok(child)
         }
-
-        Ok(())
     }
 
     /// Normalize select list into a BindContext.
@@ -67,14 +71,12 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    #[allow(unreachable_patterns)]
-    pub(super) fn normalize_select_list(
+    pub(super) async fn normalize_select_list(
         &mut self,
-        select_list: &[SelectTarget],
+        select_list: &[SelectTarget<'a>],
         input_context: &BindContext,
     ) -> Result<BindContext> {
-        let mut output_context = BindContext::create();
-        output_context.expression = input_context.expression.clone();
+        let mut output_context = BindContext::new();
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName(names) => {
@@ -84,7 +86,7 @@ impl Binder {
                         match indirection {
                             Indirection::Identifier(ident) => {
                                 let mut column_binding =
-                                    input_context.resolve_column(None, ident.name.clone())?;
+                                    input_context.resolve_column(None, ident)?;
                                 column_binding.column_name = ident.name.clone();
                                 output_context.add_column_binding(column_binding);
                             }
@@ -102,32 +104,45 @@ impl Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let scalar_binder = ScalarBinder::new(input_context);
-                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr)?;
+                    let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
+                    let (bound_expr, data_type) = scalar_binder.bind_expr(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
-                        Some(alias) => alias.name.clone(),
+                        Some(alias) => alias.name.to_lowercase(),
                         None => self.metadata.get_expr_display_string(expr)?,
                     };
 
-                    // TODO(leiysky): If expr is a ColumnRef, then it's a pass-through column.
-                    // There is no need to generate a new ColumnEntry for it.
-                    let index =
-                        self.metadata
-                            .add_column(expr_name.clone(), data_type.clone(), None);
-                    let column_binding = ColumnBinding {
-                        table_name: None,
-                        column_name: expr_name,
-                        index,
-                        data_type,
-                        scalar: Some(Box::new(bound_expr)),
+                    let column_binding = match &bound_expr {
+                        Scalar::BoundColumnRef(column_ref) => ColumnBinding {
+                            table_name: None,
+                            column_name: expr_name,
+                            visible: true,
+                            index: column_ref.column.index,
+                            data_type,
+                            scalar: Some(Box::new(bound_expr.clone())),
+                        },
+                        _ => {
+                            let index = self.metadata.add_column(
+                                expr_name.clone(),
+                                data_type.clone(),
+                                None,
+                            );
+                            ColumnBinding {
+                                table_name: None,
+                                column_name: expr_name,
+                                // Invisible if no alias given
+                                visible: alias.is_some(),
+                                index,
+                                data_type,
+                                scalar: Some(Box::new(bound_expr.clone())),
+                            }
+                        }
                     };
                     output_context.add_column_binding(column_binding);
                 }
             }
         }
-
         Ok(output_context)
     }
 }

@@ -16,6 +16,41 @@ use std::marker::PhantomData;
 
 use crate::common::HashTableEntity;
 
+pub enum HashTableIteratorKind<Key, Entity: HashTableEntity<Key>> {
+    HashMapIterator(HashTableIter<Key, Entity>),
+    TwoLevelHashMapIter(TwoLevelHashTableIter<Key, Entity>),
+}
+
+impl<Key, Entity: HashTableEntity<Key>> HashTableIteratorKind<Key, Entity> {
+    pub fn create_hash_table_iter(
+        capacity: isize,
+        entities: *mut Entity,
+        zero_entity: Option<*mut Entity>,
+    ) -> Self {
+        Self::HashMapIterator(HashTableIter::<Key, Entity>::create(
+            capacity,
+            entities,
+            zero_entity,
+        ))
+    }
+
+    pub fn create_two_level_hash_table_iter(
+        iters: Vec<HashTableIteratorKind<Key, Entity>>,
+    ) -> Self {
+        Self::TwoLevelHashMapIter(TwoLevelHashTableIter::<Key, Entity>::create(iters))
+    }
+}
+
+impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIteratorKind<Key, Entity> {
+    type Item = *mut Entity;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            HashTableIteratorKind::HashMapIterator(it) => it.next(),
+            HashTableIteratorKind::TwoLevelHashMapIter(it) => it.next(),
+        }
+    }
+}
+
 pub struct HashTableIter<Key, Entity: HashTableEntity<Key>> {
     idx: isize,
     capacity: isize,
@@ -61,6 +96,34 @@ impl<Key, Entity: HashTableEntity<Key>> Iterator for HashTableIter<Key, Entity> 
             match self.idx == self.capacity {
                 true => None,
                 false => Some(self.entities.offset(self.idx)),
+            }
+        }
+    }
+}
+
+pub struct TwoLevelHashTableIter<Key, Entity: HashTableEntity<Key>> {
+    iters: Vec<HashTableIteratorKind<Key, Entity>>,
+    index: usize,
+}
+
+impl<Key, Entity: HashTableEntity<Key>> TwoLevelHashTableIter<Key, Entity> {
+    pub fn create(iters: Vec<HashTableIteratorKind<Key, Entity>>) -> Self {
+        Self { iters, index: 0 }
+    }
+}
+
+impl<Key, Entity: HashTableEntity<Key>> Iterator for TwoLevelHashTableIter<Key, Entity> {
+    type Item = *mut Entity;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iters[self.index].next() {
+            Some(x) => Some(x),
+            None => {
+                if self.index < self.iters.len() - 1 {
+                    self.index += 1;
+                    self.next()
+                } else {
+                    None
+                }
             }
         }
     }

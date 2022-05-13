@@ -16,14 +16,14 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
-use databend_query::configs::Config;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
+use databend_query::Config;
 
 use crate::tests::SessionManagerBuilder;
 

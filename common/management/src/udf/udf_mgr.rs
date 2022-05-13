@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::udfs::UDFParser;
-use common_base::escape_for_key;
+use common_base::base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
@@ -64,9 +64,7 @@ impl UdfApi for UdfMgr {
         }
 
         let mut udf_parser = UDFParser::default();
-        udf_parser
-            .parse(&info.name, &info.parameters, &info.definition)
-            .await?;
+        udf_parser.parse(&info.name, &info.parameters, &info.definition)?;
 
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);

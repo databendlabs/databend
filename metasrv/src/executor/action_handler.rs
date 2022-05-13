@@ -50,43 +50,6 @@ impl ActionHandler {
                 let r = self.meta_node.upsert_kv(a).await;
                 RaftReply::from(r)
             }
-            // database
-            MetaGrpcWriteReq::CreateDatabase(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::DropDatabase(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // table
-            MetaGrpcWriteReq::CreateTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::DropTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::RenameTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::CommitTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // share
-            MetaGrpcWriteReq::CreateShare(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcWriteReq::DropShare(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
         }
     }
 
@@ -106,34 +69,6 @@ impl ActionHandler {
                 let r = self.meta_node.prefix_list_kv(&a.0).await;
                 RaftReply::from(r)
             }
-
-            // database
-            MetaGrpcReadReq::GetDatabase(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::ListDatabases(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-
-            // table
-            MetaGrpcReadReq::GetTable(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::ListTables(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            }
-            MetaGrpcReadReq::GetTableExt(a) => {
-                let r = self.handle(a).await;
-                RaftReply::from(r)
-            } // // share
-              // MetaGrpcReadReq::GetShare(a) => {
-              //     let r = self.handle(a).await;
-              //     RaftReply::from(r)
-              // }
         }
     }
 

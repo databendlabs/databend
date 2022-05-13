@@ -31,9 +31,9 @@ pub fn statements(i: Input) -> IResult<Vec<Statement>> {
 
     map(
         rule!(
-            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi })
+            #separated_list1(rule! { ";"+ }, rule! { #stmt | #eoi }) ~ &EOI
         ),
-        |stmts| stmts.into_iter().flatten().collect(),
+        |(stmts, _)| stmts.into_iter().flatten().collect(),
     )(i)
 }
 
@@ -82,6 +82,16 @@ pub fn statement(i: Input) -> IResult<Statement> {
         |(_, _, opt_if_exists, database)| Statement::DropDatabase {
             if_exists: opt_if_exists.is_some(),
             database,
+        },
+    );
+    let alter_database = map(
+        rule! {
+            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #ident ~ #alter_database_action
+        },
+        |(_, _, opt_if_exists, database, action)| Statement::AlterDatabase {
+            if_exists: opt_if_exists.is_some(),
+            database,
+            action,
         },
     );
     let use_database = map(
@@ -156,9 +166,10 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let describe = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ ( #ident ~ "." )? ~ #ident
+            ( DESC | DESCRIBE ) ~ ( #ident ~ "." )? ~ ( #ident ~ "." )? ~ #ident
         },
-        |(_, opt_database, table)| Statement::Describe {
+        |(_, opt_catalog, opt_database, table)| Statement::Describe {
+            catalog: opt_catalog.map(|(catalog, _)| catalog),
             database: opt_database.map(|(database, _)| database),
             table,
         },
@@ -402,6 +413,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
+            | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
             | #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
@@ -437,9 +449,9 @@ pub fn statement(i: Input) -> IResult<Statement> {
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Clone)]
-    enum ColumnConstraint {
+    enum ColumnConstraint<'a> {
         Nullable(bool),
-        DefaultExpr(Box<Expr>),
+        DefaultExpr(Box<Expr<'a>>),
     }
 
     let nullable = alt((
@@ -529,6 +541,19 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     )(i)
 }
 
+pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
+    let mut rename_database = map(
+        rule! {
+            RENAME ~ TO ~ #ident
+        },
+        |(_, _, new_db)| AlterDatabaseAction::RenameDatabase { new_db },
+    );
+
+    rule!(
+        #rename_database
+    )(i)
+}
+
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     let mut rename_table = map(
         rule! {
@@ -596,13 +621,13 @@ pub fn engine(i: Input) -> IResult<Engine> {
     )(i)
 }
 
-pub fn values_tokens(i: Input) -> IResult<Input> {
+pub fn values_tokens(i: Input) -> IResult<&[Token]> {
     let semicolon_pos = i
         .iter()
         .position(|token| token.text() == ";")
         .unwrap_or(i.len() - 1);
-    let (value_tokens, rest_tokens) = i.split_at(semicolon_pos);
-    Ok((rest_tokens, value_tokens))
+    let (value_tokens, rest_tokens) = i.0.split_at(semicolon_pos);
+    Ok((Input(rest_tokens, i.1), value_tokens))
 }
 
 pub fn role_option(i: Input) -> IResult<RoleOption> {

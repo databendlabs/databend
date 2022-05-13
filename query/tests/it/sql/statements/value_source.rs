@@ -14,7 +14,7 @@
 
 use std::io::Cursor;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -40,7 +40,7 @@ async fn test_parse_value_source() -> Result<()> {
         .to_string();
     let bytes = s.as_bytes();
     let cursor = Cursor::new(bytes);
-    let mut reader = CpBufferReader::new(Box::new(BufferReader::new(cursor)));
+    let mut reader = CheckpointReader::new(BufferReader::new(cursor));
     let block = parser.read(&mut reader).await?;
 
     common_datablocks::assert_blocks_sorted_eq(

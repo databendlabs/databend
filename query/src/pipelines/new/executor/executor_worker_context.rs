@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::TrySpawn;
+use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use petgraph::prelude::NodeIndex;

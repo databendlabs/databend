@@ -15,12 +15,13 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
+use common_base::infallible::Mutex;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
-use common_infallible::Mutex;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::InsertInputSource;
@@ -69,7 +70,7 @@ impl InsertInterpreter {
         let settings = self.ctx.get_settings();
         let table = self
             .ctx
-            .get_table(&plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
             .await?;
 
         let mut pipeline = self.create_new_pipeline()?;
@@ -120,6 +121,9 @@ impl InsertInterpreter {
                     let tz = String::from_utf8(tz).map_err(|_| {
                         ErrorCode::LogicalError("Timezone has been checked and should be valid.")
                     })?;
+                    let tz = tz.parse::<Tz>().map_err(|_| {
+                        ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+                    })?;
                     let func_ctx = FunctionContext { tz };
                     pipeline.add_transform(|transform_input_port, transform_output_port| {
                         TransformCastSchema::try_create(
@@ -158,7 +162,12 @@ impl InsertInterpreter {
 
         let append_entries = self.ctx.consume_precommit_blocks();
         table
-            .commit_insertion(self.ctx.clone(), append_entries, self.plan.overwrite)
+            .commit_insertion(
+                self.ctx.clone(),
+                &self.plan.catalog_name,
+                append_entries,
+                self.plan.overwrite,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(
@@ -207,21 +216,30 @@ impl Interpreter for InsertInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Table(plan.database_name.clone(), plan.table_name.clone()),
+                &GrantObject::Table(
+                    plan.catalog_name.clone(),
+                    plan.database_name.clone(),
+                    plan.table_name.clone(),
+                ),
                 UserPrivilegeType::Insert,
             )
             .await?;
 
         let table = self
             .ctx
-            .get_table(&plan.database_name, &plan.table_name)
+            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
             .await?;
 
         let need_fill_missing_columns = table.schema() != self.plan.schema();
 
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
-                let with_plan = InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
+                let with_plan = InsertWithPlan::new(
+                    &self.ctx,
+                    &self.plan.schema,
+                    plan_node,
+                    &plan.catalog_name,
+                );
                 with_plan.execute(table.as_ref()).await
             }
 
@@ -267,6 +285,7 @@ impl Interpreter for InsertInterpreter {
         table
             .commit_insertion(
                 self.ctx.clone(),
+                &self.plan.catalog_name,
                 append_logs.try_collect().await?,
                 self.plan.overwrite,
             )
@@ -280,8 +299,8 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn create_new_pipeline(&self) -> Result<NewPipeline> {
-        let new_pipeline = NewPipeline::create();
-        Ok(new_pipeline)
+        let insert_pipeline = NewPipeline::create();
+        Ok(insert_pipeline)
     }
 
     fn set_source_pipe_builder(&self, builder: Option<SourcePipeBuilder>) -> Result<()> {

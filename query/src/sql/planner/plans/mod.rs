@@ -14,23 +14,32 @@
 
 mod aggregate;
 mod filter;
+mod hash_join;
+mod limit;
 mod logical_get;
+mod logical_join;
 mod pattern;
 mod physical_scan;
 mod project;
 mod scalar;
+mod sort;
 
 use std::any::Any;
 
 pub use aggregate::AggregatePlan;
 use enum_dispatch::enum_dispatch;
 pub use filter::FilterPlan;
+pub use hash_join::PhysicalHashJoin;
+pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
+pub use logical_join::LogicalInnerJoin;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::ProjectItem;
 pub use project::ProjectPlan;
 pub use scalar::*;
+pub use sort::SortItem;
+pub use sort::SortPlan;
 
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelationalProperty;
@@ -68,26 +77,37 @@ pub trait PhysicalPlan {
 pub enum PlanType {
     // Logical operators
     LogicalGet,
+    LogicalInnerJoin,
 
     // Physical operators
     PhysicalScan,
+    PhysicalHashJoin,
 
     // Operators that are both logical and physical
     Project,
     Filter,
     Aggregate,
+    Sort,
+    Limit,
 
     // Pattern
     Pattern,
 }
 
 #[enum_dispatch(BasePlan)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BasePlanImpl {
     LogicalGet(LogicalGet),
+    LogicalInnerJoin(LogicalInnerJoin),
+
     PhysicalScan(PhysicalScan),
+    PhysicalHashJoin(PhysicalHashJoin),
+
     Project(ProjectPlan),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
+    Sort(SortPlan),
+    Limit(LimitPlan),
+
     Pattern(PatternPlan),
 }

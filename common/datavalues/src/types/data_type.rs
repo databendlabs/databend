@@ -124,7 +124,9 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     }
 
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
+
     fn create_serializer(&self) -> TypeSerializerImpl;
+
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl;
 }
 

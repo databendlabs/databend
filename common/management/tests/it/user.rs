@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_base::escape_for_key;
-use common_base::tokio;
+use common_base::base::escape_for_key;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_management::*;
 use common_meta_api::KVApi;
@@ -83,8 +83,13 @@ mod add {
         let test_user_name = "test_user";
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let v = serde_json::to_vec(&user_info)?;
-        let value = Operation::Update(serde_json::to_vec(&user_info)?);
+
+        let v = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+        let value = Operation::Update(serialize_struct(
+            &user_info,
+            ErrorCode::IllegalUserInfoFormat,
+            || "",
+        )?);
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
@@ -188,7 +193,7 @@ mod get {
         );
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let value = serde_json::to_vec(&user_info)?;
+        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -214,7 +219,7 @@ mod get {
         );
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let value = serde_json::to_vec(&user_info)?;
+        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -333,7 +338,10 @@ mod get_users {
             let user_info = UserInfo::new(&name, &hostname, default_test_auth_info());
             res.push((
                 "fake_key".to_string(),
-                SeqV::new(i, serde_json::to_vec(&user_info)?),
+                SeqV::new(
+                    i,
+                    serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?,
+                ),
             ));
             user_infos.push(SeqV::new(i, user_info));
         }
@@ -489,7 +497,7 @@ mod update {
         let test_seq = None;
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let prev_value = serde_json::to_vec(&user_info)?;
+        let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         // get_kv should be called
         let mut kv = MockKV::new();
@@ -503,7 +511,8 @@ mod update {
 
         // and then, update_kv should be called
         let new_user_info = UserInfo::new(test_user_name, test_hostname, new_test_auth_info(full));
-        let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
+        let new_value_with_old_salt =
+            serialize_struct(&new_user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
@@ -574,7 +583,7 @@ mod update {
         let test_seq = None;
 
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let prev_value = serde_json::to_vec(&user_info)?;
+        let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         // - get_kv should be called
         let mut kv = MockKV::new();
@@ -630,7 +639,7 @@ mod set_user_privileges {
         let test_seq = None;
 
         let mut user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let prev_value = serde_json::to_vec(&user_info)?;
+        let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         // - get_kv should be called
         let mut kv = MockKV::new();
@@ -647,7 +656,7 @@ mod set_user_privileges {
         user_info
             .grants
             .grant_privileges(&GrantObject::Global, privileges);
-        let new_value = serde_json::to_vec(&user_info)?;
+        let new_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(

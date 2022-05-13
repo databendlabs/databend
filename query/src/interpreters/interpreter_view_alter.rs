@@ -27,7 +27,6 @@ use common_planners::AlterViewPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -55,7 +54,7 @@ impl Interpreter for AlterViewInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
@@ -63,8 +62,8 @@ impl Interpreter for AlterViewInterpreter {
         // check whether view has exists
         if !self
             .ctx
-            .get_catalog()
-            .list_tables(&*self.plan.tenant, &*self.plan.db)
+            .get_catalog(&self.plan.catalog)?
+            .list_tables(&self.plan.tenant, &self.plan.db)
             .await?
             .iter()
             .any(|table| {
@@ -85,7 +84,7 @@ impl Interpreter for AlterViewInterpreter {
 impl AlterViewInterpreter {
     async fn alter_view(&self) -> Result<SendableDataBlockStream> {
         // drop view
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let plan = DropTableReq {
             if_exists: true,
 

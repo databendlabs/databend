@@ -139,6 +139,10 @@ where
         }
     }
 
+    fn with_capacity_meta(capacity: usize, _meta: ColumnMeta) -> Self {
+        Self::with_capacity(capacity)
+    }
+
     fn push(&mut self, value: <T as Scalar>::RefType<'_>) {
         self.values.push(value);
     }

@@ -12,38 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::convert::TryInto;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
-use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
-use common_meta_types::CreateDatabaseReq;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::DatabaseNameIdent;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaStorageError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TableMeta;
-use common_meta_types::TableNameIdent;
-use common_meta_types::UnknownTableId;
-use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
-use maplit::btreemap;
-use maplit::hashmap;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::LogId;
@@ -52,9 +38,8 @@ use pretty_assertions::assert_eq;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
-mod database_lookup;
-mod meta_api_impl;
 mod placement;
+mod schema_api_impl;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
@@ -119,280 +104,6 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
             })
             .await?;
         assert_eq!(AppliedState::Seq { seq: *want }, resp, "{}", name);
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_raft_test_context();
-    let m = StateMachine::open(&tc.raft_config, 1).await?;
-    let tenant = "tenant1";
-
-    struct T {
-        name: &'static str,
-        engine: &'static str,
-        prev: Option<u64>,
-        result: Option<u64>,
-    }
-
-    fn case(name: &'static str, engine: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        T {
-            name,
-            engine,
-            prev,
-            result,
-        }
-    }
-
-    let cases: Vec<T> = vec![
-        case("foo", "default", None, Some(1)),
-        case("foo", "default", Some(1), Some(1)),
-        case("bar", "default", None, Some(3)),
-        case("bar", "default", Some(3), Some(3)),
-        case("wow", "default", None, Some(5)),
-    ];
-
-    for (i, c) in cases.iter().enumerate() {
-        // add
-
-        let resp = m.sm_tree.txn(true, |t| {
-            Ok(m.apply_cmd(
-                &Cmd::CreateDatabase(CreateDatabaseReq {
-                    if_not_exists: false,
-                    name_ident: DatabaseNameIdent {
-                        tenant: tenant.to_string(),
-                        db_name: c.name.to_string(),
-                    },
-                    meta: DatabaseMeta {
-                        engine: c.engine.to_string(),
-                        ..Default::default()
-                    },
-                }),
-                &t,
-            )
-            .unwrap())
-        })?;
-
-        let mut ch: Change<DatabaseMeta> = resp.try_into().expect("DatabaseMeta");
-        let result = ch.ident.take();
-        let prev = ch.prev;
-
-        assert_eq!(c.prev.is_none(), prev.is_none(), "{}-th", i);
-        assert_eq!(c.result, result, "{}-th", i);
-
-        // get
-
-        let want = result.expect("Some(db_id)");
-
-        let got = m.get_database_id(tenant, c.name)?;
-        assert_eq!(want, got);
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_raft_store_ut!();
-    let _ent = ut_span.enter();
-
-    let tc = new_raft_test_context();
-    let m = StateMachine::open(&tc.raft_config, 1).await?;
-    let tenant = "tenant1";
-
-    tracing::info!("--- prepare a table");
-
-    m.sm_tree.txn(true, |t| {
-        Ok(m.apply_cmd(
-            &Cmd::CreateDatabase(CreateDatabaseReq {
-                if_not_exists: false,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: "db1".to_string(),
-                },
-                meta: DatabaseMeta {
-                    engine: "defeault".to_string(),
-                    ..Default::default()
-                },
-            }),
-            &t,
-        )
-        .unwrap())
-    })?;
-
-    let resp = m.sm_tree.txn(true, |t| {
-        Ok(m.apply_cmd(
-            &Cmd::CreateTable(CreateTableReq {
-                if_not_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: "db1".to_string(),
-                    table_name: "tb1".to_string(),
-                },
-                table_meta: Default::default(),
-            }),
-            &t,
-        )
-        .unwrap())
-    })?;
-
-    let mut ch: Change<TableMeta, u64> = resp.try_into().unwrap();
-    let table_id = ch.ident.take().unwrap();
-    let result = ch.result.unwrap();
-    let mut version = result.seq;
-
-    tracing::info!("--- upsert options on empty table options");
-    {
-        let resp = m.sm_tree.txn(true, |t| {
-            Ok(m.apply_cmd(
-                &Cmd::UpsertTableOptions(UpsertTableOptionReq {
-                    table_id,
-                    seq: MatchSeq::Exact(version),
-                    options: hashmap! {
-                        "a".to_string() => Some("A".to_string()),
-                        "b".to_string() => None,
-                    },
-                }),
-                &t,
-            )
-            .unwrap())
-        })?;
-
-        let ch: Change<TableMeta> = resp.try_into().unwrap();
-        let (prev, result) = ch.unwrap();
-
-        tracing::info!("--- check prev state is returned");
-        {
-            assert_eq!(version, prev.seq);
-            assert_eq!(BTreeMap::new(), prev.data.options);
-        }
-
-        tracing::info!("--- check result state, deleting b has no effect");
-        {
-            assert!(result.seq > version);
-            assert_eq!(
-                btreemap! {
-                    "a".to_string() => "A".to_string()
-                },
-                result.data.options
-            );
-        }
-    }
-
-    tracing::info!("--- check table is updated");
-    {
-        let got = m.get_table_meta_by_id(&table_id)?.unwrap();
-        assert!(got.seq > version);
-        assert_eq!(
-            btreemap! {
-                "a".to_string() => "A".to_string()
-            },
-            got.data.options
-        );
-
-        // update version to the latest
-        version = got.seq;
-    }
-
-    tracing::info!("--- update with invalid table_id");
-    {
-        m.sm_tree.txn(true, |t| {
-            let r = m.apply_cmd(
-                &Cmd::UpsertTableOptions(UpsertTableOptionReq {
-                    table_id: 0,
-                    seq: MatchSeq::Exact(version - 1),
-                    options: hashmap! {},
-                }),
-                &t,
-            );
-
-            let err = r.unwrap_err();
-            assert_eq!(
-                MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
-                    0,
-                    String::from("apply_upsert_table_options_cmd")
-                ))),
-                err
-            );
-
-            Ok(AppliedState::None)
-        })?;
-    }
-
-    tracing::info!("--- update with mismatched seq wont update anything");
-    {
-        let resp = m.sm_tree.txn(true, |t| {
-            Ok(m.apply_cmd(
-                &Cmd::UpsertTableOptions(UpsertTableOptionReq {
-                    table_id,
-                    seq: MatchSeq::Exact(version - 1),
-                    options: hashmap! {},
-                }),
-                &t,
-            )
-            .unwrap())
-        })?;
-
-        let ch: Change<TableMeta> = resp.try_into().unwrap();
-        let (prev, result) = ch.unwrap();
-
-        assert_eq!(prev, result);
-    }
-
-    tracing::info!("--- update OK");
-    {
-        let resp = m.sm_tree.txn(true, |t| {
-            Ok(m.apply_cmd(
-                &Cmd::UpsertTableOptions(UpsertTableOptionReq {
-                    table_id,
-                    seq: MatchSeq::Exact(version),
-                    options: hashmap! {
-                        "a".to_string() => None,
-                        "c".to_string() => Some("C".to_string()),
-                    },
-                }),
-                &t,
-            )
-            .unwrap())
-        })?;
-
-        let ch: Change<TableMeta> = resp.try_into().unwrap();
-        let (prev, result) = ch.unwrap();
-
-        tracing::info!("--- check prev state is returned");
-        assert_eq!(version, prev.seq);
-        assert_eq!(
-            btreemap! {
-                "a".to_string() => "A".to_string()
-            },
-            prev.data.options
-        );
-
-        tracing::info!("--- check result state, delete a add c");
-        assert!(result.seq > version);
-        assert_eq!(
-            btreemap! {
-                "c".to_string() => "C".to_string()
-            },
-            result.data.options
-        );
-
-        tracing::info!("--- check table is updated");
-        {
-            let got = m.get_table_meta_by_id(&table_id)?.unwrap();
-            assert!(got.seq > version);
-            assert_eq!(
-                btreemap! {
-                    "c".to_string() => "C".to_string()
-                },
-                got.data.options
-            );
-        }
     }
 
     Ok(())

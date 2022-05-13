@@ -19,7 +19,7 @@ pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
 use common_exception::Result;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::Metadata;
@@ -27,11 +27,14 @@ use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod join;
+mod limit;
 mod project;
 mod scalar;
 mod scalar_common;
 mod scalar_visitor;
 mod select;
+mod sort;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
@@ -42,35 +45,32 @@ mod select;
 /// - Build `Metadata`
 pub struct Binder {
     ctx: Arc<QueryContext>,
-    catalog: Arc<dyn Catalog>,
+    catalogs: Arc<CatalogManager>,
     metadata: Metadata,
 }
 
-impl Binder {
-    pub fn new(ctx: Arc<QueryContext>, catalog: Arc<dyn Catalog>) -> Self {
+impl<'a> Binder {
+    pub fn new(ctx: Arc<QueryContext>, catalogs: Arc<CatalogManager>) -> Self {
         Binder {
             ctx,
-            catalog,
+            catalogs,
             metadata: Metadata::create(),
         }
     }
 
-    pub async fn bind<'a>(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
-        let init_bind_context = BindContext::create();
-        let bind_context = self.bind_statement(stmt, &init_bind_context).await?;
-        Ok(BindResult::create(bind_context, self.metadata))
+    pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
+        let init_bind_context = BindContext::new();
+        let (s_expr, bind_context) = self.bind_statement(stmt, &init_bind_context).await?;
+        Ok(BindResult::create(s_expr, bind_context, self.metadata))
     }
 
-    async fn bind_statement<'a>(
+    async fn bind_statement(
         &mut self,
         stmt: &Statement<'a>,
         bind_context: &BindContext,
-    ) -> Result<BindContext> {
+    ) -> Result<(SExpr, BindContext)> {
         match stmt {
-            Statement::Query(query) => {
-                let bind_context = self.bind_query(query, bind_context).await?;
-                Ok(bind_context)
-            }
+            Statement::Query(query) => self.bind_query(query, bind_context).await,
             _ => todo!(),
         }
     }
@@ -78,29 +78,29 @@ impl Binder {
     async fn resolve_data_source(
         &self,
         tenant: &str,
-        database: &str,
-        table: &str,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let table_meta = self.catalog.get_table(tenant, database, table).await?;
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
         Ok(table_meta)
     }
 }
 
 pub struct BindResult {
+    pub s_expr: SExpr,
     pub bind_context: BindContext,
     pub metadata: Metadata,
 }
 
 impl BindResult {
-    pub fn create(bind_context: BindContext, metadata: Metadata) -> Self {
+    pub fn create(s_expr: SExpr, bind_context: BindContext, metadata: Metadata) -> Self {
         BindResult {
+            s_expr,
             bind_context,
             metadata,
         }
-    }
-
-    pub fn s_expr(&self) -> &SExpr {
-        self.bind_context.expression.as_ref().unwrap()
     }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
@@ -38,6 +39,7 @@ pub struct CsvSourceBuilder {
     size_limit: usize,
     field_delimiter: u8,
     record_delimiter: Terminator,
+    tz: Tz,
 }
 
 impl CsvSourceBuilder {
@@ -59,6 +61,7 @@ impl CsvSourceBuilder {
 
         let empty_as_default = format_settings.empty_as_default;
         let skip_header = format_settings.skip_header;
+        let tz = format_settings.timezone;
 
         CsvSourceBuilder {
             schema,
@@ -68,6 +71,7 @@ impl CsvSourceBuilder {
             empty_as_default,
             block_size: 10000,
             size_limit: usize::MAX,
+            tz,
         }
     }
 
@@ -174,16 +178,20 @@ where R: AsyncRead + Unpin + Send
             if record.is_empty() {
                 break;
             }
+            let format = FormatSettings {
+                timezone: self.builder.tz,
+                ..Default::default()
+            };
             for (col, pack) in packs.iter_mut().enumerate() {
                 match record.get(col) {
                     Some(bytes) => {
                         if bytes.is_empty() && self.builder.empty_as_default {
-                            pack.de_default();
+                            pack.de_default(&format);
                         } else {
-                            pack.de_whole_text(bytes)?
+                            pack.de_whole_text(bytes, &format)?
                         }
                     }
-                    None => pack.de_default(),
+                    None => pack.de_default(&format),
                 }
             }
             rows += 1;

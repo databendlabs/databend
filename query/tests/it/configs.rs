@@ -17,7 +17,7 @@ use std::fs;
 use std::io::Write;
 
 use common_exception::Result;
-use databend_query::configs::Config;
+use databend_query::Config;
 use pretty_assertions::assert_eq;
 
 // Default.
@@ -52,8 +52,6 @@ rpc_tls_server_cert = ""
 rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
-table_engine_csv_enabled = false
-table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
 database_engine_github_enabled = true
 wait_timeout_mills = 5000
@@ -76,6 +74,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "root"
 password = ""
 client_timeout_in_second = 10
@@ -96,6 +95,7 @@ access_key_id = ""
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""
@@ -103,6 +103,14 @@ account_key = ""
 container = ""
 endpoint_url = ""
 root = ""
+
+[storage.hdfs]
+name_node = ""
+root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "Binary"
 "#;
 
     let tom_actual = toml::to_string(&actual).unwrap();
@@ -140,8 +148,6 @@ fn test_env_config() -> Result<()> {
             ("STORAGE_S3_ACCESS_KEY_ID", Some("us.key.id")),
             ("STORAGE_S3_SECRET_ACCESS_KEY", Some("us.key")),
             ("STORAGE_S3_BUCKET", Some("us.bucket")),
-            ("QUERY_TABLE_ENGINE_CSV_ENABLED", Some("true")),
-            ("QUERY_TABLE_ENGINE_PARQUET_ENABLED", Some("true")),
             ("QUERY_TABLE_ENGINE_MEMORY_ENABLED", Some("true")),
             ("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", Some("false")),
             ("CONFIG_FILE", None),
@@ -175,8 +181,6 @@ fn test_env_config() -> Result<()> {
             assert_eq!("us.key", configured.storage.s3.secret_access_key);
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
-            assert!(configured.query.table_engine_csv_enabled);
-            assert!(configured.query.table_engine_parquet_enabled);
             assert!(configured.query.table_engine_memory_enabled);
             assert!(!configured.query.database_engine_github_enabled);
 
@@ -224,8 +228,6 @@ rpc_tls_server_cert = ""
 rpc_tls_server_key = ""
 rpc_tls_query_server_root_ca_cert = ""
 rpc_tls_query_service_domain_name = "localhost"
-table_engine_csv_enabled = false
-table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
 database_engine_github_enabled = true
 wait_timeout_mills = 5000
@@ -248,6 +250,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "username_from_file"
 password = "password_from_file"
 client_timeout_in_second = 10
@@ -268,6 +271,7 @@ access_key_id = "access_key_id_from_file"
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""
@@ -275,6 +279,14 @@ account_key = ""
 container = ""
 endpoint_url = ""
 root = ""
+
+[storage.hdfs]
+name_node = ""
+root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "Binary"
     "#
         .as_bytes(),
     )?;
@@ -298,12 +310,5 @@ root = ""
         },
     );
 
-    Ok(())
-}
-
-#[test]
-fn test_fuse_commit_version() -> Result<()> {
-    let v = &databend_query::configs::DATABEND_COMMIT_VERSION;
-    assert!(v.len() > 0);
     Ok(())
 }

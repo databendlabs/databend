@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::RenameTableEntity;
@@ -44,17 +43,21 @@ impl AnalyzableStatement for DfAlterTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (db, table_name) = self.resolve_table(ctx.clone(), &self.table_name)?;
+        let (catalog_name, database_name, table_name) =
+            super::resolve_table(&ctx, &self.table_name, "ALTER TABLE")?;
 
         match &self.action {
             AlterTableAction::RenameTable(o) => {
                 let mut entities = Vec::new();
-                let (new_db, new_table_name) = self.resolve_table(ctx, o)?;
+                // TODO check catalog and new_catalog, cross catalogs operation not allowed
+                let (_new_catalog, new_database_name, new_table_name) =
+                    super::resolve_table(&ctx, o, "ALTER TABLE")?;
                 entities.push(RenameTableEntity {
                     if_exists: self.if_exists,
-                    db,
+                    catalog_name,
+                    database_name,
                     table_name,
-                    new_db,
+                    new_database_name,
                     new_table_name,
                 });
 
@@ -62,24 +65,6 @@ impl AnalyzableStatement for DfAlterTable {
                     PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
                 )))
             }
-        }
-    }
-}
-
-impl DfAlterTable {
-    fn resolve_table(
-        &self,
-        ctx: Arc<QueryContext>,
-        table_name: &ObjectName,
-    ) -> Result<(String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Alter table name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Alter table name must be [`db`].`table`",
-            )),
         }
     }
 }

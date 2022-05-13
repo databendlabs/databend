@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
+use crate::prelude::*;
 use crate::types::BooleanType;
 use crate::types::DataTypeImpl;
 use crate::BooleanColumn;
@@ -105,6 +106,10 @@ impl ScalarColumnBuilder for MutableBooleanColumn {
             values: MutableBitmap::with_capacity(capacity),
             data_type: BooleanType::new_impl(),
         }
+    }
+
+    fn with_capacity_meta(capacity: usize, _meta: ColumnMeta) -> Self {
+        Self::with_capacity(capacity)
     }
 
     fn push(&mut self, value: bool) {

@@ -29,6 +29,7 @@ use super::statements::DfDropView;
 use super::statements::DfGrantRoleStatement;
 use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
+use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
@@ -82,6 +83,7 @@ pub enum DfStatement<'a> {
     CreateDatabase(DfCreateDatabase),
     DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
+    AlterDatabase(DfAlterDatabase),
 
     // Tables.
     ShowTables(DfShowTables),

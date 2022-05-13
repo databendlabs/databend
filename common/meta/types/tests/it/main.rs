@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 mod cluster;
-mod compatible;
 mod match_seq;
 mod user_defined_function;
 mod user_grant;
@@ -21,7 +20,6 @@ mod user_info;
 mod user_privilege;
 mod user_quota;
 mod user_stage;
-mod warehouse_metadata;
 
 #[test]
 fn test_bin_commit_version() -> anyhow::Result<()> {

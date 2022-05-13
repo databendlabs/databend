@@ -59,7 +59,7 @@ impl<'a> DfParser<'a> {
 
                 Ok(DfStatement::InsertQuery(DfInsertStatement {
                     or,
-                    table_name,
+                    object_name: table_name,
                     columns,
                     overwrite,
                     source: insert_source,

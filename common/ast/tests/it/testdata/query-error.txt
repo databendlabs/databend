@@ -1,40 +1,11 @@
 ---------- Input ----------
 select * from customer join where a = b
 ---------- Output ---------
-SELECT * FROM customer
----------- AST ------------
-Query {
-    body: Select(
-        SelectStmt {
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: Some(
-                Table {
-                    database: None,
-                    table: Identifier {
-                        name: "customer",
-                        quote: None,
-                    },
-                    alias: None,
-                },
-            ),
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [],
-    offset: None,
-}
----------- REST -----------
-join where a = b
+error: 
+  --> SQL:1:29
+  |
+1 | select * from customer join where a = b
+  |                             ^^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedIdent>
 
 
 ---------- Input ----------
@@ -44,62 +15,29 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected token "("
+  | ------        ^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedIdent>
   | |              
   | while parsing `SELECT ...`
 
 
 ---------- Input ----------
+select * from t inner join t1
+---------- Output ---------
+error: 
+  --> SQL:1:30
+  |
+1 | select * from t inner join t1
+  |                              ^ expected `(`, `.`, <Ident>, <QuotedIdent>, `AS`, `ON`, or 1 more ...
+
+
+---------- Input ----------
 select * from customer natural inner join orders on a = b
 ---------- Output ---------
-SELECT * FROM customer NATURAL INNER JOIN orders
----------- AST ------------
-Query {
-    body: Select(
-        SelectStmt {
-            distinct: false,
-            select_list: [
-                QualifiedName(
-                    [
-                        Star,
-                    ],
-                ),
-            ],
-            from: Some(
-                Join(
-                    Join {
-                        op: Inner,
-                        condition: Natural,
-                        left: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "customer",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                        right: Table {
-                            database: None,
-                            table: Identifier {
-                                name: "orders",
-                                quote: None,
-                            },
-                            alias: None,
-                        },
-                    },
-                ),
-            ),
-            selection: None,
-            group_by: [],
-            having: None,
-        },
-    ),
-    order_by: [],
-    limit: [],
-    offset: None,
-}
----------- REST -----------
-on a = b
+error: 
+  --> SQL:1:50
+  |
+1 | select * from customer natural inner join orders on a = b
+  |                                                  ^^ expected `(`, `.`, <Ident>, <QuotedIdent>, `AS`, `INNER`, or 12 more ...
 
 
 ---------- Input ----------
@@ -109,8 +47,20 @@ error:
   --> SQL:1:16
   |
 1 | select * order a
-  | ------         ^ expected keyword `BY`
+  | ------         ^ expected `BY`
   | |               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * order
+---------- Output ---------
+error: 
+  --> SQL:1:15
+  |
+1 | select * order
+  | ------        ^ expected `BY`
+  | |             
   | while parsing `SELECT ...`
 
 
@@ -121,7 +71,7 @@ error:
   --> SQL:1:45
   |
 1 | select number + 5 as a, cast(number as float(255))
-  | ------                  ----                ^ expected token ")"
+  | ------                  ----                ^ expected `)`
   | |                       |                    
   | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression

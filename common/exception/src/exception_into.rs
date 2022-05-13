@@ -82,6 +82,12 @@ impl From<std::num::ParseFloatError> for ErrorCode {
     }
 }
 
+impl From<std::num::TryFromIntError> for ErrorCode {
+    fn from(error: std::num::TryFromIntError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<common_arrow::arrow::error::ArrowError> for ErrorCode {
     fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
         ErrorCode::from_std_error(error)

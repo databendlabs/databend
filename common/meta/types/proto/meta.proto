@@ -35,6 +35,14 @@ message RaftReply {
   string error = 2;
 }
 
+message MemberListRequest {
+  string data = 1;
+}
+
+message MemberListReply {
+  repeated string data = 1;
+}
+
 message HandshakeRequest {
   uint64 protocol_version = 1;
   bytes payload = 2;
@@ -178,4 +186,7 @@ service MetaService {
   rpc Watch(WatchRequest) returns (stream WatchResponse);
 
   rpc Transaction(TxnRequest) returns (TxnReply);
+
+  // Get MetaSrv member list endpoints
+  rpc MemberList(MemberListRequest) returns (MemberListReply);
 }

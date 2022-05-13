@@ -15,12 +15,13 @@
 
 use std::default::Default;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
@@ -52,7 +53,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
             .await?;
 
         // get the latest tbl
@@ -66,6 +67,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts)?;
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
+                catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
@@ -109,7 +111,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit_insertion(ctx.clone(), r.try_collect().await?, true)
+            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, true)
             .await?;
 
         // get the latest tbl
@@ -125,6 +127,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
+                catalog: "default".to_owned(),
                 source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
@@ -167,6 +170,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
+        catalog: fixture.default_catalog_name(),
         db: fixture.default_db_name(),
         table: fixture.default_table_name(),
         purge: false,
@@ -189,7 +193,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
         .await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -244,7 +248,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), CATALOG_DEFAULT, r.try_collect().await?, false)
             .await?;
     }
 

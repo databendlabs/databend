@@ -18,8 +18,8 @@ use std::fs::File;
 use std::io::Read;
 use std::string::String;
 
-use common_base::tokio;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::Stoppable;
 use common_meta_types::Node;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::state_handler;

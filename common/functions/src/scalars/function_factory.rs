@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use super::commons::CommonFunction;
 use super::function::Function;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
@@ -69,6 +70,7 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
 
     ArithmeticFunction::register(&mut function_factory);
+    CommonFunction::register(&mut function_factory);
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);

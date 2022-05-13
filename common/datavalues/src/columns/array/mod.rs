@@ -21,6 +21,12 @@ use common_arrow::arrow::types::Index;
 
 use crate::prelude::*;
 
+mod iterator;
+mod mutable;
+
+pub use iterator::*;
+pub use mutable::*;
+
 type LargeListArray = ListArray<i64>;
 
 #[derive(Clone)]
@@ -159,6 +165,22 @@ impl Column for ArrayColumn {
             .map(|i| self.values.get(i))
             .collect();
         DataValue::Array(values)
+    }
+}
+
+impl ScalarColumn for ArrayColumn {
+    type Builder = MutableArrayColumn;
+    type OwnedItem = ArrayValue;
+    type RefItem<'a> = <ArrayValue as Scalar>::RefType<'a>;
+    type Iterator<'a> = ArrayValueIter<'a>;
+
+    #[inline]
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        ArrayValueRef::Indexed { column: self, idx }
+    }
+
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        ArrayValueIter::new(self)
     }
 }
 

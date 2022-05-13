@@ -16,19 +16,18 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
+use common_base::mem_allocator::malloc_size;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
-use common_mem_allocator::malloc_size;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
 use opendal::Operator;
 
-use crate::catalogs::DatabaseCatalog;
-use crate::configs::Config;
+use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -36,6 +35,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::Config;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
@@ -60,8 +60,7 @@ impl Session {
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings =
-            Settings::try_create(&conf, session_ctx.clone(), session_mgr.get_user_manager())?;
+        let session_settings = Settings::try_create(&conf)?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
 
@@ -146,7 +145,7 @@ impl Session {
         self.session_ctx.set_client_host(host);
         self.session_ctx.set_io_shutdown_tx(Some(tx));
 
-        common_base::tokio::spawn(async move {
+        common_base::base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
                 (io_shutdown)();
                 tx.send(()).ok();
@@ -160,6 +159,10 @@ impl Session {
 
     pub fn get_current_database(self: &Arc<Self>) -> String {
         self.session_ctx.get_current_database()
+    }
+
+    pub fn get_current_catalog(self: &Arc<Self>) -> String {
+        self.session_ctx.get_current_catalog()
     }
 
     pub fn get_current_tenant(self: &Arc<Self>) -> String {
@@ -221,8 +224,8 @@ impl Session {
         self.session_mgr.clone()
     }
 
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.session_mgr.get_catalog()
+    pub fn get_catalogs(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.session_mgr.get_catalog_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

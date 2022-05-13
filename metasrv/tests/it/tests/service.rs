@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common_base::tokio;
-use common_base::GlobalSequence;
-use common_base::Stoppable;
+use common_base::base::tokio;
+use common_base::base::GlobalSequence;
+use common_base::base::Stoppable;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -149,10 +149,10 @@ impl MetaSrvTestContext {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<MetaGrpcClient>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
         Ok(client)
     }
 

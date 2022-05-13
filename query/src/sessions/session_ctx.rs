@@ -17,20 +17,21 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::infallible::RwLock;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
-use crate::configs::Config;
 use crate::sessions::QueryContextShared;
+use crate::Config;
 
 #[derive(MallocSizeOf)]
 pub struct SessionContext {
     #[ignore_malloc_size_of = "insignificant"]
     conf: Config,
     abort: AtomicBool,
+    current_catalog: RwLock<String>,
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
     #[ignore_malloc_size_of = "insignificant"]
@@ -51,6 +52,7 @@ impl SessionContext {
             current_user: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
+            current_catalog: RwLock::new("default".to_string()),
             current_database: RwLock::new("default".to_string()),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
@@ -65,6 +67,18 @@ impl SessionContext {
     // Set abort status.
     pub fn set_abort(&self, v: bool) {
         self.abort.store(v, Ordering::Relaxed);
+    }
+
+    // Get current catalog name.
+    pub fn get_current_catalog(&self) -> String {
+        let lock = self.current_catalog.read();
+        lock.clone()
+    }
+
+    // Set current catalog.
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        let mut lock = self.current_catalog.write();
+        *lock = catalog_name
     }
 
     // Get current database.

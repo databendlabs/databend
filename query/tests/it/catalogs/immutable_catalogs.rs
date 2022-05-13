@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseNameIdent;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::RenameDatabaseReq;
+use databend_query::catalogs::default::ImmutableCatalog;
 use databend_query::catalogs::Catalog;
-use databend_query::catalogs::ImmutableCatalog;
 
 use crate::tests::create_catalog;
 
@@ -61,6 +62,32 @@ async fn test_immutable_catalogs_database() -> Result<()> {
     };
     let drop_db_req = catalog.drop_database(drop_db_req).await;
     assert!(drop_db_req.is_err());
+
+    // rename database should failed
+    let rename_db_req = RenameDatabaseReq {
+        if_exists: false,
+        name_ident: DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: "system".to_string(),
+        },
+
+        new_db_name: "test".to_string(),
+    };
+    let rename_db_req = catalog.rename_database(rename_db_req).await;
+    assert!(rename_db_req.is_err());
+
+    // rename database should failed
+    let rename_db_req = RenameDatabaseReq {
+        if_exists: false,
+        name_ident: DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: "test".to_string(),
+        },
+
+        new_db_name: "system".to_string(),
+    };
+    let rename_db_req = catalog.rename_database(rename_db_req).await;
+    assert!(rename_db_req.is_err());
 
     Ok(())
 }

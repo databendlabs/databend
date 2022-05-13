@@ -19,19 +19,20 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
-use common_base::tokio::task::JoinHandle;
-use common_base::Progress;
-use common_base::ProgressValues;
-use common_base::Runtime;
-use common_base::TrySpawn;
+use chrono_tz::Tz;
+use common_base::base::tokio::task::JoinHandle;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
+use common_base::base::Runtime;
+use common_base::base::TrySpawn;
+use common_base::infallible::Mutex;
+use common_base::infallible::RwLock;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
 use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
@@ -40,8 +41,8 @@ use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3StageTableInfo;
 use common_planners::SourceInfo;
+use common_planners::StageTableInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
@@ -49,9 +50,8 @@ use common_tracing::tracing;
 use opendal::Operator;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -59,11 +59,12 @@ use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
-use crate::storages::S3StageTable;
+use crate::storages::stage::StageTable;
 use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -87,7 +88,7 @@ impl QueryContext {
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
         })
@@ -103,22 +104,24 @@ impl QueryContext {
     ) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
             SourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+                self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
             }
-            SourceInfo::S3StageSource(s3_table_info) => {
-                self.build_s3_external_by_table_info(s3_table_info, plan.tbl_args.clone())
-            }
+            SourceInfo::StageSource(s3_table_info) => self.build_external_by_table_info(
+                &plan.catalog,
+                s3_table_info,
+                plan.tbl_args.clone(),
+            ),
         }
     }
 
     // Build fuse/system normal table by table info.
     fn build_table_by_table_info(
         &self,
+        catalog_name: &str,
         table_info: &TableInfo,
         table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog();
-
+        let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
             catalog.get_table_by_info(table_info)
         } else {
@@ -128,15 +131,16 @@ impl QueryContext {
         }
     }
 
-    // Build s3 external table by stage info, this is used in:
+    // Build external table by stage info, this is used in:
     // COPY INTO t1 FROM 's3://'
     // 's3://' here is a s3 external stage, and build it to the external table.
-    fn build_s3_external_by_table_info(
+    fn build_external_by_table_info(
         &self,
-        table_info: &S3StageTableInfo,
+        _catalog: &str,
+        table_info: &StageTableInfo,
         _table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
-        S3StageTable::try_create(table_info.clone())
+        StageTable::try_create(table_info.clone())
     }
 
     pub fn get_scan_progress(&self) -> Arc<Progress> {
@@ -228,8 +232,14 @@ impl QueryContext {
         self.shared.get_cluster()
     }
 
-    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
-        self.shared.get_catalog()
+    pub fn get_catalogs(&self) -> Arc<CatalogManager> {
+        self.shared.get_catalogs()
+    }
+
+    pub fn get_catalog(&self, catalog_name: impl AsRef<str>) -> Result<Arc<dyn Catalog>> {
+        self.shared
+            .get_catalogs()
+            .get_catalog(catalog_name.as_ref())
     }
 
     /// Fetch a Table by db and table name.
@@ -239,8 +249,13 @@ impl QueryContext {
     /// ```sql
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
-    pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(database, table).await
+    pub async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.shared.get_table(catalog, database, table).await
     }
 
     pub fn get_id(&self) -> String {
@@ -253,13 +268,17 @@ impl QueryContext {
         Ok(abort_stream)
     }
 
+    pub fn get_current_catalog(&self) -> String {
+        self.shared.get_current_catalog()
+    }
+
     pub fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
-        let catalog = self.get_catalog();
+        let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
         match catalog
             .get_database(tenant_id.as_str(), &new_database_name)
             .await
@@ -397,11 +416,13 @@ impl QueryContext {
     }
 
     pub fn try_get_function_context(&self) -> Result<FunctionContext> {
-        Ok(FunctionContext {
-            tz: String::from_utf8(self.get_settings().get_timezone()?).map_err(|_| {
-                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
-            })?,
-        })
+        let tz = String::from_utf8(self.get_settings().get_timezone()?).map_err(|_| {
+            ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+        })?;
+        let tz = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        Ok(FunctionContext { tz })
     }
 }
 

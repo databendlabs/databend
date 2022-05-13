@@ -72,7 +72,7 @@ pub use format::FormatFunction;
 pub use insert::InsertFunction;
 pub use leftright::LeftFunction;
 pub use leftright::RightFunction;
-pub use length::LengthFunction;
+pub use length::StringLengthFunction;
 pub use locate::InstrFunction;
 pub use locate::LocateFunction;
 pub use locate::PositionFunction;

@@ -221,6 +221,22 @@ impl SeriesFrom<Vec<Option<VariantValue>>, Vec<Option<VariantValue>>> for Series
     }
 }
 
+impl SeriesFrom<Vec<ArrayValue>, Vec<ArrayValue>> for Series {
+    fn from_data(vals: Vec<ArrayValue>) -> ColumnRef {
+        let inner_data_type = match vals.iter().find(|&x| x.inner_type().is_some()) {
+            Some(array_value) => array_value.inner_type().unwrap(),
+            None => Int64Type::new_impl(),
+        };
+        let mut builder = MutableArrayColumn::with_capacity_meta(vals.len(), ColumnMeta::Array {
+            data_type: inner_data_type,
+        });
+        for val in vals {
+            builder.append_value(val);
+        }
+        builder.finish().arc()
+    }
+}
+
 macro_rules! impl_from_option_iterator {
     ([], $( { $S: ident} ),*) => {
         $(

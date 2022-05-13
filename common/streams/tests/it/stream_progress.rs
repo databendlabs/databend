@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
-use common_base::*;
+use common_base::base::tokio;
+use common_base::base::*;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;

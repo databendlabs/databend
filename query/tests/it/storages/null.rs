@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -74,6 +74,7 @@ async fn test_null_table() -> Result<()> {
     // truncate.
     {
         let truncate_plan = TruncateTablePlan {
+            catalog: "default".to_string(),
             db: "default".to_string(),
             table: "a".to_string(),
             purge: false,

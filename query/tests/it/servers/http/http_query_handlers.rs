@@ -18,8 +18,8 @@ use std::time::Duration;
 
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
-use common_base::get_free_tcp_port;
-use common_base::tokio;
+use common_base::base::get_free_tcp_port;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -37,13 +37,13 @@ use databend_query::servers::HttpHandler;
 use databend_query::users::auth::jwt::CustomClaims;
 use databend_query::users::auth::jwt::EnsureUser;
 use headers::Header;
-use hyper::header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::claims::NoCustomClaims;
 use jwt_simple::prelude::Clock;
 use num::ToPrimitive;
+use poem::http::header;
 use poem::http::Method;
 use poem::http::StatusCode;
 use poem::Endpoint;
@@ -495,10 +495,12 @@ async fn check_response(response: Response) -> Result<(StatusCode, QueryResponse
 }
 
 async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
+    let basic = headers::Authorization::basic("root", "");
     ep.call(
         Request::builder()
             .uri(uri.parse().unwrap())
             .method(Method::GET)
+            .typed_header(basic)
             .finish(),
     )
     .await
@@ -543,15 +545,16 @@ async fn post_json_to_endpoint(
     let uri = "/v1/query";
     let content_type = "application/json";
     let body = serde_json::to_vec(&json)?;
+    let basic = headers::Authorization::basic("root", "");
 
+    let req = Request::builder()
+        .uri(uri.parse().unwrap())
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, content_type)
+        .typed_header(basic)
+        .body(body);
     let response = ep
-        .call(
-            Request::builder()
-                .uri(uri.parse().unwrap())
-                .method(Method::POST)
-                .header(header::CONTENT_TYPE, content_type)
-                .body(body),
-        )
+        .call(req)
         .await
         .map_err(|e| ErrorCode::UnexpectedError(e.to_string()))?;
 
@@ -757,7 +760,12 @@ async fn test_http_handler_tls_server() -> Result<()> {
         .add_root_certificate(cert)
         .build()
         .unwrap();
-    let resp = client.post(&url).json(&json).send().await;
+    let resp = client
+        .post(&url)
+        .json(&json)
+        .basic_auth("root", Some(""))
+        .send()
+        .await;
     assert!(resp.is_ok(), "{:?}", resp.err());
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
@@ -822,7 +830,12 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
         .add_root_certificate(cert)
         .build()
         .expect("preconfigured rustls tls");
-    let resp = client.post(&url).json(&json).send().await;
+    let resp = client
+        .post(&url)
+        .json(&json)
+        .basic_auth("root", Some(""))
+        .send()
+        .await;
     assert!(resp.is_ok(), "{:?}", resp.err());
     let resp = resp.unwrap();
     assert!(resp.status().is_success());

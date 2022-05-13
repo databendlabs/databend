@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use common_planners::PlanNode;
 use criterion::Criterion;
-use databend_query::configs::Config;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::PlanParser;
+use databend_query::Config;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;

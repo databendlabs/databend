@@ -19,5 +19,5 @@ use super::UDFDefinition;
 
 #[async_trait]
 pub trait UDFFetcher: Sized + Send {
-    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition>;
+    fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition>;
 }

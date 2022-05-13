@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_exception::ErrorCode;
@@ -47,21 +48,22 @@ impl Planner {
         Planner { ctx }
     }
 
-    pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<NewPipeline> {
+    pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<(NewPipeline, Vec<NewPipeline>)> {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
-        let stmts = parse_sql(&tokens)?;
+        let backtrace = Backtrace::new();
+        let stmts = parse_sql(&tokens, &backtrace)?;
         if stmts.len() > 1 {
             return Err(ErrorCode::UnImplement("unsupported multiple statements"));
         }
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
-        let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalog());
+        let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs());
         let bind_result = binder.bind(&stmts[0]).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
         let optimize_context = OptimizeContext::create_with_bind_context(&bind_result.bind_context);
-        let optimized_expr = optimize(bind_result.s_expr().clone(), optimize_context)?;
+        let optimized_expr = optimize(bind_result.s_expr, optimize_context)?;
 
         // Step 4: build executable Pipeline with SExpr
         let result_columns = bind_result.bind_context.result_columns();
@@ -71,8 +73,8 @@ impl Planner {
             bind_result.metadata,
             optimized_expr,
         );
-        let pipeline = pb.spawn()?;
+        let pipelines = pb.spawn()?;
 
-        Ok(pipeline)
+        Ok(pipelines)
     }
 }

@@ -17,23 +17,22 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common_base::Progress;
-use common_base::Runtime;
+use chrono_tz::Tz;
+use common_base::base::Progress;
+use common_base::base::Runtime;
+use common_base::infallible::Mutex;
+use common_base::infallible::RwLock;
 use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
-use common_infallible::RwLock;
 use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
@@ -42,8 +41,9 @@ use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
-type DatabaseAndTable = (String, String);
+type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
 /// This is very useful, for example, for queries:
@@ -137,6 +137,10 @@ impl QueryContextShared {
         self.cluster_cache.clone()
     }
 
+    pub fn get_current_catalog(&self) -> String {
+        self.session.get_current_catalog()
+    }
+
     pub fn get_current_database(&self) -> String {
         self.session.get_current_database()
     }
@@ -173,17 +177,23 @@ impl QueryContextShared {
         self.session.get_settings()
     }
 
-    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
-        self.session.get_catalog()
+    pub fn get_catalogs(&self) -> Arc<CatalogManager> {
+        self.session.get_catalogs()
     }
 
-    pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    pub async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
-        let table_meta_key = (database.to_string(), table.to_string());
+
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
         match already_in_cache {
-            false => self.get_table_to_cache(database, table).await,
+            false => self.get_table_to_cache(catalog, database, table).await,
             true => Ok(self
                 .tables_refs
                 .lock()
@@ -193,12 +203,17 @@ impl QueryContextShared {
         }
     }
 
-    async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table_to_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog();
+        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let catalog = self.get_catalogs().get_catalog(catalog)?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
-        let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();
 
         match tables_refs.entry(table_meta_key) {
@@ -263,6 +278,12 @@ impl QueryContextShared {
             format.field_delimiter = settings.get_field_delimiter()?;
             format.empty_as_default = settings.get_empty_as_default()? > 0;
             format.skip_header = settings.get_skip_header()? > 0;
+            let tz = String::from_utf8(settings.get_timezone()?).map_err(|_| {
+                ErrorCode::LogicalError("Timezone has been checked and should be valid.")
+            })?;
+            format.timezone = tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            })?;
         }
         Ok(format)
     }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::SettingsTable;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -39,6 +39,7 @@ async fn test_settings_table() -> Result<()> {
         "| enable_planner_v2              | 0       | 0       | SESSION | Enable planner v2 by setting this variable to 1, default value: 0                                  | UInt64 |",
         "| field_delimiter                | ,       | ,       | SESSION | Format field delimiter, default value: ,                                                           | String |",
         "| flight_client_timeout          | 60      | 60      | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds | UInt64 |",
+        "| group_by_two_level_threshold   | 10000   | 10000   | SESSION | The threshold of keys to open two-level aggregation, default value: 10000                          | UInt64 |",
         "| max_block_size                 | 10000   | 10000   | SESSION | Maximum block size for reading                                                                     | UInt64 |",
         "| max_threads                    | 2       | 16      | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.  | UInt64 |",
         "| record_delimiter               |         |         | SESSION | Format record_delimiter, default value:                                                            | String |",

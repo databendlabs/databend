@@ -18,10 +18,10 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use common_base::infallible::Mutex;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::processors::port::OutputPort;

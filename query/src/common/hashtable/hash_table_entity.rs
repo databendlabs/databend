@@ -58,6 +58,7 @@ where
     Key: HashTableKeyable,
     Value: Sized + Copy,
 {
+    #[inline(always)]
     unsafe fn is_zero(self: *mut Self) -> bool {
         (*self).key.is_zero()
     }
@@ -85,7 +86,7 @@ where
 
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
         if Key::BEFORE_EQ_HASH && (*self).hash != (*other).hash {
-            return false;
+            return true;
         }
 
         !((*self).key == (*other).key)

@@ -297,14 +297,15 @@ where
     F: Fn(T::Simd, T::Simd) -> u8 + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
+        let func_ctx = FunctionContext::default();
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
-            cast_column_field(l, l.data_type(), &self.least_supertype)?
+            cast_column_field(l, l.data_type(), &self.least_supertype, &func_ctx)?
         } else {
             l.column().clone()
         };
 
         let rhs = if self.need_cast && r.data_type() != &self.least_supertype {
-            cast_column_field(r, r.data_type(), &self.least_supertype)?
+            cast_column_field(r, r.data_type(), &self.least_supertype, &func_ctx)?
         } else {
             r.column().clone()
         };

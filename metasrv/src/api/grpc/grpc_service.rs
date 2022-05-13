@@ -18,7 +18,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_base::tokio::sync::mpsc;
+use common_base::base::tokio::sync::mpsc;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;
@@ -27,6 +27,8 @@ use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
+use common_meta_types::protobuf::MemberListReply;
+use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
@@ -68,10 +70,9 @@ impl MetaServiceImpl {
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
             .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
-        let claim = self
-            .token
-            .try_verify_token(token)
-            .map_err(|e| Status::unauthenticated(e.to_string()))?;
+        let claim = self.token.try_verify_token(token.clone()).map_err(|e| {
+            Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
+        })?;
         Ok(claim)
     }
 }
@@ -93,7 +94,11 @@ impl MetaService for MetaServiceImpl {
             .await
             .ok_or_else(|| Status::internal("Error request next is None"))??;
 
-        let HandshakeRequest { payload, .. } = req;
+        let HandshakeRequest {
+            protocol_version,
+            payload,
+        } = req;
+        assert_eq!(protocol_version, 0); // todo(ariesdevil): define server version, return un compatible error.
         let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
 
         let user = "root";
@@ -198,6 +203,17 @@ impl MetaService for MetaServiceImpl {
 
         let body = self.action_handler.execute_txn(request).await;
         Ok(Response::new(body))
+    }
+
+    async fn member_list(
+        &self,
+        _request: Request<MemberListRequest>,
+    ) -> Result<Response<MemberListReply>, Status> {
+        let meta_node = &self.action_handler.meta_node;
+        let members = meta_node.get_meta_addrs().await.map_err(|e| {
+            Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
+        })?;
+        Ok(Response::new(MemberListReply { data: members }))
     }
 }
 

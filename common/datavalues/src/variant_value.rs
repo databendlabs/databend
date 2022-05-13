@@ -23,7 +23,7 @@ use common_exception::Result;
 use serde_json::Value;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct VariantValue(Value);
+pub struct VariantValue(pub Value);
 
 impl From<Value> for VariantValue {
     fn from(val: Value) -> Self {

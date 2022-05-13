@@ -19,21 +19,23 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::tokio;
-use common_base::tokio::sync::Mutex;
-use common_base::tokio::sync::Notify;
-use common_base::tokio::task::JoinHandle;
-use common_base::tokio::time::sleep as tokio_async_sleep;
-use common_base::DummySignalStream;
-use common_base::GlobalUniqName;
-use common_base::SignalStream;
-use common_base::SignalType;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::Mutex;
+use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::task::JoinHandle;
+use common_base::base::tokio::time::sleep as tokio_async_sleep;
+use common_base::base::DummySignalStream;
+use common_base::base::GlobalUniqName;
+use common_base::base::SignalStream;
+use common_base::base::SignalType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_grpc::RpcClientTlsConfig;
 use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_api::KVApi;
+use common_meta_grpc::MetaGrpcClientConf;
 use common_meta_types::NodeInfo;
 use common_tracing::tracing;
 use futures::future::select;
@@ -45,7 +47,7 @@ use rand::Rng;
 
 use crate::api::FlightClient;
 use crate::common::MetaClientProvider;
-use crate::configs::Config;
+use crate::Config;
 
 pub struct ClusterDiscovery {
     local_id: String,
@@ -55,7 +57,7 @@ pub struct ClusterDiscovery {
 
 impl ClusterDiscovery {
     async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let meta_api_provider = MetaClientProvider::new(cfg.meta.to_grpc_client_config());
+        let meta_api_provider = MetaClientProvider::new(MetaGrpcClientConf::from(&cfg.meta));
         match meta_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create cluster api).")),
@@ -212,7 +214,7 @@ impl Cluster {
                         ConnectionFactory::create_rpc_channel(
                             node.flight_address.clone(),
                             None,
-                            Some(config.tls_query_client_conf()),
+                            Some(RpcClientTlsConfig::from(&config.query)),
                         )?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(

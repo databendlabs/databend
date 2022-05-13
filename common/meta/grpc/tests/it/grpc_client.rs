@@ -14,9 +14,9 @@
 
 use std::time::Duration;
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::GetDatabaseReq;
 
@@ -31,7 +31,7 @@ async fn test_grpc_client_action_timeout() {
     // server's handshake impl will sleep 2secs.
     let timeout = Duration::from_secs(3);
 
-    let client = MetaGrpcClient::try_create(&srv_addr, "", "", Some(timeout), None)
+    let client = MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None)
         .await
         .unwrap();
 
@@ -49,10 +49,10 @@ async fn test_grpc_client_handshake_timeout() {
     let srv_addr = start_grpc_server();
 
     let timeout = Duration::from_secs(1);
-    let res = MetaGrpcClient::try_create(&srv_addr, "", "", Some(timeout), None)
+    let res = MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None)
         .await
         .unwrap();
-    let client = res.make_client().await;
+    let client = res.make_conn().await;
     let got = client.unwrap_err();
     let got = ErrorCode::from(got).message();
     let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";

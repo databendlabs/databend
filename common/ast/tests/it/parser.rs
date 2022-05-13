@@ -14,13 +14,15 @@
 
 use std::io::Write;
 
-use common_ast::parser::error::pretty_print_error;
+use common_ast::parser::error::Backtrace;
+use common_ast::parser::error::DisplayError as _;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
-use common_ast::parser::statement::*;
 use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
+use common_ast::parser::util::Input;
+use common_ast::rule;
 use common_exception::Result;
 use goldenfile::Mint;
 use nom::Parser;
@@ -28,31 +30,22 @@ use nom::Parser;
 macro_rules! test_parse {
     ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = Tokenizer::new($source).collect::<Result<Vec<_>>>().unwrap();
-        match $parser.parse(&(tokens)) {
-            Ok((i, output)) if i[0].kind == TokenKind::EOI => {
+        let backtrace = Backtrace::new();
+        let parser = $parser;
+        let mut parser = rule! { #parser ~ &EOI };
+        match parser.parse(Input(&tokens, &backtrace)) {
+            Ok((i, (output, _))) => {
+                assert_eq!(i[0].kind, TokenKind::EOI);
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
                 writeln!($file, "---------- Output ---------").unwrap();
                 writeln!($file, "{}", output).unwrap();
                 writeln!($file, "---------- AST ------------").unwrap();
                 writeln!($file, "{:#?}", output).unwrap();
-                writeln!($file, "\n").unwrap();
-            }
-            Ok((i, output)) => {
-                writeln!($file, "---------- Input ----------").unwrap();
-                writeln!($file, "{}", $source).unwrap();
-                writeln!($file, "---------- Output ---------").unwrap();
-                writeln!($file, "{}", output).unwrap();
-                writeln!($file, "---------- AST ------------").unwrap();
-                writeln!($file, "{:#?}", output).unwrap();
-                writeln!($file, "---------- REST -----------").unwrap();
-                writeln!($file, "{}", &$source[i[0].span.start..]).unwrap();
                 writeln!($file, "\n").unwrap();
             }
             Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-                let report = pretty_print_error($source, err.to_labels())
-                    .trim_end()
-                    .to_string();
+                let report = err.display_error(()).trim_end().to_string();
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
                 writeln!($file, "---------- Output ---------").unwrap();
@@ -114,7 +107,8 @@ fn test_statement() {
 
     for case in cases {
         let tokens = tokenize_sql(case).unwrap();
-        let stmts = parse_sql(&tokens).unwrap();
+        let backtrace = Backtrace::new();
+        let stmts = parse_sql(&tokens, &backtrace).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         for stmt in stmts {
@@ -150,7 +144,11 @@ fn test_statements_in_legacy_suites() {
         .into_owned();
 
         let tokens = tokenize_sql(&file_str).unwrap();
-        parse_sql(&tokens).unwrap();
+        let backtrace = Backtrace::new();
+        parse_sql(&tokens, &backtrace).expect(
+            "Parser error should not exist in integration suites. \
+            Please add parser error cases to `common/ast/tests/it/parser.rs`",
+        );
     }
 }
 
@@ -171,7 +169,13 @@ fn test_statement_error() {
     ];
 
     for case in cases {
-        test_parse!(file, statement, case);
+        let tokens = tokenize_sql(case).unwrap();
+        let backtrace = Backtrace::new();
+        let err = parse_sql(&tokens, &backtrace).unwrap_err();
+        writeln!(file, "---------- Input ----------").unwrap();
+        writeln!(file, "{}", case).unwrap();
+        writeln!(file, "---------- Output ---------").unwrap();
+        writeln!(file, "{}", err.message()).unwrap();
     }
 }
 
@@ -214,8 +218,10 @@ fn test_query_error() {
     let cases = &[
         r#"select * from customer join where a = b"#,
         r#"select * from join customer"#,
+        r#"select * from t inner join t1"#,
         r#"select * from customer natural inner join orders on a = b"#,
         r#"select * order a"#,
+        r#"select * order"#,
         r#"select number + 5 as a, cast(number as float(255))"#,
     ];
 

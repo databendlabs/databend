@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::watch_request::FilterType;
@@ -26,7 +26,7 @@ use common_meta_types::UpsertKVAction;
 use crate::init_meta_ut;
 
 async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVAction>) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     // update some kv
     for update in updates.iter() {
@@ -42,15 +42,15 @@ async fn test_watch_main(
     mut watch_events: Vec<Event>,
     updates: Vec<UpsertKVAction>,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None).await?;
 
-    let mut grpc_client = client.make_client().await?;
+    let mut grpc_client = client.make_conn().await?;
 
     let request = tonic::Request::new(watch);
 
     let mut client_stream = grpc_client.watch(request).await?.into_inner();
 
-    let _h = tokio::spawn(upsert_kv_client_main(addr.clone(), updates));
+    let _h = tokio::spawn(upsert_kv_client_main(addr, updates));
 
     loop {
         if let Ok(Some(resp)) = client_stream.message().await {

@@ -80,7 +80,7 @@ impl Function for RegexpInStrFunction {
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
@@ -101,6 +101,7 @@ impl Function for RegexpInStrFunction {
                         &columns[2],
                         columns[2].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
+                        &func_ctx,
                     )?
                 }
                 3 => {
@@ -108,6 +109,7 @@ impl Function for RegexpInStrFunction {
                         &columns[3],
                         columns[3].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
+                        &func_ctx,
                     )?
                 }
                 4 => {
@@ -115,6 +117,7 @@ impl Function for RegexpInStrFunction {
                         &columns[4],
                         columns[4].data_type(),
                         &NullableType::new_impl(Int64Type::new_impl()),
+                        &func_ctx,
                     )?
                 }
                 _ => {
@@ -122,6 +125,7 @@ impl Function for RegexpInStrFunction {
                         &columns[5],
                         columns[5].data_type(),
                         &NullableType::new_impl(StringType::new_impl()),
+                        &func_ctx,
                     )?
                 }
             }

@@ -33,8 +33,9 @@ use futures::StreamExt;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
 use crate::sql::OPT_KEY_DATABASE_ID;
-use crate::sql::OPT_KEY_SNAPSHOT_LOC;
+use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
@@ -59,7 +60,7 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let mut order_keys = Vec::new();
         if let Some(order) = &table_info.meta.order_keys {
-            order_keys = serde_json::from_slice(order.as_slice())?;
+            order_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {
@@ -67,6 +68,18 @@ impl FuseTable {
             order_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
         }))
+    }
+
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "FUSE".to_string(),
+            comment: "FUSE Storage Engine".to_string(),
+            support_order_key: true,
+        }
+    }
+
+    pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
+        &self.meta_location_generator
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
@@ -83,12 +96,48 @@ impl FuseTable {
         Ok(format!("{}/{}", db_id, table_id))
     }
 
-    pub fn description() -> StorageDescription {
-        StorageDescription {
-            engine_name: "FUSE".to_string(),
-            comment: "FUSE Storage Engine".to_string(),
-            support_order_key: true,
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    pub(crate) async fn read_table_snapshot(
+        &self,
+        ctx: &QueryContext,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        if let Some(loc) = self.snapshot_loc() {
+            let reader = MetaReaders::table_snapshot_reader(ctx);
+            let ver = self.snapshot_format_version();
+            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+        } else {
+            Ok(None)
         }
+    }
+
+    pub fn snapshot_format_version(&self) -> u64 {
+        match self.snapshot_loc() {
+            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
+            None => {
+                // No snapshot location here, indicates that there are no data of this table yet
+                // in this case, we just returns the current snapshot version
+                TableSnapshot::VERSION
+            }
+        }
+    }
+
+    pub fn snapshot_loc(&self) -> Option<String> {
+        let options = self.table_info.options();
+
+        options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            // for backward compatibility, we check the legacy table option
+            .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+            .cloned()
+    }
+
+    pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
+        tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::LogicalError(format!(
+                "expects table of engine FUSE, but got {}",
+                tbl.engine()
+            ))
+        })
     }
 }
 
@@ -164,6 +213,7 @@ impl Table for FuseTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<QueryContext>,
+        catalog_name: &str,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -172,7 +222,8 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, overwrite).await
+        self.do_commit(ctx, catalog_name, append_log_entries, overwrite)
+            .await
     }
 
     async fn truncate(
@@ -198,55 +249,5 @@ impl Table for FuseTable {
                 index_length: None,
             }
         }))
-    }
-}
-
-impl FuseTable {
-    pub fn snapshot_loc(&self) -> Option<String> {
-        let options = self.table_info.options();
-
-        options
-            .get(OPT_KEY_SNAPSHOT_LOCATION)
-            // for backward compatibility, we check the legacy table option
-            .or_else(|| options.get(OPT_KEY_SNAPSHOT_LOC))
-            .cloned()
-    }
-
-    pub fn snapshot_format_version(&self) -> u64 {
-        match self.snapshot_loc() {
-            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
-            None => {
-                // No snapshot location here, indicates that there are no data of this table yet
-                // in this case, we just returns the current snapshot version
-                TableSnapshot::VERSION
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    pub(crate) async fn read_table_snapshot(
-        &self,
-        ctx: &QueryContext,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(loc) = self.snapshot_loc() {
-            let reader = MetaReaders::table_snapshot_reader(ctx);
-            let ver = self.snapshot_format_version();
-            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
-        &self.meta_location_generator
-    }
-
-    pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
-        tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::LogicalError(format!(
-                "expects table of engine FUSE, but got {}",
-                tbl.engine()
-            ))
-        })
     }
 }

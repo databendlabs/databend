@@ -36,12 +36,12 @@ impl MetaClientProvider {
         MetaClientProvider { grpc_conf }
     }
 
-    /// Get meta async client, trait is defined in MetaApi.
+    /// Get meta async client, trait is defined in SchemaApi.
     pub async fn try_get_meta_client(
         &self,
     ) -> std::result::Result<Arc<MetaGrpcClient>, Infallible> {
         let client = MetaGrpcClient::try_new(&self.grpc_conf).await?;
-        Ok(Arc::new(client))
+        Ok(client)
     }
 
     /// Get kv async client, operations trait defined in KVApi.
@@ -52,7 +52,7 @@ impl MetaClientProvider {
             Ok(meta_store)
         } else {
             let client = MetaGrpcClient::try_new(&self.grpc_conf).await?;
-            Ok(Arc::new(client))
+            Ok(client)
         }
     }
 }

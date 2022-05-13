@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
-use common_base::ProgressValues;
+use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -32,9 +32,8 @@ use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::sql::OPT_KEY_SNAPSHOT_LOC;
+use crate::sql::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -55,6 +54,7 @@ impl FuseTable {
     pub async fn do_commit(
         &self,
         ctx: Arc<QueryContext>,
+        catalog_name: impl AsRef<str>,
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -88,9 +88,10 @@ impl FuseTable {
             .with_max_elapsed_time(Some(max_elapsed))
             .build();
 
+        let catalog_name = catalog_name.as_ref();
         loop {
             match tbl
-                .try_commit(ctx.as_ref(), &operation_log, overwrite)
+                .try_commit(ctx.as_ref(), catalog_name, &operation_log, overwrite)
                 .await
             {
                 Ok(_) => break Ok(()),
@@ -103,9 +104,9 @@ impl FuseTable {
                                 name.as_str(),
                                 tbl.table_info.ident
                             );
-                        common_base::tokio::time::sleep(d).await;
+                        common_base::base::tokio::time::sleep(d).await;
 
-                        let catalog = ctx.get_catalog();
+                        let catalog = ctx.get_catalog(catalog_name)?;
                         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                         let table_info: TableInfo = TableInfo {
                             ident,
@@ -139,6 +140,7 @@ impl FuseTable {
     pub async fn try_commit(
         &self,
         ctx: &QueryContext,
+        catalog_name: &str,
         operation_log: &TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
@@ -183,8 +185,13 @@ impl FuseTable {
         let operator = ctx.get_storage_operator()?;
         operator.object(&snapshot_loc).write(bytes).await?;
 
-        let result =
-            Self::commit_to_meta_server(ctx, self.get_table_info(), snapshot_loc.clone()).await;
+        let result = Self::commit_to_meta_server(
+            ctx,
+            catalog_name,
+            self.get_table_info(),
+            snapshot_loc.clone(),
+        )
+        .await;
 
         match result {
             Ok(_) => {
@@ -239,10 +246,12 @@ impl FuseTable {
 
     async fn commit_to_meta_server(
         ctx: &QueryContext,
+        catalog_name: &str,
         table_info: &TableInfo,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
-        let catalog = ctx.get_catalog();
+        // TODO catalog name
+        let catalog = ctx.get_catalog(catalog_name)?;
         let mut options = [(
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             Some(new_snapshot_location),
@@ -332,9 +341,9 @@ mod utils {
         options_of_upsert: &mut HashMap<String, Option<String>>,
     ) {
         let table_options = table_info.options();
-        if table_options.contains_key(OPT_KEY_SNAPSHOT_LOC) {
+        if table_options.contains_key(OPT_KEY_LEGACY_SNAPSHOT_LOC) {
             // remove the option by setting the value of option to None
-            options_of_upsert.insert(OPT_KEY_SNAPSHOT_LOC.to_owned(), None);
+            options_of_upsert.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC.to_owned(), None);
         }
     }
 }

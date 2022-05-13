@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio::io::AsyncReadExt;
-use common_base::tokio::io::AsyncWriteExt;
-use common_base::tokio::net::TcpStream;
+use common_base::base::tokio::io::AsyncReadExt;
+use common_base::base::tokio::io::AsyncWriteExt;
+use common_base::base::tokio::net::TcpStream;
 use common_exception::Result;
 use opensrv_mysql::ErrorKind;
 

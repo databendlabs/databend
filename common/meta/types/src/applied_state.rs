@@ -21,11 +21,8 @@ use serde::Serialize;
 use crate::AddResult;
 use crate::AppError;
 use crate::Change;
-use crate::DatabaseMeta;
 use crate::MetaError;
 use crate::Node;
-use crate::ShareInfo;
-use crate::TableMeta;
 use crate::TxnReply;
 
 /// The state of an applied raft log.
@@ -44,13 +41,10 @@ pub enum AppliedState {
         result: Option<Node>,
     },
 
-    DatabaseId(Change<u64>),
-
-    DatabaseMeta(Change<DatabaseMeta>),
-
-    TableMeta(Change<TableMeta>),
-
-    ShareInfo(Change<ShareInfo>),
+    MetaSrvAddr {
+        prev: Option<String>,
+        result: Option<String>,
+    },
 
     KV(Change<Vec<u8>>),
 
@@ -121,10 +115,10 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::DatabaseId(ref ch) => ch.changed(),
-            AppliedState::DatabaseMeta(ref ch) => ch.changed(),
-            AppliedState::TableMeta(ref ch) => ch.changed(),
-            AppliedState::ShareInfo(ref ch) => ch.changed(),
+            AppliedState::MetaSrvAddr {
+                ref prev,
+                ref result,
+            } => prev != result,
             AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
             AppliedState::AppError(_e) => false,
@@ -152,10 +146,7 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
-            AppliedState::DatabaseId(Change { ref prev, .. }) => prev.is_none(),
-            AppliedState::DatabaseMeta(Change { ref prev, .. }) => prev.is_none(),
-            AppliedState::TableMeta(Change { ref prev, .. }) => prev.is_none(),
-            AppliedState::ShareInfo(Change { ref prev, .. }) => prev.is_none(),
+            AppliedState::MetaSrvAddr { ref prev, .. } => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
             AppliedState::AppError(_e) => true,
@@ -167,10 +158,7 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
-            AppliedState::DatabaseId(Change { ref result, .. }) => result.is_none(),
-            AppliedState::DatabaseMeta(Change { ref result, .. }) => result.is_none(),
-            AppliedState::TableMeta(Change { ref result, .. }) => result.is_none(),
-            AppliedState::ShareInfo(Change { ref result, .. }) => result.is_none(),
+            AppliedState::MetaSrvAddr { ref result, .. } => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::AppError(_e) => true,

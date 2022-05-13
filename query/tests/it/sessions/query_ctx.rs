@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
+use common_configs::FsStorageConfig;
+use common_configs::S3StorageConfig;
 use common_exception::Result;
-use databend_query::configs::FsStorageConfig;
-use databend_query::configs::S3StorageConfig;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // This test need network
@@ -30,6 +30,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         secret_access_key: "".to_string(),
         bucket: "bucket".to_string(),
         root: "".to_string(),
+        master_key: "".to_string(),
     };
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;

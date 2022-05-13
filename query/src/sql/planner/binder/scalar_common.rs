@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::sql::binder::scalar_visitor::Recursion;
 use crate::sql::binder::scalar_visitor::ScalarVisitor;
+use crate::sql::plans::AndExpr;
+use crate::sql::plans::CastExpr;
+use crate::sql::plans::ComparisonExpr;
+use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::ScalarExpr;
 use crate::sql::BindContext;
 
 // Visitor that find Expressions that match a particular predicate
@@ -89,4 +95,39 @@ pub fn find_aggregate_scalars_from_bind_context(bind_context: &BindContext) -> R
         .flat_map(|col_binding| col_binding.scalar.clone().map(|s| *s))
         .collect::<Vec<Scalar>>();
     Ok(find_aggregate_scalars(&scalars))
+}
+
+pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {
+    match scalar {
+        Scalar::AndExpr(AndExpr { left, right }) => {
+            vec![split_conjunctions(left), split_conjunctions(right)].concat()
+        }
+        _ => {
+            vec![scalar.clone()]
+        }
+    }
+}
+
+pub fn split_equivalent_predicate(scalar: &Scalar) -> Option<(Scalar, Scalar)> {
+    match scalar {
+        Scalar::ComparisonExpr(ComparisonExpr { op, left, right })
+            if *op == ComparisonOp::Equal =>
+        {
+            Some((*left.clone(), *right.clone()))
+        }
+        _ => None,
+    }
+}
+
+pub fn wrap_cast_if_needed(scalar: Scalar, target_type: &DataTypeImpl) -> Scalar {
+    if scalar.data_type() != *target_type {
+        let cast = CastExpr {
+            from_type: scalar.data_type(),
+            argument: Box::new(scalar),
+            target_type: target_type.clone(),
+        };
+        cast.into()
+    } else {
+        scalar
+    }
 }

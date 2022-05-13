@@ -33,6 +33,7 @@ pub struct InsertWithPlan<'a> {
     pub ctx: &'a Arc<QueryContext>,
     pub schema: &'a Arc<DataSchema>,
     pub plan_node: &'a PlanNode,
+    pub target_catalog: &'a str,
 }
 
 impl<'a> InsertWithPlan<'a> {
@@ -40,11 +41,13 @@ impl<'a> InsertWithPlan<'a> {
         ctx: &'a Arc<QueryContext>,
         schema: &'a Arc<DataSchema>,
         plan_node: &'a PlanNode,
+        target_catalog: &'a str,
     ) -> Self {
         Self {
             ctx,
             schema,
             plan_node,
+            target_catalog,
         }
     }
 
@@ -88,6 +91,7 @@ impl<'a> InsertWithPlan<'a> {
             PlanNode::Stage(r) => {
                 let prev_input = r.input.clone();
                 let sink = PlanNode::Sink(SinkPlan {
+                    catalog_name: self.target_catalog.to_owned(),
                     table_info: table_info.clone(),
                     input: prev_input,
                     cast_schema,
@@ -102,6 +106,7 @@ impl<'a> InsertWithPlan<'a> {
             // i.e.
             //    node <~ PlanNodeA  => Sink<~ node <~ PlanNodeA
             node => PlanNode::Sink(SinkPlan {
+                catalog_name: self.target_catalog.to_owned(),
                 table_info: table_info.clone(),
                 input: Arc::new(node),
                 cast_schema,

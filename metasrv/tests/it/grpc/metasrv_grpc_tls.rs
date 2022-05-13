@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_api::MetaApi;
+use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
 use pretty_assertions::assert_eq;
 
@@ -48,7 +48,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
     };
 
     let client =
-        MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
+        MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, Some(tls_conf)).await?;
 
     let r = client
         .get_table(("do not care", "do not care", "do not care").into())
@@ -83,11 +83,17 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = MetaGrpcClient::try_create("addr", "root", "xxx", None, Some(tls_conf))
-        .await
-        .unwrap();
+    let r = MetaGrpcClient::try_create(
+        vec!["addr".to_string()],
+        "root",
+        "xxx",
+        None,
+        Some(tls_conf),
+    )
+    .await
+    .unwrap();
 
-    let c = r.make_client().await;
+    let c = r.make_conn().await;
     assert!(c.is_err());
 
     if let Err(e) = c {

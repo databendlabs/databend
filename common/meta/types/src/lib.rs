@@ -46,15 +46,12 @@ mod user_identity;
 mod user_info;
 mod user_privilege;
 mod user_quota;
-mod user_setting;
 mod user_stage;
 
-pub(crate) mod compatibility;
 pub mod error_context;
 mod principal_identity;
 mod proto_display;
 mod share;
-mod warehouse_meta;
 
 // reexport
 
@@ -87,6 +84,8 @@ pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
 pub use database::ListDatabaseReq;
+pub use database::RenameDatabaseReply;
+pub use database::RenameDatabaseReq;
 pub use endpoint::Endpoint;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;
@@ -193,7 +192,4 @@ pub use user_info::UserOptionFlag;
 pub use user_privilege::UserPrivilegeSet;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
-pub use user_setting::UserSetting;
 pub use user_stage::*;
-pub use warehouse_meta::WarehouseInfo;
-pub use warehouse_meta::WarehouseMeta;

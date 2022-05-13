@@ -4,8 +4,38 @@ select * from customer inner join orders on a = b limit 1
 SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 1
 ---------- AST ------------
 Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..22),
+        INNER(23..28),
+        JOIN(29..33),
+        Ident(34..40),
+        ON(41..43),
+        Ident(44..45),
+        Eq(46..47),
+        Ident(48..49),
+        LIMIT(50..55),
+        LiteralNumber(56..57),
+    ],
     body: Select(
         SelectStmt {
+            span: [
+                SELECT(0..6),
+                Multiply(7..8),
+                FROM(9..13),
+                Ident(14..22),
+                INNER(23..28),
+                JOIN(29..33),
+                Ident(34..40),
+                ON(41..43),
+                Ident(44..45),
+                Eq(46..47),
+                Ident(48..49),
+                LIMIT(50..55),
+                LiteralNumber(56..57),
+            ],
             distinct: false,
             select_list: [
                 QualifiedName(
@@ -20,38 +50,53 @@ Query {
                         op: Inner,
                         condition: On(
                             BinaryOp {
+                                span: [
+                                    Eq(46..47),
+                                ],
                                 op: Eq,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(44..45),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "a",
                                         quote: None,
+                                        span: Ident(44..45),
                                     },
                                 },
                                 right: ColumnRef {
+                                    span: [
+                                        Ident(48..49),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
+                                        span: Ident(48..49),
                                     },
                                 },
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
+                                span: Ident(14..22),
                             },
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
+                                span: Ident(34..40),
                             },
                             alias: None,
                         },
@@ -65,11 +110,14 @@ Query {
     ),
     order_by: [],
     limit: [
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(56..57),
+            ],
+            lit: Number(
                 "1",
             ),
-        ),
+        },
     ],
     offset: None,
 }
@@ -81,8 +129,42 @@ select * from customer inner join orders on a = b limit 2 offset 3
 SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 2 OFFSET 3
 ---------- AST ------------
 Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..22),
+        INNER(23..28),
+        JOIN(29..33),
+        Ident(34..40),
+        ON(41..43),
+        Ident(44..45),
+        Eq(46..47),
+        Ident(48..49),
+        LIMIT(50..55),
+        LiteralNumber(56..57),
+        OFFSET(58..64),
+        LiteralNumber(65..66),
+    ],
     body: Select(
         SelectStmt {
+            span: [
+                SELECT(0..6),
+                Multiply(7..8),
+                FROM(9..13),
+                Ident(14..22),
+                INNER(23..28),
+                JOIN(29..33),
+                Ident(34..40),
+                ON(41..43),
+                Ident(44..45),
+                Eq(46..47),
+                Ident(48..49),
+                LIMIT(50..55),
+                LiteralNumber(56..57),
+                OFFSET(58..64),
+                LiteralNumber(65..66),
+            ],
             distinct: false,
             select_list: [
                 QualifiedName(
@@ -97,38 +179,53 @@ Query {
                         op: Inner,
                         condition: On(
                             BinaryOp {
+                                span: [
+                                    Eq(46..47),
+                                ],
                                 op: Eq,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(44..45),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "a",
                                         quote: None,
+                                        span: Ident(44..45),
                                     },
                                 },
                                 right: ColumnRef {
+                                    span: [
+                                        Ident(48..49),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
                                         name: "b",
                                         quote: None,
+                                        span: Ident(48..49),
                                     },
                                 },
                             },
                         ),
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
+                                span: Ident(14..22),
                             },
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
+                                span: Ident(34..40),
                             },
                             alias: None,
                         },
@@ -142,18 +239,24 @@ Query {
     ),
     order_by: [],
     limit: [
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(56..57),
+            ],
+            lit: Number(
                 "2",
             ),
-        ),
+        },
     ],
     offset: Some(
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(65..66),
+            ],
+            lit: Number(
                 "3",
             ),
-        ),
+        },
     ),
 }
 
@@ -164,8 +267,28 @@ select * from customer natural full join orders
 SELECT * FROM customer NATURAL FULL OUTER JOIN orders
 ---------- AST ------------
 Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..22),
+        NATURAL(23..30),
+        FULL(31..35),
+        JOIN(36..40),
+        Ident(41..47),
+    ],
     body: Select(
         SelectStmt {
+            span: [
+                SELECT(0..6),
+                Multiply(7..8),
+                FROM(9..13),
+                Ident(14..22),
+                NATURAL(23..30),
+                FULL(31..35),
+                JOIN(36..40),
+                Ident(41..47),
+            ],
             distinct: false,
             select_list: [
                 QualifiedName(
@@ -180,18 +303,22 @@ Query {
                         op: FullOuter,
                         condition: Natural,
                         left: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "customer",
                                 quote: None,
+                                span: Ident(14..22),
                             },
                             alias: None,
                         },
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "orders",
                                 quote: None,
+                                span: Ident(41..47),
                             },
                             alias: None,
                         },
@@ -215,8 +342,42 @@ select * from customer natural join orders left outer join detail using (id)
 SELECT * FROM customer NATURAL INNER JOIN orders LEFT OUTER JOIN detail USING(id)
 ---------- AST ------------
 Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..22),
+        NATURAL(23..30),
+        JOIN(31..35),
+        Ident(36..42),
+        LEFT(43..47),
+        OUTER(48..53),
+        JOIN(54..58),
+        Ident(59..65),
+        USING(66..71),
+        LParen(72..73),
+        Ident(73..75),
+        RParen(75..76),
+    ],
     body: Select(
         SelectStmt {
+            span: [
+                SELECT(0..6),
+                Multiply(7..8),
+                FROM(9..13),
+                Ident(14..22),
+                NATURAL(23..30),
+                JOIN(31..35),
+                Ident(36..42),
+                LEFT(43..47),
+                OUTER(48..53),
+                JOIN(54..58),
+                Ident(59..65),
+                USING(66..71),
+                LParen(72..73),
+                Ident(73..75),
+                RParen(75..76),
+            ],
             distinct: false,
             select_list: [
                 QualifiedName(
@@ -234,6 +395,7 @@ Query {
                                 Identifier {
                                     name: "id",
                                     quote: None,
+                                    span: Ident(73..75),
                                 },
                             ],
                         ),
@@ -242,28 +404,34 @@ Query {
                                 op: Inner,
                                 condition: Natural,
                                 left: Table {
+                                    catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "customer",
                                         quote: None,
+                                        span: Ident(14..22),
                                     },
                                     alias: None,
                                 },
                                 right: Table {
+                                    catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "orders",
                                         quote: None,
+                                        span: Ident(36..42),
                                     },
                                     alias: None,
                                 },
                             },
                         ),
                         right: Table {
+                            catalog: None,
                             database: None,
                             table: Identifier {
                                 name: "detail",
                                 quote: None,
+                                span: Ident(59..65),
                             },
                             alias: None,
                         },
@@ -302,44 +470,205 @@ select c_count, count(*) as custdist, sum(c_acctbal) as totacctbal
 SELECT c_count, COUNT(*) AS custdist, sum(c_acctbal) AS totacctbal FROM customer CROSS JOIN orders AS ODS CROSS JOIN (SELECT c_custkey, count(o_orderkey) FROM customer LEFT OUTER JOIN orders ON c_custkey = o_custkey AND o_comment NOT LIKE '%:1%:2%' GROUP BY c_custkey) AS c_orders GROUP BY c_count ORDER BY custdist DESC, c_count ASC, totacctbal LIMIT 10, totacctbal
 ---------- AST ------------
 Query {
+    span: [
+        SELECT(0..6),
+        Ident(7..14),
+        Comma(14..15),
+        COUNT(16..21),
+        LParen(21..22),
+        Multiply(22..23),
+        RParen(23..24),
+        AS(25..27),
+        Ident(28..36),
+        Comma(36..37),
+        Ident(38..41),
+        LParen(41..42),
+        Ident(42..51),
+        RParen(51..52),
+        AS(53..55),
+        Ident(56..66),
+        FROM(79..83),
+        Ident(84..92),
+        Comma(92..93),
+        Ident(94..100),
+        Ident(101..104),
+        Comma(104..105),
+        LParen(122..123),
+        SELECT(144..150),
+        Ident(175..184),
+        Comma(184..185),
+        COUNT(210..215),
+        LParen(215..216),
+        Ident(216..226),
+        RParen(226..227),
+        FROM(248..252),
+        Ident(277..285),
+        LEFT(286..290),
+        OUTER(291..296),
+        JOIN(297..301),
+        Ident(302..308),
+        ON(309..311),
+        Ident(340..349),
+        Eq(350..351),
+        Ident(352..361),
+        AND(390..393),
+        Ident(394..403),
+        NOT(404..407),
+        LIKE(408..412),
+        QuotedIdent(413..422),
+        GROUP(443..448),
+        BY(449..451),
+        Ident(476..485),
+        RParen(502..503),
+        AS(504..506),
+        Ident(507..515),
+        GROUP(528..533),
+        BY(534..536),
+        Ident(537..544),
+        ORDER(557..562),
+        BY(563..565),
+        Ident(566..574),
+        DESC(575..579),
+        Comma(579..580),
+        Ident(581..588),
+        ASC(589..592),
+        Comma(592..593),
+        Ident(594..604),
+        LIMIT(617..622),
+        LiteralNumber(623..625),
+        Comma(625..626),
+        Ident(627..637),
+    ],
     body: Select(
         SelectStmt {
+            span: [
+                SELECT(0..6),
+                Ident(7..14),
+                Comma(14..15),
+                COUNT(16..21),
+                LParen(21..22),
+                Multiply(22..23),
+                RParen(23..24),
+                AS(25..27),
+                Ident(28..36),
+                Comma(36..37),
+                Ident(38..41),
+                LParen(41..42),
+                Ident(42..51),
+                RParen(51..52),
+                AS(53..55),
+                Ident(56..66),
+                FROM(79..83),
+                Ident(84..92),
+                Comma(92..93),
+                Ident(94..100),
+                Ident(101..104),
+                Comma(104..105),
+                LParen(122..123),
+                SELECT(144..150),
+                Ident(175..184),
+                Comma(184..185),
+                COUNT(210..215),
+                LParen(215..216),
+                Ident(216..226),
+                RParen(226..227),
+                FROM(248..252),
+                Ident(277..285),
+                LEFT(286..290),
+                OUTER(291..296),
+                JOIN(297..301),
+                Ident(302..308),
+                ON(309..311),
+                Ident(340..349),
+                Eq(350..351),
+                Ident(352..361),
+                AND(390..393),
+                Ident(394..403),
+                NOT(404..407),
+                LIKE(408..412),
+                QuotedIdent(413..422),
+                GROUP(443..448),
+                BY(449..451),
+                Ident(476..485),
+                RParen(502..503),
+                AS(504..506),
+                Ident(507..515),
+                GROUP(528..533),
+                BY(534..536),
+                Ident(537..544),
+                ORDER(557..562),
+                BY(563..565),
+                Ident(566..574),
+                DESC(575..579),
+                Comma(579..580),
+                Ident(581..588),
+                ASC(589..592),
+                Comma(592..593),
+                Ident(594..604),
+                LIMIT(617..622),
+                LiteralNumber(623..625),
+                Comma(625..626),
+                Ident(627..637),
+            ],
             distinct: false,
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
+                        span: [
+                            Ident(7..14),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
                             name: "c_count",
                             quote: None,
+                            span: Ident(7..14),
                         },
                     },
                     alias: None,
                 },
                 AliasedExpr {
-                    expr: CountAll,
+                    expr: CountAll {
+                        span: [
+                            COUNT(16..21),
+                            LParen(21..22),
+                            Multiply(22..23),
+                            RParen(23..24),
+                        ],
+                    },
                     alias: Some(
                         Identifier {
                             name: "custdist",
                             quote: None,
+                            span: Ident(28..36),
                         },
                     ),
                 },
                 AliasedExpr {
                     expr: FunctionCall {
+                        span: [
+                            Ident(38..41),
+                            LParen(41..42),
+                            Ident(42..51),
+                            RParen(51..52),
+                        ],
                         distinct: false,
                         name: Identifier {
                             name: "sum",
                             quote: None,
+                            span: Ident(38..41),
                         },
                         args: [
                             ColumnRef {
+                                span: [
+                                    Ident(42..51),
+                                ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
                                     name: "c_acctbal",
                                     quote: None,
+                                    span: Ident(42..51),
                                 },
                             },
                         ],
@@ -349,6 +678,7 @@ Query {
                         Identifier {
                             name: "totacctbal",
                             quote: None,
+                            span: Ident(56..66),
                         },
                     ),
                 },
@@ -363,24 +693,29 @@ Query {
                                 op: CrossJoin,
                                 condition: None,
                                 left: Table {
+                                    catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "customer",
                                         quote: None,
+                                        span: Ident(84..92),
                                     },
                                     alias: None,
                                 },
                                 right: Table {
+                                    catalog: None,
                                     database: None,
                                     table: Identifier {
                                         name: "orders",
                                         quote: None,
+                                        span: Ident(94..100),
                                     },
                                     alias: Some(
                                         TableAlias {
                                             name: Identifier {
                                                 name: "ODS",
                                                 quote: None,
+                                                span: Ident(101..104),
                                             },
                                             columns: [],
                                         },
@@ -390,35 +725,104 @@ Query {
                         ),
                         right: Subquery {
                             subquery: Query {
+                                span: [
+                                    SELECT(144..150),
+                                    Ident(175..184),
+                                    Comma(184..185),
+                                    COUNT(210..215),
+                                    LParen(215..216),
+                                    Ident(216..226),
+                                    RParen(226..227),
+                                    FROM(248..252),
+                                    Ident(277..285),
+                                    LEFT(286..290),
+                                    OUTER(291..296),
+                                    JOIN(297..301),
+                                    Ident(302..308),
+                                    ON(309..311),
+                                    Ident(340..349),
+                                    Eq(350..351),
+                                    Ident(352..361),
+                                    AND(390..393),
+                                    Ident(394..403),
+                                    NOT(404..407),
+                                    LIKE(408..412),
+                                    QuotedIdent(413..422),
+                                    GROUP(443..448),
+                                    BY(449..451),
+                                    Ident(476..485),
+                                ],
                                 body: Select(
                                     SelectStmt {
+                                        span: [
+                                            SELECT(144..150),
+                                            Ident(175..184),
+                                            Comma(184..185),
+                                            COUNT(210..215),
+                                            LParen(215..216),
+                                            Ident(216..226),
+                                            RParen(226..227),
+                                            FROM(248..252),
+                                            Ident(277..285),
+                                            LEFT(286..290),
+                                            OUTER(291..296),
+                                            JOIN(297..301),
+                                            Ident(302..308),
+                                            ON(309..311),
+                                            Ident(340..349),
+                                            Eq(350..351),
+                                            Ident(352..361),
+                                            AND(390..393),
+                                            Ident(394..403),
+                                            NOT(404..407),
+                                            LIKE(408..412),
+                                            QuotedIdent(413..422),
+                                            GROUP(443..448),
+                                            BY(449..451),
+                                            Ident(476..485),
+                                        ],
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
+                                                    span: [
+                                                        Ident(175..184),
+                                                    ],
                                                     database: None,
                                                     table: None,
                                                     column: Identifier {
                                                         name: "c_custkey",
                                                         quote: None,
+                                                        span: Ident(175..184),
                                                     },
                                                 },
                                                 alias: None,
                                             },
                                             AliasedExpr {
                                                 expr: FunctionCall {
+                                                    span: [
+                                                        COUNT(210..215),
+                                                        LParen(215..216),
+                                                        Ident(216..226),
+                                                        RParen(226..227),
+                                                    ],
                                                     distinct: false,
                                                     name: Identifier {
                                                         name: "count",
                                                         quote: None,
+                                                        span: COUNT(210..215),
                                                     },
                                                     args: [
                                                         ColumnRef {
+                                                            span: [
+                                                                Ident(216..226),
+                                                            ],
                                                             database: None,
                                                             table: None,
                                                             column: Identifier {
                                                                 name: "o_orderkey",
                                                                 quote: None,
+                                                                span: Ident(216..226),
                                                             },
                                                         },
                                                     ],
@@ -433,57 +837,86 @@ Query {
                                                     op: LeftOuter,
                                                     condition: On(
                                                         BinaryOp {
+                                                            span: [
+                                                                AND(390..393),
+                                                            ],
                                                             op: And,
                                                             left: BinaryOp {
+                                                                span: [
+                                                                    Eq(350..351),
+                                                                ],
                                                                 op: Eq,
                                                                 left: ColumnRef {
+                                                                    span: [
+                                                                        Ident(340..349),
+                                                                    ],
                                                                     database: None,
                                                                     table: None,
                                                                     column: Identifier {
                                                                         name: "c_custkey",
                                                                         quote: None,
+                                                                        span: Ident(340..349),
                                                                     },
                                                                 },
                                                                 right: ColumnRef {
+                                                                    span: [
+                                                                        Ident(352..361),
+                                                                    ],
                                                                     database: None,
                                                                     table: None,
                                                                     column: Identifier {
                                                                         name: "o_custkey",
                                                                         quote: None,
+                                                                        span: Ident(352..361),
                                                                     },
                                                                 },
                                                             },
                                                             right: BinaryOp {
+                                                                span: [
+                                                                    NOT(404..407),
+                                                                    LIKE(408..412),
+                                                                ],
                                                                 op: NotLike,
                                                                 left: ColumnRef {
+                                                                    span: [
+                                                                        Ident(394..403),
+                                                                    ],
                                                                     database: None,
                                                                     table: None,
                                                                     column: Identifier {
                                                                         name: "o_comment",
                                                                         quote: None,
+                                                                        span: Ident(394..403),
                                                                     },
                                                                 },
-                                                                right: Literal(
-                                                                    String(
+                                                                right: Literal {
+                                                                    span: [
+                                                                        QuotedIdent(413..422),
+                                                                    ],
+                                                                    lit: String(
                                                                         "%:1%:2%",
                                                                     ),
-                                                                ),
+                                                                },
                                                             },
                                                         },
                                                     ),
                                                     left: Table {
+                                                        catalog: None,
                                                         database: None,
                                                         table: Identifier {
                                                             name: "customer",
                                                             quote: None,
+                                                            span: Ident(277..285),
                                                         },
                                                         alias: None,
                                                     },
                                                     right: Table {
+                                                        catalog: None,
                                                         database: None,
                                                         table: Identifier {
                                                             name: "orders",
                                                             quote: None,
+                                                            span: Ident(302..308),
                                                         },
                                                         alias: None,
                                                     },
@@ -493,11 +926,15 @@ Query {
                                         selection: None,
                                         group_by: [
                                             ColumnRef {
+                                                span: [
+                                                    Ident(476..485),
+                                                ],
                                                 database: None,
                                                 table: None,
                                                 column: Identifier {
                                                     name: "c_custkey",
                                                     quote: None,
+                                                    span: Ident(476..485),
                                                 },
                                             },
                                         ],
@@ -513,6 +950,7 @@ Query {
                                     name: Identifier {
                                         name: "c_orders",
                                         quote: None,
+                                        span: Ident(507..515),
                                     },
                                     columns: [],
                                 },
@@ -524,11 +962,15 @@ Query {
             selection: None,
             group_by: [
                 ColumnRef {
+                    span: [
+                        Ident(537..544),
+                    ],
                     database: None,
                     table: None,
                     column: Identifier {
                         name: "c_count",
                         quote: None,
+                        span: Ident(537..544),
                     },
                 },
             ],
@@ -538,11 +980,15 @@ Query {
     order_by: [
         OrderByExpr {
             expr: ColumnRef {
+                span: [
+                    Ident(566..574),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "custdist",
                     quote: None,
+                    span: Ident(566..574),
                 },
             },
             asc: Some(
@@ -552,11 +998,15 @@ Query {
         },
         OrderByExpr {
             expr: ColumnRef {
+                span: [
+                    Ident(581..588),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "c_count",
                     quote: None,
+                    span: Ident(581..588),
                 },
             },
             asc: Some(
@@ -566,11 +1016,15 @@ Query {
         },
         OrderByExpr {
             expr: ColumnRef {
+                span: [
+                    Ident(594..604),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
                     name: "totacctbal",
                     quote: None,
+                    span: Ident(594..604),
                 },
             },
             asc: None,
@@ -578,17 +1032,24 @@ Query {
         },
     ],
     limit: [
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(623..625),
+            ],
+            lit: Number(
                 "10",
             ),
-        ),
+        },
         ColumnRef {
+            span: [
+                Ident(627..637),
+            ],
             database: None,
             table: None,
             column: Identifier {
                 name: "totacctbal",
                 quote: None,
+                span: Ident(627..637),
             },
         },
     ],

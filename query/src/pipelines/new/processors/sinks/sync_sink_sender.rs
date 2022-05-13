@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 

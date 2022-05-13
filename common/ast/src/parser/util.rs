@@ -12,20 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::ParseIntError;
+use std::ops::Range;
+use std::ops::RangeFrom;
+use std::ops::RangeFull;
+use std::ops::RangeTo;
+
 use nom::branch::alt;
 use nom::combinator::map;
+use nom::Slice as _;
 
 use crate::ast::Identifier;
+use crate::parser::error::Backtrace;
 use crate::parser::error::Error;
 use crate::parser::error::ErrorKind;
 use crate::parser::token::*;
 
-pub type Input<'a> = &'a [Token<'a>];
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
+/// Input tokens slice with a backtrace that records all errors including
+/// the optional branch.
+#[derive(Debug, Clone, Copy)]
+pub struct Input<'a>(pub &'a [Token<'a>], pub &'a Backtrace<'a>);
+
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.get(0).filter(|token| token.text() == text) {
-        Some(token) => Ok((&i[1..], token)),
+    move |i| match i.0.get(0).filter(|token| token.text() == text) {
+        Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectText(text),
@@ -34,8 +46,8 @@ pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.get(0).filter(|token| token.kind == kind) {
-        Some(token) => Ok((&i[1..], token)),
+    move |i| match i.0.get(0).filter(|token| token.kind == kind) {
+        Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectToken(kind),
@@ -78,11 +90,13 @@ fn non_reserved_identifier(
                 |token| Identifier {
                     name: token.text().to_string(),
                     quote: None,
+                    span: token.clone(),
                 },
             ),
             map(rule! { QuotedIdent }, |token| Identifier {
                 name: token.text()[1..token.text().len() - 1].to_string(),
                 quote: Some(token.text().chars().next().unwrap()),
+                span: token.clone(),
             }),
         ))(i)
     }
@@ -92,10 +106,11 @@ fn non_reserved_keyword(
     is_reserved_keyword: fn(&TokenKind) -> bool,
 ) -> impl FnMut(Input) -> IResult<&Token> {
     move |i: Input| match i
+        .0
         .get(0)
         .filter(|token| token.kind.is_keyword() && !is_reserved_keyword(&token.kind))
     {
-        Some(token) => Ok((&i[1..], token)),
+        Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectToken(Ident),
@@ -114,9 +129,11 @@ pub fn literal_string(i: Input) -> IResult<String> {
 
 pub fn literal_u64(i: Input) -> IResult<u64> {
     rule!(LiteralNumber)(i).and_then(|(i2, token)| {
-        token.text().parse().map(|num| (i2, num)).map_err(|err| {
-            nom::Err::Error(Error::from_error_kind(i, ErrorKind::ParseIntError(err)))
-        })
+        token
+            .text()
+            .parse()
+            .map(|num| (i2, num))
+            .map_err(|err: ParseIntError| nom::Err::Error(Error::from_error_kind(i, err.into())))
     })
 }
 
@@ -238,5 +255,52 @@ where
                 }
             }
         }
+    }
+}
+
+impl<'a> std::ops::Deref for Input<'a> {
+    type Target = [Token<'a>];
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl<'a> nom::InputLength for Input<'a> {
+    fn input_len(&self) -> usize {
+        self.0.input_len()
+    }
+}
+
+impl<'a> nom::Offset for Input<'a> {
+    fn offset(&self, second: &Self) -> usize {
+        let fst = self.0.as_ptr();
+        let snd = second.0.as_ptr();
+
+        (snd as usize - fst as usize) / std::mem::size_of::<Token>()
+    }
+}
+
+impl<'a> nom::Slice<Range<usize>> for Input<'a> {
+    fn slice(&self, range: Range<usize>) -> Self {
+        Input(&self.0[range], self.1)
+    }
+}
+
+impl<'a> nom::Slice<RangeTo<usize>> for Input<'a> {
+    fn slice(&self, range: RangeTo<usize>) -> Self {
+        Input(&self.0[range], self.1)
+    }
+}
+
+impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
+    fn slice(&self, range: RangeFrom<usize>) -> Self {
+        Input(&self.0[range], self.1)
+    }
+}
+
+impl<'a> nom::Slice<RangeFull> for Input<'a> {
+    fn slice(&self, _: RangeFull) -> Self {
+        *self
     }
 }
