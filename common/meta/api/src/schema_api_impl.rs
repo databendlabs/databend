@@ -206,24 +206,14 @@ impl<KV: KVApi> SchemaApi for KV {
 
         loop {
             // get old db, not exists return err
-            let res = get_db_or_err(
-                self,
-                tenant_dbname,
-                format!("rename_database: {}", &tenant_dbname),
-            )
-            .await;
-
-            let (old_db_id_seq, old_db_id, _, _) = match res {
-                Ok(x) => x,
-                Err(e) => {
-                    if let MetaError::AppError(AppError::UnknownDatabase(_)) = e {
-                        if req.if_exists {
-                            return Ok(RenameDatabaseReply {});
-                        }
-                    }
-                    return Err(e);
+            let (old_db_id_seq, old_db_id) = get_id_value(self, tenant_dbname).await?;
+            if req.if_exists {
+                if old_db_id_seq == 0 {
+                    return Ok(RenameDatabaseReply {});
                 }
-            };
+            } else {
+                db_has_to_exist(old_db_id_seq, tenant_dbname, "rename_database: src (db)")?;
+            }
 
             tracing::debug!(
                 old_db_id,
