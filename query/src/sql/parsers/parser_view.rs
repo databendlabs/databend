@@ -38,7 +38,7 @@ impl<'a> DfParser<'a> {
         if self.consume_token("AS") {
             let native_query = self.parser.parse_query()?;
             let query = DfQueryStatement::try_from(native_query.clone())?;
-            let subquery = format!("{}", native_query);
+            let subquery = native_query.to_string();
             let create = DfCreateView {
                 if_not_exists,
                 name,
@@ -68,7 +68,7 @@ impl<'a> DfParser<'a> {
         if self.consume_token("AS") {
             let native_query = self.parser.parse_query()?;
             let query = DfQueryStatement::try_from(native_query.clone())?;
-            let subquery = format!("{}", native_query);
+            let subquery = native_query.to_string();
             let alter = DfAlterView {
                 name,
                 subquery,

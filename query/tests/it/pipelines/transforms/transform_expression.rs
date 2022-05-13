@@ -89,7 +89,7 @@ async fn test_transform_expression_error() -> Result<()> {
         col("number"),
         add(col("number"), lit(1u8)),
     ]);
-    let actual = format!("{}", result.err().unwrap());
+    let actual = result.err().unwrap().to_string();
     let expect =
         "Code: 1006, displayText = Unable to get field named \"xnumber\". Valid fields: [\"number\"].";
     assert_eq!(expect, actual);

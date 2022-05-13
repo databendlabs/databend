@@ -104,7 +104,7 @@ impl MetaSrvTestContext {
 
         config.raft_config.id = id;
 
-        config.raft_config.config_id = format!("{}", config_id);
+        config.raft_config.config_id = config_id.to_string();
 
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
