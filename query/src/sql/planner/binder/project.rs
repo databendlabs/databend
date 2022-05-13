@@ -75,9 +75,17 @@ impl<'a> Binder {
     pub(super) async fn normalize_select_list(
         &mut self,
         select_list: &[SelectTarget<'a>],
-        input_context: &BindContext,
+        table_alias: &Option<TableAlias<'a>>,
+        input_context: &mut BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
+        if let Some(table_alias) = table_alias {
+            for column_binding in input_context.clone().all_column_bindings().iter() {
+                if let Some(origin_table_name) = &column_binding.table_name {
+                    input_context.apply_table_alias(origin_table_name, table_alias);
+                }
+            }
+        }
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName(names) => {

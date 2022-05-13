@@ -46,7 +46,6 @@ use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
 
 impl<'a> Binder {
-    #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
@@ -103,7 +102,7 @@ impl<'a> Binder {
 
         // Output of current `SELECT` statement.
         let mut output_context = self
-            .normalize_select_list(&stmt.select_list, &from_context)
+            .normalize_select_list(&stmt.select_list, alias, &mut from_context)
             .await?;
 
         let agg_info = self.analyze_aggregate(&output_context)?;
