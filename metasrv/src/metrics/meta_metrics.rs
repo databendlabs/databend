@@ -54,9 +54,11 @@ impl MetaMetrics {
         self.has_leader = Some(common_metrics::register_gauge(has_leader));
     }
 
-    pub fn has_leader(&self, has_leader: bool) {
-        let a = self.has_leader.as_ref().unwrap();
-        a.set(if has_leader { 1.0 } else { 0.0 });
+    pub fn has_leader(has_leader: bool) {
+        if let Some(instance) = INSTANCE.get() {
+            let a = instance.has_leader.as_ref().unwrap();
+            a.set(if has_leader { 1.0 } else { 0.0 });
+        }
     }
 }
 
@@ -74,5 +76,5 @@ fn init_meta_recorder() {
 }
 
 pub fn set_meta_metrics_has_leader(has_leader: bool) {
-    MetaMetrics::instance().has_leader(has_leader);
+    MetaMetrics::has_leader(has_leader);
 }
