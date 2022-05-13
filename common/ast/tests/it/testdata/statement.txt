@@ -66,6 +66,9 @@ Explain {
                     select_list: [
                         AliasedExpr {
                             expr: ColumnRef {
+                                span: [
+                                    Ident(24..25),
+                                ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
@@ -179,11 +182,14 @@ CreateTable {
                     data_type: Int32,
                     nullable: false,
                     default_expr: Some(
-                        Literal(
-                            Number(
+                        Literal {
+                            span: [
+                                LiteralNumber(59..60),
+                            ],
+                            lit: Number(
                                 "1",
                             ),
-                        ),
+                        },
                     ),
                 },
                 ColumnDefinition {
@@ -237,11 +243,14 @@ CreateTable {
                     data_type: Int32,
                     nullable: false,
                     default_expr: Some(
-                        Literal(
-                            Number(
+                        Literal {
+                            span: [
+                                LiteralNumber(50..51),
+                            ],
+                            lit: Number(
                                 "1",
                             ),
-                        ),
+                        },
                     ),
                 },
                 ColumnDefinition {
@@ -753,11 +762,14 @@ CreateTable {
                     data_type: Int32,
                     nullable: false,
                     default_expr: Some(
-                        Literal(
-                            Number(
+                        Literal {
+                            span: [
+                                LiteralNumber(30..31),
+                            ],
+                            lit: Number(
                                 "1",
                             ),
-                        ),
+                        },
                     ),
                 },
             ],
@@ -856,6 +868,9 @@ Query(
                 select_list: [
                     AliasedExpr {
                         expr: ColumnRef {
+                            span: [
+                                Ident(16..17),
+                            ],
                             database: None,
                             table: None,
                             column: Identifier {
@@ -867,7 +882,14 @@ Query(
                         alias: None,
                     },
                     AliasedExpr {
-                        expr: CountAll,
+                        expr: CountAll {
+                            span: [
+                                COUNT(19..24),
+                                LParen(24..25),
+                                Multiply(25..26),
+                                RParen(26..27),
+                            ],
+                        },
                         alias: None,
                     },
                 ],
@@ -885,10 +907,19 @@ Query(
                 ),
                 selection: Some(
                     BinaryOp {
+                        span: [
+                            AND(47..50),
+                        ],
                         op: And,
                         left: BinaryOp {
+                            span: [
+                                Eq(43..44),
+                            ],
                             op: Eq,
                             left: ColumnRef {
+                                span: [
+                                    Ident(41..42),
+                                ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
@@ -897,17 +928,29 @@ Query(
                                     span: Ident(41..42),
                                 },
                             },
-                            right: Literal(
-                                Number(
+                            right: Literal {
+                                span: [
+                                    LiteralNumber(45..46),
+                                ],
+                                lit: Number(
                                     "1",
                                 ),
-                            ),
+                            },
                         },
                         right: BinaryOp {
+                            span: [
+                                Lt(57..58),
+                            ],
                             op: Lt,
                             left: BinaryOp {
+                                span: [
+                                    Minus(53..54),
+                                ],
                                 op: Minus,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(51..52),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
@@ -916,13 +959,19 @@ Query(
                                         span: Ident(51..52),
                                     },
                                 },
-                                right: Literal(
-                                    Number(
+                                right: Literal {
+                                    span: [
+                                        LiteralNumber(55..56),
+                                    ],
+                                    lit: Number(
                                         "1",
                                     ),
-                                ),
+                                },
                             },
                             right: ColumnRef {
+                                span: [
+                                    Ident(59..60),
+                                ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
@@ -936,6 +985,9 @@ Query(
                 ),
                 group_by: [
                     ColumnRef {
+                        span: [
+                            Ident(70..71),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
@@ -947,8 +999,14 @@ Query(
                 ],
                 having: Some(
                     BinaryOp {
+                        span: [
+                            Eq(81..82),
+                        ],
                         op: Eq,
                         left: ColumnRef {
+                            span: [
+                                Ident(79..80),
+                            ],
                             database: None,
                             table: None,
                             column: Identifier {
@@ -957,11 +1015,14 @@ Query(
                                 span: Ident(79..80),
                             },
                         },
-                        right: Literal(
-                            Number(
+                        right: Literal {
+                            span: [
+                                LiteralNumber(83..84),
+                            ],
+                            lit: Number(
                                 "1",
                             ),
-                        ),
+                        },
                     },
                 ),
             },
@@ -1237,8 +1298,16 @@ Query(
                             op: Inner,
                             condition: On(
                                 BinaryOp {
+                                    span: [
+                                        Eq(30..31),
+                                    ],
                                     op: Eq,
                                     left: ColumnRef {
+                                        span: [
+                                            Ident(26..27),
+                                            Period(27..28),
+                                            Ident(28..29),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1254,6 +1323,11 @@ Query(
                                         },
                                     },
                                     right: ColumnRef {
+                                        span: [
+                                            Ident(32..33),
+                                            Period(33..34),
+                                            Ident(34..35),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1364,8 +1438,16 @@ Query(
                             op: LeftOuter,
                             condition: On(
                                 BinaryOp {
+                                    span: [
+                                        Eq(41..42),
+                                    ],
                                     op: Eq,
                                     left: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1381,6 +1463,11 @@ Query(
                                         },
                                     },
                                     right: ColumnRef {
+                                        span: [
+                                            Ident(43..44),
+                                            Period(44..45),
+                                            Ident(45..46),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1491,8 +1578,16 @@ Query(
                             op: RightOuter,
                             condition: On(
                                 BinaryOp {
+                                    span: [
+                                        Eq(42..43),
+                                    ],
                                     op: Eq,
                                     left: ColumnRef {
+                                        span: [
+                                            Ident(38..39),
+                                            Period(39..40),
+                                            Ident(40..41),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1508,6 +1603,11 @@ Query(
                                         },
                                     },
                                     right: ColumnRef {
+                                        span: [
+                                            Ident(44..45),
+                                            Period(45..46),
+                                            Ident(46..47),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1618,8 +1718,16 @@ Query(
                             op: FullOuter,
                             condition: On(
                                 BinaryOp {
+                                    span: [
+                                        Eq(41..42),
+                                    ],
                                     op: Eq,
                                     left: ColumnRef {
+                                        span: [
+                                            Ident(37..38),
+                                            Period(38..39),
+                                            Ident(39..40),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1635,6 +1743,11 @@ Query(
                                         },
                                     },
                                     right: ColumnRef {
+                                        span: [
+                                            Ident(43..44),
+                                            Period(44..45),
+                                            Ident(45..46),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1743,8 +1856,16 @@ Query(
                             op: Inner,
                             condition: On(
                                 BinaryOp {
+                                    span: [
+                                        Eq(36..37),
+                                    ],
                                     op: Eq,
                                     left: ColumnRef {
+                                        span: [
+                                            Ident(32..33),
+                                            Period(33..34),
+                                            Ident(34..35),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {
@@ -1760,6 +1881,11 @@ Query(
                                         },
                                     },
                                     right: ColumnRef {
+                                        span: [
+                                            Ident(38..39),
+                                            Period(39..40),
+                                            Ident(40..41),
+                                        ],
                                         database: None,
                                         table: Some(
                                             Identifier {

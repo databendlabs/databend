@@ -28,10 +28,10 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     SchemaApiTestSuite {}
-        .database_create_get_drop(&client)
+        .database_create_get_drop(client.as_ref())
         .await
 }
 
@@ -42,10 +42,10 @@ async fn test_meta_grpc_client_database_create_get_drop_in_diff_tenant() -> anyh
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     SchemaApiTestSuite {}
-        .database_create_get_drop_in_diff_tenant(&client)
+        .database_create_get_drop_in_diff_tenant(client.as_ref())
         .await
 }
 
@@ -56,9 +56,9 @@ async fn test_meta_grpc_client_database_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
-    SchemaApiTestSuite {}.database_list(&client).await
+    SchemaApiTestSuite {}.database_list(client.as_ref()).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -68,10 +68,10 @@ async fn test_meta_grpc_client_database_list_in_diff_tenant() -> anyhow::Result<
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     SchemaApiTestSuite {}
-        .database_list_in_diff_tenant(&client)
+        .database_list_in_diff_tenant(client.as_ref())
         .await
 }
 
@@ -82,7 +82,7 @@ async fn test_meta_grpc_client_database_rename() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     SchemaApiTestSuite {}.database_rename(&client).await
 }
@@ -94,9 +94,11 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
-    SchemaApiTestSuite {}.table_create_get_drop(&client).await
+    SchemaApiTestSuite {}
+        .table_create_get_drop(client.as_ref())
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -106,9 +108,9 @@ async fn test_meta_grpc_client_table_rename() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
-    SchemaApiTestSuite {}.table_rename(&client).await
+    SchemaApiTestSuite {}.table_rename(client.as_ref()).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -118,9 +120,11 @@ async fn test_meta_grpc_client_table_upsert_option() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
-    SchemaApiTestSuite {}.table_upsert_option(&client).await
+    SchemaApiTestSuite {}
+        .table_upsert_option(client.as_ref())
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -130,9 +134,9 @@ async fn test_meta_grpc_client_table_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
-    SchemaApiTestSuite {}.table_list(&client).await
+    SchemaApiTestSuite {}.table_list(client.as_ref()).await
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -156,7 +160,7 @@ async fn test_meta_grpc_client_flight_get_database_meta_ddl_table() -> anyhow::R
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     let test_db = "db1";
     let plan = CreateDatabasePlan {
@@ -234,7 +238,7 @@ async fn test_meta_grpc_client_flight_get_database_meta_empty_db() -> anyhow::Re
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
@@ -248,7 +252,7 @@ async fn test_meta_grpc_client_flight_get_database_meta_ddl_db() -> anyhow::Resu
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
 
     // create-db operation will increases meta_version
     let plan = CreateDatabasePlan {

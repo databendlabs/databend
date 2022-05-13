@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod file_s3;
+syntax = "proto3";
 
-pub use file_s3::S3File;
+package databend_proto;
+
+message S3StorageConfig {
+  uint64 version = 100;
+
+  string region = 1;
+  string endpoint_url = 2;
+  string access_key_id = 3;
+  string secret_access_key = 4;
+  string bucket = 5;
+  string root = 6;
+  string master_key = 7;
+}

@@ -50,8 +50,14 @@ Query {
                         op: Inner,
                         condition: On(
                             BinaryOp {
+                                span: [
+                                    Eq(46..47),
+                                ],
                                 op: Eq,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(44..45),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
@@ -61,6 +67,9 @@ Query {
                                     },
                                 },
                                 right: ColumnRef {
+                                    span: [
+                                        Ident(48..49),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
@@ -101,11 +110,14 @@ Query {
     ),
     order_by: [],
     limit: [
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(56..57),
+            ],
+            lit: Number(
                 "1",
             ),
-        ),
+        },
     ],
     offset: None,
 }
@@ -167,8 +179,14 @@ Query {
                         op: Inner,
                         condition: On(
                             BinaryOp {
+                                span: [
+                                    Eq(46..47),
+                                ],
                                 op: Eq,
                                 left: ColumnRef {
+                                    span: [
+                                        Ident(44..45),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
@@ -178,6 +196,9 @@ Query {
                                     },
                                 },
                                 right: ColumnRef {
+                                    span: [
+                                        Ident(48..49),
+                                    ],
                                     database: None,
                                     table: None,
                                     column: Identifier {
@@ -218,18 +239,24 @@ Query {
     ),
     order_by: [],
     limit: [
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(56..57),
+            ],
+            lit: Number(
                 "2",
             ),
-        ),
+        },
     ],
     offset: Some(
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(65..66),
+            ],
+            lit: Number(
                 "3",
             ),
-        ),
+        },
     ),
 }
 
@@ -587,6 +614,9 @@ Query {
             select_list: [
                 AliasedExpr {
                     expr: ColumnRef {
+                        span: [
+                            Ident(7..14),
+                        ],
                         database: None,
                         table: None,
                         column: Identifier {
@@ -598,7 +628,14 @@ Query {
                     alias: None,
                 },
                 AliasedExpr {
-                    expr: CountAll,
+                    expr: CountAll {
+                        span: [
+                            COUNT(16..21),
+                            LParen(21..22),
+                            Multiply(22..23),
+                            RParen(23..24),
+                        ],
+                    },
                     alias: Some(
                         Identifier {
                             name: "custdist",
@@ -609,6 +646,12 @@ Query {
                 },
                 AliasedExpr {
                     expr: FunctionCall {
+                        span: [
+                            Ident(38..41),
+                            LParen(41..42),
+                            Ident(42..51),
+                            RParen(51..52),
+                        ],
                         distinct: false,
                         name: Identifier {
                             name: "sum",
@@ -617,6 +660,9 @@ Query {
                         },
                         args: [
                             ColumnRef {
+                                span: [
+                                    Ident(42..51),
+                                ],
                                 database: None,
                                 table: None,
                                 column: Identifier {
@@ -739,6 +785,9 @@ Query {
                                         select_list: [
                                             AliasedExpr {
                                                 expr: ColumnRef {
+                                                    span: [
+                                                        Ident(175..184),
+                                                    ],
                                                     database: None,
                                                     table: None,
                                                     column: Identifier {
@@ -751,6 +800,12 @@ Query {
                                             },
                                             AliasedExpr {
                                                 expr: FunctionCall {
+                                                    span: [
+                                                        COUNT(210..215),
+                                                        LParen(215..216),
+                                                        Ident(216..226),
+                                                        RParen(226..227),
+                                                    ],
                                                     distinct: false,
                                                     name: Identifier {
                                                         name: "count",
@@ -759,6 +814,9 @@ Query {
                                                     },
                                                     args: [
                                                         ColumnRef {
+                                                            span: [
+                                                                Ident(216..226),
+                                                            ],
                                                             database: None,
                                                             table: None,
                                                             column: Identifier {
@@ -779,10 +837,19 @@ Query {
                                                     op: LeftOuter,
                                                     condition: On(
                                                         BinaryOp {
+                                                            span: [
+                                                                AND(390..393),
+                                                            ],
                                                             op: And,
                                                             left: BinaryOp {
+                                                                span: [
+                                                                    Eq(350..351),
+                                                                ],
                                                                 op: Eq,
                                                                 left: ColumnRef {
+                                                                    span: [
+                                                                        Ident(340..349),
+                                                                    ],
                                                                     database: None,
                                                                     table: None,
                                                                     column: Identifier {
@@ -792,6 +859,9 @@ Query {
                                                                     },
                                                                 },
                                                                 right: ColumnRef {
+                                                                    span: [
+                                                                        Ident(352..361),
+                                                                    ],
                                                                     database: None,
                                                                     table: None,
                                                                     column: Identifier {
@@ -802,8 +872,15 @@ Query {
                                                                 },
                                                             },
                                                             right: BinaryOp {
+                                                                span: [
+                                                                    NOT(404..407),
+                                                                    LIKE(408..412),
+                                                                ],
                                                                 op: NotLike,
                                                                 left: ColumnRef {
+                                                                    span: [
+                                                                        Ident(394..403),
+                                                                    ],
                                                                     database: None,
                                                                     table: None,
                                                                     column: Identifier {
@@ -812,11 +889,14 @@ Query {
                                                                         span: Ident(394..403),
                                                                     },
                                                                 },
-                                                                right: Literal(
-                                                                    String(
+                                                                right: Literal {
+                                                                    span: [
+                                                                        QuotedIdent(413..422),
+                                                                    ],
+                                                                    lit: String(
                                                                         "%:1%:2%",
                                                                     ),
-                                                                ),
+                                                                },
                                                             },
                                                         },
                                                     ),
@@ -846,6 +926,9 @@ Query {
                                         selection: None,
                                         group_by: [
                                             ColumnRef {
+                                                span: [
+                                                    Ident(476..485),
+                                                ],
                                                 database: None,
                                                 table: None,
                                                 column: Identifier {
@@ -879,6 +962,9 @@ Query {
             selection: None,
             group_by: [
                 ColumnRef {
+                    span: [
+                        Ident(537..544),
+                    ],
                     database: None,
                     table: None,
                     column: Identifier {
@@ -894,6 +980,9 @@ Query {
     order_by: [
         OrderByExpr {
             expr: ColumnRef {
+                span: [
+                    Ident(566..574),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
@@ -909,6 +998,9 @@ Query {
         },
         OrderByExpr {
             expr: ColumnRef {
+                span: [
+                    Ident(581..588),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
@@ -924,6 +1016,9 @@ Query {
         },
         OrderByExpr {
             expr: ColumnRef {
+                span: [
+                    Ident(594..604),
+                ],
                 database: None,
                 table: None,
                 column: Identifier {
@@ -937,12 +1032,18 @@ Query {
         },
     ],
     limit: [
-        Literal(
-            Number(
+        Literal {
+            span: [
+                LiteralNumber(623..625),
+            ],
+            lit: Number(
                 "10",
             ),
-        ),
+        },
         ColumnRef {
+            span: [
+                Ident(627..637),
+            ],
             database: None,
             table: None,
             column: Identifier {

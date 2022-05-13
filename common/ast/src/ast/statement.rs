@@ -695,13 +695,13 @@ impl<'a> Display for Statement<'a> {
                         write!(f, " WITH {}", auth_type.to_str())?;
                     }
                     if let Some(password) = &auth_option.password {
-                        write!(f, " BY '{password}'", password = password)?;
+                        write!(f, " BY '{password}'")?;
                     }
                 }
                 if !role_options.is_empty() {
                     write!(f, " WITH")?;
                     for with_option in role_options {
-                        write!(f, " {with_option}", with_option = with_option)?;
+                        write!(f, " {with_option}")?;
                     }
                 }
             }

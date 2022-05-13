@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
+use common_configs::S3StorageConfig;
 use common_meta_types as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
@@ -357,35 +358,12 @@ impl FromToProto<pb::user_stage_info::StageType> for mt::StageType {
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageS3Storage> for mt::StageS3Storage {
-    fn from_pb(p: pb::user_stage_info::StageS3Storage) -> Result<Self, Incompatible>
-    where Self: Sized {
-        Ok(mt::StageS3Storage {
-            bucket: p.bucket,
-            path: p.path,
-            credentials_aws_key_id: p.credentials_aws_key_id,
-            credentials_aws_secret_key: p.credentials_aws_secret_key,
-            encryption_master_key: p.encryption_master_key,
-        })
-    }
-
-    fn to_pb(&self) -> Result<pb::user_stage_info::StageS3Storage, Incompatible> {
-        Ok(pb::user_stage_info::StageS3Storage {
-            bucket: self.bucket.clone(),
-            path: self.path.clone(),
-            credentials_aws_key_id: self.credentials_aws_key_id.clone(),
-            credentials_aws_secret_key: self.credentials_aws_secret_key.clone(),
-            encryption_master_key: self.encryption_master_key.clone(),
-        })
-    }
-}
-
 impl FromToProto<pb::user_stage_info::StageStorage> for mt::StageStorage {
     fn from_pb(p: pb::user_stage_info::StageStorage) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.storage {
             Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => {
-                Ok(mt::StageStorage::S3(mt::StageS3Storage::from_pb(s)?))
+                Ok(mt::StageStorage::S3(S3StorageConfig::from_pb(s)?))
             }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
@@ -396,9 +374,7 @@ impl FromToProto<pb::user_stage_info::StageStorage> for mt::StageStorage {
     fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
         match &*self {
             mt::StageStorage::S3(s) => Ok(pb::user_stage_info::StageStorage {
-                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(
-                    mt::StageS3Storage::to_pb(s)?,
-                )),
+                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(s.to_pb()?)),
             }),
         }
     }

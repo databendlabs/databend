@@ -22,7 +22,7 @@ default = ["simd"]
 simd = ["common-arrow/simd"]
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "tempfile"]
-storage-hdfs = ["opendal/services-hdfs"]
+storage-hdfs = ["opendal/services-hdfs", "common-io/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift"]
 
 [dependencies]
@@ -89,7 +89,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
 once_cell = "1.10.0"
-opendal = { version = "0.6.1", features = ["retry"] }
+opendal = { version = "0.6.2", features = ["retry"] }
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"

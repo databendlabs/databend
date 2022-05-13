@@ -1061,6 +1061,7 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "chrono-tz",
+ "common-configs",
  "common-exception",
  "futures",
  "lexical-core",
@@ -1213,6 +1214,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
+ "common-configs",
  "common-datavalues",
  "common-exception",
  "derive_more",
@@ -1273,6 +1275,7 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-configs",
  "common-datavalues",
  "common-meta-types",
  "common-protos",
@@ -1728,6 +1731,7 @@ dependencies = [
  "maplit",
  "metrics",
  "num",
+ "once_cell",
  "poem",
  "pretty_assertions",
  "prost 0.9.0",
@@ -4026,9 +4030,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6e34a6848f182494d5df1cf4100bac78a58776403a3c2972977142fb06b2159"
+checksum = "3649ace5a99d388ac9d02459135ad0425941e8cf6c33f418c4ded80483563ce3"
 dependencies = [
  "anyhow",
  "async-compat",

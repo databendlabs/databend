@@ -520,8 +520,10 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
             if req.if_exists {
-                // TODO: table does not exist, can not return table id.
-                return Ok(RenameTableReply { table_id: 0 });
+                if tb_id_seq == 0 {
+                    // TODO: table does not exist, can not return table id.
+                    return Ok(RenameTableReply { table_id: 0 });
+                }
             } else {
                 table_has_to_exist(
                     tb_id_seq,

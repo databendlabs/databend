@@ -27,6 +27,7 @@ impl From<&MetaConfig> for MetaGrpcClientConf {
     fn from(mc: &MetaConfig) -> Self {
         let meta_config = RpcClientConf {
             address: mc.address.clone(),
+            endpoints: mc.endpoints.clone(),
             username: mc.username.clone(),
             password: mc.password.clone(),
             tls_conf: if mc.is_tls_enabled() {

@@ -34,6 +34,9 @@ pub struct MetaConfig {
     #[serde(alias = "meta_address")]
     pub address: String,
 
+    #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
+    pub endpoints: Vec<String>,
+
     /// MetaStore backend user name
     #[clap(long = "meta-username", default_value = "root")]
     #[serde(alias = "meta_username")]
@@ -62,6 +65,7 @@ impl Default for MetaConfig {
         Self {
             embedded_dir: "./_meta_embedded".to_string(),
             address: "".to_string(),
+            endpoints: vec![],
             username: "root".to_string(),
             password: "".to_string(),
             client_timeout_in_second: 10,
@@ -82,6 +86,7 @@ impl fmt::Debug for MetaConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
             .field("address", &self.address)
+            .field("endpoints", &self.endpoints)
             .field("username", &self.username)
             .field("password", &mask_string(&self.password, 3))
             .field("embedded_dir", &self.embedded_dir)

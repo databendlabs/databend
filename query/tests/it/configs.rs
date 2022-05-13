@@ -74,6 +74,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "root"
 password = ""
 client_timeout_in_second = 10
@@ -94,6 +95,7 @@ access_key_id = ""
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""
@@ -248,6 +250,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "username_from_file"
 password = "password_from_file"
 client_timeout_in_second = 10
@@ -268,6 +271,7 @@ access_key_id = "access_key_id_from_file"
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""

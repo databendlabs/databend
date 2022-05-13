@@ -49,6 +49,7 @@ impl MetricService {
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
             ErrorCode::InitPrometheusFailure("Prometheus recorder has not been initialized yet.")
         })?;
+
         let app = poem::Route::new()
             .at("/metrics", poem::get(metric_handler))
             .data(prometheus_handle);

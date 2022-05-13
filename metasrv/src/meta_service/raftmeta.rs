@@ -58,6 +58,7 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
+use crate::metrics::set_meta_metrics_has_leader;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
 use crate::watcher::WatcherManager;
@@ -393,6 +394,9 @@ impl MetaNode {
                                         );
                                     }
                                 }
+                                set_meta_metrics_has_leader(true);
+                            } else {
+                                set_meta_metrics_has_leader(false);
                             }
                         } else {
                             // shutting down
@@ -588,6 +592,13 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_meta_addrs(&self) -> MetaResult<Vec<String>> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.state_machine.read().await;
+        sm.get_metasrv_addrs()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
     where
         Request: Into<ForwardRequestBody> + Debug,
@@ -702,6 +713,38 @@ impl MetaNode {
             .write(LogEntry {
                 txid: None,
                 cmd: Cmd::RemoveNode { node_id },
+            })
+            .await?;
+        Ok(resp)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn add_metasrv_addr(
+        &self,
+        metasrv_name: String,
+        metasrv_addr: String,
+    ) -> Result<AppliedState, MetaError> {
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::AddMetaSrvAddr {
+                    metasrv_name,
+                    metasrv_addr,
+                },
+            })
+            .await?;
+        Ok(resp)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn remove_metasrv_addr(
+        &self,
+        metasrv_name: String,
+    ) -> Result<AppliedState, MetaError> {
+        let resp = self
+            .write(LogEntry {
+                txid: None,
+                cmd: Cmd::RemoveMetaSrvAddr { metasrv_name },
             })
             .await?;
         Ok(resp)

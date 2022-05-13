@@ -31,7 +31,7 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
     let follower2 = tcs[2].grpc_client().await?;
 
     SchemaApiTestSuite {}
-        .database_get_diff_nodes(&follower1, &follower2)
+        .database_get_diff_nodes(follower1.as_ref(), follower2.as_ref())
         .await
 }
 
@@ -46,7 +46,7 @@ async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
     let follower2 = tcs[2].grpc_client().await?;
 
     SchemaApiTestSuite {}
-        .list_database_diff_nodes(&follower1, &follower2)
+        .list_database_diff_nodes(follower1.as_ref(), follower2.as_ref())
         .await
 }
 
@@ -61,7 +61,7 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let follower2 = tcs[2].grpc_client().await?;
 
     SchemaApiTestSuite {}
-        .table_get_diff_nodes(&follower1, &follower2)
+        .table_get_diff_nodes(follower1.as_ref(), follower2.as_ref())
         .await
 }
 
@@ -76,6 +76,6 @@ async fn test_meta_grpc_client_list_table() -> anyhow::Result<()> {
     let follower2 = tcs[2].grpc_client().await?;
 
     SchemaApiTestSuite {}
-        .list_table_diff_nodes(&follower1, &follower2)
+        .list_table_diff_nodes(follower1.as_ref(), follower2.as_ref())
         .await
 }

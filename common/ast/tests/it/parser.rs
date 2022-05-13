@@ -145,7 +145,10 @@ fn test_statements_in_legacy_suites() {
 
         let tokens = tokenize_sql(&file_str).unwrap();
         let backtrace = Backtrace::new();
-        parse_sql(&tokens, &backtrace).unwrap();
+        parse_sql(&tokens, &backtrace).expect(
+            "Parser error should not exist in integration suites. \
+            Please add parser error cases to `common/ast/tests/it/parser.rs`",
+        );
     }
 }
 

@@ -63,7 +63,7 @@ impl Planner {
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
         let optimize_context = OptimizeContext::create_with_bind_context(&bind_result.bind_context);
-        let optimized_expr = optimize(bind_result.s_expr().clone(), optimize_context)?;
+        let optimized_expr = optimize(bind_result.s_expr, optimize_context)?;
 
         // Step 4: build executable Pipeline with SExpr
         let result_columns = bind_result.bind_context.result_columns();

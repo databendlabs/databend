@@ -66,7 +66,7 @@ impl<'a> MetaLeader<'a> {
                 Ok(ForwardResponse::Leave(()))
             }
             ForwardRequestBody::Write(entry) => {
-                let res = self.write(entry).await?;
+                let res = self.write(entry.clone()).await?;
                 Ok(ForwardResponse::AppliedState(res))
             }
 

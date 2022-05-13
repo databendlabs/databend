@@ -44,6 +44,7 @@ use crate::pipelines::new::processors::SortMergeCompactor;
 use crate::pipelines::new::processors::TransformAggregator;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::processors::TransformHashJoinProbe;
+use crate::pipelines::new::processors::TransformLimit;
 use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
@@ -57,6 +58,7 @@ use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::FilterPlan;
+use crate::sql::plans::LimitPlan;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
 use crate::sql::plans::PlanType;
@@ -199,6 +201,12 @@ impl PipelineBuilder {
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
                 self.build_order_by(&sort_plan, input_schema, pipeline)
             }
+            PlanType::Limit => {
+                let limit_plan: LimitPlan = plan.try_into()?;
+                let input_schema =
+                    self.build_pipeline(context, &expression.children()[0], pipeline)?;
+                self.build_limit(&limit_plan, input_schema, pipeline)
+            }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
     }
@@ -215,7 +223,7 @@ impl PipelineBuilder {
         let expr_builder = ExpressionBuilder::create(&self.metadata);
         for item in project.items.iter() {
             let scalar = &item.expr;
-            let expression = expr_builder.build_and_rename(scalar, item.index)?;
+            let expression = expr_builder.build_and_rename(scalar, item.index, &input_schema)?;
             expressions.push(expression);
         }
         pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -316,15 +324,15 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let mut agg_expressions = Vec::with_capacity(aggregate.agg_expr.len());
+        let mut agg_expressions = Vec::with_capacity(aggregate.aggregate_functions.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
-        for scalar in aggregate.agg_expr.iter() {
+        for scalar in aggregate.aggregate_functions.iter() {
             let expr = expr_builder.build(scalar)?;
             agg_expressions.push(expr);
         }
 
-        let mut group_expressions = Vec::with_capacity(aggregate.group_expr.len());
-        for scalar in aggregate.group_expr.iter() {
+        let mut group_expressions = Vec::with_capacity(aggregate.group_items.len());
+        for scalar in aggregate.group_items.iter() {
             let expr = expr_builder.build(scalar)?;
             group_expressions.push(expr);
         }
@@ -341,32 +349,36 @@ impl PipelineBuilder {
         let pre_input_schema = input_schema.clone();
         let input_schema =
             schema_builder.build_group_by(input_schema, group_expressions.as_slice())?;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ExpressionTransform::try_create(
-                transform_input_port,
-                transform_output_port,
-                pre_input_schema.clone(),
-                input_schema.clone(),
-                group_expressions.clone(),
-                self.ctx.clone(),
-            )
-        })?;
+        if !input_schema.eq(&pre_input_schema) {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    pre_input_schema.clone(),
+                    input_schema.clone(),
+                    group_expressions.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        }
 
         // Process aggregation function with non-column expression, such as sum(3)
         let pre_input_schema = input_schema.clone();
         let res =
             schema_builder.build_agg_func(pre_input_schema.clone(), agg_expressions.as_slice())?;
         let input_schema = res.0;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ExpressionTransform::try_create(
-                transform_input_port,
-                transform_output_port,
-                pre_input_schema.clone(),
-                input_schema.clone(),
-                res.1.clone(),
-                self.ctx.clone(),
-            )
-        })?;
+        if !input_schema.eq(&pre_input_schema) {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    pre_input_schema.clone(),
+                    input_schema.clone(),
+                    res.1.clone(),
+                    self.ctx.clone(),
+                )
+            })?;
+        }
 
         // Get partial schema from agg_expressions
         let partial_data_fields =
@@ -419,7 +431,6 @@ impl PipelineBuilder {
                 self.ctx.clone(),
             )
         })?;
-
         Ok(final_schema)
     }
 
@@ -574,6 +585,26 @@ impl PipelineBuilder {
             )
         })?;
 
-        Ok(output_schema.clone())
+        Ok(output_schema)
+    }
+
+    fn build_limit(
+        &mut self,
+        limit_plan: &LimitPlan,
+        input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
+        pipeline.resize(1)?;
+
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformLimit::try_create(
+                limit_plan.limit,
+                limit_plan.offset,
+                transform_input_port,
+                transform_output_port,
+            )
+        })?;
+
+        Ok(input_schema)
     }
 }

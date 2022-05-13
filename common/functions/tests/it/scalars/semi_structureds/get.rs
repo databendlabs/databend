@@ -188,8 +188,8 @@ fn test_array_get_function() -> Result<()> {
                 ]),
                 Series::from_data(vec![3_u32, 3, 3]),
             ],
-            expect: Series::from_data(vec![None::<&str>]),
-            error: "Index out of array column bounds: the len is 3 but the index is 3",
+            expect: Series::from_data(vec![None::<i64>, None::<i64>, None::<i64>]),
+            error: "",
         },
         ScalarFunctionTest {
             name: "array_get_error_type",
