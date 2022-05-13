@@ -28,7 +28,6 @@ common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
-common-infallible = { path = "../common/infallible" }
 common-macros = { path = "../common/macros" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-grpc = { path = "../common/meta/grpc" }

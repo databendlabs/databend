@@ -1719,7 +1719,6 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-grpc",
- "common-infallible",
  "common-macros",
  "common-meta-api",
  "common-meta-grpc",
