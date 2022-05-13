@@ -8,7 +8,7 @@ description: RFC for backward config compatibility
 
 # Summary
 
-The versioned configuration will allow us to iterate quickly while avoiding breaking the environment.
+Adding config backward compatibility will allow us to iterate quickly while avoiding breaking the environment.
 
 # Motivation
 
