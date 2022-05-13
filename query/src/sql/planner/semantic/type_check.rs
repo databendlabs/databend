@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
+use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::DisplayError;
@@ -222,7 +223,7 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Literal { lit, .. } => {
-                let value = self.parse_literal(lit, required_type)?;
+                let value = self.resolve_literal(lit, required_type)?;
                 let data_type = value.data_type();
                 Ok((ConstantExpr { value }.into(), data_type))
             }
@@ -249,7 +250,7 @@ impl<'a> TypeChecker<'a> {
                     // Check aggregate function
                     let params = params
                         .iter()
-                        .map(|literal| self.parse_literal(literal, None))
+                        .map(|literal| self.resolve_literal(literal, None))
                         .collect::<Result<Vec<DataValue>>>()?;
 
                     let mut arguments = vec![];
@@ -312,6 +313,25 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Subquery { subquery, .. } => self.resolve_subquery(subquery, false, None).await,
+
+            Expr::MapAccess {
+                span,
+                expr,
+                accessor,
+            } => {
+                let arg = match accessor {
+                    MapAccessor::Bracket { key } => Expr::Literal {
+                        span,
+                        lit: key.clone(),
+                    },
+                    MapAccessor::Period { key } | MapAccessor::Colon { key } => Expr::Literal {
+                        span,
+                        lit: Literal::String(key.name.clone()),
+                    },
+                };
+
+                Ok(self.resolve_function("get", &[&**expr, &arg], None).await?)
+            }
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
@@ -473,7 +493,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     /// Resolve literal values.
-    pub fn parse_literal(
+    pub fn resolve_literal(
         &self,
         literal: &Literal,
         _required_type: Option<DataTypeImpl>,
