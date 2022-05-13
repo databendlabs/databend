@@ -42,7 +42,7 @@
 
 Databend is an open-source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
+Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage(MinIO, Amazon S3, Azure Blob Storage).
 
 - __Instant Elasticity__
 
