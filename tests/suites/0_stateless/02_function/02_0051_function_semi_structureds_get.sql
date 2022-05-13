@@ -75,7 +75,7 @@ select id, json_extract_path_text(str, '["b"]["c"]') from t3;
 select '==get from array table==';
 select id, get(arr, 0) from t4;
 select id, get(arr, 1) from t4;
-select id, get(arr, 4) from t4; -- {ErrorCode 1006}
+select id, get(arr, 4) from t4;  
 select id, get(arr, 'a') from t4; -- {ErrorCode 1007}
 
 DROP DATABASE db1;

@@ -77,3 +77,7 @@ cc	dd
 2	['cc', 'dd']
 3	NULL
 4	['ee', 'ff']
+aa	bb
+cc	dd
+NULL	NULL
+ee	ff
