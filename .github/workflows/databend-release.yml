@@ -9,11 +9,6 @@ jobs:
   publish_macos:
     name: Release macos assets
     runs-on: macos-11
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: us-east-2
-      AWS_DEFAULT_OUTPUT: json
     strategy:
       fail-fast: false
       matrix:
@@ -59,11 +54,6 @@ jobs:
   publish_linux:
     name: Release linux assets
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: us-east-2
-      AWS_DEFAULT_OUTPUT: json
     strategy:
       fail-fast: false
       matrix:
