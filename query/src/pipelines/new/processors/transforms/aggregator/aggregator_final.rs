@@ -28,7 +28,6 @@ use common_datavalues::MutableColumn;
 use common_datavalues::ScalarColumn;
 use common_datavalues::Series;
 use common_datavalues::StringColumn;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
@@ -63,7 +62,7 @@ pub struct FinalAggregator<
     state: Method::State,
     params: Arc<AggregatorParams>,
     // used for deserialization only, so we can reuse it during the loop
-    temp_place: StateAddr,
+    temp_place: Option<StateAddr>,
     ctx: Arc<QueryContext>,
 }
 
@@ -71,17 +70,15 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     FinalAggregator<HAS_AGG, Method>
 {
     pub fn create(
+        ctx: Arc<QueryContext>,
         method: Method,
         params: Arc<AggregatorParams>,
-        ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let state = method.aggregate_state();
         let temp_place = if params.aggregate_functions.is_empty() {
-            0.into()
+            None
         } else {
-            state
-                .alloc_layout2(&params)
-                .ok_or_else(|| ErrorCode::LayoutError("Alloc layout should success"))?
+            state.alloc_layout2(&params)
         };
 
         Ok(Self {
@@ -159,16 +156,17 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+        if let Some(temp_place) = self.temp_place {
+            for (row, place) in places.iter().enumerate() {
+                for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
+                    let final_place = place.next(offsets_aggregate_states[idx]);
+                    let state_place = temp_place.next(offsets_aggregate_states[idx]);
 
-        for (row, place) in places.iter().enumerate() {
-            for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
-                let final_place = place.next(offsets_aggregate_states[idx]);
-                let state_place = self.temp_place.next(offsets_aggregate_states[idx]);
+                    let mut data = states_binary_columns[idx].get_data(row);
 
-                let mut data = states_binary_columns[idx].get_data(row);
-
-                aggregate_function.deserialize(state_place, &mut data)?;
-                aggregate_function.merge(final_place, state_place)?;
+                    aggregate_function.deserialize(state_place, &mut data)?;
+                    aggregate_function.merge(final_place, state_place)?;
+                }
             }
         }
         Ok(())
@@ -298,9 +296,11 @@ impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Sen
                 }
             }
 
-            for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
-                let place = self.temp_place.next(*state_offset);
-                unsafe { function.drop_state(place) }
+            if let Some(temp_place) = self.temp_place {
+                for (state_offset, function) in state_offsets.iter().zip(functions.iter()) {
+                    let place = temp_place.next(*state_offset);
+                    unsafe { function.drop_state(place) }
+                }
             }
             self.states_dropped = true;
         }

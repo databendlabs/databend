@@ -52,64 +52,64 @@ impl TransformAggregator {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8FinalAggregator::<false>::create(method, aggregator_params, ctx)?,
+                    KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16FinalAggregator::<false>::create(method, aggregator_params, ctx)?,
+                    KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32FinalAggregator::<false>::create(method, aggregator_params, ctx)?,
+                    KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64FinalAggregator::<false>::create(method, aggregator_params, ctx)?,
+                    KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringFinalAggregator::<false>::create(method, aggregator_params, ctx)?,
+                    SingleStringFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerFinalAggregator::<false>::create(method, aggregator_params, ctx)?,
+                    SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
             },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8FinalAggregator::<true>::create(method, aggregator_params, ctx)?,
+                    KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16FinalAggregator::<true>::create(method, aggregator_params, ctx)?,
+                    KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32FinalAggregator::<true>::create(method, aggregator_params, ctx)?,
+                    KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64FinalAggregator::<true>::create(method, aggregator_params, ctx)?,
+                    KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringFinalAggregator::<true>::create(method, aggregator_params, ctx)?,
+                    SingleStringFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerFinalAggregator::<true>::create(method, aggregator_params, ctx)?,
+                    SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
             },
         }
@@ -136,64 +136,64 @@ impl TransformAggregator {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8PartialAggregator::<false>::create(method, aggregator_params, ctx),
+                    KeysU8PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16PartialAggregator::<false>::create(method, aggregator_params, ctx),
+                    KeysU16PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32PartialAggregator::<false>::create(method, aggregator_params, ctx),
+                    KeysU32PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64PartialAggregator::<false>::create(method, aggregator_params, ctx),
+                    KeysU64PartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringPartialAggregator::<false>::create(method, aggregator_params, ctx),
+                    SingleStringPartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerPartialAggregator::<false>::create(method, aggregator_params, ctx),
+                    SerializerPartialAggregator::<false>::create(ctx, method, aggregator_params),
                 ),
             },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8PartialAggregator::<true>::create(method, aggregator_params, ctx),
+                    KeysU8PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16PartialAggregator::<true>::create(method, aggregator_params, ctx),
+                    KeysU16PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32PartialAggregator::<true>::create(method, aggregator_params, ctx),
+                    KeysU32PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64PartialAggregator::<true>::create(method, aggregator_params, ctx),
+                    KeysU64PartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::SingleString(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SingleStringPartialAggregator::<true>::create(method, aggregator_params, ctx),
+                    SingleStringPartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerPartialAggregator::<true>::create(method, aggregator_params, ctx),
+                    SerializerPartialAggregator::<true>::create(ctx, method, aggregator_params),
                 ),
             },
         }
