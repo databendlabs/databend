@@ -152,6 +152,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 - [How to Deploy Databend With MinIO](https://databend.rs/doc/deploy/minio)
 - [How to Deploy Databend With AWS S3](https://databend.rs/doc/deploy/s3)
+- [How to Deploy Databend With Azure Blob Storage](https://databend.rs/doc/deploy/azure)
 - [How to Deploy Databend With Wasabi Object Storage](https://databend.rs/doc/deploy/wasabi)
 - [How to Deploy Databend With Scaleway OS](https://databend.rs/doc/deploy/scw)
 - [How to Deploy Databend With Tencent COS](https://databend.rs/doc/deploy/cos)
