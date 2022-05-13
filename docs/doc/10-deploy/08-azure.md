@@ -130,7 +130,6 @@ password = "root"
 type = "azblob"
 
 [storage.azblob]
-root = "databend"
 endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
 # https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
 container = "<your-azure-storage-container-name>"
