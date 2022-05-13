@@ -1,31 +1,36 @@
 ---
-title: Deploy Databend With Local FS (For Test)
-sidebar_label: With Local FS (Test)
-description:
-  How to deploy Databend with local FS (For Test).
+title: Deploy Databend With Azure Blob Storage
+sidebar_label: With Azure Blob Storage
+description: How to deploy Databend with Azure Blob Storage.
 ---
 import GetLatest from '@site/src/components/GetLatest';
 
-This guideline will deploy Databend(standalone) with local fs step by step.
+:::tip
 
-<p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
-
-</p>
-
-:::caution
-
-Databend requires scalable storage layer(like Object Storage) as its storage, local fs is for testing only, please do not use it in production!
+Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
+This guideline will deploy Databend(standalone) with Azure Blob Storage container step by step.
+
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy/deploy-azblob-standalone.png" width="300"/>
+</p>
+
+
+### Before you begin
+
+  * [Azure Account](https://azure.microsoft.com/en-us/)
+  * [Create a Container in Azure Storage](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container)
+  * [Azure Account Access Keys](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys)
+
 ## 1. Download
+
 You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../60-contributing/00-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend
 ```
-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -34,21 +39,6 @@ import TabItem from '@theme/TabItem';
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
-```
-
-</TabItem>
-<TabItem value="mac" label="MacOS">
-
-```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-apple-darwin.tar.gz
-```
-
-</TabItem>
-
-<TabItem value="arm" label="Linux Arm">
-
-```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -62,24 +52,9 @@ tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
-<TabItem value="mac" label="MacOS">
-
-```shell
-tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
-```
-
-</TabItem>
-
-<TabItem value="arm" label="Linux Arm">
-
-```shell
-tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
-```
-
-</TabItem>
 </Tabs>
 
-## 2. Deploy databend-meta
+## 2. Deploy databend-meta (Standalone)
 
 databend-meta is a global service for the meta data(such as user, table schema etc.).
 
@@ -111,7 +86,7 @@ curl -I  http://127.0.0.1:8101/v1/health
 Check the response is `HTTP/1.1 200 OK`.
 
 
-## 3. Deploy databend-query (standalone)
+## 3. Deploy databend-query (Standalone)
 
 ### 3.1 Create databend-query.toml
 
@@ -130,8 +105,6 @@ metric_api_address = "127.0.0.1:7071"
 # Cluster flight RPC.
 flight_api_address = "127.0.0.1:9091"
 
-#
-
 # Query MySQL Handler.
 mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307
@@ -148,17 +121,22 @@ tenant_id = "tenant1"
 cluster_id = "cluster1"
 
 [meta]
-# databend-meta grpc api address. 
 address = "127.0.0.1:9101"
 username = "root"
 password = "root"
 
 [storage]
-# fs|s3
-type = "fs"
+# azblob
+type = "azblob"
 
-[storage.fs]
-data_path = "benddata/datas"
+[storage.azblob]
+root = "databend"
+endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
+# https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
+container = "<your-azure-storage-container-name>"
+account_name = "<your-storage-account-name>"
+# https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
+account_key = "<your-account-key>"
 ```
 
 ### 3.2 Start databend-query
@@ -167,7 +145,7 @@ data_path = "benddata/datas"
 ./databend-query -c ./databend-query.toml > query.log 2>&1 &
 ```
 
-### 3.3 Check databend-query 
+### 3.3 Check databend-query
 
 ```shell
 curl -I  http://127.0.0.1:8001/v1/health
@@ -190,15 +168,15 @@ INSERT INTO t1 VALUES(1), (2);
 ```
 
 ```sql
-SELECT * FROM t1
+SELECT * FROM T1
+```
+```text
+  +------+
+  | a    |
+  +------+
+  |    1 |
+  |    2 |
+  +------+
 ```
 
-```text
-+------+
-| a    |
-+------+
-|    1 |
-|    2 |
-+------+
-```
 <GetLatest/>
