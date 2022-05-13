@@ -34,7 +34,7 @@ impl<'a> Binder {
 
         let limit_cnt = match limit {
             Some(Expr::Literal { span: _, lit: x }) => {
-                let data = type_checker.parse_literal(x, None)?.as_u64()?;
+                let data = type_checker.resolve_literal(x, None)?.as_u64()?;
                 Some(data as usize)
             }
             Some(_) => {
@@ -44,7 +44,7 @@ impl<'a> Binder {
         };
 
         let offset_cnt = if let Some(Expr::Literal { span: _, lit: x }) = offset {
-            let data = type_checker.parse_literal(x, None)?.as_u64()?;
+            let data = type_checker.resolve_literal(x, None)?.as_u64()?;
             data as usize
         } else {
             0

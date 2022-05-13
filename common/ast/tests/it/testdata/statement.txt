@@ -2433,3 +2433,105 @@ Insert {
 }
 
 
+---------- Input ----------
+select parse_json('{"k1": [0, 1, 2]}').k1[0];
+---------- Output ---------
+SELECT parse_json('{"k1": [0, 1, 2]}').k1[0]
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            Ident(7..17),
+            LParen(17..18),
+            QuotedIdent(18..37),
+            RParen(37..38),
+            Period(38..39),
+            Ident(39..41),
+            LBracket(41..42),
+            LiteralNumber(42..43),
+            RBracket(43..44),
+        ],
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    Ident(7..17),
+                    LParen(17..18),
+                    QuotedIdent(18..37),
+                    RParen(37..38),
+                    Period(38..39),
+                    Ident(39..41),
+                    LBracket(41..42),
+                    LiteralNumber(42..43),
+                    RBracket(43..44),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: MapAccess {
+                            span: [
+                                LBracket(41..42),
+                                LiteralNumber(42..43),
+                                RBracket(43..44),
+                            ],
+                            expr: MapAccess {
+                                span: [
+                                    Period(38..39),
+                                    Ident(39..41),
+                                ],
+                                expr: FunctionCall {
+                                    span: [
+                                        Ident(7..17),
+                                        LParen(17..18),
+                                        QuotedIdent(18..37),
+                                        RParen(37..38),
+                                    ],
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "parse_json",
+                                        quote: None,
+                                        span: Ident(7..17),
+                                    },
+                                    args: [
+                                        Literal {
+                                            span: [
+                                                QuotedIdent(18..37),
+                                            ],
+                                            lit: String(
+                                                "{\"k1\": [0, 1, 2]}",
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                },
+                                accessor: Period {
+                                    key: Identifier {
+                                        name: "k1",
+                                        quote: None,
+                                        span: Ident(39..41),
+                                    },
+                                },
+                            },
+                            accessor: Bracket {
+                                key: Number(
+                                    "0",
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: None,
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+    },
+)
+
+

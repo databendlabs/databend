@@ -110,7 +110,7 @@ impl<'a> Binder {
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => alias.name.to_lowercase(),
-                        None => self.metadata.get_expr_display_string(expr)?,
+                        None => format!("{:#}", expr),
                     };
 
                     let column_binding = match &bound_expr {

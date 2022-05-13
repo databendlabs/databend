@@ -27,6 +27,11 @@ select sin(cos(number)) from numbers(1);
 select '====IN_LIST====';
 select * from numbers(5) where number in (1, 3);
 
+-- Map access
+select '====MAP_ACCESS====';
+select parse_json('{"k1": [0, 1, 2]}'):k1[2];
+select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
+
 -- Aggregator operator
 select '====AGGREGATOR====';
 create table t(a int, b int);
