@@ -60,20 +60,17 @@ impl<'a> Binder {
 
     pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
         let init_bind_context = BindContext::new();
-        let bind_context = self.bind_statement(stmt, &init_bind_context).await?;
-        Ok(BindResult::create(bind_context, self.metadata))
+        let (s_expr, bind_context) = self.bind_statement(stmt, &init_bind_context).await?;
+        Ok(BindResult::create(s_expr, bind_context, self.metadata))
     }
 
     async fn bind_statement(
         &mut self,
         stmt: &Statement<'a>,
         bind_context: &BindContext,
-    ) -> Result<BindContext> {
+    ) -> Result<(SExpr, BindContext)> {
         match stmt {
-            Statement::Query(query) => {
-                let bind_context = self.bind_query(query, bind_context).await?;
-                Ok(bind_context)
-            }
+            Statement::Query(query) => self.bind_query(query, bind_context).await,
             _ => todo!(),
         }
     }
@@ -93,19 +90,17 @@ impl<'a> Binder {
 }
 
 pub struct BindResult {
+    pub s_expr: SExpr,
     pub bind_context: BindContext,
     pub metadata: Metadata,
 }
 
 impl BindResult {
-    pub fn create(bind_context: BindContext, metadata: Metadata) -> Self {
+    pub fn create(s_expr: SExpr, bind_context: BindContext, metadata: Metadata) -> Self {
         BindResult {
+            s_expr,
             bind_context,
             metadata,
         }
-    }
-
-    pub fn s_expr(&self) -> &SExpr {
-        self.bind_context.expression.as_ref().unwrap()
     }
 }

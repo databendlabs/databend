@@ -12,20 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::binder::aggregate::AggregateInfo;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 use crate::sql::planner::binder::ColumnBinding;
-use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::ProjectItem;
 use crate::sql::plans::ProjectPlan;
 use crate::sql::plans::Scalar;
@@ -34,7 +30,11 @@ impl<'a> Binder {
     /// Try to build a `ProjectPlan` to satisfy `output_context`.
     /// If `output_context` can already be satisfied by `input_context`(e.g. `SELECT * FROM t`),
     /// then it won't build a `ProjectPlan`.
-    pub(super) fn bind_projection(&mut self, output_context: &mut BindContext) -> Result<()> {
+    pub(super) fn bind_projection(
+        &mut self,
+        child: SExpr,
+        output_context: &BindContext,
+    ) -> Result<SExpr> {
         let mut projections: Vec<ProjectItem> = vec![];
         for column_binding in output_context.all_column_bindings() {
             if let Some(expr) = &column_binding.scalar {
@@ -46,14 +46,13 @@ impl<'a> Binder {
         }
 
         if !projections.is_empty() {
-            let child = output_context.expression.clone().unwrap();
             let project_plan = ProjectPlan { items: projections };
 
             let new_expr = SExpr::create_unary(project_plan.into(), child);
-            output_context.expression = Some(new_expr);
+            Ok(new_expr)
+        } else {
+            Ok(child)
         }
-
-        Ok(())
     }
 
     /// Normalize select list into a BindContext.
@@ -75,16 +74,9 @@ impl<'a> Binder {
     pub(super) async fn normalize_select_list(
         &mut self,
         select_list: &[SelectTarget<'a>],
-        has_order_by: bool,
-        agg_info: &mut AggregateInfo,
-        input_context: &mut BindContext,
+        input_context: &BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
-        if has_order_by {
-            output_context.order_by_columns = Some(input_context.columns.clone());
-        }
-        output_context.expression = input_context.expression.clone();
-        let mut origin_group_by = HashMap::new();
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName(names) => {
@@ -117,43 +109,39 @@ impl<'a> Binder {
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
-                        Some(alias) => alias.name.clone(),
+                        Some(alias) => alias.name.to_lowercase(),
                         None => self.metadata.get_expr_display_string(expr)?,
                     };
 
-                    // TODO(leiysky): If expr is a ColumnRef, then it's a pass-through column.
-                    // There is no need to generate a new ColumnEntry for it.
-                    let index =
-                        self.metadata
-                            .add_column(expr_name.clone(), data_type.clone(), None);
-                    let column_binding = ColumnBinding {
-                        table_name: None,
-                        column_name: expr_name,
-                        index,
-                        data_type,
-                        scalar: Some(Box::new(bound_expr.clone())),
+                    let column_binding = match &bound_expr {
+                        Scalar::BoundColumnRef(column_ref) => ColumnBinding {
+                            table_name: None,
+                            column_name: expr_name,
+                            visible: true,
+                            index: column_ref.column.index,
+                            data_type,
+                            scalar: Some(Box::new(bound_expr.clone())),
+                        },
+                        _ => {
+                            let index = self.metadata.add_column(
+                                expr_name.clone(),
+                                data_type.clone(),
+                                None,
+                            );
+                            ColumnBinding {
+                                table_name: None,
+                                column_name: expr_name,
+                                // Invisible if no alias given
+                                visible: alias.is_some(),
+                                index,
+                                data_type,
+                                scalar: Some(Box::new(bound_expr.clone())),
+                            }
+                        }
                     };
-                    if let Some(alias) = alias {
-                        input_context.columns.push(column_binding.clone());
-                        origin_group_by.insert(alias.name.clone(), bound_expr.clone());
-                    }
-                    if has_order_by
-                        && !matches!(bound_expr, Scalar::BoundColumnRef(BoundColumnRef { .. }))
-                    {
-                        output_context
-                            .order_by_columns
-                            .as_mut()
-                            .ok_or_else(|| {
-                                ErrorCode::SemanticError("Order by should have order by columns")
-                            })?
-                            .push(column_binding.clone());
-                    }
                     output_context.add_column_binding(column_binding);
                 }
             }
-        }
-        if !origin_group_by.is_empty() {
-            agg_info.origin_group_by = Some(origin_group_by);
         }
         Ok(output_context)
     }

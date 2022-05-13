@@ -144,7 +144,7 @@ impl Settings {
                 user_setting: UserSetting::create("group_by_two_level_threshold", DataValue::UInt64(10000)),
                 level: ScopeLevel::Session,
                 desc: "The threshold of keys to open two-level aggregation, default value: 10000",
-            }
+            },
         ];
 
         let settings = Arc::new(RwLock::new(HashMap::default()));

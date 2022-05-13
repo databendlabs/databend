@@ -3,8 +3,12 @@ set enable_planner_v2 = 1;
 select '====SELECT_FROM_NUMBERS====';
 select * from numbers(10);
 
+select '====ALIAS====';
+select number as a, number + 1 as b from numbers(1);
+select number as a, number + 1 as b from numbers(1) group by a, number order by number;
+
 -- Comparison expressions
-select '====COMPARSION====';
+select '====COMPARISON====';
 select * from numbers(10) where number between 1 and 9 and number > 2 and number < 8 and number is not null and number = 5 and number >= 5 and number <= 5;
 
 -- Cast expression
@@ -24,7 +28,7 @@ select '====IN_LIST====';
 select * from numbers(5) where number in (1, 3);
 
 -- Aggregator operator
-select '====AGGREGATER====';
+select '====AGGREGATOR====';
 create table t(a int, b int);
 insert into t values(1, 2), (2, 3), (3, 4);
 select sum(a) + 1 from t group by a;
@@ -96,7 +100,6 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number d
 SELECT SUM(number) AS s FROM numbers_mt(10) GROUP BY number ORDER BY s;
 create table t3(a int, b int);
 insert into t3 values(1,2),(2,3);
-select a from t3 order by a + b;
 drop table t;
 drop table t1;
 drop table t2;
@@ -113,18 +116,18 @@ select *; -- {ErrorCode 1065}
 select '=== Test limit ===';
 select number from numbers(100) order by number asc limit 10;
 select '==================';
-select number from numbers(100) order by number*2 asc limit 10;
+select number*2 as number from numbers(100) order by number limit 10;
 select '=== Test limit n, m ===';
 select number from numbers(100) order by number asc limit 10, 10;
 select '==================';
-select number from numbers(100) order by number-2 asc limit 10, 10;
+select number-2 as number from numbers(100) order by number asc limit 10, 10;
 select '=== Test limit with offset ===';
 select number from numbers(100) order by number asc limit 10 offset 10;
 select '==============================';
-select number from numbers(100) order by number/2 asc limit 10 offset 10;
+select number/2 as number from numbers(100) order by number asc limit 10 offset 10;
 select '=== Test offset ===';
 select number from numbers(10) order by number asc offset 5;
 select '===================';
-select number from numbers(10) order by number+number asc offset 5;
+select number+number as number from numbers(10) order by number asc offset 5;
 
 set enable_planner_v2 = 0;

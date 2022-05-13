@@ -25,10 +25,11 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(super) async fn bind_limit(
         &mut self,
+        child: SExpr,
         limit: Option<&Expr<'a>>,
         offset: &Option<Expr<'a>>,
-        bind_context: &mut BindContext,
-    ) -> Result<()> {
+        bind_context: &BindContext,
+    ) -> Result<SExpr> {
         let type_checker = TypeChecker::new(bind_context, self.ctx.clone());
 
         let limit_cnt = match limit {
@@ -53,9 +54,7 @@ impl<'a> Binder {
             limit: limit_cnt,
             offset: offset_cnt,
         };
-        let new_expr =
-            SExpr::create_unary(limit_plan.into(), bind_context.expression.clone().unwrap());
-        bind_context.expression = Some(new_expr);
-        Ok(())
+        let new_expr = SExpr::create_unary(limit_plan.into(), child);
+        Ok(new_expr)
     }
 }
