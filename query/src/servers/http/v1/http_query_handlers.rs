@@ -18,6 +18,8 @@ use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
 use poem::error::Error as PoemError;
+use poem::error::InternalServerError;
+use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::http::StatusCode;
@@ -25,6 +27,7 @@ use poem::post;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
+use poem::Body;
 use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
@@ -36,6 +39,9 @@ use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
+use crate::sessions::SessionType;
+use crate::storages::result::DownloadFormatType;
+use crate::storages::result::ResultTable;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -225,6 +231,7 @@ pub fn query_route() -> Route {
     Route::new()
         .at("/", post(query_handler))
         .at("/:id", get(query_state_handler))
+        .at("/:id/download", get(result_download_handler))
         .at("/:id/page/:page_no", get(query_page_handler))
         .at(
             "/:id/kill",
@@ -237,4 +244,38 @@ fn query_id_not_found(query_id: String) -> PoemError {
         format!("query id not found {}", query_id),
         StatusCode::NOT_FOUND,
     )
+}
+
+#[poem::handler]
+async fn result_download_handler(
+    ctx: &HttpQueryContext,
+    Path(query_id): Path<String>,
+) -> PoemResult<Body> {
+    let session = ctx
+        .create_session(SessionType::HTTPQuery)
+        .await
+        .map_err(InternalServerError)?;
+
+    let ctx = session
+        .create_query_context()
+        .await
+        .map_err(InternalServerError)?;
+
+    let result_table = ResultTable::try_get(ctx.clone(), &query_id)
+        .await
+        .map_err(|e| {
+            if e.code() == ErrorCode::http_not_found_code() {
+                NotFound(e)
+            } else {
+                InternalServerError(e)
+            }
+        })?;
+
+    let stream = result_table
+        .download(ctx, DownloadFormatType::Tsv)
+        .await
+        .map_err(InternalServerError)?;
+
+    let body = Body::from_bytes_stream::<_, _, ErrorCode>(stream);
+    Ok(body)
 }
