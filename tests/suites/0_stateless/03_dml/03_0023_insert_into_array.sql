@@ -137,6 +137,6 @@ CREATE TABLE IF NOT EXISTS t15(id Int, arr Array(String) Null) Engine = Memory;
 INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, null), (4, ['ee', 'ff']);
 
 select * from t15;
-select arr[0], arr[1] from t15; -- {ErrorCode 1006}
+select arr[0], arr[1] from t15;
 
 DROP DATABASE db1;

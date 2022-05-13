@@ -1,11 +1,9 @@
 ---
-title: Deploy Databend With Wasabi Object Storage
-sidebar_label: With Wasabi
-description:
-  How to deploy Databend with Wasabi object storage
+title: Deploy Databend With Azure Blob Storage
+sidebar_label: With Azure Blob Storage
+description: How to deploy Databend with Azure Blob Storage.
 ---
 import GetLatest from '@site/src/components/GetLatest';
-
 
 :::tip
 
@@ -13,20 +11,18 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-[Wasabi](https://wasabi.com/) is a cheaper object storage and 100% compatible with Amazon S3.
-
-From its official website, they proclaim `80% Less than Amazon S3` and `No Fees for Egress`.
+This guideline will deploy Databend(standalone) with Azure Blob Storage container step by step.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-wasabi-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy/deploy-azblob-standalone.png" width="300"/>
 </p>
 
 
 ### Before you begin
 
-* **Wasabi:** Wasabi is a S3-like object storage.
-  * [How to Create Wasabi Bucket](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0)
-  * [How to Get Wasabi access_key_id and secret_access_key](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm)
+  * [Azure Account](https://azure.microsoft.com/en-us/)
+  * [Create a Container in Azure Storage](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container)
+  * [Azure Account Access Keys](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys)
 
 ## 1. Download
 
@@ -75,13 +71,13 @@ single = true
 raft_dir = "metadata/datas"
 ```
 
-### 2.2 Start the databend-meta 
+### 2.2 Start the databend-meta
 
 ```shell
 ./databend-meta -c ./databend-meta.toml > meta.log 2>&1 &
 ```
 
-### 2.3 Check databend-meta 
+### 2.3 Check databend-meta
 
 ```shell
 curl -I  http://127.0.0.1:8101/v1/health
@@ -130,29 +126,17 @@ username = "root"
 password = "root"
 
 [storage]
-# s3
-type = "s3"
+# azblob
+type = "azblob"
 
-[storage.s3]
-# How to create a bucket:
-// highlight-next-line
-bucket = "<your-bucket>"
-
-# You can get the URL from:
-# https://wasabi-support.zendesk.com/hc/en-us/articles/360015106031-What-are-the-service-URLs-for-Wasabi-s-different-regions-
-// highlight-next-line
-endpoint_url = "https://s3.us-east-2.wasabisys.com"
-
-# How to get access_key_id and secret_access_key:
-// highlight-next-line
-access_key_id = "<your-key-id>"
-// highlight-next-line
-secret_access_key = "<your-access-key>"
+[storage.azblob]
+endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
+# https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container
+container = "<your-azure-storage-container-name>"
+account_name = "<your-storage-account-name>"
+# https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage?tabs=azure-portal#view-account-access-keys
+account_key = "<your-account-key>"
 ```
-
-:::tip
-In this example Wasabi region is `us-east-2`.
-:::
 
 ### 3.2 Start databend-query
 
@@ -183,15 +167,15 @@ INSERT INTO t1 VALUES(1), (2);
 ```
 
 ```sql
-SELECT * FROM t1
+SELECT * FROM T1
 ```
-```
-+------+
-| a    |
-+------+
-|    1 |
-|    2 |
-+------+
+```text
+  +------+
+  | a    |
+  +------+
+  |    1 |
+  |    2 |
+  +------+
 ```
 
 <GetLatest/>

@@ -1731,6 +1731,7 @@ dependencies = [
  "maplit",
  "metrics",
  "num",
+ "once_cell",
  "poem",
  "pretty_assertions",
  "prost 0.9.0",
