@@ -28,13 +28,13 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(super) async fn bind_order_by(
         &mut self,
+        from_context: &BindContext,
+        select_context: &BindContext,
         child: SExpr,
         order_by: &[OrderByExpr<'a>],
-        input_context: &BindContext,
-        output_context: &BindContext,
     ) -> Result<SExpr> {
-        let select_scalar_binder = ScalarBinder::new(output_context, self.ctx.clone());
-        let from_scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
+        let select_scalar_binder = ScalarBinder::new(select_context, self.ctx.clone());
+        let from_scalar_binder = ScalarBinder::new(from_context, self.ctx.clone());
         let mut order_by_items = vec![];
         for order in order_by {
             // First we try to resolve sort item with `SELECT` context
