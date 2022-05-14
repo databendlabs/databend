@@ -45,9 +45,10 @@ impl<'a> Binder {
         join: &Join<'a>,
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =
-            self.bind_table_reference(&join.left, bind_context).await?;
-        let (right_child, right_context) =
-            self.bind_table_reference(&join.right, bind_context).await?;
+            self.bind_table_reference(bind_context, &join.left).await?;
+        let (right_child, right_context) = self
+            .bind_table_reference(&left_context, &join.right)
+            .await?;
 
         let mut bind_context = BindContext::new();
         for column in left_context.all_column_bindings() {

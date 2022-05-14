@@ -26,10 +26,10 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(super) async fn bind_limit(
         &mut self,
+        bind_context: &BindContext,
         child: SExpr,
         limit: Option<&Expr<'a>>,
         offset: &Option<Expr<'a>>,
-        bind_context: &BindContext,
     ) -> Result<SExpr> {
         let type_checker = TypeChecker::new(bind_context, self.ctx.clone());
 
