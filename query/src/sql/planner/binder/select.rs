@@ -102,7 +102,7 @@ impl<'a> Binder {
 
         // Output of current `SELECT` statement.
         let mut output_context = self
-            .normalize_select_list(&stmt.select_list, &from_context)
+            .normalize_select_list(&from_context, &stmt.select_list)
             .await?;
 
         let agg_info = self.analyze_aggregate(&output_context)?;
@@ -206,7 +206,7 @@ impl<'a> Binder {
 
                 let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(&table, alias)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }
@@ -257,12 +257,18 @@ impl<'a> Binder {
 
                 let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(table.name(), alias)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }
             TableReference::Join(join) => self.bind_join(bind_context, join).await,
-            _ => Err(ErrorCode::UnImplement("Unsupported table reference type")),
+            TableReference::Subquery { subquery, alias } => {
+                let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias)?;
+                }
+                Ok((s_expr, bind_context))
+            }
         }
     }
 
