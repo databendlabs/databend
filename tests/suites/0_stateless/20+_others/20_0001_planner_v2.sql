@@ -139,4 +139,12 @@ select number from numbers(10) order by number asc offset 5;
 select '===================';
 select number+number as number from numbers(10) order by number asc offset 5;
 
+-- Memory engine
+select '====Memory Table====';
+drop table if exists temp;
+create table temp (a int) engine = Memory;
+insert into temp values (1);
+select a from temp;
+drop table temp;
+
 set enable_planner_v2 = 0;
