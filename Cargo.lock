@@ -837,6 +837,7 @@ dependencies = [
  "async-trait",
  "codespan-reporting",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-types",

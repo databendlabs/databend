@@ -684,7 +684,7 @@ Extract {
         Ident(18..19),
         RParen(19..20),
     ],
-    field: Year,
+    kind: Year,
     expr: ColumnRef {
         span: [
             Ident(18..19),
