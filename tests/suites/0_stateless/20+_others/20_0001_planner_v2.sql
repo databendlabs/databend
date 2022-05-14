@@ -161,7 +161,6 @@ create table temp (a int) engine = Memory;
 insert into temp values (1);
 select a from temp;
 drop table temp;
-select '===================';
 
 -- subquery in from
 select '=== Test Subquery In From ===';
@@ -170,7 +169,6 @@ insert into t values(1, 2),(2, 3);
 select t1.a from (select * from t) as t1;
 SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3 ;
 drop table t;
-select '===================';
 
 select '====Context Function====';
 use default;
