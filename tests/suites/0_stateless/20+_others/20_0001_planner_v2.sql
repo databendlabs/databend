@@ -147,4 +147,8 @@ insert into temp values (1);
 select a from temp;
 drop table temp;
 
+select '====Context Function====';
+use default;
+select database();
+
 set enable_planner_v2 = 0;

@@ -64,6 +64,8 @@ pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
 
+    // true if current expr is inside an aggregate function.
+    // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
 }
 
@@ -242,8 +244,14 @@ impl<'a> TypeChecker<'a> {
                 params,
                 ..
             } => {
-                let args: Vec<&Expr> = args.iter().collect();
                 let func_name = name.name.as_str();
+
+                // Check if current function is a context function, e.g. `database`, `version`
+                if let Some(ctx_func_result) = self.try_resolve_context_function(func_name).await {
+                    return ctx_func_result;
+                }
+
+                let args: Vec<&Expr> = args.iter().collect();
 
                 if AggregateFunctionFactory::instance().check(func_name) {
                     if self.in_aggregate_function {
@@ -578,6 +586,39 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok((subquery_expr.into(), data_type))
+    }
+
+    async fn try_resolve_context_function(
+        &mut self,
+        func_name: &str,
+    ) -> Option<Result<(Scalar, DataTypeImpl)>> {
+        match func_name.to_lowercase().as_str() {
+            "database" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_current_database()),
+                };
+                Some(self.resolve_function("database", &[&arg], None).await)
+            }
+            "version" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_fuse_version()),
+                };
+                Some(self.resolve_function("version", &[&arg], None).await)
+            }
+            "current_user" => match self.ctx.get_current_user() {
+                Ok(user) => {
+                    let arg = Expr::Literal {
+                        span: &[],
+                        lit: Literal::String(user.identity().to_string()),
+                    };
+                    Some(self.resolve_function("current_user", &[&arg], None).await)
+                }
+                Err(e) => Some(Err(e)),
+            },
+            _ => None,
+        }
     }
 
     /// Resolve literal values.
