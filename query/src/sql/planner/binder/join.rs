@@ -127,7 +127,10 @@ impl<'a> Binder {
     }
 }
 
-pub fn check_duplicate_join_tables(left_context: &BindContext, right_context: &BindContext) -> Result<()> {
+pub fn check_duplicate_join_tables(
+    left_context: &BindContext,
+    right_context: &BindContext,
+) -> Result<()> {
     let left_column_bindings = left_context.all_column_bindings();
     let left_table_name = if left_column_bindings.is_empty() {
         None
