@@ -36,6 +36,8 @@ pub enum IntervalKind {
     Hour,
     Minute,
     Second,
+    Doy,
+    Dow,
 }
 
 impl fmt::Display for IntervalKind {
@@ -47,6 +49,8 @@ impl fmt::Display for IntervalKind {
             IntervalKind::Hour => "HOUR",
             IntervalKind::Minute => "MINUTE",
             IntervalKind::Second => "SECOND",
+            IntervalKind::Doy => "DOY",
+            IntervalKind::Dow => "DOW",
         })
     }
 }
@@ -60,6 +64,8 @@ impl From<String> for IntervalKind {
             "HOUR" => IntervalKind::Hour,
             "MINUTE" => IntervalKind::Minute,
             "SECOND" => IntervalKind::Second,
+            "DOY" => IntervalKind::Doy,
+            "DOW" => IntervalKind::Dow,
             _ => unreachable!(),
         }
     }

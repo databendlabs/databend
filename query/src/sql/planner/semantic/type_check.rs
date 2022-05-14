@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
-use common_ast::ast::DateTimeField;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
@@ -360,8 +359,8 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Extract { field, expr, .. } => {
-                self.resolve_extract_expr(field, expr, required_type).await
+            Expr::Extract { kind, expr, .. } => {
+                self.resolve_extract_expr(kind, expr, required_type).await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
@@ -506,47 +505,43 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_extract_expr(
         &mut self,
-        date_field: &DateTimeField,
+        interval_kind: &IntervalKind,
         arg: &Expr<'a>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        match date_field {
-            DateTimeField::Year => {
+        match interval_kind {
+            IntervalKind::Year => {
                 self.resolve_function("toYear", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Month => {
+            IntervalKind::Month => {
                 self.resolve_function("toMonth", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Day => {
+            IntervalKind::Day => {
                 self.resolve_function("toDayOfMonth", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Hour => {
+            IntervalKind::Hour => {
                 self.resolve_function("toHour", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Minute => {
+            IntervalKind::Minute => {
                 self.resolve_function("toMinute", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Second => {
+            IntervalKind::Second => {
                 self.resolve_function("toSecond", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Dow => {
-                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
-                    .await
-            }
-            DateTimeField::Doy => {
+            IntervalKind::Doy => {
                 self.resolve_function("toDayOfYear", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            _ => Err(ErrorCode::SemanticError(format!(
-                "Invalid time field: {}",
-                date_field
-            ))),
+            IntervalKind::Dow => {
+                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
         }
     }
 
@@ -602,20 +597,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let data_type = if let Literal::Interval(interval) = literal {
-            match &interval.field {
-                DateTimeField::Year => IntervalType::new_impl(IntervalKind::Year),
-                DateTimeField::Month => IntervalType::new_impl(IntervalKind::Month),
-                DateTimeField::Day => IntervalType::new_impl(IntervalKind::Day),
-                DateTimeField::Hour => IntervalType::new_impl(IntervalKind::Hour),
-                DateTimeField::Minute => IntervalType::new_impl(IntervalKind::Minute),
-                DateTimeField::Second => IntervalType::new_impl(IntervalKind::Second),
-                _ => {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Invalid interval kind: {}",
-                        interval.field
-                    )));
-                }
-            }
+            IntervalType::new_impl(interval.kind)
         } else {
             value.data_type()
         };
