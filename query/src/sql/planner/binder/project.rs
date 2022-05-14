@@ -32,8 +32,8 @@ impl<'a> Binder {
     /// then it won't build a `ProjectPlan`.
     pub(super) fn bind_projection(
         &mut self,
-        child: SExpr,
         output_context: &BindContext,
+        child: SExpr,
     ) -> Result<SExpr> {
         let mut projections: Vec<ProjectItem> = vec![];
         for column_binding in output_context.all_column_bindings() {
@@ -73,8 +73,8 @@ impl<'a> Binder {
     /// in this function.
     pub(super) async fn normalize_select_list(
         &mut self,
-        select_list: &[SelectTarget<'a>],
         input_context: &BindContext,
+        select_list: &[SelectTarget<'a>],
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
         for select_target in select_list {

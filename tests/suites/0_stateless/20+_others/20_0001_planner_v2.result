@@ -88,6 +88,14 @@ NULL	2	3
 0	1	1
 1	1	2
 2	NULL	3
+4950
+100
+1
+99999
+1
+0
+685
+0.685
 ====INNER_JOIN====
 1	1
 2	2
@@ -226,3 +234,11 @@ new_planner
 18
 ====Memory Table====
 1
+=== Test Subquery In From ===
+1
+2
+0	0	5
+0	4	5
+0	8	5
+====Context Function====
+default
