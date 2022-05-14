@@ -5,11 +5,11 @@ slug: ../
 
 Databend is an open-source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
+Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/) or [MinIO](https://min.io)).
 
 - __Instant Elasticity__
 
-  Databend separates the storage and compute, which allows you easily scale up or scale down based on your application's needs.
+  Databend completely separates storage from compute, which allows you easily scale up or scale down based on your application's needs.
 
 - __Blazing Performance__
 
@@ -17,11 +17,11 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types:[VARIANT, OBJECT, ARRAY](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured data (JSON).
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
 
 - __MySQL/ClickHouse Compatible__
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools.
+  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/reference/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
 
 - __Easy to Use__
 
