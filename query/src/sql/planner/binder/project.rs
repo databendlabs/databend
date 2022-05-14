@@ -73,8 +73,8 @@ impl<'a> Binder {
     /// in this function.
     pub(super) async fn normalize_select_list(
         &mut self,
+        input_context: &BindContext,
         select_list: &[SelectTarget<'a>],
-        input_context: &mut BindContext,
     ) -> Result<BindContext> {
         let mut output_context = BindContext::new();
         for select_target in select_list {
