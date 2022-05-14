@@ -154,13 +154,7 @@ NULL	2	3
 ====SELECT_WITHOUT_FROM====
 2
 8
-ERROR 1105 (HY000) at line 119: Code: 1065, displayText = error: 
-  --> SQL:1:8
-  |
-1 | select "new_planner"
-  |        ^^^^^^^^^^^^^ column doesn't exist
-
-.
+new_planner
 === Test limit ===
 0
 1
