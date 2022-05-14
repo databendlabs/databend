@@ -14,7 +14,7 @@
 
 use super::get::GetFunction;
 use super::get::GetIgnoreCaseFunction;
-use super::get::GetPathFunction;
+use super::get_path::GetPathFunction;
 use super::json_extract_path_text::JsonExtractPathTextFunction;
 use super::parse_json::ParseJsonFunction;
 use super::parse_json::TryParseJsonFunction;
