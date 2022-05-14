@@ -28,7 +28,7 @@ pub struct IntervalType {
     kind: IntervalKind,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntervalKind {
     Year,
     Month,
