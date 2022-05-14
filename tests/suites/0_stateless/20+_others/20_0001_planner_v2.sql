@@ -35,6 +35,7 @@ select * from numbers(5) where number in (1, 3);
 select '====MAP_ACCESS====';
 select parse_json('{"k1": [0, 1, 2]}'):k1[2];
 select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
+select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
 
 -- Aggregator operator
 select '====AGGREGATOR====';
@@ -133,7 +134,7 @@ drop table t3;
 select '====SELECT_WITHOUT_FROM====';
 select 1 + 1;
 select to_int(8);
-select "new_planner";
+select 'new_planner';
 select *; -- {ErrorCode 1065}
 
 -- limit

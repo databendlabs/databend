@@ -112,7 +112,7 @@ pub enum TokenKind {
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
-    QuotedIdent,
+    QuotedString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     LiteralHex,
@@ -608,7 +608,7 @@ impl TokenKind {
         !matches!(
             self,
             Ident
-                | QuotedIdent
+                | QuotedString
                 | LiteralHex
                 | LiteralNumber
                 | DoubleEq

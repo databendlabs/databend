@@ -5,7 +5,7 @@ error:
   --> SQL:1:29
   |
 1 | select * from customer join where a = b
-  |                             ^^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedIdent>
+  |                             ^^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedString>
 
 
 ---------- Input ----------
@@ -15,7 +15,7 @@ error:
   --> SQL:1:15
   |
 1 | select * from join customer
-  | ------        ^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedIdent>
+  | ------        ^^^^ expected `(`, `SELECT`, <Ident>, or <QuotedString>
   | |              
   | while parsing `SELECT ...`
 
@@ -27,7 +27,7 @@ error:
   --> SQL:1:30
   |
 1 | select * from t inner join t1
-  |                              ^ expected `(`, `.`, <Ident>, <QuotedIdent>, `AS`, `ON`, or 1 more ...
+  |                              ^ expected `(`, `.`, <Ident>, <QuotedString>, `AS`, `ON`, or 1 more ...
 
 
 ---------- Input ----------
@@ -37,7 +37,7 @@ error:
   --> SQL:1:50
   |
 1 | select * from customer natural inner join orders on a = b
-  |                                                  ^^ expected `(`, `.`, <Ident>, <QuotedIdent>, `AS`, `INNER`, or 12 more ...
+  |                                                  ^^ expected `(`, `.`, <Ident>, <QuotedString>, `AS`, `INNER`, or 12 more ...
 
 
 ---------- Input ----------

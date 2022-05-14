@@ -86,7 +86,7 @@ error:
   --> SQL:1:21
   |
 1 | insert into t format
-  | ------              ^ expected <Ident> or <QuotedIdent>
+  | ------              ^ expected <Ident> or <QuotedString>
   | |                   
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`
 
