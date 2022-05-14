@@ -32,8 +32,8 @@ impl<'a> Binder {
     /// then it won't build a `ProjectPlan`.
     pub(super) fn bind_projection(
         &mut self,
-        child: SExpr,
         output_context: &BindContext,
+        child: SExpr,
     ) -> Result<SExpr> {
         let mut projections: Vec<ProjectItem> = vec![];
         for column_binding in output_context.all_column_bindings() {

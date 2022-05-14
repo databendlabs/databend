@@ -568,7 +568,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(subquery, &bind_context).await?;
+        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
         if output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
