@@ -50,7 +50,7 @@ impl<'a> Binder {
             .bind_table_reference(&left_context, &join.right)
             .await?;
 
-        check_join_table(&left_context, &right_context)?;
+        check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = BindContext::new();
         for column in left_context.all_column_bindings() {
@@ -127,7 +127,7 @@ impl<'a> Binder {
     }
 }
 
-pub fn check_join_table(left_context: &BindContext, right_context: &BindContext) -> Result<()> {
+pub fn check_duplicate_join_tables(left_context: &BindContext, right_context: &BindContext) -> Result<()> {
     let left_column_bindings = left_context.all_column_bindings();
     let left_table_name = if left_column_bindings.is_empty() {
         None
