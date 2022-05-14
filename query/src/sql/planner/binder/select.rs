@@ -22,7 +22,6 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
-use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::parser::error::DisplayError as _;
 use common_exception::ErrorCode;
@@ -46,6 +45,7 @@ use crate::storages::ToReadDataSourcePlan;
 use crate::table_functions::TableFunction;
 
 impl<'a> Binder {
+    #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
         bind_context: &BindContext,
@@ -102,7 +102,7 @@ impl<'a> Binder {
 
         // Output of current `SELECT` statement.
         let mut output_context = self
-            .normalize_select_list(&stmt.select_list, alias, &mut from_context)
+            .normalize_select_list(&stmt.select_list, &mut from_context)
             .await?;
 
         let agg_info = self.analyze_aggregate(&output_context)?;
@@ -206,7 +206,7 @@ impl<'a> Binder {
 
                 let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(&table, alias)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }
@@ -257,14 +257,17 @@ impl<'a> Binder {
 
                 let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(table.name(), alias)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }
             TableReference::Join(join) => self.bind_join(bind_context, join).await,
             TableReference::Subquery { subquery, alias } => {
-                self.bind_query_with_alias(subquery, alias, bind_context)
-                    .await
+                let (s_expr, mut bind_context) = self.bind_query(subquery, bind_context).await?;
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias)?;
+                }
+                Ok((s_expr, bind_context))
             }
         }
     }
