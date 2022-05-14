@@ -29,6 +29,7 @@
 ====MAP_ACCESS====
 2
 2
+2
 ====AGGREGATOR====
 2
 4
@@ -153,7 +154,13 @@ NULL	2	3
 ====SELECT_WITHOUT_FROM====
 2
 8
-new_planner
+ERROR 1105 (HY000) at line 119: Code: 1065, displayText = error: 
+  --> SQL:1:8
+  |
+1 | select "new_planner"
+  |        ^^^^^^^^^^^^^ column doesn't exist
+
+.
 === Test limit ===
 0
 1

@@ -35,6 +35,7 @@ select * from numbers(5) where number in (1, 3);
 select '====MAP_ACCESS====';
 select parse_json('{"k1": [0, 1, 2]}'):k1[2];
 select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
+select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
 
 -- Aggregator operator
 select '====AGGREGATOR====';

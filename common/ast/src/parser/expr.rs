@@ -750,9 +750,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #case : "`CASE ... END`"
             | #exists : "`EXISTS (SELECT ...)`"
             | #subquery : "`(SELECT ...)`"
-            | #map_access : "[<key>] | .<key> | :<key>"
             | #group
             | #column_ref : "<column>"
+            | #map_access : "[<key>] | .<key> | :<key>"
         ),
     )))(i)?;
 

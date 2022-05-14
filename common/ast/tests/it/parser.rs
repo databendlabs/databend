@@ -247,6 +247,7 @@ fn test_expr() {
         r#"- - + + - 1 + + - 2"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
+        r#"`t`:k1.k2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#""random"()"#,
