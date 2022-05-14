@@ -263,7 +263,7 @@ impl<'a> Binder {
             }
             TableReference::Join(join) => self.bind_join(bind_context, join).await,
             TableReference::Subquery { subquery, alias } => {
-                let (s_expr, mut bind_context) = self.bind_query(subquery, bind_context).await?;
+                let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;
                 }
