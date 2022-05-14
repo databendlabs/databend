@@ -607,7 +607,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function("version", &[&arg], None).await)
             }
-            "current_user" => match self.ctx.get_current_user() {
+            "current_user" | "user" => match self.ctx.get_current_user() {
                 Ok(user) => {
                     let arg = Expr::Literal {
                         span: &[],
