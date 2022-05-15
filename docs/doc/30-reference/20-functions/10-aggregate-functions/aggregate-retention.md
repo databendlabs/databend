@@ -13,14 +13,14 @@ The conditions, except the first, apply in pairs: the result of the second will 
 ## Syntax
 
 ```
-RETENTION(cond1, cond2, ..., cond32);
+RETENTION( <cond1> , <cond2> , ..., <cond32> );
 ```
 
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| cond  | An expression that returns a Boolean result |
+| `<cond>`  | An expression that returns a Boolean result |
 
 ## Return Type
 
@@ -36,21 +36,21 @@ INSERT INTO retention_test SELECT '2018-08-08', number FROM numbers(60);
 ```
 
 ```
-SELECT sum(r[0]::TINYINT) as r1, sum(r[1]::TINYINT) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-07' GROUP BY uid);
+SELECT sum(r[0]) as r1, sum(r[1]) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-07' GROUP BY uid);
 +------+------+
 | r1   | r2   |
 +------+------+
 |   80 |   70 |
 +------+------+
 
-SELECT sum(r[0]::TINYINT) as r1, sum(r[1]::TINYINT) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-08') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-08' GROUP BY uid);
+SELECT sum(r[0]) as r1, sum(r[1]) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-08') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-08' GROUP BY uid);
 +------+------+
 | r1   | r2   |
 +------+------+
 |   80 |   60 |
 +------+------+
 
-SELECT sum(r[0]::TINYINT) as r1, sum(r[1]::TINYINT) as r2, sum(get(r, 2)::TINYINT) as r3 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07', date = '2018-08-08') AS r FROM retention_test GROUP BY uid);
+SELECT sum(r[0]) as r1, sum(r[1]) as r2, sum(r[2]) as r3 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07', date = '2018-08-08') AS r FROM retention_test GROUP BY uid);
 +------+------+------+
 | r1   | r2   | r3   |
 +------+------+------+
