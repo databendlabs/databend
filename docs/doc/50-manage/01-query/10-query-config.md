@@ -44,6 +44,15 @@ You can explore more flags with `./databend-query -h`.
 * Default: `"root"`
 * Env variable: `META_PASSWORD`
 
+### endpoints
+
+* A list of meta server endpoints that databend-query can connect to(as seeds), e.g., `["192.168.0.1:9101", "192.168.0.2:9101"]`.
+* Default: `[""]`
+* Env variable: `META_ENDPOINTS`
+
+:::tip
+If `endpoints` is configured, the `address` configuration will no longer take effect, you only need to configure one of them.
+:::
 
 ## 3. Query config
 
