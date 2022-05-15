@@ -34,6 +34,8 @@ use tonic::codegen::futures_core::Stream;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
+use crate::metrics::incr_meta_metrics_proposals_failed;
+use crate::metrics::incr_meta_metrics_proposals_pending;
 
 pub type GrpcStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -62,6 +64,8 @@ impl RaftService for RaftServiceImpl {
         let mes = request.into_inner();
         let ent: LogEntry = mes.try_into()?;
 
+        incr_meta_metrics_proposals_pending(1);
+
         // TODO(xp): call meta_node.write()
         let res = self
             .meta_node
@@ -71,14 +75,20 @@ impl RaftService for RaftServiceImpl {
             })
             .await;
 
+        incr_meta_metrics_proposals_pending(-1);
+
         let res = match res {
             Ok(r) => {
                 let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
+                    incr_meta_metrics_proposals_failed();
                     MetaError::MetaRaftError(MetaRaftError::ForwardRequestError(e.to_string()))
                 });
                 a
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                incr_meta_metrics_proposals_failed();
+                Err(e)
+            }
         };
 
         let raft_reply = RaftReply::from(res);
