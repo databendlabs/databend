@@ -288,6 +288,10 @@ impl QueryContextShared {
         Ok(format)
     }
 
+    pub fn get_connection_id(&self) -> String {
+        self.session.get_id()
+    }
+
     pub async fn reload_config(&self) -> Result<()> {
         self.session.session_mgr.reload_config().await
     }

@@ -612,6 +612,13 @@ impl<'a> TypeChecker<'a> {
                 }
                 Err(e) => Some(Err(e)),
             },
+            "connection_id" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_connection_id()),
+                };
+                Some(self.resolve_function("connection_id", &[&arg], None).await)
+            }
             _ => None,
         }
     }
