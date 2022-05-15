@@ -25,7 +25,7 @@ jobs:
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Get target
         id: target
-        run: echo ::set-output name=target:${{ matrix.arch }}-apple-darwin
+        run: echo ::set-output name=target::${{ matrix.arch }}-apple-darwin
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh -yb
@@ -76,7 +76,7 @@ jobs:
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Get target
         id: target
-        run: echo ::set-output name=target:${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
+        run: echo ::set-output name=target::${{ matrix.arch }}-unknown-linux-${{ matrix.platform }}
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
         with:

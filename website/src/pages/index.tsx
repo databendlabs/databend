@@ -37,7 +37,7 @@ export default function Home(): JSX.Element {
     return (
       <Layout
         title={`Databend - Activate your Object Storage for real-time analytics`}
-        description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage(MinIO, Amazon S3, Azure Blob Storage) for real-time analytics`}>
+        description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage(S3, Azure Blob, or MinIO) for real-time analytics`}>
         <HomepageHeader/>
       </Layout>
     );

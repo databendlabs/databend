@@ -79,10 +79,10 @@ impl<'a> Binder {
 
     pub(super) async fn bind_group_by(
         &mut self,
-        child: SExpr,
-        group_by_expr: &[Expr<'a>],
         input_context: &BindContext,
         output_context: BindContext,
+        child: SExpr,
+        group_by_expr: &[Expr<'a>],
         agg_info: &AggregateInfo,
     ) -> Result<(SExpr, BindContext)> {
         let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());

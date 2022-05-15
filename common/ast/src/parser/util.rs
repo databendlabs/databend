@@ -88,16 +88,27 @@ fn non_reserved_identifier(
             map(
                 alt((rule! { Ident }, non_reserved_keyword(is_reserved_keyword))),
                 |token| Identifier {
+                    span: token.clone(),
                     name: token.text().to_string(),
                     quote: None,
-                    span: token.clone(),
                 },
             ),
-            map(rule! { QuotedIdent }, |token| Identifier {
-                name: token.text()[1..token.text().len() - 1].to_string(),
-                quote: Some(token.text().chars().next().unwrap()),
-                span: token.clone(),
-            }),
+            move |i| {
+                match_token(QuotedString)(i).and_then(|(i2, token)| {
+                    if token.text().starts_with('\'') {
+                        Err(nom::Err::Error(Error::from_error_kind(
+                            i,
+                            ErrorKind::ExpectToken(Ident),
+                        )))
+                    } else {
+                        Ok((i2, Identifier {
+                            span: token.clone(),
+                            name: token.text()[1..token.text().len() - 1].to_string(),
+                            quote: Some(token.text().chars().next().unwrap()),
+                        }))
+                    }
+                })
+            },
         ))(i)
     }
 }
@@ -119,16 +130,20 @@ fn non_reserved_keyword(
 }
 
 pub fn literal_string(i: Input) -> IResult<String> {
-    map(
-        rule! {
-            QuotedIdent
-        },
-        |token| token.text()[1..token.text().len() - 1].to_string(),
-    )(i)
+    match_token(QuotedString)(i).and_then(|(i2, token)| {
+        if token.text().starts_with('\'') {
+            Ok((i2, token.text()[1..token.text().len() - 1].to_string()))
+        } else {
+            Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::ExpectToken(QuotedString),
+            )))
+        }
+    })
 }
 
 pub fn literal_u64(i: Input) -> IResult<u64> {
-    rule!(LiteralNumber)(i).and_then(|(i2, token)| {
+    match_token(LiteralNumber)(i).and_then(|(i2, token)| {
         token
             .text()
             .parse()

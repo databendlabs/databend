@@ -9,12 +9,7 @@ Analyzing `OnTime` datasets on S3 with Databend step by step.
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend with Amazon S3](../10-deploy/01-s3.md)
-* [How to Deploy Databend with Tencent COS](../10-deploy/02-cos.md)
-* [How to Deploy Databend with Alibaba OSS](../10-deploy/03-oss.md)
-* [How to Deploy Databend with Wasabi](../10-deploy/05-wasabi.md)
-* [How to Deploy Databend with Scaleway OS](../10-deploy/06-scw.md)
-* [How to Deploy Databend with QingCloud QingStore](../10-deploy/07-qingstore.md)
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
 ## Step 2. Load OnTime Datasets
 

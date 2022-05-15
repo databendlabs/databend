@@ -35,6 +35,7 @@ select * from numbers(5) where number in (1, 3);
 select '====MAP_ACCESS====';
 select parse_json('{"k1": [0, 1, 2]}'):k1[2];
 select parse_json('{"k1": [0, 1, 2]}')['k1'][2];
+select parse_json('{"k1": {"k2": [0, 1, 2]}}'):k1.k2[2];
 
 -- Aggregator operator
 select '====AGGREGATOR====';
@@ -80,6 +81,21 @@ SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 
 -- u64, nullable(u8)
 SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
+-- aggregator combinator
+-- distinct
+select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
+select count_distinct(number) from ( select number % 100 as number from numbers(100000));
+select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
+
+-- if
+select sum_if(number, number >= 100000 - 1) from numbers(100000);
+select sum_if(number, number > 100) /  count_if(number,  number > 100) = avg_if(number,  number > 100) from numbers(100000);
+select count_if(number, number>9) from numbers(10);
+
+-- boolean
+select sum(number > 314) from numbers(1000);
+select avg(number > 314) from numbers(1000);
+
 drop table t;
 
 -- Inner join
@@ -118,7 +134,7 @@ drop table t3;
 select '====SELECT_WITHOUT_FROM====';
 select 1 + 1;
 select to_int(8);
-select "new_planner";
+select 'new_planner';
 select *; -- {ErrorCode 1065}
 
 -- limit
@@ -138,5 +154,25 @@ select '=== Test offset ===';
 select number from numbers(10) order by number asc offset 5;
 select '===================';
 select number+number as number from numbers(10) order by number asc offset 5;
+
+-- Memory engine
+select '====Memory Table====';
+drop table if exists temp;
+create table temp (a int) engine = Memory;
+insert into temp values (1);
+select a from temp;
+drop table temp;
+
+-- subquery in from
+select '=== Test Subquery In From ===';
+create table t(a int, b int);
+insert into t values(1, 2),(2, 3);
+select t1.a from (select * from t) as t1;
+SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3 ;
+drop table t;
+
+select '====Context Function====';
+use default;
+select database();
 
 set enable_planner_v2 = 0;

@@ -45,9 +45,12 @@ impl<'a> Binder {
         join: &Join<'a>,
     ) -> Result<(SExpr, BindContext)> {
         let (left_child, left_context) =
-            self.bind_table_reference(&join.left, bind_context).await?;
-        let (right_child, right_context) =
-            self.bind_table_reference(&join.right, bind_context).await?;
+            self.bind_table_reference(bind_context, &join.left).await?;
+        let (right_child, right_context) = self
+            .bind_table_reference(&left_context, &join.right)
+            .await?;
+
+        check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = BindContext::new();
         for column in left_context.all_column_bindings() {
@@ -122,6 +125,37 @@ impl<'a> Binder {
 
         Ok(expr)
     }
+}
+
+pub fn check_duplicate_join_tables(
+    left_context: &BindContext,
+    right_context: &BindContext,
+) -> Result<()> {
+    let left_column_bindings = left_context.all_column_bindings();
+    let left_table_name = if left_column_bindings.is_empty() {
+        None
+    } else {
+        left_column_bindings[0].table_name.as_ref()
+    };
+
+    let right_column_bindings = right_context.all_column_bindings();
+    let right_table_name = if right_column_bindings.is_empty() {
+        None
+    } else {
+        right_column_bindings[0].table_name.as_ref()
+    };
+
+    if let Some(left) = left_table_name {
+        if let Some(right) = right_table_name {
+            if left.eq(right) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Duplicated table name {} in the same FROM clause",
+                    left
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 struct JoinConditionResolver<'a> {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::IntervalKind;
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::combinator::consumed;
@@ -196,9 +197,9 @@ pub enum ExprElement<'a> {
     },
     /// `::<type_name>` expression
     PgCast { target_type: TypeName },
-    /// EXTRACT(DateTimeField FROM <expr>)
+    /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
-        field: DateTimeField,
+        field: IntervalKind,
         expr: Box<Expr<'a>>,
     },
     /// POSITION(<expr> IN <expr>)
@@ -335,7 +336,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
             },
             ExprElement::Extract { field, expr } => Expr::Extract {
                 span: elem.span.0,
-                field,
+                kind: field,
                 expr,
             },
             ExprElement::Position {
@@ -571,7 +572,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let extract = map(
         rule! {
-            EXTRACT ~ ^"(" ~ ^#date_time_field ~ ^FROM ~ ^#subexpr(0) ~ ^")"
+            EXTRACT ~ ^"(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::Extract {
             field,
@@ -750,9 +751,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #case : "`CASE ... END`"
             | #exists : "`EXISTS (SELECT ...)`"
             | #subquery : "`(SELECT ...)`"
-            | #map_access : "[<key>] | .<key> | :<key>"
             | #group
             | #column_ref : "<column>"
+            | #map_access : "[<key>] | .<key> | :<key>"
         ),
     )))(i)?;
 
@@ -813,9 +814,9 @@ pub fn literal(i: Input) -> IResult<Literal> {
     ));
     let interval = map(
         rule! {
-            INTERVAL ~ #literal_string ~ #date_time_field
+            INTERVAL ~ #literal_string ~ #interval_kind
         },
-        |(_, value, field)| Literal::Interval(Interval { value, field }),
+        |(_, value, field)| Literal::Interval(Interval { value, kind: field }),
     );
     let current_timestamp = value(Literal::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
     let null = value(Literal::Null, rule! { NULL });
@@ -910,58 +911,26 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     )(i)
 }
 
-pub fn date_time_field(i: Input) -> IResult<DateTimeField> {
-    let year = value(DateTimeField::Year, rule! { YEAR });
-    let month = value(DateTimeField::Month, rule! { MONTH });
-    let week = value(DateTimeField::Week, rule! { WEEK });
-    let day = value(DateTimeField::Day, rule! { DAY });
-    let hour = value(DateTimeField::Hour, rule! { HOUR });
-    let minute = value(DateTimeField::Minute, rule! { MINUTE });
-    let second = value(DateTimeField::Second, rule! { SECOND });
-    let century = value(DateTimeField::Century, rule! { CENTURY });
-    let decade = value(DateTimeField::Decade, rule! { DECADE });
-    let doy = value(DateTimeField::Doy, rule! { DOY });
-    let dow = value(DateTimeField::Dow, rule! { DOW });
-    let epoch = value(DateTimeField::Epoch, rule! { EPOCH });
-    let isodow = value(DateTimeField::Isodow, rule! { ISODOW });
-    let isoyear = value(DateTimeField::Isoyear, rule! { ISOYEAR });
-    let julian = value(DateTimeField::Julian, rule! { JULIAN });
-    let microseconds = value(DateTimeField::Microseconds, rule! { MICROSECONDS });
-    let millenium = value(DateTimeField::Millenium, rule! { MILLENIUM });
-    let milliseconds = value(DateTimeField::Milliseconds, rule! { MILLISECONDS });
-    let quarter = value(DateTimeField::Quarter, rule! { QUARTER });
-    let timezone = value(DateTimeField::Timezone, rule! { TIMEZONE });
-    let timezone_hour = value(DateTimeField::TimezoneHour, rule! { TIMEZONE_HOUR });
-    let timezone_minute = value(DateTimeField::TimezoneMinute, rule! { TIMEZONE_MINUTE });
+pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+    let year = value(IntervalKind::Year, rule! { YEAR });
+    let month = value(IntervalKind::Month, rule! { MONTH });
+    let day = value(IntervalKind::Day, rule! { DAY });
+    let hour = value(IntervalKind::Hour, rule! { HOUR });
+    let minute = value(IntervalKind::Minute, rule! { MINUTE });
+    let second = value(IntervalKind::Second, rule! { SECOND });
+    let doy = value(IntervalKind::Doy, rule! { DOY });
+    let dow = value(IntervalKind::Dow, rule! { DOW });
 
-    alt((
-        rule!(
-            #year
-            | #month
-            | #week
-            | #day
-            | #hour
-            | #minute
-            | #second
-            | #century
-            | #decade
-            | #doy
-            | #dow
-        ),
-        rule!(
-            #epoch
-            | #isodow
-            | #isoyear
-            | #julian
-            | #microseconds
-            | #millenium
-            | #milliseconds
-            | #quarter
-            | #timezone
-            | #timezone_hour
-            | #timezone_minute
-        ),
-    ))(i)
+    rule!(
+        #year
+        | #month
+        | #day
+        | #hour
+        | #minute
+        | #second
+        | #doy
+        | #dow
+    )(i)
 }
 
 pub fn map_access(i: Input) -> IResult<MapAccessor> {

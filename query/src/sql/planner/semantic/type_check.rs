@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
-use common_ast::ast::DateTimeField;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
@@ -64,6 +63,8 @@ pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
 
+    // true if current expr is inside an aggregate function.
+    // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
 }
 
@@ -242,8 +243,14 @@ impl<'a> TypeChecker<'a> {
                 params,
                 ..
             } => {
-                let args: Vec<&Expr> = args.iter().collect();
                 let func_name = name.name.as_str();
+
+                // Check if current function is a context function, e.g. `database`, `version`
+                if let Some(ctx_func_result) = self.try_resolve_context_function(func_name).await {
+                    return ctx_func_result;
+                }
+
+                let args: Vec<&Expr> = args.iter().collect();
 
                 if AggregateFunctionFactory::instance().check(func_name) {
                     if self.in_aggregate_function {
@@ -360,8 +367,8 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Extract { field, expr, .. } => {
-                self.resolve_extract_expr(field, expr, required_type).await
+            Expr::Extract { kind, expr, .. } => {
+                self.resolve_extract_expr(kind, expr, required_type).await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
@@ -506,47 +513,43 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_extract_expr(
         &mut self,
-        date_field: &DateTimeField,
+        interval_kind: &IntervalKind,
         arg: &Expr<'a>,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        match date_field {
-            DateTimeField::Year => {
+        match interval_kind {
+            IntervalKind::Year => {
                 self.resolve_function("toYear", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Month => {
+            IntervalKind::Month => {
                 self.resolve_function("toMonth", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Day => {
+            IntervalKind::Day => {
                 self.resolve_function("toDayOfMonth", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Hour => {
+            IntervalKind::Hour => {
                 self.resolve_function("toHour", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Minute => {
+            IntervalKind::Minute => {
                 self.resolve_function("toMinute", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Second => {
+            IntervalKind::Second => {
                 self.resolve_function("toSecond", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            DateTimeField::Dow => {
-                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
-                    .await
-            }
-            DateTimeField::Doy => {
+            IntervalKind::Doy => {
                 self.resolve_function("toDayOfYear", &[arg], Some(TimestampType::new_impl(0)))
                     .await
             }
-            _ => Err(ErrorCode::SemanticError(format!(
-                "Invalid time field: {}",
-                date_field
-            ))),
+            IntervalKind::Dow => {
+                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
         }
     }
 
@@ -560,7 +563,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(subquery, &bind_context).await?;
+        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
         if output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
@@ -578,6 +581,39 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok((subquery_expr.into(), data_type))
+    }
+
+    async fn try_resolve_context_function(
+        &mut self,
+        func_name: &str,
+    ) -> Option<Result<(Scalar, DataTypeImpl)>> {
+        match func_name.to_lowercase().as_str() {
+            "database" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_current_database()),
+                };
+                Some(self.resolve_function("database", &[&arg], None).await)
+            }
+            "version" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_fuse_version()),
+                };
+                Some(self.resolve_function("version", &[&arg], None).await)
+            }
+            "current_user" | "user" => match self.ctx.get_current_user() {
+                Ok(user) => {
+                    let arg = Expr::Literal {
+                        span: &[],
+                        lit: Literal::String(user.identity().to_string()),
+                    };
+                    Some(self.resolve_function("current_user", &[&arg], None).await)
+                }
+                Err(e) => Some(Err(e)),
+            },
+            _ => None,
+        }
     }
 
     /// Resolve literal values.
@@ -602,20 +638,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let data_type = if let Literal::Interval(interval) = literal {
-            match &interval.field {
-                DateTimeField::Year => IntervalType::new_impl(IntervalKind::Year),
-                DateTimeField::Month => IntervalType::new_impl(IntervalKind::Month),
-                DateTimeField::Day => IntervalType::new_impl(IntervalKind::Day),
-                DateTimeField::Hour => IntervalType::new_impl(IntervalKind::Hour),
-                DateTimeField::Minute => IntervalType::new_impl(IntervalKind::Minute),
-                DateTimeField::Second => IntervalType::new_impl(IntervalKind::Second),
-                _ => {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Invalid interval kind: {}",
-                        interval.field
-                    )));
-                }
-            }
+            IntervalType::new_impl(interval.kind)
         } else {
             value.data_type()
         };

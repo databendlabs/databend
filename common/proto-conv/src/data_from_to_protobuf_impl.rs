@@ -443,6 +443,8 @@ impl FromToProto<pb::IntervalKind> for dv::IntervalKind {
             pb::IntervalKind::Hour => dv::IntervalKind::Hour,
             pb::IntervalKind::Minute => dv::IntervalKind::Minute,
             pb::IntervalKind::Second => dv::IntervalKind::Second,
+            pb::IntervalKind::Doy => dv::IntervalKind::Doy,
+            pb::IntervalKind::Dow => dv::IntervalKind::Dow,
         };
 
         Ok(dv_kind)
@@ -456,6 +458,8 @@ impl FromToProto<pb::IntervalKind> for dv::IntervalKind {
             dv::IntervalKind::Hour => pb::IntervalKind::Hour,
             dv::IntervalKind::Minute => pb::IntervalKind::Minute,
             dv::IntervalKind::Second => pb::IntervalKind::Second,
+            dv::IntervalKind::Doy => pb::IntervalKind::Doy,
+            dv::IntervalKind::Dow => pb::IntervalKind::Dow,
         };
         Ok(pb_kind)
     }

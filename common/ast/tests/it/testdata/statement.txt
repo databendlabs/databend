@@ -418,7 +418,7 @@ TruncateTable {
             quote: Some(
                 '"',
             ),
-            span: QuotedIdent(15..18),
+            span: QuotedString(15..18),
         },
     ),
     table: Identifier {
@@ -465,7 +465,7 @@ DropTable {
         quote: Some(
             '"',
         ),
-        span: QuotedIdent(23..26),
+        span: QuotedString(23..26),
     },
 }
 
@@ -481,7 +481,7 @@ UseDatabase {
         quote: Some(
             '"',
         ),
-        span: QuotedIdent(4..7),
+        span: QuotedString(4..7),
     },
 }
 
@@ -2444,7 +2444,7 @@ Query(
             SELECT(0..6),
             Ident(7..17),
             LParen(17..18),
-            QuotedIdent(18..37),
+            QuotedString(18..37),
             RParen(37..38),
             Period(38..39),
             Ident(39..41),
@@ -2458,7 +2458,7 @@ Query(
                     SELECT(0..6),
                     Ident(7..17),
                     LParen(17..18),
-                    QuotedIdent(18..37),
+                    QuotedString(18..37),
                     RParen(37..38),
                     Period(38..39),
                     Ident(39..41),
@@ -2484,7 +2484,7 @@ Query(
                                     span: [
                                         Ident(7..17),
                                         LParen(17..18),
-                                        QuotedIdent(18..37),
+                                        QuotedString(18..37),
                                         RParen(37..38),
                                     ],
                                     distinct: false,
@@ -2496,7 +2496,7 @@ Query(
                                     args: [
                                         Literal {
                                             span: [
-                                                QuotedIdent(18..37),
+                                                QuotedString(18..37),
                                             ],
                                             lit: String(
                                                 "{\"k1\": [0, 1, 2]}",
