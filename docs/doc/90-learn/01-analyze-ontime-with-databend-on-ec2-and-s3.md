@@ -13,7 +13,26 @@ Make sure you have installed Databend, if not please see:
 
 ## Step 2. Load OnTime Datasets
 
-### 2.1 Create OnTime Table
+### 2.1 Create a Databend User
+
+Connect to Databend server with MySQL client:
+```shell
+mysql -h127.0.0.1 -uroot -P3307 
+```
+
+Create a user:
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
+```
+
+Grant privileges for the user:
+```sql
+GRANT ALL ON *.* TO user1;
+```
+
+See also [How To Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+
+### 2.2 Create OnTime Table
 
 ```sql
 CREATE TABLE ontime
@@ -130,7 +149,7 @@ CREATE TABLE ontime
 );
 ```
 
-### 2.2 Load Data Into OnTime Table
+### 2.3 Load Data Into OnTime Table
 
 ```shell title='t_ontime.csv.zip'
 wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
@@ -141,12 +160,14 @@ unzip t_ontime.csv.zip
 ```
 
 ```shell title='Load CSV files into Databend'
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:\t\"  -F  \"upload=@{}\"  -XPUT http://127.0.0.1:8081/v1/streaming_load |bash
+ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:\t\"  -F  \"upload=@{}\"  -XPUT http://user1:abc123@127.0.0.1:8081/v1/streaming_load |bash
 ```
 
 :::tip
 
-* http://127.0.0.1:8081/v1/streaming_load
+* http://user1:abc123@127.0.0.1:8081/v1/streaming_load
+    * `user1` is the user.
+    * `abc123` is the user password.
     * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
     * `8081` is `http_handler_port` value in your *databend-query.toml*
 :::
