@@ -876,3 +876,103 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     assert!(resp.is_err(), "{:?}", resp.err());
     Ok(())
 }
+
+pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
+    let uri = format!("/v1/query/{}/download", query_id);
+    let resp = get_uri(ep, &uri).await;
+    resp
+}
+
+#[tokio::test]
+async fn test_download() -> Result<()> {
+    let ep = create_endpoint();
+
+    let sql = "select number, number + 1 from numbers(2)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 2);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    // succeeded query
+    let resp = download(&ep, &result.id).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let exp = "0\t1\n1\t2\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
+    // not exist
+    let mut resp = download(&ep, "123").await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_non_select() -> Result<()> {
+    let ep = create_endpoint();
+    let sql = "show databases";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    let num_row = result.data.len();
+
+    let resp = download(&ep, &result.id).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.into_body().into_string().await.unwrap();
+    assert_eq!(
+        body.split('\n').filter(|x| !x.is_empty()).count(),
+        num_row,
+        "'{}'",
+        body
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_failed() -> Result<()> {
+    let ep = create_endpoint();
+    let sql = "xxx";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+
+    let mut resp = download(&ep, &result.id).await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_killed() -> Result<()> {
+    let ep = create_endpoint();
+
+    // succeeded query
+    let sql = "select sleep(0.1)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    let resp = download(&ep, &result.id).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let exp = "0\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
+    // killed query
+    let sql = "select sleep(1)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    let query_id = &result.id;
+
+    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let mut resp = download(&ep, query_id).await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
