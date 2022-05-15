@@ -208,6 +208,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 - [Analyzing Github Repository with Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
 - [Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
+- [Analyzing User Retention with Databend](https://databend.rs/doc/learn/analyze-user-retention-with-databend)
 
 ### Performance
 
