@@ -1,58 +1,52 @@
 ---
-title: WINDOW_FUNNEL
-description: Funnel Analysis
+title: How to Do Funnel Analysis With Databend
+sidebar_label: Funnel Analysis
 ---
 
+Funnel analysis measures the number of unique users who has performed a set of actions, and we use it to see drop-off and conversion in multi-step processes.
 
-## WINDOW_FUNNEL
+In Databend, it's **easy** and **performance** to do it using [WINDOW_FUNNEL FUNCTION](../30-reference/20-functions/10-aggregate-functions/aggregate-windowfunnel.md)
 
-Similar to `windowFunnel` in ClickHouse (they were created by the same author), it searches for event chains in a sliding time window and calculates the maximum number of events from the chain.
+## Step 1. Databend
 
-The function works according to the algorithm:
+### 1.1 Deploy Databend
 
--   The function searches for data that triggers the first condition in the chain and sets the event counter to 1. This is the moment when the sliding window starts.
+Make sure you have installed Databend, if not please see:
 
--   If events from the chain occur sequentially within the window, the counter is incremented. If the sequence of events is disrupted, the counter isn’t incremented.
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
--   If the data has multiple event chains at varying completion points, the function will only output the size of the longest chain.
+### 1.2 Create a Databend User
 
-
-``` sql
-WINDOW_FUNNEL( <window> )( <timestamp>, <cond1>, <cond2>, ..., <condN> )
+Connect to Databend server with MySQL client:
+```shell
+mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-**Arguments**
+Create a user:
+```sql
+CREATE USER user1 IDENTIFIED BY 'abc123';
+```
 
--   `<timestamp>` — Name of the column containing the timestamp. Data types supported: integer types and datetime types.
--   `<cond>` — Conditions or data describing the chain of events. Must be `Boolean` datatype.
+Grant privileges for the user:
+```sql
+GRANT ALL ON *.* TO user1;
+```
 
-**Parameters**
+See also [How To Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
 
--   `<window>` — Length of the sliding window, it is the time interval between the first and the last condition. The unit of `window` depends on the `timestamp` itself and varies. Determined using the expression `timestamp of cond1 <= timestamp of cond2 <= ... <= timestamp of condN <= timestamp of cond1 + window`.
+### 1.3 Create a Table
 
-**Returned value**
-
-The maximum number of consecutive triggered conditions from the chain within the sliding time window.
-All the chains in the selection are analyzed.
-
-Type: `UInt8`.
-
-
-**Example**
-
-Determine if a set period of time is enough for the user to SELECT a phone and purchase it twice in the online store.
-
-Set the following chain of events:
-
-1. The user logged in to their account on the store (`event_name = 'login'`).
-2. The user land the page (`event_name = 'visit'`).
-3. The user add to the shopping cart(`event_name = 'cart'`).
-4. The user complete the purchase (`event_name = 'purchase'`).
-
+Connect to Databend server with MySQL client:
+```shell
+mysql -h127.0.0.1 -uuser1 -pabc123 -P3307 
+```
 
 ```sql
 CREATE TABLE events(user_id BIGINT, event_name VARCHAR, event_timestamp TIMESTAMP);
+```
 
+Prepare data:
+```sql
 INSERT INTO events VALUES(100123, 'login', '2022-05-14 10:01:00');
 INSERT INTO events VALUES(100123, 'visit', '2022-05-14 10:02:00');
 INSERT INTO events VALUES(100123, 'cart', '2022-05-14 10:04:00');
@@ -67,6 +61,7 @@ INSERT INTO events VALUES(100126, 'visit', '2022-05-15 12:01:00');
 ```
 
 Input table:
+```sql
 
 ``` sql
 +---------+------------+----------------------------+
@@ -84,9 +79,9 @@ Input table:
 +---------+------------+----------------------------+
 ```
 
-Find out how far the user `user_id` could get through the chain in an hour window slides.
+## Step 2. Funnel Analysis
 
-Query:
+Find out how far the user `user_id` could get through the chain in an hour window slides.
 
 ``` sql
 SELECT
@@ -102,7 +97,6 @@ FROM
 )
 GROUP BY level ORDER BY level ASC;
 ```
-
 :::tip
 
 The `event_timestamp` type is timestamp, `3600000000` is a hour time window.
@@ -125,3 +119,4 @@ Result:
 * user `100125` level is 3 (`login -> visit -> cart`).
 * User `100123` level is 4 (`login -> visit -> cart -> purchase`).
 
+**Enjoy your journey.** 
