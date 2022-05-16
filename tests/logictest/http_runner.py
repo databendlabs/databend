@@ -9,7 +9,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
     def execute_ok(self, statement):
         http = http_connector.HttpConnector()
         http.connect(**self.driver)
-        http.query_without_session(statement)
+        http.query_with_session(statement)
         return None
 
     def execute_error(self, statement):

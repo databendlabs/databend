@@ -8,9 +8,18 @@ from log import log
 
 class TestMySQL(logictest.SuiteRunner, ABC):
 
+    def __init__(self, kind):
+        super().__init__(kind)
+        self._connection = None
+
+    def get_connection(self):
+        if self._connection is not None:
+            return self._connection
+        self._connection = mysql.connector.connect(**self.driver)
+        return self._connection
+
     def execute_ok(self, statement):
-        cnx = mysql.connector.connect(**self.driver)
-        cursor = cnx.cursor()
+        cursor = self.get_connection().cursor(buffered=True)
         cursor.execute(statement)
         return None
 
@@ -24,8 +33,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         return None
 
     def execute_query(self, statement):
-        cnx = mysql.connector.connect(**self.driver)
-        cursor = cnx.cursor()
+        cursor = self.get_connection().cursor(buffered=True)
         cursor.execute(statement.text)
         r = cursor.fetchall()
         query_type = statement.s_type.query_type
