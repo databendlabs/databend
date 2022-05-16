@@ -45,5 +45,13 @@ fn test_bump_datetime() -> Result<()> {
         let duration = dt.naive_utc().sub(epoch);
         assert_eq!(duration.num_days(), DATE_MIN as i64);
     }
+
+    {
+        //1022-05-16 03:25:02.868894
+        let tz: Tz = "UTC".parse().unwrap();
+        let dt = tz.ymd(1022, 05, 16).and_hms_micro(3, 25, 02, 868894);
+        let dt2 = DateConverter::to_timestamp(&dt.timestamp_micros(), &tz);
+        assert_eq!(dt, dt2);
+    }
     Ok(())
 }
