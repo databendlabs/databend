@@ -4,9 +4,13 @@ sidebar_label: Conversion Funnel Analysis
 description: How to do conversion funnel analysis with simplicity and high performance.
 ---
 
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/learn/databend-funnel.png" width="550"/>
+</p>
+
 Funnel analysis measures the number of unique users who has performed a set of actions, and we use it to see drop-off and conversion in multi-step processes.
 
-In Databend, it's **easy** and **performance** to do it using [WINDOW_FUNNEL FUNCTION](../30-reference/20-functions/10-aggregate-functions/aggregate-windowfunnel.md)
+In Databend, it's **easy** and **performance** to do it using [WINDOW_FUNNEL FUNCTION](../30-reference/20-functions/10-aggregate-functions/aggregate-windowfunnel.md).
 
 ## Step 1. Databend
 

@@ -3,6 +3,9 @@ title: WINDOW_FUNNEL
 description: Funnel Analysis
 ---
 
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/learn/databend-funnel.png" width="550"/>
+</p>
 
 ## WINDOW_FUNNEL
 
