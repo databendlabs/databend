@@ -156,9 +156,14 @@ pub enum Expr<'a> {
         expr: Box<Expr<'a>>,
         accessor: MapAccessor<'a>,
     },
+    /// DateTimeUnit expression, like `YEAR`
     DateTimeUnit {
         span: &'a [Token<'a>],
         unit: IntervalKind,
+    /// The `Array` expr
+    Array {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
     },
 }
 
@@ -285,6 +290,7 @@ impl<'a> Expr<'a> {
             Expr::Subquery { span, .. } => span,
             Expr::MapAccess { span, .. } => span,
             Expr::DateTimeUnit { span, .. } => span,
+            Expr::Array { span, .. } => span,
         }
     }
 }
@@ -685,6 +691,11 @@ impl<'a> Display for Expr<'a> {
             }
             Expr::DateTimeUnit { unit, .. } => {
                 write!(f, "{}", unit)?;
+            }
+            Expr::Array { exprs, .. } => {
+                write!(f, "[")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, "]")?;
             }
         }
 
