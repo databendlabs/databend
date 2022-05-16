@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::S3File;
+use common_io::prelude::init_s3_operator;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
 use common_meta_types::StageType;
@@ -165,14 +165,12 @@ impl StageSource {
         } else {
             // Get the dal file reader.
             match &stage.stage_params.storage {
-                StageStorage::S3(s3) => {
-                    let endpoint = &ctx.get_config().storage.s3.endpoint_url;
-                    let bucket = &s3.bucket;
+                StageStorage::S3(cfg) => {
+                    let mut cfg = cfg.clone();
+                    // TODO(xuanwo): it's better support user input.
+                    cfg.endpoint_url = ctx.get_config().storage.s3.endpoint_url;
 
-                    let key_id = &s3.credentials_aws_key_id;
-                    let secret_key = &s3.credentials_aws_secret_key;
-
-                    S3File::open(endpoint, bucket, key_id, secret_key, "/").await
+                    init_s3_operator(&cfg).await
                 }
             }
         }

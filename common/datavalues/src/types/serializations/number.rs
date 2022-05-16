@@ -60,7 +60,7 @@ where T: PrimitiveType
         _format: &FormatSettings,
     ) -> Result<Vec<String>> {
         let column: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let result: Vec<String> = column.iter().map(|x| format!("{}", x)).collect();
+        let result: Vec<String> = column.iter().map(|x| x.to_string()).collect();
         Ok(result)
     }
 

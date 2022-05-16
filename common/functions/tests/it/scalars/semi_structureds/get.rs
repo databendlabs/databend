@@ -30,7 +30,7 @@ fn test_get_function() -> Result<()> {
                     VariantValue::from(json!({"A":3_i32,"B":4_i32})),
                     VariantValue::from(json!([1_i32, 2, 3])),
                 ]),
-                Series::from_data(vec!["a"]),
+                Series::from_data(vec!["a", "a", "a"]),
             ],
             expect: Series::from_data(vec![Some(VariantValue::from(json!(1_i32))), None, None]),
             error: "",
@@ -43,14 +43,11 @@ fn test_get_function() -> Result<()> {
                     VariantValue::from(json!(["\"a\"", "\"b\"", "\"c\""])),
                     VariantValue::from(json!({"key":"val"})),
                 ]),
-                Series::from_data(vec![0_u32, 1_u32]),
+                Series::from_data(vec![0_u32, 0, 0]),
             ],
             expect: Series::from_data(vec![
                 Some(VariantValue::from(json!(0_i32))),
                 Some(VariantValue::from(json!("\"a\""))),
-                None,
-                Some(VariantValue::from(json!(1_i32))),
-                Some(VariantValue::from(json!("\"b\""))),
                 None,
             ]),
             error: "",
@@ -59,7 +56,7 @@ fn test_get_function() -> Result<()> {
             name: "get_by_field_name_error_type",
             columns: vec![
                 Series::from_data(vec!["abc", "123"]),
-                Series::from_data(vec![0_i32]),
+                Series::from_data(vec![0_i32, 0]),
             ],
             expect: Series::from_data(vec![None::<&str>, None::<&str>]),
             error: "Invalid argument types for function 'GET': (String, Int32)",
@@ -77,15 +74,13 @@ fn test_get_ignore_case_function() -> Result<()> {
             columns: vec![
                 Series::from_data(vec![
                     VariantValue::from(json!({"aa":1_i32, "aA":2, "Aa":3})),
-                    VariantValue::from(json!([1_i32, 2, 3])),
+                    VariantValue::from(json!({"aa":1_i32, "aA":2, "Aa":3})),
                 ]),
                 Series::from_data(vec!["aA", "AA"]),
             ],
             expect: Series::from_data(vec![
                 Some(VariantValue::from(json!(2_i32))),
-                None,
                 Some(VariantValue::from(json!(1_i32))),
-                None,
             ]),
             error: "",
         },
@@ -93,7 +88,7 @@ fn test_get_ignore_case_function() -> Result<()> {
             name: "get_ignore_case_error_type",
             columns: vec![
                 Series::from_data(vec!["abc", "123"]),
-                Series::from_data(vec![0_i32]),
+                Series::from_data(vec![0_i32, 0]),
             ],
             expect: Series::from_data(vec![None::<&str>, None::<&str>]),
             error: "Invalid argument types for function 'GET_IGNORE_CASE': (String, Int32)",
@@ -109,9 +104,13 @@ fn test_get_path_function() -> Result<()> {
         ScalarFunctionTest {
             name: "get_path",
             columns: vec![
-                Series::from_data(vec![VariantValue::from(
-                    json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}}),
-                )]),
+                Series::from_data(vec![
+                    VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
+                    VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
+                    VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
+                    VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
+                    VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
+                ]),
                 Series::from_data(vec!["a[0][0]", "a.b", "o.p:q", "o['p']['q']", "o[0]"]),
             ],
             expect: Series::from_data(vec![
@@ -127,7 +126,7 @@ fn test_get_path_function() -> Result<()> {
             name: "get_path_error_type",
             columns: vec![
                 Series::from_data(vec!["abc", "123"]),
-                Series::from_data(vec![0_i32]),
+                Series::from_data(vec![0_i32, 0]),
             ],
             expect: Series::from_data(vec![None::<&str>, None::<&str>]),
             error: "Invalid argument types for function 'GET_PATH': (String, Int32)",
@@ -135,4 +134,76 @@ fn test_get_path_function() -> Result<()> {
     ];
 
     test_scalar_functions("get_path", &tests)
+}
+
+#[test]
+fn test_array_get_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "array_get_int64",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                    ArrayValue::new(vec![4_i64.into(), 5_i64.into(), 6_i64.into()]),
+                    ArrayValue::new(vec![7_i64.into(), 8_i64.into(), 9_i64.into()]),
+                ]),
+                Series::from_data(vec![0_u32, 0, 0]),
+            ],
+            expect: Series::from_data(vec![Some(1_i64), Some(4_i64), Some(7_i64)]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "array_get_string",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![
+                        "a1".as_bytes().into(),
+                        "a2".as_bytes().into(),
+                        "a3".as_bytes().into(),
+                    ]),
+                    ArrayValue::new(vec![
+                        "b1".as_bytes().into(),
+                        "b2".as_bytes().into(),
+                        "b3".as_bytes().into(),
+                    ]),
+                    ArrayValue::new(vec![
+                        "c1".as_bytes().into(),
+                        "c2".as_bytes().into(),
+                        "c3".as_bytes().into(),
+                    ]),
+                ]),
+                Series::from_data(vec![0_u32, 0, 0]),
+            ],
+            expect: Series::from_data(vec![Some("a1"), Some("b1"), Some("c1")]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "array_get_out_of_bounds",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                    ArrayValue::new(vec![4_i64.into(), 5_i64.into(), 6_i64.into()]),
+                    ArrayValue::new(vec![7_i64.into(), 8_i64.into(), 9_i64.into()]),
+                ]),
+                Series::from_data(vec![3_u32, 3, 3]),
+            ],
+            expect: Series::from_data(vec![None::<i64>, None::<i64>, None::<i64>]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "array_get_error_type",
+            columns: vec![
+                Series::from_data(vec![
+                    ArrayValue::new(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]),
+                    ArrayValue::new(vec![4_i64.into(), 5_i64.into(), 6_i64.into()]),
+                    ArrayValue::new(vec![7_i64.into(), 8_i64.into(), 9_i64.into()]),
+                ]),
+                Series::from_data(vec!["a", "a", "a"]),
+            ],
+            expect: Series::from_data(vec![None::<&str>]),
+            error: "Invalid argument types for function 'GET': (Array, String)",
+        },
+    ];
+
+    test_scalar_functions("get", &tests)
 }

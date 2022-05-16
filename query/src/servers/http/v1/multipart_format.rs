@@ -68,10 +68,13 @@ impl MultipartWorker {
                         break 'outer;
                     }
                     Ok(Some(field)) => {
+                        let filename = field.file_name().unwrap_or("Unknown file name").to_string();
+
                         if let Err(cause) = tx.send(Ok(vec![])).await {
                             common_tracing::tracing::warn!(
-                                "Multipart channel disconnect. {}",
-                                cause
+                                "Multipart channel disconnect. {}, filename '{}'",
+                                cause,
+                                filename
                             );
 
                             break 'outer;
@@ -90,13 +93,14 @@ impl MultipartWorker {
                                 }
                                 Ok(sz) => {
                                     if sz != buf.len() {
-                                        buf = buf[..sz].to_vec();
+                                        buf.truncate(sz);
                                     }
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {
                                         common_tracing::tracing::warn!(
-                                            "Multipart channel disconnect. {}",
-                                            cause
+                                            "Multipart channel disconnect. {}, filename: '{}'",
+                                            cause,
+                                            filename
                                         );
 
                                         break 'outer;
@@ -105,14 +109,16 @@ impl MultipartWorker {
                                 Err(cause) => {
                                     if let Err(cause) = tx
                                         .send(Err(ErrorCode::BadBytes(format!(
-                                            "Read part to field bytes error, cause {:?}",
-                                            cause
+                                            "Read part to field bytes error, cause {:?}, filename: '{}'",
+                                            cause,
+                                            filename
                                         ))))
                                         .await
                                     {
                                         common_tracing::tracing::warn!(
-                                            "Multipart channel disconnect. {}",
-                                            cause
+                                            "Multipart channel disconnect. {}, filename: '{}'",
+                                            cause,
+                                            filename
                                         );
                                         break 'outer;
                                     }
@@ -266,16 +272,26 @@ impl Processor for SequentialInputFormatSource {
                     data_slice = &data_slice[read_size..];
 
                     if read_size < len {
-                        let block = self.input_format.deserialize_data(&mut self.input_state)?;
-                        progress_values.rows += block.num_rows();
-                        self.data_block.push(block);
+                        let state = &mut self.input_state;
+                        let mut blocks = self.input_format.deserialize_data(state)?;
+
+                        self.data_block.reserve(blocks.len());
+                        while let Some(block) = blocks.pop() {
+                            progress_values.rows += block.num_rows();
+                            self.data_block.push(block);
+                        }
                     }
                 }
             }
             State::NeedDeserialize => {
-                let block = self.input_format.deserialize_data(&mut self.input_state)?;
-                progress_values.rows += block.num_rows();
-                self.data_block.push(block);
+                let state = &mut self.input_state;
+                let mut blocks = self.input_format.deserialize_data(state)?;
+
+                self.data_block.reserve(blocks.len());
+                while let Some(block) = blocks.pop() {
+                    progress_values.rows += block.num_rows();
+                    self.data_block.push(block);
+                }
             }
             _ => {
                 return Err(ErrorCode::LogicalError(

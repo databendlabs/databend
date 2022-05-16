@@ -21,6 +21,8 @@ use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
+use common_meta_types::protobuf::MemberListReply;
+use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::TxnReply;
@@ -91,6 +93,13 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
+        todo!()
+    }
+
+    async fn member_list(
+        &self,
+        _request: Request<MemberListRequest>,
+    ) -> Result<Response<MemberListReply>, Status> {
         todo!()
     }
 }

@@ -1,6 +1,7 @@
 ---
 title: Analyzing Github Repository With Databend
 sidebar_label: Analyzing Github Repository
+description: Use Databend analyzing Github repository step by step.
 ---
 
 # Analyzing Github Repository with Databend
@@ -9,7 +10,9 @@ Use Databend analyzing Github repository step by step.
 
 ## Step 1 
 
-Install Databend, see [How to deploy Databend with local fs](../10-deploy/00-local.md).
+Make sure you have installed Databend, if not please see:
+
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
 ## Step 2
 

@@ -29,6 +29,7 @@ mod buffer;
 mod files;
 mod format_settings;
 mod marshal;
+mod operator;
 mod options_deserializer;
 mod stat_buffer;
 mod unmarshal;

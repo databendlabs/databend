@@ -174,7 +174,7 @@ impl InputFormat for CsvInputFormat {
         })
     }
 
-    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<DataBlock> {
+    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>> {
         let mut deserializers = Vec::with_capacity(self.schema.num_fields());
         for field in self.schema.fields() {
             let data_type = field.data_type();
@@ -187,11 +187,8 @@ impl InputFormat for CsvInputFormat {
         let reader = BufferReader::new(cursor);
         let mut checkpoint_reader = CheckpointReader::new(reader);
 
-        for row_index in 0..self.min_accepted_rows {
-            if checkpoint_reader.eof()? {
-                break;
-            }
-
+        let mut row_index = 0;
+        while !checkpoint_reader.eof()? {
             for column_index in 0..deserializers.len() {
                 if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default(&self.settings);
@@ -231,6 +228,8 @@ impl InputFormat for CsvInputFormat {
                 // \r\n
                 checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
             }
+
+            row_index += 1;
         }
 
         let mut columns = Vec::with_capacity(deserializers.len());
@@ -238,7 +237,7 @@ impl InputFormat for CsvInputFormat {
             columns.push(deserializer.finish_to_column());
         }
 
-        Ok(DataBlock::create(self.schema.clone(), columns))
+        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
     }
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize> {

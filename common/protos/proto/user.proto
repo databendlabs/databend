@@ -1,0 +1,178 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+import "datatype.proto";
+import "config.proto";
+
+message AuthInfo {
+  uint64 ver = 100;
+
+  message None {}
+  message Password {
+    enum PasswordHashMethod {
+      PlainText = 0;
+      DoubleSha1 = 1;
+      Sha256 = 2;
+    }
+    bytes hash_value = 1;
+    PasswordHashMethod hash_method = 2;
+  }
+  message JWT {}
+
+  oneof info {
+    None none = 1;
+    Password password = 2;
+    JWT jwt = 3;
+  }
+}
+
+message GrantObject {
+  uint64 ver = 100;
+
+  message GrantGlobalObject {}
+
+  message GrantDatabaseObject {
+    string catalog = 1;
+    string db = 2;
+  }
+
+  message GrantTableObject {
+    string catalog = 1;
+    string db = 2;
+    string table = 3;
+  }
+
+  oneof object {
+    GrantGlobalObject global = 1;
+    GrantDatabaseObject database = 2;
+    GrantTableObject table = 3;
+  }
+}
+
+message GrantEntry {
+  uint64 ver = 100;
+  GrantObject object = 1;
+  uint64 privileges = 2;
+}
+
+message UserGrantSet {
+  uint64 ver = 100;
+  repeated GrantEntry entries = 1;
+  map<string, bool> roles = 2;
+}
+
+message UserQuota {
+  uint64 ver = 100;
+  uint64 max_cpu = 1;
+  uint64 max_memory_in_bytes = 2;
+  uint64 max_storage_in_bytes = 3;
+}
+
+message UserOption {
+  uint64 ver = 100;
+  uint64 flags = 1;
+}
+
+message UserInfo {
+  uint64 ver = 100;
+
+  string name = 1;
+  string hostname = 2;
+  AuthInfo auth_info = 3;
+  UserGrantSet grants = 4;
+  UserQuota quota = 5;
+  UserOption option = 6;
+}
+
+message UserStageInfo {
+  uint64 ver = 100;
+
+  enum StageType {
+    Interval = 0;
+    External = 1;
+  }
+
+  message StageStorage {
+    oneof storage { S3StorageConfig s3 = 1; }
+  }
+
+  message StageParams { StageStorage storage = 1; }
+
+  enum StageFileFormatType {
+    Csv = 0;
+    Json = 1;
+    Avro = 2;
+    Orc = 3;
+    Parquet = 4;
+    Xml = 5;
+  }
+
+  enum StageFileCompression {
+    Auto = 0;
+    Gzip = 1;
+    Bz2 = 2;
+    Brotli = 3;
+    Zstd = 4;
+    Deflate = 5;
+    RawDeflate = 6;
+    Lzo = 7;
+    Snappy = 8;
+    None = 9;
+  }
+
+  message FileFormatOptions {
+    uint64 ver = 100;
+
+    StageFileFormatType format = 1;
+    // Number of lines at the start of the file to skip.
+    uint64 skip_header = 2;
+
+    string field_delimiter = 3;
+
+    string record_delimiter = 4;
+
+    StageFileCompression compression = 5;
+  }
+
+  message OnErrorMode {
+    oneof mode {
+      Empty None = 1;
+      Empty Continue = 2;
+      Empty SkipFile = 3;
+      uint64 SkipFileNum = 4;
+      Empty AbortStatement = 5;
+    }
+  }
+
+  message CopyOptions {
+    OnErrorMode on_error = 1;
+    uint64 size_limit = 2;
+  }
+
+  string stage_name = 1;
+
+  StageType stage_type = 2;
+
+  StageParams stage_params = 3;
+
+  FileFormatOptions file_format_options = 4;
+
+  CopyOptions copy_options = 5;
+
+  string comment = 6;
+}

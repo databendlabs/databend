@@ -23,6 +23,7 @@ use once_cell::sync::Lazy;
 
 use crate::formats::format::InputFormat;
 use crate::formats::format_csv::CsvInputFormat;
+use crate::formats::format_parquet::ParquetInputFormat;
 
 pub type InputFormatFactoryCreator =
     Box<dyn Fn(&str, DataSchemaRef, FormatSettings) -> Result<Box<dyn InputFormat>> + Send + Sync>;
@@ -35,6 +36,7 @@ static FORMAT_FACTORY: Lazy<Arc<FormatFactory>> = Lazy::new(|| {
     let mut format_factory = FormatFactory::create();
 
     CsvInputFormat::register(&mut format_factory);
+    ParquetInputFormat::register(&mut format_factory);
 
     Arc::new(format_factory)
 });

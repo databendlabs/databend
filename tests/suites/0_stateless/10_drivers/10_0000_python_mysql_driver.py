@@ -40,7 +40,8 @@ res = mycursor.fetchall()
 assert res == [('t1',)]
 mycursor.execute("SHOW FULL TABLES FROM db1")
 res = mycursor.fetchall()
-assert res == [('t1', 'BASE TABLE')]
+assert res == [('t1', 'BASE TABLE', 'db1', 'Memory',
+                '1970-01-01 00:00:00.000 +0000', None, None, None, None)], res
 sql3 = "SELECT COUNT(*) FROM db1.t1 WHERE a = %s" % (
     "\"Test Some Inser\\\"'`ts\"")
 mycursor.execute(sql3)

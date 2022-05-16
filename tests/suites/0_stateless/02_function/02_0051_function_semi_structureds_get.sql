@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS t3(id Int null, str String null) Engine = Memory;
 
 insert into t3 values(1, '[1,2,3,["a","b","c"]]'), (2, '{"a":1,"b":{"c":2}}');
 
+CREATE TABLE IF NOT EXISTS t4(id Int null, arr Array(Int64) null) Engine = Memory;
+
+insert into t4 values(1, [10,20,30,40]), (2, [50,60,70,80]);
+
 select '==get from table==';
 select get(arr, 0) from t1;
 select get(arr, 'a') from t1;
@@ -67,5 +71,11 @@ select id, json_extract_path_text(str, 'a') from t3;
 select id, json_extract_path_text(str, '["a"]') from t3;
 select id, json_extract_path_text(str, 'b.c') from t3;
 select id, json_extract_path_text(str, '["b"]["c"]') from t3;
+
+select '==get from array table==';
+select id, get(arr, 0) from t4;
+select id, get(arr, 1) from t4;
+select id, get(arr, 4) from t4;  
+select id, get(arr, 'a') from t4; -- {ErrorCode 1007}
 
 DROP DATABASE db1;

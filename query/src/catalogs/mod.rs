@@ -13,18 +13,15 @@
 // limitations under the License.
 
 mod catalog;
-mod catalog_context;
-mod table_id_ranges;
-mod table_memory_meta;
 
-mod backends;
-mod impls;
+mod catalog_manager;
+pub mod default;
+#[cfg(feature = "hive")]
+pub mod hive;
 
-pub use backends::MetaBackend;
 pub use catalog::Catalog;
-pub use catalog_context::CatalogContext;
-pub use impls::DatabaseCatalog;
-pub use impls::ImmutableCatalog;
-pub use impls::MutableCatalog;
-pub use table_id_ranges::*;
-pub use table_memory_meta::InMemoryMetas;
+pub use catalog_manager::CatalogManager;
+pub use catalog_manager::CATALOG_DEFAULT;
+pub use default::table_id_ranges::*;
+pub use default::table_memory_meta::InMemoryMetas;
+pub use default::DatabaseCatalog;

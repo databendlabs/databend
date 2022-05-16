@@ -23,11 +23,15 @@ runs:
       if: "contains(inputs.target, 'apple')"
       run: rustup target add ${{ inputs.target }}
 
+    - shell: bash
+      if: "contains(inputs.target, 'apple')"
+      run: brew install thrift
+
     - name: Setup Build Tool
       if: "contains(inputs.target, 'linux')"
       uses: ./.github/actions/setup_build_tool
       with:
-        image: multiarch
+        image: ${{ inputs.target }}
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1

@@ -24,7 +24,7 @@ pub struct MutableArrayColumn {
     inner_data_type: DataTypeImpl,
     last_offset: usize,
     offsets: Vec<i64>,
-    inner_column: Box<dyn MutableColumn>,
+    pub inner_column: Box<dyn MutableColumn>,
 }
 
 impl MutableArrayColumn {

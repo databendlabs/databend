@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
+use common_meta_types::UserDefinedFunction;
 use common_planners::Expression;
 use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Expr;
@@ -49,18 +50,67 @@ use crate::sql::SQLCommon;
 #[derive(Clone)]
 pub struct ExpressionAnalyzer {
     context: Arc<QueryContext>,
+    udfs: Vec<UserDefinedFunction>,
 }
 
 impl ExpressionAnalyzer {
     pub fn create(context: Arc<QueryContext>) -> ExpressionAnalyzer {
-        ExpressionAnalyzer { context }
+        ExpressionAnalyzer {
+            context,
+            udfs: vec![],
+        }
+    }
+
+    pub fn create_with_udfs_support(
+        context: Arc<QueryContext>,
+        udfs: Vec<UserDefinedFunction>,
+    ) -> ExpressionAnalyzer {
+        ExpressionAnalyzer { context, udfs }
+    }
+
+    pub fn analyze_sync(&self, expr: &Expr) -> Result<Expression> {
+        let mut stack = Vec::new();
+
+        // Build RPN for expr. Because async function unsupported recursion
+        for rpn_item in &ExprRPNBuilder::build(expr, self.udfs.clone())? {
+            match rpn_item {
+                ExprRPNItem::Value(v) => Self::analyze_value(
+                    v,
+                    &mut stack,
+                    self.context.get_current_session().get_type(),
+                )?,
+                ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
+                ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
+                ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
+                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
+                ExprRPNItem::Cast(v, pg_style) => self.analyze_cast(v, *pg_style, &mut stack)?,
+                ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
+                ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
+                ExprRPNItem::MapAccess(v) => self.analyze_map_access(v, &mut stack)?,
+                ExprRPNItem::Array(v) => self.analyze_array(*v, &mut stack)?,
+
+                _ => {
+                    return Err(ErrorCode::LogicalError(format!(
+                        "Logical error: can't analyze {:?} in sync mode, it's a bug",
+                        expr
+                    )))
+                }
+            }
+        }
+
+        match stack.len() {
+            1 => Ok(stack.remove(0)),
+            _ => Err(ErrorCode::LogicalError(
+                "Logical error: this is expr rpn bug.",
+            )),
+        }
     }
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
         let mut stack = Vec::new();
 
         // Build RPN for expr. Because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr).await? {
+        for rpn_item in &ExprRPNBuilder::build(expr, self.udfs.clone())? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(
                     v,
@@ -89,9 +139,9 @@ impl ExpressionAnalyzer {
         }
     }
 
-    pub async fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
+    pub fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => self.analyze(expr).await,
+            FunctionArgExpr::Expr(expr) => self.analyze_sync(expr),
             FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported arg statement: {}",
@@ -183,7 +233,6 @@ impl ExpressionAnalyzer {
         }
     }
 
-    /// Function to process when args's size is more than 2.
     fn other_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
         let query_context = self.context.clone();
         let context_args = ContextFunction::build_args_from_ctx(query_context, &info.name)?;
@@ -283,8 +332,8 @@ impl ExpressionAnalyzer {
         let query_context = self.context.clone();
         let subquery_context = QueryContext::create_from(query_context.clone());
 
-        let analyze_subquery = statement.analyze(subquery_context);
-        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
+        let analyze_subquery = statement.analyze(subquery_context).await;
+        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery? {
             let subquery_plan = PlanParser::build_query_plan(&analyze_data)?;
             return Ok(Expression::Subquery {
                 name: query_context.get_subquery_name(&subquery_plan),
@@ -308,8 +357,8 @@ impl ExpressionAnalyzer {
         let query_context = self.context.clone();
         let subquery_context = QueryContext::create_from(query_context.clone());
 
-        let analyze_subquery = statement.analyze(subquery_context);
-        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
+        let analyze_subquery = statement.analyze(subquery_context).await?;
+        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery {
             let subquery_plan = PlanParser::build_query_plan(&analyze_data)?;
             args.push(Expression::ScalarSubquery {
                 name: query_context.get_subquery_name(&subquery_plan),
@@ -385,37 +434,39 @@ impl ExpressionAnalyzer {
                 "MapAccess operator must be one children.",
             )),
             Some(inner_expr) => {
-                let path_name: String = keys
-                    .iter()
-                    .enumerate()
-                    .map(|(i, k)| match k {
-                        k @ Value::Number(_, _) => format!("[{}]", k),
-                        Value::SingleQuotedString(s) => format!("[\"{}\"]", s),
-                        Value::ColonString(s) => {
-                            let key = if i == 0 {
-                                s.to_string()
-                            } else {
-                                format!(":{}", s)
-                            };
-                            key
-                        }
-                        Value::PeriodString(s) => format!(".{}", s),
-                        _ => format!("[{}]", k),
-                    })
-                    .collect();
-
-                let name = match keys[0] {
-                    Value::ColonString(_) => format!("{}:{}", inner_expr.column_name(), path_name),
-                    _ => format!("{}{}", inner_expr.column_name(), path_name),
+                let name = match &keys[0] {
+                    k @ Value::Number(_, _) => format!("{}[{}]", inner_expr.column_name(), k),
+                    Value::SingleQuotedString(s) => {
+                        format!("{}['{}']", inner_expr.column_name(), s)
+                    }
+                    Value::DoubleQuotedString(s) => {
+                        format!("{}[\"{}\"]", inner_expr.column_name(), s)
+                    }
+                    Value::ColonString(s) => format!("{}:{}", inner_expr.column_name(), s),
+                    Value::PeriodString(s) => format!("{}.{}", inner_expr.column_name(), s),
+                    _ => format!("{}[{}]", inner_expr.column_name(), keys[0]),
                 };
-                let path =
-                    Expression::create_literal(DataValue::String(path_name.as_bytes().to_vec()));
-                let arguments = vec![inner_expr, path];
+
+                let path_expr = match &keys[0] {
+                    Value::Number(value, _) => Expression::create_literal(
+                        DataValue::try_from_literal(value, None).unwrap(),
+                    ),
+                    Value::SingleQuotedString(s)
+                    | Value::DoubleQuotedString(s)
+                    | Value::ColonString(s)
+                    | Value::PeriodString(s) => Expression::create_literal(s.as_bytes().into()),
+                    _ => Expression::create_literal(keys[0].to_string().as_bytes().into()),
+                };
+                let arguments = vec![inner_expr, path_expr];
 
                 args.push(Expression::MapAccess {
                     name,
                     args: arguments,
                 });
+                // convert map access v[0][1] to function get(get(v, 0), 1)
+                if keys.len() > 1 {
+                    self.analyze_map_access(&keys[1..], args)?;
+                }
                 Ok(())
             }
         }
@@ -517,16 +568,16 @@ impl ExprRPNItem {
 
 struct ExprRPNBuilder {
     rpn: Vec<ExprRPNItem>,
-    context: Arc<QueryContext>,
+    udfs: Vec<UserDefinedFunction>,
 }
 
 impl ExprRPNBuilder {
-    pub async fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
+    pub fn build(expr: &Expr, udfs: Vec<UserDefinedFunction>) -> Result<Vec<ExprRPNItem>> {
         let mut builder = ExprRPNBuilder {
-            context,
             rpn: Vec::new(),
+            udfs,
         };
-        UDFExprTraverser::accept(expr, &mut builder).await?;
+        UDFExprTraverser::accept(expr, &mut builder)?;
         Ok(builder.rpn)
     }
 
@@ -689,35 +740,31 @@ impl ExprRPNBuilder {
 
 #[async_trait]
 impl UDFFetcher for ExprRPNBuilder {
-    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
-        let tenant = self.context.get_tenant();
-        let udf = self
-            .context
-            .get_user_manager()
-            .get_udf(&tenant, name)
-            .await?;
-        let mut udf_parser = UDFParser::default();
-        let definition = udf_parser
-            .parse(&udf.name, &udf.parameters, &udf.definition)
-            .await?;
+    fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
+        let udf = self.udfs.iter().find(|udf| udf.name == name);
 
-        Ok(UDFDefinition::new(udf.parameters, definition))
+        if let Some(udf) = udf {
+            let mut udf_parser = UDFParser::default();
+            let definition = udf_parser.parse(&udf.name, &udf.parameters, &udf.definition)?;
+            return Ok(UDFDefinition::new(udf.parameters.clone(), definition));
+        }
+        Err(ErrorCode::UnknownUDF(format!("Unknown Function {}", name)))
     }
 }
 
 #[async_trait]
 impl UDFExprVisitor for ExprRPNBuilder {
-    async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
             if !is_builtin_function(&function.name.to_string()) {
-                return UDFTransformer::transform_function(function, self).await;
+                return UDFTransformer::transform_function(function, self);
             }
         }
 
         Ok(expr.clone())
     }
 
-    async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
+    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         self.process_expr(expr)
     }
 

@@ -1,6 +1,7 @@
 ---
 title: Analyzing Nginx Access Logs With Databend
 sidebar_label: Analyzing Nginx Logs
+description: Use Databend analyzing Nginx access logs step by step.
 ---
 
 <p align="center">
@@ -18,14 +19,9 @@ Lets ingesting Nginx access logs into Databend from Vector step by step.
 
 ### 1.1 Deploy Databend
 
-Make sure you have installed Databend, if not please see(Choose one):
+Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend With Amazon S3](../10-deploy/01-s3.md)
-* [How to Deploy Databend With Tencent COS](../10-deploy/02-cos.md)
-* [How to Deploy Databend With Alibaba OSS](../10-deploy/03-oss.md)
-* [How to Deploy Databend With Wasabi](../10-deploy/05-wasabi.md)
-* [How to Deploy Databend With Scaleway OS](../10-deploy/06-scw.md)
-
+* [How to Deploy Databend](../00-guides/index.md#deployment)
 
 ### 1.2 Create a Database and Table
 

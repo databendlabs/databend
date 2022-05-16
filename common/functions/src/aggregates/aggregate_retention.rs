@@ -21,7 +21,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
-use serde_json::json;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
@@ -66,7 +65,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     fn return_type(&self) -> Result<DataTypeImpl> {
-        Ok(VariantValue::to_data_type())
+        Ok(ArrayType::new_impl(UInt8Type::new_impl()))
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -142,18 +141,20 @@ impl AggregateFunction for AggregateRetentionFunction {
         array: &mut dyn common_datavalues::MutableColumn,
     ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let builder: &mut MutableObjectColumn<VariantValue> =
-            Series::check_get_mutable_column(array)?;
-        let mut vec: Vec<u8> = vec![0; self.events_size as usize];
+        let builder: &mut MutableArrayColumn = Series::check_get_mutable_column(array)?;
+        let inner_column: &mut MutablePrimitiveColumn<u8> =
+            Series::check_get_mutable_column(builder.inner_column.as_mut())?;
         if state.events & 1 == 1 {
-            vec[0] = 1;
+            inner_column.append_value(1u8);
             for i in 1..self.events_size {
                 if state.events & (1 << i) != 0 {
-                    vec[i as usize] = 1;
+                    inner_column.append_value(1u8);
+                } else {
+                    inner_column.append_value(0u8);
                 }
             }
         }
-        builder.append_value(VariantValue::from(json!(vec)));
+        builder.add_offset(self.events_size as usize);
         Ok(())
     }
 

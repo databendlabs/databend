@@ -104,7 +104,7 @@ impl MetaSrvTestContext {
 
         config.raft_config.id = id;
 
-        config.raft_config.config_id = format!("{}", config_id);
+        config.raft_config.config_id = config_id.to_string();
 
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
@@ -149,10 +149,10 @@ impl MetaSrvTestContext {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<MetaGrpcClient>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
         Ok(client)
     }
 

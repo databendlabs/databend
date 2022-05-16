@@ -109,6 +109,15 @@ impl SledKeySpace for ClientLastResps {
     type V = ClientLastRespValue;
 }
 
+/// Key-Value types for meta service addrs in sled::Tree:
+pub struct MetaSrvAddrs {}
+impl SledKeySpace for MetaSrvAddrs {
+    const PREFIX: u8 = 11;
+    const NAME: &'static str = "metasrv-addr";
+    type K = String;
+    type V = String;
+}
+
 /// Enum of key-value pair types of all key spaces.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KeySpaceKV {
@@ -143,5 +152,9 @@ pub enum KeySpaceKV {
     LogMeta {
         key: <LogMeta as SledKeySpace>::K,
         value: <LogMeta as SledKeySpace>::V,
+    },
+    MetaSrvAddrs {
+        key: <MetaSrvAddrs as SledKeySpace>::K,
+        value: <MetaSrvAddrs as SledKeySpace>::V,
     },
 }

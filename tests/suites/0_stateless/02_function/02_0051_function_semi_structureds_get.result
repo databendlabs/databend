@@ -48,3 +48,10 @@ NULL
 2	2
 1	NULL
 2	2
+==get from array table==
+1	10
+2	50
+1	20
+2	60
+1	NULL
+2	NULL

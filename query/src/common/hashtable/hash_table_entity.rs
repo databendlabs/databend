@@ -86,7 +86,7 @@ where
 
     unsafe fn not_equals_key(self: *mut Self, other: *mut Self) -> bool {
         if Key::BEFORE_EQ_HASH && (*self).hash != (*other).hash {
-            return false;
+            return true;
         }
 
         !((*self).key == (*other).key)

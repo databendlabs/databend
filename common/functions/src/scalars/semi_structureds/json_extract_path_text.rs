@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::scalars::semi_structureds::get::extract_value_by_path;
-use crate::scalars::semi_structureds::get::parse_path_keys;
+use crate::scalars::semi_structureds::get_path::extract_value_by_path;
+use crate::scalars::semi_structureds::get_path::parse_path_keys;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -74,46 +74,46 @@ impl Function for JsonExtractPathTextFunction {
         let path_keys = parse_path_keys(columns[1].column())?;
 
         let data_type = columns[0].field().data_type();
-        if !data_type.data_type_id().is_string() && !data_type.data_type_id().is_variant() {
-            let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
-            for _ in 0..input_rows {
-                builder.append_null();
-            }
-            return Ok(builder.build(input_rows));
-        }
-
-        let mut builder = ColumnBuilder::<VariantValue>::with_capacity(input_rows);
         let serializer = data_type.create_serializer();
         // TODO(veeupup): check if we can use default format_settings
         let format = FormatSettings::default();
-        match serializer.serialize_json_object(columns[0].column(), None, &format) {
-            Ok(values) => {
-                for v in values {
-                    builder.append(&VariantValue::from(v));
-                }
-            }
-            Err(e) => return Err(e),
-        }
-        let variant_column = builder.build(input_rows);
-        let column = extract_value_by_path(&variant_column, path_keys, input_rows, false)?;
-
-        // convert VariantColumn to StringColumn
-        let (_, valids) = column.validity();
-        let nullable_column: &NullableColumn = Series::check_get(&column)?;
-        let column = nullable_column.inner();
-        let c: &VariantColumn = Series::check_get(column)?;
+        let values = serializer.serialize_json_object(columns[0].column(), None, &format)?;
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
-        for (i, v) in c.iter().enumerate() {
-            if let Some(valids) = valids {
-                if !valids.get_bit(i) {
-                    builder.append_null();
-                    continue;
+        if columns[0].column().is_const() {
+            let value = values.get(0).unwrap();
+            for i in 0..input_rows {
+                let path_key = path_keys.get(i).unwrap();
+                match extract_value_by_path(value, path_key) {
+                    Some(child_value) => {
+                        builder.append(child_value.to_string().as_bytes(), true);
+                    }
+                    None => builder.append_null(),
                 }
             }
-            builder.append(v.as_ref().to_string().as_bytes(), true);
+        } else if columns[1].column().is_const() {
+            let path_key = path_keys.get(0).unwrap();
+            for i in 0..input_rows {
+                let value = values.get(i).unwrap();
+                match extract_value_by_path(value, path_key) {
+                    Some(child_value) => {
+                        builder.append(child_value.to_string().as_bytes(), true);
+                    }
+                    None => builder.append_null(),
+                }
+            }
+        } else {
+            for i in 0..input_rows {
+                let path_key = path_keys.get(i).unwrap();
+                let value = values.get(i).unwrap();
+                match extract_value_by_path(value, path_key) {
+                    Some(child_value) => {
+                        builder.append(child_value.to_string().as_bytes(), true);
+                    }
+                    None => builder.append_null(),
+                }
+            }
         }
-
         Ok(builder.build(input_rows))
     }
 }

@@ -29,6 +29,7 @@ bitflags! {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct OptimizeTablePlan {
+    pub catalog: String,
     pub database: String,
     pub table: String,
     pub operation: Optimization,

@@ -15,113 +15,146 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_datavalues::IntervalKind;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::parser::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
+pub enum Expr<'a> {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        database: Option<Identifier>,
-        table: Option<Identifier>,
-        column: Identifier,
+        span: &'a [Token<'a>],
+        database: Option<Identifier<'a>>,
+        table: Option<Identifier<'a>>,
+        column: Identifier<'a>,
     },
     /// `IS [ NOT ] NULL` expression
-    IsNull { expr: Box<Expr>, not: bool },
+    IsNull {
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        not: bool,
+    },
     /// `[ NOT ] IN (expr, ...)`
     InList {
-        expr: Box<Expr>,
-        list: Vec<Expr>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        list: Vec<Expr<'a>>,
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
-        expr: Box<Expr>,
-        subquery: Box<Query>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        subquery: Box<Query<'a>>,
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
-        expr: Box<Expr>,
-        low: Box<Expr>,
-        high: Box<Expr>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        low: Box<Expr<'a>>,
+        high: Box<Expr<'a>>,
         not: bool,
     },
     /// Binary operation
     BinaryOp {
+        span: &'a [Token<'a>],
         op: BinaryOperator,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: Box<Expr<'a>>,
+        right: Box<Expr<'a>>,
     },
     /// Unary operation
-    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    UnaryOp {
+        span: &'a [Token<'a>],
+        op: UnaryOperator,
+        expr: Box<Expr<'a>>,
+    },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        expr: Box<Expr>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        expr: Box<Expr>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
-    /// EXTRACT(DateTimeField FROM <expr>)
+    /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
-        field: DateTimeField,
-        expr: Box<Expr>,
+        span: &'a [Token<'a>],
+        kind: IntervalKind,
+        expr: Box<Expr<'a>>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        substr_expr: Box<Expr>,
-        str_expr: Box<Expr>,
+        span: &'a [Token<'a>],
+        substr_expr: Box<Expr<'a>>,
+        str_expr: Box<Expr<'a>>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
-        expr: Box<Expr>,
-        substring_from: Option<Box<Expr>>,
-        substring_for: Option<Box<Expr>>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        substring_from: Option<Box<Expr<'a>>>,
+        substring_for: Option<Box<Expr<'a>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
-        expr: Box<Expr>,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr>)>,
+        trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
     },
     /// A literal value, such as string, number, date or NULL
-    Literal(Literal),
+    Literal { span: &'a [Token<'a>], lit: Literal },
     /// `COUNT(*)` expression
-    CountAll,
+    CountAll { span: &'a [Token<'a>] },
     /// `(foo, bar)`
-    Tuple { exprs: Vec<Expr> },
+    Tuple {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
+    },
     /// Scalar function call
     FunctionCall {
+        span: &'a [Token<'a>],
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: Identifier,
-        args: Vec<Expr>,
+        name: Identifier<'a>,
+        args: Vec<Expr<'a>>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
+        span: &'a [Token<'a>],
+        operand: Option<Box<Expr<'a>>>,
+        conditions: Vec<Expr<'a>>,
+        results: Vec<Expr<'a>>,
+        else_result: Option<Box<Expr<'a>>>,
     },
     /// `EXISTS` expression
-    Exists(Box<Query>),
+    Exists {
+        span: &'a [Token<'a>],
+        subquery: Box<Query<'a>>,
+    },
     /// Scalar subquery, which will only return a single row with a single column.
-    Subquery(Box<Query>),
-    // TODO(andylokandy): allow interval, function, and others alike to be a key
+    Subquery {
+        span: &'a [Token<'a>],
+        subquery: Box<Query<'a>>,
+    },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
-        expr: Box<Expr>,
-        accessor: MapAccessor,
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        accessor: MapAccessor<'a>,
     },
 }
 
@@ -139,13 +172,13 @@ pub enum Literal {
 
 /// The display style for a map access expression
 #[derive(Debug, Clone, PartialEq)]
-pub enum MapAccessor {
+pub enum MapAccessor<'a> {
     /// `[0][1]`
     Bracket { key: Literal },
     /// `.a.b`
-    Period { key: Identifier },
+    Period { key: Identifier<'a> },
     /// `:a:b`
-    Colon { key: Identifier },
+    Colon { key: Identifier<'a> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -173,33 +206,7 @@ pub enum TypeName {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interval {
     pub value: String,
-    pub field: DateTimeField,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum DateTimeField {
-    Year,
-    Month,
-    Week,
-    Day,
-    Hour,
-    Minute,
-    Second,
-    Century,
-    Decade,
-    Dow,
-    Doy,
-    Epoch,
-    Isodow,
-    Isoyear,
-    Julian,
-    Microseconds,
-    Millenium,
-    Milliseconds,
-    Quarter,
-    Timezone,
-    TimezoneHour,
-    TimezoneMinute,
+    pub kind: IntervalKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -247,6 +254,34 @@ pub enum UnaryOperator {
     Plus,
     Minus,
     Not,
+}
+
+impl<'a> Expr<'a> {
+    pub fn span(&self) -> &'a [Token<'a>] {
+        match self {
+            Expr::ColumnRef { span, .. } => span,
+            Expr::IsNull { span, .. } => span,
+            Expr::InList { span, .. } => span,
+            Expr::InSubquery { span, .. } => span,
+            Expr::Between { span, .. } => span,
+            Expr::BinaryOp { span, .. } => span,
+            Expr::UnaryOp { span, .. } => span,
+            Expr::Cast { span, .. } => span,
+            Expr::TryCast { span, .. } => span,
+            Expr::Extract { span, .. } => span,
+            Expr::Position { span, .. } => span,
+            Expr::Substring { span, .. } => span,
+            Expr::Trim { span, .. } => span,
+            Expr::Literal { span, .. } => span,
+            Expr::CountAll { span } => span,
+            Expr::Tuple { span, .. } => span,
+            Expr::FunctionCall { span, .. } => span,
+            Expr::Case { span, .. } => span,
+            Expr::Exists { span, .. } => span,
+            Expr::Subquery { span, .. } => span,
+            Expr::MapAccess { span, .. } => span,
+        }
+    }
 }
 
 impl Display for UnaryOperator {
@@ -415,35 +450,6 @@ impl Display for TypeName {
     }
 }
 
-impl Display for DateTimeField {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.write_str(match self {
-            DateTimeField::Year => "YEAR",
-            DateTimeField::Month => "MONTH",
-            DateTimeField::Week => "WEEK",
-            DateTimeField::Day => "DAY",
-            DateTimeField::Hour => "HOUR",
-            DateTimeField::Minute => "MINUTE",
-            DateTimeField::Second => "SECOND",
-            DateTimeField::Century => "CENTURY",
-            DateTimeField::Decade => "DECADE",
-            DateTimeField::Dow => "DOW",
-            DateTimeField::Doy => "DOY",
-            DateTimeField::Epoch => "EPOCH",
-            DateTimeField::Isodow => "ISODOW",
-            DateTimeField::Isoyear => "ISOYEAR",
-            DateTimeField::Julian => "JULIAN",
-            DateTimeField::Microseconds => "MICROSECONDS",
-            DateTimeField::Millenium => "MILLENIUM",
-            DateTimeField::Milliseconds => "MILLISECONDS",
-            DateTimeField::Quarter => "QUARTER",
-            DateTimeField::Timezone => "TIMEZONE",
-            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
-            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
-        })
-    }
-}
-
 impl Display for TrimWhere {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.write_str(match self {
@@ -474,7 +480,7 @@ impl Display for Literal {
                 write!(f, "CURRENT_TIMESTAMP")
             }
             Literal::Interval(interval) => {
-                write!(f, "INTERVAL {} {}", interval.value, interval.field)
+                write!(f, "INTERVAL {} {}", interval.value, interval.kind)
             }
             Literal::Null => {
                 write!(f, "NULL")
@@ -483,24 +489,34 @@ impl Display for Literal {
     }
 }
 
-impl Display for Expr {
+impl<'a> Display for Expr<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::ColumnRef {
                 database,
                 table,
                 column,
+                ..
             } => {
-                write_period_separated_list(f, database.iter().chain(table).chain(Some(column)))?;
+                if f.alternate() {
+                    write!(f, "{}", column.name)?;
+                } else {
+                    write_period_separated_list(
+                        f,
+                        database.iter().chain(table).chain(Some(column)),
+                    )?;
+                }
             }
-            Expr::IsNull { expr, not } => {
+            Expr::IsNull { expr, not, .. } => {
                 write!(f, "{expr} IS")?;
                 if *not {
                     write!(f, " NOT")?;
                 }
                 write!(f, " NULL")?;
             }
-            Expr::InList { expr, list, not } => {
+            Expr::InList {
+                expr, list, not, ..
+            } => {
                 write!(f, "{expr}")?;
                 if *not {
                     write!(f, " NOT")?;
@@ -513,6 +529,7 @@ impl Display for Expr {
                 expr,
                 subquery,
                 not,
+                ..
             } => {
                 write!(f, "{expr}")?;
                 if *not {
@@ -525,6 +542,7 @@ impl Display for Expr {
                 low,
                 high,
                 not,
+                ..
             } => {
                 write!(f, "{expr}")?;
                 if *not {
@@ -532,16 +550,19 @@ impl Display for Expr {
                 }
                 write!(f, " BETWEEN {low} AND {high}")?;
             }
-            Expr::UnaryOp { op, expr } => {
+            Expr::UnaryOp { op, expr, .. } => {
                 write!(f, "{op} {expr}")?;
             }
-            Expr::BinaryOp { op, left, right } => {
+            Expr::BinaryOp {
+                op, left, right, ..
+            } => {
                 write!(f, "{left} {op} {right}")?;
             }
             Expr::Cast {
                 expr,
                 target_type,
                 pg_style,
+                ..
             } => {
                 if *pg_style {
                     write!(f, "{expr}::{target_type}")?;
@@ -549,15 +570,20 @@ impl Display for Expr {
                     write!(f, "CAST({expr} AS {target_type})")?;
                 }
             }
-            Expr::TryCast { expr, target_type } => {
+            Expr::TryCast {
+                expr, target_type, ..
+            } => {
                 write!(f, "TRY_CAST({expr} AS {target_type})")?;
             }
-            Expr::Extract { field, expr } => {
+            Expr::Extract {
+                kind: field, expr, ..
+            } => {
                 write!(f, "EXTRACT({field} FROM {expr})")?;
             }
             Expr::Position {
                 substr_expr,
                 str_expr,
+                ..
             } => {
                 write!(f, "POSITION({substr_expr} IN {str_expr})")?;
             }
@@ -565,6 +591,7 @@ impl Display for Expr {
                 expr,
                 substring_from,
                 substring_for,
+                ..
             } => {
                 write!(f, "SUBSTRING({expr}")?;
                 if let Some(substring_from) = substring_from {
@@ -575,20 +602,22 @@ impl Display for Expr {
                 }
                 write!(f, ")")?;
             }
-            Expr::Trim { expr, trim_where } => {
+            Expr::Trim {
+                expr, trim_where, ..
+            } => {
                 write!(f, "TRIM(")?;
                 if let Some((trim_where, trim_str)) = trim_where {
                     write!(f, "{trim_where} {trim_str} FROM ")?;
                 }
                 write!(f, "{expr})")?;
             }
-            Expr::Literal(lit) => {
+            Expr::Literal { lit, .. } => {
                 write!(f, "{lit}")?;
             }
-            Expr::CountAll => {
+            Expr::CountAll { .. } => {
                 write!(f, "COUNT(*)")?;
             }
-            Expr::Tuple { exprs } => {
+            Expr::Tuple { exprs, .. } => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, exprs)?;
                 if exprs.len() == 1 {
@@ -601,6 +630,7 @@ impl Display for Expr {
                 name,
                 args,
                 params,
+                ..
             } => {
                 write!(f, "{name}")?;
                 if !params.is_empty() {
@@ -620,6 +650,7 @@ impl Display for Expr {
                 conditions,
                 results,
                 else_result,
+                ..
             } => {
                 write!(f, "CASE")?;
                 if let Some(op) = operand {
@@ -633,13 +664,13 @@ impl Display for Expr {
                 }
                 write!(f, " END")?;
             }
-            Expr::Exists(subquery) => {
+            Expr::Exists { subquery, .. } => {
                 write!(f, "EXITS ({subquery})")?;
             }
-            Expr::Subquery(subquery) => {
+            Expr::Subquery { subquery, .. } => {
                 write!(f, "({subquery})")?;
             }
-            Expr::MapAccess { expr, accessor } => {
+            Expr::MapAccess { expr, accessor, .. } => {
                 write!(f, "{}", expr)?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,

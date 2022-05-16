@@ -86,19 +86,24 @@ impl Processor for AggregatorFinalTransform {
         let start = Instant::now();
         let arena = bumpalo::Bump::new();
 
-        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
-        let places: Vec<usize> = {
-            let place: StateAddr = arena.alloc_layout(layout).into();
-            funcs
-                .iter()
-                .enumerate()
-                .map(|(idx, func)| {
-                    let arg_place = place.next(offsets_aggregate_states[idx]);
-                    func.init_state(arg_place);
-                    arg_place.addr()
-                })
-                .collect()
-        };
+        let mut places: Vec<usize> = vec![];
+        if !funcs.is_empty() {
+            let mut offsets_aggregate_states = Vec::with_capacity(funcs.len());
+            let layout = get_layout_offsets(&funcs, &mut offsets_aggregate_states)?;
+
+            places = {
+                let place: StateAddr = arena.alloc_layout(layout).into();
+                funcs
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, func)| {
+                        let arg_place = place.next(offsets_aggregate_states[idx]);
+                        func.init_state(arg_place);
+                        arg_place.addr()
+                    })
+                    .collect()
+            };
+        }
 
         while let Some(block) = stream.next().await {
             let block = block?;

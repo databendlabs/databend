@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::S3File;
+use common_io::prelude::operator_list_files;
 use common_planners::CopyPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -67,7 +67,7 @@ impl CopyInterpreter {
                     files_with_path
                 } else {
                     let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
-                    S3File::list(&op, path).await?
+                    operator_list_files(&op, path).await?
                 };
 
                 Ok(files_with_path)
@@ -115,7 +115,11 @@ impl CopyInterpreter {
         }
 
         let table = ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .get_table(
+                &self.plan.catalog_name,
+                &self.plan.db_name,
+                &self.plan.tbl_name,
+            )
             .await?;
 
         if ctx.get_settings().get_enable_new_processor_framework()? != 0
@@ -184,12 +188,21 @@ impl Interpreter for CopyInterpreter {
 
         let table = self
             .ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .get_table(
+                &self.plan.catalog_name,
+                &self.plan.db_name,
+                &self.plan.tbl_name,
+            )
             .await?;
 
         // Commit.
         table
-            .commit_insertion(self.ctx.clone(), write_results, false)
+            .commit_insertion(
+                self.ctx.clone(),
+                &self.plan.catalog_name,
+                write_results,
+                false,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

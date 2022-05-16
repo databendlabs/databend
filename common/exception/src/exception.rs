@@ -138,7 +138,7 @@ impl ErrorCode {
     pub fn from_std_error<T: std::error::Error>(error: T) -> Self {
         ErrorCode {
             code: 1002,
-            display_text: format!("{}", error),
+            display_text: error.to_string(),
             cause: None,
             backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
         }
@@ -171,7 +171,7 @@ impl ErrorCode {
 ///
 /// assert_eq!(
 ///     "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
-///     format!("{}", y.unwrap_err())
+///     y.unwrap_err().to_string()
 /// );
 /// ```
 pub trait ToErrorCode<T, E, CtxFn>

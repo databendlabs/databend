@@ -14,7 +14,7 @@
 
 mod cluster;
 mod role;
-mod setting;
+mod serde;
 mod stage;
 mod udf;
 mod user;
@@ -23,8 +23,8 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use role::RoleApi;
 pub use role::RoleMgr;
-pub use setting::SettingApi;
-pub use setting::SettingMgr;
+pub use serde::deserialize_struct;
+pub use serde::serialize_struct;
 pub use stage::StageApi;
 pub use stage::StageMgr;
 pub use udf::UdfApi;

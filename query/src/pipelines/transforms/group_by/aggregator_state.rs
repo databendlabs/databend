@@ -54,26 +54,28 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn alloc_place(&self, layout: Layout) -> StateAddr;
 
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.alloc_place(params.layout);
+    fn alloc_layout(&self, params: &AggregatorParams) -> Option<StateAddr> {
+        params.layout?;
+        let place: StateAddr = self.alloc_place(params.layout.unwrap());
 
         for idx in 0..params.offsets_aggregate_states.len() {
             let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }
-        place
+        Some(place)
     }
 
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
-        let place: StateAddr = self.alloc_place(params.layout);
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> Option<StateAddr> {
+        params.layout?;
+        let place: StateAddr = self.alloc_place(params.layout.unwrap());
 
         for idx in 0..params.offsets_aggregate_states.len() {
             let aggr_state = params.offsets_aggregate_states[idx];
             let aggr_state_place = place.next(aggr_state);
             params.aggregate_functions[idx].init_state(aggr_state_place);
         }
-        place
+        Some(place)
     }
 
     fn entity(&mut self, key: &Method::HashKey<'_>, inserted: &mut bool) -> *mut Self::Entity;

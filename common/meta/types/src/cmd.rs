@@ -45,6 +45,17 @@ pub enum Cmd {
         node_id: NodeId,
     },
 
+    /// Add MetaSrv addr if absent
+    AddMetaSrvAddr {
+        metasrv_name: String,
+        metasrv_addr: String,
+    },
+
+    /// Remove MetaSrv addr
+    RemoveMetaSrvAddr {
+        metasrv_name: String,
+    },
+
     /// Update or insert a general purpose kv store
     UpsertKV {
         key: String,
@@ -77,7 +88,15 @@ impl fmt::Display for Cmd {
             Cmd::RemoveNode { node_id } => {
                 write!(f, "remove_node:{}", node_id)
             }
-
+            Cmd::AddMetaSrvAddr {
+                metasrv_name,
+                metasrv_addr,
+            } => {
+                write!(f, "add_metasrv_addr: {}={}", metasrv_name, metasrv_addr)
+            }
+            Cmd::RemoveMetaSrvAddr { metasrv_name } => {
+                write!(f, "remove_metasrv_addr: {}", metasrv_name)
+            }
             Cmd::UpsertKV {
                 key,
                 seq,

@@ -30,7 +30,7 @@ pub struct AggregatorParams {
     pub aggregate_functions_arguments_name: Vec<Vec<String>>,
 
     // about function state memory layout
-    pub layout: Layout,
+    pub layout: Option<Layout>,
     pub offsets_aggregate_states: Vec<usize>,
 }
 
@@ -53,7 +53,15 @@ impl AggregatorParams {
             aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
         }
 
-        let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
+        let mut states_offsets: Vec<usize> = Vec::with_capacity(aggregate_functions.len());
+        let mut states_layout = None;
+        if !aggregate_functions.is_empty() {
+            states_offsets = Vec::with_capacity(aggregate_functions.len());
+            states_layout = Option::Some(get_layout_offsets(
+                &aggregate_functions,
+                &mut states_offsets,
+            )?);
+        }
 
         Ok(Arc::new(AggregatorParams {
             aggregate_functions,
