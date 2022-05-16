@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -25,17 +26,20 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(super) async fn bind_limit(
         &mut self,
+        bind_context: &BindContext,
         child: SExpr,
         limit: Option<&Expr<'a>>,
         offset: &Option<Expr<'a>>,
-        bind_context: &BindContext,
     ) -> Result<SExpr> {
         let type_checker = TypeChecker::new(bind_context, self.ctx.clone());
 
         let limit_cnt = match limit {
             Some(Expr::Literal { span: _, lit: x }) => {
-                let data = type_checker.parse_literal(x, None)?.as_u64()?;
-                Some(data as usize)
+                let (value, data_type) = type_checker.resolve_literal(x, None)?;
+                if !data_type.data_type_id().is_integer() {
+                    return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
+                }
+                Some(value.as_u64()? as usize)
             }
             Some(_) => {
                 return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
@@ -44,8 +48,11 @@ impl<'a> Binder {
         };
 
         let offset_cnt = if let Some(Expr::Literal { span: _, lit: x }) = offset {
-            let data = type_checker.parse_literal(x, None)?.as_u64()?;
-            data as usize
+            let (value, data_type) = type_checker.resolve_literal(x, None)?;
+            if !data_type.data_type_id().is_integer() {
+                return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
+            }
+            value.as_u64()? as usize
         } else {
             0
         };

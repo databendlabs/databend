@@ -12,9 +12,12 @@
 ====ALIAS====
 0	1
 0	1
+====SCALAR_EXPRESSION====
+1	13
 ====COMPARISON====
 5
 ====CAST====
+5
 5
 ====BINARY_OPERATOR====
 -0.75
@@ -23,6 +26,10 @@
 ====IN_LIST====
 1
 3
+====MAP_ACCESS====
+2
+2
+2
 ====AGGREGATOR====
 2
 4
@@ -82,6 +89,14 @@ NULL	2	3
 0	1	1
 1	1	2
 2	NULL	3
+4950
+100
+1
+99999
+1
+0
+685
+0.685
 ====INNER_JOIN====
 1	1
 2	2
@@ -218,3 +233,13 @@ new_planner
 14
 16
 18
+====Memory Table====
+1
+=== Test Subquery In From ===
+1
+2
+0	0	5
+0	4	5
+0	8	5
+====Context Function====
+default

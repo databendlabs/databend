@@ -344,6 +344,53 @@ BinaryOp {
 
 
 ---------- Input ----------
+`t`:k1.k2
+---------- Output ---------
+`t`:k1.k2
+---------- AST ------------
+MapAccess {
+    span: [
+        Period(6..7),
+        Ident(7..9),
+    ],
+    expr: MapAccess {
+        span: [
+            Colon(3..4),
+            Ident(4..6),
+        ],
+        expr: ColumnRef {
+            span: [
+                QuotedString(0..3),
+            ],
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "t",
+                quote: Some(
+                    '`',
+                ),
+                span: QuotedString(0..3),
+            },
+        },
+        accessor: Colon {
+            key: Identifier {
+                name: "k1",
+                quote: None,
+                span: Ident(4..6),
+            },
+        },
+    },
+    accessor: Period {
+        key: Identifier {
+            name: "k2",
+            quote: None,
+            span: Ident(7..9),
+        },
+    },
+}
+
+
+---------- Input ----------
 col1 not between 1 and 2
 ---------- Output ---------
 col1 NOT BETWEEN 1 AND 2
@@ -431,7 +478,7 @@ FunctionCall {
 ---------- AST ------------
 FunctionCall {
     span: [
-        QuotedIdent(0..8),
+        QuotedString(0..8),
         LParen(8..9),
         RParen(9..10),
     ],
@@ -441,7 +488,7 @@ FunctionCall {
         quote: Some(
             '"',
         ),
-        span: QuotedIdent(0..8),
+        span: QuotedString(0..8),
     },
     args: [],
     params: [],
@@ -594,14 +641,14 @@ Trim {
         TRIM(0..4),
         LParen(4..5),
         LEADING(5..12),
-        QuotedIdent(13..18),
+        QuotedString(13..18),
         FROM(19..23),
-        QuotedIdent(24..29),
+        QuotedString(24..29),
         RParen(29..30),
     ],
     expr: Literal {
         span: [
-            QuotedIdent(24..29),
+            QuotedString(24..29),
         ],
         lit: String(
             "def",
@@ -612,7 +659,7 @@ Trim {
             Leading,
             Literal {
                 span: [
-                    QuotedIdent(13..18),
+                    QuotedString(13..18),
                 ],
                 lit: String(
                     "abc",
@@ -637,7 +684,7 @@ Extract {
         Ident(18..19),
         RParen(19..20),
     ],
-    field: Year,
+    kind: Year,
     expr: ColumnRef {
         span: [
             Ident(18..19),
@@ -662,14 +709,14 @@ Position {
     span: [
         POSITION(0..8),
         LParen(8..9),
-        QuotedIdent(9..12),
+        QuotedString(9..12),
         IN(13..15),
         Ident(16..19),
         RParen(19..20),
     ],
     substr_expr: Literal {
         span: [
-            QuotedIdent(9..12),
+            QuotedString(9..12),
         ],
         lit: String(
             "a",
@@ -900,7 +947,7 @@ arr[4]['k']
 MapAccess {
     span: [
         LBracket(6..7),
-        QuotedIdent(7..10),
+        QuotedString(7..10),
         RBracket(10..11),
     ],
     expr: MapAccess {
@@ -959,7 +1006,7 @@ BinaryOp {
     },
     right: Literal {
         span: [
-            QuotedIdent(8..13),
+            QuotedString(8..13),
         ],
         lit: String(
             "^11",
@@ -1141,7 +1188,7 @@ BinaryOp {
             Period(16..17),
             Ident(17..23),
             Eq(24..25),
-            QuotedIdent(26..35),
+            QuotedString(26..35),
             THEN(36..40),
             Ident(41..50),
             ELSE(51..55),
@@ -1164,7 +1211,7 @@ BinaryOp {
                     Period(16..17),
                     Ident(17..23),
                     Eq(24..25),
-                    QuotedIdent(26..35),
+                    QuotedString(26..35),
                     THEN(36..40),
                     Ident(41..50),
                     ELSE(51..55),
@@ -1200,7 +1247,7 @@ BinaryOp {
                         },
                         right: Literal {
                             span: [
-                                QuotedIdent(26..35),
+                                QuotedString(26..35),
                             ],
                             lit: String(
                                 "GERMANY",
@@ -1441,7 +1488,7 @@ BinaryOp {
                                 },
                                 right: Literal {
                                     span: [
-                                        QuotedIdent(48..58),
+                                        QuotedString(48..58),
                                     ],
                                     lit: String(
                                         "Brand#12",
@@ -1453,13 +1500,13 @@ BinaryOp {
                             span: [
                                 IN(87..89),
                                 LParen(90..91),
-                                QuotedIdent(91..100),
+                                QuotedString(91..100),
                                 Comma(100..101),
-                                QuotedIdent(102..110),
+                                QuotedString(102..110),
                                 Comma(110..111),
-                                QuotedIdent(112..121),
+                                QuotedString(112..121),
                                 Comma(121..122),
-                                QuotedIdent(123..131),
+                                QuotedString(123..131),
                                 RParen(131..132),
                             ],
                             expr: ColumnRef {
@@ -1477,7 +1524,7 @@ BinaryOp {
                             list: [
                                 Literal {
                                     span: [
-                                        QuotedIdent(91..100),
+                                        QuotedString(91..100),
                                     ],
                                     lit: String(
                                         "SM CASE",
@@ -1485,7 +1532,7 @@ BinaryOp {
                                 },
                                 Literal {
                                     span: [
-                                        QuotedIdent(102..110),
+                                        QuotedString(102..110),
                                     ],
                                     lit: String(
                                         "SM BOX",
@@ -1493,7 +1540,7 @@ BinaryOp {
                                 },
                                 Literal {
                                     span: [
-                                        QuotedIdent(112..121),
+                                        QuotedString(112..121),
                                     ],
                                     lit: String(
                                         "SM PACK",
@@ -1501,7 +1548,7 @@ BinaryOp {
                                 },
                                 Literal {
                                     span: [
-                                        QuotedIdent(123..131),
+                                        QuotedString(123..131),
                                     ],
                                     lit: String(
                                         "SM PKG",
@@ -1681,9 +1728,9 @@ BinaryOp {
             span: [
                 IN(332..334),
                 LParen(335..336),
-                QuotedIdent(336..341),
+                QuotedString(336..341),
                 Comma(341..342),
-                QuotedIdent(343..352),
+                QuotedString(343..352),
                 RParen(352..353),
             ],
             expr: ColumnRef {
@@ -1701,7 +1748,7 @@ BinaryOp {
             list: [
                 Literal {
                     span: [
-                        QuotedIdent(336..341),
+                        QuotedString(336..341),
                     ],
                     lit: String(
                         "AIR",
@@ -1709,7 +1756,7 @@ BinaryOp {
                 },
                 Literal {
                     span: [
-                        QuotedIdent(343..352),
+                        QuotedString(343..352),
                     ],
                     lit: String(
                         "AIR REG",
@@ -1738,7 +1785,7 @@ BinaryOp {
         },
         right: Literal {
             span: [
-                QuotedIdent(387..406),
+                QuotedString(387..406),
             ],
             lit: String(
                 "DELIVER IN PERSON",

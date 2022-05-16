@@ -70,7 +70,7 @@ Upload `books.csv` into stages:
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage"\
  -F "upload=@./books.csv"\
- -XPUT http://localhost:8081/v1/upload_to_stage
+ -XPUT http://root:@localhost:8081/v1/upload_to_stage
 ```
 
 ```text title='Response'
@@ -95,7 +95,7 @@ Upload `books.parquet` into stages:
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage"\
  -F "upload=@./books.parquet"\
- -XPUT http://localhost:8081/v1/upload_to_stage
+ -XPUT http://root:@localhost:8081/v1/upload_to_stage
 ```
 
 ```text title='Response'

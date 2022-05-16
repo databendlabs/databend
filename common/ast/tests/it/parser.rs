@@ -103,6 +103,7 @@ fn test_statement() {
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
+        r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
     ];
 
     for case in cases {
@@ -166,6 +167,7 @@ fn test_statement_error() {
         r#"truncate a"#,
         r#"drop a"#,
         r#"insert into t format"#,
+        r#"alter database system x rename to db"#,
     ];
 
     for case in cases {
@@ -245,6 +247,7 @@ fn test_expr() {
         r#"- - + + - 1 + + - 2"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
+        r#"`t`:k1.k2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#""random"()"#,

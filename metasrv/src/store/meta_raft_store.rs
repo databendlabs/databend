@@ -53,6 +53,7 @@ use openraft::SnapshotMeta;
 use openraft::StorageError;
 
 use crate::export::vec_kv_to_json;
+use crate::metrics::incr_meta_metrics_applying_snapshot;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -403,6 +404,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn begin_receiving_snapshot(&self) -> Result<Box<Self::SnapshotData>, StorageError> {
+        incr_meta_metrics_applying_snapshot(1);
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
@@ -418,6 +420,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
         );
+        incr_meta_metrics_applying_snapshot(-1);
 
         let new_snapshot = Snapshot {
             meta: meta.clone(),

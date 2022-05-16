@@ -95,9 +95,9 @@ fn test_match_seq_from_opt_u64() -> Result<(), ()> {
 
 #[test]
 fn test_match_seq_display() -> Result<(), ()> {
-    assert_eq!("is any value", format!("{}", MatchSeq::Any));
-    assert_eq!("== 3", format!("{}", MatchSeq::Exact(3)));
-    assert_eq!(">= 3", format!("{}", MatchSeq::GE(3)));
+    assert_eq!("is any value", MatchSeq::Any.to_string());
+    assert_eq!("== 3", MatchSeq::Exact(3).to_string());
+    assert_eq!(">= 3", MatchSeq::GE(3).to_string());
 
     Ok(())
 }

@@ -81,13 +81,9 @@ impl BindContext {
 
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
     /// This method will rename column bindings according to table alias.
-    pub fn apply_table_alias(&mut self, original_name: &str, alias: &TableAlias) -> Result<()> {
+    pub fn apply_table_alias(&mut self, alias: &TableAlias) -> Result<()> {
         for column in self.columns.iter_mut() {
-            if let Some(table_name) = &column.table_name {
-                if table_name.as_str() == original_name {
-                    column.table_name = Some(alias.name.to_string());
-                }
-            }
+            column.table_name = Some(alias.name.to_string());
         }
 
         if alias.columns.len() > self.columns.len() {

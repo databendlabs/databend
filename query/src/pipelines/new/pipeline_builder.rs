@@ -101,7 +101,12 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        let aggregator_params = AggregatorParams::try_create_partial(plan)?;
+        let aggregator_params = AggregatorParams::try_create(
+            &plan.aggr_expr,
+            &plan.group_expr,
+            &plan.input.schema(),
+            &plan.schema(),
+        )?;
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformAggregator::try_create_partial(
@@ -121,7 +126,12 @@ impl PlanVisitor for QueryPipelineBuilder {
         self.visit_plan_node(&plan.input)?;
 
         self.pipeline.resize(1)?;
-        let aggregator_params = AggregatorParams::try_create_final(plan)?;
+        let aggregator_params = AggregatorParams::try_create(
+            &plan.aggr_expr,
+            &plan.group_expr,
+            &plan.schema_before_group_by,
+            &plan.schema,
+        )?;
         self.pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 TransformAggregator::try_create_final(

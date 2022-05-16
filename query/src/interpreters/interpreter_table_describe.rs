@@ -94,7 +94,7 @@ impl Interpreter for DescribeTableInterpreter {
 
                 None => {
                     let value = field.data_type().default_value();
-                    default_exprs.push(format!("{}", value));
+                    default_exprs.push(value.to_string());
                 }
             }
             extras.push("".to_string());

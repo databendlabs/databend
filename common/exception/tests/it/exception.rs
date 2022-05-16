@@ -22,20 +22,20 @@ fn test_format_with_error_codes() {
     use common_exception::exception::*;
 
     assert_eq!(
-        format!("{}", ErrorCode::Ok("test message 1")),
+        ErrorCode::Ok("test message 1").to_string(),
         "Code: 0, displayText = test message 1."
     );
 
     assert_eq!(
-        format!("{}", ErrorCode::Ok("test message 2")),
+        ErrorCode::Ok("test message 2").to_string(),
         "Code: 0, displayText = test message 2."
     );
     assert_eq!(
-        format!("{}", ErrorCode::UnknownException("test message 1")),
+        ErrorCode::UnknownException("test message 1").to_string(),
         "Code: 1067, displayText = test message 1."
     );
     assert_eq!(
-        format!("{}", ErrorCode::UnknownException("test message 2")),
+        ErrorCode::UnknownException("test message 2").to_string(),
         "Code: 1067, displayText = test message 2."
     );
 }
@@ -62,7 +62,7 @@ fn test_derive_from_std_error() {
 
     assert_eq!(
         "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
-        format!("{}", rst1.as_ref().unwrap_err())
+        rst1.as_ref().unwrap_err().to_string()
     );
 
     let rst2: common_exception::exception::Result<()> =
@@ -70,7 +70,7 @@ fn test_derive_from_std_error() {
 
     assert_eq!(
         "Code: 0, displayText = wrapper, cause: Code: 1067, displayText = 123, cause: an error occurred when formatting an argument..",
-        format!("{}", rst2.as_ref().unwrap_err())
+        rst2.as_ref().unwrap_err().to_string()
     );
 }
 
@@ -86,7 +86,7 @@ fn test_derive_from_display() {
 
     assert_eq!(
         "Code: 1067, displayText = 123, cause: 3.",
-        format!("{}", rst1.as_ref().unwrap_err())
+        rst1.as_ref().unwrap_err().to_string()
     );
 }
 
@@ -98,7 +98,7 @@ fn test_from_and_to_serialized_error() {
     let ec2: ErrorCode = se.into();
     assert_eq!(ec.code(), ec2.code());
     assert_eq!(ec.message(), ec2.message());
-    assert_eq!(format!("{}", ec), format!("{}", ec2));
+    assert_eq!(ec.to_string(), ec2.to_string());
     assert_eq!(ec.backtrace_str(), ec2.backtrace_str());
 }
 

@@ -38,7 +38,7 @@ async fn test_pipeline_walker() -> Result<()> {
         let mut actual: Vec<String> = vec![];
         pipeline.walk_preorder(|pipe| {
             let processor = pipe.processor_by_index(0).clone();
-            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
+            actual.push(processor.name().to_string() + " x " + &*pipe.nums().to_string());
             Result::Ok(true)
         })?;
 
@@ -61,7 +61,7 @@ async fn test_pipeline_walker() -> Result<()> {
         let mut actual: Vec<String> = vec![];
         pipeline.walk_postorder(|pipe| {
             let processor = pipe.processor_by_index(0).clone();
-            actual.push(processor.name().to_string() + " x " + &*format!("{}", pipe.nums()));
+            actual.push(processor.name().to_string() + " x " + &*pipe.nums().to_string());
             Result::Ok(true)
         })?;
 

@@ -144,6 +144,11 @@ build_exceptions! {
     // Tenant error codes.
     TenantIsEmpty(1101),
     IndexOutOfBounds(1102),
+
+    // Layout error code.
+    LayoutError(1103),
+
+    PanicError(1104),
 }
 
 // Metasvr errors [2001, 3000].

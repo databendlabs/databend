@@ -14,6 +14,7 @@ insert into table tt values ('2021-04-30 22:48:00'), (to_timestamp('2021-04-30 2
 select * from tt;
 set timezone = 'Asia/Shanghai';
 select * from tt;
+drop table tt;
 -- number function
 -- 1619820000000000 = 2021-04-30 22:00:00
 select "====NUMBER_FUNCTION====";
