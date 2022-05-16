@@ -189,6 +189,7 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "fs".to_string();
                 cfg.fs = v.into();
             }
+            #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
                 cfg.storage_type = "hdfs".to_string();
                 cfg.hdfs = v.into();
@@ -216,6 +217,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                 match self.storage_type.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
+                    #[cfg(feature = "storage-hdfs")]
                     "hdfs" => StorageParams::Hdfs(self.hdfs.try_into()?),
                     "memory" => StorageParams::Memory,
                     "s3" => StorageParams::S3(self.s3.try_into()?),
