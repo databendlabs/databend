@@ -21,11 +21,11 @@ use common_tracing::tracing;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
-use headers::HeaderMap;
-use hyper::http::header::AUTHORIZATION;
+use http::header::AUTHORIZATION;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
+use poem::Addr;
 use poem::Endpoint;
 use poem::Middleware;
 use poem::Request;
@@ -38,15 +38,22 @@ pub struct HTTPSessionMiddleware {
     pub session_manager: Arc<SessionManager>,
 }
 
-fn get_credential(headers: &HeaderMap) -> Result<Option<Credential>> {
-    let auth_headers: Vec<_> = headers.get_all(AUTHORIZATION).iter().collect();
+fn get_credential(req: &Request) -> Result<Credential> {
+    let auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
     if auth_headers.is_empty() {
-        return Ok(None);
+        return Err(ErrorCode::AuthenticateFailure(
+            "No authorization header detected",
+        ));
     }
+    let client_ip = match req.remote_addr().0 {
+        Addr::SocketAddr(addr) => Some(addr.ip().to_string()),
+        Addr::Custom(..) => Some("127.0.0.1".to_string()),
+        _ => None,
+    };
     let value = auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
         match Basic::decode(value) {
@@ -57,21 +64,21 @@ fn get_credential(headers: &HeaderMap) -> Result<Option<Credential>> {
                 let c = Credential::Password {
                     name,
                     password,
-                    hostname: None,
+                    hostname: client_ip,
                 };
-                Ok(Some(c))
+                Ok(c)
             }
             None => Err(ErrorCode::AuthenticateFailure("bad Basic auth header")),
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
-            Some(bearer) => Ok(Some(Credential::Jwt {
+            Some(bearer) => Ok(Credential::Jwt {
                 token: bearer.token().to_string(),
-            })),
+            }),
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
     } else {
-        Ok(None)
+        Err(ErrorCode::AuthenticateFailure("bad auth header"))
     }
 }
 
@@ -92,11 +99,8 @@ pub struct HTTPSessionEndpoint<E> {
 
 impl<E> HTTPSessionEndpoint<E> {
     async fn auth(&self, req: &Request) -> Result<(Option<String>, UserInfo)> {
-        let credential = get_credential(req.headers())?;
-        match credential {
-            Some(c) => self.manager.get_auth_manager().auth(&c).await,
-            None => Ok((None, self.manager.get_auth_manager().no_auth().await?)),
-        }
+        let credential = get_credential(req)?;
+        self.manager.get_auth_manager().auth(&credential).await
     }
 }
 

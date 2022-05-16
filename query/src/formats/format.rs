@@ -28,7 +28,7 @@ pub trait InputFormat: Send {
 
     fn create_state(&self) -> Box<dyn InputState>;
 
-    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<DataBlock>;
+    fn deserialize_data(&self, state: &mut Box<dyn InputState>) -> Result<Vec<DataBlock>>;
 
     fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<usize>;
 

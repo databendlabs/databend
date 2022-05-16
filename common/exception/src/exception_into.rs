@@ -82,6 +82,12 @@ impl From<std::num::ParseFloatError> for ErrorCode {
     }
 }
 
+impl From<std::num::TryFromIntError> for ErrorCode {
+    fn from(error: std::num::TryFromIntError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<common_arrow::arrow::error::ArrowError> for ErrorCode {
     fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
         ErrorCode::from_std_error(error)
@@ -108,7 +114,7 @@ impl From<std::convert::Infallible> for ErrorCode {
 
 impl From<sqlparser::parser::ParserError> for ErrorCode {
     fn from(error: sqlparser::parser::ParserError) -> Self {
-        ErrorCode::SyntaxException(format!("{}", error))
+        ErrorCode::SyntaxException(error.to_string())
     }
 }
 

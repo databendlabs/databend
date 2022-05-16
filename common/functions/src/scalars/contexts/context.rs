@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::scalars::ConnectionIdFunction;
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
 use crate::scalars::FunctionFactory;
@@ -22,6 +23,7 @@ pub struct ContextFunction;
 
 impl ContextFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("connection_id", ConnectionIdFunction::desc());
         factory.register("database", DatabaseFunction::desc());
         factory.register("version", VersionFunction::desc());
         factory.register("current_user", CurrentUserFunction::desc());

@@ -15,6 +15,9 @@
 use std::alloc::Layout;
 use std::ptr::NonNull;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Clone, Copy)]
@@ -99,13 +102,13 @@ impl From<StateAddr> for usize {
     }
 }
 
-/// # Safety
-/// layout must ensure to be aligned
-pub unsafe fn get_layout_offsets(funcs: &[AggregateFunctionRef]) -> (Layout, Vec<usize>) {
+pub fn get_layout_offsets(
+    funcs: &[AggregateFunctionRef],
+    offsets: &mut Vec<usize>,
+) -> Result<Layout> {
     let mut max_align = 0;
     let mut total_size = 0;
 
-    let mut offsets = Vec::with_capacity(funcs.len());
     for func in funcs {
         let layout = func.state_layout();
         let align = layout.align();
@@ -117,6 +120,6 @@ pub unsafe fn get_layout_offsets(funcs: &[AggregateFunctionRef]) -> (Layout, Vec
         max_align = max_align.max(align);
         total_size += layout.size();
     }
-    let layout = Layout::from_size_align_unchecked(total_size, max_align);
-    (layout, offsets)
+    Layout::from_size_align(total_size, max_align)
+        .map_err(|e| ErrorCode::LayoutError(format!("Layout error: {}", e)))
 }

@@ -28,6 +28,7 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -424,6 +425,120 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    pub async fn database_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let db2_name = "db2";
+        let new_db_name = "db3";
+
+        tracing::info!("--- rename not exists db1 to not exists db2");
+        {
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                new_db_name: new_db_name.to_string(),
+            };
+
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(res.unwrap_err()).code()
+            );
+        }
+
+        tracing::info!("--- prepare db1 and db2");
+        {
+            // prepare db2
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
+            assert_eq!(1, res.db_id);
+
+            tracing::info!("--- rename not exists db4 to exists db1");
+            {
+                let req = RenameDatabaseReq {
+                    if_exists: false,
+                    name_ident: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: "db4".to_string(),
+                    },
+                    new_db_name: db_name.to_string(),
+                };
+
+                let res = mt.rename_database(req).await;
+                tracing::info!("rename database res: {:?}", res);
+                assert!(res.is_err());
+                assert_eq!(
+                    ErrorCode::UnknownDatabase("").code(),
+                    ErrorCode::from(res.unwrap_err()).code()
+                );
+            }
+
+            // prepare db2
+            let res = self.create_database(mt, tenant, "db2", "eng1").await?;
+            assert!(res.db_id > 1);
+        }
+
+        tracing::info!("--- rename exists db db1 to exists db db2");
+        {
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                new_db_name: db2_name.to_string(),
+            };
+
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_err());
+            assert_eq!(
+                ErrorCode::DatabaseAlreadyExists("").code(),
+                ErrorCode::from(res.unwrap_err()).code()
+            );
+        }
+
+        tracing::info!("--- rename exists db db1 to not exists mutable db");
+        {
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+
+                new_db_name: new_db_name.to_string(),
+            };
+            let res = mt.rename_database(req).await;
+            tracing::info!("rename database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let res = mt
+                .get_database(GetDatabaseReq::new(tenant, new_db_name))
+                .await;
+            tracing::debug!("get present database res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.ident.db_id, "db3 id is 1");
+            assert_eq!("db3".to_string(), res.name_ident.db_name, "db3.db is db3");
+
+            tracing::info!("--- get old database after rename");
+            {
+                let res = mt.get_database(GetDatabaseReq::new(tenant, db_name)).await;
+                let err = res.err().unwrap();
+                assert_eq!(
+                    ErrorCode::UnknownDatabase("").code(),
+                    ErrorCode::from(err).code()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn table_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
@@ -702,10 +817,10 @@ impl SchemaApiTestSuite {
 
     pub async fn table_rename<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
-        let db_name = "db1";
-        let tbl_name = "tb2";
-        let new_tbl_name = "tb3";
-        let new_db_name = "db2";
+        let db1_name = "db1";
+        let tb2_name = "tb2";
+        let db2_name = "db2";
+        let tb3_name = "tb3";
 
         let schema = || {
             Arc::new(DataSchema::new(vec![DataField::new(
@@ -715,6 +830,17 @@ impl SchemaApiTestSuite {
         };
 
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let rename_db1tb2_to_db1tb3 = |if_exists| RenameTableReq {
+            if_exists,
+            name_ident: TableNameIdent {
+                tenant: tenant.to_string(),
+                db_name: db1_name.to_string(),
+                table_name: tb2_name.to_string(),
+            },
+            new_db_name: db1_name.to_string(),
+            new_table_name: tb3_name.to_string(),
+        };
 
         let table_meta = |created_on| TableMeta {
             schema: schema(),
@@ -726,17 +852,7 @@ impl SchemaApiTestSuite {
 
         tracing::info!("--- rename table on unknown db");
         {
-            let req = RenameTableReq {
-                if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let got = mt.rename_table(req.clone()).await;
+            let got = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             tracing::debug!("--- rename table on unknown database got: {:?}", got);
 
             assert!(got.is_err());
@@ -752,7 +868,7 @@ impl SchemaApiTestSuite {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
+                    db_name: db1_name.to_string(),
                 },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -765,38 +881,28 @@ impl SchemaApiTestSuite {
         }
 
         let created_on = Utc::now();
-        let req = CreateTableReq {
+        let create_tb2_req = CreateTableReq {
             if_not_exists: false,
             name_ident: TableNameIdent {
                 tenant: tenant.to_string(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
+                db_name: db1_name.to_string(),
+                table_name: tb2_name.to_string(),
             },
             table_meta: table_meta(created_on),
         };
 
         tracing::info!("--- create table for rename");
         let tb_ident = {
-            mt.create_table(req.clone()).await?;
-            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            mt.create_table(create_tb2_req.clone()).await?;
+            let got = mt.get_table((tenant, db1_name, tb2_name).into()).await?;
             got.ident.clone()
         };
 
         tracing::info!("--- rename table, ok");
         {
-            let req = RenameTableReq {
-                if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            mt.rename_table(req.clone()).await?;
+            mt.rename_table(rename_db1tb2_to_db1tb3(false)).await?;
 
-            let got = mt.get_table((tenant, db_name, new_tbl_name).into()).await?;
+            let got = mt.get_table((tenant, db1_name, tb3_name).into()).await?;
             let want = TableInfo {
                 // TODO: use this after kv-txn rename-table replaces metasrv rename-table:
                 //    `ident: tb_ident.clone(),`
@@ -805,15 +911,15 @@ impl SchemaApiTestSuite {
                     table_id: tb_ident.table_id,
                     seq: got.ident.seq,
                 },
-                desc: format!("'{}'.'{}'.'{}'", tenant, db_name, new_tbl_name),
-                name: new_tbl_name.into(),
+                desc: format!("'{}'.'{}'.'{}'", tenant, db1_name, tb3_name),
+                name: tb3_name.into(),
                 meta: table_meta(created_on),
             };
             assert_eq!(want, got.as_ref().clone(), "get renamed table");
 
             tracing::info!("--- get old table after rename");
             {
-                let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
+                let res = mt.get_table((tenant, db1_name, tb2_name).into()).await;
                 let err = res.err().unwrap();
                 assert_eq!(
                     ErrorCode::UnknownTable("").code(),
@@ -822,73 +928,54 @@ impl SchemaApiTestSuite {
             }
         }
 
-        tracing::info!("--- rename table again, error");
+        tracing::info!("--- db1,tb2(nil) -> db1,tb3(no_nil), error");
         {
-            let req = RenameTableReq {
-                if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let res = mt.rename_table(req.clone()).await;
+            let res = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::UnknownTable("").code(),
                 ErrorCode::from(err).code(),
                 "rename table {} again",
-                tbl_name
+                tb2_name
             );
         }
 
-        tracing::info!("--- rename table again, with if_exist=true, OK");
+        tracing::info!("--- db1,tb2(nil) -> db1,tb3(no_nil), with if_exist=true, OK");
         {
-            let req = RenameTableReq {
-                if_exists: true,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            // Ok
-            mt.rename_table(req.clone()).await?;
+            mt.rename_table(rename_db1tb2_to_db1tb3(true)).await?;
         }
 
-        tracing::info!("--- create table again after rename, ok");
+        tracing::info!("--- create db1,db2, ok");
         let tb_ident2 = {
-            mt.create_table(req.clone()).await?;
+            mt.create_table(create_tb2_req.clone()).await?;
 
-            let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+            let got = mt.get_table((tenant, db1_name, tb2_name).into()).await?;
             assert_ne!(tb_ident.table_id, got.ident.table_id);
             assert_ne!(tb_ident.seq, got.ident.seq);
             got.ident.clone()
         };
 
-        tracing::info!("--- rename table again after recreate, error");
+        tracing::info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), error");
         {
-            let req = RenameTableReq {
-                if_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                new_db_name: db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
-            };
-            let res = mt.rename_table(req.clone()).await;
+            let res = mt.rename_table(rename_db1tb2_to_db1tb3(false)).await;
             let err = res.unwrap_err();
             assert_eq!(
                 ErrorCode::TableAlreadyExists("").code(),
                 ErrorCode::from(err).code(),
                 "rename table {} again after recreate",
-                tbl_name
+                tb2_name
+            );
+        }
+
+        tracing::info!("--- db1,tb2(no_nil) -> db1,tb3(no_nil), if_exists=true, error");
+        {
+            let res = mt.rename_table(rename_db1tb2_to_db1tb3(true)).await;
+            let err = res.unwrap_err();
+            assert_eq!(
+                ErrorCode::TableAlreadyExists("").code(),
+                ErrorCode::from(err).code(),
+                "rename table {} again after recreate",
+                tb2_name
             );
         }
 
@@ -898,11 +985,11 @@ impl SchemaApiTestSuite {
                 if_exists: false,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
+                    db_name: db1_name.to_string(),
+                    table_name: tb2_name.to_string(),
                 },
-                new_db_name: new_db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
+                new_db_name: db2_name.to_string(),
+                new_table_name: tb3_name.to_string(),
             };
             let res = mt.rename_table(req.clone()).await;
             tracing::debug!("--- rename table to other db got: {:?}", res);
@@ -920,7 +1007,7 @@ impl SchemaApiTestSuite {
                 if_not_exists: false,
                 name_ident: DatabaseNameIdent {
                     tenant: tenant.to_string(),
-                    db_name: new_db_name.to_string(),
+                    db_name: db2_name.to_string(),
                 },
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -937,17 +1024,15 @@ impl SchemaApiTestSuite {
                 if_exists: false,
                 name_ident: TableNameIdent {
                     tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
+                    db_name: db1_name.to_string(),
+                    table_name: tb2_name.to_string(),
                 },
-                new_db_name: new_db_name.to_string(),
-                new_table_name: new_tbl_name.to_string(),
+                new_db_name: db2_name.to_string(),
+                new_table_name: tb3_name.to_string(),
             };
             mt.rename_table(req.clone()).await?;
 
-            let got = mt
-                .get_table((tenant, new_db_name, new_tbl_name).into())
-                .await?;
+            let got = mt.get_table((tenant, db2_name, tb3_name).into()).await?;
             let want = TableInfo {
                 // TODO similar: version should not change.
                 //   ident: tb_ident2,
@@ -955,8 +1040,8 @@ impl SchemaApiTestSuite {
                     table_id: tb_ident2.table_id,
                     seq: got.ident.seq,
                 },
-                desc: format!("'{}'.'{}'.'{}'", tenant, new_db_name, new_tbl_name),
-                name: new_tbl_name.into(),
+                desc: format!("'{}'.'{}'.'{}'", tenant, db2_name, tb3_name),
+                name: tb3_name.into(),
                 meta: table_meta(created_on),
             };
             assert_eq!(want, got.as_ref().clone(), "get renamed table");
@@ -1499,7 +1584,7 @@ impl SchemaApiTestSuite {
             assert_eq!("Unknown database 'nonexistent'", err.message());
             assert_eq!(
                 "Code: 1003, displayText = Unknown database 'nonexistent'.",
-                format!("{}", err)
+                err.to_string()
             );
         }
 

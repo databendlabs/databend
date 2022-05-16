@@ -53,10 +53,12 @@ pub struct SingleStateAggregator<const FINAL: bool> {
 
 impl<const FINAL: bool> SingleStateAggregator<FINAL> {
     pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
+        assert!(!params.offsets_aggregate_states.is_empty());
         let arena = Bump::new();
-        let (layout, offsets_aggregate_states) =
-            unsafe { get_layout_offsets(&params.aggregate_functions) };
 
+        let mut offsets_aggregate_states = Vec::with_capacity(params.aggregate_functions.len());
+        let layout =
+            get_layout_offsets(&params.aggregate_functions, &mut offsets_aggregate_states)?;
         let get_places = || -> Vec<StateAddr> {
             let place: StateAddr = arena.alloc_layout(layout).into();
             params
@@ -73,7 +75,6 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
 
         let places = get_places();
         let temp_places = get_places();
-
         Ok(Self {
             _arena: arena,
             places,

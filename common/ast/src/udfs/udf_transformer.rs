@@ -27,13 +27,8 @@ use super::UDFFetcher;
 pub struct UDFTransformer;
 
 impl UDFTransformer {
-    pub async fn transform_function<F: UDFFetcher>(
-        function: &Function,
-        fetcher: &F,
-    ) -> Result<Expr> {
-        let definition = fetcher
-            .get_udf_definition(&function.name.to_string())
-            .await?;
+    pub fn transform_function<F: UDFFetcher>(function: &Function, fetcher: &F) -> Result<Expr> {
+        let definition = fetcher.get_udf_definition(&function.name.to_string())?;
         let parameters = definition.parameters;
         let expr = definition.expr;
 

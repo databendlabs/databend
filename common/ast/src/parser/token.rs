@@ -19,9 +19,9 @@ use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
-use crate::parser::error::pretty_print_error;
+use crate::parser::error::DisplayError;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Token<'a> {
     pub source: &'a str,
     pub kind: TokenKind,
@@ -31,6 +31,12 @@ pub struct Token<'a> {
 impl<'a> Token<'a> {
     pub fn text(&self) -> &'a str {
         &self.source[self.span.clone()]
+    }
+}
+
+impl<'a> std::fmt::Debug for Token<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}({:?})", self.kind, self.span)
     }
 }
 
@@ -56,11 +62,13 @@ impl<'a> Iterator for Tokenizer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
             Some(kind) if kind == TokenKind::Error => {
-                let rest_span = self.lexer.span().start..self.source.len();
-                let lables = vec![(rest_span, "unable to recognize the rest tokens".to_owned())];
-                Some(Err(ErrorCode::SyntaxException(pretty_print_error(
-                    self.source,
-                    lables,
+                let rest_span = Token {
+                    source: self.source,
+                    kind: TokenKind::Error,
+                    span: self.lexer.span().start..self.source.len(),
+                };
+                Some(Err(ErrorCode::SyntaxException(rest_span.display_error(
+                    "unable to recognize the rest tokens".to_string(),
                 ))))
             }
             Some(kind) => Some(Ok(Token {
@@ -104,7 +112,7 @@ pub enum TokenKind {
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
-    QuotedIdent,
+    QuotedString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     LiteralHex,
@@ -600,7 +608,7 @@ impl TokenKind {
         !matches!(
             self,
             Ident
-                | QuotedIdent
+                | QuotedString
                 | LiteralHex
                 | LiteralNumber
                 | DoubleEq

@@ -21,7 +21,7 @@ use jwtk::HeaderAndClaims;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
+use crate::Config;
 
 pub struct JwtAuthenticator {
     //Todo(youngsofun): verify settings, like issuer

@@ -103,7 +103,7 @@ fn test_deserialize_multi_lines() -> Result<()> {
             "| 1 | second |",
             "+---+--------+",
         ],
-        &[csv_input_format.deserialize_data(&mut csv_input_state)?],
+        &csv_input_format.deserialize_data(&mut csv_input_state)?,
     );
 
     let csv_input_format = CsvInputFormat::try_create(
@@ -128,7 +128,7 @@ fn test_deserialize_multi_lines() -> Result<()> {
             "| 1 | second |",
             "+---+--------+",
         ],
-        &[csv_input_format.deserialize_data(&mut csv_input_state)?],
+        &csv_input_format.deserialize_data(&mut csv_input_state)?,
     );
     Ok(())
 }

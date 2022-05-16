@@ -57,7 +57,7 @@ pub enum MetaStorageError {
 /// Output message for end users, with sensitive info stripped.
 pub trait AppErrorMessage: Display {
     fn message(&self) -> String {
-        format!("{}", self)
+        self.to_string()
     }
 }
 

@@ -187,7 +187,9 @@ pub async fn streaming_load(
         let source_pipe_builder = match &plan {
             PlanNode::Insert(insert) => match &insert.source {
                 InsertInputSource::StreamingWithFormat(format) => {
-                    if format.to_lowercase().as_str() == "csv" {
+                    if format.to_lowercase().as_str() == "csv"
+                        || format.to_lowercase().as_str() == "parquet"
+                    {
                         return match new_processor_format(&context, &plan, multipart).await {
                             Ok(res) => Ok(res),
                             Err(cause) => {
@@ -197,9 +199,7 @@ pub async fn streaming_load(
                         };
                     }
 
-                    if format.to_lowercase().as_str() == "parquet" {
-                        parquet_source_pipe_builder(context.clone(), &plan, multipart).await
-                    } else if format.to_lowercase().as_str() == "ndjson"
+                    if format.to_lowercase().as_str() == "ndjson"
                         || format.to_lowercase().as_str() == "jsoneachrow"
                     {
                         ndjson_source_pipe_builder(context.clone(), &plan, multipart).await
@@ -426,30 +426,6 @@ fn format_source_pipe_builder(
     }
 
     Ok((worker, source_pipe_builder))
-}
-
-async fn parquet_source_pipe_builder(
-    ctx: Arc<QueryContext>,
-    plan: &PlanNode,
-    mut multipart: Multipart,
-) -> PoemResult<SourcePipeBuilder> {
-    let builder = ParquetSourceBuilder::create(plan.schema());
-    let mut source_pipe_builder = SourcePipeBuilder::create();
-    while let Ok(Some(field)) = multipart.next_field().await {
-        let bytes = field
-            .bytes()
-            .await
-            .map_err_to_code(ErrorCode::BadBytes, || "Read part to field bytes error")
-            .unwrap();
-        let cursor = Cursor::new(bytes);
-        let parquet_source = builder.build(cursor).unwrap();
-        let output_port = OutputPort::create();
-        let source =
-            StreamSourceV2::create(ctx.clone(), Box::new(parquet_source), output_port.clone())
-                .unwrap();
-        source_pipe_builder.add_source(output_port, source);
-    }
-    Ok(source_pipe_builder)
 }
 
 async fn ndjson_source_pipe_builder(

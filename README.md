@@ -40,13 +40,13 @@
 
 ## What is Databend?
 
-Databend is an open-source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse.
+Databend is an open-source **Elastic** and **Workload-Aware** modern cloud data warehouse.
 
-Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on Object Storage.
+Databend uses the latest techniques in vectorized query processing to allow you to do blazing-fast data analytics on object storage([S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/) or [MinIO](https://min.io)).
 
 - __Instant Elasticity__
 
-  Databend separates the storage and compute, which allows you easily scale up or scale down based on your application's needs.
+  Databend completely separates storage from compute, which allows you easily scale up or scale down based on your application's needs.
 
 - __Blazing Performance__
 
@@ -54,11 +54,11 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types:[VARIANT, OBJECT, ARRAY](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured data (JSON).
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
 
 - __MySQL/ClickHouse Compatible__
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools.
+  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/reference/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
 
 - __Easy to Use__
 
@@ -152,6 +152,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 - [How to Deploy Databend With MinIO](https://databend.rs/doc/deploy/minio)
 - [How to Deploy Databend With AWS S3](https://databend.rs/doc/deploy/s3)
+- [How to Deploy Databend With Azure Blob Storage](https://databend.rs/doc/deploy/azure)
 - [How to Deploy Databend With Wasabi Object Storage](https://databend.rs/doc/deploy/wasabi)
 - [How to Deploy Databend With Scaleway OS](https://databend.rs/doc/deploy/scw)
 - [How to Deploy Databend With Tencent COS](https://databend.rs/doc/deploy/cos)
@@ -205,8 +206,10 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 ### Use Case
 
-- [Analyzing Github Repository with Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
-- [Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
+- [Analyzing Github Repository With Databend](https://databend.rs/doc/learn/analyze-github-repo-with-databend)
+- [Analyzing Nginx Access Logs With Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
+- [User Retention Analysis With Databend](https://databend.rs/doc/learn/analyze-user-retention-with-databend)
+- [Conversion Funnel Analysis With Databend](https://databend.rs/doc/learn/analyze-funnel-with-databend)
 
 ### Performance
 

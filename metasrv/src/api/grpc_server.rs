@@ -98,10 +98,15 @@ impl GrpcServer {
                 return Err(err.into());
             }
         };
+
         tracing::info!("gRPC addr: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());
         let grpc_srv = MetaServiceServer::new(grpc_impl);
+
+        // meta_node
+        //     .add_metasrv_addr(conf.grpc_api_address.clone(), conf.grpc_api_address.clone())
+        //     .await;
 
         let j = tokio::spawn(
             async move {

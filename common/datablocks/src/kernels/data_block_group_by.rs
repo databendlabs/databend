@@ -29,45 +29,20 @@ use crate::HashMethod;
 use crate::HashMethodSingleString;
 
 impl DataBlock {
-    // TODO(leiysky): replace with `DataBlock::choose_hash_method_with_types` and deprecate this method
     pub fn choose_hash_method(
         block: &DataBlock,
         column_names: &[String],
     ) -> Result<HashMethodKind> {
-        if column_names.len() == 1 {
-            let typ = block.try_column_by_name(&column_names[0])?;
-            if typ.data_type_id() == TypeID::String {
-                return Ok(HashMethodKind::SingleString(
-                    HashMethodSingleString::default(),
-                ));
-            }
-        }
+        let hash_key_types = column_names
+            .iter()
+            .map(|c| {
+                let col = block.try_column_by_name(c)?;
+                Ok(col.data_type())
+            })
+            .collect::<Result<Vec<_>>>();
 
-        let mut group_key_len = 0;
-        for col in column_names {
-            let column = block.try_column_by_name(col)?;
-            let typ = remove_nullable(&column.data_type());
-
-            if typ.data_type_id().is_numeric() || typ.data_type_id().is_date_or_date_time() {
-                group_key_len += typ.data_type_id().numeric_byte_size()?;
-
-                //extra one byte for null flag
-                if column.is_nullable() {
-                    group_key_len += 1;
-                }
-            } else {
-                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
-            }
-        }
-
-        match group_key_len {
-            1 => Ok(HashMethodKind::KeysU8(HashMethodKeysU8::default())),
-            2 => Ok(HashMethodKind::KeysU16(HashMethodKeysU16::default())),
-            3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::default())),
-            5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
-            // TODO support u128, u256
-            _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
-        }
+        let hash_key_types = hash_key_types?;
+        Self::choose_hash_method_with_types(&hash_key_types)
     }
 
     pub fn choose_hash_method_with_types(
@@ -84,10 +59,12 @@ impl DataBlock {
 
         let mut group_key_len = 0;
         for typ in hash_key_types {
-            let typ = remove_nullable(typ);
+            let not_null_type = remove_nullable(typ);
 
-            if typ.data_type_id().is_numeric() || typ.data_type_id().is_date_or_date_time() {
-                group_key_len += typ.data_type_id().numeric_byte_size()?;
+            if not_null_type.data_type_id().is_numeric()
+                || not_null_type.data_type_id().is_date_or_date_time()
+            {
+                group_key_len += not_null_type.data_type_id().numeric_byte_size()?;
 
                 //extra one byte for null flag
                 if typ.is_nullable() {

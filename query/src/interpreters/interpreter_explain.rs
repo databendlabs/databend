@@ -72,7 +72,8 @@ impl ExplainInterpreter {
             &self.explain.input,
         )?;
         let formatted_plan = Series::from_data(
-            format!("{}", plan.display_graphviz())
+            plan.display_graphviz()
+                .to_string()
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),

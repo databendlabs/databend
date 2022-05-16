@@ -81,11 +81,7 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
-        &mut self,
-        reader: &mut CheckpointReader<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut R, _format: &FormatSettings) -> Result<()> {
         self.buffer.clear();
         reader.read_escaped_string_text(&mut self.buffer)?;
         let val = serde_json::from_slice(self.buffer.as_slice())?;
@@ -95,7 +91,7 @@ impl TypeDeserializer for VariantDeserializer {
 
     fn de_text_quoted<R: BufferRead>(
         &mut self,
-        reader: &mut CheckpointReader<R>,
+        reader: &mut R,
         _format: &FormatSettings,
     ) -> Result<()> {
         self.buffer.clear();
@@ -109,7 +105,7 @@ impl TypeDeserializer for VariantDeserializer {
 
     fn de_text_csv<R: BufferRead>(
         &mut self,
-        reader: &mut CheckpointReader<R>,
+        reader: &mut R,
         _format: &FormatSettings,
     ) -> Result<()> {
         self.buffer.clear();

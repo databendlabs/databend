@@ -7,6 +7,7 @@ title: How-to Guides
 * [How to Deploy Databend With Local File System(For Test)](../10-deploy/00-local.md)
 * [How to Deploy Databend With MinIO](../10-deploy/04-minio.md)
 * [How to Deploy Databend With AWS S3](../10-deploy/01-s3.md)
+* [How to Deploy Databend With Azure Blob Storage](../10-deploy/08-azure.md)
 * [How to Deploy Databend With Tencent COS](../10-deploy/02-cos.md)
 * [How to Deploy Databend With Alibaba OSS](../10-deploy/03-oss.md)
 * [How to Deploy Databend With QingCloud QingStore](../10-deploy/07-qingstore.md)
@@ -66,6 +67,8 @@ title: How-to Guides
 
 * [How to Analyze Github Repository With Databend](../90-learn/00-analyze-github-repo-with-databend.md)
 * [How to Analyze Nginx Access Logs With Databend](../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)
+* [How to Do User Retention Analysis With Databend](../90-learn/03-analyze-user-retention-with-databend.md)
+* [How to Do Conversion Funnel Analysis With Databend](../90-learn/04-analyze-funnel-with-databend.md)
 
 
 ## Back up

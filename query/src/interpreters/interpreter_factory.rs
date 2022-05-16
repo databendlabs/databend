@@ -52,6 +52,7 @@ use crate::interpreters::InterceptorInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
 use crate::interpreters::OptimizeTableInterpreter;
+use crate::interpreters::RenameDatabaseInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::RevokeRoleInterpreter;
 use crate::interpreters::SelectInterpreter;
@@ -126,6 +127,7 @@ impl InterpreterFactory {
             PlanNode::ShowCreateDatabase(v) => {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
+            PlanNode::RenameDatabase(v) => RenameDatabaseInterpreter::try_create(ctx_clone, v),
 
             // Table related transforms
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),

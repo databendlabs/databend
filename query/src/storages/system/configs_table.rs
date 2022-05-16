@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use itertools::Itertools;
 use serde_json::Value;
 
 use crate::sessions::QueryContext;
@@ -194,6 +195,17 @@ impl ConfigsTable {
                     descs,
                     k.to_string(),
                     b.to_string(),
+                    group.clone(),
+                    "".to_string(),
+                    name_prefix.clone(),
+                ),
+                Value::Array(v) => ConfigsTable::push_config(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    k.to_string(),
+                    v.iter().join(","),
                     group.clone(),
                     "".to_string(),
                     name_prefix.clone(),

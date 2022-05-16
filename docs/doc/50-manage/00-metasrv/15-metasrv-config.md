@@ -5,12 +5,6 @@ description:
   Databend Meta Service Configuration
 ---
 
-:::tip
-
-Expected deployment time: ** 5 minutes ⏱ **
-
-:::
-
 A `databend-meta` server is configured with a config file in `toml`: `databend-meta --config-file databend-meta.toml`.
 
 ```toml title="databend-meta.toml"
@@ -61,7 +55,7 @@ join                     = ["127.0.0.1:28103", "127.0.0.1:28203"]
 ## 1. Logging config
 
 - `log_id` is the path to a directory for storing hourly-rolling debug log.
-- `log_level` is the log level. by default it is `DEBUG`.
+- `log_level` is the log level. By default, it is `DEBUG`.
 
 ## 2. Metric service config
 
@@ -110,7 +104,7 @@ Defines raft behaviors on raft-storage and the state machine.
 
 - `snapshot_logs_since_last` specifies the number of raft-logs since the last snapshot beyond which a snapshot will be generated.
 
-### 7. Startup config
+## 7. Startup config
 
 - `single` tells the node to initialize a single node cluster if it is not
   initialized. Otherwise, this arg is just ignored.

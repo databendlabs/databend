@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::env;
 use std::future::Future;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,25 +24,17 @@ use common_base::infallible::RwLock;
 use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::init_operator;
 use common_metrics::label_counter;
 use common_tracing::init_query_logger;
 use common_tracing::tracing;
 use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
-use opendal::services::azblob;
-use opendal::services::fs;
-#[cfg(feature = "storage-hdfs")]
-use opendal::services::hdfs;
-use opendal::services::memory;
-use opendal::services::s3;
-use opendal::Accessor;
 use opendal::Operator;
-use opendal::Scheme as DalSchema;
 
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::ClusterDiscovery;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -54,11 +44,12 @@ use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: RwLock<Config>,
     pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
-    pub(in crate::sessions) catalog: RwLock<Arc<DatabaseCatalog>>,
+    pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
     pub(in crate::sessions) user_manager: RwLock<Arc<UserApiProvider>>,
     pub(in crate::sessions) auth_manager: RwLock<Arc<AuthMgr>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
@@ -76,7 +67,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
+        let catalogs = Arc::new(CatalogManager::new(&conf).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
 
         // Cluster discovery.
@@ -113,7 +104,7 @@ impl SessionManager {
 
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
-            catalog: RwLock::new(catalog),
+            catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
             user_manager: RwLock::new(user),
             http_query_manager,
@@ -150,8 +141,8 @@ impl SessionManager {
         self.user_manager.read().clone()
     }
 
-    pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.catalog.read().clone()
+    pub fn get_catalog_manager(self: &Arc<Self>) -> Arc<CatalogManager> {
+        self.catalogs.read().clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
@@ -328,104 +319,10 @@ impl SessionManager {
 
     // Init the storage operator by config.
     async fn init_storage_operator(conf: &Config) -> Result<Operator> {
-        let storage_conf = &conf.storage;
-        let schema_name = &storage_conf.storage_type;
-        let schema = DalSchema::from_str(schema_name)?;
-
-        let accessor: Arc<dyn Accessor> = match schema {
-            DalSchema::Memory => {
-                let mut builder = memory::Backend::build();
-
-                builder.finish().await?
-            }
-            DalSchema::Azblob => {
-                let azblob_conf = &storage_conf.azblob;
-                let mut builder = azblob::Backend::build();
-
-                // Endpoint
-                {
-                    builder.endpoint(&azblob_conf.azblob_endpoint_url);
-                }
-
-                // Container
-                {
-                    builder.container(&azblob_conf.container);
-                }
-
-                // Root
-                {
-                    builder.root(&azblob_conf.azblob_root);
-                }
-
-                // Credential
-                {
-                    builder.account_name(&azblob_conf.account_name);
-                    builder.account_key(&azblob_conf.account_key);
-                }
-
-                builder.finish().await?
-            }
-            DalSchema::Fs => {
-                let mut path = storage_conf.fs.data_path.clone();
-                if !path.starts_with('/') {
-                    path = env::current_dir().unwrap().join(path).display().to_string();
-                }
-
-                fs::Backend::build().root(&path).finish().await?
-            }
-            #[cfg(feature = "storage-hdfs")]
-            DalSchema::Hdfs => {
-                let conf = &storage_conf.hdfs;
-                let mut builder = hdfs::Backend::build();
-
-                // Endpoint.
-                {
-                    builder.name_node(&conf.name_node);
-                }
-
-                // Root
-                {
-                    builder.root(&conf.hdfs_root);
-                }
-
-                builder.finish().await?
-            }
-            DalSchema::S3 => {
-                let s3_conf = &storage_conf.s3;
-                let mut builder = s3::Backend::build();
-
-                // Endpoint.
-                {
-                    builder.endpoint(&s3_conf.endpoint_url);
-                }
-
-                // Region
-                {
-                    builder.region(&s3_conf.region);
-                }
-
-                // Credential.
-                {
-                    builder.access_key_id(&s3_conf.access_key_id);
-                    builder.secret_access_key(&s3_conf.secret_access_key);
-                }
-
-                // Bucket.
-                {
-                    builder.bucket(&s3_conf.bucket);
-                }
-
-                // Root.
-                {
-                    builder.root(&s3_conf.root);
-                }
-
-                builder.finish().await?
-            }
-        };
+        let op = init_operator(&conf.storage).await?;
 
         // Enable exponential backoff by default
-        Ok(Operator::new(accessor).with_backoff(backon::ExponentialBackoff::default()))
+        Ok(op.with_backoff(backon::ExponentialBackoff::default()))
     }
 
     pub async fn reload_config(&self) -> Result<()> {
@@ -438,8 +335,8 @@ impl SessionManager {
         };
 
         {
-            let catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
-            *self.catalog.write() = Arc::new(catalog);
+            let catalogs = CatalogManager::new(&config).await?;
+            *self.catalogs.write() = Arc::new(catalogs);
         }
 
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));

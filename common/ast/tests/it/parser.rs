@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use common_ast::parser::error::pretty_print_error;
 use common_ast::parser::error::Backtrace;
+use common_ast::parser::error::DisplayError as _;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
@@ -45,9 +45,7 @@ macro_rules! test_parse {
                 writeln!($file, "\n").unwrap();
             }
             Err(nom::Err::Error(err) | nom::Err::Failure(err)) => {
-                let report = pretty_print_error($source, err.to_labels())
-                    .trim_end()
-                    .to_string();
+                let report = err.display_error(()).trim_end().to_string();
                 writeln!($file, "---------- Input ----------").unwrap();
                 writeln!($file, "{}", $source).unwrap();
                 writeln!($file, "---------- Output ---------").unwrap();
@@ -105,6 +103,7 @@ fn test_statement() {
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
+        r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
     ];
 
     for case in cases {
@@ -147,7 +146,10 @@ fn test_statements_in_legacy_suites() {
 
         let tokens = tokenize_sql(&file_str).unwrap();
         let backtrace = Backtrace::new();
-        parse_sql(&tokens, &backtrace).unwrap();
+        parse_sql(&tokens, &backtrace).expect(
+            "Parser error should not exist in integration suites. \
+            Please add parser error cases to `common/ast/tests/it/parser.rs`",
+        );
     }
 }
 
@@ -165,6 +167,7 @@ fn test_statement_error() {
         r#"truncate a"#,
         r#"drop a"#,
         r#"insert into t format"#,
+        r#"alter database system x rename to db"#,
     ];
 
     for case in cases {
@@ -244,6 +247,7 @@ fn test_expr() {
         r#"- - + + - 1 + + - 2"#,
         r#"1 + a * c.d"#,
         r#"number % 2"#,
+        r#"`t`:k1.k2"#,
         r#"col1 not between 1 and 2"#,
         r#"sum(col1)"#,
         r#""random"()"#,

@@ -16,6 +16,9 @@ use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ShowCreateTablePlan {
+    /// The catalog name
+    pub catalog: String,
+    /// The database name
     pub db: String,
     /// The table name
     pub table: String,

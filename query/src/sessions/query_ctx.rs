@@ -50,9 +50,8 @@ use common_tracing::tracing;
 use opendal::Operator;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
-use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -65,6 +64,7 @@ use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
+use crate::Config;
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -88,7 +88,7 @@ impl QueryContext {
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("DatabendQuery {}", *crate::configs::DATABEND_COMMIT_VERSION),
+            version: format!("DatabendQuery {}", *crate::version::DATABEND_COMMIT_VERSION),
             shared,
             precommit_blocks: Arc::new(RwLock::new(Vec::new())),
         })
@@ -104,22 +104,24 @@ impl QueryContext {
     ) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
             SourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+                self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
             }
-            SourceInfo::StageSource(s3_table_info) => {
-                self.build_external_by_table_info(s3_table_info, plan.tbl_args.clone())
-            }
+            SourceInfo::StageSource(s3_table_info) => self.build_external_by_table_info(
+                &plan.catalog,
+                s3_table_info,
+                plan.tbl_args.clone(),
+            ),
         }
     }
 
     // Build fuse/system normal table by table info.
     fn build_table_by_table_info(
         &self,
+        catalog_name: &str,
         table_info: &TableInfo,
         table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog();
-
+        let catalog = self.get_catalog(catalog_name)?;
         if table_args.is_none() {
             catalog.get_table_by_info(table_info)
         } else {
@@ -134,6 +136,7 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_external_by_table_info(
         &self,
+        _catalog: &str,
         table_info: &StageTableInfo,
         _table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
@@ -229,8 +232,14 @@ impl QueryContext {
         self.shared.get_cluster()
     }
 
-    pub fn get_catalog(&self) -> Arc<DatabaseCatalog> {
-        self.shared.get_catalog()
+    pub fn get_catalogs(&self) -> Arc<CatalogManager> {
+        self.shared.get_catalogs()
+    }
+
+    pub fn get_catalog(&self, catalog_name: impl AsRef<str>) -> Result<Arc<dyn Catalog>> {
+        self.shared
+            .get_catalogs()
+            .get_catalog(catalog_name.as_ref())
     }
 
     /// Fetch a Table by db and table name.
@@ -240,8 +249,13 @@ impl QueryContext {
     /// ```sql
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
-    pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(database, table).await
+    pub async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.shared.get_table(catalog, database, table).await
     }
 
     pub fn get_id(&self) -> String {
@@ -254,13 +268,17 @@ impl QueryContext {
         Ok(abort_stream)
     }
 
+    pub fn get_current_catalog(&self) -> String {
+        self.shared.get_current_catalog()
+    }
+
     pub fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
-        let catalog = self.get_catalog();
+        let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
         match catalog
             .get_database(tenant_id.as_str(), &new_database_name)
             .await
@@ -405,6 +423,10 @@ impl QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         Ok(FunctionContext { tz })
+    }
+
+    pub fn get_connection_id(&self) -> String {
+        self.shared.get_connection_id()
     }
 }
 

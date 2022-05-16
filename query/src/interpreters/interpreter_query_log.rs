@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use serde::Serialize;
 use serde_json;
 
+use crate::catalogs::CATALOG_DEFAULT;
 use crate::sessions::QueryContext;
 
 #[derive(Clone, Copy, Serialize)]
@@ -135,7 +136,10 @@ impl InterpreterQueryLog {
     }
 
     async fn write_log(&self, event: &LogEvent) -> Result<()> {
-        let query_log = self.ctx.get_table("system", "query_log").await?;
+        let query_log = self
+            .ctx
+            .get_table(CATALOG_DEFAULT, "system", "query_log")
+            .await?;
         let schema = query_log.get_table_info().meta.schema.clone();
 
         let block = DataBlock::create(schema.clone(), vec![
@@ -224,7 +228,7 @@ impl InterpreterQueryLog {
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
-        let sql_user_privileges = format!("{}", user.grants);
+        let sql_user_privileges = user.grants.to_string();
 
         // Query.
         let query_id = self.ctx.get_id();
@@ -334,7 +338,7 @@ impl InterpreterQueryLog {
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
-        let sql_user_privileges = format!("{}", user.grants);
+        let sql_user_privileges = user.grants.to_string();
 
         // Query.
         let query_id = self.ctx.get_id();

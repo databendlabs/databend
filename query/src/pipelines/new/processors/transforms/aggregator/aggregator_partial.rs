@@ -68,7 +68,7 @@ pub struct PartialAggregator<
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn create(method: Method, params: Arc<AggregatorParams>, ctx: Arc<QueryContext>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
         Self {
             is_generated: false,
@@ -103,9 +103,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             match inserted {
                 true => {
-                    let place = state.alloc_layout2(params);
-                    places.push(place);
-                    entity.set_state_value(place.addr());
+                    if let Some(place) = state.alloc_layout2(params) {
+                        places.push(place);
+                        entity.set_state_value(place.addr());
+                    }
                 }
                 false => {
                     let place: StateAddr = (*entity.get_state_value()).into();

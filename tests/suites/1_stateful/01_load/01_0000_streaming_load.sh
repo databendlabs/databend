@@ -36,15 +36,15 @@ fi
 
 
 
-curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.csv"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 
 
-curl -H "insert_sql:insert into ontime_streaming_load format Parquet" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.parquet"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load format Parquet" -H "skip_header:1" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 
 
-curl -H "insert_sql:insert into ontime_streaming_load format NdJson" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.ndjson"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load format NdJson" -H "skip_header:1" -F "upload=@/tmp/ontime_200.ndjson" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 
 

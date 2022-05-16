@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "datatype.proto";
 
 // Complete database info.
 message DatabaseInfo {
@@ -27,7 +28,8 @@ message DatabaseInfo {
 }
 
 // The identifier of a database by name. Names can be changed.
-// There is no guarantee that two get-database request by name will return the same instance.
+// There is no guarantee that two get-database request by name will return the
+// same instance.
 message DatabaseNameIdent {
   uint64 ver = 100;
 
@@ -74,7 +76,6 @@ message DatabaseMeta {
   string comment = 22;
 }
 
-
 // Complete table info.
 message TableInfo {
   uint64 ver = 100;
@@ -93,12 +94,14 @@ message TableInfo {
   /// The essential information about a table definition.
   ///
   /// It is about what a table actually is.
-  /// `name`, `id` or `version` is not included in the table structure definition.
+  /// `name`, `id` or `version` is not included in the table structure
+  /// definition.
   TableMeta meta = 4;
 }
 
 // The identifier of a table by name. Names can be changed.
-// There is no guarantee that two get-table request by name will return the same instance.
+// There is no guarantee that two get-table request by name will return the same
+// instance.
 message TableNameIdent {
   uint64 ver = 100;
 
@@ -142,7 +145,7 @@ message TableMeta {
   map<string, string> options = 5;
 
   // Keys to sort rows in table.
-  optional bytes order_keys = 9;
+  optional string order_keys = 9;
 
   // The time table created.
   string created_on = 20;
@@ -172,105 +175,9 @@ message DataField {
   // The name of this column.
   string name = 1;
 
-  // A SQL style expression to define the default value for this field.
-  optional bytes default_expr = 2;
+  // A SQL style expression to define the default value for this field, represent as raw sql
+  optional string default_expr = 2;
 
   // Column data type
   DataType data_type = 3;
 }
-
-// An enumeration of all supported data types.
-message DataType {
-  uint64 ver = 100;
-
-  oneof dt {
-    NullableType nullable_type = 1;
-    Empty         bool_type = 2;
-    Empty         int8_type = 3;
-    Empty         int16_type = 4;
-    Empty         int32_type = 5;
-    Empty         int64_type = 6;
-    Empty         uint8_type = 7;
-    Empty         uint16_type = 8;
-    Empty         uint32_type = 9;
-    Empty         uint64_type = 10;
-    Empty         float32_type = 11;
-    Empty         float64_type = 12;
-    Empty         date_type = 13;
-    Timestamp     timestamp_type = 14;
-    Empty         string_type = 15;
-    Struct        struct_type = 16;
-    Array         array_type = 17;
-    Variant       variant_type = 18;
-    VariantArray  variant_array_type = 19;
-    VariantObject variant_object_type = 20;
-    IntervalType  interval_type = 21;
-  }
-}
-
-// A wrapper data type of another type.
-// Such a column allows to contain `null` elements
-message NullableType {
-  uint64 ver = 100;
-
-  // The type for the non-null element.
-  DataType inner = 1;
-}
-
-// Timestamp data type with customizable precision and timezone: `tz`.
-message Timestamp {
-  uint64 ver = 100;
-
-  /// The time resolution is determined by the precision parameter, range from 0 to 9
-  /// Typically are used - 0 (seconds) 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
-  uint64 precision = 1;
-}
-
-// Struct is similar to a `map` with fixed keys.
-message Struct {
-  uint64 ver = 100;
-
-  // Struct field names.
-  repeated string names = 1;
-
-  // The corresponding field types.
-  repeated DataType types = 2;
-}
-
-// Array contains multiple elements of the same type.
-message Array {
-  uint64 ver = 100;
-
-  // The type of the elements
-  DataType inner = 1;
-}
-
-message VariantArray {
-  uint64 ver = 100;
-}
-
-message VariantObject {
-  uint64 ver = 100;
-}
-
-enum IntervalKind {
-  Year = 0;
-  Month = 1;
-  Day = 2;
-  Hour = 3;
-  Minute = 4;
-  Second = 5;
-}
-message IntervalType {
-  uint64 ver = 100;
-
-  IntervalKind kind = 1;
-}
-
-// Something under developing.:)
-message Variant {
-  uint64 ver = 100;
-}
-
-// Place holder type for primitive types
-message Empty {}

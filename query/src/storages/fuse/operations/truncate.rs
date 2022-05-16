@@ -20,7 +20,6 @@ use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -51,7 +50,7 @@ impl FuseTable {
                 let keep_last_snapshot = false;
                 self.do_optimize(ctx.clone(), keep_last_snapshot).await?
             }
-            ctx.get_catalog()
+            ctx.get_catalog(&plan.catalog)?
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
                     OPT_KEY_SNAPSHOT_LOCATION,

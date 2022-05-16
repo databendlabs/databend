@@ -17,7 +17,7 @@ use std::fs;
 use std::io::Write;
 
 use common_exception::Result;
-use databend_query::configs::Config;
+use databend_query::Config;
 use pretty_assertions::assert_eq;
 
 // Default.
@@ -74,6 +74,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "root"
 password = ""
 client_timeout_in_second = 10
@@ -94,6 +95,7 @@ access_key_id = ""
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""
@@ -105,6 +107,10 @@ root = ""
 [storage.hdfs]
 name_node = ""
 root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "Binary"
 "#;
 
     let tom_actual = toml::to_string(&actual).unwrap();
@@ -244,6 +250,7 @@ query_enabled = false
 [meta]
 embedded_dir = "./_meta_embedded"
 address = ""
+endpoints = []
 username = "username_from_file"
 password = "password_from_file"
 client_timeout_in_second = 10
@@ -264,6 +271,7 @@ access_key_id = "access_key_id_from_file"
 secret_access_key = ""
 bucket = ""
 root = ""
+master_key = ""
 
 [storage.azblob]
 account_name = ""
@@ -275,6 +283,10 @@ root = ""
 [storage.hdfs]
 name_node = ""
 root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "Binary"
     "#
         .as_bytes(),
     )?;
@@ -298,12 +310,5 @@ root = ""
         },
     );
 
-    Ok(())
-}
-
-#[test]
-fn test_fuse_commit_version() -> Result<()> {
-    let v = &databend_query::configs::DATABEND_COMMIT_VERSION;
-    assert!(v.len() > 0);
     Ok(())
 }
