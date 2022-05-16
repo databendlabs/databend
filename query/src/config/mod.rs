@@ -12,6 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// Config mods provide config support.
+///
+/// We are providing two config types:
+///
+/// - [`inner::Config`] which will be exposed as [`crate::Config`] will be used in all business logic.
+/// - [`outer_v0::Config`] is the outer config for [`inner::Config`] which will be exposed to end-users.
+///
+/// It's safe to refactor [`inner::Config`] in anyway, as long as it satisfied the following traits
+///
+/// - `TryInto<inner::Config> for outer_v0::Config`
+/// - `From<inner::Config> for outer_v0::Config`
 mod inner;
 mod outer_v0;
 

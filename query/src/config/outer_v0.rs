@@ -38,6 +38,17 @@ use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
 
+/// Outer config for `query`.
+///
+/// We will use this config to handle
+///
+/// - Args parse
+/// - Env loading
+/// - Config files serialize and deserialize
+///
+/// It's forbidden to do any breaking changes on this struct.
+/// Only adding new fields is allowed.
+/// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]

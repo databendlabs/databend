@@ -21,6 +21,9 @@ use common_io::prelude::StorageConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 
+/// Inner config for query.
+///
+/// All function should implemented based on this Config.
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Config {
     pub config_file: String,
@@ -66,6 +69,15 @@ impl Config {
         !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
     }
 
+    /// Transform config into the outer style.
+    ///
+    /// This function should only be used for end-users.
+    ///
+    /// For examples:
+    ///
+    /// - system config table
+    /// - HTTP Handler
+    /// - tests
     pub fn into_outer(self) -> OuterV0Config {
         OuterV0Config::from(self)
     }
