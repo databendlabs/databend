@@ -22,7 +22,7 @@ create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
 
 
 create table t3(`a` int) ENGINE = Null;
-create table t4('a' int) ENGINE = Null;
+create table t4(a int) ENGINE = Null;
 
 DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;

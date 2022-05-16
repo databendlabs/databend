@@ -52,7 +52,7 @@ impl ShowTablesInterpreter {
         let showfull = self.plan.showfull;
         let select_cols = if showfull {
             format!(
-                "table_name as Tables_in_{}, table_type as Table_type",
+                "table_name as Tables_in_{}, table_type as Table_type, table_catalog, engine, create_time, num_rows, data_size, data_compressed_size, index_size",
                 database
             )
         } else {

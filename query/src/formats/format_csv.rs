@@ -187,11 +187,8 @@ impl InputFormat for CsvInputFormat {
         let reader = BufferReader::new(cursor);
         let mut checkpoint_reader = CheckpointReader::new(reader);
 
-        for row_index in 0..self.min_accepted_rows {
-            if checkpoint_reader.eof()? {
-                break;
-            }
-
+        let mut row_index = 0;
+        while !checkpoint_reader.eof()? {
             for column_index in 0..deserializers.len() {
                 if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default(&self.settings);
@@ -231,6 +228,8 @@ impl InputFormat for CsvInputFormat {
                 // \r\n
                 checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
             }
+
+            row_index += 1;
         }
 
         let mut columns = Vec::with_capacity(deserializers.len());

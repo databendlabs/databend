@@ -138,10 +138,7 @@ impl DataType for TimestampType {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
         mp.insert(ARROW_EXTENSION_NAME.to_string(), "Timestamp".to_string());
-        mp.insert(
-            ARROW_EXTENSION_META.to_string(),
-            format!("{}", self.precision),
-        );
+        mp.insert(ARROW_EXTENSION_META.to_string(), self.precision.to_string());
         Some(mp)
     }
 

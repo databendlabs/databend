@@ -33,7 +33,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -45,10 +45,10 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/
 
 </TabItem>
 
-<TabItem value="arm" label="Arm">
+<TabItem value="arm" label="Linux Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -58,7 +58,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-${version}-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-${version}-x86_64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>
@@ -70,10 +70,10 @@ tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
 
 </TabItem>
 
-<TabItem value="arm" label="Arm">
+<TabItem value="arm" label="Linux Arm">
 
 ```shell
-tar xzvf databend-${version}-aarch64-unknown-linux-gnu.tar.gz
+tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
 ```
 
 </TabItem>

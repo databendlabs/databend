@@ -41,7 +41,7 @@ async fn test_setting_interpreter_error() -> Result<()> {
     let executor = InterpreterFactory::get(ctx.clone(), plan)?;
     if let Err(e) = executor.execute(None).await {
         let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";
-        assert_eq!(expect, format!("{}", e));
+        assert_eq!(expect, e.to_string());
     }
 
     Ok(())

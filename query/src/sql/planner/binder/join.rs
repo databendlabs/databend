@@ -43,15 +43,20 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         join: &Join<'a>,
-    ) -> Result<BindContext> {
-        let left_child = self.bind_table_reference(&join.left, bind_context).await?;
-        let right_child = self.bind_table_reference(&join.right, bind_context).await?;
+    ) -> Result<(SExpr, BindContext)> {
+        let (left_child, left_context) =
+            self.bind_table_reference(bind_context, &join.left).await?;
+        let (right_child, right_context) = self
+            .bind_table_reference(&left_context, &join.right)
+            .await?;
+
+        check_duplicate_join_tables(&left_context, &right_context)?;
 
         let mut bind_context = BindContext::new();
-        for column in left_child.all_column_bindings() {
+        for column in left_context.all_column_bindings() {
             bind_context.add_column_binding(column.clone());
         }
-        for column in right_child.all_column_bindings() {
+        for column in right_context.all_column_bindings() {
             bind_context.add_column_binding(column.clone());
         }
 
@@ -60,8 +65,8 @@ impl<'a> Binder {
         let mut other_conditions: Vec<Scalar> = vec![];
         let join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
-            &left_child,
-            &right_child,
+            &left_context,
+            &right_context,
             &bind_context,
             &join.condition,
         );
@@ -73,66 +78,84 @@ impl<'a> Binder {
             )
             .await?;
 
-        match &join.op {
-            JoinOperator::Inner => {
-                bind_context = self.bind_inner_join(
-                    left_join_conditions,
-                    right_join_conditions,
-                    bind_context,
-                    left_child.expression.unwrap(),
-                    right_child.expression.unwrap(),
-                )?;
-            }
-            JoinOperator::LeftOuter => {
-                return Err(ErrorCode::UnImplement(
-                    "Unsupported join type: LEFT OUTER JOIN",
-                ));
-            }
-            JoinOperator::RightOuter => {
-                return Err(ErrorCode::UnImplement(
-                    "Unsupported join type: RIGHT OUTER JOIN",
-                ));
-            }
-            JoinOperator::FullOuter => {
-                return Err(ErrorCode::UnImplement(
-                    "Unsupported join type: FULL OUTER JOIN",
-                ));
-            }
+        let mut s_expr = match &join.op {
+            JoinOperator::Inner => self.bind_inner_join(
+                left_join_conditions,
+                right_join_conditions,
+                left_child,
+                right_child,
+            ),
+            JoinOperator::LeftOuter => Err(ErrorCode::UnImplement(
+                "Unsupported join type: LEFT OUTER JOIN",
+            )),
+            JoinOperator::RightOuter => Err(ErrorCode::UnImplement(
+                "Unsupported join type: RIGHT OUTER JOIN",
+            )),
+            JoinOperator::FullOuter => Err(ErrorCode::UnImplement(
+                "Unsupported join type: FULL OUTER JOIN",
+            )),
             JoinOperator::CrossJoin => {
-                return Err(ErrorCode::UnImplement("Unsupported join type: CROSS JOIN"));
+                Err(ErrorCode::UnImplement("Unsupported join type: CROSS JOIN"))
             }
-        }
+        }?;
 
         if !other_conditions.is_empty() {
             let filter_plan = FilterPlan {
                 predicates: other_conditions,
                 is_having: false,
             };
-            let new_expr =
-                SExpr::create_unary(filter_plan.into(), bind_context.expression.clone().unwrap());
-            bind_context.expression = Some(new_expr);
+            s_expr = SExpr::create_unary(filter_plan.into(), s_expr);
         }
 
-        Ok(bind_context)
+        Ok((s_expr, bind_context))
     }
 
     fn bind_inner_join(
         &mut self,
         left_conditions: Vec<Scalar>,
         right_conditions: Vec<Scalar>,
-        mut bind_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
-    ) -> Result<BindContext> {
+    ) -> Result<SExpr> {
         let inner_join = LogicalInnerJoin {
             left_conditions,
             right_conditions,
         };
         let expr = SExpr::create_binary(inner_join.into(), left_child, right_child);
-        bind_context.expression = Some(expr);
 
-        Ok(bind_context)
+        Ok(expr)
     }
+}
+
+pub fn check_duplicate_join_tables(
+    left_context: &BindContext,
+    right_context: &BindContext,
+) -> Result<()> {
+    let left_column_bindings = left_context.all_column_bindings();
+    let left_table_name = if left_column_bindings.is_empty() {
+        None
+    } else {
+        left_column_bindings[0].table_name.as_ref()
+    };
+
+    let right_column_bindings = right_context.all_column_bindings();
+    let right_table_name = if right_column_bindings.is_empty() {
+        None
+    } else {
+        right_column_bindings[0].table_name.as_ref()
+    };
+
+    if let Some(left) = left_table_name {
+        if let Some(right) = right_table_name {
+            if left.eq(right) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Duplicated table name {} in the same FROM clause",
+                    left
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 struct JoinConditionResolver<'a> {

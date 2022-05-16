@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,9 +41,21 @@ impl<'a> ExpressionBuilder<'a> {
         ExpressionBuilder { metadata }
     }
 
-    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
+    pub fn build_and_rename(
+        &self,
+        scalar: &Scalar,
+        index: IndexType,
+        input_schema: &DataSchemaRef,
+    ) -> Result<Expression> {
         let mut expr = self.build(scalar)?;
-        expr = self.normalize_aggr_to_col(expr)?;
+        // If the input_schema contains the field of expr,
+        // it means that its sub-plan has already processed the expression
+        // and we can directly convert it to column expression
+        if input_schema.has_field(expr.column_name().as_str()) {
+            expr = Expression::Column(expr.column_name());
+        } else {
+            expr = self.normalize_aggr_to_col(expr)?;
+        }
         let column = self.metadata.column(index);
         Ok(Expression::Alias(
             format_field_name(column.name.as_str(), index),
@@ -54,7 +68,9 @@ impl<'a> ExpressionBuilder<'a> {
             Scalar::BoundColumnRef(BoundColumnRef { column }) => {
                 self.build_column_ref(column.index)
             }
-            Scalar::ConstantExpr(ConstantExpr { value }) => self.build_literal(value),
+            Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
+                self.build_literal(value, data_type)
+            }
             Scalar::ComparisonExpr(ComparisonExpr { op, left, right }) => {
                 self.build_binary_operator(left, right, op.to_func_name())
             }
@@ -121,8 +137,16 @@ impl<'a> ExpressionBuilder<'a> {
         )))
     }
 
-    pub fn build_literal(&self, data_value: &DataValue) -> Result<Expression> {
-        Ok(Expression::create_literal(data_value.clone()))
+    pub fn build_literal(
+        &self,
+        data_value: &DataValue,
+        data_type: &DataTypeImpl,
+    ) -> Result<Expression> {
+        Ok(Expression::Literal {
+            value: data_value.clone(),
+            column_name: None,
+            data_type: data_type.clone(),
+        })
     }
 
     pub fn build_binary_operator(

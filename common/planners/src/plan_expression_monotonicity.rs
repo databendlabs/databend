@@ -248,7 +248,7 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 column_name,
                 data_type,
             } => {
-                let name = column_name.clone().unwrap_or(format!("{}", value));
+                let name = column_name.clone().unwrap_or_else(|| value.to_string());
                 let data_field = DataField::new(&name, data_type.clone());
                 let col = data_type.create_constant_column(value, 1)?;
                 let data_column_field = ColumnWithField::new(col, data_field);

@@ -340,6 +340,8 @@ Build tools (since -b or no option was provided):
   * pkg-config
   * libssl-dev
   * protobuf-compiler
+  * thrift-compiler
+  * openjdk
 EOF
 	fi
 

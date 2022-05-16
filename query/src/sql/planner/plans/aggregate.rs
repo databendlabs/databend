@@ -26,9 +26,9 @@ use crate::sql::plans::PlanType;
 #[derive(Clone, Debug)]
 pub struct AggregatePlan {
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
-    pub group_expr: Vec<Scalar>,
+    pub group_items: Vec<Scalar>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    pub agg_expr: Vec<Scalar>,
+    pub aggregate_functions: Vec<Scalar>,
 }
 
 impl BasePlan for AggregatePlan {

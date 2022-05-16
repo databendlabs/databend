@@ -42,7 +42,7 @@ async fn test_use_database_interpreter_error() -> Result<()> {
 
     if let Err(e) = interpreter.execute(None).await {
         let expect = "Code: 1003, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
-        assert_eq!(expect, format!("{}", e));
+        assert_eq!(expect, e.to_string());
     }
 
     Ok(())

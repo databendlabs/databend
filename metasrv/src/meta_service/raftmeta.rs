@@ -58,6 +58,11 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
+use crate::metrics::incr_meta_metrics_leader_change;
+use crate::metrics::incr_meta_metrics_read_failed;
+use crate::metrics::set_meta_metrics_has_leader;
+use crate::metrics::set_meta_metrics_is_leader;
+use crate::metrics::set_meta_metrics_proposals_applied;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
 use crate::watcher::WatcherManager;
@@ -360,6 +365,7 @@ impl MetaNode {
         // TODO: every state change triggers add_non_voter!!!
         let mut running_rx = mn.running_rx.clone();
         let mut jh = mn.join_handles.lock().await;
+        let mut current_leader: Option<u64> = None;
 
         // TODO: reduce dependency: it does not need all of the fields in MetaNode
         let mn = mn.clone();
@@ -381,6 +387,17 @@ impl MetaNode {
                         if changed.is_ok() {
                             let mm = metrics_rx.borrow().clone();
                             if let Some(cur) = mm.current_leader {
+                                // if current leader has changed?
+                                if let Some(leader) = current_leader {
+                                    if cur != leader {
+                                        current_leader = Some(cur);
+                                        incr_meta_metrics_leader_change();
+                                    }
+                                } else {
+                                    current_leader = Some(cur);
+                                    incr_meta_metrics_leader_change();
+                                }
+
                                 if cur == mn.sto.id {
                                     // TODO: check result
                                     let _rst = mn.add_configured_non_voters().await;
@@ -392,7 +409,17 @@ impl MetaNode {
                                             _rst
                                         );
                                     }
+                                    set_meta_metrics_is_leader(true);
+                                } else {
+                                    set_meta_metrics_is_leader(false);
                                 }
+                                set_meta_metrics_has_leader(true);
+                            } else {
+                                set_meta_metrics_has_leader(false);
+                                set_meta_metrics_is_leader(false);
+                            }
+                            if let Some(last_applied) = mm.last_applied {
+                                set_meta_metrics_proposals_applied(last_applied.index);
                             }
                         } else {
                             // shutting down
@@ -601,18 +628,29 @@ impl MetaNode {
         ForwardResponse: TryInto<Reply>,
         <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
     {
-        let res = self
+        match self
             .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
                 body: req.into(),
             })
-            .await?;
+            .await
+        {
+            Err(e) => {
+                incr_meta_metrics_read_failed();
+                Err(e)
+            }
+            Ok(res) => {
+                let res: Reply = res.try_into().map_err(|e| {
+                    incr_meta_metrics_read_failed();
+                    MetaRaftError::ConsistentReadError(format!(
+                        "consistent read recv invalid reply: {}",
+                        e
+                    ))
+                })?;
 
-        let res: Reply = res.try_into().map_err(|e| {
-            MetaRaftError::ConsistentReadError(format!("consistent read recv invalid reply: {}", e))
-        })?;
-
-        Ok(res)
+                Ok(res)
+            }
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
