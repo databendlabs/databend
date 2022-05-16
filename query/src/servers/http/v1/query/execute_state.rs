@@ -21,7 +21,6 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -34,6 +33,7 @@ use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -148,7 +148,7 @@ impl ExecuteState {
         request: &HttpQueryRequest,
         session: SessionRef,
         ctx: Arc<QueryContext>,
-        block_tx: mpsc::Sender<DataBlock>,
+        block_buffer: Arc<BlockBuffer>,
     ) -> Result<Arc<RwLock<Executor>>> {
         let sql = &request.sql;
         let start_time = Instant::now();
@@ -168,11 +168,6 @@ impl ExecuteState {
             .await
             .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
-        let (abort_tx, mut abort_rx) = mpsc::channel(2);
-        ctx.attach_http_query(HttpQueryHandle {
-            abort_sender: abort_tx,
-        });
-
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
@@ -186,16 +181,11 @@ impl ExecuteState {
         let executor_clone = executor.clone();
         let ctx_clone = ctx.clone();
         ctx.try_spawn(async move {
-            // drop/close block_tx after calling Executor::stop
-            // so handler task can get newest state before return
-            // otherwise the handler task and this task may competing for the executor lock
-            let block_tx_clone = block_tx.clone();
-            match execute(interpreter, ctx_clone, block_tx_clone, &mut abort_rx).await {
-                Ok(_) => Executor::stop(&executor_clone, Ok(()), false).await,
-                Err(err) => {
-                    let kill = err.message().starts_with("aborted");
-                    Executor::stop(&executor_clone, Err(err), kill).await
-                }
+            if let Err(err) =
+                execute(interpreter, ctx_clone, block_buffer, executor_clone.clone()).await
+            {
+                let kill = err.message().starts_with("aborted");
+                Executor::stop(&executor_clone, Err(err), kill).await
             };
         })?;
 
@@ -206,13 +196,14 @@ impl ExecuteState {
 async fn execute(
     interpreter: Arc<dyn Interpreter>,
     ctx: Arc<QueryContext>,
-    block_tx: mpsc::Sender<DataBlock>,
-    abort_rx: &mut mpsc::Receiver<()>,
+    block_buffer: Arc<BlockBuffer>,
+    executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
     let data_stream = interpreter.execute(None).await?;
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
     let mut result_table_writer: Option<ResultTableWriter> = None;
+
     while let Some(block_r) = data_stream.next().await {
         match block_r {
             Ok(block) => {
@@ -224,22 +215,19 @@ async fn execute(
                             user: ctx.get_current_user()?.identity(),
                         })
                         .await?,
-                    )
+                    );
+                    {
+                        block_buffer
+                            .init_reader(ctx.clone(), block.schema().clone())
+                            .await?;
+                    }
                 };
-                result_table_writer
+                let part_ptr = result_table_writer
                     .as_mut()
                     .unwrap()
                     .append_block(block.clone())
                     .await?;
-                tokio::select! {
-                    _ = block_tx.send(block) => { },
-                    _ = abort_rx.recv() => {
-                        if let Some(writer) = result_table_writer {
-                            writer.abort().await?;
-                        }
-                        return Err(ErrorCode::AbortedQuery("aborted"))
-                    },
-                };
+                block_buffer.push(block.clone(), part_ptr).await;
             }
             Err(err) => {
                 if let Some(writer) = result_table_writer {
@@ -249,6 +237,8 @@ async fn execute(
             }
         };
     }
+    Executor::stop(&executor, Ok(()), false).await;
+    block_buffer.stop_push().await;
     if let Some(mut writer) = result_table_writer {
         writer.commit().await?;
     }

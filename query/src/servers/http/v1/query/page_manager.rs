@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc;
-use common_base::base::tokio::sync::mpsc::error::TryRecvError;
-use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_tracing::tracing;
+use serde_json::Value as JsonValue;
 
+use crate::servers::http::v1::json_block::block_to_json_value;
+use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::JsonBlock;
-
-const TARGET_ROWS_PER_PAGE: usize = 10000;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
     Async,
-    Sync,
     Deadline(Instant),
 }
 
@@ -45,22 +45,30 @@ pub struct ResponseData {
     pub next_page_no: Option<usize>,
 }
 
-pub struct ResultDataManager {
+pub struct PageManager {
+    max_rows_per_page: usize,
     total_rows: usize,
     total_pages: usize,
-    last_page: Option<Page>,
-    pub(crate) block_rx: mpsc::Receiver<DataBlock>,
     end: bool,
+    block_end: bool,
+    schema: DataSchemaRef,
+    last_page: Option<Page>,
+    page_buffer: VecDeque<Vec<Vec<JsonValue>>>,
+    block_buffer: Arc<BlockBuffer>,
 }
 
-impl ResultDataManager {
-    pub fn new(block_rx: mpsc::Receiver<DataBlock>) -> ResultDataManager {
-        ResultDataManager {
-            block_rx,
+impl PageManager {
+    pub fn new(max_rows_per_page: usize, block_buffer: Arc<BlockBuffer>) -> PageManager {
+        PageManager {
             total_rows: 0,
             last_page: None,
             total_pages: 0,
             end: false,
+            block_end: false,
+            page_buffer: Default::default(),
+            schema: Arc::new(DataSchema::empty()),
+            block_buffer,
+            max_rows_per_page,
         }
     }
 
@@ -107,53 +115,58 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn receive(
-        block_rx: &mut mpsc::Receiver<DataBlock>,
-        tp: &Wait,
-    ) -> std::result::Result<DataBlock, TryRecvError> {
-        use Wait::*;
-        match tp {
-            Async => block_rx.try_recv(),
-            Sync => block_rx.recv().await.ok_or(TryRecvError::Disconnected),
-            Deadline(t) => {
-                let sleep = tokio::time::sleep_until(tokio::time::Instant::from_std(*t));
-                tokio::select! {
-                    biased;
-                    block = block_rx.recv() => block.ok_or(TryRecvError::Disconnected),
-                    _ = sleep => Err(TryRecvError::Empty)
-                }
-            }
-        }
-    }
-
-    pub async fn collect_new_page(
+    async fn collect_new_page(
         &mut self,
         tp: &Wait,
         format: &FormatSettings,
     ) -> Result<(JsonBlock, bool)> {
-        let mut results: Vec<JsonBlock> = Vec::new();
-        let mut rows = 0;
-        let block_rx = &mut self.block_rx;
-
-        let mut end = false;
+        let res: Vec<Vec<JsonValue>> = vec![];
+        let mut res = self.page_buffer.pop_front().unwrap_or(res);
         loop {
-            match ResultDataManager::receive(block_rx, tp).await {
-                Ok(block) => {
-                    rows += block.num_rows();
-                    results.push(JsonBlock::new(&block, format)?);
-                    // TODO(youngsofun):  set it in post if needed
-                    if rows >= TARGET_ROWS_PER_PAGE {
-                        break;
+            if res.len() >= self.max_rows_per_page {
+                break;
+            };
+            let block = self.block_buffer.pop().await?;
+            match block {
+                Some(block) => {
+                    if self.schema.fields().is_empty() {
+                        self.schema = block.schema().clone();
+                    }
+                    let mut iter = block_to_json_value(&block, format)?.into_iter().peekable();
+                    if res.is_empty() {
+                        let mut chunk = iter.by_ref().take(self.max_rows_per_page).collect();
+                        res.append(&mut chunk);
+                    } else {
+                        res = iter.by_ref().take(self.max_rows_per_page).collect();
+                    }
+                    while iter.peek().is_some() {
+                        let chunk: Vec<_> = iter.by_ref().take(self.max_rows_per_page).collect();
+                        self.page_buffer.push_back(chunk)
                     }
                 }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    tracing::debug!("no more data");
-                    end = true;
-                    break;
-                }
+                None => match tp {
+                    Wait::Async => break,
+                    Wait::Deadline(t) => {
+                        let d = *t - Instant::now();
+                        if d.is_zero()
+                            || tokio::time::timeout(d, self.block_buffer.block_notify.notified())
+                                .await
+                                .is_err()
+                        {
+                            break;
+                        }
+                    }
+                },
             }
         }
-        Ok((JsonBlock::concat(results), end))
+        let block = JsonBlock {
+            schema: self.schema.clone(),
+            data: res,
+        };
+        if !self.block_end {
+            self.block_end = self.block_buffer.pop_done().await;
+        }
+        let end = self.block_end && self.page_buffer.is_empty();
+        Ok((block, end))
     }
 }
