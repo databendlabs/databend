@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod quota;
-mod role;
-mod stage;
-mod udf;
-mod user;
+mod quota_api;
+mod quota_mgr;
 
-pub use cluster::ClusterApi;
-pub use cluster::ClusterMgr;
-pub use quota::QuotaApi;
-pub use quota::QuotaMgr;
-pub use role::RoleApi;
-pub use role::RoleMgr;
-pub use stage::StageApi;
-pub use stage::StageMgr;
-pub use udf::UdfApi;
-pub use udf::UdfMgr;
-pub use user::UserApi;
-pub use user::UserMgr;
+pub use quota_api::QuotaApi;
+pub use quota_mgr::QuotaMgr;
