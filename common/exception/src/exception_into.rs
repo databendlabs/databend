@@ -114,7 +114,7 @@ impl From<std::convert::Infallible> for ErrorCode {
 
 impl From<sqlparser::parser::ParserError> for ErrorCode {
     fn from(error: sqlparser::parser::ParserError) -> Self {
-        ErrorCode::SyntaxException(format!("{}", error))
+        ErrorCode::SyntaxException(error.to_string())
     }
 }
 

@@ -44,6 +44,15 @@ You can explore more flags with `./databend-query -h`.
 * Default: `"root"`
 * Env variable: `META_PASSWORD`
 
+### endpoints
+
+* A list of meta server endpoints that databend-query can connect to(as seeds), e.g., `["192.168.0.1:9101", "192.168.0.2:9101"]`.
+* Default: `[""]`
+* Env variable: `META_ENDPOINTS`
+
+:::tip
+If `endpoints` is configured, the `address` configuration will no longer take effect, you only need to configure one of them.
+:::
 
 ## 3. Query config
 
@@ -106,7 +115,7 @@ You can explore more flags with `./databend-query -h`.
 
 ### type 
 
-* Which storage type(Only support `"fs"` or `"s3"`) should use for the databend-query, e.g., `"s3"`.
+* Which storage type(Must one of `"fs"` | `"s3"` | `"azblob"`) should use for the databend-query, e.g., `"s3"`.
 * Default: `""`
 * Env variable: `STORAGE_TYPE`
 * Required.
@@ -140,6 +149,35 @@ You can explore more flags with `./databend-query -h`.
 * Env variable: `STORAGE_S3SECRET_ACCESS_KEY`
 * Required.
 
+### storage.azblob
+
+#### endpoint_url
+
+* Azure Blob Storage endpoint URL, e.g., `"https://<your-storage-account-name>.blob.core.windows.net"`.
+* Default: `""`
+* Env variable: `STORAGE_AZBLOB_ENDPOINT_URL`
+* Required.
+
+#### container
+
+* Azure Blob Storage container name.
+* Default: `""`
+* Env variable: `STORAGE_AZBLOB_CONTAINER`
+* Required.
+
+#### account_name
+
+* Azure Blob Storage account name.
+* Default: `""`
+* Env variable: `STORAGE_AZBLOB_ACCOUNT_NAME`
+* Required.
+
+#### account_key
+
+* Azure Blob Storage account key.
+* Default: `""`
+* Env variable: `STORAGE_AZBLOB_ACCOUNT_KEY`
+* Required.
 
 ## A Toml File Demo
 

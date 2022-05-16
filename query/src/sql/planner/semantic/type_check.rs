@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
+use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::DisplayError;
@@ -24,6 +25,9 @@ use common_datavalues::BooleanType;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use common_datavalues::IntervalKind;
+use common_datavalues::IntervalType;
+use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -59,6 +63,8 @@ pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
 
+    // true if current expr is inside an aggregate function.
+    // This is used to check if there is nested aggregate function.
     in_aggregate_function: bool,
 }
 
@@ -183,11 +189,8 @@ impl<'a> TypeChecker<'a> {
                 expr, target_type, ..
             } => {
                 let (scalar, data_type) = self.resolve(expr, required_type).await?;
-                let cast_func = CastFunction::create_try(
-                    "",
-                    target_type.to_string().as_str(),
-                    data_type.clone(),
-                )?;
+                let cast_func =
+                    CastFunction::create("", target_type.to_string().as_str(), data_type.clone())?;
                 Ok((
                     CastExpr {
                         argument: Box::new(scalar),
@@ -222,9 +225,15 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Literal { lit, .. } => {
-                let value = self.parse_literal(lit, required_type)?;
-                let data_type = value.data_type();
-                Ok((ConstantExpr { value }.into(), data_type))
+                let (value, data_type) = self.resolve_literal(lit, required_type)?;
+                Ok((
+                    ConstantExpr {
+                        value,
+                        data_type: data_type.clone(),
+                    }
+                    .into(),
+                    data_type,
+                ))
             }
 
             Expr::FunctionCall {
@@ -234,8 +243,14 @@ impl<'a> TypeChecker<'a> {
                 params,
                 ..
             } => {
-                let args: Vec<&Expr> = args.iter().collect();
                 let func_name = name.name.as_str();
+
+                // Check if current function is a context function, e.g. `database`, `version`
+                if let Some(ctx_func_result) = self.try_resolve_context_function(func_name).await {
+                    return ctx_func_result;
+                }
+
+                let args: Vec<&Expr> = args.iter().collect();
 
                 if AggregateFunctionFactory::instance().check(func_name) {
                     if self.in_aggregate_function {
@@ -249,7 +264,7 @@ impl<'a> TypeChecker<'a> {
                     // Check aggregate function
                     let params = params
                         .iter()
-                        .map(|literal| self.parse_literal(literal, None))
+                        .map(|literal| self.resolve_literal(literal, None).map(|(value, _)| value))
                         .collect::<Result<Vec<DataValue>>>()?;
 
                     let mut arguments = vec![];
@@ -312,6 +327,49 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::Subquery { subquery, .. } => self.resolve_subquery(subquery, false, None).await,
+
+            Expr::MapAccess {
+                span,
+                expr,
+                accessor,
+            } => {
+                let arg = match accessor {
+                    MapAccessor::Bracket { key } => Expr::Literal {
+                        span,
+                        lit: key.clone(),
+                    },
+                    MapAccessor::Period { key } | MapAccessor::Colon { key } => Expr::Literal {
+                        span,
+                        lit: Literal::String(key.name.clone()),
+                    },
+                };
+
+                Ok(self.resolve_function("get", &[&**expr, &arg], None).await?)
+            }
+
+            Expr::TryCast {
+                expr, target_type, ..
+            } => {
+                let (scalar, data_type) = self.resolve(expr, required_type).await?;
+                let cast_func = CastFunction::create_try(
+                    "",
+                    target_type.to_string().as_str(),
+                    data_type.clone(),
+                )?;
+                Ok((
+                    CastExpr {
+                        argument: Box::new(scalar),
+                        from_type: data_type,
+                        target_type: cast_func.return_type(),
+                    }
+                    .into(),
+                    cast_func.return_type(),
+                ))
+            }
+
+            Expr::Extract { kind, expr, .. } => {
+                self.resolve_extract_expr(kind, expr, required_type).await
+            }
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
@@ -438,8 +496,61 @@ impl<'a> TypeChecker<'a> {
         child: &Expr<'a>,
         required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        self.resolve_function(op.to_string().as_str(), &[child], required_type)
-            .await
+        match op {
+            UnaryOperator::Plus => {
+                // Omit unary + operator
+                self.resolve(child, required_type).await
+            }
+
+            UnaryOperator::Minus => {
+                self.resolve_function("negate", &[child], required_type)
+                    .await
+            }
+
+            UnaryOperator::Not => self.resolve_function("not", &[child], required_type).await,
+        }
+    }
+
+    pub async fn resolve_extract_expr(
+        &mut self,
+        interval_kind: &IntervalKind,
+        arg: &Expr<'a>,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        match interval_kind {
+            IntervalKind::Year => {
+                self.resolve_function("toYear", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Month => {
+                self.resolve_function("toMonth", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Day => {
+                self.resolve_function("toDayOfMonth", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Hour => {
+                self.resolve_function("toHour", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Minute => {
+                self.resolve_function("toMinute", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Second => {
+                self.resolve_function("toSecond", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Doy => {
+                self.resolve_function("toDayOfYear", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+            IntervalKind::Dow => {
+                self.resolve_function("toDayOfWeek", &[arg], Some(TimestampType::new_impl(0)))
+                    .await
+            }
+        }
     }
 
     pub async fn resolve_subquery(
@@ -452,7 +563,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = binder.bind_query(subquery, &bind_context).await?;
+        let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
         if output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
@@ -472,23 +583,73 @@ impl<'a> TypeChecker<'a> {
         Ok((subquery_expr.into(), data_type))
     }
 
+    async fn try_resolve_context_function(
+        &mut self,
+        func_name: &str,
+    ) -> Option<Result<(Scalar, DataTypeImpl)>> {
+        match func_name.to_lowercase().as_str() {
+            "database" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_current_database()),
+                };
+                Some(self.resolve_function("database", &[&arg], None).await)
+            }
+            "version" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_fuse_version()),
+                };
+                Some(self.resolve_function("version", &[&arg], None).await)
+            }
+            "current_user" | "user" => match self.ctx.get_current_user() {
+                Ok(user) => {
+                    let arg = Expr::Literal {
+                        span: &[],
+                        lit: Literal::String(user.identity().to_string()),
+                    };
+                    Some(self.resolve_function("current_user", &[&arg], None).await)
+                }
+                Err(e) => Some(Err(e)),
+            },
+            "connection_id" => {
+                let arg = Expr::Literal {
+                    span: &[],
+                    lit: Literal::String(self.ctx.get_connection_id()),
+                };
+                Some(self.resolve_function("connection_id", &[&arg], None).await)
+            }
+            _ => None,
+        }
+    }
+
     /// Resolve literal values.
-    pub fn parse_literal(
+    pub fn resolve_literal(
         &self,
         literal: &Literal,
         _required_type: Option<DataTypeImpl>,
-    ) -> Result<DataValue> {
+    ) -> Result<(DataValue, DataTypeImpl)> {
         // TODO(leiysky): try cast value to required type
         let value = match literal {
             Literal::Number(string) => DataValue::try_from_literal(string, None)?,
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
+            Literal::Interval(interval) => {
+                let num = interval.value.parse::<i64>()?;
+                DataValue::Int64(num)
+            }
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
 
-        Ok(value)
+        let data_type = if let Literal::Interval(interval) = literal {
+            IntervalType::new_impl(interval.kind)
+        } else {
+            value.data_type()
+        };
+
+        Ok((value, data_type))
     }
 }

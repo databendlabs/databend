@@ -424,6 +424,10 @@ impl QueryContext {
         })?;
         Ok(FunctionContext { tz })
     }
+
+    pub fn get_connection_id(&self) -> String {
+        self.shared.get_connection_id()
+    }
 }
 
 impl TrySpawn for QueryContext {

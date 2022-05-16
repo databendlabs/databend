@@ -72,11 +72,13 @@ impl ScalarExpr for BoundColumnRef {
 #[derive(Clone, PartialEq, Debug)]
 pub struct ConstantExpr {
     pub value: DataValue,
+
+    pub data_type: DataTypeImpl,
 }
 
 impl ScalarExpr for ConstantExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.value.data_type()
+        self.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {

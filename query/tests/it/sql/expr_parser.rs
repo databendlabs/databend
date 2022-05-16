@@ -64,7 +64,7 @@ fn test_expr_parser() -> Result<()> {
                 assert_eq!(t.expect, v.column_name(), "{}", t.name);
             }
             Err(e) => {
-                assert_eq!(t.error, format!("{}", e), "{}", t.name);
+                assert_eq!(t.error, e.to_string(), "{}", t.name);
             }
         }
     }

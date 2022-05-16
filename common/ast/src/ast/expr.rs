@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_datavalues::IntervalKind;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Identifier;
@@ -84,10 +86,10 @@ pub enum Expr<'a> {
         expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
-    /// EXTRACT(DateTimeField FROM <expr>)
+    /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
         span: &'a [Token<'a>],
-        field: DateTimeField,
+        kind: IntervalKind,
         expr: Box<Expr<'a>>,
     },
     /// POSITION(<expr> IN <expr>)
@@ -148,12 +150,16 @@ pub enum Expr<'a> {
         span: &'a [Token<'a>],
         subquery: Box<Query<'a>>,
     },
-    // TODO(andylokandy): allow interval, function, and others alike to be a key
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         span: &'a [Token<'a>],
         expr: Box<Expr<'a>>,
         accessor: MapAccessor<'a>,
+    },
+    /// The `Array` expr
+    Array {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
     },
 }
 
@@ -205,33 +211,7 @@ pub enum TypeName {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interval {
     pub value: String,
-    pub field: DateTimeField,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum DateTimeField {
-    Year,
-    Month,
-    Week,
-    Day,
-    Hour,
-    Minute,
-    Second,
-    Century,
-    Decade,
-    Dow,
-    Doy,
-    Epoch,
-    Isodow,
-    Isoyear,
-    Julian,
-    Microseconds,
-    Millenium,
-    Milliseconds,
-    Quarter,
-    Timezone,
-    TimezoneHour,
-    TimezoneMinute,
+    pub kind: IntervalKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -305,6 +285,7 @@ impl<'a> Expr<'a> {
             Expr::Exists { span, .. } => span,
             Expr::Subquery { span, .. } => span,
             Expr::MapAccess { span, .. } => span,
+            Expr::Array { span, .. } => span,
         }
     }
 }
@@ -475,35 +456,6 @@ impl Display for TypeName {
     }
 }
 
-impl Display for DateTimeField {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.write_str(match self {
-            DateTimeField::Year => "YEAR",
-            DateTimeField::Month => "MONTH",
-            DateTimeField::Week => "WEEK",
-            DateTimeField::Day => "DAY",
-            DateTimeField::Hour => "HOUR",
-            DateTimeField::Minute => "MINUTE",
-            DateTimeField::Second => "SECOND",
-            DateTimeField::Century => "CENTURY",
-            DateTimeField::Decade => "DECADE",
-            DateTimeField::Dow => "DOW",
-            DateTimeField::Doy => "DOY",
-            DateTimeField::Epoch => "EPOCH",
-            DateTimeField::Isodow => "ISODOW",
-            DateTimeField::Isoyear => "ISOYEAR",
-            DateTimeField::Julian => "JULIAN",
-            DateTimeField::Microseconds => "MICROSECONDS",
-            DateTimeField::Millenium => "MILLENIUM",
-            DateTimeField::Milliseconds => "MILLISECONDS",
-            DateTimeField::Quarter => "QUARTER",
-            DateTimeField::Timezone => "TIMEZONE",
-            DateTimeField::TimezoneHour => "TIMEZONE_HOUR",
-            DateTimeField::TimezoneMinute => "TIMEZONE_MINUTE",
-        })
-    }
-}
-
 impl Display for TrimWhere {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.write_str(match self {
@@ -534,7 +486,7 @@ impl Display for Literal {
                 write!(f, "CURRENT_TIMESTAMP")
             }
             Literal::Interval(interval) => {
-                write!(f, "INTERVAL {} {}", interval.value, interval.field)
+                write!(f, "INTERVAL {} {}", interval.value, interval.kind)
             }
             Literal::Null => {
                 write!(f, "NULL")
@@ -552,7 +504,14 @@ impl<'a> Display for Expr<'a> {
                 column,
                 ..
             } => {
-                write_period_separated_list(f, database.iter().chain(table).chain(Some(column)))?;
+                if f.alternate() {
+                    write!(f, "{}", column.name)?;
+                } else {
+                    write_period_separated_list(
+                        f,
+                        database.iter().chain(table).chain(Some(column)),
+                    )?;
+                }
             }
             Expr::IsNull { expr, not, .. } => {
                 write!(f, "{expr} IS")?;
@@ -622,7 +581,9 @@ impl<'a> Display for Expr<'a> {
             } => {
                 write!(f, "TRY_CAST({expr} AS {target_type})")?;
             }
-            Expr::Extract { field, expr, .. } => {
+            Expr::Extract {
+                kind: field, expr, ..
+            } => {
                 write!(f, "EXTRACT({field} FROM {expr})")?;
             }
             Expr::Position {
@@ -722,6 +683,11 @@ impl<'a> Display for Expr<'a> {
                     MapAccessor::Period { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
+            }
+            Expr::Array { exprs, .. } => {
+                write!(f, "[")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, "]")?;
             }
         }
 

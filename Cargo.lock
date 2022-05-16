@@ -837,6 +837,7 @@ dependencies = [
  "async-trait",
  "codespan-reporting",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-types",
@@ -5906,7 +5907,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=8db5b12#8db5b126bd9185d0ca97adfcdff1ce679fdf5307"
+source = "git+https://github.com/b41sh/sqlparser-rs?rev=6630165#6630165bc2b21c88ab2d9c010122ad368a99f19a"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

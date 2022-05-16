@@ -183,7 +183,13 @@ impl DfCreateTable {
                                 // we ensure that expr's column_name equals the raw sql (no alias inside the expression)
                                 default_expr = Some(expr.column_name());
                             }
-                            _ => {}
+                            ColumnOption::NotNull => {}
+
+                            other => {
+                                return Err(ErrorCode::BadOption(format!("{} column option is not supported, please do not specify them in the CREATE TABLE statement",
+                        other
+                            )));
+                            }
                         }
                     }
                     let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {

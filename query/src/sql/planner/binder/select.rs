@@ -48,36 +48,36 @@ impl<'a> Binder {
     #[async_recursion]
     pub(crate) async fn bind_query(
         &mut self,
-        query: &Query,
         bind_context: &BindContext,
+        query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         let (mut s_expr, bind_context) = match &query.body {
             SetExpr::Select(stmt) => {
-                self.bind_select_stmt(stmt, &query.order_by, bind_context)
+                self.bind_select_stmt(bind_context, stmt, &query.order_by)
                     .await
             }
-            SetExpr::Query(stmt) => self.bind_query(stmt, bind_context).await,
+            SetExpr::Query(stmt) => self.bind_query(bind_context, stmt).await,
             _ => Err(ErrorCode::UnImplement("Unsupported query type")),
         }?;
 
         if !query.limit.is_empty() {
             if query.limit.len() == 1 {
                 s_expr = self
-                    .bind_limit(s_expr, Some(&query.limit[0]), &query.offset, &bind_context)
+                    .bind_limit(&bind_context, s_expr, Some(&query.limit[0]), &query.offset)
                     .await?;
             } else {
                 s_expr = self
                     .bind_limit(
+                        &bind_context,
                         s_expr,
                         Some(&query.limit[0]),
                         &Some(query.limit[1].clone()),
-                        &bind_context,
                     )
                     .await?;
             }
         } else if query.offset.is_some() {
             s_expr = self
-                .bind_limit(s_expr, None, &query.offset, &bind_context)
+                .bind_limit(&bind_context, s_expr, None, &query.offset)
                 .await?;
         }
 
@@ -86,47 +86,47 @@ impl<'a> Binder {
 
     pub(super) async fn bind_select_stmt(
         &mut self,
+        bind_context: &BindContext,
         stmt: &SelectStmt<'a>,
         order_by: &[OrderByExpr<'a>],
-        bind_context: &BindContext,
     ) -> Result<(SExpr, BindContext)> {
         let (mut s_expr, from_context) = if let Some(from) = &stmt.from {
-            self.bind_table_reference(from, bind_context).await?
+            self.bind_table_reference(bind_context, from).await?
         } else {
             self.bind_one_table(stmt).await?
         };
 
         if let Some(expr) = &stmt.selection {
-            s_expr = self.bind_where(expr, s_expr, &from_context, false).await?;
+            s_expr = self.bind_where(&from_context, expr, s_expr, false).await?;
         }
 
         // Output of current `SELECT` statement.
         let mut output_context = self
-            .normalize_select_list(&stmt.select_list, &from_context)
+            .normalize_select_list(&from_context, &stmt.select_list)
             .await?;
 
         let agg_info = self.analyze_aggregate(&output_context)?;
         if !agg_info.aggregate_functions.is_empty() || !stmt.group_by.is_empty() {
             (s_expr, output_context) = self
                 .bind_group_by(
-                    s_expr,
-                    &stmt.group_by,
                     &from_context,
                     output_context,
+                    s_expr,
+                    &stmt.group_by,
                     &agg_info,
                 )
                 .await?;
         }
 
         if let Some(expr) = &stmt.having {
-            s_expr = self.bind_where(expr, s_expr, &from_context, true).await?;
+            s_expr = self.bind_where(&from_context, expr, s_expr, true).await?;
         }
 
-        s_expr = self.bind_projection(s_expr, &output_context)?;
+        s_expr = self.bind_projection(&output_context, s_expr)?;
 
         if !order_by.is_empty() {
             s_expr = self
-                .bind_order_by(s_expr, order_by, &from_context, &output_context)
+                .bind_order_by(&from_context, &output_context, s_expr, order_by)
                 .await?;
         }
 
@@ -167,8 +167,8 @@ impl<'a> Binder {
 
     pub(super) async fn bind_table_reference(
         &mut self,
-        stmt: &TableReference<'a>,
         bind_context: &BindContext,
+        stmt: &TableReference<'a>,
     ) -> Result<(SExpr, BindContext)> {
         match stmt {
             TableReference::Table {
@@ -206,7 +206,7 @@ impl<'a> Binder {
 
                 let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(&table, alias)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }
@@ -224,11 +224,13 @@ impl<'a> Binder {
                 let expressions = args
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value }) => Ok(Expression::Literal {
-                            value: value.clone(),
-                            column_name: None,
-                            data_type: value.data_type(),
-                        }),
+                        Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
+                            Ok(Expression::Literal {
+                                value,
+                                column_name: None,
+                                data_type,
+                            })
+                        }
                         _ => Err(ErrorCode::UnImplement(format!(
                             "Unsupported table argument type: {:?}",
                             scalar
@@ -255,12 +257,18 @@ impl<'a> Binder {
 
                 let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(table.name(), alias)?;
+                    bind_context.apply_table_alias(alias)?;
                 }
                 Ok((s_expr, bind_context))
             }
             TableReference::Join(join) => self.bind_join(bind_context, join).await,
-            _ => Err(ErrorCode::UnImplement("Unsupported table reference type")),
+            TableReference::Subquery { subquery, alias } => {
+                let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias)?;
+                }
+                Ok((s_expr, bind_context))
+            }
         }
     }
 
@@ -293,9 +301,9 @@ impl<'a> Binder {
 
     pub(super) async fn bind_where(
         &mut self,
+        bind_context: &BindContext,
         expr: &Expr<'a>,
         child: SExpr,
-        bind_context: &BindContext,
         is_having: bool,
     ) -> Result<SExpr> {
         let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());

@@ -68,10 +68,13 @@ impl MultipartWorker {
                         break 'outer;
                     }
                     Ok(Some(field)) => {
+                        let filename = field.file_name().unwrap_or("Unknown file name").to_string();
+
                         if let Err(cause) = tx.send(Ok(vec![])).await {
                             common_tracing::tracing::warn!(
-                                "Multipart channel disconnect. {}",
-                                cause
+                                "Multipart channel disconnect. {}, filename '{}'",
+                                cause,
+                                filename
                             );
 
                             break 'outer;
@@ -95,8 +98,9 @@ impl MultipartWorker {
 
                                     if let Err(cause) = tx.send(Ok(buf)).await {
                                         common_tracing::tracing::warn!(
-                                            "Multipart channel disconnect. {}",
-                                            cause
+                                            "Multipart channel disconnect. {}, filename: '{}'",
+                                            cause,
+                                            filename
                                         );
 
                                         break 'outer;
@@ -105,14 +109,16 @@ impl MultipartWorker {
                                 Err(cause) => {
                                     if let Err(cause) = tx
                                         .send(Err(ErrorCode::BadBytes(format!(
-                                            "Read part to field bytes error, cause {:?}",
-                                            cause
+                                            "Read part to field bytes error, cause {:?}, filename: '{}'",
+                                            cause,
+                                            filename
                                         ))))
                                         .await
                                     {
                                         common_tracing::tracing::warn!(
-                                            "Multipart channel disconnect. {}",
-                                            cause
+                                            "Multipart channel disconnect. {}, filename: '{}'",
+                                            cause,
+                                            filename
                                         );
                                         break 'outer;
                                     }

@@ -392,7 +392,7 @@ impl PipelineBuilder {
             RewriteHelper::exprs_to_fields(final_exprs.as_slice(), &input_schema)?;
         let final_schema = schema_builder.build_aggregate(final_data_fields, &input_schema)?;
 
-        let partial_aggr_params = AggregatorParams::try_create_v2(
+        let partial_aggr_params = AggregatorParams::try_create(
             &agg_expressions,
             &group_expressions,
             &input_schema,
@@ -412,7 +412,7 @@ impl PipelineBuilder {
         })?;
 
         pipeline.resize(1)?;
-        let final_aggr_params = AggregatorParams::try_create_v2(
+        let final_aggr_params = AggregatorParams::try_create(
             &agg_expressions,
             &group_expressions,
             &input_schema,

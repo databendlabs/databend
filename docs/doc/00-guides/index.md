@@ -67,6 +67,8 @@ title: How-to Guides
 
 * [How to Analyze Github Repository With Databend](../90-learn/00-analyze-github-repo-with-databend.md)
 * [How to Analyze Nginx Access Logs With Databend](../90-learn/02-analyze-nginx-logs-with-databend-and-vector.md)
+* [How to Do User Retention Analysis With Databend](../90-learn/03-analyze-user-retention-with-databend.md)
+* [How to Do Conversion Funnel Analysis With Databend](../90-learn/04-analyze-funnel-with-databend.md)
 
 
 ## Back up
