@@ -1,6 +1,7 @@
 ---
-title: How to Do Funnel Analysis With Databend
-sidebar_label: Funnel Analysis
+title: How to Do Conversion Funnel Analysis With Databend
+sidebar_label: Conversion Funnel Analysis
+description: How to do conversion funnel analysis with simplicity and high performance.
 ---
 
 Funnel analysis measures the number of unique users who has performed a set of actions, and we use it to see drop-off and conversion in multi-step processes.
@@ -77,6 +78,11 @@ Input table:
 |  100126 | visit      | 2022-05-15 12:01:00.000000 |
 +---------+------------+----------------------------+
 ```
+
+We have a table with the following fields:
+* user_id - a unique identifier for user
+* event_name - type of the event
+* event_timestamp - timestamp which event occurred
 
 ## Step 2. Funnel Analysis
 

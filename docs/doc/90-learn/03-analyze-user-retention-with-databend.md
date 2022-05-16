@@ -1,6 +1,7 @@
 ---
 title: How to Analyze User Retention With Databend
-sidebar_label: Analyzing User Retention
+sidebar_label: User Retention Analysis
+description: How to do user retention analysis with simplicity and high performance.
 ---
 
 User retention helps you analyze how many users return to your product or service. Let's go through an example and see how to analyze it in Databend.
@@ -44,6 +45,9 @@ mysql -h127.0.0.1 -uuser1 -pabc123 -P3307
 ```sql
 CREATE TABLE events(`user_id` INT, `login_date` DATE);
 ```
+We have a table with the following fields:
+* user_id - a unique identifier for user
+* login_date - user login date
 
 Prepare data:
 ```sql
