@@ -13,10 +13,8 @@
 // limitations under the License.
 
 mod catalog;
-mod log;
 mod meta;
 
 pub use catalog::HiveCatalogConfig;
 pub use catalog::ThriftProtocol;
-pub use log::LogConfig;
 pub use meta::MetaConfig;

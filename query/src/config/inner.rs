@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_configs::HiveCatalogConfig;
-use common_configs::LogConfig;
 use common_configs::MetaConfig;
 use common_exception::Result;
 use common_grpc::RpcClientTlsConfig;
 use common_io::prelude::StorageConfig;
+use common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 

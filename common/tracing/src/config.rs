@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,31 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Args;
-use serde::Deserialize;
-use serde::Serialize;
-
-/// Log config group.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct LogConfig {
-    /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", default_value = "INFO")]
-    #[serde(alias = "log_level")]
+/// Config for tracing.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Config {
     pub level: String,
-
-    /// Log file dir
-    #[clap(long = "log-dir", default_value = "./_logs")]
-    #[serde(alias = "log_dir")]
     pub dir: String,
-
-    /// Log file dir
-    #[clap(long = "log-query-enabled")]
-    #[serde(alias = "log_query_enabled")]
     pub query_enabled: bool,
 }
 
-impl Default for LogConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             level: "INFO".to_string(),

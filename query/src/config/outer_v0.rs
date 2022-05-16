@@ -18,7 +18,6 @@ use clap::Args;
 use clap::Parser;
 use common_base::base::mask_string;
 use common_configs::HiveCatalogConfig;
-use common_configs::LogConfig;
 use common_configs::MetaConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,6 +27,7 @@ use common_io::prelude::StorageFsConfig as InnerStorageFsConfig;
 use common_io::prelude::StorageHdfsConfig as InnerStorageHdfsConfig;
 use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config as InnerStorageS3Config;
+use common_tracing::Config as InnerLogConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -123,7 +123,7 @@ impl From<InnerConfig> for Config {
         Self {
             config_file: inner.config_file,
             query: inner.query.into(),
-            log: inner.log,
+            log: inner.log.into(),
             meta: inner.meta,
             storage: inner.storage.into(),
             catalog: inner.catalog,
@@ -138,7 +138,7 @@ impl TryInto<InnerConfig> for Config {
         Ok(InnerConfig {
             config_file: self.config_file,
             query: self.query.try_into()?,
-            log: self.log,
+            log: self.log.try_into()?,
             meta: self.meta,
             storage: self.storage.try_into()?,
             catalog: self.catalog,
@@ -699,6 +699,53 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
             management_mode: inner.management_mode,
             jwt_key_file: inner.jwt_key_file,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-level", default_value = "INFO")]
+    #[serde(alias = "log_level")]
+    pub level: String,
+
+    /// Log file dir
+    #[clap(long = "log-dir", default_value = "./_logs")]
+    #[serde(alias = "log_dir")]
+    pub dir: String,
+
+    /// Log file dir
+    #[clap(long = "log-query-enabled")]
+    #[serde(alias = "log_query_enabled")]
+    pub query_enabled: bool,
+}
+
+impl Default for LogConfig {
+    fn default() -> Self {
+        InnerLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerLogConfig> for LogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerLogConfig> {
+        Ok(InnerLogConfig {
+            level: self.level,
+            dir: self.dir,
+            query_enabled: self.query_enabled,
+        })
+    }
+}
+
+impl From<InnerLogConfig> for LogConfig {
+    fn from(inner: InnerLogConfig) -> Self {
+        Self {
+            level: inner.level,
+            dir: inner.dir,
+            query_enabled: inner.query_enabled,
         }
     }
 }
