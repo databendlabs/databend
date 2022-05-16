@@ -255,6 +255,11 @@ impl HttpQuery {
         .await;
     }
 
+    pub async fn detach(&self) {
+        let data = self.data.lock().await;
+        data.detach().await
+    }
+
     pub async fn clear_expire_time(&self) {
         let mut t = self.expire_at.lock().await;
         *t = None;

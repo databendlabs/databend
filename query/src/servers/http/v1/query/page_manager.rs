@@ -169,4 +169,8 @@ impl PageManager {
         let end = self.block_end && self.page_buffer.is_empty();
         Ok((block, end))
     }
+
+    pub async fn detach(&self) {
+        self.block_buffer.stop_pop().await;
+    }
 }

@@ -994,26 +994,29 @@ async fn test_download_failed() -> Result<()> {
 async fn test_download_killed() -> Result<()> {
     let ep = create_endpoint();
 
-    // succeeded query
+    // detached query can download result
     let sql = "select sleep(0.1)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
+    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
     let resp = download(&ep, &result.id).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let exp = "0\n";
     assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
 
-    // killed query
+    // killed query can not download result
     let sql = "select sleep(1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     let query_id = &result.id;
 
-    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let mut resp = download(&ep, query_id).await;

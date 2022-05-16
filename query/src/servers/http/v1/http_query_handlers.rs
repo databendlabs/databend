@@ -26,7 +26,6 @@ use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
-use poem::web::Query;
 use poem::Body;
 use poem::IntoResponse;
 use poem::Route;
@@ -52,7 +51,11 @@ pub fn make_state_uri(query_id: &str) -> String {
 }
 
 pub fn make_final_uri(query_id: &str) -> String {
-    format!("/v1/query/{}/kill?delete=true", query_id)
+    format!("/v1/query/{}/final", query_id)
+}
+
+pub fn make_kill_uri(query_id: &str) -> String {
+    format!("/v1/query/{}/kill", query_id)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,6 +93,7 @@ pub struct QueryResponse {
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
     pub next_uri: Option<String>,
+    pub kill_uri: Option<String>,
 }
 
 impl QueryResponse {
@@ -115,6 +119,7 @@ impl QueryResponse {
             next_uri: next_url,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
+            kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.as_ref().map(QueryError::from_error_code),
         }
     }
@@ -130,29 +135,38 @@ impl QueryResponse {
             next_uri: None,
             stats_uri: None,
             final_uri: None,
+            kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
         }
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub(crate) struct CancelParams {
-    delete: Option<bool>,
+#[poem::handler]
+async fn query_detach_handler(
+    ctx: &HttpQueryContext,
+    Path(query_id): Path<String>,
+) -> impl IntoResponse {
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    match http_query_manager.remove_query(&query_id).await {
+        Some(query) => {
+            query.detach().await;
+            StatusCode::OK
+        }
+        None => StatusCode::NOT_FOUND,
+    }
 }
 
+// currently implementation only support kill http query
 #[poem::handler]
 async fn query_cancel_handler(
     ctx: &HttpQueryContext,
-    Query(params): Query<CancelParams>,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
     let http_query_manager = ctx.session_mgr.get_http_query_manager();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.kill().await;
-            if params.delete.unwrap_or(false) {
-                http_query_manager.remove_query(&query_id).await;
-            }
+            http_query_manager.remove_query(&query_id).await;
             StatusCode::OK
         }
         None => StatusCode::NOT_FOUND,
@@ -236,6 +250,10 @@ pub fn query_route() -> Route {
         .at(
             "/:id/kill",
             get(query_cancel_handler).post(query_cancel_handler),
+        )
+        .at(
+            "/:id/final",
+            get(query_detach_handler).post(query_detach_handler),
         )
 }
 
