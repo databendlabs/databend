@@ -1090,6 +1090,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-io",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-types",
