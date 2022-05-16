@@ -24,7 +24,6 @@ use common_management::UdfMgr;
 use common_management::UserApi;
 use common_management::UserMgr;
 use common_meta_api::KVApi;
-use common_meta_grpc::MetaGrpcClientConf;
 
 use crate::common::MetaClientProvider;
 use crate::Config;
@@ -35,7 +34,7 @@ pub struct UserApiProvider {
 
 impl UserApiProvider {
     pub async fn create_global(conf: Config) -> Result<Arc<UserApiProvider>> {
-        let client = MetaClientProvider::new(MetaGrpcClientConf::from(&conf.meta))
+        let client = MetaClientProvider::new(conf.meta.to_meta_grpc_client_conf())
             .try_get_kv_client()
             .await?;
 

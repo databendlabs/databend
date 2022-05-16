@@ -13,11 +13,12 @@
 // limitations under the License.
 use std::env;
 use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use clap::Args;
 use clap::Parser;
 use common_base::base::mask_string;
-use common_configs::MetaConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::StorageAzblobConfig as InnerStorageAzblobConfig;
@@ -36,6 +37,7 @@ use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
 use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
+use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 
 /// Outer config for `query`.
@@ -124,7 +126,7 @@ impl From<InnerConfig> for Config {
             config_file: inner.config_file,
             query: inner.query.into(),
             log: inner.log.into(),
-            meta: inner.meta,
+            meta: inner.meta.into(),
             storage: inner.storage.into(),
             catalog: inner.catalog.into(),
         }
@@ -139,7 +141,7 @@ impl TryInto<InnerConfig> for Config {
             config_file: self.config_file,
             query: self.query.try_into()?,
             log: self.log.try_into()?,
-            meta: self.meta,
+            meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             catalog: self.catalog.try_into()?,
         })
@@ -782,5 +784,105 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
             meta_store_address: inner.meta_store_address,
             protocol: inner.protocol.to_string(),
         }
+    }
+}
+
+/// Meta config group.
+/// TODO(xuanwo): All meta_xxx should be rename to xxx.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct MetaConfig {
+    /// The dir to store persisted meta state for a embedded meta store
+    #[clap(long = "meta-embedded-dir", default_value = "./_meta_embedded")]
+    #[serde(alias = "meta_embedded_dir")]
+    pub embedded_dir: String,
+
+    /// MetaStore backend address
+    #[clap(long = "meta-address", default_value_t)]
+    #[serde(alias = "meta_address")]
+    pub address: String,
+
+    #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
+    pub endpoints: Vec<String>,
+
+    /// MetaStore backend user name
+    #[clap(long = "meta-username", default_value = "root")]
+    #[serde(alias = "meta_username")]
+    pub username: String,
+
+    /// MetaStore backend user password
+    #[clap(long = "meta-password", default_value_t)]
+    #[serde(alias = "meta_password")]
+    pub password: String,
+
+    /// Timeout for each client request, in seconds
+    #[clap(long = "meta-client-timeout-in-second", default_value = "10")]
+    #[serde(alias = "meta_client_timeout_in_second")]
+    pub client_timeout_in_second: u64,
+
+    /// Certificate for client to identify meta rpc serve
+    #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
+    pub rpc_tls_meta_server_root_ca_cert: String,
+
+    #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
+    pub rpc_tls_meta_service_domain_name: String,
+}
+
+impl Default for MetaConfig {
+    fn default() -> Self {
+        InnerMetaConfig::default().into()
+    }
+}
+
+impl TryInto<InnerMetaConfig> for MetaConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerMetaConfig> {
+        Ok(InnerMetaConfig {
+            embedded_dir: self.embedded_dir,
+            address: self.address,
+            endpoints: self.endpoints,
+            username: self.username,
+            password: self.password,
+            client_timeout_in_second: self.client_timeout_in_second,
+            rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
+            rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
+        })
+    }
+}
+
+impl From<InnerMetaConfig> for MetaConfig {
+    fn from(inner: InnerMetaConfig) -> Self {
+        Self {
+            embedded_dir: inner.embedded_dir,
+            address: inner.address,
+            endpoints: inner.endpoints,
+            username: inner.username,
+            password: inner.password,
+            client_timeout_in_second: inner.client_timeout_in_second,
+            rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
+            rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
+        }
+    }
+}
+
+impl Debug for MetaConfig {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("MetaConfig")
+            .field("address", &self.address)
+            .field("endpoints", &self.endpoints)
+            .field("username", &self.username)
+            .field("password", &mask_string(&self.password, 3))
+            .field("embedded_dir", &self.embedded_dir)
+            .field("client_timeout_in_second", &self.client_timeout_in_second)
+            .field(
+                "rpc_tls_meta_server_root_ca_cert",
+                &self.rpc_tls_meta_server_root_ca_cert,
+            )
+            .field(
+                "rpc_tls_meta_service_domain_name",
+                &self.rpc_tls_meta_service_domain_name,
+            )
+            .finish()
     }
 }
