@@ -269,10 +269,7 @@ async fn result_download_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
 ) -> PoemResult<Body> {
-    let session = ctx
-        .create_session(SessionType::HTTPQuery)
-        .await
-        .map_err(InternalServerError)?;
+    let session = ctx.get_session(SessionType::HTTPQuery);
 
     let ctx = session
         .create_query_context()
