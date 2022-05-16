@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_io::prelude::StorageFsConfig;
 use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config;
 use common_protos::pb;
@@ -49,6 +50,29 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
                 bucket: v.bucket.clone(),
                 root: v.root.clone(),
                 master_key: v.master_key.clone(),
+            })
+        } else {
+            Err(Incompatible {
+                reason: "storage type mismatch".to_string(),
+            })
+        }
+    }
+}
+
+impl FromToProto<pb::FsStorageConfig> for StorageParams {
+    fn from_pb(p: pb::FsStorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        // TODO: config will have it's own version flags in the future.
+        check_ver(p.version)?;
+
+        Ok(Self::Fs(StorageFsConfig { root: p.root }))
+    }
+
+    fn to_pb(&self) -> Result<pb::FsStorageConfig, Incompatible> {
+        if let StorageParams::Fs(v) = self {
+            Ok(pb::FsStorageConfig {
+                version: VER,
+                root: v.root.clone(),
             })
         } else {
             Err(Incompatible {
