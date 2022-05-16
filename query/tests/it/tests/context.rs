@@ -27,7 +27,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionType;
 use databend_query::storages::StorageContext;
-use databend_query::Config;
+use databend_query::ConfigV0;
 
 use crate::tests::SessionManagerBuilder;
 
@@ -57,7 +57,7 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
 }
 
 pub async fn create_query_context_with_config(
-    config: Config,
+    config: ConfigV0,
     current_user: Option<UserInfo>,
 ) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;

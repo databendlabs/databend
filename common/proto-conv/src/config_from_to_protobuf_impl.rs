@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_configs::S3StorageConfig;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 use common_protos::pb;
 
 use crate::check_ver;
@@ -20,13 +21,13 @@ use crate::FromToProto;
 use crate::Incompatible;
 use crate::VER;
 
-impl FromToProto<pb::S3StorageConfig> for S3StorageConfig {
+impl FromToProto<pb::S3StorageConfig> for StorageParams {
     fn from_pb(p: pb::S3StorageConfig) -> Result<Self, Incompatible>
     where Self: Sized {
         // TODO: config will have it's own version flags in the future.
         check_ver(p.version)?;
 
-        Ok(Self {
+        Ok(Self::S3(StorageS3Config {
             region: p.region,
             endpoint_url: p.endpoint_url,
             access_key_id: p.access_key_id,
@@ -34,19 +35,25 @@ impl FromToProto<pb::S3StorageConfig> for S3StorageConfig {
             bucket: p.bucket,
             root: p.root,
             master_key: p.master_key,
-        })
+        }))
     }
 
     fn to_pb(&self) -> Result<pb::S3StorageConfig, Incompatible> {
-        Ok(pb::S3StorageConfig {
-            version: VER,
-            region: self.region.clone(),
-            endpoint_url: self.endpoint_url.clone(),
-            access_key_id: self.access_key_id.clone(),
-            secret_access_key: self.secret_access_key.clone(),
-            bucket: self.bucket.clone(),
-            root: self.root.clone(),
-            master_key: self.master_key.clone(),
-        })
+        if let StorageParams::S3(v) = self {
+            Ok(pb::S3StorageConfig {
+                version: VER,
+                region: v.region.clone(),
+                endpoint_url: v.endpoint_url.clone(),
+                access_key_id: v.access_key_id.clone(),
+                secret_access_key: v.secret_access_key.clone(),
+                bucket: v.bucket.clone(),
+                root: v.root.clone(),
+                master_key: v.master_key.clone(),
+            })
+        } else {
+            Err(Incompatible {
+                reason: format!("storage type mismatch"),
+            })
+        }
     }
 }

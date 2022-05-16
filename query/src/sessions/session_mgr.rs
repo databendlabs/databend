@@ -74,7 +74,7 @@ impl SessionManager {
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
         let storage_runtime = {
-            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            let mut storage_num_cpus = conf.storage.num_cpus as usize;
             if storage_num_cpus == 0 {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }

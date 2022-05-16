@@ -23,13 +23,13 @@ use databend_query::clusters::Cluster;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionType;
-use databend_query::Config;
+use databend_query::ConfigV0;
 
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
-    let conf = Config::load()?;
+    let conf = ConfigV0::load()?;
     let session_ctx = SessionContext::try_create(conf)?;
 
     // Abort status.

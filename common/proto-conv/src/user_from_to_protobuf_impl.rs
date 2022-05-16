@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
-use common_configs::S3StorageConfig;
+use common_io::prelude::*;
 use common_meta_types as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;
@@ -358,12 +358,12 @@ impl FromToProto<pb::user_stage_info::StageType> for mt::StageType {
     }
 }
 
-impl FromToProto<pb::user_stage_info::StageStorage> for mt::StageStorage {
+impl FromToProto<pb::user_stage_info::StageStorage> for StorageParams {
     fn from_pb(p: pb::user_stage_info::StageStorage) -> Result<Self, Incompatible>
     where Self: Sized {
         match p.storage {
             Some(pb::user_stage_info::stage_storage::Storage::S3(s)) => {
-                Ok(mt::StageStorage::S3(S3StorageConfig::from_pb(s)?))
+                Ok(StorageParams::from_pb(s)?)
             }
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
@@ -373,9 +373,12 @@ impl FromToProto<pb::user_stage_info::StageStorage> for mt::StageStorage {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageStorage, Incompatible> {
         match &*self {
-            mt::StageStorage::S3(s) => Ok(pb::user_stage_info::StageStorage {
-                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(s.to_pb()?)),
+            StorageParams::S3(_) => Ok(pb::user_stage_info::StageStorage {
+                storage: Some(pb::user_stage_info::stage_storage::Storage::S3(
+                    self.to_pb()?,
+                )),
             }),
+            _ => todo!("other stage storage are not supported"),
         }
     }
 }
@@ -384,7 +387,7 @@ impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
     fn from_pb(p: pb::user_stage_info::StageParams) -> Result<Self, Incompatible>
     where Self: Sized {
         Ok(mt::StageParams {
-            storage: mt::StageStorage::from_pb(p.storage.ok_or_else(|| Incompatible {
+            storage: StorageParams::from_pb(p.storage.ok_or_else(|| Incompatible {
                 reason: "pb::user_stage_info::StageParams.storage cannot be None".to_string(),
             })?)?,
         })
@@ -392,7 +395,7 @@ impl FromToProto<pb::user_stage_info::StageParams> for mt::StageParams {
 
     fn to_pb(&self) -> Result<pb::user_stage_info::StageParams, Incompatible> {
         Ok(pb::user_stage_info::StageParams {
-            storage: Some(mt::StageStorage::to_pb(&self.storage)?),
+            storage: Some(StorageParams::to_pb(&self.storage)?),
         })
     }
 }

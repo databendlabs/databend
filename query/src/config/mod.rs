@@ -12,26 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
-#![feature(can_vector)]
-#![feature(read_buf)]
-#![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
+mod inner;
+mod outer_v0;
 
-pub mod prelude;
-
-mod binary_read;
-mod binary_write;
-
-mod buffer;
-mod configs;
-mod files;
-mod format_settings;
-mod marshal;
-mod operator;
-mod options_deserializer;
-mod stat_buffer;
-mod unmarshal;
-mod utils;
+pub use inner::Config;

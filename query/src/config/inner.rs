@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
-
 use clap::Parser;
 use common_configs::HiveCatalogConfig;
 use common_configs::LogConfig;
 use common_configs::MetaConfig;
 use common_configs::QueryConfig;
-use common_configs::StorageConfig;
 use common_exception::Result;
+use common_io::prelude::StorageConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -28,66 +26,37 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
-#[clap(about, version, author)]
-#[serde(default)]
+use super::outer_v0::Config as OuterV0Config;
+
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Config {
-    #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
 
     // Query engine config.
-    #[clap(flatten)]
     pub query: QueryConfig,
 
-    #[clap(flatten)]
     pub log: LogConfig,
 
     // Meta Service config.
-    #[clap(flatten)]
     pub meta: MetaConfig,
 
     // Storage backend config.
-    #[clap(flatten)]
     pub storage: StorageConfig,
 
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
-    #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
 }
 
 impl Config {
-    /// Load will load config from file, env and args.
+    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and than convert from [`ConfigV0`] to [`Config`].
     ///
-    /// - Load from file as default.
-    /// - Load from env, will override config from file.
-    /// - Load from args as finally override
+    /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
-        let arg_conf: Self = Config::parse();
+        let cfg = OuterV0Config::load()?.try_into()?;
 
-        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
-
-        // Load from config file first.
-        {
-            let config_file = if !arg_conf.config_file.is_empty() {
-                arg_conf.config_file.clone()
-            } else if let Ok(path) = env::var("CONFIG_FILE") {
-                path
-            } else {
-                "".to_string()
-            };
-
-            builder = builder.collect(from_file(Toml, &config_file));
-        }
-
-        // Then, load from env.
-        builder = builder.collect(from_env());
-
-        // Finally, load from args.
-        builder = builder.collect(from_self(arg_conf));
-
-        Ok(builder.build()?)
+        Ok(cfg)
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {
@@ -102,5 +71,9 @@ impl Config {
 
     pub fn tls_rpc_server_enabled(&self) -> bool {
         !self.query.rpc_tls_server_key.is_empty() && !self.query.rpc_tls_server_cert.is_empty()
+    }
+
+    pub fn into_outer(self) -> OuterV0Config {
+        OuterV0Config::from(self)
     }
 }

@@ -13,67 +13,57 @@
 // limitations under the License.
 
 use std::env;
-use std::str::FromStr;
 
-use common_configs::AzblobStorageConfig;
-use common_configs::FsStorageConfig;
-use common_configs::S3StorageConfig;
-use common_configs::StorageConfig;
 use common_exception::Result;
 use opendal::services::azblob;
 use opendal::services::fs;
 use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Operator;
-use opendal::Scheme;
+
+use super::configs::StorageAzblobConfig;
+use super::configs::StorageConfig;
+use super::configs::StorageFsConfig;
+use super::configs::StorageParams;
+use super::configs::StorageS3Config;
 
 /// init_operator will init an opendal operator based on storage config.
 pub async fn init_operator(cfg: &StorageConfig) -> Result<Operator> {
-    let scheme = Scheme::from_str(&cfg.storage_type)?;
-
-    Ok(match scheme {
-        Scheme::Azblob => init_azblob_operator(&cfg.azblob).await?,
-        Scheme::Fs => init_fs_operator(&cfg.fs).await?,
+    Ok(match &cfg.params {
+        StorageParams::Azblob(cfg) => init_azblob_operator(&cfg).await?,
+        StorageParams::Fs(cfg) => init_fs_operator(&cfg).await?,
         #[cfg(feature = "storage-hdfs")]
-        Scheme::Hdfs => init_hdfs_operator(&cfg.hdfs).await?,
-        Scheme::Memory => init_memory_operator().await?,
-        Scheme::S3 => init_s3_operator(&cfg.s3).await?,
+        StorageParams::Hdfs(cfg) => init_hdfs_operator(&cfg).await?,
+        StorageParams::Memory => init_memory_operator().await?,
+        StorageParams::S3(cfg) => init_s3_operator(&cfg).await?,
     })
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
-pub async fn init_azblob_operator(cfg: &AzblobStorageConfig) -> Result<Operator> {
+pub async fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
     let mut builder = azblob::Backend::build();
 
     // Endpoint
-    {
-        builder.endpoint(&cfg.azblob_endpoint_url);
-    }
+    builder.endpoint(&cfg.endpoint_url);
 
     // Container
-    {
-        builder.container(&cfg.container);
-    }
+    builder.container(&cfg.container);
 
     // Root
-    {
-        builder.root(&cfg.azblob_root);
-    }
+    builder.root(&cfg.root);
 
     // Credential
-    {
-        builder.account_name(&cfg.account_name);
-        builder.account_key(&cfg.account_key);
-    }
+    builder.account_name(&cfg.account_name);
+    builder.account_key(&cfg.account_key);
 
     Ok(Operator::new(builder.finish().await?))
 }
 
 /// init_fs_operator will init a opendal fs operator.
-pub async fn init_fs_operator(cfg: &FsStorageConfig) -> Result<Operator> {
+pub async fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     let mut builder = fs::Backend::build();
 
-    let mut path = cfg.data_path.clone();
+    let mut path = cfg.root.clone();
     if !path.starts_with('/') {
         path = env::current_dir().unwrap().join(path).display().to_string();
     }
@@ -84,20 +74,16 @@ pub async fn init_fs_operator(cfg: &FsStorageConfig) -> Result<Operator> {
 
 /// init_hdfs_operator will init a opendal hdfs operator.
 #[cfg(feature = "storage-hdfs")]
-pub async fn init_hdfs_operator(cfg: &common_configs::HdfsConfig) -> Result<Operator> {
+pub async fn init_hdfs_operator(cfg: &super::configs::StorageHdfsConfig) -> Result<Operator> {
     use opendal::services::hdfs;
 
     let mut builder = hdfs::Backend::build();
 
     // Endpoint.
-    {
-        builder.name_node(&cfg.name_node);
-    }
+    builder.name_node(&cfg.name_node);
 
     // Root
-    {
-        builder.root(&cfg.hdfs_root);
-    }
+    builder.root(&cfg.root);
 
     Ok(Operator::new(builder.finish().await?))
 }
@@ -110,34 +96,24 @@ pub async fn init_memory_operator() -> Result<Operator> {
 }
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
-pub async fn init_s3_operator(cfg: &S3StorageConfig) -> Result<Operator> {
+pub async fn init_s3_operator(cfg: &StorageS3Config) -> Result<Operator> {
     let mut builder = s3::Backend::build();
 
     // Endpoint.
-    {
-        builder.endpoint(&cfg.endpoint_url);
-    }
+    builder.endpoint(&cfg.endpoint_url);
 
     // Region
-    {
-        builder.region(&cfg.region);
-    }
+    builder.region(&cfg.region);
 
     // Credential.
-    {
-        builder.access_key_id(&cfg.access_key_id);
-        builder.secret_access_key(&cfg.secret_access_key);
-    }
+    builder.access_key_id(&cfg.access_key_id);
+    builder.secret_access_key(&cfg.secret_access_key);
 
     // Bucket.
-    {
-        builder.bucket(&cfg.bucket);
-    }
+    builder.bucket(&cfg.bucket);
 
     // Root.
-    {
-        builder.root(&cfg.root);
-    }
+    builder.root(&cfg.root);
 
     Ok(Operator::new(builder.finish().await?))
 }

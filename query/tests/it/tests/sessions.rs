@@ -19,9 +19,9 @@ use common_base::base::tokio::runtime::Runtime;
 use common_base::base::Thread;
 use common_exception::Result;
 use databend_query::sessions::SessionManager;
-use databend_query::Config;
+use databend_query::ConfigV0;
 
-async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
+async fn async_create_sessions(config: ConfigV0) -> Result<Arc<SessionManager>> {
     let sessions = SessionManager::from_conf(config.clone()).await?;
 
     let cluster_discovery = sessions.get_cluster_discovery();
@@ -29,13 +29,13 @@ async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     Ok(sessions)
 }
 
-fn sync_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
+fn sync_create_sessions(config: ConfigV0) -> Result<Arc<SessionManager>> {
     let runtime = Runtime::new()?;
     runtime.block_on(async_create_sessions(config))
 }
 
 pub struct SessionManagerBuilder {
-    config: Config,
+    config: ConfigV0,
 }
 
 impl SessionManagerBuilder {
@@ -47,7 +47,7 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::create_with_conf(conf).log_dir_with_relative("../tests/data/logs")
     }
 
-    pub fn create_with_conf(config: Config) -> SessionManagerBuilder {
+    pub fn create_with_conf(config: ConfigV0) -> SessionManagerBuilder {
         SessionManagerBuilder { config }
     }
 

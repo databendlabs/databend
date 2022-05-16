@@ -17,13 +17,13 @@ use std::fs;
 use std::io::Write;
 
 use common_exception::Result;
-use databend_query::Config;
+use databend_query::ConfigV0;
 use pretty_assertions::assert_eq;
 
 // Default.
 #[test]
 fn test_default_config() -> Result<()> {
-    let actual = Config::default();
+    let actual = ConfigV0::default();
 
     let tom_expect = r#"config_file = ""
 
@@ -153,7 +153,7 @@ fn test_env_config() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load().expect("must success");
+            let configured = ConfigV0::load().expect("must success");
             assert_eq!("DEBUG", configured.log.level);
 
             assert_eq!("tenant-1", configured.query.tenant_id);
@@ -302,7 +302,7 @@ protocol = "Binary"
             ("STORAGE_TYPE", None),
         ],
         || {
-            let cfg = Config::load().expect("config load success");
+            let cfg = ConfigV0::load().expect("config load success");
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
