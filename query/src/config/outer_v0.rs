@@ -14,10 +14,8 @@
 use std::env;
 use std::fmt;
 
-use chrono::SecondsFormat;
 use clap::Args;
 use clap::Parser;
-use common_ast::parser::error::Error;
 use common_base::base::mask_string;
 use common_configs::HiveCatalogConfig;
 use common_configs::LogConfig;

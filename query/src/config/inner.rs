@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Parser;
 use common_configs::HiveCatalogConfig;
 use common_configs::LogConfig;
 use common_configs::MetaConfig;
 use common_configs::QueryConfig;
 use common_exception::Result;
 use common_io::prelude::StorageConfig;
-use serde::Deserialize;
-use serde::Serialize;
-use serfig::collectors::from_env;
-use serfig::collectors::from_file;
-use serfig::collectors::from_self;
-use serfig::parsers::Toml;
 
 use super::outer_v0::Config as OuterV0Config;
 
