@@ -1213,7 +1213,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
- "common-configs",
  "common-datavalues",
  "common-exception",
  "common-io",
@@ -1275,7 +1274,6 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "common-configs",
  "common-datavalues",
  "common-io",
  "common-meta-types",

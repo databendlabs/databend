@@ -11,11 +11,10 @@ doctest = false
 test = false
 
 [dependencies]
-common-configs = { path = "../../common/configs" }
 common-datavalues = { path = "../../common/datavalues" }
+common-io = { path = "../../common/io" }
 common-meta-types = { path = "../../common/meta/types" }
 common-protos = { path = "../../common/protos" }
-common-io = { path = "../../common/io" }
 
 num = "0.4"
 thiserror = "1.0.30"
