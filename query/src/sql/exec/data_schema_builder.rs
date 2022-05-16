@@ -15,7 +15,6 @@
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -46,11 +45,7 @@ impl<'a> DataSchemaBuilder<'a> {
                 new_data_fields.push(data_field);
                 continue;
             }
-            let field = if data_field.is_nullable() {
-                DataField::new_nullable(data_field.name(), data_field.data_type().clone())
-            } else {
-                DataField::new(data_field.name(), data_field.data_type().clone())
-            };
+            let field = DataField::new(data_field.name(), data_field.data_type().clone());
             new_data_fields.push(field);
         }
         Ok(DataSchemaRefExt::create(new_data_fields))
@@ -78,12 +73,7 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in plan.columns.iter() {
             let column_entry = self.metadata.column(*index);
             let field_name = format_field_name(column_entry.name.as_str(), *index);
-            let field = if matches!(column_entry.data_type, DataTypeImpl::Nullable(_)) {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
-
+            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
         }
 
@@ -95,12 +85,7 @@ impl<'a> DataSchemaBuilder<'a> {
         for index in columns {
             let column_entry = self.metadata.column(*index);
             let field_name = column_entry.name.clone();
-            let field = if matches!(column_entry.data_type, DataTypeImpl::Nullable(_)) {
-                DataField::new_nullable(field_name.as_str(), column_entry.data_type.clone())
-            } else {
-                DataField::new(field_name.as_str(), column_entry.data_type.clone())
-            };
-
+            let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
         }
 
@@ -124,11 +109,7 @@ impl<'a> DataSchemaBuilder<'a> {
             if input_schema.has_field(expr_name.as_str()) {
                 continue;
             }
-            let field = if expr.nullable(&input_schema)? {
-                DataField::new_nullable(expr_name.as_str(), expr.to_data_type(&input_schema)?)
-            } else {
-                DataField::new(expr_name.as_str(), expr.to_data_type(&input_schema)?)
-            };
+            let field = DataField::new(expr_name.as_str(), expr.to_data_type(&input_schema)?);
             fields.push(field);
         }
         Ok(DataSchemaRefExt::create(fields))
@@ -154,17 +135,10 @@ impl<'a> DataSchemaBuilder<'a> {
                         if input_schema.has_field(expr_name.as_str()) {
                             continue;
                         }
-                        let field = if arg_inner_expr.nullable(&input_schema)? {
-                            DataField::new_nullable(
-                                expr_name.as_str(),
-                                arg_inner_expr.to_data_type(&input_schema)?,
-                            )
-                        } else {
-                            DataField::new(
-                                expr_name.as_str(),
-                                arg_inner_expr.to_data_type(&input_schema)?,
-                            )
-                        };
+                        let field = DataField::new(
+                            expr_name.as_str(),
+                            arg_inner_expr.to_data_type(&input_schema)?,
+                        );
                         fields.push(field);
                         agg_inner_expressions.push(arg_inner_expr.clone())
                     }
@@ -190,5 +164,21 @@ impl<'a> DataSchemaBuilder<'a> {
         }
 
         DataSchemaRefExt::create(fields)
+    }
+
+    pub fn build_sort(
+        &self,
+        input_schema: &DataSchemaRef,
+        exprs: &[Expression],
+    ) -> Result<DataSchemaRef> {
+        let mut fields = input_schema.fields().clone();
+        for expr in exprs.iter() {
+            let expr_name = expr.column_name().clone();
+            if !input_schema.has_field(expr_name.as_str()) {
+                let field = DataField::new(expr_name.as_str(), expr.to_data_type(input_schema)?);
+                fields.push(field);
+            }
+        }
+        Ok(DataSchemaRefExt::create(fields))
     }
 }

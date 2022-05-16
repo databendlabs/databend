@@ -28,7 +28,7 @@ pub struct IntervalType {
     kind: IntervalKind,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntervalKind {
     Year,
     Month,
@@ -36,6 +36,8 @@ pub enum IntervalKind {
     Hour,
     Minute,
     Second,
+    Doy,
+    Dow,
 }
 
 impl fmt::Display for IntervalKind {
@@ -47,6 +49,8 @@ impl fmt::Display for IntervalKind {
             IntervalKind::Hour => "HOUR",
             IntervalKind::Minute => "MINUTE",
             IntervalKind::Second => "SECOND",
+            IntervalKind::Doy => "DOY",
+            IntervalKind::Dow => "DOW",
         })
     }
 }
@@ -60,6 +64,8 @@ impl From<String> for IntervalKind {
             "HOUR" => IntervalKind::Hour,
             "MINUTE" => IntervalKind::Minute,
             "SECOND" => IntervalKind::Second,
+            "DOY" => IntervalKind::Doy,
+            "DOW" => IntervalKind::Dow,
             _ => unreachable!(),
         }
     }
@@ -119,7 +125,7 @@ impl DataType for IntervalType {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
         mp.insert(ARROW_EXTENSION_NAME.to_string(), "Interval".to_string());
-        mp.insert(ARROW_EXTENSION_META.to_string(), format!("{}", self.kind));
+        mp.insert(ARROW_EXTENSION_META.to_string(), self.kind.to_string());
         Some(mp)
     }
 

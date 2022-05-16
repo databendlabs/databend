@@ -23,8 +23,8 @@ pub mod api;
 pub mod catalogs;
 pub mod clusters;
 pub mod common;
-pub mod configs;
 pub mod databases;
+pub mod formats;
 pub mod interpreters;
 pub mod metrics;
 pub mod optimizers;
@@ -36,3 +36,9 @@ pub mod sql;
 pub mod storages;
 pub mod table_functions;
 pub mod users;
+
+mod config;
+mod version;
+
+pub use config::Config;
+pub use version::DATABEND_COMMIT_VERSION;

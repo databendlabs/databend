@@ -19,7 +19,6 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::catalogs::Catalog;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -45,11 +44,12 @@ impl Procedure for FuseSnapshotProcedure {
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        let catalog_name = ctx.get_current_catalog();
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog()
+            .get_catalog(&catalog_name)?
             .get_table(
                 tenant_id.as_str(),
                 database_name.as_str(),

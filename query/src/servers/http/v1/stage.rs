@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_io::prelude::get_abs_path;
-use common_meta_types::StageStorage;
+use common_io::prelude::StorageParams;
 use common_meta_types::StageType;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -89,9 +89,10 @@ pub async fn upload_to_stage(
         }
         // It's  external, so we need to join the root path
         StageType::External => match stage.stage_params.storage {
-            StageStorage::S3(ref s3) => {
-                final_related_path = get_abs_path(s3.path.as_str(), relative_path);
+            StorageParams::S3(ref s3) => {
+                final_related_path = get_abs_path(s3.root.as_str(), relative_path);
             }
+            _ => todo!("other stage is not supported"),
         },
     }
 

@@ -128,7 +128,7 @@ impl DataValue {
                 DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
+                let names = (0..x.len()).map(|i| i.to_string()).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 DataTypeImpl::Struct(StructType::create(names, types))
             }
@@ -154,7 +154,7 @@ impl DataValue {
                 DataTypeImpl::Array(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
+                let names = (0..x.len()).map(|i| i.to_string()).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 DataTypeImpl::Struct(StructType::create(names, types))
             }
@@ -408,7 +408,7 @@ impl fmt::Display for DataValue {
                     f,
                     "[{}]",
                     v.iter()
-                        .map(|v| format!("{}", v))
+                        .map(|v| v.to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -440,6 +440,6 @@ pub fn format_datavalue_sql(value: &DataValue) -> String {
     match value {
         DataValue::String(_) | DataValue::Variant(_) => format!("'{}'", value),
         DataValue::Float64(value) => format!("'{:?}'", value),
-        _ => format!("{}", value),
+        _ => value.to_string(),
     }
 }

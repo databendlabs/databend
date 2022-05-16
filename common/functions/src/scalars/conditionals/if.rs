@@ -117,16 +117,16 @@ impl IfFunction {
                     for (predicate, (row, r_val)) in iter {
                         if predicate {
                             builder.append(r_val, rhs_viewer.valid_at(row));
-                        }else {
+                        } else {
                             builder.append(l_val, true);
                         }
                     }
                     return Ok(builder.build(input_rows));
-                }else {
+                } else {
                     for (predicate, (row, r_val)) in iter {
                         if predicate {
                             builder.append(l_val, true);
-                        }else {
+                        } else {
                             builder.append(r_val, rhs_viewer.valid_at(row));
                         }
                     }
@@ -146,7 +146,7 @@ impl IfFunction {
                 if reverse {
                     let iter = cond_col.iter().map(|predicate| if predicate { r_val } else { l_val });
                     return Ok(Arc::new(ColumnBuilder::<$T>::from_iterator(iter)));
-                }else {
+                } else {
                     let iter = cond_col.iter().map(|predicate| if predicate { l_val } else { r_val });
                     return Ok(Arc::new(ColumnBuilder::<$T>::from_iterator(iter)));
                 }

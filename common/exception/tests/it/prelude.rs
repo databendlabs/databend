@@ -21,7 +21,7 @@ fn test_prelude() -> anyhow::Result<()> {
 
     assert_eq!(
         "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
-        format!("{}", y.unwrap_err())
+        y.unwrap_err().to_string()
     );
     Ok(())
 }

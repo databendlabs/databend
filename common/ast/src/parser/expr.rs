@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::IntervalKind;
 use itertools::Itertools;
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom::Slice as _;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattError;
@@ -96,7 +99,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     iter.next()
                         .map(|elem| elem.span)
                         // It's safe to slice one more token because EOI is always added.
-                        .unwrap_or(Input(&rest.0[..1], i.1)),
+                        .unwrap_or_else(|| rest.slice(..1)),
                     err,
                 )
             })
@@ -144,8 +147,8 @@ fn map_pratt_error<'a>(
 
 #[derive(Debug, Clone)]
 pub struct WithSpan<'a> {
-    elem: ExprElement,
     span: Input<'a>,
+    elem: ExprElement<'a>,
 }
 
 /// A 'flattened' AST of expressions.
@@ -158,24 +161,24 @@ pub struct WithSpan<'a> {
 /// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
 /// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprElement {
+pub enum ExprElement<'a> {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        database: Option<Identifier>,
-        table: Option<Identifier>,
-        column: Identifier,
+        database: Option<Identifier<'a>>,
+        table: Option<Identifier<'a>>,
+        column: Identifier<'a>,
     },
     /// `IS NULL` expression
     IsNull { not: bool },
     /// `IS NOT NULL` expression
     /// `[ NOT ] IN (list, ...)`
-    InList { list: Vec<Expr>, not: bool },
+    InList { list: Vec<Expr<'a>>, not: bool },
     /// `[ NOT ] IN (SELECT ...)`
-    InSubquery { subquery: Box<Query>, not: bool },
+    InSubquery { subquery: Box<Query<'a>>, not: bool },
     /// `BETWEEN ... AND ...`
     Between {
-        low: Box<Expr>,
-        high: Box<Expr>,
+        low: Box<Expr<'a>>,
+        high: Box<Expr<'a>>,
         not: bool,
     },
     /// Binary operation
@@ -184,69 +187,71 @@ pub enum ExprElement {
     UnaryOp { op: UnaryOperator },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         target_type: TypeName,
     },
     /// `::<type_name>` expression
     PgCast { target_type: TypeName },
-    /// EXTRACT(DateTimeField FROM <expr>)
+    /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
-        field: DateTimeField,
-        expr: Box<Expr>,
+        field: IntervalKind,
+        expr: Box<Expr<'a>>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        substr_expr: Box<Expr>,
-        str_expr: Box<Expr>,
+        substr_expr: Box<Expr<'a>>,
+        str_expr: Box<Expr<'a>>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     SubString {
-        expr: Box<Expr>,
-        substring_from: Option<Box<Expr>>,
-        substring_for: Option<Box<Expr>>,
+        expr: Box<Expr<'a>>,
+        substring_from: Option<Box<Expr<'a>>>,
+        substring_for: Option<Box<Expr<'a>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
-        expr: Box<Expr>,
+        expr: Box<Expr<'a>>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr>)>,
+        trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
     },
     /// A literal value, such as string, number, date or NULL
-    Literal(Literal),
+    Literal { lit: Literal },
     /// `Count(*)` expression
     CountAll,
     /// `(foo, bar)`
-    Tuple { exprs: Vec<Expr> },
+    Tuple { exprs: Vec<Expr<'a>> },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
-        name: Identifier,
-        args: Vec<Expr>,
+        name: Identifier<'a>,
+        args: Vec<Expr<'a>>,
         params: Vec<Literal>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
+        operand: Option<Box<Expr<'a>>>,
+        conditions: Vec<Expr<'a>>,
+        results: Vec<Expr<'a>>,
+        else_result: Option<Box<Expr<'a>>>,
     },
     /// `EXISTS` expression
-    Exists(Query),
+    Exists { subquery: Query<'a> },
     /// Scalar subquery, which will only return a single row with a single column.
-    Subquery(Query),
+    Subquery { subquery: Query<'a> },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
-    MapAccess { accessor: MapAccessor },
+    MapAccess { accessor: MapAccessor<'a> },
     /// An expression between parentheses
-    Group(Expr),
+    Group(Expr<'a>),
+    /// `[1, 2, 3]`
+    Array { exprs: Vec<Expr<'a>> },
 }
 
 struct ExprParser;
@@ -254,7 +259,7 @@ struct ExprParser;
 impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     type Error = pratt::NoError;
     type Input = WithSpan<'a>;
-    type Output = Expr;
+    type Output = Expr<'a>;
 
     fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
@@ -308,28 +313,39 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan) -> pratt::Result<Expr> {
+    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
                 table,
                 column,
             } => Expr::ColumnRef {
+                span: elem.span.0,
                 database,
                 table,
                 column,
             },
             ExprElement::Cast { expr, target_type } => Expr::Cast {
+                span: elem.span.0,
                 expr,
                 target_type,
                 pg_style: false,
             },
-            ExprElement::TryCast { expr, target_type } => Expr::TryCast { expr, target_type },
-            ExprElement::Extract { field, expr } => Expr::Extract { field, expr },
+            ExprElement::TryCast { expr, target_type } => Expr::TryCast {
+                span: elem.span.0,
+                expr,
+                target_type,
+            },
+            ExprElement::Extract { field, expr } => Expr::Extract {
+                span: elem.span.0,
+                kind: field,
+                expr,
+            },
             ExprElement::Position {
                 substr_expr,
                 str_expr,
             } => Expr::Position {
+                span: elem.span.0,
                 substr_expr,
                 str_expr,
             },
@@ -338,20 +354,32 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 substring_from,
                 substring_for,
             } => Expr::Substring {
+                span: elem.span.0,
                 expr,
                 substring_from,
                 substring_for,
             },
-            ExprElement::Trim { expr, trim_where } => Expr::Trim { expr, trim_where },
-            ExprElement::Literal(lit) => Expr::Literal(lit),
-            ExprElement::CountAll => Expr::CountAll,
-            ExprElement::Tuple { exprs } => Expr::Tuple { exprs },
+            ExprElement::Trim { expr, trim_where } => Expr::Trim {
+                span: elem.span.0,
+                expr,
+                trim_where,
+            },
+            ExprElement::Literal { lit } => Expr::Literal {
+                span: elem.span.0,
+                lit,
+            },
+            ExprElement::CountAll => Expr::CountAll { span: elem.span.0 },
+            ExprElement::Tuple { exprs } => Expr::Tuple {
+                span: elem.span.0,
+                exprs,
+            },
             ExprElement::FunctionCall {
                 distinct,
                 name,
                 args,
                 params,
             } => Expr::FunctionCall {
+                span: elem.span.0,
                 distinct,
                 name,
                 args,
@@ -363,22 +391,39 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 results,
                 else_result,
             } => Expr::Case {
+                span: elem.span.0,
                 operand,
                 conditions,
                 results,
                 else_result,
             },
-            ExprElement::Exists(subquery) => Expr::Exists(Box::new(subquery)),
-            ExprElement::Subquery(subquery) => Expr::Subquery(Box::new(subquery)),
+            ExprElement::Exists { subquery } => Expr::Exists {
+                span: elem.span.0,
+                subquery: Box::new(subquery),
+            },
+            ExprElement::Subquery { subquery } => Expr::Subquery {
+                span: elem.span.0,
+                subquery: Box::new(subquery),
+            },
             ExprElement::Group(expr) => expr,
+            ExprElement::Array { exprs } => Expr::Array {
+                span: elem.span.0,
+                exprs,
+            },
             _ => unreachable!(),
         };
         Ok(expr)
     }
 
-    fn infix(&mut self, lhs: Expr, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
+    fn infix(
+        &mut self,
+        lhs: Expr<'a>,
+        elem: WithSpan<'a>,
+        rhs: Expr<'a>,
+    ) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
+                span: elem.span.0,
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
@@ -388,9 +433,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
+    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
+                span: elem.span.0,
                 op,
                 expr: Box::new(rhs),
             },
@@ -399,33 +445,39 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr, elem: WithSpan) -> pratt::Result<Expr> {
+    fn postfix(&mut self, lhs: Expr<'a>, elem: WithSpan<'a>) -> pratt::Result<Expr<'a>> {
         let expr = match elem.elem {
             ExprElement::MapAccess { accessor } => Expr::MapAccess {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 accessor,
             },
             ExprElement::IsNull { not } => Expr::IsNull {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 not,
             },
             ExprElement::InList { list, not } => Expr::InList {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 list,
                 not,
             },
             ExprElement::InSubquery { subquery, not } => Expr::InSubquery {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 subquery,
                 not,
             },
             ExprElement::Between { low, high, not } => Expr::Between {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 low,
                 high,
                 not,
             },
             ExprElement::PgCast { target_type } => Expr::Cast {
+                span: elem.span.0,
                 expr: Box::new(lhs),
                 target_type,
                 pg_style: true,
@@ -526,7 +578,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let extract = map(
         rule! {
-            EXTRACT ~ ^"(" ~ ^#date_time_field ~ ^FROM ~ ^#subexpr(0) ~ ^")"
+            EXTRACT ~ ^"(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
         },
         |(_, _, field, _, expr, _)| ExprElement::Extract {
             field,
@@ -657,7 +709,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let exists = map(
         rule! { EXISTS ~ ^"(" ~ ^#query ~ ^")" },
-        |(_, _, subquery, _)| ExprElement::Exists(subquery),
+        |(_, _, subquery, _)| ExprElement::Exists { subquery },
     );
     let subquery = map(
         rule! {
@@ -665,7 +717,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             ~ #query
             ~ ^")"
         },
-        |(_, subquery, _)| ExprElement::Subquery(subquery),
+        |(_, subquery, _)| ExprElement::Subquery { subquery },
     );
     let group = map(
         rule! {
@@ -677,10 +729,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
-    let literal = map(literal, ExprElement::Literal);
+    let literal = map(literal, |lit| ExprElement::Literal { lit });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    let array = map(
+        rule! {
+            "[" ~ #comma_separated_list0(subexpr(0))? ~ ","? ~ ^"]"
+        },
+        |(_, opt_args, _, _)| {
+            let exprs = opt_args.unwrap_or_default();
+            ExprElement::Array { exprs }
+        },
+    );
 
-    let (rest, elem) = alt((
+    let (rest, (span, elem)) = consumed(alt((
         rule! (
             #is_null : "`... IS [NOT] NULL`"
             | #in_list : "`[NOT] IN (<expr>, ...)`"
@@ -705,18 +766,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #case : "`CASE ... END`"
             | #exists : "`EXISTS (SELECT ...)`"
             | #subquery : "`(SELECT ...)`"
-            | #map_access : "[<key>] | .<key> | :<key>"
             | #group
             | #column_ref : "<column>"
+            | #map_access : "[<key>] | .<key> | :<key>"
+            | #array : "`[...]`"
         ),
-    ))(i)?;
+    )))(i)?;
 
-    let input_ptr = i.as_ptr();
-    let rest_ptr = rest.as_ptr();
-    let offset = (rest_ptr as usize - input_ptr as usize) / std::mem::size_of::<Token>();
-    let span = Input(&i.0[..offset], i.1);
-
-    Ok((rest, WithSpan { elem, span }))
+    Ok((rest, WithSpan { span, elem }))
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
@@ -773,9 +830,9 @@ pub fn literal(i: Input) -> IResult<Literal> {
     ));
     let interval = map(
         rule! {
-            INTERVAL ~ #literal_string ~ #date_time_field
+            INTERVAL ~ #literal_string ~ #interval_kind
         },
-        |(_, value, field)| Literal::Interval(Interval { value, field }),
+        |(_, value, field)| Literal::Interval(Interval { value, kind: field }),
     );
     let current_timestamp = value(Literal::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
     let null = value(Literal::Null, rule! { NULL });
@@ -870,58 +927,26 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     )(i)
 }
 
-pub fn date_time_field(i: Input) -> IResult<DateTimeField> {
-    let year = value(DateTimeField::Year, rule! { YEAR });
-    let month = value(DateTimeField::Month, rule! { MONTH });
-    let week = value(DateTimeField::Week, rule! { WEEK });
-    let day = value(DateTimeField::Day, rule! { DAY });
-    let hour = value(DateTimeField::Hour, rule! { HOUR });
-    let minute = value(DateTimeField::Minute, rule! { MINUTE });
-    let second = value(DateTimeField::Second, rule! { SECOND });
-    let century = value(DateTimeField::Century, rule! { CENTURY });
-    let decade = value(DateTimeField::Decade, rule! { DECADE });
-    let doy = value(DateTimeField::Doy, rule! { DOY });
-    let dow = value(DateTimeField::Dow, rule! { DOW });
-    let epoch = value(DateTimeField::Epoch, rule! { EPOCH });
-    let isodow = value(DateTimeField::Isodow, rule! { ISODOW });
-    let isoyear = value(DateTimeField::Isoyear, rule! { ISOYEAR });
-    let julian = value(DateTimeField::Julian, rule! { JULIAN });
-    let microseconds = value(DateTimeField::Microseconds, rule! { MICROSECONDS });
-    let millenium = value(DateTimeField::Millenium, rule! { MILLENIUM });
-    let milliseconds = value(DateTimeField::Milliseconds, rule! { MILLISECONDS });
-    let quarter = value(DateTimeField::Quarter, rule! { QUARTER });
-    let timezone = value(DateTimeField::Timezone, rule! { TIMEZONE });
-    let timezone_hour = value(DateTimeField::TimezoneHour, rule! { TIMEZONE_HOUR });
-    let timezone_minute = value(DateTimeField::TimezoneMinute, rule! { TIMEZONE_MINUTE });
+pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+    let year = value(IntervalKind::Year, rule! { YEAR });
+    let month = value(IntervalKind::Month, rule! { MONTH });
+    let day = value(IntervalKind::Day, rule! { DAY });
+    let hour = value(IntervalKind::Hour, rule! { HOUR });
+    let minute = value(IntervalKind::Minute, rule! { MINUTE });
+    let second = value(IntervalKind::Second, rule! { SECOND });
+    let doy = value(IntervalKind::Doy, rule! { DOY });
+    let dow = value(IntervalKind::Dow, rule! { DOW });
 
-    alt((
-        rule!(
-            #year
-            | #month
-            | #week
-            | #day
-            | #hour
-            | #minute
-            | #second
-            | #century
-            | #decade
-            | #doy
-            | #dow
-        ),
-        rule!(
-            #epoch
-            | #isodow
-            | #isoyear
-            | #julian
-            | #microseconds
-            | #millenium
-            | #milliseconds
-            | #quarter
-            | #timezone
-            | #timezone_hour
-            | #timezone_minute
-        ),
-    ))(i)
+    rule!(
+        #year
+        | #month
+        | #day
+        | #hour
+        | #minute
+        | #second
+        | #doy
+        | #dow
+    )(i)
 }
 
 pub fn map_access(i: Input) -> IResult<MapAccessor> {

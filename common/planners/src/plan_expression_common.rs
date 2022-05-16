@@ -543,7 +543,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 self.stack.push(inner_type.clone());
                 Ok(self)
             }
-            Expression::MapAccess { args, .. } => self.visit_function("get_path", args.len()),
+            Expression::MapAccess { args, .. } => self.visit_function("get", args.len()),
             Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
         }
     }

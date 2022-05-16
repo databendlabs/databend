@@ -69,8 +69,8 @@ macro_rules! define_timestamp_add_year_months {
         let tz = $ctx.tz;
         let factor = $ctx.factor;
         let micros = $l;
-        let date = tz.timestamp(micros / 1_000_000, (micros % 1_000_000 * 1000) as u32);
 
+        let date = common_datavalues::DateConverter::to_timestamp(&micros, &tz);
         let new_date = $op(date.year(), date.month(), date.day(), $r.as_() * factor);
         new_date.map_or_else(
             |e| {

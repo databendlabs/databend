@@ -69,6 +69,7 @@ use serde::Serialize;
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
 use crate::sled_key_spaces::GenericKV;
+use crate::sled_key_spaces::MetaSrvAddrs;
 use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
@@ -334,6 +335,42 @@ impl StateMachine {
         if prev.is_some() {
             tracing::info!("applied RemoveNode: {}={:?}", node_id, prev);
             sm_nodes.remove(node_id)?;
+        }
+        Ok((prev, None).into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_add_metasrv_addr_cmd(
+        &self,
+        metasrv_name: &String,
+        addr: &String,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let sm_metasrv_addrs = txn_tree.key_space::<MetaSrvAddrs>();
+
+        let prev = sm_metasrv_addrs.get(metasrv_name)?;
+        if prev.is_some() {
+            Ok((prev, None).into())
+        } else {
+            sm_metasrv_addrs.insert(metasrv_name, addr)?;
+            tracing::info!("applied AddMetaSrvAddr: {}={}", metasrv_name, addr);
+            Ok((prev, Some(addr.to_string())).into())
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_remove_metasrv_addr_cmd(
+        &self,
+        metasrv_name: &String,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
+        let sm_metasrv_addrs = txn_tree.key_space::<MetaSrvAddrs>();
+
+        let prev = sm_metasrv_addrs.get(metasrv_name)?;
+
+        if prev.is_some() {
+            tracing::info!("applied RemoveMetaSrvAddr: {}={:?}", metasrv_name, prev);
+            sm_metasrv_addrs.remove(metasrv_name)?;
         }
         Ok((prev, None).into())
     }
@@ -624,6 +661,15 @@ impl StateMachine {
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node_cmd(node_id, txn_tree),
 
+            Cmd::AddMetaSrvAddr {
+                ref metasrv_name,
+                ref metasrv_addr,
+            } => self.apply_add_metasrv_addr_cmd(metasrv_name, metasrv_addr, txn_tree),
+
+            Cmd::RemoveMetaSrvAddr { ref metasrv_name } => {
+                self.apply_remove_metasrv_addr_cmd(metasrv_name, txn_tree)
+            }
+
             Cmd::UpsertKV {
                 key,
                 seq,
@@ -792,6 +838,14 @@ impl StateMachine {
         }
     }
 
+    pub fn get_metasrv_addrs(&self) -> MetaResult<Vec<String>> {
+        let sm_nodes = self.metasrv_addrs();
+        match sm_nodes.range_values(..) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
         seq_value.and_then(Self::unexpired)
     }
@@ -836,6 +890,10 @@ impl StateMachine {
     }
 
     pub fn nodes(&self) -> AsKeySpace<Nodes> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn metasrv_addrs(&self) -> AsKeySpace<MetaSrvAddrs> {
         self.sm_tree.key_space()
     }
 

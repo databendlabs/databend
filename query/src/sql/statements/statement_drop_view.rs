@@ -21,9 +21,9 @@ use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
+use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::statements::DfCreateTable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfDropView {
@@ -37,12 +37,13 @@ impl AnalyzableStatement for DfDropView {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
-        let (db, viewname) = DfCreateTable::resolve_table(ctx, &self.name, "View")?;
+        let (catalog, db, viewname) = resolve_table(&ctx, &self.name, "DROP VIEW")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropView(
             DropViewPlan {
                 if_exists,
                 tenant,
+                catalog,
                 db,
                 viewname,
             },

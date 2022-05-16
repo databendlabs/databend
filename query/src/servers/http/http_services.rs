@@ -27,13 +27,13 @@ use poem::Route;
 
 use super::v1::upload_to_stage;
 use crate::common::service::HttpShutdownHandler;
-use crate::configs::Config;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
+use crate::Config;
 
 pub struct HttpHandler {
     session_manager: Arc<SessionManager>,

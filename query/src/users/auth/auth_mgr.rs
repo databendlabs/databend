@@ -20,9 +20,9 @@ use common_meta_types::AuthInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 
-pub use crate::configs::Config;
 use crate::users::auth::jwt::JwtAuthenticator;
 use crate::users::UserApiProvider;
+pub use crate::Config;
 
 pub struct AuthMgr {
     tenant: String,
@@ -48,12 +48,6 @@ impl AuthMgr {
             tenant: cfg.query.tenant_id.clone(),
             jwt: JwtAuthenticator::try_create(cfg).await?,
         })
-    }
-
-    pub async fn no_auth(&self) -> Result<UserInfo> {
-        self.user_mgr
-            .get_user(&self.tenant, UserIdentity::new("root", "127.0.0.1"))
-            .await
     }
 
     pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {

@@ -24,7 +24,7 @@ use logos::Span;
 use crate::parser::token::*;
 use crate::parser::util::Input;
 
-const MAX_DISPLAY_ERROR_COUNT: usize = 5;
+const MAX_DISPLAY_ERROR_COUNT: usize = 6;
 
 /// This error type accumulates errors and their position when backtracking
 /// through a parse tree. This take a deepest error at `alt` combinator.
@@ -143,12 +143,56 @@ impl<'a> Error<'a> {
             backtrace: input.1,
         }
     }
+}
 
-    pub fn to_labels(&self) -> Vec<(Span, String)> {
+impl From<ParseIntError> for ErrorKind {
+    fn from(err: ParseIntError) -> Self {
+        let msg = match err.kind() {
+            IntErrorKind::InvalidDigit => {
+                "unable to parse number because it contains invalid characters"
+            }
+            IntErrorKind::PosOverflow => "unable to parse number because it positive overflowed",
+            IntErrorKind::NegOverflow => "unable to parse number because it negative overflowed",
+            _ => "unable to parse number",
+        };
+        ErrorKind::Other(msg)
+    }
+}
+
+pub trait DisplayError {
+    type Message;
+
+    fn display_error(&self, message: Self::Message) -> String;
+}
+
+impl<'a> DisplayError for Token<'a> {
+    type Message = String;
+
+    fn display_error(&self, message: String) -> String {
+        pretty_print_error(self.source, vec![(self.span.clone(), message)])
+    }
+}
+
+impl<'a> DisplayError for &'a [Token<'a>] {
+    type Message = String;
+
+    fn display_error(&self, message: String) -> String {
+        assert!(!self.is_empty());
+        let source = self.first().unwrap().source;
+        let span_start = self.first().unwrap().span.start;
+        let span_end = self.last().unwrap().span.end;
+        pretty_print_error(source, vec![(span_start..span_end, message)])
+    }
+}
+
+impl<'a> DisplayError for Error<'a> {
+    type Message = ();
+
+    fn display_error(&self, _: ()) -> String {
         let inner = &*self.backtrace.inner.borrow();
         let inner = match inner {
             Some(inner) => inner,
-            None => return vec![],
+            None => return String::new(),
         };
 
         let mut lables = vec![];
@@ -168,6 +212,7 @@ impl<'a> Error<'a> {
                 .iter()
                 .chain(&inner.errors)
                 .filter_map(|kind| match kind {
+                    ErrorKind::ExpectToken(EOI) => None,
                     ErrorKind::ExpectToken(token) if token.is_keyword() => {
                         Some(format!("`{:?}`", token))
                     }
@@ -209,25 +254,11 @@ impl<'a> Error<'a> {
                 .map(|(span, msg)| (span.span.clone(), format!("while parsing {}", msg))),
         );
 
-        lables
+        pretty_print_error(self.span.source, lables)
     }
 }
 
-impl From<ParseIntError> for ErrorKind {
-    fn from(err: ParseIntError) -> Self {
-        let msg = match err.kind() {
-            IntErrorKind::InvalidDigit => {
-                "unable to parse number because it contains invalid characters"
-            }
-            IntErrorKind::PosOverflow => "unable to parse number because it positive overflowed",
-            IntErrorKind::NegOverflow => "unable to parse number because it negative overflowed",
-            _ => "unable to parse number",
-        };
-        ErrorKind::Other(msg)
-    }
-}
-
-pub fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
+fn pretty_print_error(source: &str, lables: Vec<(Span, String)>) -> String {
     use codespan_reporting::diagnostic::Diagnostic;
     use codespan_reporting::diagnostic::Label;
     use codespan_reporting::files::SimpleFile;

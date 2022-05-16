@@ -624,9 +624,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22a9137b95ea06864e018375b72adfb7db6e6f68cfc8df5a04d00288050485ee"
+checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 dependencies = [
  "jobserver",
 ]
@@ -837,6 +837,7 @@ dependencies = [
  "async-trait",
  "codespan-reporting",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-types",
@@ -901,6 +902,16 @@ dependencies = [
  "ritelinked",
  "tempfile",
  "walkdir",
+]
+
+[[package]]
+name = "common-configs"
+version = "0.1.0"
+dependencies = [
+ "clap 3.1.8",
+ "common-base",
+ "common-exception",
+ "serde",
 ]
 
 [[package]]
@@ -1023,6 +1034,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "common-base",
+ "common-configs",
  "common-exception",
  "common-tracing",
  "hyper",
@@ -1032,6 +1044,14 @@ dependencies = [
  "thiserror",
  "tonic",
  "trust-dns-resolver",
+]
+
+[[package]]
+name = "common-hive-meta-store"
+version = "0.1.0"
+dependencies = [
+ "thrift",
+ "which",
 ]
 
 [[package]]
@@ -1071,9 +1091,12 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-io",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
  "mockall",
  "serde_json",
 ]
@@ -1122,6 +1145,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-configs",
  "common-exception",
  "common-grpc",
  "common-meta-api",
@@ -1193,6 +1217,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-exception",
+ "common-io",
  "derive_more",
  "enumflags2",
  "hex",
@@ -1252,10 +1277,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-datavalues",
+ "common-io",
  "common-meta-types",
  "common-protos",
+ "enumflags2",
  "maplit",
  "num",
+ "serde_json",
  "thiserror",
 ]
 
@@ -1704,6 +1732,7 @@ dependencies = [
  "maplit",
  "metrics",
  "num",
+ "once_cell",
  "poem",
  "pretty_assertions",
  "prost 0.9.0",
@@ -1763,12 +1792,14 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
+ "common-configs",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-functions",
  "common-grpc",
+ "common-hive-meta-store",
  "common-io",
  "common-macros",
  "common-management",
@@ -1789,7 +1820,6 @@ dependencies = [
  "futures",
  "headers",
  "http",
- "hyper",
  "itertools",
  "jwt-simple",
  "jwtk",
@@ -1826,6 +1856,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "threadpool",
+ "thrift",
  "time 0.3.9",
  "tokio-rustls 0.23.3",
  "tokio-stream",
@@ -2630,6 +2661,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hdfs-sys"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73dcfda0dbca0569e98b8bfb87028d83d2f07705587bac1fddea7dc9ee1eca13"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "hdrhistogram"
 version = "7.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2640,6 +2680,18 @@ dependencies = [
  "flate2",
  "nom",
  "num-traits",
+]
+
+[[package]]
+name = "hdrs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b63458420a6d683971b318d1241478eb23c811932d6b255166a3c0d5458a45c"
+dependencies = [
+ "futures-io",
+ "hdfs-sys",
+ "libc",
+ "log",
 ]
 
 [[package]]
@@ -3219,9 +3271,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.119"
+version = "0.2.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf2e165bb3457c8e098ea76f3e3bc9db55f87aa90d52d0e6be741470916aaa4"
+checksum = "5916d2ae698f6de9bfb891ad7a8d65c09d232dc58cc4ac433c7da3b2fd84bc2b"
 
 [[package]]
 name = "libgit2-sys"
@@ -3986,9 +4038,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.6.0"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b485a8d622cabe87171f51f0d6ae91ffa4425137097b0d69197a763f5cf7d0b"
+checksum = "3649ace5a99d388ac9d02459135ad0425941e8cf6c33f418c4ded80483563ce3"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -3997,6 +4049,7 @@ dependencies = [
  "base64 0.13.0",
  "bytes 1.1.0",
  "futures",
+ "hdrs",
  "http",
  "hyper",
  "hyper-tls",
@@ -4579,8 +4632,9 @@ dependencies = [
 
 [[package]]
 name = "pprof"
-version = "0.7.0"
-source = "git+https://github.com/tikv/pprof-rs?rev=666d9e2#666d9e218e336e6840002f4e502b44440a55a3be"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2324292407eab69d4ace0eed1524fe612ac37c98aa22b0d868355b17fada530"
 dependencies = [
  "backtrace",
  "cfg-if",
@@ -5860,7 +5914,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=8db5b12#8db5b126bd9185d0ca97adfcdff1ce679fdf5307"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=619e3b6#619e3b66d0a3b7eaaed69a66d452b37a5488dca4"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

@@ -34,7 +34,13 @@ where T: AsPrimitive<i64>
     }
 
     fn to_timestamp(&self, tz: &Tz) -> DateTime<Tz> {
+        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
         let micros = self.as_();
-        tz.timestamp(micros / 1_000_000, (micros % 1_000_000 * 1000) as u32)
+        let (mut secs, mut nanos) = (micros / 1_000_000, (micros % 1_000_000) * 1_000);
+        if nanos < 0 {
+            secs -= 1;
+            nanos += 1_000_000_000;
+        }
+        tz.timestamp_opt(secs, nanos as u32).unwrap()
     }
 }

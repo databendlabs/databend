@@ -74,7 +74,7 @@ impl SledTree {
         tracing::debug!("SledTree opened tree: {}", tree_name);
 
         let rl = SledTree {
-            name: format!("{}", tree_name),
+            name: tree_name.to_string(),
             sync,
             tree: t,
         };

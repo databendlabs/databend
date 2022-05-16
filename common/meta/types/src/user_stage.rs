@@ -16,6 +16,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::StorageParams;
 
 /*
 -- Internal stage
@@ -137,31 +138,8 @@ impl Default for FileFormatOptions {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
-pub struct StageS3Storage {
-    // `example-bucket` in `s3://example-bucket/path/to/object`
-    pub bucket: String,
-    pub path: String,
-    pub credentials_aws_key_id: String,
-    pub credentials_aws_secret_key: String,
-    pub encryption_master_key: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum StageStorage {
-    // Location is aws s3.
-    S3(StageS3Storage),
-}
-
-impl Default for StageStorage {
-    fn default() -> Self {
-        Self::S3(StageS3Storage::default())
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
-#[serde(default)]
 pub struct StageParams {
-    pub storage: StageStorage,
+    pub storage: StorageParams,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

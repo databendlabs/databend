@@ -33,7 +33,7 @@ async fn test_input_and_output_port() -> Result<()> {
                 input.set_need_data();
                 while !input.has_data() {}
                 let data = input.pull_data().unwrap();
-                assert_eq!(data.unwrap_err().message(), format!("{}", index));
+                assert_eq!(data.unwrap_err().message(), index.to_string());
             }
         }
     }
@@ -43,7 +43,7 @@ async fn test_input_and_output_port() -> Result<()> {
             barrier.wait();
             for index in 0..100 {
                 while !output.can_push() {}
-                output.push_data(Err(ErrorCode::Ok(format!("{}", index))));
+                output.push_data(Err(ErrorCode::Ok(index.to_string())));
             }
         }
     }

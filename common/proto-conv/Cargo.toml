@@ -12,11 +12,15 @@ test = false
 
 [dependencies]
 common-datavalues = { path = "../../common/datavalues" }
+common-io = { path = "../../common/io" }
 common-meta-types = { path = "../../common/meta/types" }
 common-protos = { path = "../../common/protos" }
 
 num = "0.4"
 thiserror = "1.0.30"
+
+enumflags2 = { version = "0.7.4", features = ["serde"] }
+serde_json = "1.0.79"
 
 [build-dependencies]
 

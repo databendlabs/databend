@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowCreateDatabasePlan;
@@ -32,10 +31,12 @@ pub struct DfShowCreateDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowCreateDatabase {
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let (catalog, db) = super::resolve_database(&ctx, &self.name, "SHOW CREATE DATABASE")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::ShowCreateDatabase(ShowCreateDatabasePlan {
-                db: self.database_name()?,
+                catalog,
+                db,
                 schema: Self::schema(),
             }),
         )))
@@ -48,15 +49,5 @@ impl DfShowCreateDatabase {
             DataField::new("Database", Vu8::to_data_type()),
             DataField::new("Create Database", Vu8::to_data_type()),
         ])
-    }
-
-    fn database_name(&self) -> Result<String> {
-        if self.name.0.is_empty() {
-            return Err(ErrorCode::SyntaxException(
-                "Show create database name is empty",
-            ));
-        }
-
-        Ok(self.name.0[0].value.clone())
     }
 }

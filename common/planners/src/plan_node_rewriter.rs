@@ -68,6 +68,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
@@ -145,6 +146,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+            PlanNode::RenameDatabase(plan) => self.rewrite_rename_database(plan),
 
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
@@ -364,6 +366,9 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_rename_table(&mut self, plan: &RenameTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::RenameTable(plan.clone()))
+    }
+    fn rewrite_rename_database(&mut self, plan: &RenameDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RenameDatabase(plan.clone()))
     }
 
     fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {

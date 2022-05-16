@@ -14,6 +14,8 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
@@ -41,6 +43,7 @@ async fn test_configs_table() -> Result<()> {
         "| log     | level                                | INFO                     |             |",
         "| log     | query_enabled                        | false                    |             |",
         "| meta    | address                              |                          |             |",
+        "| meta    | endpoints                            |                          |             |",
         "| meta    | client_timeout_in_second             | 10                       |             |",
         "| meta    | embedded_dir                         | ./_meta_embedded         |             |",
         "| meta    | password                             |                          |             |",
@@ -90,10 +93,13 @@ async fn test_configs_table() -> Result<()> {
         "| storage | azblob.endpoint_url                  |                          |             |",
         "| storage | azblob.root                          |                          |             |",
         "| storage | fs.data_path                         | _data                    |             |",
+        "| storage | hdfs.name_node                       |                          |             |",
+        "| storage | hdfs.root                            |                          |             |",
         "| storage | num_cpus                             | 0                        |             |",
         "| storage | s3.access_key_id                     |                          |             |",
         "| storage | s3.bucket                            |                          |             |",
         "| storage | s3.endpoint_url                      | https://s3.amazonaws.com |             |",
+        "| storage | s3.master_key                        |                          |             |",
         "| storage | s3.region                            |                          |             |",
         "| storage | s3.root                              |                          |             |",
         "| storage | s3.secret_access_key                 |                          |             |",
@@ -107,8 +113,12 @@ async fn test_configs_table() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table_redact() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
-    conf.storage.s3.access_key_id = "access_key_id".to_string();
-    conf.storage.s3.secret_access_key = "secret_access_key".to_string();
+    conf.storage.params = StorageParams::S3(StorageS3Config {
+        bucket: "test".to_string(),
+        access_key_id: "access_key_id".to_string(),
+        secret_access_key: "secret_access_key".to_string(),
+        ..Default::default()
+    });
     let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
@@ -128,6 +138,7 @@ async fn test_configs_table_redact() -> Result<()> {
         "| log     | level                                | INFO                     |             |",
         "| log     | query_enabled                        | false                    |             |",
         "| meta    | address                              |                          |             |",
+        "| meta    | endpoints                            |                          |             |",
         "| meta    | client_timeout_in_second             | 10                       |             |",
         "| meta    | embedded_dir                         | ./_meta_embedded         |             |",
         "| meta    | password                             |                          |             |",
@@ -177,14 +188,17 @@ async fn test_configs_table_redact() -> Result<()> {
         "| storage | azblob.endpoint_url                  |                          |             |",
         "| storage | azblob.root                          |                          |             |",
         "| storage | fs.data_path                         | _data                    |             |",
+        "| storage | hdfs.name_node                       |                          |             |",
+        "| storage | hdfs.root                            |                          |             |",
         "| storage | num_cpus                             | 0                        |             |",
         "| storage | s3.access_key_id                     | ******_id                |             |",
-        "| storage | s3.bucket                            |                          |             |",
+        "| storage | s3.bucket                            | test                     |             |",
         "| storage | s3.endpoint_url                      | https://s3.amazonaws.com |             |",
+        "| storage | s3.master_key                        |                          |             |",
         "| storage | s3.region                            |                          |             |",
         "| storage | s3.root                              |                          |             |",
         "| storage | s3.secret_access_key                 | ******key                |             |",
-        "| storage | type                                 | fs                       |             |",
+        "| storage | type                                 | s3                       |             |",
         "+---------+--------------------------------------+--------------------------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

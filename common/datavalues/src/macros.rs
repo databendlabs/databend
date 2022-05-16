@@ -29,6 +29,7 @@ macro_rules! for_all_scalar_types {
             { f64 },
             { bool },
             { Vu8 },
+            { ArrayValue },
             { VariantValue }
         }
     };
@@ -270,6 +271,56 @@ macro_rules! with_match_primitive_types_error {
             TypeID::UInt64 => __with_ty__! { u64 },
             TypeID::Float32 => __with_ty__! { f32 },
             TypeID::Float64 => __with_ty__! { f64 },
+            v => Err(ErrorCode::BadDataValueType(format!(
+                "Ops is not support on datatype: {:?}",
+                v
+            ))),
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! with_match_integer_type_id {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! with_match_integer_types_error {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
             v => Err(ErrorCode::BadDataValueType(format!(
                 "Ops is not support on datatype: {:?}",
                 v

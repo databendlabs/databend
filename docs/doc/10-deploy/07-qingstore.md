@@ -126,10 +126,8 @@ username = "root"
 password = "root"
 
 [storage]
-# fs|s3
+# s3
 type = "s3"
-
-[storage.fs]
 
 [storage.s3]
 bucket = "databend"
@@ -142,8 +140,6 @@ endpoint_url = "https://pek3b.qingstor.com"
 # https://docs.qingcloud.com/product/api/common/overview.html
 access_key_id = "<your-key-id>"
 secret_access_key = "<your-access-key>"
-
-[storage.azblob]
 ```
 
 :::tip

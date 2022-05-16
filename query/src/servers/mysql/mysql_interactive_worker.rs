@@ -442,7 +442,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             version: format!(
                 "{}-{}",
                 MYSQL_VERSION,
-                *crate::configs::DATABEND_COMMIT_VERSION
+                *crate::version::DATABEND_COMMIT_VERSION
             ),
             client_addr,
         }

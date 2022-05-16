@@ -66,9 +66,17 @@ where R: BufferRead
             let _ = self.ignores(|f| (b'0'..=b'9').contains(&f))?;
         }
 
-        FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
-            format!("Cannot parse value:{:?} to number type", buf)
-        })
+        match buf.is_empty() {
+            true => Ok(T::default()),
+            false => match FromLexical::from_lexical(buf.as_slice()) {
+                Ok(value) => Ok(value),
+                Err(cause) => Err(ErrorCode::BadBytes(format!(
+                    "Cannot parse value:{:?} to number type, cause: {:?}",
+                    String::from_utf8(buf),
+                    cause
+                ))),
+            },
+        }
     }
 
     fn read_float_text<T: FromLexical>(&mut self) -> Result<T> {

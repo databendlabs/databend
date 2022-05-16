@@ -19,7 +19,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
-use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -51,9 +50,10 @@ impl Interpreter for DescribeTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        let catalog = self.plan.catalog.as_str();
         let database = self.plan.db.as_str();
         let table = self.plan.table.as_str();
-        let table = self.ctx.get_table(database, table).await?;
+        let table = self.ctx.get_table(catalog, database, table).await?;
         let tbl_info = table.get_table_info();
 
         let schema = if tbl_info.engine() == VIEW_ENGINE {
@@ -88,13 +88,13 @@ impl Interpreter for DescribeTableInterpreter {
             });
             match field.default_expr() {
                 Some(expr) => {
-                    let expression: Expression = serde_json::from_slice::<Expression>(expr)?;
+                    let expression = PlanParser::parse_expr(expr)?;
                     default_exprs.push(format!("{:?}", expression));
                 }
 
                 None => {
                     let value = field.data_type().default_value();
-                    default_exprs.push(format!("{}", value));
+                    default_exprs.push(value.to_string());
                 }
             }
             extras.push("".to_string());

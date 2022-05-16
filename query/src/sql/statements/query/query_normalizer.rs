@@ -40,9 +40,11 @@ pub struct QueryNormalizer {
 
 /// Replace alias in query and collect aggregate functions
 impl QueryNormalizer {
-    fn create(ctx: Arc<QueryContext>) -> QueryNormalizer {
-        QueryNormalizer {
-            expression_analyzer: ExpressionAnalyzer::create(ctx),
+    async fn try_create(ctx: Arc<QueryContext>) -> Result<QueryNormalizer> {
+        let tenant = ctx.get_tenant();
+        let udfs = ctx.get_user_manager().get_udfs(&tenant).await?;
+        Ok(QueryNormalizer {
+            expression_analyzer: ExpressionAnalyzer::create_with_udfs_support(ctx, udfs),
             aliases_map: HashMap::new(),
             query_ast_ir: QueryASTIR {
                 filter_predicate: None,
@@ -56,11 +58,11 @@ impl QueryNormalizer {
                 limit: None,
                 offset: None,
             },
-        }
+        })
     }
 
     pub async fn normalize(ctx: Arc<QueryContext>, v: &DfQueryStatement) -> Result<QueryASTIR> {
-        let query_normalizer = QueryNormalizer::create(ctx);
+        let query_normalizer = QueryNormalizer::try_create(ctx).await?;
         query_normalizer.transform(v).await
     }
 

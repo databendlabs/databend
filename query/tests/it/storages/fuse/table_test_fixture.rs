@@ -19,6 +19,8 @@ use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::StorageFsConfig;
+use common_io::prelude::StorageParams;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
@@ -26,7 +28,7 @@ use common_planners::CreateTablePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
-use databend_query::catalogs::Catalog;
+use databend_query::catalogs::CATALOG_DEFAULT;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
@@ -56,9 +58,11 @@ impl TestFixture {
         let mut conf = crate::tests::ConfigBuilder::create().config();
 
         // make sure we are suing `fs` storage
-        conf.storage.storage_type = "fs".to_string();
-        // use `TempDir` as root path (auto clean)
-        conf.storage.fs.data_path = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.params = StorageParams::Fs(StorageFsConfig {
+            // use `TempDir` as root path (auto clean)
+            root: tmp_dir.path().to_str().unwrap().to_string(),
+        });
+
         let ctx = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
@@ -68,6 +72,7 @@ impl TestFixture {
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
+            catalog: "default".to_owned(),
             tenant,
             if_not_exists: false,
             db: db_name,
@@ -76,7 +81,8 @@ impl TestFixture {
                 ..Default::default()
             },
         };
-        ctx.get_catalog()
+        ctx.get_catalog("default")
+            .unwrap()
             .create_database(plan.into())
             .await
             .unwrap();
@@ -100,6 +106,10 @@ impl TestFixture {
         gen_db_name(&self.prefix)
     }
 
+    pub fn default_catalog_name(&self) -> String {
+        "default".to_owned()
+    }
+
     pub fn default_table_name(&self) -> String {
         format!("tbl_{}", self.prefix)
     }
@@ -112,6 +122,7 @@ impl TestFixture {
         CreateTablePlan {
             if_not_exists: false,
             tenant: self.default_tenant(),
+            catalog: self.default_catalog_name(),
             db: self.default_db_name(),
             table: self.default_table_name(),
             table_meta: TableMeta {
@@ -175,7 +186,7 @@ impl TestFixture {
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
         self.ctx
-            .get_catalog()
+            .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
@@ -294,7 +305,7 @@ pub async fn append_sample_data_overwrite(
     let ctx = fixture.ctx();
     let stream = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit_insertion(ctx, stream.try_collect().await?, overwrite)
+        .commit_insertion(ctx, CATALOG_DEFAULT, stream.try_collect().await?, overwrite)
         .await
 }
 
@@ -305,7 +316,10 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
 ) {
-    let data_path = fixture.ctx().get_config().storage.fs.data_path;
+    let data_path = match fixture.ctx().get_config().storage.params {
+        StorageParams::Fs(v) => v.root,
+        _ => panic!("storage type is not fs"),
+    };
     let root = data_path.as_str();
     let mut ss_count = 0;
     let mut sg_count = 0;

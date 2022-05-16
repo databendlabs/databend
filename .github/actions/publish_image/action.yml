@@ -42,7 +42,7 @@ runs:
 
     - name: Build and publish databend image
       id: docker_build
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       with:
         push: true
         tags: ${{ inputs.dockerhub_namespace }}/databend:master # assume latest tag is the latest release tag

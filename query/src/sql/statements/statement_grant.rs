@@ -43,19 +43,21 @@ pub enum DfGrantObject {
 
 impl DfGrantObject {
     pub fn convert_to_grant_object(&self, ctx: Arc<QueryContext>) -> GrantObject {
+        // TODO fetch real catalog
+        let catalog_name = ctx.get_current_catalog();
         match self {
             DfGrantObject::Global => GrantObject::Global,
             DfGrantObject::Table(database_name, table_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| ctx.get_current_database());
-                GrantObject::Table(database_name, table_name.clone())
+                GrantObject::Table(catalog_name, database_name, table_name.clone())
             }
             DfGrantObject::Database(database_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| ctx.get_current_database());
-                GrantObject::Database(database_name)
+                GrantObject::Database(catalog_name, database_name)
             }
         }
     }

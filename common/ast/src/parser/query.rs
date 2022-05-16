@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use nom::branch::alt;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 
@@ -24,7 +25,7 @@ use crate::rule;
 
 pub fn query(i: Input) -> IResult<Query> {
     map(
-        rule! {
+        consumed(rule! {
             SELECT ~ DISTINCT? ~ #comma_separated_list1(select_target)
             ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
             ~ ( WHERE ~ ^#expr )?
@@ -34,21 +35,27 @@ pub fn query(i: Input) -> IResult<Query> {
             ~ ( LIMIT ~ ^#comma_separated_list1(expr) )?
             ~ ( OFFSET ~ ^#expr )?
             : "`SELECT ...`"
-        },
+        }),
         |(
-            _select,
-            opt_distinct,
-            select_list,
-            opt_from_block,
-            opt_where_block,
-            opt_group_by_block,
-            opt_having_block,
-            opt_order_by_block,
-            opt_limit_block,
-            opt_offset_block,
+            span,
+            (
+                _select,
+                opt_distinct,
+                select_list,
+                opt_from_block,
+                opt_where_block,
+                opt_group_by_block,
+                opt_having_block,
+                opt_order_by_block,
+                opt_limit_block,
+                opt_offset_block,
+            ),
         )| {
             Query {
+                span: span.0,
                 body: SetExpr::Select(Box::new(SelectStmt {
+                    // TODO(andylokandy): span should exclude order by
+                    span: span.0,
                     distinct: opt_distinct.is_some(),
                     select_list,
                     from: opt_from_block.map(|(_, table_refs)| {
@@ -102,7 +109,7 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
             #expr ~ ( AS ~ #ident_after_as )?
         },
         |(expr, alias)| SelectTarget::AliasedExpr {
-            expr,
+            expr: Box::new(expr),
             alias: alias.map(|(_, name)| name),
         },
     );
@@ -126,15 +133,20 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 pub fn aliased_table(i: Input) -> IResult<TableReference> {
     map(
         rule! {
-            #ident ~ ( "." ~ #ident )? ~ #table_alias?
+            #ident ~ ( "." ~ #ident )? ~ ( "." ~ #ident )? ~ #table_alias?
         },
-        |(fst, snd, alias)| {
-            let (database, table) = match (fst, snd) {
-                (database, Some((_, table))) => (Some(database), table),
-                (table, None) => (None, table),
+        |(fst, snd, third, alias)| {
+            let (catalog, database, table) = match (fst, snd, third) {
+                (catalog, Some((_, database)), Some((_, table))) => {
+                    (Some(catalog), Some(database), table)
+                }
+                (database, Some((_, table)), None) => (None, Some(database), table),
+                (database, None, Some((_, table))) => (None, Some(database), table),
+                (table, None, None) => (None, None, table),
             };
 
             TableReference::Table {
+                catalog,
                 database,
                 table,
                 alias,
@@ -197,10 +209,10 @@ pub fn parenthesized_joined_tables(i: Input) -> IResult<TableReference> {
 }
 
 pub fn joined_tables(i: Input) -> IResult<TableReference> {
-    struct JoinElement {
+    struct JoinElement<'a> {
         op: JoinOperator,
-        condition: JoinCondition,
-        right: Box<TableReference>,
+        condition: JoinCondition<'a>,
+        right: Box<TableReference<'a>>,
     }
 
     let table_ref_without_join = |i| {
@@ -215,7 +227,7 @@ pub fn joined_tables(i: Input) -> IResult<TableReference> {
         rule! {
             ON ~ #expr
         },
-        |(_, expr)| JoinCondition::On(expr),
+        |(_, expr)| JoinCondition::On(Box::new(expr)),
     );
     let join_condition_using = map(
         rule! {

@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use metrics::histogram;
+use sqlparser::ast::Expr;
 use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
@@ -89,6 +90,27 @@ impl<'a> DfParser<'a> {
                 Ok(result)
             }
         }
+    }
+
+    pub fn parse_expr(expr: &str) -> Result<Expr, ParserError> {
+        let dialect = &MySqlDialect {};
+        let mut tokenizer = Tokenizer::new(dialect, expr);
+        let (tokens, position_map) = tokenizer.tokenize()?;
+        let mut parser = Parser::new(tokens, position_map, dialect);
+        parser.parse_expr()
+    }
+
+    pub fn parse_exprs(expr: &str) -> Result<Vec<Expr>, ParserError> {
+        let dialect = &MySqlDialect {};
+        let mut tokenizer = Tokenizer::new(dialect, expr);
+        let (tokens, position_map) = tokenizer.tokenize()?;
+        let mut parser = Parser::new(tokens, position_map, dialect);
+
+        parser.expect_token(&Token::LParen)?;
+        let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
+        parser.expect_token(&Token::RParen)?;
+
+        Ok(exprs)
     }
 
     /// Parse a SQL statement and produce a set of statements
@@ -291,6 +313,7 @@ impl<'a> DfParser<'a> {
                 Keyword::FUNCTION => self.parse_alter_udf(),
                 Keyword::TABLE => self.parse_alter_table(),
                 Keyword::VIEW => self.parse_alter_view(),
+                Keyword::DATABASE => self.parse_alter_database(),
                 _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),

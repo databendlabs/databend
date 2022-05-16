@@ -24,6 +24,7 @@ pub trait BufferReadExt: BufferRead {
     fn ignore_bytes(&mut self, bs: &[u8]) -> Result<bool>;
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> Result<bool>;
     fn ignore_white_spaces(&mut self) -> Result<bool>;
+    fn ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<bool>;
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize>;
 
     fn keep_read(&mut self, buf: &mut Vec<u8>, f: impl Fn(u8) -> bool) -> Result<usize>;
@@ -55,6 +56,11 @@ pub trait BufferReadExt: BufferRead {
         Ok(())
     }
 
+    fn eof(&mut self) -> Result<bool> {
+        let buffer = self.fill_buf()?;
+        Ok(buffer.is_empty())
+    }
+
     fn must_eof(&mut self) -> Result<()> {
         let buffer = self.fill_buf()?;
         if !buffer.is_empty() {
@@ -78,6 +84,16 @@ pub trait BufferReadExt: BufferRead {
 
     fn must_ignore_byte(&mut self, b: u8) -> Result<()> {
         if !self.ignore_byte(b)? {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Expected to have char {}.", b as char),
+            ));
+        }
+        Ok(())
+    }
+
+    fn must_ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<()> {
+        if !self.ignore_white_spaces_and_byte(b)? {
             return Err(std::io::Error::new(
                 ErrorKind::InvalidData,
                 format!("Expected to have char {}", b as char),
@@ -170,6 +186,17 @@ where R: BufferRead
             cnt += 1;
         }
         Ok(cnt > 0)
+    }
+
+    fn ignore_white_spaces_and_byte(&mut self, b: u8) -> Result<bool> {
+        self.ignores(|c: u8| c == b' ')?;
+
+        if self.ignore_byte(b)? {
+            self.ignores(|c: u8| c == b' ')?;
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> Result<usize> {

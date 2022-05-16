@@ -15,8 +15,10 @@
 pub mod query;
 
 mod analyzer_expr;
+mod analyzer_expr_sync;
 mod analyzer_statement;
 mod analyzer_value_expr;
+mod statement_alter_database;
 mod statement_alter_table;
 mod statement_alter_udf;
 mod statement_alter_user;
@@ -70,11 +72,14 @@ mod statement_use_database;
 mod value_source;
 
 pub use analyzer_expr::ExpressionAnalyzer;
+pub use analyzer_expr_sync::ExpressionSyncAnalyzer;
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::QueryAnalyzeState;
 pub use analyzer_statement::QueryRelation;
 pub use query::QueryASTIR;
+pub use statement_alter_database::AlterDatabaseAction;
+pub use statement_alter_database::DfAlterDatabase;
 pub use statement_alter_table::AlterTableAction;
 pub use statement_alter_table::DfAlterTable;
 pub use statement_alter_udf::DfAlterUDF;

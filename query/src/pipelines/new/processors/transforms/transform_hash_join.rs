@@ -53,6 +53,7 @@ impl Sink for SinkBuildHashTable {
 enum HashJoinStep {
     Build,
     Probe,
+    Finished,
 }
 
 pub struct TransformHashJoinProbe {
@@ -103,6 +104,7 @@ impl Processor for TransformHashJoinProbe {
                     self.step = HashJoinStep::Probe;
                     Ok(Event::Sync)
                 } else {
+                    // Idle till build finished
                     Ok(Event::NeedData)
                 }
             }
@@ -113,17 +115,23 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if !self.output_port.can_push() {
-                    self.input_port.set_not_need_data();
                     return Ok(Event::NeedConsume);
                 }
 
                 if !self.output_data_blocks.is_empty() {
                     self.output_port
                         .push_data(Ok(self.output_data_blocks.remove(0)));
+                    return Ok(Event::NeedConsume);
                 }
 
                 if self.input_data.is_some() {
                     return Ok(Event::Sync);
+                }
+
+                if self.input_port.is_finished() {
+                    self.output_port.finish();
+                    self.step = HashJoinStep::Finished;
+                    return Ok(Event::Finished);
                 }
 
                 if let Some(data) = self.input_port.pull_data() {
@@ -134,11 +142,13 @@ impl Processor for TransformHashJoinProbe {
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
+            HashJoinStep::Finished => Ok(Event::Finished),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match self.step {
+            HashJoinStep::Finished => Ok(()),
             HashJoinStep::Build => Ok(()),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.take() {

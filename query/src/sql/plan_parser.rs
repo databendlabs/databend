@@ -24,6 +24,7 @@ use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_tracing::tracing;
 
+use super::statements::ExpressionSyncAnalyzer;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -39,6 +40,23 @@ impl PlanParser {
     pub async fn parse(ctx: Arc<QueryContext>, query: &str) -> Result<PlanNode> {
         let (statements, _) = DfParser::parse_sql(query, ctx.get_current_session().get_type())?;
         PlanParser::build_plan(statements, ctx).await
+    }
+
+    pub fn parse_expr(expr: &str) -> Result<Expression> {
+        let expr = DfParser::parse_expr(expr)?;
+        let analyzer = ExpressionSyncAnalyzer::create();
+        analyzer.analyze(&expr)
+    }
+
+    pub fn parse_exprs(expr: &str) -> Result<Vec<Expression>> {
+        let exprs = DfParser::parse_exprs(expr)?;
+        let analyzer = ExpressionSyncAnalyzer::create();
+
+        let results = exprs
+            .iter()
+            .map(|expr| analyzer.analyze(expr))
+            .collect::<Result<Vec<_>>>();
+        results
     }
 
     pub async fn parse_with_hint(

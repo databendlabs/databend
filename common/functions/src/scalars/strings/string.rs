@@ -33,7 +33,6 @@ use crate::scalars::InstrFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::LeftFunction;
 use crate::scalars::LeftPadFunction;
-use crate::scalars::LengthFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::LowerFunction;
 use crate::scalars::OctFunction;
@@ -83,7 +82,6 @@ impl StringFunction {
         factory.register("char_length", CharLengthFunction::desc());
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
-        factory.register("length", LengthFunction::desc());
         factory.register("regexp_instr", RegexpInStrFunction::desc());
         factory.register("regexp_like", RegexpLikeFunction::desc());
         factory.register("regexp_replace", RegexpReplaceFunction::desc());

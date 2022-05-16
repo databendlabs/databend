@@ -28,6 +28,7 @@ use common_grpc::RpcClientTlsConfig;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::HandshakeRequest;
+use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::ConnectionError;
@@ -45,6 +46,7 @@ use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
 use tonic::transport::Channel;
+use tonic::transport::Endpoint;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
@@ -60,14 +62,9 @@ struct MetaChannelManager {
     conf: Option<RpcClientTlsConfig>,
 }
 
-#[async_trait]
-impl ItemManager for MetaChannelManager {
-    type Key = String;
-    type Item = Channel;
-    type Error = MetaError;
-
-    async fn build(&self, addr: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
-        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+impl MetaChannelManager {
+    fn build_endpoint(&self, addr: &String) -> std::result::Result<Endpoint, MetaError> {
+        let ch = ConnectionFactory::create_rpc_endpoint(addr, self.timeout, self.conf.clone())
             .map_err(|e| match e {
                 GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
                     AnyError::new(&e).add_context(|| "while creating rpc channel"),
@@ -79,6 +76,23 @@ impl ItemManager for MetaChannelManager {
                     ConnectionError::new(e, "while creating rpc channel"),
                 ),
             })?;
+        Ok(ch)
+    }
+}
+
+#[async_trait]
+impl ItemManager for MetaChannelManager {
+    type Key = Vec<String>;
+    type Item = Channel;
+    type Error = MetaError;
+
+    async fn build(&self, endpoints: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
+        let channel_eps: std::result::Result<Vec<Endpoint>, MetaError> = (*endpoints)
+            .iter()
+            .map(|a| self.build_endpoint(a))
+            .collect();
+        let channel_eps = channel_eps?;
+        let ch = Channel::balance_list(channel_eps.into_iter());
         Ok(ch)
     }
 
@@ -94,10 +108,10 @@ impl ItemManager for MetaChannelManager {
 
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
-    addr: String,
+    endpoints: RwLock<Vec<String>>,
     username: String,
     password: String,
-    token: Arc<RwLock<Option<Vec<u8>>>>,
+    token: RwLock<Option<Vec<u8>>>,
 }
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
@@ -105,48 +119,70 @@ const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 impl MetaGrpcClient {
     pub async fn try_new(
         conf: &MetaGrpcClientConf,
-    ) -> std::result::Result<MetaGrpcClient, Infallible> {
+    ) -> std::result::Result<Arc<MetaGrpcClient>, Infallible> {
         let mgr = MetaChannelManager {
             timeout: Some(Duration::from_secs(conf.client_timeout_in_second)),
             conf: conf.meta_service_config.tls_conf.clone(),
         };
-        Ok(Self {
+
+        let addr = conf.meta_service_config.address.to_string();
+        let endpoints = if !conf.meta_service_config.endpoints.is_empty() {
+            conf.meta_service_config.endpoints.clone()
+        } else {
+            vec![addr]
+        };
+
+        let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            addr: conf.meta_service_config.address.to_string(),
+            endpoints: RwLock::new(endpoints),
             username: conf.meta_service_config.username.to_string(),
             password: conf.meta_service_config.password.to_string(),
-            token: Arc::new(RwLock::new(None)),
-        })
+            token: RwLock::new(None),
+        });
+
+        Ok(client)
     }
 
+    // This method is just for tests using.
     #[tracing::instrument(level = "debug", skip(password))]
     pub async fn try_create(
-        addr: &str,
+        endpoints: Vec<String>,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
         conf: Option<RpcClientTlsConfig>,
-    ) -> Result<Self> {
-        let mgr = MetaChannelManager { timeout, conf };
+    ) -> Result<Arc<Self>> {
+        let mgr = MetaChannelManager {
+            timeout,
+            conf: conf.clone(),
+        };
 
-        Ok(Self {
+        let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
-            addr: addr.to_string(),
+            endpoints: RwLock::new(endpoints),
             username: username.to_string(),
             password: password.to_string(),
-            token: Arc::new(RwLock::new(None)),
-        })
+            token: RwLock::new(None),
+        });
+
+        Ok(client)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn make_client(
+    pub async fn make_conn(
         &self,
     ) -> std::result::Result<
         MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
         MetaError,
     > {
-        let channel = self.conn_pool.get(&self.addr).await?;
-        tracing::debug!("connecting to {}, channel: {:?}", &self.addr, channel);
+        let channel = {
+            let eps = self.endpoints.read().await;
+            if (*eps).is_empty() {
+                return Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
+            }
+            self.conn_pool.get(&*eps).await?
+        };
+        tracing::info!("connecting with channel: {:?}", channel);
 
         let mut client = MetaServiceClient::new(channel.clone());
         let mut t = self.token.write().await;
@@ -165,6 +201,33 @@ impl MetaGrpcClient {
         Ok(client)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn set_endpoints(&self, endpoints: Vec<String>) -> Result<()> {
+        let mut eps = self.endpoints.write().await;
+        *eps = endpoints;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn sync_endpoints(&self) -> Result<()> {
+        let endpoints = {
+            let eps = self.endpoints.read().await;
+            (*eps).clone()
+        };
+        let channel = self.conn_pool.get(&endpoints).await?;
+        tracing::info!("connecting with channel: {:?}", channel);
+
+        let mut client = MetaServiceClient::new(channel.clone());
+        let endpoints = client
+            .member_list(Request::new(MemberListRequest {
+                data: "".to_string(),
+            }))
+            .await?;
+        let result: Vec<String> = endpoints.into_inner().data;
+        self.set_endpoints(result).await?;
+        Ok(())
+    }
+
     /// Handshake.
     #[tracing::instrument(level = "debug", skip(client, password))]
     async fn handshake(
@@ -181,8 +244,8 @@ impl MetaGrpcClient {
 
         let req = Request::new(futures::stream::once(async {
             HandshakeRequest {
+                protocol_version: 0,
                 payload,
-                ..HandshakeRequest::default()
             }
         }));
 
@@ -204,7 +267,7 @@ impl MetaGrpcClient {
         let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client().await?;
+        let mut client = self.make_conn().await?;
         let result = client.write_msg(req).await;
         let result: std::result::Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
@@ -214,7 +277,7 @@ impl MetaGrpcClient {
                         let mut token = self.token.write().await;
                         *token = None;
                     }
-                    let mut client = self.make_client().await?;
+                    let mut client = self.make_conn().await?;
                     let req: Request<RaftRequest> = act.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.write_msg(req).await?.into_inner())
@@ -245,7 +308,7 @@ impl MetaGrpcClient {
         let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client().await?;
+        let mut client = self.make_conn().await?;
         let result = client.read_msg(req).await;
 
         tracing::debug!(reply = debug(&result), "MetaGrpcClient::do_read reply");
@@ -258,7 +321,7 @@ impl MetaGrpcClient {
                         let mut token = self.token.write().await;
                         *token = None;
                     }
-                    let mut client = self.make_client().await?;
+                    let mut client = self.make_conn().await?;
                     let req: Request<RaftRequest> = act.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.read_msg(req).await?.into_inner())
@@ -285,7 +348,7 @@ impl MetaGrpcClient {
         let req: Request<TxnRequest> = Request::new(txn.clone());
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client().await?;
+        let mut client = self.make_conn().await?;
         let result = client.transaction(req).await;
 
         let result: std::result::Result<TxnReply, Status> = match result {
@@ -296,7 +359,7 @@ impl MetaGrpcClient {
                         let mut token = self.token.write().await;
                         *token = None;
                     }
-                    let mut client = self.make_client().await?;
+                    let mut client = self.make_conn().await?;
                     let req: Request<TxnRequest> = Request::new(txn);
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     let ret = client.transaction(req).await?.into_inner();

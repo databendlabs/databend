@@ -79,7 +79,7 @@ impl Runtime {
     fn create(tracker: Arc<RuntimeTracker>, builder: &mut tokio::runtime::Builder) -> Result<Self> {
         let runtime = builder
             .build()
-            .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))?;
+            .map_err(|tokio_error| ErrorCode::TokioError(tokio_error.to_string()))?;
 
         let (send_stop, recv_stop) = oneshot::channel();
 

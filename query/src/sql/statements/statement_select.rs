@@ -295,9 +295,18 @@ impl DfQueryStatement {
 
         match tables_desc.remove(0) {
             JoinedTableDesc::Table {
-                table, push_downs, ..
+                table,
+                push_downs,
+                name_parts,
+                ..
             } => {
-                let source_plan = table.read_plan(ctx.clone(), push_downs).await?;
+                // TODO
+                // shall we put the catalog name in the table_info?
+                // table already resolved here
+                let catalog_name = Self::resolve_catalog(&ctx, &name_parts)?;
+                let source_plan = table
+                    .read_plan_with_catalog(ctx.clone(), catalog_name, push_downs)
+                    .await?;
                 state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }
             JoinedTableDesc::Subquery {
@@ -310,6 +319,17 @@ impl DfQueryStatement {
         }
 
         Ok(AnalyzedResult::SelectQuery(Box::new(state)))
+    }
+
+    fn resolve_catalog(ctx: &QueryContext, idents: &[String]) -> Result<String> {
+        match idents.len() {
+            // for table_functions, idents.len() == 0
+            0 | 1 | 2 => Ok(ctx.get_current_catalog()),
+            3 => Ok(idents[0].clone()),
+            _ => Err(ErrorCode::SyntaxException(
+                "table name should be [`catalog`].[`db`].`table` in statement",
+            )),
+        }
     }
 
     fn verify_with_dry_run(schema: &JoinedSchema, state: &QueryAnalyzeState) -> Result<DataBlock> {

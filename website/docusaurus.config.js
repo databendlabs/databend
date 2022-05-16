@@ -10,7 +10,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'The modern Cloud Data Warehouse, activate your Object Storage for sub-second analytics.',
+    tagline: 'The modern Cloud Data Warehouse, activate your object storage(S3, Azure Blob, or MinIO) for real-time analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -166,8 +166,8 @@ const config = {
             },
             algolia: {
                 appId: 'RL7MS9PKE8',
-                apiKey: '78bb6be96bb0361a4be9dab6bd83936c',
-                indexName: 'databend-rs',
+                apiKey: 'cb5d6af612410c0fced698ff39ccd47a',
+                indexName: 'databend-rs-docs',
                 contextualSearch: true,
             }
         }),

@@ -23,6 +23,8 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
+use common_meta_types::RenameDatabaseReply;
+use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
@@ -67,6 +69,8 @@ pub trait Catalog: DynClone + Send + Sync {
             }
         }
     }
+
+    async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply>;
 
     ///
     /// Table.

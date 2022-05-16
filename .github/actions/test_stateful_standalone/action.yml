@@ -60,3 +60,4 @@ runs:
           metasrv/_logs*/
           query/_logs*/
           store/_logs*/
+          nohup.out

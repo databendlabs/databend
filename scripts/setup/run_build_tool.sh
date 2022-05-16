@@ -5,7 +5,7 @@
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
-IMAGE="${IMAGE:-datafuselabs/build-tool:dev-debian-amd64}"
+IMAGE="${IMAGE:-datafuselabs/build-tool:dev}"
 INTERACTIVE="${INTERACTIVE:-false}"
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 BYPASS_ENV_VARS="${BYPASS_ENV_VARS:-RUSTFLAGS,RUST_LOG}"

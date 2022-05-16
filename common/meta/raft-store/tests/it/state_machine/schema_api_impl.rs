@@ -63,6 +63,16 @@ async fn test_meta_embedded_database_list_in_diff_tenant() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_database_rename() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_raft_store_ut!();
+    let _ent = ut_span.enter();
+    let tc = new_raft_test_context();
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
+
+    SchemaApiTestSuite {}.database_rename(&sm).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();

@@ -74,11 +74,11 @@ pub trait ScalarVisitor: Sized {
                                         stack.push(RecursionProcessing::Call(arg));
                                     }
                                 }
-                                Scalar::BoundColumnRef(_) => {}
-                                Scalar::ConstantExpr(_) => {}
+                                Scalar::BoundColumnRef(_) | Scalar::ConstantExpr(_) => {}
                                 Scalar::Cast(CastExpr { argument, .. }) => {
                                     stack.push(RecursionProcessing::Call(argument))
                                 }
+                                Scalar::SubqueryExpr(_) => {}
                             }
 
                             visitor

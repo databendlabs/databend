@@ -26,7 +26,6 @@ use common_planners::CreateViewPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -54,7 +53,7 @@ impl Interpreter for CreateViewInterpreter {
         self.ctx
             .get_current_session()
             .validate_privilege(
-                &GrantObject::Database(self.plan.db.clone()),
+                &GrantObject::Database(self.plan.catalog.clone(), self.plan.db.clone()),
                 UserPrivilegeType::Create,
             )
             .await?;
@@ -62,7 +61,7 @@ impl Interpreter for CreateViewInterpreter {
         // check whether view has exists
         if self
             .ctx
-            .get_catalog()
+            .get_catalog(&self.plan.catalog)?
             .list_tables(&*self.plan.tenant, &*self.plan.db)
             .await?
             .iter()
@@ -80,7 +79,7 @@ impl Interpreter for CreateViewInterpreter {
 
 impl CreateViewInterpreter {
     async fn create_view(&self) -> Result<SendableDataBlockStream> {
-        let catalog = self.ctx.get_catalog();
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let mut options = BTreeMap::new();
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {

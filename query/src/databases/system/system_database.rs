@@ -21,10 +21,10 @@ use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
 
 use crate::catalogs::InMemoryMetas;
-use crate::configs::Config;
 use crate::databases::Database;
 use crate::storages::system;
 use crate::storages::Table;
+use crate::Config;
 
 #[derive(Clone)]
 pub struct SystemDatabase {

@@ -5,6 +5,7 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
+    "common/configs",
     "common/contexts",
     "common/datablocks",
     "common/datavalues",
@@ -26,6 +27,7 @@ members = [
     "common/codegen",
     "common/tracing",
     "common/metrics",
+    "common/hive-meta-store",
 
     # Query
     "query",

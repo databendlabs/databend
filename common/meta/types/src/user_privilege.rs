@@ -21,7 +21,16 @@ use enumflags2::BitFlags;
 
 #[bitflags]
 #[repr(u64)]
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
+)]
 pub enum UserPrivilegeType {
     // UsagePrivilege is a synonym for “no privileges”
     Usage = 1 << 0,

@@ -91,7 +91,10 @@ impl BlockStreamWriter {
     /// It's more like [Stream::filter_map] than [Stream::map] in the sense
     /// that m items of input stream may be mapped to n items, where m <> n (but
     /// for the convenience of impl, [TryStreamExt::try_unfold] is used).
-    fn transform<R, A, S, T>(inputs: R, mapper: A) -> impl futures::stream::Stream<Item = Result<T>>
+    pub(crate) fn transform<R, A, S, T>(
+        inputs: R,
+        mapper: A,
+    ) -> impl futures::stream::Stream<Item = Result<T>>
     where
         R: Stream<Item = Result<S>> + Unpin,
         A: Compactor<S, T>,

@@ -45,7 +45,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/
 
 </TabItem>
 
-<TabItem value="arm" label="Arm">
+<TabItem value="arm" label="Linux Arm">
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/${version}/databend-${version}-aarch64-unknown-linux-musl.tar.gz
@@ -70,7 +70,7 @@ tar xzvf databend-${version}-aarch64-apple-darwin.tar.gz
 
 </TabItem>
 
-<TabItem value="arm" label="Arm">
+<TabItem value="arm" label="Linux Arm">
 
 ```shell
 tar xzvf databend-${version}-aarch64-unknown-linux-musl.tar.gz
@@ -159,10 +159,6 @@ type = "fs"
 
 [storage.fs]
 data_path = "benddata/datas"
-
-[storage.s3]
-
-[storage.azblob]
 ```
 
 ### 3.2 Start databend-query

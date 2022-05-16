@@ -57,6 +57,7 @@ use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameDatabasePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::RevokeRolePlan;
@@ -118,6 +119,7 @@ pub enum PlanNode {
     // Database.
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
+    RenameDatabase(RenameDatabasePlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
 
     // Table.
@@ -216,6 +218,7 @@ impl PlanNode {
             PlanNode::CreateDatabase(v) => v.schema(),
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
+            PlanNode::RenameDatabase(v) => v.schema(),
 
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
@@ -315,6 +318,7 @@ impl PlanNode {
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
+            PlanNode::RenameDatabase(_) => "RenameDatabase",
 
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",

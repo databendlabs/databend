@@ -16,6 +16,7 @@ mod access;
 mod interpreter_call;
 mod interpreter_database_create;
 mod interpreter_database_drop;
+mod interpreter_database_rename;
 mod interpreter_database_show_create;
 mod interpreter_empty;
 mod interpreter_explain;

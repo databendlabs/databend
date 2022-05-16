@@ -71,6 +71,10 @@ where
         }
     }
 
+    fn de_null(&mut self, _format: &FormatSettings) -> bool {
+        false
+    }
+
     fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
         let mut reader = BufferReader::new(reader);
         let v: T = if !T::FLOATING {
@@ -84,11 +88,7 @@ where
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
-        &mut self,
-        reader: &mut CheckpointReader<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_text<R: BufferRead>(&mut self, reader: &mut R, _format: &FormatSettings) -> Result<()> {
         let v: T = if !T::FLOATING {
             reader.read_int_text()
         } else {
@@ -98,8 +98,25 @@ where
         Ok(())
     }
 
-    fn de_null(&mut self, _format: &FormatSettings) -> bool {
-        false
+    fn de_text_csv<R: BufferRead>(
+        &mut self,
+        reader: &mut R,
+        _settings: &FormatSettings,
+    ) -> Result<()> {
+        let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
+
+        let v: T = if !T::FLOATING {
+            reader.read_int_text()
+        } else {
+            reader.read_float_text()
+        }?;
+
+        if maybe_quote {
+            reader.must_ignore(|f| f == b'\'' || f == b'"')?;
+        }
+
+        self.builder.append_value(v);
+        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

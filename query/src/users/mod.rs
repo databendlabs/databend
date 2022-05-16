@@ -21,7 +21,6 @@ mod user_udf;
 
 pub mod auth;
 pub mod role_cache_mgr;
-mod user_setting;
 
 pub use auth::auth_mgr::AuthMgr;
 pub use auth::auth_mgr::Credential;
