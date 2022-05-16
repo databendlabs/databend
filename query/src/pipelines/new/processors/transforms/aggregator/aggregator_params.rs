@@ -22,8 +22,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 
 use crate::pipelines::new::processors::port::InputPort;
@@ -53,49 +51,7 @@ impl AggregatorParams {
             .collect::<Vec<_>>()
     }
 
-    pub fn try_create_final(plan: &AggregatorFinalPlan) -> Result<Arc<AggregatorParams>> {
-        let before_schema = &plan.schema_before_group_by;
-        let group_cols = Self::extract_group_columns(&plan.group_expr);
-        let mut aggregate_functions = Vec::with_capacity(plan.aggr_expr.len());
-        let mut aggregate_functions_column_name = Vec::with_capacity(plan.aggr_expr.len());
-        let mut aggregate_functions_arguments_name = Vec::with_capacity(plan.aggr_expr.len());
-
-        for expr in plan.aggr_expr.iter() {
-            aggregate_functions.push(expr.to_aggregate_function(before_schema)?);
-            aggregate_functions_column_name.push(expr.column_name());
-            aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
-        }
-
-        let mut states_offsets: Vec<usize> = Vec::with_capacity(aggregate_functions.len());
-        let mut states_layout = None;
-        if !aggregate_functions.is_empty() {
-            states_offsets = Vec::with_capacity(aggregate_functions.len());
-            states_layout = Option::Some(get_layout_offsets(
-                aggregate_functions.as_slice(),
-                &mut states_offsets,
-            )?);
-        }
-
-        let group_data_fields = plan
-            .group_expr
-            .iter()
-            .map(|c| c.to_data_field(&plan.schema_before_group_by))
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(Arc::new(AggregatorParams {
-            group_data_fields,
-            aggregate_functions,
-            aggregate_functions_column_name,
-            aggregate_functions_arguments_name,
-            layout: states_layout,
-            schema: plan.schema(),
-            before_schema: before_schema.clone(),
-            group_columns_name: group_cols.to_vec(),
-            offsets_aggregate_states: states_offsets,
-        }))
-    }
-
-    pub fn try_create_v2(
+    pub fn try_create(
         aggr_expr: &[Expression],
         group_expr: &[Expression],
         input_schema: &DataSchemaRef,
@@ -135,48 +91,6 @@ impl AggregatorParams {
             layout: states_layout,
             schema: output_schema.clone(),
             before_schema: input_schema.clone(),
-            group_columns_name: group_cols.to_vec(),
-            offsets_aggregate_states: states_offsets,
-        }))
-    }
-
-    pub fn try_create_partial(plan: &AggregatorPartialPlan) -> Result<Arc<AggregatorParams>> {
-        let before_schema = plan.input.schema();
-        let group_cols = Self::extract_group_columns(&plan.group_expr);
-        let mut aggregate_functions = Vec::with_capacity(plan.aggr_expr.len());
-        let mut aggregate_functions_column_name = Vec::with_capacity(plan.aggr_expr.len());
-        let mut aggregate_functions_arguments_name = Vec::with_capacity(plan.aggr_expr.len());
-
-        for expr in plan.aggr_expr.iter() {
-            aggregate_functions.push(expr.to_aggregate_function(&before_schema)?);
-            aggregate_functions_column_name.push(expr.column_name());
-            aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
-        }
-
-        let mut states_offsets: Vec<usize> = Vec::with_capacity(aggregate_functions.len());
-        let mut states_layout = None;
-        if !aggregate_functions.is_empty() {
-            states_offsets = Vec::with_capacity(aggregate_functions.len());
-            states_layout = Option::Some(get_layout_offsets(
-                aggregate_functions.as_slice(),
-                &mut states_offsets,
-            )?);
-        }
-
-        let group_data_fields = plan
-            .group_expr
-            .iter()
-            .map(|c| c.to_data_field(&before_schema))
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(Arc::new(AggregatorParams {
-            before_schema,
-            group_data_fields,
-            aggregate_functions,
-            aggregate_functions_column_name,
-            aggregate_functions_arguments_name,
-            layout: states_layout,
-            schema: plan.schema(),
             group_columns_name: group_cols.to_vec(),
             offsets_aggregate_states: states_offsets,
         }))
