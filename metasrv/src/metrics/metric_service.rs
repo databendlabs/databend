@@ -17,23 +17,29 @@ use std::net::SocketAddr;
 use common_base::base::tokio::sync::broadcast;
 use common_base::base::HttpShutdownHandler;
 use common_base::base::Stoppable;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metrics::PrometheusHandle;
 use poem::web::Data;
 use poem::EndpointExt;
 use poem::IntoResponse;
 
 use crate::configs::Config;
+use crate::metrics::meta_metrics_prometheus_string;
 
 pub struct MetricService {
     conf: Config,
     shutdown_handler: HttpShutdownHandler,
 }
 
+#[derive(Clone)]
+pub struct MetricsHandler {
+    pub handler: fn() -> String,
+}
+
 #[poem::handler]
-pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl IntoResponse {
-    prom_extension.0.render()
+pub async fn metric_handler(prom_extension: Data<&MetricsHandler>) -> impl IntoResponse {
+    let h = prom_extension.0;
+    let handler = h.handler;
+    handler()
 }
 
 impl MetricService {
@@ -46,13 +52,12 @@ impl MetricService {
     }
 
     async fn start_without_tls(&mut self, listening: String) -> Result<SocketAddr> {
-        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
-            ErrorCode::InitPrometheusFailure("Prometheus recorder has not been initialized yet.")
-        })?;
-
         let app = poem::Route::new()
             .at("/metrics", poem::get(metric_handler))
-            .data(prometheus_handle);
+            .data(MetricsHandler {
+                handler: meta_metrics_prometheus_string,
+            });
+
         let addr = self
             .shutdown_handler
             .start_service(listening, None, app)
