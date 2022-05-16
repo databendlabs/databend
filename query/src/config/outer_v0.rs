@@ -17,7 +17,6 @@ use std::fmt;
 use clap::Args;
 use clap::Parser;
 use common_base::base::mask_string;
-use common_configs::HiveCatalogConfig;
 use common_configs::MetaConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,6 +35,7 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
+use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 
 /// Outer config for `query`.
@@ -126,7 +126,7 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta,
             storage: inner.storage.into(),
-            catalog: inner.catalog,
+            catalog: inner.catalog.into(),
         }
     }
 }
@@ -141,7 +141,7 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta,
             storage: self.storage.try_into()?,
-            catalog: self.catalog,
+            catalog: self.catalog.try_into()?,
         })
     }
 }
@@ -746,6 +746,41 @@ impl From<InnerLogConfig> for LogConfig {
             level: inner.level,
             dir: inner.dir,
             query_enabled: inner.query_enabled,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct HiveCatalogConfig {
+    #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
+    pub meta_store_address: String,
+    #[clap(long = "hive-thrift-protocol", default_value = "binary")]
+    pub protocol: String,
+}
+
+impl Default for HiveCatalogConfig {
+    fn default() -> Self {
+        InnerHiveCatalogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerHiveCatalogConfig> for HiveCatalogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerHiveCatalogConfig> {
+        Ok(InnerHiveCatalogConfig {
+            meta_store_address: self.meta_store_address,
+            protocol: self.protocol.parse()?,
+        })
+    }
+}
+
+impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
+    fn from(inner: InnerHiveCatalogConfig) -> Self {
+        Self {
+            meta_store_address: inner.meta_store_address,
+            protocol: inner.protocol.to_string(),
         }
     }
 }

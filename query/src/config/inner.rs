@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_configs::HiveCatalogConfig;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::str::FromStr;
+
 use common_configs::MetaConfig;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientTlsConfig;
 use common_io::prelude::StorageConfig;
@@ -224,6 +228,47 @@ impl QueryConfig {
         RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_query_service_domain_name.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ThriftProtocol {
+    Binary,
+    // Compact,
+}
+
+impl FromStr for ThriftProtocol {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<ThriftProtocol> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "binary" => Ok(ThriftProtocol::Binary),
+            _ => Err(ErrorCode::StorageOther("invalid thrift protocol spec")),
+        }
+    }
+}
+
+impl Display for ThriftProtocol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Binary => write!(f, "binary"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HiveCatalogConfig {
+    pub meta_store_address: String,
+    pub protocol: ThriftProtocol,
+}
+
+impl Default for HiveCatalogConfig {
+    fn default() -> Self {
+        Self {
+            meta_store_address: "127.0.0.1:9083".to_string(),
+            protocol: ThriftProtocol::Binary,
         }
     }
 }
