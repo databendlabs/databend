@@ -170,11 +170,10 @@ impl FuseTable {
                 break;
             }
         }
-
         (statistics, partitions)
     }
 
-    fn all_columns_part(meta: &BlockMeta) -> PartInfoPtr {
+    pub(crate) fn all_columns_part(meta: &BlockMeta) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
 
         for (idx, column_meta) in &meta.col_metas {

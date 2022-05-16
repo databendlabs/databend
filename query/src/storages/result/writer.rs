@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_planners::PartInfoPtr;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;
@@ -26,6 +27,7 @@ use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics as FuseMetaStatistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
+use crate::storages::fuse::FuseTable;
 use crate::storages::result::result_locations::ResultLocations;
 use crate::storages::result::result_table::ResultStorageInfo;
 use crate::storages::result::result_table::ResultTableMeta;
@@ -82,7 +84,7 @@ impl ResultTableWriter {
         Ok(())
     }
 
-    pub async fn append_block(&mut self, block: DataBlock) -> Result<()> {
+    pub async fn append_block(&mut self, block: DataBlock) -> Result<PartInfoPtr> {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
@@ -97,14 +99,19 @@ impl ResultTableWriter {
             })?;
         self.accumulator
             .add_block(size, meta_data, block_statistics)?;
-        Ok(())
+        Ok(self.get_last_part_info())
     }
 
     pub async fn write_stream(&mut self, mut stream: SendableDataBlockStream) -> Result<()> {
         while let Some(Ok(block)) = stream.next().await {
-            self.append_block(block).await?
+            self.append_block(block).await?;
         }
         self.commit().await?;
         Ok(())
+    }
+
+    pub fn get_last_part_info(&mut self) -> PartInfoPtr {
+        let meta = self.accumulator.blocks_metas.last().unwrap();
+        FuseTable::all_columns_part(meta)
     }
 }
