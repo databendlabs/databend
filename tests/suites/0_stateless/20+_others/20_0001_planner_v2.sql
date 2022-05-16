@@ -177,9 +177,9 @@ select database();
 
 -- distinct
 select '==== Distinct =====';
-SELECT DISTINCT * FROM numbers(3) order by number;
+SELECT DISTINCT * FROM numbers(3) ORDER BY  number;
 SELECT DISTINCT 1 FROM numbers(3);
 SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
-SELECT distinct count(number %3) FROM numbers(10)  group by number % 3;
+SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDER BY c;
 
 set enable_planner_v2 = 0;
