@@ -25,7 +25,8 @@ def format_result(results):
                 lineTmp = str(item)
             else:
                 lineTmp = lineTmp + " " + str(item)  # every item seperate by space
-        if len(lineTmp) == 0:  # empty line replace with tab
+        if len(lineTmp) == 0:  
+            # empty line in results will replace with tab
             lineTmp = "\t"
         res = res + lineTmp + "\n"
     return res
@@ -160,11 +161,7 @@ class HttpConnector():
         return self._query_option
 
 
-if __name__ == '__main__':
-    connector = HttpConnector()
-    connector.connect("127.0.0.1", 8000)
-    # resp = connector.query_with_session("show databases;")
-    # resp = connector.query_with_session("show tables;")
-    # print(format_result(resp))
-    # resp = connector.fetch_all("select * from t3;")
-    # print(resp)
+# if __name__ == '__main__':
+#     connector = HttpConnector()
+#     connector.connect("127.0.0.1", 8000)
+#     connector.query_with_session("show databases;")
