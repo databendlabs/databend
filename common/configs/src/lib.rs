@@ -15,10 +15,8 @@
 mod catalog;
 mod log;
 mod meta;
-mod query;
 
 pub use catalog::HiveCatalogConfig;
 pub use catalog::ThriftProtocol;
 pub use log::LogConfig;
 pub use meta::MetaConfig;
-pub use query::QueryConfig;
