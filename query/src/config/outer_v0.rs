@@ -97,8 +97,7 @@ impl Config {
         // Finally, load from args.
         builder = builder.collect(from_self(arg_conf));
 
-        // Convert from OuterConfig to Config.
-        Ok(builder.build()?.into())
+        Ok(builder.build()?)
     }
 }
 

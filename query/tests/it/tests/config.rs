@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_query::ConfigV0;
+use databend_query::Config;
 
 pub struct ConfigBuilder {
-    conf: ConfigV0,
+    conf: Config,
 }
 
 impl ConfigBuilder {
     pub fn create() -> ConfigBuilder {
-        let mut conf = ConfigV0::default();
+        let mut conf = Config::default();
         conf.query.tenant_id = "test".to_string();
 
         ConfigBuilder { conf }
@@ -32,7 +32,7 @@ impl ConfigBuilder {
         ConfigBuilder { conf }
     }
 
-    pub fn config(&self) -> ConfigV0 {
+    pub fn config(&self) -> Config {
         self.conf.clone()
     }
 }

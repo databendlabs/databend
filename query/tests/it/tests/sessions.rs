@@ -18,10 +18,12 @@ use std::sync::Arc;
 use common_base::base::tokio::runtime::Runtime;
 use common_base::base::Thread;
 use common_exception::Result;
+use common_io::prelude::StorageFsConfig;
+use common_io::prelude::StorageParams;
 use databend_query::sessions::SessionManager;
-use databend_query::ConfigV0;
+use databend_query::Config;
 
-async fn async_create_sessions(config: ConfigV0) -> Result<Arc<SessionManager>> {
+async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let sessions = SessionManager::from_conf(config.clone()).await?;
 
     let cluster_discovery = sessions.get_cluster_discovery();
@@ -29,13 +31,13 @@ async fn async_create_sessions(config: ConfigV0) -> Result<Arc<SessionManager>> 
     Ok(sessions)
 }
 
-fn sync_create_sessions(config: ConfigV0) -> Result<Arc<SessionManager>> {
+fn sync_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let runtime = Runtime::new()?;
     runtime.block_on(async_create_sessions(config))
 }
 
 pub struct SessionManagerBuilder {
-    config: ConfigV0,
+    config: Config,
 }
 
 impl SessionManagerBuilder {
@@ -47,7 +49,7 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::create_with_conf(conf).log_dir_with_relative("../tests/data/logs")
     }
 
-    pub fn create_with_conf(config: ConfigV0) -> SessionManagerBuilder {
+    pub fn create_with_conf(config: Config) -> SessionManagerBuilder {
         SessionManagerBuilder { config }
     }
 
@@ -122,7 +124,8 @@ impl SessionManagerBuilder {
 
     pub fn fs_storage_path(self, path: String) -> SessionManagerBuilder {
         let mut new_config = self.config;
-        new_config.storage.fs.data_path = path;
+
+        new_config.storage.params = StorageParams::Fs(StorageFsConfig { root: path });
         SessionManagerBuilder::create_with_conf(new_config)
     }
 

@@ -52,7 +52,7 @@ impl FromToProto<pb::S3StorageConfig> for StorageParams {
             })
         } else {
             Err(Incompatible {
-                reason: format!("storage type mismatch"),
+                reason: "storage type mismatch".to_string(),
             })
         }
     }

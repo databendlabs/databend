@@ -20,7 +20,7 @@ use databend_query::interpreters::SelectInterpreter;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::PlanParser;
-use databend_query::ConfigV0;
+use databend_query::Config;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
@@ -29,7 +29,7 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let sessions = SessionManager::from_conf(ConfigV0::default()).await?;
+    let sessions = SessionManager::from_conf(Config::default()).await?;
     let executor_session = sessions.create_session(SessionType::Test).await?;
     let ctx = executor_session.create_query_context().await?;
 

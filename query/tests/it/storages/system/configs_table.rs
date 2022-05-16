@@ -14,6 +14,8 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
@@ -111,8 +113,11 @@ async fn test_configs_table() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table_redact() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
-    conf.storage.s3.access_key_id = "access_key_id".to_string();
-    conf.storage.s3.secret_access_key = "secret_access_key".to_string();
+    conf.storage.params = StorageParams::S3(StorageS3Config {
+        access_key_id: "access_key_id".to_string(),
+        secret_access_key: "secret_access_key".to_string(),
+        ..Default::default()
+    });
     let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
