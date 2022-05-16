@@ -13,17 +13,17 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_configs::FsStorageConfig;
-use common_configs::S3StorageConfig;
 use common_exception::Result;
+use common_io::prelude::StorageFsConfig;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // This test need network
 async fn test_get_storage_accessor_s3() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
-    conf.storage.storage_type = "s3".to_string();
-    conf.storage.s3 = S3StorageConfig {
+    conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
         endpoint_url: "http://s3.amazonaws.com".to_string(),
         access_key_id: "".to_string(),
@@ -31,7 +31,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         bucket: "bucket".to_string(),
         root: "".to_string(),
         master_key: "".to_string(),
-    };
+    });
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;
 
@@ -44,10 +44,9 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 async fn test_get_storage_accessor_fs() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
-    conf.storage.storage_type = "fs".to_string();
-    conf.storage.fs = FsStorageConfig {
-        data_path: "/tmp".to_string(),
-    };
+    conf.storage.params = StorageParams::Fs(StorageFsConfig {
+        root: "/tmp".to_string(),
+    });
 
     let qctx = crate::tests::create_query_context_with_config(conf, None).await?;
 

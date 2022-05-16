@@ -13,7 +13,7 @@ test = false
 
 [[bin]]
 name = "databend-query"
-path = "src/bin/databend-query.rs"
+path = "bin/databend-query.rs"
 doctest = false
 test = false
 

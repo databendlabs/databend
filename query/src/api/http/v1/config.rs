@@ -24,5 +24,5 @@ use crate::sessions::SessionManager;
 pub async fn config_handler(
     session: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {
-    Ok(Json(session.0.get_conf()))
+    Ok(Json(session.0.get_conf().into_outer()))
 }
