@@ -199,6 +199,89 @@ async fn test_async() -> Result<()> {
 
     Ok(())
 }
+#[tokio::test]
+async fn test_buffer_size() -> Result<()> {
+    let rows = 100;
+    let ep = create_endpoint();
+    let sql = format!("select * from numbers({})", rows);
+
+    for buf_size in [0, 99, 100, 101] {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_in_buffer": buf_size}});
+        let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+        assert_eq!(
+            result.data.len(),
+            rows,
+            "buf_size={}, result={:?}",
+            buf_size,
+            result
+        );
+        assert_eq!(status, StatusCode::OK);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_pagination() -> Result<()> {
+    let ep = create_endpoint();
+    let sql = "select * from numbers(10)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}});
+
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    let query_id = &result.id;
+    let next_uri = make_page_uri(query_id, 1);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 2);
+    assert_eq!(result.next_uri, Some(next_uri));
+    assert!(result.stats.scan_progress.is_some());
+    assert!(result.schema.is_some());
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    // get page, support retry
+    for page in 0..4 {
+        let uri = make_page_uri(query_id, page);
+
+        let (status, result) = get_uri_checked(&ep, &uri).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result);
+        assert_eq!(result.data.len(), 2, "{:?}", result);
+        assert!(result.schema.is_some());
+        assert!(result.stats.scan_progress.is_some());
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        if page == 5 {
+            assert!(result.next_uri.is_none());
+        } else {
+            assert!(result.next_uri.is_some());
+        }
+    }
+
+    // get state
+    let uri = make_state_uri(query_id);
+    let (status, result) = get_uri_checked(&ep, &uri).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.data.len(), 0);
+    assert!(result.next_uri.is_none());
+    assert!(result.schema.is_some());
+    assert!(result.stats.scan_progress.is_some());
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+
+    // get page not expected
+    let uri = make_page_uri(query_id, 6);
+    let response = get_uri(&ep, &uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = response.into_body().into_string().await.unwrap();
+    assert_eq!(body, "wrong page number 6");
+
+    // delete
+    let status = delete_query(&ep, query_id).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let response = get_uri(&ep, &uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
 
 #[test]
 fn test_http_session_serde() {
@@ -326,42 +409,6 @@ async fn test_system_tables() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_multi_page() -> Result<()> {
-    let session_manager = SessionManagerBuilder::create().build().unwrap();
-    let num_parts = session_manager.get_conf().query.num_cpus as usize;
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(HTTPSessionMiddleware { session_manager });
-
-    let max_block_size = 10000;
-    let sql = format!("select * from numbers({})", max_block_size * num_parts);
-
-    let json = serde_json::json!({"sql": sql.to_string(),  "pagination": {"wait_time_secs": 3}});
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.data.len(), max_block_size);
-    let query_id = result.id;
-    let mut next_uri = make_page_uri(&query_id, 1);
-
-    for p in 1..(num_parts + 1) {
-        let (status, result) = get_uri_checked(&ep, &next_uri).await?;
-        assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none(), "{:?}", result.error);
-        assert!(result.stats.scan_progress.is_some());
-        if p == num_parts {
-            assert_eq!(result.data.len(), 0);
-            assert_eq!(result.next_uri, None);
-            assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        } else {
-            next_uri = make_page_uri(&query_id, p + 1);
-            assert_eq!(result.data.len(), max_block_size);
-            assert_eq!(result.next_uri, Some(next_uri.clone()));
-        }
-    }
-    Ok(())
-}
-
 #[tokio::test]
 async fn test_insert() -> Result<()> {
     let route = create_endpoint();
@@ -445,7 +492,7 @@ async fn test_query_log() -> Result<()> {
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none());
 
-    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
@@ -874,5 +921,108 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
         .expect("preconfigured rustls tls");
     let resp = client.post(&url).json(&json).send().await;
     assert!(resp.is_err(), "{:?}", resp.err());
+    Ok(())
+}
+
+pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
+    let uri = format!("/v1/query/{}/download", query_id);
+    let resp = get_uri(ep, &uri).await;
+    resp
+}
+
+#[tokio::test]
+async fn test_download() -> Result<()> {
+    let ep = create_endpoint();
+
+    let sql = "select number, number + 1 from numbers(2)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 2);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    // succeeded query
+    let resp = download(&ep, &result.id).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let exp = "0\t1\n1\t2\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
+    // not exist
+    let mut resp = download(&ep, "123").await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_non_select() -> Result<()> {
+    let ep = create_endpoint();
+    let sql = "show databases";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    let num_row = result.data.len();
+
+    let resp = download(&ep, &result.id).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.into_body().into_string().await.unwrap();
+    assert_eq!(
+        body.split('\n').filter(|x| !x.is_empty()).count(),
+        num_row,
+        "'{}'",
+        body
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_failed() -> Result<()> {
+    let ep = create_endpoint();
+    let sql = "xxx";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+
+    let mut resp = download(&ep, &result.id).await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_killed() -> Result<()> {
+    let ep = create_endpoint();
+
+    // detached query can download result
+    let sql = "select sleep(0.1)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    let response = get_uri(&ep, &result.final_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let resp = download(&ep, &result.id).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let exp = "0\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+
+    // killed query can not download result
+    let sql = "select sleep(1)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    let query_id = &result.id;
+
+    let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let mut resp = download(&ep, query_id).await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
     Ok(())
 }

@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
@@ -27,14 +25,15 @@ use common_io::prelude::FormatSettings;
 use serde::Deserialize;
 
 use super::HttpQueryContext;
+use crate::servers::http::v1::query::block_buffer::BlockBuffer;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
 use crate::servers::http::v1::query::Executor;
+use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
-use crate::servers::http::v1::query::ResultDataManager;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionType;
 
@@ -48,24 +47,49 @@ pub struct HttpQueryRequest {
     pub pagination: PaginationConf,
 }
 
+const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
+const DEFAULT_MAX_ROWS_PER_PAGE: usize = 10000;
+const DEFAULT_WAIT_TIME_SECS: u32 = 1;
+
+fn default_max_rows_in_buffer() -> usize {
+    DEFAULT_MAX_ROWS_IN_BUFFER
+}
+
+fn default_max_rows_per_page() -> usize {
+    DEFAULT_MAX_ROWS_PER_PAGE
+}
+
+fn default_wait_time_secs() -> u32 {
+    DEFAULT_WAIT_TIME_SECS
+}
+
 #[derive(Deserialize, Debug)]
 pub struct PaginationConf {
-    pub(crate) wait_time_secs: i32,
+    #[serde(default = "default_wait_time_secs")]
+    pub(crate) wait_time_secs: u32,
+    #[serde(default = "default_max_rows_in_buffer")]
+    pub(crate) max_rows_in_buffer: usize,
+    #[serde(default = "default_max_rows_per_page")]
+    pub(crate) max_rows_per_page: usize,
 }
 
 impl Default for PaginationConf {
     fn default() -> Self {
-        PaginationConf { wait_time_secs: 1 }
+        PaginationConf {
+            wait_time_secs: 1,
+            max_rows_in_buffer: DEFAULT_MAX_ROWS_IN_BUFFER,
+            max_rows_per_page: DEFAULT_MAX_ROWS_PER_PAGE,
+        }
     }
 }
 
 impl PaginationConf {
     pub(crate) fn get_wait_type(&self) -> Wait {
         let t = self.wait_time_secs;
-        match t.cmp(&0) {
-            Ordering::Greater => Wait::Deadline(Instant::now() + Duration::from_secs(t as u64)),
-            Ordering::Equal => Wait::Async,
-            Ordering::Less => Wait::Sync,
+        if t > 0 {
+            Wait::Deadline(Instant::now() + Duration::from_secs(t as u64))
+        } else {
+            Wait::Async
         }
     }
 }
@@ -111,7 +135,7 @@ pub struct HttpQuery {
 
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
-    data: Arc<TokioMutex<ResultDataManager>>,
+    data: Arc<TokioMutex<PageManager>>,
     config: HttpQueryConfig,
     expire_at: Arc<TokioMutex<Option<Instant>>>,
 }
@@ -156,11 +180,12 @@ impl HttpQuery {
         let ctx = session.create_query_context().await?;
         let id = ctx.get_id();
 
-        //TODO(youngsofun): support config/set channel size
-        let (block_tx, block_rx) = mpsc::channel(10);
-
-        let state = ExecuteState::try_create(&request, session, ctx, block_tx).await?;
-        let data = Arc::new(TokioMutex::new(ResultDataManager::new(block_rx)));
+        let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
+        let state = ExecuteState::try_create(&request, session, ctx, block_buffer.clone()).await?;
+        let data = Arc::new(TokioMutex::new(PageManager::new(
+            request.pagination.max_rows_per_page,
+            block_buffer,
+        )));
         let query = HttpQuery {
             id,
             session_id,
@@ -228,7 +253,11 @@ impl HttpQuery {
             true,
         )
         .await;
-        self.data.lock().await.block_rx.close();
+    }
+
+    pub async fn detach(&self) {
+        let data = self.data.lock().await;
+        data.detach().await
     }
 
     pub async fn clear_expire_time(&self) {

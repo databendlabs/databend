@@ -12,4 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod tsv_output;
+mod download;
+mod result_locations;
+mod result_table;
+mod writer;
+
+pub use result_table::ResultQueryInfo;
+pub use result_table::ResultTable;
+pub use writer::ResultTableWriter;
