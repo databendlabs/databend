@@ -168,3 +168,17 @@ pub fn parse_escape_byte(b: u8) -> u8 {
         _ => b,
     }
 }
+
+/// Mask a string by "******", but keep `unmask_len` of suffix.
+///
+/// Copied from `common-base` so that we don't need to depend on it.
+#[inline]
+pub fn mask_string(s: &str, unmask_len: usize) -> String {
+    if s.len() <= unmask_len {
+        s.to_string()
+    } else {
+        let mut ret = "******".to_string();
+        ret.push_str(&s[(s.len() - unmask_len)..]);
+        ret
+    }
+}

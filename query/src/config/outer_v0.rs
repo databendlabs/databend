@@ -23,7 +23,7 @@ use common_configs::MetaConfig;
 use common_configs::QueryConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::StorageAzblobConfig;
+use common_io::prelude::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_io::prelude::StorageConfig as InnerStorageConfig;
 use common_io::prelude::StorageFsConfig as InnerStorageFsConfig;
 use common_io::prelude::StorageHdfsConfig as InnerStorageHdfsConfig;
@@ -38,7 +38,7 @@ use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
 
-#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
@@ -65,6 +65,12 @@ pub struct Config {
     // - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        InnerConfig::default().into_outer()
+    }
 }
 
 impl Config {
@@ -161,15 +167,7 @@ pub struct StorageConfig {
 
 impl Default for StorageConfig {
     fn default() -> Self {
-        Self {
-            storage_type: "fs".to_string(),
-            storage_num_cpus: 0,
-
-            fs: FsStorageConfig::default(),
-            s3: S3StorageConfig::default(),
-            azblob: AzblobStorageConfig::default(),
-            hdfs: HdfsConfig::default(),
-        }
+        InnerStorageConfig::default().into()
     }
 }
 
@@ -177,7 +175,11 @@ impl From<InnerStorageConfig> for StorageConfig {
     fn from(inner: InnerStorageConfig) -> Self {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
-            ..Default::default()
+            storage_type: "".to_string(),
+            fs: Default::default(),
+            s3: Default::default(),
+            azblob: Default::default(),
+            hdfs: Default::default(),
         };
 
         match inner.params {
@@ -238,9 +240,7 @@ pub struct FsStorageConfig {
 
 impl Default for FsStorageConfig {
     fn default() -> Self {
-        Self {
-            data_path: "_data".to_string(),
-        }
+        InnerStorageFsConfig::default().into()
     }
 }
 
@@ -299,15 +299,7 @@ pub struct S3StorageConfig {
 
 impl Default for S3StorageConfig {
     fn default() -> Self {
-        Self {
-            region: "".to_string(),
-            endpoint_url: "https://s3.amazonaws.com".to_string(),
-            access_key_id: "".to_string(),
-            secret_access_key: "".to_string(),
-            bucket: "".to_string(),
-            root: "".to_string(),
-            master_key: "".to_string(),
-        }
+        InnerStorageS3Config::default().into()
     }
 }
 
@@ -358,7 +350,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Default, Args)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct AzblobStorageConfig {
     /// Account for Azblob
@@ -390,6 +382,12 @@ pub struct AzblobStorageConfig {
     pub azblob_root: String,
 }
 
+impl Default for AzblobStorageConfig {
+    fn default() -> Self {
+        InnerStorageAzblobConfig::default().into()
+    }
+}
+
 impl fmt::Debug for AzblobStorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("AzureStorageBlobConfig")
@@ -402,8 +400,8 @@ impl fmt::Debug for AzblobStorageConfig {
     }
 }
 
-impl From<StorageAzblobConfig> for AzblobStorageConfig {
-    fn from(inner: StorageAzblobConfig) -> Self {
+impl From<InnerStorageAzblobConfig> for AzblobStorageConfig {
+    fn from(inner: InnerStorageAzblobConfig) -> Self {
         Self {
             account_name: inner.account_name,
             account_key: inner.account_key,
@@ -414,11 +412,11 @@ impl From<StorageAzblobConfig> for AzblobStorageConfig {
     }
 }
 
-impl TryInto<StorageAzblobConfig> for AzblobStorageConfig {
+impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<StorageAzblobConfig> {
-        Ok(StorageAzblobConfig {
+    fn try_into(self) -> Result<InnerStorageAzblobConfig> {
+        Ok(InnerStorageAzblobConfig {
             endpoint_url: self.azblob_endpoint_url,
             container: self.container,
             account_name: self.account_name,
@@ -428,7 +426,7 @@ impl TryInto<StorageAzblobConfig> for AzblobStorageConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Default, Args, Debug)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Args, Debug)]
 #[serde(default)]
 pub struct HdfsConfig {
     #[clap(long = "storage-hdfs-name-node", default_value_t)]
@@ -439,6 +437,12 @@ pub struct HdfsConfig {
     #[clap(long = "storage-hdfs-root", default_value_t)]
     #[serde(rename = "root")]
     pub hdfs_root: String,
+}
+
+impl Default for HdfsConfig {
+    fn default() -> Self {
+        InnerStorageHdfsConfig::default().into()
+    }
 }
 
 impl From<InnerStorageHdfsConfig> for HdfsConfig {
