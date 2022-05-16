@@ -15,16 +15,18 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::compute::partition::lexicographical_partition_ranges;
+use common_arrow::arrow::compute::sort::SortColumn;
 use common_datablocks::DataBlock;
-use common_datavalues::BooleanType;
 use common_datavalues::ColumnRef;
+use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
+use common_datavalues::Series;
+use common_functions::aggregates::eval_aggr;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::window::WindowFrameBound;
-use common_functions::window::WindowFrameUnits;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -55,6 +57,91 @@ impl WindowFuncTransform {
             input_schema,
         }
     }
+
+    /// evaluate range frame
+    /// requires that the block's already sorted by expressions of partition by and order by sub stmts
+    async fn evaluate_window_func_col(
+        &self,
+        block: &DataBlock,
+    ) -> common_exception::Result<ColumnRef> {
+        // extract the window function
+        let_extract!(
+            Expression::WindowFunction {
+                op,
+                params,
+                args,
+                partition_by,
+                order_by,
+                window_frame
+            },
+            &self.window_func,
+            panic!()
+        );
+
+        match window_frame {
+            None => {
+                // at the moment, only supports aggr function
+                let is_aggr_func = AggregateFunctionFactory::instance().check(&op);
+                match is_aggr_func {
+                    true => {
+                        let mut arguments: Vec<DataField> = Vec::with_capacity(args.len());
+                        for arg in args {
+                            arguments.push(arg.to_data_field(&self.input_schema)?);
+                        }
+
+                        let mut sort_cols: Vec<SortColumn> =
+                            Vec::with_capacity(partition_by.len() + order_by.len());
+                        let partition_by_arrow_array = partition_by
+                            .iter()
+                            .map(|expr| {
+                                block
+                                    .try_column_by_name(&expr.column_name())
+                                    .unwrap()
+                                    .as_arrow_array()
+                            })
+                            .collect::<Vec<ArrayRef>>();
+                        let partition_by_column = partition_by_arrow_array
+                            .iter()
+                            .map(|array| SortColumn {
+                                values: array.as_ref(),
+                                options: None,
+                            })
+                            .collect::<Vec<SortColumn>>();
+
+                        sort_cols.extend(partition_by_column);
+                        // todo process sort expr
+
+                        let peer_rows = lexicographical_partition_ranges(&sort_cols).unwrap();
+
+                        let window_cols = peer_rows
+                            .map(|range| {
+                                let offset = range.start;
+                                let length = range.end - range.start;
+                                let peered = block.slice(offset, length);
+                                let args = arguments
+                                    .iter()
+                                    .map(|f| {
+                                        let arg = peered.try_column_by_name(f.name()).unwrap();
+                                        ColumnWithField::new(arg.clone(), f.to_owned())
+                                    })
+                                    .collect::<Vec<_>>();
+                                let agg_result =
+                                    eval_aggr(op, params.to_owned(), &args, peered.num_rows())
+                                        .unwrap();
+                                Series::concat(
+                                    &(0..length).map(|_| agg_result.clone()).collect::<Vec<_>>(),
+                                )
+                                .unwrap()
+                            })
+                            .collect::<Vec<_>>();
+                        Ok(Series::concat(&window_cols).unwrap())
+                    }
+                    false => unimplemented!(),
+                }
+            }
+            Some(window_frame) => unimplemented!("not yet support window frame"),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -79,111 +166,50 @@ impl Processor for WindowFuncTransform {
     #[tracing::instrument(level = "debug", name = "window_aggr_func_execute", skip(self))]
     async fn execute(&self) -> common_exception::Result<SendableDataBlockStream> {
         let mut stream: SendableDataBlockStream = self.input.execute().await?;
-        let mut data_blocks: Vec<DataBlock> = vec![];
+        let mut blocks: Vec<DataBlock> = vec![];
         while let Some(block) = stream.next().await {
             let block = block?;
-            data_blocks.push(block);
+            blocks.push(block);
         }
 
-        let_extract!(
-            Expression::WindowFunction {
-                op,
-                params,
-                args,
-                partition_by,
-                order_by,
-                window_frame
-            },
-            &self.window_func,
-            panic!()
-        );
-
-        let mut arguments = Vec::with_capacity(args.len());
-        for arg in args {
-            arguments.push(arg.to_data_field(&self.input_schema)?);
+        if blocks.is_empty() {
+            return Ok(Box::pin(DataBlockStream::create(
+                self.schema.clone(),
+                None,
+                vec![],
+            )));
         }
 
-        let is_aggr_func = AggregateFunctionFactory::instance().check(&op);
+        // combine blocks
+        let schema = blocks[0].schema();
 
-        let window_cols = match &window_frame {
-            Some(window_frame) if is_aggr_func => match &window_frame.units {
-                WindowFrameUnits::Range => {
-                    evaluate_range_with_aggr_func(
-                        AggregateFunctionFactory::instance().get(
-                            op,
-                            params.to_owned(),
-                            arguments,
-                        )?,
-                        &data_blocks,
-                        window_frame.start_bound,
-                        window_frame.end_bound,
-                    )
-                    .await?
-                }
-                WindowFrameUnits::Rows => {
-                    evaluate_rows_with_aggr_func(
-                        AggregateFunctionFactory::instance().get(
-                            op,
-                            params.to_owned(),
-                            arguments,
-                        )?,
-                        &data_blocks,
-                        window_frame.start_bound,
-                        window_frame.end_bound,
-                    )
-                    .await?
-                }
-            },
-            None if is_aggr_func => {
-                evaluate_range_with_aggr_func(
-                    AggregateFunctionFactory::instance().get(op, params.to_owned(), arguments)?,
-                    &data_blocks,
-                    WindowFrameBound::Preceding(None),
-                    WindowFrameBound::CurrentRow,
-                )
-                .await?
-            }
-            _ => unimplemented!(),
-        };
-
-        // add window func result column to blocks
-        let data_blocks = data_blocks
-            .into_iter()
-            .zip(window_cols)
-            .map(|(block, window_col)| {
-                block
-                    .add_column(
-                        window_col,
-                        DataField::new("test", DataTypeImpl::Boolean(BooleanType {})),
-                    )
-                    .unwrap()
+        let combined_columns = (0..schema.num_fields())
+            .map(|i| {
+                blocks
+                    .iter()
+                    .map(|block| block.column(i).clone())
+                    .collect::<Vec<_>>()
             })
-            .collect();
+            .map(|columns| Series::concat(&columns).unwrap())
+            .collect::<Vec<_>>();
+
+        let block = DataBlock::create(schema.clone(), combined_columns);
+
+        // evaluate the window function column
+        let window_col = self.evaluate_window_func_col(&block).await.unwrap();
+
+        // add window func result column to the block
+        let block = block
+            .add_column(
+                window_col,
+                self.window_func.to_data_field(&self.input_schema).unwrap(),
+            )
+            .unwrap();
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            data_blocks,
+            vec![block],
         )))
     }
-}
-
-/// evaluate range frame
-async fn evaluate_range_with_aggr_func(
-    func: AggregateFunctionRef,
-    blocks: &[DataBlock],
-    start_bound: WindowFrameBound,
-    end_bound: WindowFrameBound,
-) -> common_exception::Result<Vec<ColumnRef>> {
-    let window_cols = Vec::with_capacity(blocks.len());
-}
-
-/// evaluate rows frame
-async fn evaluate_rows_with_aggr_func(
-    func: AggregateFunctionRef,
-    blocks: &[DataBlock],
-    start_bound: WindowFrameBound,
-    end_bound: WindowFrameBound,
-) -> common_exception::Result<Vec<ColumnRef>> {
-    todo!()
 }
