@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_management::QuotaApi;
+use common_management::QuotaMgr;
 use common_management::RoleApi;
 use common_management::RoleMgr;
 use common_management::StageApi;
@@ -37,7 +39,6 @@ impl UserApiProvider {
         let client = MetaClientProvider::new(conf.meta.to_meta_grpc_client_conf())
             .try_get_kv_client()
             .await?;
-
         Ok(Arc::new(UserApiProvider { client }))
     }
 
@@ -55,5 +56,9 @@ impl UserApiProvider {
 
     pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
         Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_tenant_quota_api_client(&self, tenant: &str) -> Result<Arc<dyn QuotaApi>> {
+        Ok(Arc::new(QuotaMgr::create(self.client.clone(), tenant)?))
     }
 }

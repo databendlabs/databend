@@ -12,5 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod format_csv;
-mod output_format_tsv;
+mod result_table;

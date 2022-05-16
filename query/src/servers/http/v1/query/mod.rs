@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_buffer;
 mod execute_state;
 mod expirable;
 mod expiring_map;
 mod http_query;
 mod http_query_context;
 mod http_query_manager;
-mod result_data_manager;
+mod page_manager;
 
 pub(crate) use execute_state::ExecuteState;
 pub use execute_state::ExecuteStateKind;
@@ -33,7 +34,7 @@ pub use http_query::PaginationConf;
 pub use http_query::ResponseState;
 pub use http_query_context::HttpQueryContext;
 pub use http_query_manager::HttpQueryManager;
-pub use result_data_manager::Page;
-pub use result_data_manager::ResponseData;
-pub use result_data_manager::ResultDataManager;
-pub use result_data_manager::Wait;
+pub use page_manager::Page;
+pub use page_manager::PageManager;
+pub use page_manager::ResponseData;
+pub use page_manager::Wait;

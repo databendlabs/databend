@@ -17,7 +17,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use databend_query::servers::http::formats::tsv_output::block_to_tsv;
+use databend_query::formats::output_format::OutputFormat;
+use databend_query::formats::output_format::OutputFormatType;
 use pretty_assertions::assert_eq;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
@@ -60,8 +61,9 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     } else {
         block
     };
-    let format = FormatSettings::default();
-    let json_block = String::from_utf8(block_to_tsv(&block, &format)?)?;
+    let fmt = OutputFormatType::Tsv;
+    let format_setting = FormatSettings::default();
+    let json_block = String::from_utf8(fmt.serialize_block(&block, &format_setting)?)?;
     let expect = "1\ta\t1\t1.1\t1970-01-02\n\
                         2\tb\t1\t2.2\t1970-01-03\n\
                         3\tc\t0\t3.3\t1970-01-04\n";

@@ -18,13 +18,15 @@ use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
 use poem::error::Error as PoemError;
+use poem::error::InternalServerError;
+use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
-use poem::web::Query;
+use poem::Body;
 use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
@@ -34,8 +36,11 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use crate::formats::output_format::OutputFormatType;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
+use crate::sessions::SessionType;
+use crate::storages::result::ResultTable;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -46,7 +51,11 @@ pub fn make_state_uri(query_id: &str) -> String {
 }
 
 pub fn make_final_uri(query_id: &str) -> String {
-    format!("/v1/query/{}/kill?delete=true", query_id)
+    format!("/v1/query/{}/final", query_id)
+}
+
+pub fn make_kill_uri(query_id: &str) -> String {
+    format!("/v1/query/{}/kill", query_id)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -84,6 +93,7 @@ pub struct QueryResponse {
     // just call it after client not use it anymore, not care about the server-side behavior
     pub final_uri: Option<String>,
     pub next_uri: Option<String>,
+    pub kill_uri: Option<String>,
 }
 
 impl QueryResponse {
@@ -109,6 +119,7 @@ impl QueryResponse {
             next_uri: next_url,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
+            kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.as_ref().map(QueryError::from_error_code),
         }
     }
@@ -124,29 +135,38 @@ impl QueryResponse {
             next_uri: None,
             stats_uri: None,
             final_uri: None,
+            kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
         }
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub(crate) struct CancelParams {
-    delete: Option<bool>,
+#[poem::handler]
+async fn query_detach_handler(
+    ctx: &HttpQueryContext,
+    Path(query_id): Path<String>,
+) -> impl IntoResponse {
+    let http_query_manager = ctx.session_mgr.get_http_query_manager();
+    match http_query_manager.remove_query(&query_id).await {
+        Some(query) => {
+            query.detach().await;
+            StatusCode::OK
+        }
+        None => StatusCode::NOT_FOUND,
+    }
 }
 
+// currently implementation only support kill http query
 #[poem::handler]
 async fn query_cancel_handler(
     ctx: &HttpQueryContext,
-    Query(params): Query<CancelParams>,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
     let http_query_manager = ctx.session_mgr.get_http_query_manager();
     match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.kill().await;
-            if params.delete.unwrap_or(false) {
-                http_query_manager.remove_query(&query_id).await;
-            }
+            http_query_manager.remove_query(&query_id).await;
             StatusCode::OK
         }
         None => StatusCode::NOT_FOUND,
@@ -225,10 +245,15 @@ pub fn query_route() -> Route {
     Route::new()
         .at("/", post(query_handler))
         .at("/:id", get(query_state_handler))
+        .at("/:id/download", get(result_download_handler))
         .at("/:id/page/:page_no", get(query_page_handler))
         .at(
             "/:id/kill",
             get(query_cancel_handler).post(query_cancel_handler),
+        )
+        .at(
+            "/:id/final",
+            get(query_detach_handler).post(query_detach_handler),
         )
 }
 
@@ -237,4 +262,38 @@ fn query_id_not_found(query_id: String) -> PoemError {
         format!("query id not found {}", query_id),
         StatusCode::NOT_FOUND,
     )
+}
+
+#[poem::handler]
+async fn result_download_handler(
+    ctx: &HttpQueryContext,
+    Path(query_id): Path<String>,
+) -> PoemResult<Body> {
+    let session = ctx
+        .create_session(SessionType::HTTPQuery)
+        .await
+        .map_err(InternalServerError)?;
+
+    let ctx = session
+        .create_query_context()
+        .await
+        .map_err(InternalServerError)?;
+
+    let result_table = ResultTable::try_get(ctx.clone(), &query_id)
+        .await
+        .map_err(|e| {
+            if e.code() == ErrorCode::http_not_found_code() {
+                NotFound(e)
+            } else {
+                InternalServerError(e)
+            }
+        })?;
+
+    let stream = result_table
+        .download(ctx, OutputFormatType::Tsv)
+        .await
+        .map_err(InternalServerError)?;
+
+    let body = Body::from_bytes_stream::<_, _, ErrorCode>(stream);
+    Ok(body)
 }
