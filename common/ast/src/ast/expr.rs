@@ -160,6 +160,7 @@ pub enum Expr<'a> {
     DateTimeUnit {
         span: &'a [Token<'a>],
         unit: IntervalKind,
+    },
     /// The `Array` expr
     Array {
         span: &'a [Token<'a>],

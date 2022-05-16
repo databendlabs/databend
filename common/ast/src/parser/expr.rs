@@ -436,7 +436,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
             ExprElement::DateTimeUnit { unit } => Expr::DateTimeUnit {
                 span: elem.span.0,
                 unit,
-            }
+            },
             ExprElement::Array { exprs } => Expr::Array {
                 span: elem.span.0,
                 exprs,
