@@ -147,6 +147,8 @@ build_exceptions! {
 
     // Layout error code.
     LayoutError(1103),
+
+    PanicError(1104),
 }
 
 // Metasvr errors [2001, 3000].
