@@ -13,13 +13,13 @@
 //  limitations under the License.
 //
 
+mod async_crash_me;
 mod memory_block_part;
 mod numbers_part;
 mod numbers_stream;
 mod numbers_table;
 mod table_function;
 mod table_function_factory;
-mod async_crash_me;
 
 pub use memory_block_part::generate_numbers_parts;
 pub use numbers_part::NumbersPartInfo;

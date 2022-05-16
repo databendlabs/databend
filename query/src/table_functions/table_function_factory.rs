@@ -107,7 +107,7 @@ impl TableFunctionFactory {
 
         creators.insert(
             "async_crash_me".to_string(),
-            (next_id(), Arc::new(AsyncCrashMeTable::create))
+            (next_id(), Arc::new(AsyncCrashMeTable::create)),
         );
 
         TableFunctionFactory {
