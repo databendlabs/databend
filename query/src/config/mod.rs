@@ -27,3 +27,4 @@ mod inner;
 mod outer_v0;
 
 pub use inner::Config;
+pub use inner::QueryConfig;

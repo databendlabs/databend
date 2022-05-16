@@ -31,7 +31,6 @@ use common_base::base::SignalType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
-use common_grpc::RpcClientTlsConfig;
 use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_api::KVApi;
@@ -214,7 +213,7 @@ impl Cluster {
                         ConnectionFactory::create_rpc_channel(
                             node.flight_address.clone(),
                             None,
-                            Some(RpcClientTlsConfig::from(&config.query)),
+                            Some(config.query.to_rpc_client_tls_config()),
                         )?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
