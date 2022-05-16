@@ -20,6 +20,7 @@ use super::AddDaysFunction;
 use super::AddMonthsFunction;
 use super::AddTimesFunction;
 use super::AddYearsFunction;
+use super::DateAddFunction;
 use super::RoundFunction;
 use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
@@ -124,5 +125,6 @@ impl DateFunction {
         factory.register("subtractHours", AddTimesFunction::desc(-3600));
         factory.register("subtractMinutes", AddTimesFunction::desc(-60));
         factory.register("subtractSeconds", AddTimesFunction::desc(-1));
+        factory.register("dateAdd", DateAddFunction::desc());
     }
 }

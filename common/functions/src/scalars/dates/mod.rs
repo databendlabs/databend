@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod date;
+mod date_add;
 mod interval_function;
 mod now;
 mod number_function;
@@ -23,6 +24,7 @@ mod week_date;
 mod macros;
 
 pub use date::DateFunction;
+pub use date_add::DateAddFunction;
 pub use interval_function::AddDaysFunction;
 pub use interval_function::AddMonthsFunction;
 pub use interval_function::AddTimesFunction;

@@ -156,6 +156,10 @@ pub enum Expr<'a> {
         expr: Box<Expr<'a>>,
         accessor: MapAccessor<'a>,
     },
+    DateTimeUnit {
+        span: &'a [Token<'a>],
+        unit: IntervalKind,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -280,6 +284,7 @@ impl<'a> Expr<'a> {
             Expr::Exists { span, .. } => span,
             Expr::Subquery { span, .. } => span,
             Expr::MapAccess { span, .. } => span,
+            Expr::DateTimeUnit { span, .. } => span,
         }
     }
 }
@@ -677,6 +682,9 @@ impl<'a> Display for Expr<'a> {
                     MapAccessor::Period { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
+            }
+            Expr::DateTimeUnit { unit, .. } => {
+                write!(f, "{}", unit)?;
             }
         }
 

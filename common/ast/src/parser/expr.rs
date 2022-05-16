@@ -169,12 +169,20 @@ pub enum ExprElement<'a> {
         column: Identifier<'a>,
     },
     /// `IS NULL` expression
-    IsNull { not: bool },
+    IsNull {
+        not: bool,
+    },
     /// `IS NOT NULL` expression
     /// `[ NOT ] IN (list, ...)`
-    InList { list: Vec<Expr<'a>>, not: bool },
+    InList {
+        list: Vec<Expr<'a>>,
+        not: bool,
+    },
     /// `[ NOT ] IN (SELECT ...)`
-    InSubquery { subquery: Box<Query<'a>>, not: bool },
+    InSubquery {
+        subquery: Box<Query<'a>>,
+        not: bool,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         low: Box<Expr<'a>>,
@@ -182,9 +190,13 @@ pub enum ExprElement<'a> {
         not: bool,
     },
     /// Binary operation
-    BinaryOp { op: BinaryOperator },
+    BinaryOp {
+        op: BinaryOperator,
+    },
     /// Unary operation
-    UnaryOp { op: UnaryOperator },
+    UnaryOp {
+        op: UnaryOperator,
+    },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr<'a>>,
@@ -196,7 +208,9 @@ pub enum ExprElement<'a> {
         target_type: TypeName,
     },
     /// `::<type_name>` expression
-    PgCast { target_type: TypeName },
+    PgCast {
+        target_type: TypeName,
+    },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
         field: IntervalKind,
@@ -222,11 +236,15 @@ pub enum ExprElement<'a> {
         trim_where: Option<(TrimWhere, Box<Expr<'a>>)>,
     },
     /// A literal value, such as string, number, date or NULL
-    Literal { lit: Literal },
+    Literal {
+        lit: Literal,
+    },
     /// `Count(*)` expression
     CountAll,
     /// `(foo, bar)`
-    Tuple { exprs: Vec<Expr<'a>> },
+    Tuple {
+        exprs: Vec<Expr<'a>>,
+    },
     /// Scalar function call
     FunctionCall {
         /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
@@ -243,13 +261,22 @@ pub enum ExprElement<'a> {
         else_result: Option<Box<Expr<'a>>>,
     },
     /// `EXISTS` expression
-    Exists { subquery: Query<'a> },
+    Exists {
+        subquery: Query<'a>,
+    },
     /// Scalar subquery, which will only return a single row with a single column.
-    Subquery { subquery: Query<'a> },
+    Subquery {
+        subquery: Query<'a>,
+    },
     /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
-    MapAccess { accessor: MapAccessor<'a> },
+    MapAccess {
+        accessor: MapAccessor<'a>,
+    },
     /// An expression between parentheses
     Group(Expr<'a>),
+    DateTimeUnit {
+        unit: IntervalKind,
+    },
 }
 
 struct ExprParser;
@@ -404,6 +431,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 subquery: Box::new(subquery),
             },
             ExprElement::Group(expr) => expr,
+            ExprElement::DateTimeUnit { unit } => Expr::DateTimeUnit {
+                span: elem.span.0,
+                unit,
+            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -503,6 +534,30 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
                 table: Some(table),
                 column,
             },
+        },
+    );
+    let datetime_unit = map(
+        rule! {YEAR|MONTH|DAY|HOUR|MINUTE|SECOND|DOY|DOW},
+        |token| match token.kind {
+            YEAR => ExprElement::DateTimeUnit {
+                unit: IntervalKind::Year,
+            },
+            MONTH => ExprElement::DateTimeUnit {
+                unit: IntervalKind::Month,
+            },
+            DAY => ExprElement::DateTimeUnit {
+                unit: IntervalKind::Day,
+            },
+            HOUR => ExprElement::DateTimeUnit {
+                unit: IntervalKind::Month,
+            },
+            MINUTE => ExprElement::DateTimeUnit {
+                unit: IntervalKind::Minute,
+            },
+            SECOND => ExprElement::DateTimeUnit {
+                unit: IntervalKind::Second,
+            },
+            _ => unimplemented!(),
         },
     );
     let is_null = map(
@@ -754,6 +809,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #group
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
+            | #datetime_unit: "<unit>"
         ),
     )))(i)?;
 

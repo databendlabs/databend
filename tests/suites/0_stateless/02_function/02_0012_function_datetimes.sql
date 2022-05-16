@@ -231,3 +231,12 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '1000
 
 select * from t order by b;
 drop table t;
+
+select '===dateAdd===';
+set enable_planner_v2=1;
+select dateAdd(to_date(18321), 1, YEAR);
+select dateAdd(to_date(18321), -1, YEAR);
+select dateAdd(to_date(18321), 1, SECOND);
+select dateAdd(to_date(18321), interval '1' YEAR);
+select dateAdd(to_date(18321), interval '-1' SECOND);
+set enable_planner_v2=0;

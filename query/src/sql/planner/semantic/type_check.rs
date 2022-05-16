@@ -273,6 +273,7 @@ impl<'a> TypeChecker<'a> {
                     for arg in args.iter() {
                         arguments.push(self.resolve(arg, None).await?);
                     }
+
                     self.in_aggregate_function = false;
 
                     let data_fields = arguments
@@ -388,19 +389,34 @@ impl<'a> TypeChecker<'a> {
         let mut args = vec![];
         let mut arg_types = vec![];
 
+        let mut suffix = String::new();
+
         for argument in arguments {
-            let (arg, arg_type) = self.resolve(argument, None).await?;
-            args.push(arg);
-            arg_types.push(arg_type);
+            match argument {
+                Expr::DateTimeUnit { unit, .. } => {
+                    suffix = unit.to_string();
+                }
+                _ => {
+                    let (arg, arg_type) = self.resolve(argument, None).await?;
+                    args.push(arg);
+                    arg_types.push(arg_type);
+                }
+            }
         }
 
-        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+        let new_name = if func_name == "dateAdd" && !suffix.is_empty() {
+            format!("add{}s", suffix)
+        } else {
+            func_name.to_string()
+        };
 
-        let func = FunctionFactory::instance().get(func_name, &arg_types_ref)?;
+        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+        let func = FunctionFactory::instance().get(new_name.as_str(), &arg_types_ref)?;
+
         Ok((
             FunctionCall {
                 arguments: args,
-                func_name: func_name.to_string(),
+                func_name: new_name,
                 arg_types: arg_types.to_vec(),
                 return_type: func.return_type(),
             }

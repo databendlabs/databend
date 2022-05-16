@@ -72,7 +72,6 @@ impl ScalarExpr for BoundColumnRef {
 #[derive(Clone, PartialEq, Debug)]
 pub struct ConstantExpr {
     pub value: DataValue,
-
     pub data_type: DataTypeImpl,
 }
 

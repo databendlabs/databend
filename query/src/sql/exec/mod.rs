@@ -221,6 +221,7 @@ impl PipelineBuilder {
         let output_schema = schema_builder.build_project(project, input_schema.clone())?;
         let mut expressions = Vec::with_capacity(project.items.len());
         let expr_builder = ExpressionBuilder::create(&self.metadata);
+
         for item in project.items.iter() {
             let scalar = &item.expr;
             let expression = expr_builder.build_and_rename(scalar, item.index, &input_schema)?;

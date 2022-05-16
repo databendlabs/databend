@@ -822,6 +822,7 @@ impl TokenKind {
             | TokenKind::CURRENT_TIMESTAMP
             // | TokenKind::CURRENT_USER
             // | TokenKind::DEFERRABLE
+            | TokenKind::DAY
             | TokenKind::DESC
             | TokenKind::DISTINCT
             // | TokenKind::DO
@@ -843,6 +844,8 @@ impl TokenKind {
             | TokenKind::LIKE
             // | TokenKind::LOCALTIME
             // | TokenKind::LOCALTIMESTAMP
+            | TokenKind::MONTH
+            | TokenKind::MINUTE
             | TokenKind::NATURAL
             | TokenKind::NOT
             | TokenKind::NULL
@@ -853,6 +856,7 @@ impl TokenKind {
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
+            | TokenKind::SECOND
             | TokenKind::SELECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
@@ -894,6 +898,7 @@ impl TokenKind {
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
+            | TokenKind::YEAR
             if !after_as => true,
             _ => false
         }
