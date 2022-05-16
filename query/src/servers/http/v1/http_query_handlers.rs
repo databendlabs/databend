@@ -36,10 +36,10 @@ use serde_json::Value as JsonValue;
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use crate::formats::output_format::OutputFormatType;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::SessionType;
-use crate::storages::result::DownloadFormatType;
 use crate::storages::result::ResultTable;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
@@ -290,7 +290,7 @@ async fn result_download_handler(
         })?;
 
     let stream = result_table
-        .download(ctx, DownloadFormatType::Tsv)
+        .download(ctx, OutputFormatType::Tsv)
         .await
         .map_err(InternalServerError)?;
 

@@ -17,7 +17,6 @@ mod result_locations;
 mod result_table;
 mod writer;
 
-pub use download::DownloadFormatType;
 pub use result_table::ResultQueryInfo;
 pub use result_table::ResultTable;
 pub use writer::ResultTableWriter;
