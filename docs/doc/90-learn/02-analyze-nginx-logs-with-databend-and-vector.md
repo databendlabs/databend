@@ -1,6 +1,7 @@
 ---
 title: Analyzing Nginx Access Logs With Databend
 sidebar_label: Analyzing Nginx Logs
+description: Use Databend analyzing Nginx access logs step by step.
 ---
 
 <p align="center">
