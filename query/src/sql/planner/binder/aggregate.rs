@@ -118,6 +118,7 @@ impl<'a> Binder {
         let aggregate_plan = AggregatePlan {
             group_items: group_expr,
             aggregate_functions: agg_info.aggregate_functions.clone(),
+            from_distinct: false,
         };
         let new_expr = SExpr::create_unary(aggregate_plan.into(), child);
         Ok((new_expr, output_context))

@@ -175,4 +175,11 @@ select '====Context Function====';
 use default;
 select database();
 
+-- distinct
+select '==== Distinct =====';
+SELECT DISTINCT * FROM numbers(3) order by number;
+SELECT DISTINCT 1 FROM numbers(3);
+SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
+SELECT distinct count(number %3) FROM numbers(10)  group by number % 3;
+
 set enable_planner_v2 = 0;

@@ -24,7 +24,6 @@ use crate::sql::BindContext;
 impl<'a> Binder {
     pub(super) fn bind_distinct(&self, bind_context: &BindContext, child: SExpr) -> Result<SExpr> {
         // Like aggregate, we just use scalar directly.
-        // Current it does not support distinct with group by. 
         let group_items: Vec<Scalar> = bind_context
             .all_column_bindings()
             .iter()
@@ -36,10 +35,10 @@ impl<'a> Binder {
             })
             .collect();
 
-        println!("---- bind distinct, group items:{:?}", group_items);    
         let distinct_plan = AggregatePlan {
             group_items,
             aggregate_functions: vec![],
+            from_distinct: true,
         };
 
         Ok(SExpr::create_unary(distinct_plan.into(), child))
