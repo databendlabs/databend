@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod admin;
-pub mod bootstrap_tenant;
-pub mod reload_config;
-pub mod tenant_quota;
+use common_exception::Result;
+use common_meta_types::SeqV;
+use common_meta_types::TenantQuota;
 
-pub use admin::AdminProcedure;
+#[async_trait::async_trait]
+pub trait QuotaApi: Sync + Send {
+    async fn get_quota(&self, seq: Option<u64>) -> Result<SeqV<TenantQuota>>;
+
+    async fn set_quota(&self, quota: &TenantQuota, seq: Option<u64>) -> Result<u64>;
+}
