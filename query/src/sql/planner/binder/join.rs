@@ -313,7 +313,7 @@ impl<'a> JoinConditionResolver<'a> {
             assert_eq!(right_scalars.len(), 1);
             for col_binding in self.join_context.columns.iter_mut() {
                 if col_binding.column_name == join_key_name {
-                    col_binding.duplicated = true;
+                    col_binding.visible_in_unqualified_wildcard = false;
                     break;
                 }
             }

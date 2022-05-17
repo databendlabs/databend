@@ -284,7 +284,7 @@ impl<'a> Binder {
                 index: column.column_index,
                 data_type: column.data_type.clone(),
                 scalar: None,
-                duplicated: false,
+                visible_in_unqualified_wildcard: true,
             };
             bind_context.add_column_binding(column_binding);
         }

@@ -48,7 +48,7 @@ pub struct ColumnBinding {
     /// Consider the sql: `select * from t join t1 using(a)`.
     /// The result should only contain one `a` column.
     /// So we need mark `t.a` or `t1.a` duplicated.
-    pub duplicated: bool,
+    pub visible_in_unqualified_wildcard: bool,
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.

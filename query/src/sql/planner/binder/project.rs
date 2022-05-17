@@ -94,7 +94,7 @@ impl<'a> Binder {
                                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
                                 for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.duplicated {
+                                    if !column_binding.visible_in_unqualified_wildcard {
                                         continue;
                                     }
                                     output_context.add_column_binding(column_binding.clone());
@@ -124,7 +124,7 @@ impl<'a> Binder {
                             index: column_ref.column.index,
                             data_type,
                             scalar: Some(Box::new(bound_expr.clone())),
-                            duplicated: false,
+                            visible_in_unqualified_wildcard: true,
                         },
                         _ => {
                             let index = self.metadata.add_column(
@@ -140,7 +140,7 @@ impl<'a> Binder {
                                 index,
                                 data_type,
                                 scalar: Some(Box::new(bound_expr.clone())),
-                                duplicated: false,
+                                visible_in_unqualified_wildcard: true,
                             }
                         }
                     };
