@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use common_base::base::TrySpawn;
 use common_base::infallible::Mutex;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
@@ -160,15 +161,24 @@ impl InsertInterpreter {
         executor.execute()?;
         drop(executor);
 
+        let overwrite = self.plan.overwrite;
+        let catalog_name = self.plan.catalog_name.clone();
+        let context = self.ctx.clone();
         let append_entries = self.ctx.consume_precommit_blocks();
-        table
-            .commit_insertion(
-                self.ctx.clone(),
-                &self.plan.catalog_name,
-                append_entries,
-                self.plan.overwrite,
-            )
-            .await?;
+        let handler = self.ctx.get_storage_runtime().spawn(async move {
+            table
+                .commit_insertion(context, &catalog_name, append_entries, overwrite)
+                .await
+        });
+
+        match handler.await {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(cause)) => Err(cause),
+            Err(cause) => Err(ErrorCode::PanicError(format!(
+                "Maybe panic while in commit insert. {}",
+                cause
+            ))),
+        }?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

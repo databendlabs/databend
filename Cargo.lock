@@ -1714,15 +1714,15 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-metrics",
  "common-tracing",
  "futures",
+ "lazy_static",
  "maplit",
- "metrics",
  "num",
  "once_cell",
  "poem",
  "pretty_assertions",
+ "prometheus",
  "prost 0.9.0",
  "regex",
  "reqwest",
@@ -4744,6 +4744,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "procfs"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95e344cafeaeefe487300c361654bcfc85db3ac53619eeccced29f5ea18c4c70"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "libc",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "libc",
+ "memchr",
+ "parking_lot 0.11.2",
+ "procfs",
+ "protobuf",
+ "thiserror",
 ]
 
 [[package]]

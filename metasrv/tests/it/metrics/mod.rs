@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use poem::web::Data;
-use poem::web::Json;
-use serde_json;
-
-use crate::meta_service::MetaNode;
-use crate::metrics::meta_metrics_to_json;
-
-/// GET /v1/metrics
-///
-/// return the metrics.
-/// The response content is the same as `MetaMetrics` in metrics/meta_metrics.rs
-#[poem::handler]
-pub async fn metrics_handler(
-    _meta_node: Data<&Arc<MetaNode>>,
-) -> poem::Result<Json<serde_json::Value>> {
-    Ok(Json(meta_metrics_to_json()))
-}
+mod metasrv_metrics;

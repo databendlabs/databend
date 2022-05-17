@@ -253,3 +253,12 @@ default
 2
 3
 4
+===Inner Join with Using===
+4	3	4
+6	5	6
+3
+5
+4
+6
+4	3	4
+6	5	6
