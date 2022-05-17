@@ -50,15 +50,18 @@ impl ResultTable {
             })
             .await?;
         let fmt_setting = ctx.get_format_settings()?;
+        let mut output_format = fmt.with_default_setting();
+
         let stream = stream! {
             while let Some(block) = block_stream.next().await {
                 match block{
                     Ok(block) => {
-                        yield(fmt.serialize_block(&block, &fmt_setting))
+                        yield output_format.serialize_block(&block, &fmt_setting);
                     },
                     Err(err) => yield(Err(err)),
                 };
             };
+            yield output_format.finalize();
         };
         Ok(Box::pin(stream))
     }

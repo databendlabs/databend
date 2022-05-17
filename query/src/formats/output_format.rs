@@ -18,41 +18,37 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::output_format_tsv::TSVOutputFormat;
+use crate::formats::output_format_csv::CSVOutputFormat;
+use crate::formats::output_format_csv::TSVOutputFormat;
 
-pub trait OutputFormat: Send + Default {
+pub trait OutputFormat: Send {
     fn serialize_block(
-        &self,
+        &mut self,
         data_block: &DataBlock,
         format_setting: &FormatSettings,
     ) -> Result<Vec<u8>>;
+
+    fn finalize(&mut self) -> Result<Vec<u8>>;
 }
 
 #[derive(Clone, Copy)]
 pub enum OutputFormatType {
     Tsv,
+    Csv,
+    // NDJson,
+    // Parquet,
 }
 
 impl OutputFormatType {
-    pub fn with_default_setting(&self) -> impl OutputFormat {
+    pub fn with_default_setting(&self) -> Box<dyn OutputFormat> {
         match self {
-            OutputFormatType::Tsv => TSVOutputFormat::default(),
+            OutputFormatType::Tsv => Box::new(TSVOutputFormat::default()),
+            OutputFormatType::Csv => Box::new(CSVOutputFormat::default()),
         }
     }
 
     pub fn is_download_format(&self) -> bool {
-        matches!(self, Self::Tsv)
-    }
-}
-
-impl OutputFormat for OutputFormatType {
-    fn serialize_block(
-        &self,
-        block: &DataBlock,
-        format_setting: &FormatSettings,
-    ) -> Result<Vec<u8>> {
-        self.with_default_setting()
-            .serialize_block(block, format_setting)
+        matches!(self, Self::Tsv | Self::Csv)
     }
 }
 
@@ -67,7 +63,8 @@ impl FromStr for OutputFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "TSV" => Ok(OutputFormatType::Tsv),
-            _ => Err("Unknown file format type, must be one of { TSV }".to_string()),
+            "CSV" => Ok(OutputFormatType::Csv),
+            _ => Err("Unknown file format type, must be one of { TSV, CSV }".to_string()),
         }
     }
 }

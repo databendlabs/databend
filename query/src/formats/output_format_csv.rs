@@ -24,14 +24,18 @@ use crate::formats::output_format::OutputFormat;
 const FIELD_DELIMITER: u8 = b'\t';
 const ROW_DELIMITER: u8 = b'\n';
 
-#[derive(Default)]
-pub struct TSVOutputFormat {}
+pub type TSVOutputFormat = TCSVOutputFormat<true>;
+pub type CSVOutputFormat = TCSVOutputFormat<false>;
 
-impl OutputFormat for TSVOutputFormat {
-    fn serialize_block(&self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
+#[derive(Default)]
+pub struct TCSVOutputFormat<const TSV: bool> {}
+
+impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
+    fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
         let columns_size = block.num_columns();
 
+        let mut buf = Vec::with_capacity(block.memory_size());
         let mut col_table = Vec::new();
         for col_index in 0..columns_size {
             let column = block.column(col_index);
@@ -41,21 +45,38 @@ impl OutputFormat for TSVOutputFormat {
             let serializer = data_type.create_serializer();
             col_table.push(serializer.serialize_column(&column, format).map_err(|e| {
                 ErrorCode::UnexpectedError(format!(
-                    "fail to serialize filed {}, error = {}",
+                    "fail to serialize field {}, error = {}",
                     field.name(),
                     e
                 ))
             })?);
         }
-        let mut buf = vec![];
+
+        let fd = if TSV {
+            FIELD_DELIMITER
+        } else {
+            format.field_delimiter[0]
+        };
+
+        let rd = if TSV {
+            ROW_DELIMITER
+        } else {
+            format.record_delimiter[0]
+        };
+
         for row_index in 0..rows_size {
             for col in col_table.iter().take(columns_size - 1) {
                 buf.extend_from_slice(col[row_index].as_bytes());
-                buf.push(FIELD_DELIMITER);
+                buf.push(fd);
             }
             buf.extend_from_slice(col_table[columns_size - 1][row_index].as_bytes());
-            buf.push(ROW_DELIMITER);
+            buf.push(rd);
         }
+
         Ok(buf)
+    }
+
+    fn finalize(&mut self) -> Result<Vec<u8>> {
+        Ok(vec![])
     }
 }

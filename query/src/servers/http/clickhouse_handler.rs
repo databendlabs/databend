@@ -92,15 +92,19 @@ async fn execute(
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
     let fmt = OutputFormatType::Tsv;
+    let mut output_format = fmt.with_default_setting();
     let stream = stream! {
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield(fmt.serialize_block(&block, &format_setting))
+                    yield output_format.serialize_block(&block, &format_setting);
                 },
                 Err(err) => yield(Err(err)),
             };
         }
+
+        yield output_format.finalize();
+
         let _ = interpreter
             .finish()
             .await
