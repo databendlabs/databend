@@ -1726,7 +1726,6 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-metrics",
  "common-tracing",
  "futures",
  "lazy_static",
