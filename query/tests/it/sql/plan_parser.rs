@@ -289,7 +289,7 @@ async fn test_plan_parser() -> Result<()> {
             name: "select-without-table",
             sql: "SELECT *",
             expect: "",
-            error: "Code: 1015, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
+            error: "Code: 1065, displayText = SELECT * with no tables specified is not valid (while in analyze select projection)."
         }
     ];
 
