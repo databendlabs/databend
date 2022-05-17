@@ -19,6 +19,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::prelude::MutableColumn;
 use crate::prelude::Scalar;
+use crate::ColumnMeta;
 use crate::ColumnRef;
 use crate::ConstColumn;
 use crate::NullableColumn;
@@ -36,6 +37,13 @@ pub struct ColumnBuilderBase<const NULLABLE: bool, T: Scalar> {
 impl<const NULLABLE: bool, T> ColumnBuilderBase<NULLABLE, T>
 where T: Scalar
 {
+    pub fn with_capacity_meta(capacity: usize, meta: ColumnMeta) -> Self {
+        Self {
+            builder: <<T::ColumnType as ScalarColumn>::Builder>::with_capacity_meta(capacity, meta),
+            validity: MutableBitmap::with_capacity(capacity),
+        }
+    }
+
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             builder: <<T::ColumnType as ScalarColumn>::Builder>::with_capacity(capacity),

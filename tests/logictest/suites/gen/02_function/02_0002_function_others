@@ -1,0 +1,105 @@
+statement query T 
+SELECT '=== IGNORE ===';
+
+----  
+=== IGNORE ===
+
+statement query I 
+select count() from numbers(100) where ignore(number + 1);
+
+----  
+0
+
+statement query I 
+select count() from numbers(100) where not ignore(to_varchar(number + 3), 1, 4343, 4343, 'a');
+
+----  
+100
+
+statement query T 
+SELECT '=== TRY_INET_ATON ===';
+
+----  
+=== TRY_INET_ATON ===
+
+statement query I 
+SELECT TRY_INET_ATON('10.0.5.9');
+
+----  
+167773449
+
+statement query T 
+SELECT TRY_INET_ATON(NULL);
+
+----  
+None
+
+statement query I 
+SELECT TRY_INET_ATON('hello');
+
+----  
+None
+
+statement query T 
+SELECT '=== INET_ATON ===';
+
+----  
+=== INET_ATON ===
+
+statement query I 
+SELECT INET_ATON('10.0.5.9');
+
+----  
+167773449
+
+statement query T 
+SELECT INET_ATON(NULL);
+
+----  
+None
+
+statement error 1060
+SELECT INET_ATON('hello');
+
+statement query T 
+SELECT '=== TRY_INET_NTOA ===';
+
+----  
+=== TRY_INET_NTOA ===
+
+statement query T 
+SELECT TRY_INET_NTOA(167773449);
+
+----  
+10.0.5.9
+
+statement error 1007
+SELECT TRY_INET_NTOA('167773449');
+
+statement query T 
+SELECT TRY_INET_NTOA(NULL);
+
+----  
+None
+
+statement query T 
+SELECT '=== INET_NTOA ===';
+
+----  
+=== INET_NTOA ===
+
+statement query T 
+SELECT INET_NTOA(167773449);
+
+----  
+10.0.5.9
+
+statement error 1007
+SELECT INET_NTOA('167773449'); 
+
+statement query T 
+SELECT INET_NTOA(NULL);
+
+----  
+None
+

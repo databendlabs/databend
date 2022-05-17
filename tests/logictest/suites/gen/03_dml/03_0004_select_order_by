@@ -1,0 +1,83 @@
+statement ok
+set max_threads = 16;
+
+statement query II 
+SELECT number, number + 3 FROM numbers_mt (1000) where number > 5 order by number desc limit 3;
+
+----  
+999 1002
+998 1001
+997 1000
+
+statement query II 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
+
+----  
+2 0
+2 0
+2 1
+1 0
+1 1
+1 1
+0 0
+0 0
+0 1
+0 1
+
+statement query T 
+EXPLAIN SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
+
+----  
+Projection: (number % 3) as c1:UInt8, (number % 2) as c2:UInt8
+  Sort: (number % 3):UInt8, number:UInt64
+    Expression: (number % 3):UInt8, (number % 2):UInt8, number:UInt64 (Before OrderBy)
+      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], order_by: [(number % 3), number]]
+
+statement query II 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number desc;
+
+----  
+0 1
+0 0
+0 1
+0 0
+1 1
+1 0
+1 1
+2 0
+2 1
+2 0
+
+statement ok
+create table t1(id int);
+
+statement ok
+insert into t1 select number as id from numbers(10);
+
+statement query I 
+select * from t1 order by id asc limit 3,3;
+
+----  
+3
+4
+5
+
+statement query I 
+select * from t1 order by id desc limit 3,3;
+
+----  
+6
+5
+4
+
+statement ok
+drop table t1;
+
+statement query IT 
+SELECT number, null from numbers(3) order by number desc;
+
+----  
+2 None
+1 None
+0 None
+

@@ -1,0 +1,34 @@
+statement ok 
+DROP USER if exists 'test'@'localhost';
+
+statement ok 
+DROP USER if exists 'test-a'@'localhost';
+
+statement ok 
+DROP USER if exists 'test-b'@'localhost';
+
+statement ok 
+DROP USER if exists 'test-c'@'localhost';
+
+statement ok 
+DROP USER if exists 'test-d'@'localhost';
+
+statement ok
+CREATE USER 'test'@'localhost' IDENTIFIED BY 'password';
+
+statement error 2202
+CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'; 
+
+statement ok
+CREATE USER 'test-a'@'localhost' IDENTIFIED WITH plaintext_password BY 'password';
+
+statement ok
+CREATE USER 'test-b'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
+
+statement ok
+CREATE USER 'test-c'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password';
+
+statement ok
+CREATE USER 'test-d'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
+
+

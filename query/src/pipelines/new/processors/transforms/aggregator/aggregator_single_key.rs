@@ -27,8 +27,8 @@ use common_datavalues::ScalarColumn;
 use common_datavalues::ScalarColumnBuilder;
 use common_datavalues::Series;
 use common_datavalues::StringColumn;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
 
@@ -55,10 +55,9 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
     pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
         assert!(!params.offsets_aggregate_states.is_empty());
         let arena = Bump::new();
-
-        let mut offsets_aggregate_states = Vec::with_capacity(params.aggregate_functions.len());
-        let layout =
-            get_layout_offsets(&params.aggregate_functions, &mut offsets_aggregate_states)?;
+        let layout = params
+            .layout
+            .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
         let get_places = || -> Vec<StateAddr> {
             let place: StateAddr = arena.alloc_layout(layout).into();
             params
@@ -66,7 +65,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
                 .iter()
                 .enumerate()
                 .map(|(idx, func)| {
-                    let arg_place = place.next(offsets_aggregate_states[idx]);
+                    let arg_place = place.next(params.offsets_aggregate_states[idx]);
                     func.init_state(arg_place);
                     arg_place
                 })

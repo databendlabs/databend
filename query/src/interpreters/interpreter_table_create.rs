@@ -62,11 +62,26 @@ impl Interpreter for CreateTableInterpreter {
             )
             .await?;
 
+        let tenant = self.plan.tenant.clone();
+        let quota_api = self
+            .ctx
+            .get_user_manager()
+            .get_tenant_quota_api_client(&tenant)?;
+        let quota = quota_api.get_quota(None).await?.data;
         let engine = self.plan.engine();
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        let name_not_duplicate = catalog
+        let tables = catalog
             .list_tables(&*self.plan.tenant, &*self.plan.db)
-            .await?
+            .await?;
+        if quota.max_tables_per_database != 0
+            && tables.len() >= quota.max_tables_per_database as usize
+        {
+            return Err(ErrorCode::TenantQuotaExceeded(format!(
+                "Max tables per database quota exceeded: {}",
+                quota.max_tables_per_database
+            )));
+        };
+        let name_not_duplicate = tables
             .iter()
             .all(|table| table.name() != self.plan.table.as_str());
 

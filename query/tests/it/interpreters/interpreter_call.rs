@@ -21,6 +21,7 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
+use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -194,6 +195,103 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         executor.execute(None).await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_call_tenant_quota_interpreter() -> Result<()> {
+    common_tracing::init_default_ut_tracing();
+    let ctx = crate::tests::create_query_context().await?;
+
+    // NumberArgumentsNotMatch
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota()").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect = "Code: 1028, displayText = Function `TENANT_QUOTA` expect to have [1, 3] arguments, but got 0.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // Access denied
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect =
+            "Code: 1062, displayText = Access denied: 'TENANT_QUOTA' only used in management-mode.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+    let mut user_info = ctx.get_current_user()?;
+    user_info
+        .option
+        .set_option_flag(UserOptionFlag::TenantSetting);
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---------------+-------------------------+",
+            "| max_databases | max_tables_per_database |",
+            "+---------------+-------------------------+",
+            "| 0             | 0                       |",
+            "+---------------+-------------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 7, 5)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---------------+-------------------------+",
+            "| max_databases | max_tables_per_database |",
+            "+---------------+-------------------------+",
+            "| 7             | 5                       |",
+            "+---------------+-------------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 8)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---------------+-------------------------+",
+            "| max_databases | max_tables_per_database |",
+            "+---------------+-------------------------+",
+            "| 8             | 5                       |",
+            "+---------------+-------------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    }
+
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+---------------+-------------------------+",
+            "| max_databases | max_tables_per_database |",
+            "+---------------+-------------------------+",
+            "| 8             | 5                       |",
+            "+---------------+-------------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())

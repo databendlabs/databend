@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::tenant_quota::TenantQuotaProcedure;
 use crate::procedures::admins::bootstrap_tenant::BootstrapTenantProcedure;
 use crate::procedures::admins::reload_config::ReloadConfigProcedure;
 use crate::procedures::ProcedureFactory;
@@ -27,6 +28,10 @@ impl AdminProcedure {
         factory.register(
             "admin$bootstrap_tenant",
             Box::new(BootstrapTenantProcedure::try_create),
+        );
+        factory.register(
+            "admin$tenant_quota",
+            Box::new(TenantQuotaProcedure::try_create),
         );
     }
 }

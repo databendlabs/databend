@@ -85,7 +85,15 @@ impl Function for ArrayGetFunction {
         with_match_scalar_types_error!(inner_type.to_physical_type(), |$T1| {
             with_match_integer_types_error!(index_type, |$T2| {
                 let inner_column: &<$T1 as Scalar>::ColumnType = Series::check_get(array_column.values())?;
-                let mut builder = NullableColumnBuilder::<$T1>::with_capacity(input_rows);
+                let meta = if inner_type.is_array() {
+                    let inner_array_type: ArrayType = self.array_type.inner_type().clone().try_into()?;
+                    ColumnMeta::Array {
+                        data_type: inner_array_type.inner_type().clone(),
+                    }
+                } else {
+                    ColumnMeta::Simple
+                };
+                let mut builder = NullableColumnBuilder::<$T1>::with_capacity_meta(input_rows, meta);
                 if columns[0].column().is_const() {
                     let index_column: &PrimitiveColumn<$T2> = if columns[1].column().is_const() {
                         let const_column: &ConstColumn = Series::check_get(columns[1].column())?;

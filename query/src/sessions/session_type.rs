@@ -23,7 +23,7 @@ pub enum SessionType {
     ClickHouseHttpHandler,
     FlightRPC,
     HTTPAPI(String),
-    Test,
+    Dummy,
     Fuzz,
 }
 
@@ -31,7 +31,7 @@ impl SessionType {
     pub fn is_user_session(&self) -> bool {
         !matches!(
             self,
-            SessionType::HTTPAPI(_) | SessionType::Test | SessionType::Fuzz
+            SessionType::HTTPAPI(_) | SessionType::Dummy | SessionType::Fuzz
         )
     }
 }
@@ -44,7 +44,7 @@ impl fmt::Display for SessionType {
             SessionType::MySQL => "MySQL".to_string(),
             SessionType::HTTPQuery => "HTTPQuery".to_string(),
             SessionType::HTTPStreamingLoad => "HTTPStreamingLoad".to_string(),
-            SessionType::Test => "Test".to_string(),
+            SessionType::Dummy => "Dummy".to_string(),
             SessionType::FlightRPC => "FlightRPC".to_string(),
             SessionType::HTTPAPI(usage) => format!("HTTPAPI({})", usage),
             SessionType::Fuzz => "Fuzz".to_string(),

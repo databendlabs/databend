@@ -16,14 +16,14 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use common_configs::S3StorageConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::get_abs_path;
 use common_io::prelude::parse_escape_string;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
-use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use sqlparser::ast::ObjectName;
@@ -58,7 +58,7 @@ pub fn parse_stage_storage(
     location: &str,
     credential_options: &BTreeMap<String, String>,
     encryption_options: &BTreeMap<String, String>,
-) -> Result<(StageStorage, String)> {
+) -> Result<(StorageParams, String)> {
     // TODO(xuanwo): we should support use non-aws s3 as stage like oss.
     // TODO(xuanwo): we should make the path logic more clear, ref: https://github.com/datafuselabs/databend/issues/5295
 
@@ -97,7 +97,7 @@ pub fn parse_stage_storage(
         Some(v) => match v {
             // AWS s3 plan.
             "s3" => {
-                let cfg = S3StorageConfig {
+                let cfg = StorageS3Config {
                     bucket,
                     root: root.to_string(),
                     access_key_id: credential_options
@@ -115,7 +115,7 @@ pub fn parse_stage_storage(
                     ..Default::default()
                 };
 
-                Ok((StageStorage::S3(cfg), path.to_string()))
+                Ok((StorageParams::S3(cfg), path.to_string()))
             }
 
             // Others.

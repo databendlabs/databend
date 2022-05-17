@@ -905,16 +905,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-configs"
-version = "0.1.0"
-dependencies = [
- "clap 3.1.8",
- "common-base",
- "common-exception",
- "serde",
-]
-
-[[package]]
 name = "common-contexts"
 version = "0.1.0"
 dependencies = [
@@ -1034,7 +1024,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "common-base",
- "common-configs",
  "common-exception",
  "common-tracing",
  "hyper",
@@ -1062,7 +1051,6 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "chrono-tz",
- "common-configs",
  "common-exception",
  "futures",
  "lexical-core",
@@ -1092,6 +1080,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-io",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-types",
@@ -1145,7 +1134,6 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
- "common-configs",
  "common-exception",
  "common-grpc",
  "common-meta-api",
@@ -1215,9 +1203,9 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
- "common-configs",
  "common-datavalues",
  "common-exception",
+ "common-io",
  "derive_more",
  "enumflags2",
  "hex",
@@ -1276,8 +1264,8 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "common-configs",
  "common-datavalues",
+ "common-io",
  "common-meta-types",
  "common-protos",
  "enumflags2",
@@ -1792,7 +1780,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
- "common-configs",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
@@ -5907,7 +5894,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=8db5b12#8db5b126bd9185d0ca97adfcdff1ce679fdf5307"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=619e3b6#619e3b66d0a3b7eaaed69a66d452b37a5488dca4"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

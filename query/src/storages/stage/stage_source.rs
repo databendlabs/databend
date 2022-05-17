@@ -22,8 +22,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::init_s3_operator;
+use common_io::prelude::StorageParams;
 use common_meta_types::StageFileFormatType;
-use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::StageTableInfo;
@@ -165,13 +165,18 @@ impl StageSource {
         } else {
             // Get the dal file reader.
             match &stage.stage_params.storage {
-                StageStorage::S3(cfg) => {
+                StorageParams::S3(cfg) => {
                     let mut cfg = cfg.clone();
+
+                    // If we are running of s3, use ctx cfg's endpoint instead.
                     // TODO(xuanwo): it's better support user input.
-                    cfg.endpoint_url = ctx.get_config().storage.s3.endpoint_url;
+                    if let StorageParams::S3(ctx_cfg) = ctx.get_config().storage.params {
+                        cfg.endpoint_url = ctx_cfg.endpoint_url;
+                    }
 
                     init_s3_operator(&cfg).await
                 }
+                _ => todo!("other storage type are not supported"),
             }
         }
     }

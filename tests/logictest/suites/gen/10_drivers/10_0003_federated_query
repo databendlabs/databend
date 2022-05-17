@@ -1,0 +1,27 @@
+statement ok
+/*!40101*/select number from numbers_mt(2) ORDER BY number;
+
+statement ok
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+
+statement ok
+/*!40101*/select number from numbers_mt(1) ORDER BY number;
+
+statement ok
+COMMIT;
+
+statement ok
+ROLLBACK;
+
+statement ok
+START;
+
+statement ok
+SET SQL_LOG_BIN=0;
+
+statement ok
+SHOW MASTER STATUS;
+
+statement ok
+SHOW ALL SLAVES STATUS;
+

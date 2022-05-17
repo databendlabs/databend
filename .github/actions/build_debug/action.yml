@@ -36,7 +36,7 @@ runs:
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: debug-${{ inputs.target }}-v2
+        sharedKey: debug-${{ inputs.target }}-v3
 
     - shell: bash
       run: cargo build --target ${{ inputs.target }}

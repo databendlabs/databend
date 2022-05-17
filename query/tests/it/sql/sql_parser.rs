@@ -24,7 +24,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Tokenizer;
 
 pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
-    let (statements, _) = DfParser::parse_sql(sql, SessionType::Test)?;
+    let (statements, _) = DfParser::parse_sql(sql, SessionType::Dummy)?;
     assert_eq!(
         statements.len(),
         1,
@@ -35,13 +35,13 @@ pub fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
 }
 
 pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
-    let (statements, _) = DfParser::parse_sql(sql, SessionType::Test)?;
+    let (statements, _) = DfParser::parse_sql(sql, SessionType::Dummy)?;
     assert_eq!(
         statements.len(),
         1,
         "Expected to parse exactly one statement"
     );
-    let (statements2, _) = DfParser::parse_sql(sql2, SessionType::Test)?;
+    let (statements2, _) = DfParser::parse_sql(sql2, SessionType::Dummy)?;
     assert_eq!(
         statements2.len(),
         1,
@@ -52,7 +52,7 @@ pub fn expect_synonym_parse_eq(sql: &str, sql2: &str) -> Result<()> {
 }
 
 pub fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
-    let result = DfParser::parse_sql(sql, SessionType::Test);
+    let result = DfParser::parse_sql(sql, SessionType::Dummy);
     assert!(result.is_err(), "'{}' SHOULD BE '{}'", sql, expected);
     assert_eq!(
         result.unwrap_err().message(),
@@ -65,7 +65,7 @@ pub fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
 }
 
 pub fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
-    let result = DfParser::parse_sql(sql, SessionType::Test);
+    let result = DfParser::parse_sql(sql, SessionType::Dummy);
     assert!(result.is_err(), "'{}' SHOULD CONTAINS '{}'", sql, expected);
     assert!(
         result.unwrap_err().message().contains(&expected),

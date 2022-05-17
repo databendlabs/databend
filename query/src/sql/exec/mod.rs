@@ -74,8 +74,9 @@ pub struct PipelineBuilder {
     metadata: Metadata,
     result_columns: Vec<(IndexType, String)>,
     expression: SExpr,
-
     pipelines: Vec<NewPipeline>,
+    limit: Option<usize>,
+    offset: usize,
 }
 
 impl PipelineBuilder {
@@ -90,8 +91,9 @@ impl PipelineBuilder {
             metadata,
             result_columns,
             expression,
-
             pipelines: vec![],
+            limit: None,
+            offset: 0,
         }
     }
 
@@ -400,7 +402,7 @@ impl PipelineBuilder {
             RewriteHelper::exprs_to_fields(final_exprs.as_slice(), &input_schema)?;
         let final_schema = schema_builder.build_aggregate(final_data_fields, &input_schema)?;
 
-        let partial_aggr_params = AggregatorParams::try_create_v2(
+        let partial_aggr_params = AggregatorParams::try_create(
             &agg_expressions,
             &group_expressions,
             &input_schema,
@@ -420,7 +422,7 @@ impl PipelineBuilder {
         })?;
 
         pipeline.resize(1)?;
-        let final_aggr_params = AggregatorParams::try_create_v2(
+        let final_aggr_params = AggregatorParams::try_create(
             &agg_expressions,
             &group_expressions,
             &input_schema,
@@ -548,8 +550,7 @@ impl PipelineBuilder {
             )
         })?;
 
-        //TODO(xudong963): Add rows_limit
-
+        let rows_limit = self.limit.map(|limit| limit + self.offset);
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
@@ -557,7 +558,7 @@ impl PipelineBuilder {
             TransformSortPartial::try_create(
                 transform_input_port,
                 transform_output_port,
-                None,
+                rows_limit,
                 get_sort_descriptions(&output_schema, expressions.as_slice())?,
             )
         })?;
@@ -570,7 +571,7 @@ impl PipelineBuilder {
                 transform_input_port,
                 transform_output_port,
                 SortMergeCompactor::new(
-                    None,
+                    rows_limit,
                     get_sort_descriptions(&output_schema, expressions.as_slice())?,
                 ),
             )
@@ -587,7 +588,7 @@ impl PipelineBuilder {
                 transform_input_port,
                 transform_output_port,
                 SortMergeCompactor::new(
-                    None,
+                    rows_limit,
                     get_sort_descriptions(&output_schema, expressions.as_slice())?,
                 ),
             )
@@ -602,6 +603,8 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
+        self.limit = limit_plan.limit;
+        self.offset = limit_plan.offset;
         pipeline.resize(1)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {

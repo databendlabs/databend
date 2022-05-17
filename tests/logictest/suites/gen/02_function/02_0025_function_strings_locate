@@ -1,0 +1,60 @@
+statement query T 
+SELECT '===LOCATE===';
+
+----  
+===LOCATE===
+
+statement query I 
+SELECT LOCATE('bar', 'foobarbar');
+
+----  
+4
+
+statement query I 
+SELECT LOCATE('xbar', 'foobar');
+
+----  
+0
+
+statement query I 
+SELECT LOCATE('bar', 'foobarbar', 5);
+
+----  
+7
+
+statement query T 
+SELECT '===POSITION===';
+
+----  
+===POSITION===
+
+statement query I 
+SELECT POSITION('bar' IN 'foobarbar');
+
+----  
+4
+
+statement query I 
+SELECT POSITION('xbar' IN 'foobar');
+
+----  
+0
+
+statement query T 
+SELECT '===INSTR===';
+
+----  
+===INSTR===
+
+statement query I 
+SELECT INSTR('foobarbar', 'bar');
+
+----  
+4
+
+statement query I 
+SELECT INSTR('foobar', 'xbar');
+
+----  
+0
+

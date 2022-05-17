@@ -1,0 +1,9 @@
+statement ok
+CREATE ROLE 'test';
+
+statement query TI 
+SHOW ROLES;
+
+----  
+test 0
+

@@ -80,7 +80,7 @@ pub fn cast_from_timestamp(
             let tz = func_ctx.tz;
             for v in c.iter() {
                 let s = timestamp_to_string(
-                    tz.timestamp(*v / 1_000_000, (*v % 1_000_000 * 1_000) as u32),
+                    DateConverter::to_timestamp(v, &tz),
                     date_time64.format_string().as_str(),
                 );
                 builder.append_value(s.as_bytes());

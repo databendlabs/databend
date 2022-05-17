@@ -1,0 +1,90 @@
+statement ok
+CREATE DATABASE IF NOT EXISTS `db01`;
+
+statement ok
+CREATE TABLE IF NOT EXISTS `db01`.`tb1`;
+
+statement ok
+DROP USER if exists 'test-grant'@'localhost';
+
+statement ok
+CREATE USER 'test-grant'@'localhost' IDENTIFIED BY 'password';
+
+statement ok
+GRANT SELECT ON * TO 'test-grant'@'localhost';
+
+statement error 2201
+GRANT SELECT ON * TO 'test-grant1'@'localhost'; 
+
+statement ok
+GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+
+statement ok
+GRANT ALL ON * TO 'test-grant'@'localhost';
+
+statement ok
+GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+
+statement ok
+GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+
+statement ok
+GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+
+statement ok
+GRANT SELECT ON `db01`.'tb1' TO 'test-grant'@'localhost';
+
+statement error 1025
+GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'; 
+
+statement error 1003
+GRANT SELECT ON dbnotexists.* TO 'test-grant'@'localhost'; 
+
+statement query T 
+SHOW GRANTS FOR 'test-grant'@'localhost';
+
+----  
+GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
+
+statement ok
+REVOKE SELECT ON db01.* FROM 'test-grant'@'localhost';
+
+statement query T 
+SHOW GRANTS FOR 'test-grant'@'localhost';
+
+----  
+GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
+
+statement ok
+REVOKE ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
+
+statement query T 
+SHOW GRANTS FOR 'test-grant'@'localhost';
+
+----  
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
+
+statement ok
+CREATE ROLE 'test-grant-role';
+
+statement ok
+GRANT SELECT ON * TO ROLE 'test-grant-role';
+
+statement error 2204
+GRANT SELECT ON * TO ROLE 'test-grant-role1'; 
+
+statement query T 
+SHOW GRANTS FOR ROLE 'test-grant-role';
+
+----  
+GRANT SELECT ON 'default'.'default'.* TO 'test-grant-role'
+
+statement ok
+DROP ROLE 'test-grant-role';
+
+statement ok
+DROP DATABASE `db01`;
+

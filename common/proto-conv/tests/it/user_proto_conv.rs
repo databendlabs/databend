@@ -15,7 +15,8 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use common_configs::S3StorageConfig;
+use common_io::prelude::StorageParams;
+use common_io::prelude::StorageS3Config;
 use common_meta_types as mt;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -63,7 +64,7 @@ fn test_user_stage_info() -> mt::UserStageInfo {
         stage_name: "s3://mybucket/data/files".to_string(),
         stage_type: mt::StageType::External,
         stage_params: mt::StageParams {
-            storage: mt::StageStorage::S3(S3StorageConfig {
+            storage: StorageParams::S3(StorageS3Config {
                 bucket: "mybucket".to_string(),
                 root: "/data/files".to_string(),
                 access_key_id: "my_key_id".to_string(),

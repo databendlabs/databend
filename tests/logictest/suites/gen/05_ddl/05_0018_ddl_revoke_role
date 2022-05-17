@@ -1,0 +1,24 @@
+statement error 2201
+REVOKE ROLE 'test' FROM 'test-user'; 
+
+statement ok
+CREATE USER 'test-user' IDENTIFIED BY 'password';
+
+statement ok
+REVOKE ROLE 'test' FROM 'test-user';
+
+statement error 2204
+REVOKE ROLE 'test' FROM ROLE 'test-role'; 
+
+statement ok
+CREATE ROLE 'test-role';
+
+statement ok
+REVOKE ROLE 'test' FROM ROLE 'test-role';
+
+statement ok
+DROP ROLE 'test-role';
+
+statement ok
+DROP USER 'test-user';
+
