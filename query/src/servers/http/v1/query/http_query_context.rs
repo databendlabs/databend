@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_meta_types::UserInfo;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
@@ -27,18 +25,20 @@ use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
     pub session_mgr: Arc<SessionManager>,
-    pub user_info: UserInfo,
-    pub tenant_id: Option<String>,
+    session: SessionRef,
 }
 
 impl HttpQueryContext {
-    pub async fn create_session(&self, typ: SessionType) -> Result<SessionRef> {
-        let session = self.session_mgr.create_session(typ).await?;
-        session.set_current_user(self.user_info.clone());
-        if let Some(tenant_id) = self.tenant_id.clone() {
-            session.set_current_tenant(tenant_id);
+    pub fn new(session_mgr: Arc<SessionManager>, session: SessionRef) -> Self {
+        HttpQueryContext {
+            session_mgr,
+            session,
         }
-        Ok(session)
+    }
+
+    pub fn get_session(&self, session_type: SessionType) -> SessionRef {
+        self.session.set_type(session_type);
+        self.session.clone()
     }
 }
 

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -32,6 +31,7 @@ use poem::Request;
 
 use super::v1::HttpQueryContext;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::users::auth::auth_mgr::Credential;
 
 pub struct HTTPSessionMiddleware {
@@ -98,9 +98,21 @@ pub struct HTTPSessionEndpoint<E> {
 }
 
 impl<E> HTTPSessionEndpoint<E> {
-    async fn auth(&self, req: &Request) -> Result<(Option<String>, UserInfo)> {
+    async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
         let credential = get_credential(req)?;
-        self.manager.get_auth_manager().auth(&credential).await
+        let session = self.manager.create_session(SessionType::Dummy).await?;
+        let (tenant_id, user_info) = session
+            .create_query_context()
+            .await?
+            .get_auth_manager()
+            .auth(&credential)
+            .await?;
+        session.set_current_user(user_info);
+        if let Some(tenant_id) = tenant_id {
+            session.set_current_tenant(tenant_id);
+        }
+
+        Ok(HttpQueryContext::new(self.manager.clone(), session))
     }
 }
 
@@ -111,12 +123,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         tracing::debug!("receive http request: {:?},", req);
         let res = match self.auth(&req).await {
-            Ok((tenant_id, user_info)) => {
-                let ctx = HttpQueryContext {
-                    session_mgr: self.manager.clone(),
-                    user_info,
-                    tenant_id,
-                };
+            Ok(ctx) => {
                 req.extensions_mut().insert(ctx);
                 self.ep.call(req).await
             }

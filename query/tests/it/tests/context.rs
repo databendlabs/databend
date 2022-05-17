@@ -33,7 +33,7 @@ use crate::tests::SessionManagerBuilder;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session(SessionType::Test).await?;
+    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
@@ -48,8 +48,7 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(Arc::new(dummy_session.as_ref().clone()), Cluster::empty())
-            .await?,
+        QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?,
     );
 
     context.get_settings().set_max_threads(8)?;
@@ -61,7 +60,7 @@ pub async fn create_query_context_with_config(
     current_user: Option<UserInfo>,
 ) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
-    let dummy_session = sessions.create_session(SessionType::Test).await?;
+    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
 
     let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
         hash_method: PasswordHashMethod::Sha256,
@@ -77,8 +76,7 @@ pub async fn create_query_context_with_config(
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(Arc::new(dummy_session.as_ref().clone()), Cluster::empty())
-            .await?,
+        QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?,
     );
 
     context.get_settings().set_max_threads(8)?;
@@ -134,17 +132,14 @@ pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
 ) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session(SessionType::Test).await?;
+    let dummy_session = sessions.create_session(SessionType::Dummy).await?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::create(nodes, local_id),
-        )
-        .await?,
+        QueryContextShared::try_create((*dummy_session).clone(), Cluster::create(nodes, local_id))
+            .await?,
     );
 
     context.get_settings().set_max_threads(8)?;
