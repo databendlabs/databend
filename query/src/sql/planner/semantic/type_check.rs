@@ -576,7 +576,7 @@ impl<'a> TypeChecker<'a> {
         match interval_kind {
             IntervalKind::Year => {
                 self.resolve_function(
-                    "toIntervalYear",
+                    "to_interval_year",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Year)),
                 )
@@ -584,7 +584,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Month => {
                 self.resolve_function(
-                    "toIntervalMonth",
+                    "to_interval_month",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Month)),
                 )
@@ -592,7 +592,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Day => {
                 self.resolve_function(
-                    "toIntervalDay",
+                    "to_interval_day",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Day)),
                 )
@@ -600,7 +600,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Hour => {
                 self.resolve_function(
-                    "toIntervalHour",
+                    "to_interval_hour",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Hour)),
                 )
@@ -608,7 +608,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Minute => {
                 self.resolve_function(
-                    "toIntervalMinute",
+                    "to_interval_minute",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Minute)),
                 )
@@ -616,7 +616,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Second => {
                 self.resolve_function(
-                    "toIntervalSecond",
+                    "to_interval_second",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Second)),
                 )
@@ -624,7 +624,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Doy => {
                 self.resolve_function(
-                    "toIntervalDoy",
+                    "to_interval_doy",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Doy)),
                 )
@@ -632,7 +632,7 @@ impl<'a> TypeChecker<'a> {
             }
             IntervalKind::Dow => {
                 self.resolve_function(
-                    "toIntervalDow",
+                    "to_interval_dow",
                     &[arg],
                     Some(IntervalType::new_impl(IntervalKind::Dow)),
                 )
@@ -662,11 +662,11 @@ impl<'a> TypeChecker<'a> {
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
-        let func = FunctionFactory::instance().get("dateAdd", &arg_types_ref)?;
+        let func = FunctionFactory::instance().get("date_add", &arg_types_ref)?;
         Ok((
             FunctionCall {
                 arguments: args,
-                func_name: "dateAdd".to_string(),
+                func_name: "date_add".to_string(),
                 arg_types: arg_types.to_vec(),
                 return_type: func.return_type(),
             }

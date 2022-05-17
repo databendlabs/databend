@@ -134,15 +134,15 @@ impl DateFunction {
         factory.register("subtractMinutes", AddTimesFunction::desc(-60));
         factory.register("subtractSeconds", AddTimesFunction::desc(-1));
 
-        factory.register("toIntervalYear", ToIntervalYearFunction::desc());
-        factory.register("toIntervalMonth", ToIntervalMonthFunction::desc());
-        factory.register("toIntervalDay", ToIntervalDayFunction::desc());
-        factory.register("toIntervalHour", ToIntervalHourFunction::desc());
-        factory.register("toIntervalMinute", ToIntervalMinuteFunction::desc());
-        factory.register("toIntervalSecond", ToIntervalSecondFunction::desc());
-        factory.register("toIntervalDoy", ToIntervalDoyFunction::desc());
-        factory.register("toIntervalDow", ToIntervalDowFunction::desc());
+        factory.register("to_interval_year", ToIntervalYearFunction::desc());
+        factory.register("to_interval_month", ToIntervalMonthFunction::desc());
+        factory.register("to_interval_day", ToIntervalDayFunction::desc());
+        factory.register("to_interval_hour", ToIntervalHourFunction::desc());
+        factory.register("to_interval_minute", ToIntervalMinuteFunction::desc());
+        factory.register("to_interval_second", ToIntervalSecondFunction::desc());
+        factory.register("to_interval_doy", ToIntervalDoyFunction::desc());
+        factory.register("to_interval_dow", ToIntervalDowFunction::desc());
 
-        factory.register("dateAdd", DateAddFunction::desc());
+        factory.register("date_add", DateAddFunction::desc());
     }
 }

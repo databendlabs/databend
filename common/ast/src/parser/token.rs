@@ -294,7 +294,7 @@ pub enum TokenKind {
     DATABASES,
     #[token("DATE", ignore(ascii_case))]
     DATE,
-    #[token("DATEADD", ignore(ascii_case))]
+    #[token("DATE_ADD", ignore(ascii_case))]
     DATEADD,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
@@ -790,8 +790,17 @@ impl TokenKind {
             // | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
+            | TokenKind::WITH
             | TokenKind::DATEADD
-            | TokenKind::WITH if !after_as => true,
+            | TokenKind::YEAR
+            | TokenKind::MONTH
+            | TokenKind::DAY
+            | TokenKind::HOUR
+            | TokenKind::MINUTE
+            | TokenKind::SECOND
+            | TokenKind::DOY
+            | TokenKind::DOW
+            if !after_as => true,
             _ => false
         }
     }
