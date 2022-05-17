@@ -46,8 +46,8 @@ optimize table `t` all;
 statement ok
 create table m(a uint64) engine=Memory;
 
-statement ok
-optimize table m;
+-- statement ok
+-- optimize table m;
 
 statement ok
 optimize table m all;
@@ -70,11 +70,11 @@ insert into m values(1);
 statement ok
 insert into m values(2);
 
-statement ok
-optimize table m;
+-- statement ok
+-- optimize table m;
 
-statement ok
-optimize table m;
+-- statement ok
+-- optimize table m;
 
 statement ok
 optimize table m all;

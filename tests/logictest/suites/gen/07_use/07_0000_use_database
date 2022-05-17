@@ -13,14 +13,11 @@ USE default;
 statement ok
 USE system;
 
-statement query T label(mysql,http)
+statement query T
 select database();
 
-----  mysql
+----
 system
-
-----  http
-default
 
 statement ok
 create database `rust-lang`;

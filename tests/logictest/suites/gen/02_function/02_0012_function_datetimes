@@ -1211,6 +1211,9 @@ statement ok
 drop table if exists ts;
 
 statement ok
+drop table if exists t;
+
+statement ok
 create table t(a datetime, b DateTime(3), c Date);
 
 statement ok
