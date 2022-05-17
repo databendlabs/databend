@@ -161,6 +161,18 @@ pub enum Expr<'a> {
         span: &'a [Token<'a>],
         exprs: Vec<Expr<'a>>,
     },
+    /// The `Interval 1 DAY` expr
+    Interval {
+        span: &'a [Token<'a>],
+        expr: Box<Expr<'a>>,
+        unit: IntervalKind,
+    },
+    DateAdd {
+        span: &'a [Token<'a>],
+        date: Box<Expr<'a>>,
+        interval: Box<Expr<'a>>,
+        unit: IntervalKind,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -170,7 +182,6 @@ pub enum Literal {
     // Quoted string literal value
     String(String),
     Boolean(bool),
-    Interval(Interval),
     CurrentTimestamp,
     Null,
 }
@@ -206,12 +217,6 @@ pub enum TypeName {
     Array { item_type: Option<Box<TypeName>> },
     Object,
     Variant,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Interval {
-    pub value: String,
-    pub kind: IntervalKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -286,6 +291,8 @@ impl<'a> Expr<'a> {
             Expr::Subquery { span, .. } => span,
             Expr::MapAccess { span, .. } => span,
             Expr::Array { span, .. } => span,
+            Expr::Interval { span, .. } => span,
+            Expr::DateAdd { span, .. } => span,
         }
     }
 }
@@ -484,9 +491,6 @@ impl Display for Literal {
             }
             Literal::CurrentTimestamp => {
                 write!(f, "CURRENT_TIMESTAMP")
-            }
-            Literal::Interval(interval) => {
-                write!(f, "INTERVAL {} {}", interval.value, interval.kind)
             }
             Literal::Null => {
                 write!(f, "NULL")
@@ -688,6 +692,17 @@ impl<'a> Display for Expr<'a> {
                 write!(f, "[")?;
                 write_comma_separated_list(f, exprs)?;
                 write!(f, "]")?;
+            }
+            Expr::Interval { expr, unit, .. } => {
+                write!(f, "INTERVAL {expr} {unit}")?;
+            }
+            Expr::DateAdd {
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                write!(f, "DATEADD({date}, INTERVAL {interval} {unit})")?;
             }
         }
 

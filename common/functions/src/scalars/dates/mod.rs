@@ -13,16 +13,19 @@
 // limitations under the License.
 
 mod date;
+mod date_add;
 mod interval_function;
 mod now;
 mod number_function;
 mod round_function;
 mod simple_date;
+mod to_interval_function;
 mod week_date;
 #[macro_use]
 mod macros;
 
 pub use date::DateFunction;
+pub use date_add::DateAddFunction;
 pub use interval_function::AddDaysFunction;
 pub use interval_function::AddMonthsFunction;
 pub use interval_function::AddTimesFunction;
@@ -46,4 +49,5 @@ pub use round_function::RoundFunction;
 pub use simple_date::TodayFunction;
 pub use simple_date::TomorrowFunction;
 pub use simple_date::YesterdayFunction;
+pub use to_interval_function::to_interval_function_creator;
 pub use week_date::ToStartOfWeekFunction;

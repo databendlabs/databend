@@ -8,7 +8,7 @@ select number as a, number + 1 as b from numbers(1);
 select number as a, number + 1 as b from numbers(1) group by a, number order by number;
 
 select '====SCALAR_EXPRESSION====';
-select interval '1' day, extract(day from to_date('2022-05-13'));
+select extract(day from to_date('2022-05-13'));
 
 -- Comparison expressions
 select '====COMPARISON====';
