@@ -82,6 +82,10 @@ stateless-test: build-debug
 	rm -rf ./_meta*/
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
+sqllogic-test: build-debug
+	rm -rf ./_meta*/
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
+
 management-test: build-debug
 	rm -rf ./_meta*/
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh
@@ -97,7 +101,7 @@ stateless-cluster-test-tls: build-debug
 metactl-test: build-debug
 	bash ./tests/metactl/test-metactl.sh
 
-test: unit-test stateless-test metactl-test
+test: unit-test stateless-test sqllogic-test metactl-test
 
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
