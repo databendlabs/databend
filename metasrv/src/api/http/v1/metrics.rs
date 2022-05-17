@@ -19,7 +19,7 @@ use poem::web::Json;
 use serde_json;
 
 use crate::meta_service::MetaNode;
-use crate::metrics::meta_metrics_json_string;
+use crate::metrics::meta_metrics_to_json;
 
 /// GET /v1/metrics
 ///
@@ -29,5 +29,5 @@ use crate::metrics::meta_metrics_json_string;
 pub async fn metrics_handler(
     _meta_node: Data<&Arc<MetaNode>>,
 ) -> poem::Result<Json<serde_json::Value>> {
-    Ok(Json(meta_metrics_json_string()))
+    Ok(Json(meta_metrics_to_json()))
 }

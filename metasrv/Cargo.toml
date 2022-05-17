@@ -47,7 +47,6 @@ async-trait = "0.1.53"
 clap = { version = "3.1.8", features = ["derive", "env"] }
 futures = "0.3.21"
 lazy_static = "1.4.0"
-metrics = "0.18.1"
 num = "0.4.0"
 once_cell = "1.10.0"
 poem = { version = "=1.3.16", features = ["rustls"] }

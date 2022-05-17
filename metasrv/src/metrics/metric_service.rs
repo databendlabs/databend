@@ -23,7 +23,7 @@ use poem::EndpointExt;
 use poem::IntoResponse;
 
 use crate::configs::Config;
-use crate::metrics::meta_metrics_prometheus_string;
+use crate::metrics::meta_metrics_to_prometheus_string;
 
 pub struct MetricService {
     conf: Config,
@@ -55,7 +55,7 @@ impl MetricService {
         let app = poem::Route::new()
             .at("/metrics", poem::get(metric_handler))
             .data(MetricsHandler {
-                handler: meta_metrics_prometheus_string,
+                handler: meta_metrics_to_prometheus_string,
             });
 
         let addr = self

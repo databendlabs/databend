@@ -167,7 +167,7 @@ pub fn incr_meta_metrics_watchers(cnt: i64) {
 }
 
 /// Encode metrics as prometheus format string
-pub fn meta_metrics_prometheus_string() -> String {
+pub fn meta_metrics_to_prometheus_string() -> String {
     use prometheus::Encoder;
     let encoder = prometheus::TextEncoder::new();
 
@@ -186,14 +186,14 @@ pub fn meta_metrics_prometheus_string() -> String {
     res
 }
 
-/// Encode metrics as json format string
-pub fn meta_metrics_json_string() -> serde_json::Value {
+/// Encode metrics as json value
+pub fn meta_metrics_to_json() -> serde_json::Value {
     serde_json::json!({
         "has_leader": HAS_LEADER.get(),
         "is_leader": IS_LEADER.get(),
         "leader_changes": LEADER_CHANGES.get(),
         "applying_snapshot": APPLYING_SNAPSHOT.get(),
-        "proposals_applied": PROPOSALS_APPLIED.get(),
+        "proposals_applied": PROPOSALS_APPLIED.get() as u64,
         "proposals_pending": PROPOSALS_PENDING.get(),
         "proposals_failed": PROPOSALS_FAILED.get(),
         "read_failed": READ_FAILED.get(),

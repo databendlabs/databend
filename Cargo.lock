@@ -1731,7 +1731,6 @@ dependencies = [
  "futures",
  "lazy_static",
  "maplit",
- "metrics",
  "num",
  "once_cell",
  "poem",
