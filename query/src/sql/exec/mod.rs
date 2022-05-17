@@ -16,6 +16,7 @@ mod data_schema_builder;
 mod expression_builder;
 mod util;
 
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -363,11 +364,11 @@ impl PipelineBuilder {
             })?;
         }
 
-        // Since transform has added or did, making group expressions as column expr is safe.
-        group_expressions = group_expressions
-            .iter()
-            .map(|expr| Expression::Column(expr.column_name()))
-            .collect();
+        // Since transform has been added, making group expressions as column expr is safe.
+        group_expressions
+            .iter_mut()
+            .filter(|expr| matches!(expr, Expression::Column(_)).not())
+            .for_each(|expr| *expr = Expression::Column(expr.column_name()));
 
         // Process aggregation function with non-column expression, such as sum(3)
         let pre_input_schema = input_schema.clone();
