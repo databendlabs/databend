@@ -56,7 +56,7 @@ async fn test_metrics() -> common_exception::Result<()> {
     let metrics =
         serde_json::from_str::<serde_json::Value>(String::from_utf8_lossy(&body).as_ref())?;
 
-    metrics["has_leader"].as_bool().unwrap();
+    metrics["has_leader"].as_u64().unwrap();
 
     meta_node.stop().await?;
 
