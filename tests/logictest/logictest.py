@@ -244,9 +244,19 @@ class SuiteRunner(object):
                     (filename, os.path.relpath(filename, self.path)))
 
     def execute(self):
-        for (file_path, suite_name) in self.statement_files:
-            for state in get_statements(file_path, suite_name):
-                self.execute_statement(state)
+        # batch execute use single session
+        if callable(getattr(self, "batch_execute")):
+            # case batch
+            for (file_path, suite_name) in self.statement_files:
+                statement_list = list()
+                for state in get_statements(file_path, suite_name):
+                    statement_list.append(state)
+                self.batch_execute(statement_list)
+        else:
+            # case one by one
+            for (file_path, suite_name) in self.statement_files:
+                for state in get_statements(file_path, suite_name):
+                    self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.show_query_on_execution:

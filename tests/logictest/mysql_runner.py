@@ -1,4 +1,6 @@
 from abc import ABC
+from datetime import datetime, date
+from types import NoneType
 
 import mysql.connector
 
@@ -12,20 +14,29 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         super().__init__(kind)
         self._connection = None
 
+    def reset_connection(self):
+        if self._connection is not None:
+            self._connection.close()
+            self._connection= None
+
     def get_connection(self):
         if self._connection is not None:
             return self._connection
         self._connection = mysql.connector.connect(**self.driver)
         return self._connection
 
+    def batch_execute(self, statement_list):     
+        for statement in statement_list:
+            self.execute_statement(statement)
+        self.reset_connection()
+
     def execute_ok(self, statement):
         cursor = self.get_connection().cursor(buffered=True)
         cursor.execute(statement)
         return None
 
-    def execute_error(self, statement):
-        cnx = mysql.connector.connect(**self.driver)
-        cursor = cnx.cursor()
+    def execute_error(self, statement):   
+        cursor = cursor = self.get_connection().cursor(buffered=True)
         try:
             cursor.execute(statement)
         except mysql.connector.Error as err:
@@ -40,6 +51,9 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         vals = []
         for (ri, row) in enumerate(r):
             for (i, v) in enumerate(row):
+                if isinstance(v, NoneType):
+                    vals.append("None")
+                    continue
                 if query_type[i] == 'I':
                     if not isinstance(v, int):
                         log.error(
@@ -51,7 +65,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                             "Expected float, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'T':
-                    if not isinstance(v, str):
+                    if not (isinstance(v, str) or isinstance(v, datetime) or isinstance(v, date)):
                         log.error(
                             "Expected string, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))

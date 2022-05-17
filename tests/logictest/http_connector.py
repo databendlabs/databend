@@ -31,17 +31,25 @@ def format_result(results):
         res = res + lineTmp + "\n"
     return res
 
+def get_data_type(field):
+    if 'data_type' in field:
+        if 'inner' in field['data_type']:
+            return field['data_type']['inner']['type']
+        else:
+            return field['data_type']['type']
+
 def get_query_options(response):
     ret = ""
     if get_error(response) != None:
         return ret
     for field in response['schema']['fields']:
-        type = str.lower(field['data_type']['type'])
+        type = str.lower(get_data_type(field))
+        log.debug("type:{}".format(type))
         if "int" in type:
             ret = ret + "I"
         elif "float" in type or "double" in type:
             ret = ret + "F"
-        elif "boolean" in type:
+        elif "bool" in type:
              ret = ret + "B"
         else:
             ret = ret + "T"
