@@ -694,7 +694,7 @@ impl<'a> Display for Expr<'a> {
                 write!(f, "]")?;
             }
             Expr::Interval { expr, unit, .. } => {
-                write!(f, "INTERVAL({expr} {unit})")?;
+                write!(f, "INTERVAL {expr} {unit}")?;
             }
             Expr::DateAdd {
                 date,
@@ -702,7 +702,7 @@ impl<'a> Display for Expr<'a> {
                 unit,
                 ..
             } => {
-                write!(f, "DATEADD({date}, INTERVAL({interval} {unit}))")?;
+                write!(f, "DATEADD({date}, INTERVAL {interval} {unit})")?;
             }
         }
 

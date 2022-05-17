@@ -19,67 +19,60 @@ use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
 use common_exception::Result;
 
+use crate::scalars::FactoryCreator;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
-macro_rules! impl_to_interval_function {
-    ($FUNCTION_NAME:ident, $INTERVAL_KIND: ident) => {
-        #[derive(Clone)]
-        pub struct $FUNCTION_NAME {
-            display_name: String,
-        }
-
-        impl $FUNCTION_NAME {
-            pub fn try_create(
-                display_name: &str,
-                _args: &[&DataTypeImpl],
-            ) -> Result<Box<dyn Function>> {
-                Ok(Box::new($FUNCTION_NAME {
-                    display_name: display_name.to_string(),
-                }))
-            }
-
-            pub fn desc() -> FunctionDescription {
-                FunctionDescription::creator(Box::new(Self::try_create))
-                    .features(FunctionFeatures::default().num_arguments(1))
-            }
-        }
-
-        impl Function for $FUNCTION_NAME {
-            fn name(&self) -> &str {
-                self.display_name.as_str()
-            }
-
-            fn return_type(&self) -> DataTypeImpl {
-                IntervalType::new_impl(IntervalKind::$INTERVAL_KIND)
-            }
-
-            fn eval(
-                &self,
-                _func_ctx: FunctionContext,
-                columns: &ColumnsWithField,
-                _input_rows: usize,
-            ) -> Result<ColumnRef> {
-                IntervalType::new_impl(IntervalKind::$INTERVAL_KIND)
-                    .create_column(&columns[0].column().to_values())
-            }
-        }
-
-        impl fmt::Display for $FUNCTION_NAME {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, "{}()", self.display_name)
-            }
-        }
-    };
+#[derive(Clone)]
+pub struct ToIntervalFunction {
+    display_name: String,
+    interval_kind: IntervalKind,
 }
 
-impl_to_interval_function!(ToIntervalYearFunction, Year);
-impl_to_interval_function!(ToIntervalMonthFunction, Month);
-impl_to_interval_function!(ToIntervalDayFunction, Day);
-impl_to_interval_function!(ToIntervalHourFunction, Hour);
-impl_to_interval_function!(ToIntervalMinuteFunction, Minute);
-impl_to_interval_function!(ToIntervalSecondFunction, Second);
-impl_to_interval_function!(ToIntervalDoyFunction, Doy);
-impl_to_interval_function!(ToIntervalDowFunction, Dow);
+impl ToIntervalFunction {
+    pub fn try_create(
+        display_name: String,
+        interval_kind: IntervalKind,
+        _args: &[&DataTypeImpl],
+    ) -> Result<Box<dyn Function>> {
+        Ok(Box::new(ToIntervalFunction {
+            display_name,
+            interval_kind,
+        }))
+    }
+}
+
+impl Function for ToIntervalFunction {
+    fn name(&self) -> &str {
+        self.display_name.as_str()
+    }
+
+    fn return_type(&self) -> DataTypeImpl {
+        IntervalType::new_impl(self.interval_kind)
+    }
+
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<ColumnRef> {
+        IntervalType::new_impl(self.interval_kind).create_column(&columns[0].column().to_values())
+    }
+}
+
+impl fmt::Display for ToIntervalFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}()", self.display_name)
+    }
+}
+
+pub fn to_interval_function_creator(interval_kind: IntervalKind) -> FunctionDescription {
+    let creator: FactoryCreator = Box::new(move |display_name, args| {
+        ToIntervalFunction::try_create(display_name.to_string(), interval_kind, args)
+    });
+
+    FunctionDescription::creator(creator).features(FunctionFeatures::default().num_arguments(1))
+}

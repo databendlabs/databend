@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::IntervalKind;
+
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
 use super::number_function::ToYearFunction;
 use super::round_function::Round;
+use super::to_interval_function_creator;
 use super::AddDaysFunction;
 use super::AddMonthsFunction;
 use super::AddTimesFunction;
@@ -26,14 +29,14 @@ use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
 use super::ToDayOfYearFunction;
 use super::ToHourFunction;
-use super::ToIntervalDayFunction;
-use super::ToIntervalDowFunction;
-use super::ToIntervalDoyFunction;
-use super::ToIntervalHourFunction;
-use super::ToIntervalMinuteFunction;
-use super::ToIntervalMonthFunction;
-use super::ToIntervalSecondFunction;
-use super::ToIntervalYearFunction;
+// use super::ToIntervalDayFunction;
+// use super::ToIntervalDowFunction;
+// use super::ToIntervalDoyFunction;
+// use super::ToIntervalHourFunction;
+// use super::ToIntervalMinuteFunction;
+// use super::ToIntervalMonthFunction;
+// use super::ToIntervalSecondFunction;
+// use super::ToIntervalYearFunction;
 use super::ToMinuteFunction;
 use super::ToMonthFunction;
 use super::ToSecondFunction;
@@ -134,14 +137,38 @@ impl DateFunction {
         factory.register("subtractMinutes", AddTimesFunction::desc(-60));
         factory.register("subtractSeconds", AddTimesFunction::desc(-1));
 
-        factory.register("to_interval_year", ToIntervalYearFunction::desc());
-        factory.register("to_interval_month", ToIntervalMonthFunction::desc());
-        factory.register("to_interval_day", ToIntervalDayFunction::desc());
-        factory.register("to_interval_hour", ToIntervalHourFunction::desc());
-        factory.register("to_interval_minute", ToIntervalMinuteFunction::desc());
-        factory.register("to_interval_second", ToIntervalSecondFunction::desc());
-        factory.register("to_interval_doy", ToIntervalDoyFunction::desc());
-        factory.register("to_interval_dow", ToIntervalDowFunction::desc());
+        factory.register(
+            "to_interval_year",
+            to_interval_function_creator(IntervalKind::Year),
+        );
+        factory.register(
+            "to_interval_month",
+            to_interval_function_creator(IntervalKind::Month),
+        );
+        factory.register(
+            "to_interval_day",
+            to_interval_function_creator(IntervalKind::Day),
+        );
+        factory.register(
+            "to_interval_hour",
+            to_interval_function_creator(IntervalKind::Hour),
+        );
+        factory.register(
+            "to_interval_minute",
+            to_interval_function_creator(IntervalKind::Minute),
+        );
+        factory.register(
+            "to_interval_second",
+            to_interval_function_creator(IntervalKind::Second),
+        );
+        factory.register(
+            "to_interval_doy",
+            to_interval_function_creator(IntervalKind::Doy),
+        );
+        factory.register(
+            "to_interval_dow",
+            to_interval_function_creator(IntervalKind::Dow),
+        );
 
         factory.register("date_add", DateAddFunction::desc());
     }
