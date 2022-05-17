@@ -186,6 +186,7 @@ insert into t2 values(1, 2), (3, 4), (5, 6);
 select * from t1 join t2 using(a);
 select t1.a from t1 join t2 using(a);
 select t2.d from t1 join t2 using(a);
+select * from t1 natural join t2;
 drop table t1;
 drop table t2;
 

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
@@ -203,11 +202,22 @@ impl<'a> JoinConditionResolver<'a> {
                 .await?;
             }
             JoinCondition::Using(identifiers) => {
-                self.resolve_using(identifiers, left_join_conditions, right_join_conditions)
+                let using_columns = identifiers
+                    .iter()
+                    .map(|ident| ident.name.clone())
+                    .collect::<Vec<String>>();
+                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
                     .await?;
             }
             JoinCondition::Natural => {
-                return Err(ErrorCode::UnImplement("NATURAL JOIN is not supported yet. Please specify join condition with ON clause."));
+                // NATURAL is a shorthand form of USING: it forms a USING list consisting of all column names that appear in both input tables
+                // As with USING, these columns appear only once in the output table
+                // Todo(xudong963) If there are no common column names, NATURAL JOIN behaves like JOIN ... ON TRUE, producing a cross-product join.
+                let mut using_columns = vec![];
+                // Find common columns in both input tables
+                self.find_using_columns(&mut using_columns)?;
+                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
+                    .await?
             }
             JoinCondition::None => {
                 return Err(ErrorCode::UnImplement("JOIN without condition is not supported yet. Please specify join condition with ON clause."));
@@ -265,12 +275,12 @@ impl<'a> JoinConditionResolver<'a> {
 
     async fn resolve_using(
         &mut self,
-        identifiers: &[Identifier<'_>],
+        using_columns: Vec<String>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
-        for join_key in identifiers.iter() {
-            let join_key_name = join_key.name.as_str();
+        for join_key in using_columns.iter() {
+            let join_key_name = join_key.as_str();
             let mut left_scalars = vec![];
             for col_binding in self.left_context.columns.iter() {
                 if col_binding.column_name == join_key_name {
@@ -360,6 +370,17 @@ impl<'a> JoinConditionResolver<'a> {
         {
             left_join_conditions.push(right);
             right_join_conditions.push(left);
+        }
+        Ok(())
+    }
+
+    fn find_using_columns(&self, using_columns: &mut Vec<String>) -> Result<()> {
+        for left_column in self.left_context.all_column_bindings().iter() {
+            for right_column in self.right_context.all_column_bindings().iter() {
+                if left_column.column_name == right_column.column_name {
+                    using_columns.push(left_column.column_name.clone());
+                }
+            }
         }
         Ok(())
     }
