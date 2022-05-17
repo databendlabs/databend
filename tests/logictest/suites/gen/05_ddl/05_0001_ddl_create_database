@@ -1,0 +1,66 @@
+statement ok
+DROP DATABASE IF EXISTS db;
+
+statement ok
+CREATE DATABASE db;
+
+statement ok
+CREATE TABLE db.t(c1 int) ENGINE = Null;
+
+statement query I 
+SELECT COUNT(1) from system.tables where name = 't' and database = 'db';
+
+----  
+1
+
+statement ok
+CREATE DATABASE IF NOT EXISTS db;
+
+statement error 2301
+CREATE DATABASE db; 
+
+statement ok
+DROP DATABASE IF EXISTS db;
+
+statement error 2301
+CREATE DATABASE system; 
+
+statement error 1002
+DROP DATABASE system; 
+
+statement error 1006
+CREATE DATABASE catalog_not_exist.t; 
+
+statement ok
+DROP SCHEMA IF EXISTS db;
+
+statement ok
+CREATE SCHEMA db;
+
+statement ok
+CREATE TABLE db.t(c1 int) ENGINE = Null;
+
+statement query I 
+SELECT COUNT(1) from system.tables where name = 't' and database = 'db';
+
+----  
+1
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS db;
+
+statement error 2301
+CREATE SCHEMA db; 
+
+statement ok
+DROP SCHEMA IF EXISTS db;
+
+statement error 2301
+CREATE SCHEMA system; 
+
+statement error 1002
+DROP SCHEMA system; 
+
+statement error 1006
+CREATE SCHEMA catalog_not_exist.t; 
+

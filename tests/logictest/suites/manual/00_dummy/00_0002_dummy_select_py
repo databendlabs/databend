@@ -1,0 +1,17 @@
+statement query I
+select 1;
+
+----
+1
+
+statement query I
+select 2;
+
+----
+2
+
+statement query I
+select 3;
+
+----
+3

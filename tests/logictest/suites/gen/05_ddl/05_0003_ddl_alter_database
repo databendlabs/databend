@@ -1,0 +1,141 @@
+statement ok
+DROP DATABASE IF EXISTS a;
+
+statement ok
+DROP DATABASE IF EXISTS b;
+
+statement ok
+DROP DATABASE IF EXISTS c;
+
+statement ok
+DROP DATABASE IF EXISTS A;
+
+statement ok
+CREATE DATABASE a;
+
+statement ok
+CREATE DATABASE b;
+
+statement ok
+CREATE TABLE a.t1 (id int);
+
+statement ok
+INSERT INTO a.t1 VALUES (1);
+
+statement ok
+CREATE TABLE b.t2 (id int);
+
+statement ok
+INSERT INTO b.t2 VALUES (10);
+
+statement error 1003
+ALTER DATABASE c RENAME TO a; 
+
+statement ok
+ALTER DATABASE IF EXISTS c RENAME TO a;
+
+statement query T 
+SELECT * FROM system.databases;
+
+----  
+system
+INFORMATION_SCHEMA
+a
+b
+default
+
+statement ok
+ALTER DATABASE IF EXISTS c RENAME TO C;
+
+statement error 1003
+ALTER DATABASE c RENAME TO C; 
+
+statement query T 
+SELECT * FROM system.databases;
+
+----  
+system
+INFORMATION_SCHEMA
+a
+b
+default
+
+statement error 1002
+ALTER DATABASE IF EXISTS system RENAME TO C; 
+
+statement error 1002
+ALTER DATABASE system RENAME TO C; 
+
+statement query T 
+SELECT * FROM system.databases;
+
+----  
+system
+INFORMATION_SCHEMA
+a
+b
+default
+
+statement error 2301
+ALTER DATABASE a RENAME TO b; 
+
+statement error 2301
+ALTER DATABASE IF EXISTS a RENAME TO b; 
+
+statement query T 
+SELECT * FROM system.databases;
+
+----  
+system
+INFORMATION_SCHEMA
+a
+b
+default
+
+statement ok
+ALTER DATABASE a RENAME TO A;
+
+statement query T 
+SELECT * FROM system.databases;
+
+----  
+system
+INFORMATION_SCHEMA
+A
+b
+default
+
+statement query I 
+SELECT * FROM A.t1;
+
+----  
+1
+
+statement error 1002
+ALTER DATABASE b RENAME TO system; 
+
+statement error 1002
+ALTER DATABASE IF EXISTS b RENAME TO system; 
+
+statement query I 
+SELECT * FROM b.t2;
+
+----  
+10
+
+statement query T 
+SELECT * FROM system.databases;
+
+----  
+system
+INFORMATION_SCHEMA
+A
+b
+default
+
+statement ok
+DROP DATABASE b;
+
+statement ok
+DROP DATABASE A;
+

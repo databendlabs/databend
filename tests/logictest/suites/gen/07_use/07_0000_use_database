@@ -1,0 +1,33 @@
+statement error 1003
+USE not_exists_db;
+
+statement error 1003
+USE ``;
+
+statement error 1003
+USE ` `;
+
+statement ok
+USE default;
+
+statement ok
+USE system;
+
+statement query T label(mysql,http)
+select database();
+
+----  mysql
+system
+
+----  http
+default
+
+statement ok
+create database `rust-lang`;
+
+statement ok
+use `rust-lang`;
+
+statement ok
+DROP DATABASE if exists `rust-lang`;
+

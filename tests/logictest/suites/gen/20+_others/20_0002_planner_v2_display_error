@@ -1,0 +1,12 @@
+statement ok
+set enable_planner_v2 = 1;
+
+statement ok
+create table t(a int, b int);
+
+statement ok
+select aa from t;
+
+statement ok
+select *;
+

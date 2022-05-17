@@ -1,0 +1,224 @@
+statement query T 
+SELECT '=== const ===';
+
+----  
+=== const ===
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, a); ===';
+
+----  
+=== FIND_IN_SET(a, a); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', 'a');
+
+----  
+1
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, ,a); ===';
+
+----  
+=== FIND_IN_SET(a, ,a); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', ',a');
+
+----  
+2
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, a,); ===';
+
+----  
+=== FIND_IN_SET(a, a,); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', 'a,');
+
+----  
+1
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, ,,a,); ===';
+
+----  
+=== FIND_IN_SET(a, ,,a,); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', ',,a,');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, 1,2,a,4,5); ===';
+
+----  
+=== FIND_IN_SET(a, 1,2,a,4,5); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', '1,2,a,4,5');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, 1,2,a,4,5); ===';
+
+----  
+=== FIND_IN_SET(a, 1,2,a,4,5); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', '1,2,a,4,5');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, 1,2,a,); ===';
+
+----  
+=== FIND_IN_SET(a, 1,2,a,); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', '1,2,a,');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(a, ,1,2,a); ===';
+
+----  
+=== FIND_IN_SET(a, ,1,2,a); ===
+
+statement query I 
+SELECT FIND_IN_SET('a', ',1,2,a');
+
+----  
+4
+
+statement query T 
+SELECT '=== FIND_IN_SET(ab, 1,2,ab,3,4,5); ===';
+
+----  
+=== FIND_IN_SET(ab, 1,2,ab,3,4,5); ===
+
+statement query I 
+SELECT FIND_IN_SET('ab', '1,2,ab,3,4,5');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(ab, 1,2,ab,); ===';
+
+----  
+=== FIND_IN_SET(ab, 1,2,ab,); ===
+
+statement query I 
+SELECT FIND_IN_SET('ab', '1,2,ab,');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(ab, 1,2,ab); ===';
+
+----  
+=== FIND_IN_SET(ab, 1,2,ab); ===
+
+statement query I 
+SELECT FIND_IN_SET('ab', '1,2,ab');
+
+----  
+3
+
+statement query T 
+SELECT '=== FIND_IN_SET(ab, ,ab); ===';
+
+----  
+=== FIND_IN_SET(ab, ,ab); ===
+
+statement query I 
+SELECT FIND_IN_SET('ab', ',ab');
+
+----  
+2
+
+statement query T 
+SELECT '=== FIND_IN_SET(ab, ab); ===';
+
+----  
+=== FIND_IN_SET(ab, ab); ===
+
+statement query I 
+SELECT FIND_IN_SET('ab', 'ab');
+
+----  
+1
+
+statement query T 
+SELECT '=== series ===';
+
+----  
+=== series ===
+
+statement query T 
+SELECT '=== FIND_IN_SET(3, number) ===';
+
+----  
+=== FIND_IN_SET(3, number) ===
+
+statement query I 
+SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number;
+
+----  
+0
+0
+0
+1
+0
+
+statement query T 
+SELECT '=== FIND_IN_SET(number, 1,2,3,4,5) ===';
+
+----  
+=== FIND_IN_SET(number, 1,2,3,4,5) ===
+
+statement query I 
+SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY number;
+
+----  
+0
+1
+2
+3
+4
+
+statement query T 
+SELECT '=== null ===';
+
+----  
+=== null ===
+
+statement query T 
+SELECT FIND_IN_SET(NULL, NULL);
+
+----  
+None
+
+statement query T 
+SELECT FIND_IN_SET('abc', NULL);
+
+----  
+None
+
+statement query T 
+SELECT FIND_IN_SET(NULL, 'abc,cdf');
+
+----  
+None
+

@@ -1,0 +1,24 @@
+statement query I 
+SELECT BIT_LENGTH('latin');
+
+----  
+40
+
+statement query I 
+SELECT BIT_LENGTH('кириллица'); -- cyrillic in russian
+
+----  
+144
+
+statement query I 
+SELECT BIT_LENGTH('кириллица and latin');
+
+----  
+224
+
+statement query T 
+SELECT BIT_LENGTH(NULL);
+
+----  
+None
+

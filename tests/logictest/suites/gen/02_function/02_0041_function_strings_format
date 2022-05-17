@@ -1,0 +1,98 @@
+statement query T 
+SELECT FORMAT(12332.123456, 4);
+
+----  
+12,332.1235
+
+statement query T 
+SELECT FORMAT(-12332.123456, 4);
+
+----  
+-12,332.1235
+
+statement query T 
+SELECT FORMAT(12332.1, 4);
+
+----  
+12,332.1000
+
+statement query T 
+SELECT FORMAT(12332.2, 0);
+
+----  
+12,332
+
+statement query T 
+SELECT FORMAT(12332.2, -1);
+
+----  
+12,332
+
+statement query T 
+SELECT FORMAT(12332, 2);
+
+----  
+12,332.00
+
+statement query T 
+SELECT FORMAT(0, 0);
+
+----  
+0
+
+statement query T 
+SELECT FORMAT(NULL, 1);
+
+----  
+None
+
+statement query T 
+SELECT FORMAT(1, NULL);
+
+----  
+None
+
+statement query T 
+SELECT FORMAT(NULL, NULL);
+
+----  
+None
+
+statement query T 
+SELECT FORMAT(12332.123456, 4, 'en_US');
+
+----  
+12,332.1235
+
+statement query T 
+SELECT FORMAT(12332.123456, 4, 'zh_CN');
+
+----  
+12,332.1235
+
+statement query T 
+SELECT FORMAT(12332.123456, 4, '');
+
+----  
+12,332.1235
+
+statement query T 
+SELECT FORMAT(12332.123456, 4, NULL);
+
+----  
+None
+
+statement query T 
+SELECT FORMAT(100 + 100, 2);
+
+----  
+200.00
+
+statement query TI 
+SELECT FORMAT(number, number), number from  numbers(3) order by number;
+
+----  
+0 0
+1.0 1
+2.00 2
+

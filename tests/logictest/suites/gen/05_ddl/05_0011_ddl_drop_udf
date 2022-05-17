@@ -1,0 +1,15 @@
+statement ok
+DROP FUNCTION IF EXISTS isnotempty;
+
+statement ok
+CREATE FUNCTION isnotempty AS (p) -> not(is_null(p));
+
+statement ok
+DROP FUNCTION isnotempty;
+
+statement ok
+DROP FUNCTION IF EXISTS isnotempty;
+
+statement error 2602
+DROP FUNCTION isnotempty; 
+

@@ -1,0 +1,24 @@
+statement query T 
+select trim('      abc   ');
+
+----  
+abc
+
+statement query T 
+select trim('');
+
+----  
+	
+
+statement query T 
+select trim('abc');
+
+----  
+abc
+
+statement query T 
+select trim(null);
+
+----  
+None
+

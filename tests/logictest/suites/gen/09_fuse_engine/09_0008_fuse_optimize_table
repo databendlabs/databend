@@ -1,0 +1,96 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0008;
+
+statement ok
+CREATE DATABASE db_09_0008;
+
+statement ok
+USE db_09_0008;
+
+statement ok
+create table t(a uint64);
+
+statement ok
+insert into t values (5);
+
+statement ok
+insert into t values (6);
+
+statement ok
+insert into t values (7);
+
+statement ok
+select * from t order by a;
+
+statement ok
+optimize table t compact;
+
+statement ok
+optimize table `t` purge;
+
+statement ok
+optimize table `t` purge;
+
+statement ok
+insert into t values (8);
+
+statement ok
+insert into t values (9);
+
+statement ok
+insert into t values (10);
+
+statement ok
+optimize table `t` all;
+
+statement ok
+create table m(a uint64) engine=Memory;
+
+statement ok
+optimize table m;
+
+statement ok
+optimize table m all;
+
+statement ok
+optimize table m purge;
+
+statement ok
+optimize table m compact;
+
+statement ok
+drop table m;
+
+statement ok
+create table m(a uint64) engine=Fuse;
+
+statement ok
+insert into m values(1);
+
+statement ok
+insert into m values(2);
+
+statement ok
+optimize table m;
+
+statement ok
+optimize table m;
+
+statement ok
+optimize table m all;
+
+statement ok
+optimize table m purge;
+
+statement ok
+optimize table m compact;
+
+statement ok
+DROP TABLE m;
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP DATABASE db_09_0008;
+
