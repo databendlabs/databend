@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod clustering_information;
 mod fuse_segment;
 mod fuse_snapshot;
 mod system;
-mod clustering_information;
 
+pub use clustering_information::ClusteringInformationProcedure;
 pub use fuse_segment::FuseSegmentProcedure;
 pub use fuse_snapshot::FuseSnapshotProcedure;
 pub use system::SystemProcedure;
-pub use clustering_information::ClusteringInformationProcedure;

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::procedures::systems::ClusteringInformationProcedure;
 use crate::procedures::systems::FuseSegmentProcedure;
 use crate::procedures::systems::FuseSnapshotProcedure;
-use crate::procedures::systems::ClusteringInformationProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct SystemProcedure;
@@ -23,7 +23,8 @@ impl SystemProcedure {
     pub fn register(factory: &mut ProcedureFactory) {
         factory.register(
             "system$clustering_information",
-            Box::new(ClusteringInformationProcedure::try_create));
+            Box::new(ClusteringInformationProcedure::try_create),
+        );
         factory.register(
             "system$fuse_snapshot",
             Box::new(FuseSnapshotProcedure::try_create),

@@ -122,6 +122,7 @@ build_exceptions! {
     InvalidTimezone(1067),
     InvalidDate(1068),
     InvalidTimestamp(1069),
+    InvalidClusterKeys(1070),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),

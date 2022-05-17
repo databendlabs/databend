@@ -82,6 +82,10 @@ impl FuseTable {
         &self.meta_location_generator
     }
 
+    pub fn cluster_keys(&self) -> Vec<Expression> {
+        self.order_keys.clone()
+    }
+
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
         let table_id = table_info.ident.table_id;
         let db_id = table_info
