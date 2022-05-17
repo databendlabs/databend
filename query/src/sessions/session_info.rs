@@ -57,7 +57,7 @@ impl Session {
 
         ProcessInfo {
             id: self.id.clone(),
-            typ: self.typ.clone().to_string(),
+            typ: self.get_type().to_string(),
             state: self.process_state(status),
             database: status.get_current_database(),
             user: status.get_current_user(),
@@ -79,7 +79,7 @@ impl Session {
     }
 
     fn process_extra_info(self: &Arc<Self>, status: &SessionContext) -> Option<String> {
-        match self.typ {
+        match self.get_type() {
             SessionType::FlightRPC => Session::rpc_extra_info(status),
             _ => Session::query_extra_info(status),
         }

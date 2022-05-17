@@ -115,11 +115,7 @@ pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session = ctx
-        .create_session(SessionType::ClickHouseHttpHandler)
-        .await
-        .map_err(InternalServerError)?;
-
+    let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let context = session
         .create_query_context()
         .await
@@ -179,11 +175,7 @@ pub async fn clickhouse_handler_post(
     body: Body,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session = ctx
-        .create_session(SessionType::ClickHouseHttpHandler)
-        .await
-        .map_err(InternalServerError)?;
-
+    let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let ctx = session
         .create_query_context()
         .await

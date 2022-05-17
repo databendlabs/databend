@@ -41,10 +41,7 @@ pub async fn upload_to_stage(
     req: &Request,
     mut multipart: Multipart,
 ) -> PoemResult<Json<UploadToStageResponse>> {
-    let session = ctx
-        .create_session(SessionType::HTTPAPI("UploadToStage".to_string()))
-        .await
-        .map_err(InternalServerError)?;
+    let session = ctx.get_session(SessionType::HTTPAPI("UploadToStage".to_string()));
     let context = session
         .create_query_context()
         .await
