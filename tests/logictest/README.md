@@ -8,7 +8,7 @@ The database return right with diffrent handlers, for example mysql and http
 ## prepare
 1. Change to the scripts dir, cd tests/logictest/
 2. Make sure python3 is installed
-3. Using pip to install dependency, pip install -r ./requirements.txt  (use -i for private repo)
+3. Using [Poetry](https://github.com/python-poetry/poetry) to install dependency, dependency see tests/pyproject.toml
 
 ## Need to Known
 1. Cases from **tests/suites/0_stateless/**  to  **tests/logictest/suites/gen/**
