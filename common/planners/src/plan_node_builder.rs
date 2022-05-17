@@ -251,6 +251,7 @@ impl PlanBuilder {
     pub fn select(&self) -> Result<Self> {
         Ok(Self::from(&PlanNode::Select(SelectPlan {
             input: Arc::new(self.plan.clone()),
+            format: None,
         })))
     }
 

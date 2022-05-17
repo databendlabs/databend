@@ -17,7 +17,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use databend_query::formats::output_format::OutputFormat;
 use databend_query::formats::output_format::OutputFormatType;
 use pretty_assertions::assert_eq;
 
@@ -65,9 +64,8 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
     {
         let fmt = OutputFormatType::Tsv;
-        let mut formater = fmt.with_default_setting();
-        formater.serialize_block(&block, &format_setting)?;
-        let buffer = formater.finalize()?;
+        let mut formater = fmt.create_format(schema.clone());
+        let buffer = formater.serialize_block(&block, &format_setting)?;
 
         let json_block = String::from_utf8(buffer)?;
         let expect = "1\ta\t1\t1.1\t1970-01-02\n\
@@ -81,9 +79,8 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         format_setting.field_delimiter = vec![b'$'];
 
         let fmt = OutputFormatType::Csv;
-        let mut formater = fmt.with_default_setting();
-        formater.serialize_block(&block, &format_setting)?;
-        let buffer = formater.finalize()?;
+        let mut formater = fmt.create_format(schema.clone());
+        let buffer = formater.serialize_block(&block, &format_setting)?;
 
         let json_block = String::from_utf8(buffer)?;
         let expect = "1$a$1$1.1$1970-01-02%\

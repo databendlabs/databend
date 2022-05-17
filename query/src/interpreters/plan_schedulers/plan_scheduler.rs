@@ -850,6 +850,7 @@ impl PlanScheduler {
     fn visit_local_select(&mut self, _: &SelectPlan) {
         self.nodes_plan[self.local_pos] = PlanNode::Select(SelectPlan {
             input: Arc::new(self.nodes_plan[self.local_pos].clone()),
+            format: None,
         });
     }
 
@@ -857,6 +858,7 @@ impl PlanScheduler {
         for index in 0..self.nodes_plan.len() {
             self.nodes_plan[index] = PlanNode::Select(SelectPlan {
                 input: Arc::new(self.nodes_plan[index].clone()),
+                format: None,
             });
         }
     }

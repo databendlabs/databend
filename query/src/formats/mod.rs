@@ -18,6 +18,7 @@ mod format_factory;
 mod format_parquet;
 pub mod output_format;
 pub mod output_format_csv;
+mod output_format_parquet;
 
 pub use format::InputFormat;
 pub use format::InputState;

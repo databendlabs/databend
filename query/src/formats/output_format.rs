@@ -15,9 +15,11 @@
 use std::str::FromStr;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
+use super::output_format_parquet::ParquetOutputFormat;
 use crate::formats::output_format_csv::CSVOutputFormat;
 use crate::formats::output_format_csv::TSVOutputFormat;
 
@@ -35,20 +37,17 @@ pub trait OutputFormat: Send {
 pub enum OutputFormatType {
     Tsv,
     Csv,
+    Parquet,
     // NDJson,
-    // Parquet,
 }
 
 impl OutputFormatType {
-    pub fn with_default_setting(&self) -> Box<dyn OutputFormat> {
+    pub fn create_format(&self, schema: DataSchemaRef) -> Box<dyn OutputFormat> {
         match self {
-            OutputFormatType::Tsv => Box::new(TSVOutputFormat::default()),
-            OutputFormatType::Csv => Box::new(CSVOutputFormat::default()),
+            OutputFormatType::Tsv => Box::new(TSVOutputFormat::create(schema)),
+            OutputFormatType::Csv => Box::new(CSVOutputFormat::create(schema)),
+            OutputFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema)),
         }
-    }
-
-    pub fn is_download_format(&self) -> bool {
-        matches!(self, Self::Tsv | Self::Csv)
     }
 }
 
@@ -64,7 +63,8 @@ impl FromStr for OutputFormatType {
         match s.to_uppercase().as_str() {
             "TSV" => Ok(OutputFormatType::Tsv),
             "CSV" => Ok(OutputFormatType::Csv),
-            _ => Err("Unknown file format type, must be one of { TSV, CSV }".to_string()),
+            "PARQUET" => Ok(OutputFormatType::Parquet),
+            _ => Err("Unknown file format type, must be one of { TSV, CSV, PARQUET }".to_string()),
         }
     }
 }

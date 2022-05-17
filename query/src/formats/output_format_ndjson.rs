@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
@@ -30,12 +29,6 @@ pub type CSVOutputFormat = TCSVOutputFormat<false>;
 
 #[derive(Default)]
 pub struct TCSVOutputFormat<const TSV: bool> {}
-
-impl<const TSV: bool> TCSVOutputFormat<TSV> {
-    pub fn create(_schema: DataSchemaRef) -> Self {
-        Self {}
-    }
-}
 
 impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
     fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {

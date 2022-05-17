@@ -122,6 +122,7 @@ impl PlanParser {
 
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(limit),
+            format: None,
         }))
     }
 

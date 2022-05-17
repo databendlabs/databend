@@ -36,7 +36,6 @@ use poem::EndpointExt;
 use poem::Route;
 use serde::Deserialize;
 
-use crate::formats::output_format::OutputFormat;
 use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -92,7 +91,7 @@ async fn execute(
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
     let fmt = OutputFormatType::Tsv;
-    let mut output_format = fmt.with_default_setting();
+    let mut output_format = fmt.create_format(plan.schema());
     let stream = stream! {
         while let Some(block) = data_stream.next().await {
             match block{
