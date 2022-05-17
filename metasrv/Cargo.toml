@@ -57,6 +57,8 @@ tempfile = "3.3.0"
 tokio-stream = "0.1.8"
 tonic = { version = "=0.6.2", features = ["tls"] }
 tonic-reflection = "=0.3.0"
+serfig = "0.0.1"
+serde-bridge = "0.0.3"
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }

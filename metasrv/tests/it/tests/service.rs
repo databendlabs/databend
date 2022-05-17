@@ -94,7 +94,7 @@ impl MetaSrvTestContext {
     pub fn new(id: u64) -> MetaSrvTestContext {
         let config_id = next_port();
 
-        let mut config = configs::Config::empty();
+        let mut config = configs::Config::default();
 
         // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
         if cfg!(target_os = "macos") {

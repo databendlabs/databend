@@ -15,14 +15,12 @@
 use std::fs::File;
 use std::io::Write;
 
-use clap::Parser;
-use databend_meta::configs::config as meta_config;
 use databend_meta::configs::Config;
 use tempfile::tempdir;
 
 #[test]
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
-    let mut conf = Config::empty();
+    let mut conf = Config::default();
     assert!(!conf.tls_rpc_server_enabled());
     conf.grpc_tls_server_key = "test".to_owned();
     assert!(!conf.tls_rpc_server_enabled());
@@ -33,12 +31,6 @@ fn test_tls_rpc_enabled() -> anyhow::Result<()> {
 
 #[test]
 fn test_load_config() -> anyhow::Result<()> {
-    let cfg = Config::try_parse_from(vec!["test", "-c", "foo.toml"]).unwrap();
-    assert_eq!("foo.toml", cfg.config_file.as_str());
-
-    let cfg = Config::try_parse_from(vec!["test", "--config-file", "bar.toml"]).unwrap();
-    assert_eq!("bar.toml", cfg.config_file.as_str());
-
     let d = tempdir()?;
     let file_path = d.path().join("foo.toml");
     let mut file = File::create(&file_path)?;
@@ -72,7 +64,9 @@ sled_tree_prefix = "sled_foo"
              "#
     )?;
 
-    let mut cfg = Config::load_from_file(file_path.to_str().unwrap())?;
+    std::env::set_var("METASRV_CONFIG_FILE", file_path);
+
+    let cfg = Config::load()?;
     assert_eq!(cfg.log_level, "ERROR");
     assert_eq!(cfg.log_dir, "foo/logs");
     assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");
@@ -95,12 +89,14 @@ sled_tree_prefix = "sled_foo"
     assert_eq!(cfg.raft_config.id, 20);
     assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");
 
-    // test overwrite configs with environment variables
-    std::env::set_var(meta_config::METASRV_LOG_LEVEL, "INFO");
+    std::env::remove_var("METASRV_CONFIG_FILE");
 
-    Config::load_from_env(&mut cfg);
+    // test overwrite configs with environment variables
+    std::env::set_var("METASRV_LOG_LEVEL", "INFO");
+
+    let cfg = Config::load()?;
     assert_eq!(cfg.log_level, "INFO");
-    std::env::remove_var(meta_config::METASRV_LOG_LEVEL);
+    std::env::remove_var("METASRV_LOG_LEVEL");
 
     Ok(())
 }
