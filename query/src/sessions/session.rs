@@ -37,11 +37,11 @@ use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::Config;
 
-#[derive(Clone, MallocSizeOf)]
+#[derive(MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) typ: SessionType,
+    pub(in crate::sessions) typ: RwLock<SessionType>,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -66,7 +66,7 @@ impl Session {
 
         Ok(Arc::new(Session {
             id,
-            typ,
+            typ: RwLock::new(typ),
             session_mgr,
             ref_count,
             session_ctx,
@@ -79,8 +79,14 @@ impl Session {
         self.id.clone()
     }
 
-    pub fn get_type(self: &Arc<Self>) -> SessionType {
-        self.typ.clone()
+    pub fn get_type(&self) -> SessionType {
+        let lock = self.typ.read();
+        lock.clone()
+    }
+
+    pub fn set_type(&self, typ: SessionType) {
+        let mut lock = self.typ.write();
+        *lock = typ;
     }
 
     pub fn is_aborting(self: &Arc<Self>) -> bool {

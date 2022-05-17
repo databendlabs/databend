@@ -149,7 +149,7 @@ impl HttpQuery {
         let http_query_manager = ctx.session_mgr.get_http_query_manager();
         let session = match &request.session {
             HttpSession::New(session_conf) => {
-                let session = ctx.create_session(SessionType::HTTPQuery).await?;
+                let session = ctx.get_session(SessionType::HTTPQuery);
                 if let Some(db) = &session_conf.database {
                     session.set_current_database(db.clone());
                 }
