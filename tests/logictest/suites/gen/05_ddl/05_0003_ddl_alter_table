@@ -1,0 +1,42 @@
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t0`;
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t1`;
+
+statement ok
+CREATE TABLE `05_0003_at_t0`(a int);
+
+statement ok
+INSERT INTO TABLE `05_0003_at_t0` values(1);
+
+statement query I 
+SELECT * FROM `05_0003_at_t0`;
+
+----  
+1
+
+statement ok
+ALTER TABLE `05_0003_at_t0` RENAME TO `05_0003_at_t1`;
+
+statement error 1025
+ALTER TABLE `05_0003_at_t0` RENAME TO `05_0003_at_t1`; 
+
+statement ok
+ALTER TABLE IF EXISTS `05_0003_at_t0` RENAME TO `05_0003_at_t1`;
+
+statement error 1025
+DROP TABLE `05_0003_at_t0`; 
+
+statement query I 
+SELECT * FROM `05_0003_at_t1`;
+
+----  
+1
+
+statement error 1002
+ALTER TABLE `05_0003_at_t1` RENAME TO system.`05_0003_at_t1`; 
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t1`;
+

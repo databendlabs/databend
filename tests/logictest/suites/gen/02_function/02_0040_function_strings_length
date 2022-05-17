@@ -1,0 +1,30 @@
+statement query I 
+SELECT LENGTH('word');
+
+----  
+4
+
+statement query I 
+SELECT LENGTH('кириллица'); -- cyrillic in russian
+
+----  
+18
+
+statement query I 
+SELECT LENGTH('кириллица and latin');
+
+----  
+28
+
+statement query I 
+SELECT LENGTH('你好');
+
+----  
+6
+
+statement query T 
+SELECT LENGTH(NULL);
+
+----  
+None
+

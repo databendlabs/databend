@@ -1,0 +1,36 @@
+statement ok
+DROP TABLE IF EXISTS retention_test;
+
+statement ok
+CREATE TABLE retention_test(date DATE, uid INT);
+
+statement ok
+INSERT INTO retention_test SELECT '2018-08-06', number FROM numbers(80);
+
+statement ok
+INSERT INTO retention_test SELECT '2018-08-07', number FROM numbers(50);
+
+statement ok
+INSERT INTO retention_test SELECT '2018-08-08', number FROM numbers(60);
+
+statement query II 
+SELECT sum(r[0]) as r1, sum(r[1]) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-07' GROUP BY uid);
+
+----  
+80 50
+
+statement query II 
+SELECT sum(r[0]) as r1, sum(r[1]) as r2 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-08') AS r FROM retention_test WHERE date = '2018-08-06' or date = '2018-08-08' GROUP BY uid);
+
+----  
+80 60
+
+statement query III 
+SELECT sum(r[0]) as r1, sum(r[1]) as r2, sum(r[2]) as r3 FROM (SELECT uid, retention(date = '2018-08-06', date = '2018-08-07', date = '2018-08-08') AS r FROM retention_test GROUP BY uid);
+
+----  
+80 50 60
+
+statement ok
+DROP TABLE retention_test;
+

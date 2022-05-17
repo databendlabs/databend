@@ -1,0 +1,15 @@
+statement ok
+DROP FUNCTION IF EXISTS test_alter_udf;
+
+statement ok
+CREATE FUNCTION test_alter_udf AS (p) -> not(is_null(p));
+
+statement ok
+ALTER FUNCTION test_alter_udf AS (d) -> not(is_not_null(d)) DESC = 'This is a new description';
+
+statement error 2602
+ALTER FUNCTION test_alter_udf_unknown AS (d) -> not(is_not_null(d)); 
+
+statement error 2603
+ALTER FUNCTION is_not_null AS (d) -> not(is_null(d)); 
+

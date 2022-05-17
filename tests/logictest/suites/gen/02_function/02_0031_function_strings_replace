@@ -1,0 +1,166 @@
+statement query T 
+SELECT '=== null ===';
+
+----  
+=== null ===
+
+statement query T 
+SELECT REPLACE(NULL, 'a', 'b');
+
+----  
+None
+
+statement query T 
+SELECT REPLACE('aaa', 'a', NULL);
+
+----  
+None
+
+statement query T 
+SELECT REPLACE('aaa', NULL, NULL);
+
+----  
+None
+
+statement query T 
+SELECT REPLACE(NULL, NULL, NULL);
+
+----  
+None
+
+statement query T 
+SELECT '=== const, const, const ===';
+
+----  
+=== const, const, const ===
+
+statement query T 
+SELECT REPLACE('aaaa123aaa456aa7a', 'a', 'b');
+
+----  
+bbbb123bbb456bb7b
+
+statement query T 
+SELECT REPLACE('aaaa123aaa456aa7a', '', 'b');
+
+----  
+aaaa123aaa456aa7a
+
+statement query T 
+SELECT REPLACE('aaaa123aaa456aa7a', 'a', '');
+
+----  
+1234567
+
+statement query T 
+SELECT '=== const, const, series ===';
+
+----  
+=== const, const, series ===
+
+statement query T 
+SELECT REPLACE('a1b', '1', to_varchar(number)) FROM numbers(5) ORDER BY number;
+
+----  
+a0b
+a1b
+a2b
+a3b
+a4b
+
+statement query T 
+SELECT '=== const, series, const ===';
+
+----  
+=== const, series, const ===
+
+statement query T 
+SELECT REPLACE('a1b', to_varchar(number), '7') FROM numbers(5) ORDER BY number;
+
+----  
+a1b
+a7b
+a1b
+a1b
+a1b
+
+statement query T 
+SELECT '=== const, series, series ===';
+
+----  
+=== const, series, series ===
+
+statement query T 
+SELECT REPLACE('a1b', to_varchar(number), to_varchar(number + 1)) FROM numbers(5) ORDER BY number;
+
+----  
+a1b
+a2b
+a1b
+a1b
+a1b
+
+statement query T 
+SELECT '=== series, const, const ===';
+
+----  
+=== series, const, const ===
+
+statement query T 
+SELECT REPLACE(to_varchar(number * 10), '0', '1') FROM numbers(5) ORDER BY number;
+
+----  
+1
+11
+21
+31
+41
+
+statement query T 
+SELECT '=== series, const, series ===';
+
+----  
+=== series, const, series ===
+
+statement query T 
+SELECT REPLACE(to_varchar(number * 10), '0', to_varchar(number)) FROM numbers(5) ORDER BY number;
+
+----  
+0
+11
+22
+33
+44
+
+statement query T 
+SELECT '=== series, series, const ===';
+
+----  
+=== series, series, const ===
+
+statement query T 
+SELECT REPLACE(to_varchar(number * 10), to_varchar(number), '1') FROM numbers(5) ORDER BY number;
+
+----  
+1
+10
+10
+10
+10
+
+statement query T 
+SELECT '=== series, series, series ===';
+
+----  
+=== series, series, series ===
+
+statement query T 
+SELECT REPLACE(to_varchar(number * 10), to_varchar(number), to_varchar(number)) FROM numbers(5) ORDER BY number;
+
+----  
+0
+10
+20
+30
+40
+

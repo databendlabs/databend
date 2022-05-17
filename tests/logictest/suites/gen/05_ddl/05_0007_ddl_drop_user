@@ -1,0 +1,39 @@
+statement error 2201
+DROP USER 'test-j'@'localhost'; 
+
+statement ok
+DROP USER IF EXISTS 'test-j'@'localhost';
+
+statement ok
+CREATE USER 'test-j'@'localhost' IDENTIFIED BY 'password';
+
+statement ok
+DROP USER 'test-j'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-j'@'localhost';
+
+statement ok
+CREATE USER 'test-k'@'localhost' IDENTIFIED WITH plaintext_password BY 'password';
+
+statement ok
+DROP USER IF EXISTS 'test-k'@'localhost';
+
+statement error 2201
+DROP USER 'test-k'@'localhost'; 
+
+statement ok
+CREATE USER 'test-l'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
+
+statement ok
+DROP USER 'test-l'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-l'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-l'@'localhost';
+
+statement ok
+DROP USER IF EXISTS 'test-l'@'localhost';
+

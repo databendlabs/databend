@@ -1,0 +1,12 @@
+statement query I 
+SELECT max(number) FROM numbers_mt (10) where number > 99999999998;
+
+----  
+0
+
+statement query I 
+SELECT max(number) FROM numbers_mt (10) where number > 2;
+
+----  
+9
+

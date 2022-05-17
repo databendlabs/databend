@@ -1,0 +1,87 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_004;
+
+statement ok
+CREATE DATABASE db_09_004;
+
+statement ok
+USE db_09_004;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = Memory;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse;
+
+statement error 1006
+INSERT INTO t1 (a,b,c,d,e) select * from t3; 
+
+statement error 1006
+INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3; 
+
+statement ok
+create table n1(a uint64);
+
+statement ok
+insert into n1 select number from numbers(10000);
+
+statement ok
+select sum(a) from n1;
+
+statement ok
+CREATE TABLE n2(a UInt64, b UInt64);
+
+statement ok
+insert into n2 select number, number + 1 from numbers(10000);
+
+statement ok
+insert into n2 select * from n2;
+
+statement ok
+create table n3(a uint64, b uint64);
+
+statement ok
+insert into n3 select sum(a), sum(b) from n2;
+
+statement ok
+create table s1(a String, b String);
+
+statement ok
+insert into s1 select number, number + 1 from numbers(10000);
+
+statement ok
+create table d1(n String, a UInt8 not null, b Int16 default a + 3, c String default 'c');
+
+statement ok
+insert into d1(a) values (1);
+
+statement ok
+insert into d1(b) values (2);
+
+statement ok
+insert into d1(b) select b from d1;
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t3;
+
+statement ok
+DROP TABLE n1;
+
+statement ok
+DROP TABLE n2;
+
+statement ok
+DROP TABLE n3;
+
+statement ok
+DROP TABLE s1;
+
+statement ok
+DROP TABLE d1;
+
+statement ok
+DROP DATABASE db_09_004;
+

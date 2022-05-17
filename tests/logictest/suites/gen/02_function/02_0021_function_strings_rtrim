@@ -1,0 +1,24 @@
+statement query T 
+select rtrim('abc      ');
+
+----  
+abc
+
+statement query T 
+select rtrim('');
+
+----  
+	
+
+statement query T 
+select rtrim('abc');
+
+----  
+abc
+
+statement query T 
+select rtrim(null);
+
+----  
+None
+
