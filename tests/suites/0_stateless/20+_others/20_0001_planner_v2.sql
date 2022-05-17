@@ -175,4 +175,19 @@ select '====Context Function====';
 use default;
 select database();
 
+-- Inner join with using
+select '===Inner Join with Using===';
+drop table if exists t1;
+create table t1(a int, b int);
+insert into t1 values(7, 8), (3, 4), (5, 6);
+drop table if exists t2;
+create table t2(a int, d int);
+insert into t2 values(1, 2), (3, 4), (5, 6);
+select * from t1 join t2 using(a);
+select t1.a from t1 join t2 using(a);
+select t2.d from t1 join t2 using(a);
+select * from t1 natural join t2;
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;
