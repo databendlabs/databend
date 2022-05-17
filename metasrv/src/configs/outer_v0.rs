@@ -88,6 +88,55 @@ impl TryInto<InnerConfig> for Config {
     type Error = MetaError;
 
     fn try_into(self) -> MetaResult<InnerConfig> {
+        // Really dirty hacks, we will remove them in the near future.
+        // We will compare inner_raft_config with default
+        // If the value is the same with default, we can use parsed value.
+        // Or, we will take inner_raft_config first.
+        let default_raft_config = InnerRaftConfig::default();
+        let mut raft_config = self.inner_raft_config;
+        if raft_config.config_id == default_raft_config.config_id {
+            raft_config.config_id = self.raft_config.config_id
+        }
+        if raft_config.raft_listen_host == default_raft_config.raft_listen_host {
+            raft_config.raft_listen_host = self.raft_config.raft_listen_host
+        }
+        if raft_config.raft_advertise_host == default_raft_config.raft_advertise_host {
+            raft_config.raft_advertise_host = self.raft_config.raft_advertise_host
+        }
+        if raft_config.raft_api_port == default_raft_config.raft_api_port {
+            raft_config.raft_api_port = self.raft_config.raft_api_port
+        }
+        if raft_config.raft_dir == default_raft_config.raft_dir {
+            raft_config.raft_dir = self.raft_config.raft_dir
+        }
+        if raft_config.no_sync == default_raft_config.no_sync {
+            raft_config.no_sync = self.raft_config.no_sync
+        }
+        if raft_config.snapshot_logs_since_last == default_raft_config.snapshot_logs_since_last {
+            raft_config.snapshot_logs_since_last = self.raft_config.snapshot_logs_since_last
+        }
+        if raft_config.heartbeat_interval == default_raft_config.heartbeat_interval {
+            raft_config.heartbeat_interval = self.raft_config.heartbeat_interval
+        }
+        if raft_config.install_snapshot_timeout == default_raft_config.install_snapshot_timeout {
+            raft_config.install_snapshot_timeout = self.raft_config.install_snapshot_timeout
+        }
+        if raft_config.max_applied_log_to_keep == default_raft_config.max_applied_log_to_keep {
+            raft_config.max_applied_log_to_keep = self.raft_config.max_applied_log_to_keep
+        }
+        if raft_config.single == default_raft_config.single {
+            raft_config.single = self.raft_config.single
+        }
+        if raft_config.join == default_raft_config.join {
+            raft_config.join = self.raft_config.join
+        }
+        if raft_config.id == default_raft_config.id {
+            raft_config.id = self.raft_config.id
+        }
+        if raft_config.sled_tree_prefix == default_raft_config.sled_tree_prefix {
+            raft_config.sled_tree_prefix = self.raft_config.sled_tree_prefix
+        }
+
         Ok(InnerConfig {
             config_file: self.config_file,
             log_level: self.log_level,
@@ -99,7 +148,7 @@ impl TryInto<InnerConfig> for Config {
             grpc_api_address: self.grpc_api_address,
             grpc_tls_server_cert: self.grpc_tls_server_cert,
             grpc_tls_server_key: self.grpc_tls_server_key,
-            raft_config: self.raft_config.try_into()?,
+            raft_config: raft_config.try_into()?,
         })
     }
 }
