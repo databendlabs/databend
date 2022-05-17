@@ -790,6 +790,7 @@ impl TokenKind {
             // | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
+            | TokenKind::DATEADD
             | TokenKind::WITH if !after_as => true,
             _ => false
         }
@@ -824,12 +825,8 @@ impl TokenKind {
             | TokenKind::CURRENT_TIMESTAMP
             // | TokenKind::CURRENT_USER
             // | TokenKind::DEFERRABLE
-            | TokenKind::DATEADD
-            | TokenKind::DAY
             | TokenKind::DESC
             | TokenKind::DISTINCT
-            | TokenKind::DOW
-            | TokenKind::DOY
             // | TokenKind::DO
             | TokenKind::ELSE
             | TokenKind::END
@@ -838,7 +835,6 @@ impl TokenKind {
             // | TokenKind::FREEZE
             | TokenKind::FULL
             // | TokenKind::ILIKE
-            | TokenKind::HOUR
             | TokenKind::IN
             // | TokenKind::INITIALLY
             | TokenKind::INNER
@@ -850,8 +846,6 @@ impl TokenKind {
             | TokenKind::LIKE
             // | TokenKind::LOCALTIME
             // | TokenKind::LOCALTIMESTAMP
-            | TokenKind::MINUTE
-            | TokenKind::MONTH
             | TokenKind::NATURAL
             | TokenKind::NOT
             | TokenKind::NULL
@@ -862,7 +856,6 @@ impl TokenKind {
             // | TokenKind::PRIMARY
             // | TokenKind::REFERENCES
             | TokenKind::RIGHT
-            | TokenKind::SECOND
             | TokenKind::SELECT
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
@@ -904,7 +897,6 @@ impl TokenKind {
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
-            | TokenKind::YEAR
             if !after_as => true,
             _ => false
         }

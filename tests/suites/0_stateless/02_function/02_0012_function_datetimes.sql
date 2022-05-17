@@ -113,27 +113,27 @@ select '===addYears===';
 
 select '===subtractMonths===';
 select subtractMonths(to_date(18321), cast(13, INT16)); -- 2020-2-29 - 13 months
-select to_date(18321) -  interval '13' month;
+-- select to_date(18321) -  interval '13' month;
 
 select subtractMonths(to_datetime(1582970400000000), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
-select to_datetime(1582970400000000) -  interval '122' month;
+-- select to_datetime(1582970400000000) -  interval '122' month;
 select subtractMonths(to_date('1000-01-01'), 1); -- {ErrorCode 1068}
 select subtractMonths(to_datetime('1000-01-01 00:00:00'), 1); -- {ErrorCode 1069}
 select '===subtractMonths===';
 
 select '===addDays===';
 select addDays(to_date(18321), cast(1, INT16)); -- 2020-2-29 + 1 day
-select to_date(18321) + interval '1' day;
+-- select to_date(18321) + interval '1' day;
 
 select addDays(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
-select to_datetime(1582970400000000) + interval '-1' day;
+-- select to_datetime(1582970400000000) + interval '-1' day;
 select addDays(to_date('9999-12-31'), 1); -- {ErrorCode 1068}
 select addDays(to_datetime('9999-12-31 23:59:59'), 1); -- {ErrorCode 1069}
 select '===addDays===';
 
 select '===addHours===';
 select addHours(to_datetime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
-select to_datetime(1582970400000000) + interval '25' hour;
+-- select to_datetime(1582970400000000) + interval '25' hour;
 select addHours(to_date(18321), cast(1.2, Float32));
 select addHours(to_date('9999-12-31'), 24); -- {ErrorCode 1069}
 select addHours(to_datetime('9999-12-31 23:59:59'), 1); -- {ErrorCode 1069}
