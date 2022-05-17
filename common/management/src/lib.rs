@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod cluster;
+mod quota;
 mod role;
 mod serde;
 mod stage;
@@ -21,6 +22,8 @@ mod user;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
+pub use quota::QuotaApi;
+pub use quota::QuotaMgr;
 pub use role::RoleApi;
 pub use role::RoleMgr;
 pub use serde::deserialize_struct;

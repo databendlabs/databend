@@ -16,4 +16,5 @@ mod fuse;
 mod index;
 mod memory;
 mod null;
+mod result;
 mod system;

@@ -14,7 +14,6 @@
 //
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
@@ -80,12 +79,9 @@ async fn test_session_context() -> Result<()> {
     // context shared.
     {
         let sessions = SessionManagerBuilder::create().build()?;
-        let dummy_session = sessions.create_session(SessionType::Test).await?;
-        let shared = QueryContextShared::try_create(
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::empty(),
-        )
-        .await?;
+        let dummy_session = sessions.create_session(SessionType::Dummy).await?;
+        let shared =
+            QueryContextShared::try_create((*dummy_session).clone(), Cluster::empty()).await?;
 
         session_ctx.set_query_context_shared(Some(shared.clone()));
         let val = session_ctx.get_query_context_shared();

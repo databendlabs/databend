@@ -3,6 +3,9 @@
 NULL
 2
 NULL
+2.71
+3.14
+1
 ==get_ignore_case==
 2
 1
@@ -20,6 +23,13 @@ NULL
 "databend"
 "ext"
 NULL
+==array get==
+NULL
+0
+[[1, 2, 3], [4, 5, 6]]
+[4, 5, 6]
+6
+0
 ==get from table==
 1
 NULL

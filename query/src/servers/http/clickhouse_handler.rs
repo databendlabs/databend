@@ -36,11 +36,12 @@ use poem::EndpointExt;
 use poem::Route;
 use serde::Deserialize;
 
+use crate::formats::output_format::OutputFormat;
+use crate::formats::output_format::OutputFormatType;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::formats::tsv_output::block_to_tsv;
 use crate::servers::http::formats::Format;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
@@ -89,17 +90,17 @@ async fn execute(
             interpreter.execute(input_stream).await?
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
-    let format = ctx.get_format_settings()?;
+    let format_setting = ctx.get_format_settings()?;
+    let fmt = OutputFormatType::Tsv;
     let stream = stream! {
         while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
-                    yield(block_to_tsv(&block, &format))
+                    yield(fmt.serialize_block(&block, &format_setting))
                 },
                 Err(err) => yield(Err(err)),
             };
         }
-
         let _ = interpreter
             .finish()
             .await
@@ -114,11 +115,7 @@ pub async fn clickhouse_handler_get(
     ctx: &HttpQueryContext,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session = ctx
-        .create_session(SessionType::ClickHouseHttpHandler)
-        .await
-        .map_err(InternalServerError)?;
-
+    let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let context = session
         .create_query_context()
         .await
@@ -178,11 +175,7 @@ pub async fn clickhouse_handler_post(
     body: Body,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Body> {
-    let session = ctx
-        .create_session(SessionType::ClickHouseHttpHandler)
-        .await
-        .map_err(InternalServerError)?;
-
+    let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
     let ctx = session
         .create_query_context()
         .await

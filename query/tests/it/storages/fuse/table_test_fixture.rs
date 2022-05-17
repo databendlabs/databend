@@ -19,6 +19,8 @@ use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_io::prelude::StorageFsConfig;
+use common_io::prelude::StorageParams;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
@@ -56,9 +58,11 @@ impl TestFixture {
         let mut conf = crate::tests::ConfigBuilder::create().config();
 
         // make sure we are suing `fs` storage
-        conf.storage.storage_type = "fs".to_string();
-        // use `TempDir` as root path (auto clean)
-        conf.storage.fs.data_path = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.params = StorageParams::Fs(StorageFsConfig {
+            // use `TempDir` as root path (auto clean)
+            root: tmp_dir.path().to_str().unwrap().to_string(),
+        });
+
         let ctx = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
@@ -312,7 +316,10 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
 ) {
-    let data_path = fixture.ctx().get_config().storage.fs.data_path;
+    let data_path = match fixture.ctx().get_config().storage.params {
+        StorageParams::Fs(v) => v.root,
+        _ => panic!("storage type is not fs"),
+    };
     let root = data_path.as_str();
     let mut ss_count = 0;
     let mut sg_count = 0;

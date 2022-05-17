@@ -147,6 +147,8 @@ build_exceptions! {
 
     // Layout error code.
     LayoutError(1103),
+
+    PanicError(1104),
 }
 
 // Metasvr errors [2001, 3000].
@@ -199,6 +201,11 @@ build_exceptions! {
 
     // Variable error codes.
     UnknownVariable(2801),
+
+    // Tenant quota error codes.
+    IllegalTenantQuotaFormat(2901),
+    TenantQuotaUnknown(2902),
+    TenantQuotaExceeded(2903),
 }
 
 // Storage errors [3001, 4000].

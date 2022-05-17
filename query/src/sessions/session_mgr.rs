@@ -42,16 +42,12 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
-use crate::users::auth::auth_mgr::AuthMgr;
-use crate::users::UserApiProvider;
 use crate::Config;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: RwLock<Config>,
     pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
     pub(in crate::sessions) catalogs: RwLock<Arc<CatalogManager>>,
-    pub(in crate::sessions) user_manager: RwLock<Arc<UserApiProvider>>,
-    pub(in crate::sessions) auth_manager: RwLock<Arc<AuthMgr>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -74,7 +70,7 @@ impl SessionManager {
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
         let storage_runtime = {
-            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            let mut storage_num_cpus = conf.storage.num_cpus as usize;
             if storage_num_cpus == 0 {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }
@@ -86,10 +82,6 @@ impl SessionManager {
         let storage_operator = Self::init_storage_operator(&conf)
             .await?
             .layer(DalRuntime::new(storage_runtime.inner()));
-
-        // User manager and init the default users.
-        let user = UserApiProvider::create_global(conf.clone()).await?;
-        let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
@@ -106,11 +98,9 @@ impl SessionManager {
             conf: RwLock::new(conf),
             catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
-            user_manager: RwLock::new(user),
             http_query_manager,
             max_sessions,
             active_sessions,
-            auth_manager: RwLock::new(auth_manager),
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,
@@ -130,15 +120,6 @@ impl SessionManager {
 
     pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
         self.http_query_manager.clone()
-    }
-
-    pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
-        self.auth_manager.read().clone()
-    }
-
-    /// Get the user api provider.
-    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.user_manager.read().clone()
     }
 
     pub fn get_catalog_manager(self: &Arc<Self>) -> Arc<CatalogManager> {
@@ -354,16 +335,6 @@ impl SessionManager {
             let discovery = ClusterDiscovery::create_global(config.clone()).await?;
             *self.discovery.write() = discovery;
         }
-
-        // User manager and init the default users.
-        let user = {
-            let user = UserApiProvider::create_global(config.clone()).await?;
-            *self.user_manager.write() = user.clone();
-            user
-        };
-
-        let auth_mgr = AuthMgr::create(config.clone(), user).await?;
-        *self.auth_manager.write() = Arc::new(auth_mgr);
 
         Ok(())
     }
