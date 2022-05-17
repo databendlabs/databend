@@ -223,9 +223,34 @@ impl InteractiveWorkerBase {
                     Err(e)
                 }
                 Ok(mut data_stream) => {
-                    while let Some(block) = data_stream.next().await {
-                        data_tx.send(BlockItem::Block(block)).await.ok();
+                    'worker: loop {
+                        match data_stream.next().await {
+                            None => {
+                                break 'worker;
+                            }
+                            Some(Ok(data)) => {
+                                if let Err(cause) = data_tx.send(BlockItem::Block(Ok(data))).await {
+                                    tracing::warn!(
+                                        "Cannot send data to channel, cause: {:?}",
+                                        cause
+                                    );
+                                    break 'worker;
+                                }
+                            }
+                            Some(Err(error_code)) => {
+                                if let Err(cause) =
+                                    data_tx.send(BlockItem::Block(Err(error_code))).await
+                                {
+                                    tracing::warn!(
+                                        "Cannot send data to channel, cause: {:?}",
+                                        cause
+                                    );
+                                }
+                                break 'worker;
+                            }
+                        }
                     }
+
                     let _ = interpreter
                         .finish()
                         .await
