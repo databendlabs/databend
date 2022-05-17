@@ -233,10 +233,8 @@ async fn test_pagination() -> Result<()> {
     assert_eq!(result.next_uri, Some(next_uri));
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
-    // get page, support retry
-    for page in 0..4 {
+    for page in 0..5 {
         let uri = make_page_uri(query_id, page);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
@@ -245,8 +243,8 @@ async fn test_pagination() -> Result<()> {
         assert_eq!(result.data.len(), 2, "{:?}", result);
         assert!(result.schema.is_some());
         assert!(result.stats.scan_progress.is_some());
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        if page == 5 {
+        if page == 4 {
+            assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
             assert!(result.next_uri.is_none());
         } else {
             assert!(result.next_uri.is_some());
