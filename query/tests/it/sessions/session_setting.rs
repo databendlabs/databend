@@ -27,7 +27,7 @@ async fn test_session_setting() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        SessionType::Test,
+        SessionType::Dummy,
         session_manager,
     )
     .await?;

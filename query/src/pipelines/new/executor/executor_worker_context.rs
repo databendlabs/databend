@@ -90,9 +90,21 @@ impl ExecutorWorkerContext {
         let worker_id = self.worker_num;
         let workers_notify = self.get_workers_notify().clone();
         let tasks_queue = executor.global_tasks_queue.clone();
+        let clone_processor = processor.clone();
+        let join_handle = executor
+            .async_runtime
+            .spawn(async move { processor.async_process().await });
         executor.async_runtime.spawn(async move {
-            let res = processor.async_process().await;
-            let task = CompletedAsyncTask::create(processor, worker_id, res);
+            let res = match join_handle.await {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(cause)) => Err(cause),
+                Err(cause) => Err(ErrorCode::PanicError(format!(
+                    "Panic error, cause {}",
+                    cause
+                ))),
+            };
+
+            let task = CompletedAsyncTask::create(clone_processor, worker_id, res);
             tasks_queue.completed_async_task(task);
             workers_notify.dec_active_async_worker();
             workers_notify.wakeup(worker_id);

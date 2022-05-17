@@ -249,16 +249,9 @@ pub trait UDFExprVisitor: Sized + Send {
     }
 
     fn visit_array(&mut self, exprs: &[Expr]) -> Result<()> {
-        match exprs.len() {
-            0 => Err(ErrorCode::SyntaxException(
-                "Array must have at least one element.",
-            )),
-            _ => {
-                for expr in exprs {
-                    UDFExprTraverser::accept(expr, self)?;
-                }
-                Ok(())
-            }
+        for expr in exprs {
+            UDFExprTraverser::accept(expr, self)?;
         }
+        Ok(())
     }
 }

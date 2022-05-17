@@ -41,7 +41,7 @@ impl SyncSystemTable for ConfigsTable {
     }
 
     fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
-        let config = ctx.get_config();
+        let config = ctx.get_config().into_outer();
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];

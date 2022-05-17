@@ -16,15 +16,9 @@ mod catalog;
 mod log;
 mod meta;
 mod query;
-mod storage;
 
 pub use catalog::HiveCatalogConfig;
 pub use catalog::ThriftProtocol;
 pub use log::LogConfig;
 pub use meta::MetaConfig;
 pub use query::QueryConfig;
-pub use storage::AzblobStorageConfig;
-pub use storage::FsStorageConfig;
-pub use storage::HdfsConfig;
-pub use storage::S3StorageConfig;
-pub use storage::StorageConfig;

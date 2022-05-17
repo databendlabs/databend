@@ -17,7 +17,6 @@ storage-hdfs = ["opendal/services-hdfs"]
 
 [dependencies]
 # Workspace dependencies
-common-configs = { path = "../configs" }
 common-exception = { path = "../exception" }
 
 # Github dependencies

@@ -250,6 +250,8 @@ pub enum ExprElement<'a> {
     MapAccess { accessor: MapAccessor<'a> },
     /// An expression between parentheses
     Group(Expr<'a>),
+    /// `[1, 2, 3]`
+    Array { exprs: Vec<Expr<'a>> },
 }
 
 struct ExprParser;
@@ -404,6 +406,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
                 subquery: Box::new(subquery),
             },
             ExprElement::Group(expr) => expr,
+            ExprElement::Array { exprs } => Expr::Array {
+                span: elem.span.0,
+                exprs,
+            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -725,6 +731,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let literal = map(literal, |lit| ExprElement::Literal { lit });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    let array = map(
+        rule! {
+            "[" ~ #comma_separated_list0(subexpr(0))? ~ ","? ~ ^"]"
+        },
+        |(_, opt_args, _, _)| {
+            let exprs = opt_args.unwrap_or_default();
+            ExprElement::Array { exprs }
+        },
+    );
 
     let (rest, (span, elem)) = consumed(alt((
         rule! (
@@ -754,6 +769,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #group
             | #column_ref : "<column>"
             | #map_access : "[<key>] | .<key> | :<key>"
+            | #array : "`[...]`"
         ),
     )))(i)?;
 

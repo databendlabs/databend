@@ -27,3 +27,9 @@ message S3StorageConfig {
   string root = 6;
   string master_key = 7;
 }
+
+message FsStorageConfig {
+  uint64 version = 100;
+
+  string root = 1;
+}

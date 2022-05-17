@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+mod async_crash_me;
 mod memory_block_part;
 mod numbers_part;
 mod numbers_stream;

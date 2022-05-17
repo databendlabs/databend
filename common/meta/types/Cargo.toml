@@ -11,9 +11,9 @@ doctest = false
 test = false
 
 [dependencies]
-common-configs = { path = "../../configs" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
+common-io = { path = "../../io" }
 
 openraft = { git = "https://github.com/datafuselabs/openraft", rev = "f633756d60152d171909aea56f80d18905cd4002" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }

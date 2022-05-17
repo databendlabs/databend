@@ -1,0 +1,95 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Arc;
+
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRefExt;
+use common_exception::Result;
+use common_meta_types::TenantQuota;
+use common_meta_types::UserOptionFlag;
+
+use crate::procedures::Procedure;
+use crate::procedures::ProcedureFeatures;
+use crate::sessions::QueryContext;
+
+pub struct TenantQuotaProcedure;
+
+impl TenantQuotaProcedure {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
+        Ok(Box::new(TenantQuotaProcedure {}))
+    }
+}
+
+#[async_trait::async_trait]
+impl Procedure for TenantQuotaProcedure {
+    fn name(&self) -> &str {
+        "TENANT_QUOTA"
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        ProcedureFeatures::default()
+            .variadic_arguments(1, 3)
+            .management_mode_required(true)
+            .user_option_flag(UserOptionFlag::TenantSetting)
+    }
+
+    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        let tenant = args[0].clone();
+        let quota_api = ctx
+            .get_user_manager()
+            .get_tenant_quota_api_client(&tenant)?;
+        let res = quota_api.get_quota(None).await?;
+        let mut quota = res.data;
+
+        if args.len() == 1 {
+            return self.to_block(&quota);
+        };
+
+        let max_databases = args[1].clone();
+        let max_tables = if args.len() > 2 {
+            Some(args[2].clone())
+        } else {
+            None
+        };
+
+        quota.max_databases = max_databases.parse::<u32>()?;
+        if let Some(max_tables) = max_tables {
+            quota.max_tables_per_database = max_tables.parse::<u32>()?;
+        };
+
+        quota_api.set_quota(&quota, Some(res.seq)).await?;
+
+        self.to_block(&quota)
+    }
+
+    fn schema(&self) -> Arc<DataSchema> {
+        DataSchemaRefExt::create(vec![
+            DataField::new("max_databases", u32::to_data_type()),
+            DataField::new("max_tables_per_database", u32::to_data_type()),
+        ])
+    }
+}
+
+impl TenantQuotaProcedure {
+    fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
+        Ok(DataBlock::create(self.schema(), vec![
+            Series::from_data(vec![quota.max_databases]),
+            Series::from_data(vec![quota.max_tables_per_database]),
+        ]))
+    }
+}

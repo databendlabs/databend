@@ -156,6 +156,11 @@ pub enum Expr<'a> {
         expr: Box<Expr<'a>>,
         accessor: MapAccessor<'a>,
     },
+    /// The `Array` expr
+    Array {
+        span: &'a [Token<'a>],
+        exprs: Vec<Expr<'a>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -280,6 +285,7 @@ impl<'a> Expr<'a> {
             Expr::Exists { span, .. } => span,
             Expr::Subquery { span, .. } => span,
             Expr::MapAccess { span, .. } => span,
+            Expr::Array { span, .. } => span,
         }
     }
 }
@@ -677,6 +683,11 @@ impl<'a> Display for Expr<'a> {
                     MapAccessor::Period { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
+            }
+            Expr::Array { exprs, .. } => {
+                write!(f, "[")?;
+                write_comma_separated_list(f, exprs)?;
+                write!(f, "]")?;
             }
         }
 

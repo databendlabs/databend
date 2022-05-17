@@ -108,7 +108,10 @@ message UserStageInfo {
   }
 
   message StageStorage {
-    oneof storage { S3StorageConfig s3 = 1; }
+    oneof storage {
+      S3StorageConfig s3 = 1;
+      FsStorageConfig fs = 2;
+    }
   }
 
   message StageParams { StageStorage storage = 1; }

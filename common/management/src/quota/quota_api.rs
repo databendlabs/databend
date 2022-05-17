@@ -12,4 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod tsv_output;
+use common_exception::Result;
+use common_meta_types::SeqV;
+use common_meta_types::TenantQuota;
+
+#[async_trait::async_trait]
+pub trait QuotaApi: Sync + Send {
+    async fn get_quota(&self, seq: Option<u64>) -> Result<SeqV<TenantQuota>>;
+
+    async fn set_quota(&self, quota: &TenantQuota, seq: Option<u64>) -> Result<u64>;
+}
