@@ -17,8 +17,10 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::default_column_cast;
 use crate::scalars::FactoryCreator;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
@@ -35,8 +37,15 @@ impl ToIntervalFunction {
     pub fn try_create(
         display_name: String,
         interval_kind: IntervalKind,
-        _args: &[&DataTypeImpl],
+        args: &[&DataTypeImpl],
     ) -> Result<Box<dyn Function>> {
+        if !args[0].data_type_id().is_numeric() {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported type {:?}",
+                args[0].data_type_id()
+            )));
+        }
+
         Ok(Box::new(ToIntervalFunction {
             display_name,
             interval_kind,
@@ -59,7 +68,7 @@ impl Function for ToIntervalFunction {
         columns: &ColumnsWithField,
         _input_rows: usize,
     ) -> Result<ColumnRef> {
-        IntervalType::new_impl(self.interval_kind).create_column(&columns[0].column().to_values())
+        default_column_cast(columns[0].column(), &i64::to_data_type())
     }
 }
 
