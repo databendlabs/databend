@@ -20,11 +20,20 @@ use super::AddDaysFunction;
 use super::AddMonthsFunction;
 use super::AddTimesFunction;
 use super::AddYearsFunction;
+use super::DateAddFunction;
 use super::RoundFunction;
 use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
 use super::ToDayOfYearFunction;
 use super::ToHourFunction;
+use super::ToIntervalDayFunction;
+use super::ToIntervalDowFunction;
+use super::ToIntervalDoyFunction;
+use super::ToIntervalHourFunction;
+use super::ToIntervalMinuteFunction;
+use super::ToIntervalMonthFunction;
+use super::ToIntervalSecondFunction;
+use super::ToIntervalYearFunction;
 use super::ToMinuteFunction;
 use super::ToMonthFunction;
 use super::ToSecondFunction;
@@ -124,5 +133,16 @@ impl DateFunction {
         factory.register("subtractHours", AddTimesFunction::desc(-3600));
         factory.register("subtractMinutes", AddTimesFunction::desc(-60));
         factory.register("subtractSeconds", AddTimesFunction::desc(-1));
+
+        factory.register("toIntervalYear", ToIntervalYearFunction::desc());
+        factory.register("toIntervalMonth", ToIntervalMonthFunction::desc());
+        factory.register("toIntervalDay", ToIntervalDayFunction::desc());
+        factory.register("toIntervalHour", ToIntervalHourFunction::desc());
+        factory.register("toIntervalMinute", ToIntervalMinuteFunction::desc());
+        factory.register("toIntervalSecond", ToIntervalSecondFunction::desc());
+        factory.register("toIntervalDoy", ToIntervalDoyFunction::desc());
+        factory.register("toIntervalDow", ToIntervalDowFunction::desc());
+
+        factory.register("dateAdd", DateAddFunction::desc());
     }
 }
