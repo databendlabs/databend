@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod log;
-mod meta;
-mod query;
+/// Config for tracing.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Config {
+    pub level: String,
+    pub dir: String,
+    pub query_enabled: bool,
+}
 
-pub use catalog::HiveCatalogConfig;
-pub use catalog::ThriftProtocol;
-pub use log::LogConfig;
-pub use meta::MetaConfig;
-pub use query::QueryConfig;
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            level: "INFO".to_string(),
+            dir: "./_logs".to_string(),
+            query_enabled: false,
+        }
+    }
+}
