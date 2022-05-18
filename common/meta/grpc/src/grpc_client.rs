@@ -186,7 +186,6 @@ impl MetaGrpcClient {
             // self.conn_pool.get(&*eps).await?
             self.conn_pool.item_manager().build(&*eps).await?
         };
-        tracing::info!("connecting with channel: {:?}", channel);
 
         let mut client = MetaServiceClient::new(channel.clone());
         let mut t = self.token.write().await;
@@ -219,7 +218,6 @@ impl MetaGrpcClient {
             (*eps).clone()
         };
         let channel = self.conn_pool.get(&endpoints).await?;
-        tracing::info!("connecting with channel: {:?}", channel);
 
         let mut client = MetaServiceClient::new(channel.clone());
         let endpoints = client
