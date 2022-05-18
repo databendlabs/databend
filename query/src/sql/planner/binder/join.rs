@@ -281,45 +281,50 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Result<()> {
         for join_key in using_columns.iter() {
             let join_key_name = join_key.as_str();
-            let mut left_scalars = vec![];
-            for col_binding in self.left_context.columns.iter() {
-                if col_binding.column_name == join_key_name {
-                    left_scalars.push(Scalar::BoundColumnRef(BoundColumnRef {
-                        column: col_binding.clone(),
-                    }));
-                }
-            }
-            if left_scalars.is_empty() {
+            let left_scalar = if let Some(col_binding) = self
+                .left_context
+                .columns
+                .iter()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                Scalar::BoundColumnRef(BoundColumnRef {
+                    column: col_binding.clone(),
+                })
+            } else {
                 return Err(ErrorCode::SemanticError(format!(
                     "column {} specified in USING clause does not exist in left table",
                     join_key_name
                 )));
-            }
-            assert_eq!(left_scalars.len(), 1);
-            let mut right_scalars = vec![];
-            for col_binding in self.right_context.columns.iter() {
-                if col_binding.column_name == join_key_name {
-                    right_scalars.push(Scalar::BoundColumnRef(BoundColumnRef {
-                        column: col_binding.clone(),
-                    }));
-                }
-            }
-            if right_scalars.is_empty() {
+            };
+
+            let right_scalar = if let Some(col_binding) = self
+                .right_context
+                .columns
+                .iter()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                Scalar::BoundColumnRef(BoundColumnRef {
+                    column: col_binding.clone(),
+                })
+            } else {
                 return Err(ErrorCode::SemanticError(format!(
                     "column {} specified in USING clause does not exist in right table",
                     join_key_name
                 )));
+            };
+
+            if let Some(col_binding) = self
+                .join_context
+                .columns
+                .iter_mut()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                col_binding.visible_in_unqualified_wildcard = false;
             }
-            assert_eq!(right_scalars.len(), 1);
-            for col_binding in self.join_context.columns.iter_mut() {
-                if col_binding.column_name == join_key_name {
-                    col_binding.visible_in_unqualified_wildcard = false;
-                    break;
-                }
-            }
+
             self.add_conditions(
-                left_scalars[0].clone(),
-                right_scalars[0].clone(),
+                left_scalar,
+                right_scalar,
                 left_join_conditions,
                 right_join_conditions,
             )?;
