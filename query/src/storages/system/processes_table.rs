@@ -57,6 +57,7 @@ impl AsyncSystemTable for ProcessesTable {
         let mut processes_dal_metrics_write_bytes = Vec::with_capacity(processes_info.len());
         let mut processes_scan_progress_read_rows = Vec::with_capacity(processes_info.len());
         let mut processes_scan_progress_read_bytes = Vec::with_capacity(processes_info.len());
+        let mut processes_mysql_connection_id = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             processes_id.push(process_info.id.clone().into_bytes());
@@ -77,6 +78,7 @@ impl AsyncSystemTable for ProcessesTable {
                 ProcessesTable::process_scan_progress_values(&process_info.scan_progress_value);
             processes_scan_progress_read_rows.push(scan_progress_read_rows);
             processes_scan_progress_read_bytes.push(scan_progress_read_bytes);
+            processes_mysql_connection_id.push(process_info.mysql_connection_id);
         }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
@@ -92,6 +94,7 @@ impl AsyncSystemTable for ProcessesTable {
             Series::from_data(processes_dal_metrics_write_bytes),
             Series::from_data(processes_scan_progress_read_rows),
             Series::from_data(processes_scan_progress_read_bytes),
+            Series::from_data(processes_mysql_connection_id),
         ]))
     }
 }
@@ -111,6 +114,7 @@ impl ProcessesTable {
             DataField::new_nullable("dal_metrics_write_bytes", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
+            DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
         ]);
 
         let table_info = TableInfo {
