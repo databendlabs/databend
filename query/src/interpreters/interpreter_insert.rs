@@ -165,6 +165,8 @@ impl InsertInterpreter {
         let catalog_name = self.plan.catalog_name.clone();
         let context = self.ctx.clone();
         let append_entries = self.ctx.consume_precommit_blocks();
+
+        // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
         let handler = self.ctx.get_storage_runtime().spawn(async move {
             table
                 .commit_insertion(context, &catalog_name, append_entries, overwrite)
