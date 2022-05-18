@@ -37,7 +37,7 @@ pub struct Config {
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
 
-    #[clap(long, default_value = "./_logs")]
+    #[clap(long, default_value = "./.databend/logs")]
     pub log_dir: String,
 
     #[clap(long, default_value = "127.0.0.1:28001")]
@@ -238,7 +238,7 @@ pub struct RaftConfig {
     pub raft_api_port: u32,
 
     /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long, default_value = "./_meta")]
+    #[clap(long, default_value = "./.databend/meta")]
     pub raft_dir: String,
 
     /// Whether to fsync meta to disk for every meta write(raft log, state machine etc).

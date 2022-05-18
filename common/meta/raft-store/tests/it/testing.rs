@@ -45,7 +45,6 @@ macro_rules! init_raft_store_ut {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
         common_meta_sled_store::init_temp_sled_db(t);
 
-        // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
         common_tracing::init_meta_ut_tracing();
 
         let name = common_tracing::func_name!();

@@ -69,6 +69,7 @@ runs:
           metasrv/_logs*/
           query/_logs*/
           store/_logs*/
+          .databend/
 
     # for cache
     - shell: bash
