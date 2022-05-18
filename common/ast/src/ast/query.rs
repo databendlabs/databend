@@ -36,6 +36,8 @@ pub struct Query<'a> {
     pub limit: Vec<Expr<'a>>,
     // `OFFSET` expr
     pub offset: Option<Expr<'a>>,
+    // FORMAT <format>
+    pub format: Option<String>,
 }
 
 // A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
@@ -403,6 +405,9 @@ impl<'a> Display for Query<'a> {
             write!(f, " OFFSET {offset}")?;
         }
 
+        if let Some(format) = &self.format {
+            write!(f, " FORMAT {format}")?;
+        }
         Ok(())
     }
 }

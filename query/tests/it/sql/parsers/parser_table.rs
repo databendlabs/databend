@@ -139,6 +139,7 @@ fn create_table() -> Result<()> {
             order_by: vec![],
             limit: None,
             offset: None,
+            format: None,
         })),
         order_keys: vec![],
     });

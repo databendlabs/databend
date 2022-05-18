@@ -20,7 +20,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use futures::StreamExt;
 
-use crate::formats::output_format::OutputFormat;
 use crate::formats::output_format::OutputFormatType;
 use crate::sessions::QueryContext;
 use crate::storages::result::ResultTable;
@@ -50,15 +49,18 @@ impl ResultTable {
             })
             .await?;
         let fmt_setting = ctx.get_format_settings()?;
+        let mut output_format = fmt.create_format(self.schema());
+
         let stream = stream! {
             while let Some(block) = block_stream.next().await {
                 match block{
                     Ok(block) => {
-                        yield(fmt.serialize_block(&block, &fmt_setting))
+                        yield output_format.serialize_block(&block, &fmt_setting);
                     },
                     Err(err) => yield(Err(err)),
                 };
             };
+            yield output_format.finalize();
         };
         Ok(Box::pin(stream))
     }

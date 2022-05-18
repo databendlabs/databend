@@ -73,6 +73,7 @@ impl TryFrom<Query> for DfQueryStatement {
             order_by: query.order_by.clone(),
             limit: query.limit.clone(),
             offset: query.offset.clone(),
+            format: query.format.clone(),
         })
     }
 }

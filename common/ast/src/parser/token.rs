@@ -895,6 +895,7 @@ impl TokenKind {
             | TokenKind::INTO
             // | TokenKind::ISNULL
             | TokenKind::LIMIT
+            | TokenKind::FORMAT
             // | TokenKind::NOTNULL
             | TokenKind::OFFSET
             | TokenKind::ON
