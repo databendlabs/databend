@@ -47,6 +47,19 @@ impl TypeSerializer for StringSerializer {
         Ok(result)
     }
 
+    fn serialize_column_quoted(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        let column: &StringColumn = Series::check_get(column)?;
+        let result: Vec<String> = column
+            .iter()
+            .map(|v| format!("{:?}", String::from_utf8_lossy(v)))
+            .collect();
+        Ok(result)
+    }
+
     fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let column: &StringColumn = Series::check_get(column)?;
         let result: Vec<Value> = column

@@ -13,66 +13,64 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
-use common_exception::ErrorCode;
+use common_datavalues::TypeSerializerImpl;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
 use crate::formats::output_format::OutputFormat;
 
-const FIELD_DELIMITER: u8 = b'\t';
-const ROW_DELIMITER: u8 = b'\n';
-
-pub type TSVOutputFormat = TCSVOutputFormat<true>;
-pub type CSVOutputFormat = TCSVOutputFormat<false>;
-
 #[derive(Default)]
-pub struct TCSVOutputFormat<const TSV: bool> {}
+pub struct NDJsonOutputFormat {
+    serializers: Vec<TypeSerializerImpl>,
+}
 
-impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
+impl NDJsonOutputFormat {
+    pub fn create(schema: DataSchemaRef) -> Self {
+        let serializers: Vec<_> = schema
+            .fields()
+            .iter()
+            .map(|field| field.data_type().create_serializer())
+            .collect();
+
+        Self { serializers }
+    }
+}
+
+impl OutputFormat for NDJsonOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock, format: &FormatSettings) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
         let columns_size = block.num_columns();
 
+        assert_eq!(self.serializers.len(), columns_size);
+
         let mut buf = Vec::with_capacity(block.memory_size());
         let mut col_table = Vec::new();
         for col_index in 0..columns_size {
-            let column = block.column(col_index);
-            let column = column.convert_full_column();
-            let field = block.schema().field(col_index);
-            let data_type = field.data_type();
-            let serializer = data_type.create_serializer();
-            col_table.push(serializer.serialize_column(&column, format).map_err(|e| {
-                ErrorCode::UnexpectedError(format!(
-                    "fail to serialize field {}, error = {}",
-                    field.name(),
-                    e
-                ))
-            })?);
+            let column = block.column(col_index).convert_full_column();
+            let res = self.serializers[col_index].serialize_column_quoted(&column, format)?;
+            col_table.push(res)
         }
-
-        let fd = if TSV {
-            FIELD_DELIMITER
-        } else {
-            format.field_delimiter[0]
-        };
-
-        let rd = if TSV {
-            ROW_DELIMITER
-        } else {
-            format.record_delimiter[0]
-        };
 
         for row_index in 0..rows_size {
-            for col in col_table.iter().take(columns_size - 1) {
-                buf.extend_from_slice(col[row_index].as_bytes());
-                buf.push(fd);
-            }
-            buf.extend_from_slice(col_table[columns_size - 1][row_index].as_bytes());
-            buf.push(rd);
-        }
+            for (i, (col, field)) in col_table.iter().zip(block.schema().fields()).enumerate() {
+                if i != 0 {
+                    buf.push(b',');
+                } else {
+                    buf.push(b'{')
+                }
 
+                buf.push(b'"');
+                buf.extend_from_slice(field.name().as_bytes());
+                buf.push(b'"');
+
+                buf.push(b':');
+                buf.extend_from_slice(col[row_index].as_bytes());
+            }
+            buf.extend_from_slice("}\n".as_bytes());
+        }
         Ok(buf)
     }
 

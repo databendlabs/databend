@@ -42,6 +42,27 @@ impl PlanParser {
         PlanParser::build_plan(statements, ctx).await
     }
 
+    pub async fn parse_with_format(
+        ctx: Arc<QueryContext>,
+        query: &str,
+    ) -> Result<(PlanNode, Option<String>)> {
+        let (statements, _) = DfParser::parse_sql(query, ctx.get_current_session().get_type())?;
+        let mut format = None;
+        if !statements.is_empty() {
+            match &statements[0] {
+                DfStatement::Query(q) => {
+                    format = q.format.clone();
+                }
+                DfStatement::InsertQuery(q) => {
+                    format = q.format.clone();
+                }
+                _ => {}
+            }
+        };
+        let plan = PlanParser::build_plan(statements, ctx).await?;
+        Ok((plan, format))
+    }
+
     pub fn parse_expr(expr: &str) -> Result<Expression> {
         let expr = DfParser::parse_expr(expr)?;
         let analyzer = ExpressionSyncAnalyzer::create();
@@ -122,7 +143,6 @@ impl PlanParser {
 
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(limit),
-            format: None,
         }))
     }
 

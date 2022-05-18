@@ -21,7 +21,6 @@ use crate::PlanNode;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct SelectPlan {
     pub input: Arc<PlanNode>,
-    pub format: Option<String>,
 }
 
 impl SelectPlan {

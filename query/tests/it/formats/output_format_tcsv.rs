@@ -56,10 +56,11 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
                 NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
             })
             .collect();
-        DataBlock::create(schema, columns)
+        DataBlock::create(schema.clone(), columns)
     } else {
         block
     };
+
     let mut format_setting = FormatSettings::default();
 
     {
@@ -79,7 +80,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         format_setting.field_delimiter = vec![b'$'];
 
         let fmt = OutputFormatType::Csv;
-        let mut formater = fmt.create_format(schema.clone());
+        let mut formater = fmt.create_format(schema);
         let buffer = formater.serialize_block(&block, &format_setting)?;
 
         let json_block = String::from_utf8(buffer)?;

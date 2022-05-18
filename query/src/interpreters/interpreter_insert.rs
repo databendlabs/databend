@@ -99,7 +99,6 @@ impl InsertInterpreter {
                 let select_interpreter =
                     SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
                         input: Arc::new((**plan).clone()),
-                        format: None,
                     })?;
                 pipeline = select_interpreter.create_new_pipeline()?;
 

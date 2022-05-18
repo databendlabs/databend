@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
@@ -41,12 +42,9 @@ use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSource;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::formats::Format;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
-use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 
 // https://clickhouse.com/docs/en/interfaces/http/
@@ -55,16 +53,13 @@ const FORMAT_JSON_EACH_ROW: &str = "JSONEachRow";
 
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
-    query: String,
-}
-
-fn supported_formats() -> String {
-    vec![FORMAT_JSON_EACH_ROW].join("|")
+    query: Option<String>,
 }
 
 async fn execute(
     ctx: Arc<QueryContext>,
     plan: PlanNode,
+    format: Option<String>,
     input_stream: Option<SendableDataBlockStream>,
 ) -> Result<Body> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -90,7 +85,11 @@ async fn execute(
         };
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
     let format_setting = ctx.get_format_settings()?;
-    let fmt = OutputFormatType::Tsv;
+    let mut fmt = OutputFormatType::Tsv;
+    if let Some(format) = format {
+        fmt = OutputFormatType::from_str(format.as_str())?;
+    }
+
     let mut output_format = fmt.create_format(plan.schema());
     let stream = stream! {
         while let Some(block) = data_stream.next().await {
@@ -128,8 +127,8 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(InternalServerError)?;
 
-    let mut sql = params.query;
-    let plan = PlanParser::parse(context.clone(), &sql)
+    let sql = params.query.unwrap_or_default();
+    let (plan, format) = PlanParser::parse_with_format(context.clone(), &sql)
         .await
         .map_err(BadRequest)?;
 
@@ -139,41 +138,9 @@ pub async fn clickhouse_handler_get(
         )));
     }
     context.attach_query_str(&sql);
-    execute(context, plan, None)
+    execute(context, plan, format, None)
         .await
         .map_err(InternalServerError)
-}
-
-fn try_parse_insert_formatted(
-    sql: &str,
-    typ: SessionType,
-) -> Result<Option<(Format, Vec<DfStatement>)>> {
-    if let Ok((statements, _)) = DfParser::parse_sql(sql, typ) {
-        if statements.is_empty() {
-            return Ok(None);
-        }
-        if statements.len() > 1 {
-            return Err(ErrorCode::SyntaxException("Only support single query"));
-        }
-        let statement = &statements[0];
-        if let DfStatement::InsertQuery(ref insert) = statement {
-            if let Some(format) = &insert.format {
-                match format.as_str() {
-                    FORMAT_JSON_EACH_ROW => return Ok(Some((Format::NDJson, statements))),
-                    // "" for "insert into my_table values;"
-                    "" => {}
-                    _ => {
-                        return Err(ErrorCode::SyntaxException(format!(
-                            "format {} not supported; only support: {}",
-                            format,
-                            supported_formats()
-                        )))
-                    }
-                };
-            }
-        };
-    }
-    Ok(None)
 }
 
 #[poem::handler]
@@ -192,38 +159,34 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    let mut sql = params.query;
+    let mut sql = params.query.unwrap_or_default();
 
-    // Insert into format sql
-    let (plan, input_stream) = if let Some((format, statements)) =
-        try_parse_insert_formatted(&sql, ctx.get_current_session().get_type())
-            .map_err(BadRequest)?
-    {
-        let plan = PlanParser::build_plan(statements, ctx.clone())
+    let (plan, format, input_stream) = if sql.is_empty() {
+        sql = body.into_string().await?;
+        let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
             .await
-            .map_err(InternalServerError)?;
-        ctx.attach_query_str(&sql);
+            .map_err(BadRequest)?;
 
-        let input_stream = match format {
-            Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
-        };
-        (plan, Some(input_stream))
+        (plan, format, None)
     } else {
-        // Other sql
-        let body = body.into_string().await.map_err(BadRequest)?;
-        let sql = format!("{}\n{}", sql, body);
-        let (statements, _) =
-            DfParser::parse_sql(&sql, ctx.get_current_session().get_type()).map_err(BadRequest)?;
-
-        let plan = PlanParser::build_plan(statements, ctx.clone())
+        let (plan, format) = PlanParser::parse_with_format(ctx.clone(), &sql)
             .await
-            .map_err(InternalServerError)?;
-        ctx.attach_query_str(&sql);
+            .map_err(BadRequest)?;
 
-        (plan, None)
+        let mut input_stream = None;
+        if let PlanNode::Insert(_) = &plan {
+            if let Some(format) = &format {
+                if format.to_uppercase() == FORMAT_JSON_EACH_ROW {
+                    input_stream =
+                        Some(build_ndjson_stream(&plan, body).await.map_err(BadRequest)?);
+                }
+            }
+        }
+        (plan, format, input_stream)
     };
 
-    execute(ctx, plan, input_stream)
+    ctx.attach_query_str(&sql);
+    execute(ctx, plan, format, input_stream)
         .await
         .map_err(InternalServerError)
 }

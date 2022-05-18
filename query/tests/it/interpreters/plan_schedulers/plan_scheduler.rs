@@ -140,7 +140,6 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
                     },
                     input: Arc::new(PlanNode::Empty(EmptyPlan::create())),
                 })),
-                format: None,
             })),
         })),
     }))?;
@@ -241,7 +240,6 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
                     scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
                     input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
                 })),
-                format: None,
             })),
         })),
     }))?;

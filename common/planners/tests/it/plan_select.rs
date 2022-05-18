@@ -26,7 +26,6 @@ fn test_select_wildcard_plan() -> Result<()> {
     let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;
     let select = PlanNode::Select(SelectPlan {
         input: Arc::new(plan),
-        format: None,
     });
     let expect = "Projection: a:String";
 

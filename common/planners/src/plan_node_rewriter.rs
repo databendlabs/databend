@@ -340,7 +340,6 @@ pub trait PlanRewriter: Sized {
     fn rewrite_select(&mut self, plan: &SelectPlan) -> Result<PlanNode> {
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
-            format: plan.format.clone(),
         }))
     }
 

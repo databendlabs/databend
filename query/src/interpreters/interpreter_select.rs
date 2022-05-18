@@ -95,7 +95,6 @@ impl Interpreter for SelectInterpreter {
         let optimized_plan = self.rewrite_plan()?;
         let select_plan = SelectPlan {
             input: Arc::new(optimized_plan),
-            format: None,
         };
         let mut new_pipeline = builder.finalize(&select_plan)?;
         new_pipeline.set_max_threads(settings.get_max_threads()? as usize);

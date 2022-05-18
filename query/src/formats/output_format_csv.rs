@@ -50,13 +50,20 @@ impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
             let field = block.schema().field(col_index);
             let data_type = field.data_type();
             let serializer = data_type.create_serializer();
-            col_table.push(serializer.serialize_column(&column, format).map_err(|e| {
+
+            let res = if TSV {
+                serializer.serialize_column(&column, format)
+            } else {
+                serializer.serialize_column_quoted(&column, format)
+            };
+            let res = res.map_err(|e| {
                 ErrorCode::UnexpectedError(format!(
                     "fail to serialize field {}, error = {}",
                     field.name(),
                     e
                 ))
-            })?);
+            })?;
+            col_table.push(res)
         }
 
         let fd = if TSV {
@@ -72,14 +79,14 @@ impl<const TSV: bool> OutputFormat for TCSVOutputFormat<TSV> {
         };
 
         for row_index in 0..rows_size {
-            for col in col_table.iter().take(columns_size - 1) {
+            for (i, col) in col_table.iter().enumerate() {
+                if i != 0 {
+                    buf.push(fd);
+                }
                 buf.extend_from_slice(col[row_index].as_bytes());
-                buf.push(fd);
             }
-            buf.extend_from_slice(col_table[columns_size - 1][row_index].as_bytes());
             buf.push(rd);
         }
-
         Ok(buf)
     }
 
