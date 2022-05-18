@@ -1,0 +1,300 @@
+statement query T 
+SELECT '=== null ===';
+
+----  
+=== null ===
+
+statement query T 
+SELECT SUBSTRING('12345', null);
+
+----  
+None
+
+statement query T 
+SELECT SUBSTRING(null, 2);
+
+----  
+None
+
+statement query T 
+SELECT SUBSTRING(null, null);
+
+----  
+None
+
+statement query T 
+SELECT '=== const, const ===';
+
+----  
+=== const, const ===
+
+statement query T 
+SELECT SUBSTRING('12345', 0);
+
+----  
+	
+
+statement query T 
+SELECT SUBSTRING('12345', 1);
+
+----  
+12345
+
+statement query T 
+SELECT SUBSTRING('12345', 5);
+
+----  
+5
+
+statement query T 
+SELECT SUBSTRING('12345', 6);
+
+----  
+	
+
+statement query T 
+SELECT '=== const, const, const ===';
+
+----  
+=== const, const, const ===
+
+statement query T 
+SELECT SUBSTRING('12345', 2, 0);
+
+----  
+	
+
+statement query T 
+SELECT SUBSTRING('12345', 2, 1);
+
+----  
+2
+
+statement query T 
+SELECT SUBSTRING('12345', 2, 5);
+
+----  
+2345
+
+statement query T 
+SELECT SUBSTRING('12345', 2, 6);
+
+----  
+2345
+
+statement query T 
+SELECT '=== const, const, series ===';
+
+----  
+=== const, const, series ===
+
+statement query T 
+SELECT SUBSTRING('12345', 2, number) FROM numbers(7) ORDER BY number;
+
+----  
+	
+2
+23
+234
+2345
+2345
+2345
+
+statement query T 
+SELECT '=== const, series ===';
+
+----  
+=== const, series ===
+
+statement query T 
+SELECT SUBSTRING('12345', number) FROM numbers(7) ORDER BY number;
+
+----  
+	
+12345
+2345
+345
+45
+5
+	
+
+statement query T 
+SELECT '=== const, series, const ===';
+
+----  
+=== const, series, const ===
+
+statement query T 
+SELECT SUBSTRING('12345', number, 2) FROM numbers(7) ORDER BY number;
+
+----  
+	
+12
+23
+34
+45
+5
+	
+
+statement query T 
+SELECT '=== const, series, series ===';
+
+----  
+=== const, series, series ===
+
+statement query T 
+SELECT SUBSTRING('12345', number, number) FROM numbers(7) ORDER BY number;
+
+----  
+	
+1
+23
+345
+45
+5
+	
+
+statement query T 
+SELECT '=== series, const ===';
+
+----  
+=== series, const ===
+
+statement query T 
+SELECT SUBSTRING(to_varchar(number * 100 + number), 2) FROM numbers(7) ORDER BY number;
+
+----  
+	
+01
+02
+03
+04
+05
+06
+
+statement query T 
+SELECT '=== series, const, const ===';
+
+----  
+=== series, const, const ===
+
+statement query T 
+SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER BY number;
+
+----  
+0
+1
+2
+3
+4
+5
+6
+
+statement query T 
+SELECT '=== series, const, series ===';
+
+----  
+=== series, const, series ===
+
+statement query T 
+SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) ORDER BY number;
+
+----  
+	
+1
+20
+303
+404
+505
+606
+
+statement query T 
+SELECT '=== series, series ===';
+
+----  
+=== series, series ===
+
+statement query T 
+SELECT SUBSTRING(to_varchar(number * 100 + number), number) FROM numbers(7) ORDER BY number;
+
+----  
+	
+101
+02
+3
+	
+	
+	
+
+statement query T 
+SELECT '=== series, series, const ===';
+
+----  
+=== series, series, const ===
+
+statement query T 
+SELECT SUBSTRING(to_varchar(number * 100 + number), number, 1) FROM numbers(7) ORDER BY number;
+
+----  
+	
+1
+0
+3
+	
+	
+	
+
+statement query T 
+SELECT '=== series, series, series ===';
+
+----  
+=== series, series, series ===
+
+statement query T 
+SELECT SUBSTRING(to_varchar(number * 100 + number), number, number) FROM numbers(7) ORDER BY number;
+
+----  
+	
+1
+02
+3
+	
+	
+	
+
+statement query T 
+SELECT '=== forms ===';
+
+----  
+=== forms ===
+
+statement query T 
+SELECT SUBSTRING('12345' FROM 2);
+
+----  
+2345
+
+statement query T 
+SELECT SUBSTRING('12345' FROM 2 FOR 1);
+
+----  
+2
+
+statement query T 
+SELECT '=== synonyms ===';
+
+----  
+=== synonyms ===
+
+statement query T 
+SELECT MID('12345', 2, 1);
+
+----  
+2
+
+statement query T 
+SELECT SUBSTR('12345', 2, 1);
+
+----  
+2
+

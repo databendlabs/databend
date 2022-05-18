@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_grpc::MetaGrpcClientConf;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
@@ -99,9 +98,9 @@ impl MutableCatalog {
         } else {
             tracing::info!("use remote meta");
 
-            let meta_client_provider = Arc::new(MetaClientProvider::new(MetaGrpcClientConf::from(
-                &conf.meta,
-            )));
+            let meta_client_provider = Arc::new(MetaClientProvider::new(
+                conf.meta.to_meta_grpc_client_conf(),
+            ));
             let meta_backend = MetaBackend::create(meta_client_provider);
             Arc::new(meta_backend)
         };

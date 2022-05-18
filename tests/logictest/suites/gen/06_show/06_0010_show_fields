@@ -1,0 +1,18 @@
+statement ok
+DROP DATABASE IF EXISTS ss;
+
+statement ok
+CREATE DATABASE ss;
+
+statement ok
+USE ss;
+
+statement ok
+CREATE TABLE t1(a INT);
+
+statement ok
+SHOW FIELDS FROM t1;
+
+statement ok
+DROP DATABASE IF EXISTS ss;
+

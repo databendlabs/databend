@@ -1,0 +1,59 @@
+statement ok
+DROP DATABASE IF EXISTS `test`;
+
+statement ok
+CREATE DATABASE `test`;
+
+statement ok
+CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default 'x', d smallint null, e Date) Engine = Null;
+
+statement query TT 
+SHOW CREATE TABLE `test`.`a`;
+
+----  
+a CREATE TABLE `a` (
+  `a` BIGINT,
+  `b` INT DEFAULT 3,
+  `c` VARCHAR DEFAULT 'x',
+  `d` SMALLINT NULL,
+  `e` DATE
+) ENGINE=Null
+
+statement ok
+CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null, e Date default today()) Engine = Null COMMENT = 'test b';
+
+statement query TT 
+SHOW CREATE TABLE `test`.`b`;
+
+----  
+b CREATE TABLE `b` (
+  `a` BIGINT,
+  `b` INT NULL DEFAULT NULL,
+  `c` VARCHAR,
+  `d` SMALLINT UNSIGNED NULL,
+  `e` DATE DEFAULT today()
+) ENGINE=Null COMMENT='test b'
+
+statement ok
+CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3);
+
+statement query TT 
+SHOW CREATE TABLE `test`.`c`;
+
+----  
+c CREATE TABLE `c` (
+  `a` INT
+) ENGINE=FUSE CLUSTER BY (a, (a % 3))
+
+statement ok
+DROP TABLE `test`.`a`;
+
+statement ok
+DROP TABLE `test`.`b`;
+
+statement ok
+DROP TABLE `test`.`c`;
+
+statement ok
+DROP DATABASE `test`;
+

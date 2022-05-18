@@ -1,0 +1,33 @@
+statement query II 
+select 1, sum(number) from numbers_mt(1000000);
+
+----  
+1 499999500000
+
+statement query B label(mysql,http)
+select count(*) = count(1) from numbers(1000);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query I 
+select count(1) from numbers(1000);
+
+----  
+1000
+
+statement query I 
+select sum(3) from numbers(1000);
+
+----  
+3000
+
+statement query I 
+select count(null) from numbers(1000);
+
+----  
+0
+

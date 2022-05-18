@@ -1,0 +1,27 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0005;
+
+statement ok
+CREATE DATABASE db_09_0005;
+
+statement ok
+USE db_09_0005;
+
+statement ok
+create table n1(a uint64);
+
+statement ok
+insert into n1 select number from numbers(10);
+
+statement ok
+insert into n1 select number from numbers(10);
+
+statement ok
+select count(*) from n1;
+
+statement ok
+DROP TABLE n1;
+
+statement ok
+DROP DATABASE db_09_0005;
+

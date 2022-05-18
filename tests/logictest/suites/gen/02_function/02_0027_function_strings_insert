@@ -1,0 +1,66 @@
+statement query T 
+SELECT INSERT('123456789', 0, 0, 'aaa');
+
+----  
+123456789
+
+statement query T 
+SELECT INSERT('123456789', 1, 1, 'aaa');
+
+----  
+aaa23456789
+
+statement query T 
+SELECT INSERT('123456789', 2, 2, 'aaa');
+
+----  
+1aaa456789
+
+statement query T 
+SELECT INSERT('123456789', 3, 3, 'aaa');
+
+----  
+12aaa6789
+
+statement query T 
+SELECT INSERT('123456789', 4, 4, 'aaa');
+
+----  
+123aaa89
+
+statement query T 
+SELECT INSERT('123456789', 5, 5, 'aaa');
+
+----  
+1234aaa
+
+statement query T 
+SELECT INSERT('123456789', 6, 6, 'aaa');
+
+----  
+12345aaa
+
+statement query T 
+SELECT INSERT('123456789', 7, 7, 'aaa');
+
+----  
+123456aaa
+
+statement query T 
+SELECT INSERT('123456789', 8, 8, 'aaa');
+
+----  
+1234567aaa
+
+statement query T 
+SELECT INSERT('123456789', 9, 9, 'aaa');
+
+----  
+12345678aaa
+
+statement query T 
+SELECT INSERT('123456789', 10, 10, 'aaa');
+
+----  
+123456789
+

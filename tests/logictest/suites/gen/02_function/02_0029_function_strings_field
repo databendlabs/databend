@@ -1,0 +1,64 @@
+statement query T 
+SELECT '===1===';
+
+----  
+===1===
+
+statement query I 
+SELECT FIELD('3', '77', '3') FROM numbers(5) ORDER BY number;
+
+----  
+2
+2
+2
+2
+2
+
+statement query T 
+SELECT '===2===';
+
+----  
+===2===
+
+statement query I 
+SELECT FIELD('3', '77', to_varchar(number+1)) FROM numbers(5) ORDER BY number;
+
+----  
+0
+0
+2
+0
+0
+
+statement query T 
+SELECT '===3===';
+
+----  
+===3===
+
+statement query I 
+SELECT FIELD(to_varchar(number+1), '77', '3') FROM numbers(5) ORDER BY number;
+
+----  
+0
+0
+2
+0
+0
+
+statement query T 
+SELECT '===4===';
+
+----  
+===4===
+
+statement query I 
+SELECT FIELD(to_varchar(number), '77', to_varchar(4-number)) FROM numbers(5) ORDER BY number;
+
+----  
+0
+0
+2
+0
+0
+

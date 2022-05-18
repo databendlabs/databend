@@ -1,0 +1,204 @@
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+DROP TABLE IF EXISTS t3;
+
+statement ok
+DROP TABLE IF EXISTS t4;
+
+statement ok
+CREATE TABLE t(c1 int) ENGINE = Null;
+
+statement query I 
+SELECT COUNT(1) from system.tables where name = 't' and database = 'default';
+
+----  
+1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
+
+statement error 2302
+CREATE TABLE t(c1 int) ENGINE = Null; 
+
+statement ok
+create table t2(a int,b int) engine=Memory;
+
+statement ok
+insert into t2 values(1,1),(2,2);
+
+statement query I 
+select a+b from t2;
+
+----  
+2
+4
+
+statement error 2302
+create table t2(a int,b int) engine=Memory; 
+
+statement error 2703
+create table t3(a int,b int) engine=Memory CLUSTER BY(a); 
+
+statement ok
+create table t3(`a` int) ENGINE = Null;
+
+statement ok
+create table t4(a int) ENGINE = Null;
+
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+DROP TABLE IF EXISTS t3;
+
+statement ok
+DROP TABLE IF EXISTS t4;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+CREATE DATABASE db2;
+
+statement ok
+CREATE TABLE db1.test1(a INT, b INT null) ENGINE=memory;
+
+statement ok
+INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4);
+
+statement query T 
+SELECT '====BEGIN TEST CREATE TABLE LIKE STATEMENT====';
+
+----  
+====BEGIN TEST CREATE TABLE LIKE STATEMENT====
+
+statement ok
+CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse;
+
+statement ok
+INSERT INTO db2.test2 VALUES (3, 5);
+
+statement query I 
+SELECT a+b FROM db2.test2;
+
+----  
+8
+
+statement query TTTTT 
+DESCRIBE db2.test2;
+
+----  
+a INT NO 0 
+b INT YES NULL 
+
+statement query T 
+SELECT '====END TEST CREATE TABLE LIKE STATEMENT====';
+
+----  
+====END TEST CREATE TABLE LIKE STATEMENT====
+
+statement query T 
+SELECT '====BEGIN TEST CREATE TABLE AS SELECT STATEMENT====';
+
+----  
+====BEGIN TEST CREATE TABLE AS SELECT STATEMENT====
+
+statement ok
+CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1;
+
+statement query TTTTT 
+DESCRIBE db2.test3;
+
+----  
+a VARCHAR YES NULL 
+y VARCHAR YES NULL 
+b INT YES NULL 
+
+statement query T 
+SELECT a FROM db2.test3;
+
+----  
+1
+2
+3
+
+statement ok
+CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1;
+
+statement query TTTTT 
+DESCRIBE db2.test4;
+
+----  
+a VARCHAR YES NULL 
+y VARCHAR YES NULL 
+b INT YES NULL 
+
+statement query T 
+SELECT a FROM db2.test4;
+
+----  
+1
+2
+3
+
+statement ok
+CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b FROM db1.test1;
+
+statement query T 
+SELECT a FROM db2.test5;
+
+----  
+None
+None
+None
+
+statement query T 
+SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
+
+----  
+====END TEST CREATE TABLE AS SELECT STATEMENT====
+
+statement query T 
+SELECT '====TIMESTAMP====';
+
+----  
+====TIMESTAMP====
+
+statement error 1006
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP); 
+
+statement error 1006
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + a); 
+
+statement ok
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
+
+statement query T 
+SELECT '====CREATE ALL DATA TYPE TABLE====';
+
+----  
+====CREATE ALL DATA TYPE TABLE====
+
+statement ok
+create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
+
+statement ok
+desc db2.test7;
+
+statement ok
+DROP DATABASE db1;
+
+statement ok
+DROP DATABASE db2;
+
+statement error 1002
+CREATE TABLE system.test; 
+

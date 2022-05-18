@@ -13,7 +13,6 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-base = { path = "../base" }
-common-configs = { path = "../configs" }
 common-exception = { path = "../exception" }
 common-tracing = { path = "../tracing" }
 

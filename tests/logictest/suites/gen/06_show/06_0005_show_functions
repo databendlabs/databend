@@ -1,0 +1,30 @@
+statement query TBBTT label(mysql,http)
+SHOW FUNCTIONS LIKE 'today%';
+
+----  mysql
+today 1 0  Returns current date.
+todayofmonth 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+todayofweek 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+todayofyear 1 0  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+
+----  http
+today true false  Returns current date.
+todayofmonth true false  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+todayofweek true false  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+todayofyear true false  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+
+statement query TBBTT label(mysql,http)
+SHOW FUNCTIONS WHERE name LIKE 'today%';
+
+----  mysql
+today 1 0  Returns current date.
+todayofmonth 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+todayofweek 1 0  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+todayofyear 1 0  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+
+----  http
+today true false  Returns current date.
+todayofmonth true false  Converts a date or date with time to a UInt8 number containing the number of the day of the month (1-31).
+todayofweek true false  Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+todayofyear true false  Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+

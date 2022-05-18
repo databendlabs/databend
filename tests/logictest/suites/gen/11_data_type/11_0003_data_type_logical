@@ -1,0 +1,18 @@
+statement query B label(mysql,http)
+SELECT 1::BOOLEAN;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT 1::BOOL;
+
+----  mysql
+1
+
+----  http
+true
+

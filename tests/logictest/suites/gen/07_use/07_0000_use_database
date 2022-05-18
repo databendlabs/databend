@@ -1,0 +1,30 @@
+statement error 1003
+USE not_exists_db;
+
+statement error 1003
+USE ``;
+
+statement error 1003
+USE ` `;
+
+statement ok
+USE default;
+
+statement ok
+USE system;
+
+statement query T
+select database();
+
+----
+system
+
+statement ok
+create database `rust-lang`;
+
+statement ok
+use `rust-lang`;
+
+statement ok
+DROP DATABASE if exists `rust-lang`;
+

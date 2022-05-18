@@ -1,0 +1,141 @@
+statement query I 
+SELECT (0 - number) :: Int8 AS c FROM numbers(256) GROUP BY c HAVING c = 0;
+
+----  
+0
+
+statement query I 
+SELECT (0 - number) :: Int8 AS c FROM numbers(256) GROUP BY c HAVING c = -1;
+
+----  
+-1
+
+statement query I 
+SELECT (0 - number) :: Int8 AS c FROM numbers(256) GROUP BY c HAVING c = -127;
+
+----  
+-127
+
+statement query I 
+SELECT (0 - number) :: Int8 AS c FROM numbers(256) GROUP BY c HAVING c = -128;
+
+----  
+-128
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int8 AS c FROM numbers(256) GROUP BY c);
+
+----  
+256
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int8 AS c FROM numbers(256) GROUP BY c HAVING c > 0);
+
+----  
+127
+
+statement query I 
+SELECT (0 - number) :: Int16 AS c FROM numbers(65535) GROUP BY c HAVING c = 0;
+
+----  
+0
+
+statement query I 
+SELECT (0 - number) :: Int16 AS c FROM numbers(65535) GROUP BY c HAVING c = -1;
+
+----  
+-1
+
+statement query I 
+SELECT (0 - number) :: Int16 AS c FROM numbers(65535) GROUP BY c HAVING c = -32768;
+
+----  
+-32768
+
+statement ok
+SELECT (0 - number) :: Int16 AS c FROM numbers(65535) GROUP BY c HAVING c = -32769;
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int16 AS c FROM numbers(65535) GROUP BY c);
+
+----  
+65535
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int16 AS c FROM numbers(65535) GROUP BY c HAVING c > 0);
+
+----  
+32766
+
+statement query I 
+SELECT (0 - number) :: Int32 AS c FROM numbers(65535) GROUP BY c HAVING c = 0;
+
+----  
+0
+
+statement query I 
+SELECT (0 - number) :: Int32 AS c FROM numbers(65535) GROUP BY c HAVING c = -1;
+
+----  
+-1
+
+statement query I 
+SELECT (0 - number) :: Int32 AS c FROM numbers(65535) GROUP BY c HAVING c = -32768;
+
+----  
+-32768
+
+statement query I 
+SELECT (0 - number) :: Int32 AS c FROM numbers(65535) GROUP BY c HAVING c = -32769;
+
+----  
+-32769
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int32 AS c FROM numbers(65535) GROUP BY c);
+
+----  
+65535
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int32 AS c FROM numbers(65535) GROUP BY c HAVING c > 0);
+
+----  
+0
+
+statement query I 
+SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c HAVING c = 0;
+
+----  
+0
+
+statement query I 
+SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c HAVING c = -1;
+
+----  
+-1
+
+statement query I 
+SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c HAVING c = -32768;
+
+----  
+-32768
+
+statement query I 
+SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c HAVING c = -32769;
+
+----  
+-32769
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c);
+
+----  
+65535
+
+statement query I 
+SELECT COUNT() FROM (SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c HAVING c > 0);
+
+----  
+0
+

@@ -1,0 +1,120 @@
+statement query F 
+SELECT try_cast(1 + 1, Float64);
+
+----  
+2.0
+
+statement query I 
+SELECT try_cast(try_cast(1 + 1 + 1, String) AS Int8);
+
+----  
+3
+
+statement query I 
+SELECT try_cast(Null as Int64);
+
+----  
+None
+
+statement query T 
+SELECT try_cast(Null as Varchar);
+
+----  
+None
+
+statement query B 
+SELECT try_cast(Null as Boolean);
+
+----  
+None
+
+statement query B label(mysql,http)
+SELECT try_cast('33' as signed) = 33;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast('33' as unsigned) = 33;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast('-33aa' as signed) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast('33 aa' as unsigned) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast('-33' as unsigned) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast('aa' as unsigned) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast('aa' as Float64) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast(parse_json('null') as float64) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast(parse_json('"test"') as int32) is null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT try_cast(parse_json('123') as int32)  = 123;
+
+----  mysql
+1
+
+----  http
+true
+

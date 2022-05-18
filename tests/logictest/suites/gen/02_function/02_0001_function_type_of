@@ -1,0 +1,144 @@
+statement query T 
+select typeof(number) from numbers(100) limit 1;
+
+----  
+BIGINT UNSIGNED
+
+statement query TTTT 
+select typeof(number + 1), typeof(number - 1),       typeof(number / 1), typeof(number * 1) from numbers(100) limit 1;
+
+----  
+BIGINT UNSIGNED BIGINT DOUBLE BIGINT UNSIGNED
+
+statement query TTT 
+select typeof('33'), typeof('44'), typeof(Null);
+
+----  
+VARCHAR VARCHAR NULL
+
+statement query T 
+select '=== TEST_numeric_coercion';
+
+----  
+=== TEST_numeric_coercion
+
+statement query TTTTT 
+select 'UInt8 OP UInt8',  typeof(1 + 2),             typeof(1-2),             typeof(1 * 2),             typeof(1/2) ;
+
+----  
+UInt8 OP UInt8 SMALLINT UNSIGNED SMALLINT SMALLINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt8 OP UInt16', typeof(1 + 256),           typeof(1-256),           typeof(1 * 256),           typeof(1/256) ;
+
+----  
+UInt8 OP UInt16 INT UNSIGNED INT INT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt8 OP UInt32', typeof(1 + 65536),         typeof(1-65536),         typeof(1 * 65536),         typeof(1/65536) ;
+
+----  
+UInt8 OP UInt32 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt8 OP UInt64', typeof(1 + 65536 * 65536), typeof(1-65536 * 65536), typeof(1 * 65536 * 65536), typeof(1/(65536 * 65536)) ;
+
+----  
+UInt8 OP UInt64 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt16 OP UInt8',  typeof(256 + 2),             typeof(256 - 2),              typeof(256 * 2),              typeof(256 / 2) ;
+
+----  
+UInt16 OP UInt8 INT UNSIGNED INT INT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt16 OP UInt16', typeof(256 + 256),           typeof(256 - 256),            typeof(256 * 256),            typeof(256 / 256) ;
+
+----  
+UInt16 OP UInt16 INT UNSIGNED INT INT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt16 OP UInt32', typeof(256 + 65536),         typeof(256 - 65536),          typeof(256 * 65536),          typeof(256 / 65536) ;
+
+----  
+UInt16 OP UInt32 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt16 OP UInt64', typeof(256 + 65536 * 65536), typeof(256 - 65536 * 65536),  typeof(256 * 65536 * 65536),  typeof(256 / (65536 * 65536)) ;
+
+----  
+UInt16 OP UInt64 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt32 OP UInt8',  typeof(65536 + 2),             typeof(65536 - 2),              typeof(65536 * 2),              typeof(65536 / 2) ;
+
+----  
+UInt32 OP UInt8 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt32 OP UInt16', typeof(65536 + 256),           typeof(65536 - 256),            typeof(65536 * 256),            typeof(65536 / 256) ;
+
+----  
+UInt32 OP UInt16 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt32 OP UInt32', typeof(65536 + 65536),         typeof(65536 - 65536),          typeof(65536 * 65536),          typeof(65536 / 65536) ;
+
+----  
+UInt32 OP UInt32 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt32 OP UInt64', typeof(65536 + 65536 * 65536), typeof(65536 - 65536 * 65536),  typeof(65536 * 65536 * 65536),  typeof(65536 / (65536 * 65536)) ;
+
+----  
+UInt32 OP UInt64 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt64 OP UInt8',  typeof(65536 * 65536 + 2),             typeof(65536 * 65536 - 2),              typeof(65536 * 65536 * 2),              typeof(65536 * 65536 / 2) ;
+
+----  
+UInt64 OP UInt8 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt64 OP UInt16', typeof(65536 * 65536 + 256),           typeof(65536 * 65536 - 256),            typeof(65536 * 65536 * 256),            typeof(65536 * 65536 / 256) ;
+
+----  
+UInt64 OP UInt16 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt64 OP UInt32', typeof(65536 * 65536 + 65536),         typeof(65536 * 65536 - 65536),          typeof(65536 * 65536 * 65536),          typeof(65536 * 65536 / 65536) ;
+
+----  
+UInt64 OP UInt32 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query TTTTT 
+select 'UInt64 OP UInt64', typeof(65536 * 65536 + 65536 * 65536), typeof(65536 * 65536 - 65536 * 65536),  typeof(65536 * 65536 * 65536),  typeof(65536 * 65536 / (65536 * 65536)) ;
+
+----  
+UInt64 OP UInt64 BIGINT UNSIGNED BIGINT BIGINT UNSIGNED DOUBLE
+
+statement query T 
+select '=== TEST_datetimes';
+
+----  
+=== TEST_datetimes
+
+statement query B label(mysql,http)
+select typeof(now()) = 'DateTime';
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+select typeof(today()) = 'Date';
+
+----  mysql
+0
+
+----  http
+false
+

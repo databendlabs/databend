@@ -1,0 +1,28 @@
+statement ok
+SELECT * FROM numbers_mt (3) having number > 5;
+
+statement query I 
+SELECT * FROM numbers_mt (3) having number > 1;
+
+----  
+2
+
+statement ok
+SELECT * FROM numbers_mt (3) having 1=2;
+
+statement query I 
+SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max>8;
+
+----  
+9
+
+statement query I 
+SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max>7 ORDER BY max;
+
+----  
+8
+9
+
+statement ok
+SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max<7;
+
