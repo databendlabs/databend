@@ -174,7 +174,13 @@ pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
     let data_type = arguments[0].data_type().clone();
-    let phid = data_type.data_type_id().to_physical_type();
+    let mut phid = data_type.data_type_id().to_physical_type();
+
+    // null use dummy func, it's already covered in `AggregateNullResultFunction`
+    if data_type.is_null() {
+        phid = PhysicalTypeID::UInt8;
+    }
+
     let result = with_match_scalar_types_error!(phid, |$T| {
         if IS_MIN {
             type State = ScalarState<$T, CmpMin>;
