@@ -18,8 +18,10 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::NullableColumnData;
 use serde_json::Value;
+use streaming_iterator::StreamingIterator;
 
 use crate::prelude::DataValue;
+use crate::serializations::formats::iterators::NullInfo;
 use crate::Column;
 use crate::ColumnRef;
 use crate::NullableColumn;
@@ -97,5 +99,30 @@ impl TypeSerializer for NullableSerializer {
         let data = NullableColumnData { nulls, inner };
 
         Ok(Arc::new(data))
+    }
+
+    fn serialize_csv<'a>(
+        &self,
+        column: &'a ColumnRef,
+        format: &FormatSettings,
+    ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>> {
+        let column2: &NullableColumn = Series::check_get(&column)?;
+        let null_helper = NullInfo::new(|row| column.null_at(row), vec![b'\0']);
+        let it = self
+            .inner
+            .serialize_csv_inner(column2.inner(), format, null_helper);
+        it
+    }
+
+    fn serialize_csv_inner<'a, F2>(
+        &self,
+        column: &'a ColumnRef,
+        format: &FormatSettings,
+        nullable: NullInfo<F2>,
+    ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
+    where
+        F2: Fn(usize) -> bool + 'a,
+    {
+        unreachable!()
     }
 }

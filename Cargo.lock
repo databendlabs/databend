@@ -942,6 +942,7 @@ dependencies = [
  "common-io",
  "common-macros",
  "criterion",
+ "csv-core",
  "dyn-clone",
  "enum_dispatch",
  "itertools",
@@ -956,6 +957,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "streaming-iterator",
 ]
 
 [[package]]

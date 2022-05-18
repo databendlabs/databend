@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::util::lexical_to_bytes_mut;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::Marshal;
@@ -23,8 +24,11 @@ use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use opensrv_clickhouse::types::HasSqlType;
 use serde_json::Value;
+use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
+use crate::serializations::formats::iterators::new_it;
+use crate::serializations::formats::iterators::NullInfo;
 
 #[derive(Debug, Clone)]
 pub struct NumberSerializer<T: PrimitiveType> {
@@ -49,6 +53,7 @@ where T: PrimitiveType
         + std::convert::From<opensrv_clickhouse::types::Value>
         + opensrv_clickhouse::io::Marshal
         + opensrv_clickhouse::io::Unmarshal<T>
+        + lexical_core::ToLexical
 {
     fn serialize_value(&self, value: &DataValue, _format: &FormatSettings) -> Result<String> {
         Ok(format!("{:?}", value))
@@ -106,5 +111,23 @@ where T: PrimitiveType
             })
             .collect();
         Ok(result)
+    }
+
+    fn serialize_csv_inner<'a, F2>(
+        &self,
+        column: &'a ColumnRef,
+        format: &FormatSettings,
+        nullable: NullInfo<F2>,
+    ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
+    where
+        F2: Fn(usize) -> bool + 'a,
+    {
+        let column2: &PrimitiveColumn<T> = Series::check_get(&column)?;
+        Ok(new_it(
+            column2.iter(),
+            |x, buf| lexical_to_bytes_mut(*x, buf),
+            vec![],
+            nullable,
+        ))
     }
 }

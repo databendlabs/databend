@@ -19,11 +19,13 @@ use common_io::prelude::FormatSettings;
 use enum_dispatch::enum_dispatch;
 use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
+use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
 mod array;
 mod boolean;
 mod date;
+pub mod formats;
 mod null;
 mod nullable;
 mod number;
@@ -42,6 +44,8 @@ pub use string::*;
 pub use struct_::*;
 pub use timestamp::*;
 pub use variant::*;
+
+use crate::serializations::formats::iterators::NullInfo;
 
 #[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
@@ -83,6 +87,27 @@ pub trait TypeSerializer: Send + Sync {
             "Error parsing JSON: unsupported data type",
         ))
     }
+
+    fn serialize_csv<'a>(
+        &self,
+        column: &'a ColumnRef,
+        format: &FormatSettings,
+    ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>> {
+        let is_null = |_| false;
+        self.serialize_csv_inner(column, format, NullInfo::not_nullable(is_null))
+    }
+
+    fn serialize_csv_inner<'a, F2>(
+        &self,
+        column: &'a ColumnRef,
+        format: &FormatSettings,
+        nullable: NullInfo<F2>,
+    ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
+    where
+        F2: Fn(usize) -> bool + 'a,
+    {
+        Err(ErrorCode::UnImplement(""))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -109,4 +134,30 @@ pub enum TypeSerializerImpl {
     Array(ArraySerializer),
     Struct(StructSerializer),
     Variant(VariantSerializer),
+}
+
+#[test]
+fn test_s() -> Result<()> {
+    use crate::TypeSerializer;
+    let col = Series::from_data(vec![true, false, true]);
+    let col = Series::from_data(vec!["a", "a", "bc"]);
+    let col = Series::from_data(vec![12, 23, 34]);
+
+    println!("{:?}", col);
+    let s = col.data_type().create_serializer();
+    let mut stream = s.serialize_csv(&col, &FormatSettings::default())?;
+    println!("{:?}", stream.next());
+    println!("{:?}", stream.next());
+    println!("{:?}", stream.next());
+    println!("{:?}", stream.next());
+
+    let col = Series::from_data(vec![Some(12), None, Some(34)]);
+    println!("{:?}", col);
+    let s = col.data_type().create_serializer();
+    let mut stream = s.serialize_csv(&col, &FormatSettings::default())?;
+    println!("{:?}", stream.next());
+    println!("{:?}", stream.next());
+    println!("{:?}", stream.next());
+    println!("{:?}", stream.next());
+    Ok(())
 }
