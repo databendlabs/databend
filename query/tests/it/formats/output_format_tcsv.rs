@@ -84,9 +84,9 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let buffer = formater.serialize_block(&block, &format_setting)?;
 
         let json_block = String::from_utf8(buffer)?;
-        let expect = "1$a$1$1.1$1970-01-02%\
-                            2$b$1$2.2$1970-01-03%\
-                            3$c$0$3.3$1970-01-04%";
+        let expect = "1$\"a\"$1$1.1$\"1970-01-02\"%\
+                            2$\"b\"$1$2.2$\"1970-01-03\"%\
+                            3$\"c\"$0$3.3$\"1970-01-04\"%";
         assert_eq!(&json_block, expect);
     }
 

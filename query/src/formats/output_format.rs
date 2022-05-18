@@ -22,6 +22,7 @@ use common_io::prelude::FormatSettings;
 
 use super::output_format_ndjson::NDJsonOutputFormat;
 use super::output_format_parquet::ParquetOutputFormat;
+use super::output_format_values::ValuesOutputFormat;
 use crate::formats::output_format_csv::CSVOutputFormat;
 use crate::formats::output_format_csv::TSVOutputFormat;
 
@@ -41,6 +42,7 @@ pub enum OutputFormatType {
     Csv,
     Parquet,
     NDJson,
+    Values,
 }
 
 impl OutputFormatType {
@@ -50,6 +52,7 @@ impl OutputFormatType {
             OutputFormatType::Csv => Box::new(CSVOutputFormat::create(schema)),
             OutputFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema)),
             OutputFormatType::NDJson => Box::new(NDJsonOutputFormat::create(schema)),
+            OutputFormatType::Values => Box::new(ValuesOutputFormat::create(schema)),
         }
     }
 }
@@ -68,8 +71,9 @@ impl FromStr for OutputFormatType {
             "CSV" => Ok(OutputFormatType::Csv),
             "NDJSON" | "JSONEACHROW" => Ok(OutputFormatType::NDJson),
             "PARQUET" => Ok(OutputFormatType::Parquet),
+            "VALUES" => Ok(OutputFormatType::Values),
             _ => Err(ErrorCode::StrParseError(
-                "Unknown file format type, must be one of { TSV, CSV, PARQUET, NDJSON | JSONEACHROW }".to_string(),
+                "Unknown file format type, must be one of { TSV, CSV, PARQUET, Values, NDJSON | JSONEACHROW }".to_string(),
             )),
         }
     }

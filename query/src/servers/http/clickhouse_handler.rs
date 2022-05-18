@@ -19,6 +19,8 @@ use async_stream::stream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_io::prelude::BufferReader;
+use common_io::prelude::CheckpointReader;
 use common_io::prelude::FormatSettings;
 use common_planners::PlanNode;
 use common_streams::NDJsonSourceBuilder;
@@ -26,6 +28,7 @@ use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_tracing::tracing;
 use futures::StreamExt;
+use nom::AsBytes;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -45,11 +48,8 @@ use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
+use crate::sql::statements::ValueSource;
 use crate::sql::PlanParser;
-
-// https://clickhouse.com/docs/en/interfaces/http/
-
-const FORMAT_JSON_EACH_ROW: &str = "JSONEachRow";
 
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
@@ -168,10 +168,17 @@ pub async fn clickhouse_handler_post(
         let mut input_stream = None;
         if let PlanNode::Insert(_) = &plan {
             if let Some(format) = &format {
-                if format.to_uppercase() == FORMAT_JSON_EACH_ROW {
+                if format.eq_ignore_ascii_case("JSONEachRow") {
                     input_stream =
                         Some(build_ndjson_stream(&plan, body).await.map_err(BadRequest)?);
+                } else if format.eq_ignore_ascii_case("Values") {
+                    input_stream = Some(
+                        build_values_stream(ctx.clone(), &plan, body)
+                            .await
+                            .map_err(BadRequest)?,
+                    );
                 }
+                // TODO more formats
             }
         }
         (plan, format, input_stream)
@@ -183,8 +190,8 @@ pub async fn clickhouse_handler_post(
         .map_err(InternalServerError)
 }
 
+// TODO: use format pipeline
 async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableDataBlockStream> {
-    // TODO(veeupup): HTTP with global session tz
     let builder = NDJsonSourceBuilder::create(plan.schema(), FormatSettings::default());
     let cursor = futures::io::Cursor::new(
         body.into_vec()
@@ -193,6 +200,22 @@ async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableData
     );
     let source = builder.build(cursor)?;
     SourceStream::new(Box::new(source)).execute().await
+}
+
+async fn build_values_stream(
+    ctx: Arc<QueryContext>,
+    plan: &PlanNode,
+    body: Body,
+) -> Result<SendableDataBlockStream> {
+    let value_source = ValueSource::new(ctx, plan.schema());
+    let value = body
+        .into_vec()
+        .await
+        .map_err_to_code(ErrorCode::BadBytes, || "fail to read body")?;
+    let reader = BufferReader::new(value.as_bytes());
+    let mut reader = CheckpointReader::new(reader);
+    let block = value_source.read(&mut reader).await?;
+    Ok(Box::pin(futures::stream::iter(vec![Ok(block)])))
 }
 
 pub fn clickhouse_router() -> impl Endpoint {

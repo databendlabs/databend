@@ -20,6 +20,7 @@ pub mod output_format;
 pub mod output_format_csv;
 mod output_format_ndjson;
 mod output_format_parquet;
+mod output_format_values;
 
 pub use format::InputFormat;
 pub use format::InputState;
