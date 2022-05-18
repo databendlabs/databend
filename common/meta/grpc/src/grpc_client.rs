@@ -180,7 +180,11 @@ impl MetaGrpcClient {
             if (*eps).is_empty() {
                 return Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
             }
-            self.conn_pool.get(&*eps).await?
+            // TODO(xp): use the client across runtime hangs the application.
+            //           Temporarily disable reusing a client.
+            //           See: https://github.com/datafuselabs/databend/runs/6367049291?check_suite_focus=true
+            // self.conn_pool.get(&*eps).await?
+            self.conn_pool.item_manager().build(&*eps).await?
         };
         tracing::info!("connecting with channel: {:?}", channel);
 
