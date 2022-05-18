@@ -102,7 +102,7 @@ rsa = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde-bridge = "0.0.3"
 serde_json = "1.0.79"
-serfig = "0.0.1"
+serfig = "0.0.2"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 tempfile = { version = "3.3.0", optional = true }
