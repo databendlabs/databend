@@ -110,10 +110,10 @@ impl Settings {
                 desc: "Enable planner v2 by setting this variable to 1, default value: 0",
             },
             SettingValue {
-                default_value: DataValue::String("\n".as_bytes().to_vec()),
-                user_setting: UserSetting::create("record_delimiter", DataValue::String("\n".as_bytes().to_vec())),
+                default_value: DataValue::String(" ".as_bytes().to_vec()),
+                user_setting: UserSetting::create("record_delimiter", DataValue::String(" ".as_bytes().to_vec())),
                 level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value: \n",
+                desc: "Format record_delimiter, default value:  ",
             },
             SettingValue {
                 default_value: DataValue::String(",".as_bytes().to_vec()),
