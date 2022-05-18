@@ -50,6 +50,8 @@ pub enum Scalar {
     ComparisonExpr(ComparisonExpr),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
+    // TODO(leiysky): maybe we don't need this variant any more
+    // after making functions static typed?
     Cast(CastExpr),
     SubqueryExpr(SubqueryExpr),
 }
@@ -194,6 +196,8 @@ impl ScalarExpr for ComparisonExpr {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AggregateFunction {
+    pub display_name: String,
+
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<DataValue>,
