@@ -16,6 +16,7 @@ mod data_schema_builder;
 mod expression_builder;
 mod util;
 
+use std::ops::Not;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -339,7 +340,7 @@ impl PipelineBuilder {
             group_expressions.push(expr);
         }
 
-        if !find_aggregate_exprs(&group_expressions).is_empty() {
+        if !aggregate.from_distinct && !find_aggregate_exprs(&group_expressions).is_empty() {
             return Err(ErrorCode::SyntaxException(
                 "Group by clause cannot contain aggregate functions",
             ));
@@ -351,6 +352,7 @@ impl PipelineBuilder {
         let pre_input_schema = input_schema.clone();
         let input_schema =
             schema_builder.build_group_by(input_schema, group_expressions.as_slice())?;
+
         if !input_schema.eq(&pre_input_schema) {
             pipeline.add_transform(|transform_input_port, transform_output_port| {
                 ExpressionTransform::try_create(
@@ -363,6 +365,12 @@ impl PipelineBuilder {
                 )
             })?;
         }
+
+        // Since transform has been added, making group expressions as column expr is safe.
+        group_expressions
+            .iter_mut()
+            .filter(|expr| matches!(expr, Expression::Column(_)).not())
+            .for_each(|expr| *expr = Expression::Column(expr.column_name()));
 
         // Process aggregation function with non-column expression, such as sum(3)
         let pre_input_schema = input_schema.clone();

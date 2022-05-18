@@ -29,6 +29,8 @@ pub struct AggregatePlan {
     pub group_items: Vec<Scalar>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
     pub aggregate_functions: Vec<Scalar>,
+    // True if the plan is generated from distinct, else the plan is a normal aggregate;
+    pub from_distinct: bool,
 }
 
 impl BasePlan for AggregatePlan {

@@ -175,6 +175,13 @@ select '====Context Function====';
 use default;
 select database();
 
+-- distinct
+select '==== Distinct =====';
+SELECT DISTINCT * FROM numbers(3) ORDER BY  number;
+SELECT DISTINCT 1 FROM numbers(3);
+SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
+SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDER BY c;
+
 -- Inner join with using
 select '===Inner Join with Using===';
 drop table if exists t1;
