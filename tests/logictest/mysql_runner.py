@@ -17,7 +17,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
     def reset_connection(self):
         if self._connection is not None:
             self._connection.close()
-            self._connection= None
+            self._connection = None
 
     def get_connection(self):
         if self._connection is not None:
@@ -25,7 +25,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         self._connection = mysql.connector.connect(**self.driver)
         return self._connection
 
-    def batch_execute(self, statement_list):     
+    def batch_execute(self, statement_list):
         for statement in statement_list:
             self.execute_statement(statement)
         self.reset_connection()
@@ -35,7 +35,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
         cursor.execute(statement)
         return None
 
-    def execute_error(self, statement):   
+    def execute_error(self, statement):
         cursor = cursor = self.get_connection().cursor(buffered=True)
         try:
             cursor.execute(statement)
@@ -65,7 +65,8 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                             "Expected float, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'T':
-                    if not (isinstance(v, str) or isinstance(v, datetime) or isinstance(v, date)):
+                    if not (isinstance(v, str) or isinstance(v, datetime) or
+                            isinstance(v, date)):
                         log.error(
                             "Expected string, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))

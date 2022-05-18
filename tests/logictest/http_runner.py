@@ -5,6 +5,7 @@ import logictest
 import http_connector
 from log import log
 
+
 class TestHttp(logictest.SuiteRunner, ABC):
 
     def __init__(self, kind):
@@ -20,7 +21,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
     def reset_connection(self):
         self._http.reset_session()
 
-    def batch_execute(self, statement_list):     
+    def batch_execute(self, statement_list):
         for statement in statement_list:
             self.execute_statement(statement)
         self.reset_connection()
@@ -37,7 +38,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
         results = self.get_connection().fetch_all(statement.text)
         query_type = statement.s_type.query_type
         vals = []
-        for (ri,row) in enumerate(results):
+        for (ri, row) in enumerate(results):
             for (i, v) in enumerate(row):
                 if isinstance(v, NoneType):
                     vals.append("None")
@@ -55,7 +56,8 @@ class TestHttp(logictest.SuiteRunner, ABC):
                             .format(type(v), statement.text, ri, i, v))
                 elif query_type[i] == 'T':
                     # include data, timestamp, dict, list ...
-                    if not (isinstance(v, str) or isinstance(v, dict) or isinstance(v, list)):
+                    if not (isinstance(v, str) or isinstance(v, dict) or
+                            isinstance(v, list)):
                         log.error(
                             "Expected string, got type {} in query {} row {} col {} value {}"
                             .format(type(v), statement.text, ri, i, v))
@@ -69,6 +71,7 @@ class TestHttp(logictest.SuiteRunner, ABC):
                         "Unknown type {} in query {} row {} col {} value {}".
                         format(query_type[i], statement.text, ri, i, v))
                 if isinstance(v, bool):
-                    v = str(v).lower() # bool to string in python will be True/False
+                    v = str(v).lower(
+                    )  # bool to string in python will be True/False
                 vals.append(str(v))
         return vals
