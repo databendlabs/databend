@@ -14,9 +14,11 @@
 
 use std::sync::Arc;
 
+pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::catalogs::CatalogManager;
@@ -36,6 +38,7 @@ mod scalar_common;
 mod scalar_visitor;
 mod select;
 mod sort;
+mod table;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
@@ -87,6 +90,25 @@ impl<'a> Binder {
         let catalog = self.catalogs.get_catalog(catalog_name)?;
         let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
         Ok(table_meta)
+    }
+
+    /// Create a new ColumnBinding with assigned index
+    pub(super) fn create_column_binding(
+        &mut self,
+        table_name: Option<String>,
+        column_name: String,
+        data_type: DataTypeImpl,
+    ) -> ColumnBinding {
+        let index = self
+            .metadata
+            .add_column(column_name.clone(), data_type.clone(), None);
+        ColumnBinding {
+            table_name,
+            column_name,
+            index,
+            data_type,
+            visible_in_unqualified_wildcard: true,
+        }
     }
 }
 
