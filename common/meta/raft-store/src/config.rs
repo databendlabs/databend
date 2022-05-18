@@ -176,7 +176,10 @@ impl RaftConfig {
     }
 
     pub fn check(&self) -> MetaResult<()> {
-        if !self.join.is_empty() == self.single {
+        // There two cases:
+        // - both join and single is set
+        // - neither join nor single is set
+        if self.join.is_empty() != self.single {
             return Err(MetaError::InvalidConfig(String::from(
                 "at least one of `single` and `join` needs to be enabled",
             )));
