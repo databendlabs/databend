@@ -19,7 +19,6 @@ use common_base::base::StopHandle;
 use common_base::base::Stoppable;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
-use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_global_tracing;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
@@ -42,7 +41,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     tracing::info!("{:?}", conf.clone());
 
     init_sled_db(conf.raft_config.raft_dir.clone());
-    init_default_metrics_recorder();
     init_meta_metrics_recorder();
 
     tracing::info!(

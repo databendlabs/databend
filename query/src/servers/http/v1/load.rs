@@ -137,10 +137,7 @@ pub async fn streaming_load(
     req: &Request,
     mut multipart: Multipart,
 ) -> PoemResult<Json<LoadResponse>> {
-    let session = ctx
-        .create_session(SessionType::HTTPStreamingLoad)
-        .await
-        .map_err(InternalServerError)?;
+    let session = ctx.get_session(SessionType::HTTPStreamingLoad);
     let context = session
         .create_query_context()
         .await

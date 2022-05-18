@@ -371,6 +371,20 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_extract_expr(kind, expr, required_type).await
             }
 
+            Expr::Interval { expr, unit, .. } => {
+                self.resolve_interval(expr, unit, required_type).await
+            }
+
+            Expr::DateAdd {
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                self.resolve_date_add(date, interval, unit, required_type)
+                    .await
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -553,6 +567,114 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    pub async fn resolve_interval(
+        &mut self,
+        arg: &Expr<'a>,
+        interval_kind: &IntervalKind,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        match interval_kind {
+            IntervalKind::Year => {
+                self.resolve_function(
+                    "to_interval_year",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Year)),
+                )
+                .await
+            }
+            IntervalKind::Month => {
+                self.resolve_function(
+                    "to_interval_month",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Month)),
+                )
+                .await
+            }
+            IntervalKind::Day => {
+                self.resolve_function(
+                    "to_interval_day",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Day)),
+                )
+                .await
+            }
+            IntervalKind::Hour => {
+                self.resolve_function(
+                    "to_interval_hour",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Hour)),
+                )
+                .await
+            }
+            IntervalKind::Minute => {
+                self.resolve_function(
+                    "to_interval_minute",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Minute)),
+                )
+                .await
+            }
+            IntervalKind::Second => {
+                self.resolve_function(
+                    "to_interval_second",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Second)),
+                )
+                .await
+            }
+            IntervalKind::Doy => {
+                self.resolve_function(
+                    "to_interval_doy",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Doy)),
+                )
+                .await
+            }
+            IntervalKind::Dow => {
+                self.resolve_function(
+                    "to_interval_dow",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Dow)),
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn resolve_date_add(
+        &mut self,
+        date: &Expr<'a>,
+        interval: &Expr<'a>,
+        interval_kind: &IntervalKind,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let mut args = vec![];
+        let mut arg_types = vec![];
+
+        let (date, date_type) = self.resolve(date, None).await?;
+        args.push(date);
+        arg_types.push(date_type);
+
+        let (interval, interval_type) =
+            self.resolve_interval(interval, interval_kind, None).await?;
+        args.push(interval);
+        arg_types.push(interval_type);
+
+        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+
+        let func = FunctionFactory::instance().get("date_add", &arg_types_ref)?;
+        Ok((
+            FunctionCall {
+                arguments: args,
+                func_name: "date_add".to_string(),
+                arg_types: arg_types.to_vec(),
+                return_type: func.return_type(),
+            }
+            .into(),
+            func.return_type(),
+        ))
+    }
+
     pub async fn resolve_subquery(
         &mut self,
         subquery: &Query<'a>,
@@ -635,20 +757,12 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
-            Literal::Interval(interval) => {
-                let num = interval.value.parse::<i64>()?;
-                DataValue::Int64(num)
-            }
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
 
-        let data_type = if let Literal::Interval(interval) = literal {
-            IntervalType::new_impl(interval.kind)
-        } else {
-            value.data_type()
-        };
+        let data_type = value.data_type();
 
         Ok((value, data_type))
     }

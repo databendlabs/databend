@@ -1,0 +1,18 @@
+statement query T 
+SELECT REVERSE(NULL);
+
+----  
+None
+
+statement query T 
+SELECT REVERSE('');
+
+----  
+	
+
+statement query T 
+SELECT REVERSE('abc');
+
+----  
+cba
+

@@ -1,0 +1,37 @@
+statement ok
+set max_threads=1;
+
+statement query II 
+SELECT (number+1) as c1, max(number) as c2 FROM numbers_mt(10) group by number+1 having c2>1 order by c1 desc, c2 asc;
+
+----  
+10 9
+9 8
+8 7
+7 6
+6 5
+5 4
+4 3
+3 2
+
+statement ok
+DROP DATABASE IF EXISTS test;
+
+statement ok
+CREATE DATABASE test;
+
+statement ok
+USE test;
+
+statement ok
+CREATE TABLE test.t (id int);
+
+statement ok
+INSERT INTO test.t VALUES(1);
+
+statement ok
+SELECT t.`id` AS C, `t`.id AS C1, `id` AS C2, `t`.`id` AS C3  FROM test.t;
+
+statement ok
+DROP DATABASE test;
+

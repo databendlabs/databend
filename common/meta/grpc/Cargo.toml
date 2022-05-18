@@ -16,7 +16,6 @@ test = false
 [dependencies]
 common-arrow = { path = "../../arrow" }
 common-base = { path = "../../base" }
-common-configs = { path = "../../configs" }
 common-exception = { path = "../../exception" }
 common-grpc = { path = "../../grpc" }
 common-meta-api = { path = "../api" }

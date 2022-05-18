@@ -1,0 +1,182 @@
+statement query I 
+SELECT number from numbers_mt(10) WHERE number+1 IN (2, 3 ,20) ORDER BY number;
+
+----  
+1
+2
+
+statement query I 
+SELECT number from numbers_mt(10000) WHERE number+1 IN (2, 3 ,20, 5000) ORDER BY number;
+
+----  
+1
+2
+19
+4999
+
+statement query I 
+SELECT number from numbers_mt(10) WHERE number+1 not IN (2, 3 ,20, 5000) ORDER BY number;
+
+----  
+0
+3
+4
+5
+6
+7
+8
+9
+
+statement query T 
+SELECT NULL IN (1, 2, 3);
+
+----  
+None
+
+statement query B label(mysql,http)
+SELECT 1 IN (1, 2, NULL);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT 1 IN (2, 3, NULL);
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT 1.1 IN (1.10, 2, 3.3, 1.1);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select 1 in (1.2, 2);
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+select 1 in (1.0, 2);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select 'aa' in ('aa', 'bb', 'cc');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select true in (true, false);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select true in (NULL, false);
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT to_date(18869) in (to_date(18869));
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT to_date(18869) in ('2021-08-30');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT to_date(18869) in (to_date(18869), NULL);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+SELECT NULL in ('2021-08-30');
+
+----  
+None
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Memory;
+
+statement ok
+INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
+
+statement query I 
+SELECT a FROM t1 WHERE b IN (NULL,3);
+
+----  
+2
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE TABLE t2(date DATE, datetime DATETIME null) Engine = Memory;
+
+statement ok
+INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', NULL);
+
+statement query TT 
+SELECT * FROM t2 WHERE date in ('2022-04-23');
+
+----  
+2022-04-23 2022-04-23 01:48:19
+
+statement query TT 
+SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19', NULL);
+
+----  
+2022-04-23 2022-04-23 01:48:19
+
+statement ok
+DROP TABLE t2;
+

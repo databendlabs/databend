@@ -1,0 +1,33 @@
+statement ok
+CREATE DATABASE IF NOT EXISTS data_type;
+
+statement ok
+USE data_type;
+
+statement ok
+DROP TABLE IF EXISTS t;
+
+statement ok
+CREATE TABLE t(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED);
+
+statement ok
+INSERT INTO t VALUES (-1, -1);
+
+statement ok
+SELECT * FROM t;
+
+statement ok
+TRUNCATE TABLE t;
+
+statement ok
+INSERT INTO t VALUES (-129, -1);
+
+statement ok
+TRUNCATE TABLE t;
+
+statement ok
+INSERT INTO t VALUES (128, 256);
+
+statement ok
+DROP DATABASE data_type;
+

@@ -1,0 +1,256 @@
+statement query B label(mysql,http)
+SELECT true and false;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT true and true;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT false and false;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT 1 and 0;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT 1 and 1;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B 
+SELECT 1 and null;
+
+----  
+None
+
+statement query B label(mysql,http)
+SELECT 0 and null;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B 
+SELECT null and null;
+
+----  
+None
+
+statement query I 
+SELECT number from numbers(10) WHERE number > 5 AND number < 8 ORDER BY number;
+
+----  
+6
+7
+
+statement query B label(mysql,http)
+SELECT true OR false;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT true OR true;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT false OR false;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT 1 OR 0;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT 1 OR 1;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT 0 OR 0;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT 1 OR null;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B 
+SELECT 0 OR null;
+
+----  
+None
+
+statement query B label(mysql,http)
+SELECT null OR 1;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B 
+SELECT null OR null;
+
+----  
+None
+
+statement query I 
+SELECT number from numbers(10) WHERE number > 7 OR number < 2 ORDER BY number;
+
+----  
+0
+1
+8
+9
+
+statement query B label(mysql,http)
+SELECT true XOR true;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT false XOR false;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT true XOR false;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT false XOR true;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+SELECT null XOR true;
+
+----  
+None
+
+statement query T 
+SELECT false XOR null;
+
+----  
+None
+
+statement query B label(mysql,http)
+SELECT not true;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT not false;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT not 1;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT not 0;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+SELECT not null;
+
+----  
+None
+

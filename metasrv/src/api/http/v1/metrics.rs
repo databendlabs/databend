@@ -19,6 +19,7 @@ use poem::web::Json;
 use serde_json;
 
 use crate::meta_service::MetaNode;
+use crate::metrics::meta_metrics_to_json;
 
 /// GET /v1/metrics
 ///
@@ -26,13 +27,7 @@ use crate::meta_service::MetaNode;
 /// The response content is the same as `MetaMetrics` in metrics/meta_metrics.rs
 #[poem::handler]
 pub async fn metrics_handler(
-    meta_node: Data<&Arc<MetaNode>>,
+    _meta_node: Data<&Arc<MetaNode>>,
 ) -> poem::Result<Json<serde_json::Value>> {
-    let metrics = meta_node.raft.metrics().borrow().clone();
-
-    let has_leader = matches!(metrics.current_leader, Some(_));
-
-    Ok(Json(serde_json::json!({
-        "has_leader": has_leader,
-    })))
+    Ok(Json(meta_metrics_to_json()))
 }

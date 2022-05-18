@@ -1,0 +1,24 @@
+statement query T 
+SELECT SPACE(NULL);
+
+----  
+None
+
+statement query T 
+SELECT SPACE(0);
+
+----  
+	
+
+statement query T 
+SELECT SPACE(1);
+
+----  
+ 
+
+statement query T 
+SELECT SPACE(2);
+
+----  
+  
+

@@ -1,0 +1,96 @@
+statement query B label(mysql,http)
+SELECT LENGTH(gen_random_uuid()) = 36;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT IGNORE(gen_random_uuid());
+
+----  mysql
+0
+
+----  http
+false
+
+statement query T 
+SELECT gen_zero_uuid();
+
+----  
+00000000-0000-0000-0000-000000000000
+
+statement query B label(mysql,http)
+SELECT is_empty_uuid(gen_random_uuid());
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT is_empty_uuid(gen_zero_uuid());
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT is_empty_uuid('5');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT is_empty_uuid(null);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT is_not_empty_uuid(gen_random_uuid());
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT is_not_empty_uuid(gen_zero_uuid());
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT is_not_empty_uuid('5');
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT is_not_empty_uuid(null);
+
+----  mysql
+0
+
+----  http
+false
+

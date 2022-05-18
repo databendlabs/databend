@@ -13,7 +13,7 @@
 0	1
 0	1
 ====SCALAR_EXPRESSION====
-1	13
+13
 ====COMPARISON====
 5
 ====CAST====
@@ -243,3 +243,12 @@ new_planner
 0	8	5
 ====Context Function====
 default
+===Inner Join with Using===
+4	3	4
+6	5	6
+3
+5
+4
+6
+4	3	4
+6	5	6

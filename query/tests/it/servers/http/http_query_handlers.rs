@@ -22,8 +22,6 @@ use common_base::base::get_free_tcp_port;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
-use common_meta_types::UserInfo;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_final_uri;
@@ -235,10 +233,8 @@ async fn test_pagination() -> Result<()> {
     assert_eq!(result.next_uri, Some(next_uri));
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
-    // get page, support retry
-    for page in 0..4 {
+    for page in 0..5 {
         let uri = make_page_uri(query_id, page);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
@@ -247,8 +243,8 @@ async fn test_pagination() -> Result<()> {
         assert_eq!(result.data.len(), 2, "{:?}", result);
         assert!(result.schema.is_some());
         assert!(result.stats.scan_progress.is_some());
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        if page == 5 {
+        if page == 4 {
+            assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
             assert!(result.next_uri.is_none());
         } else {
             assert!(result.next_uri.is_some());
@@ -625,7 +621,7 @@ async fn test_auth_basic() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_auth_jwt() -> Result<()> {
-    let user_name = "user1";
+    let user_name = "root";
 
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
@@ -652,22 +648,6 @@ async fn test_auth_jwt() -> Result<()> {
         .jwt_key_file(jwks_url)
         .build()
         .unwrap();
-
-    let user_info = UserInfo {
-        name: user_name.to_string(),
-        hostname: "%".to_string(),
-        auth_info: AuthInfo::JWT,
-        grants: Default::default(),
-        quota: Default::default(),
-        option: Default::default(),
-    };
-
-    let tenant = "test";
-    session_manager
-        .get_user_manager()
-        .add_user(tenant, user_info, false)
-        .await?;
-
     let ep = Route::new()
         .nest("/v1/query", query_route())
         .with(HTTPSessionMiddleware { session_manager });

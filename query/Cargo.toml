@@ -31,7 +31,6 @@ common-arrow = { path = "../common/arrow" }
 common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
-common-configs = { path = "../common/configs" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
