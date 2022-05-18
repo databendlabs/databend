@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::procedures::Procedure;
@@ -25,7 +24,6 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::table_functions::get_cluster_keys;
 use crate::storages::fuse::table_functions::ClusteringInformation;
 use crate::storages::fuse::FuseTable;
-use crate::storages::Table;
 
 pub struct ClusteringInformationProcedure {}
 
@@ -59,25 +57,9 @@ impl Procedure for ClusteringInformationProcedure {
             )
             .await?;
 
-        let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "expecting fuse table, but got table of engine type: {}",
-                tbl.get_table_info().meta.engine
-            ))
-        })?;
-
-        let cluster_keys = if args.len() == 2 {
-            tbl.cluster_keys()
-        } else {
-            get_cluster_keys(ctx.clone(), tbl.schema(), &args[2]).await?
-        };
-
-        if cluster_keys.is_empty() {
-            return Err(ErrorCode::InvalidClusterKeys(format!(
-                "Invalid clustering keys or table {} is not clustered",
-                table_name
-            )));
-        }
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        let definition = if args.len() > 2 { &args[2] } else { "" };
+        let cluster_keys = get_cluster_keys(ctx.clone(), tbl, definition).await?;
 
         Ok(ClusteringInformation::new(ctx, tbl, cluster_keys)
             .get_clustering_info()

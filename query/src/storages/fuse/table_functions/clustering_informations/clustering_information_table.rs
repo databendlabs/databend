@@ -18,7 +18,6 @@ use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -32,6 +31,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use super::clustering_information::ClusteringInformation;
+use super::table_args::get_cluster_keys;
 use super::table_args::parse_func_table_args;
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::pipelines::new::processors::port::OutputPort;
@@ -53,6 +53,8 @@ pub struct ClusteringInformationTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
+    // Todo(zhyass): support define cluster_keys.
+    arg_cluster_keys: String,
 }
 
 impl ClusteringInformationTable {
@@ -81,6 +83,7 @@ impl ClusteringInformationTable {
             table_info,
             arg_database_name,
             arg_table_name,
+            arg_cluster_keys: "".to_string(),
         }))
     }
 }
@@ -124,15 +127,9 @@ impl Table for ClusteringInformationTable {
                 self.arg_table_name.as_str(),
             )
             .await?;
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "expecting fuse table, but got table of engine type: {}",
-                tbl.get_table_info().meta.engine
-            ))
-        })?;
-
-        let cluster_keys = tbl.cluster_keys();
+        let cluster_keys = get_cluster_keys(ctx.clone(), tbl, &self.arg_cluster_keys).await?;
 
         let blocks = vec![
             ClusteringInformation::new(ctx.clone(), tbl, cluster_keys)
@@ -161,6 +158,7 @@ impl Table for ClusteringInformationTable {
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
+                self.arg_cluster_keys.to_owned(),
             )?],
         });
 
@@ -173,6 +171,7 @@ struct FuseHistorySource {
     ctx: Arc<QueryContext>,
     arg_database_name: String,
     arg_table_name: String,
+    arg_cluster_keys: String,
 }
 
 impl FuseHistorySource {
@@ -181,12 +180,14 @@ impl FuseHistorySource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
+        arg_cluster_keys: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
+            arg_cluster_keys,
         })
     }
 }
@@ -215,7 +216,9 @@ impl AsyncSource for FuseHistorySource {
                 .await?;
 
             let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-            let cluster_keys = tbl.cluster_keys();
+            let cluster_keys =
+                get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys).await?;
+
             Ok(Some(
                 ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)
                     .get_clustering_info()

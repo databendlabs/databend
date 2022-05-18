@@ -13,7 +13,6 @@
 //  limitations under the License.
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::validate_expression;
@@ -27,6 +26,8 @@ use sqlparser::tokenizer::Tokenizer;
 use crate::sessions::QueryContext;
 use crate::sql::statements::ExpressionAnalyzer;
 use crate::storages::fuse::table_functions::string_value;
+use crate::storages::fuse::FuseTable;
+use crate::storages::Table;
 use crate::table_functions::TableArgs;
 
 pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)> {
@@ -46,19 +47,32 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 
 pub async fn get_cluster_keys(
     ctx: Arc<QueryContext>,
-    schema: DataSchemaRef,
+    table: &FuseTable,
     definition: &str,
 ) -> Result<Vec<Expression>> {
-    let exprs = parse_cluster_keys(definition)?;
+    let cluster_keys = if !definition.is_empty() {
+        let schema = table.schema();
+        let mut expressions = vec![];
+        let expression_analyzer = ExpressionAnalyzer::create(ctx);
+        let exprs = parse_cluster_keys(definition)?;
+        for expr in exprs.iter() {
+            let expression = expression_analyzer.analyze(expr).await?;
+            validate_expression(&expression, &schema)?;
+            expressions.push(expression);
+        }
+        expressions
+    } else {
+        table.cluster_keys()
+    };
 
-    let mut expressions = vec![];
-    let expression_analyzer = ExpressionAnalyzer::create(ctx);
-    for expr in exprs.iter() {
-        let expression = expression_analyzer.analyze(expr).await?;
-        validate_expression(&expression, &schema)?;
-        expressions.push(expression);
+    if cluster_keys.is_empty() {
+        return Err(ErrorCode::InvalidClusterKeys(format!(
+            "Invalid clustering keys or table {} is not clustered",
+            table.name()
+        )));
     }
-    Ok(expressions)
+
+    Ok(cluster_keys)
 }
 
 fn parse_cluster_keys(definition: &str) -> Result<Vec<Expr>> {

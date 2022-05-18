@@ -104,7 +104,7 @@ impl<'a> ClusteringInformation<'a> {
                 total_constant_block_count: 0,
                 average_overlaps: 0.0,
                 average_depth: 0.0,
-                block_depth_histogram: VariantValue::from(json!(null)),
+                block_depth_histogram: VariantValue::from(json!({})),
             });
         }
 
