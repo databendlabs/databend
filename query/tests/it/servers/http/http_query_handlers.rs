@@ -468,11 +468,13 @@ async fn test_query_log() -> Result<()> {
         result
     );
     assert!(
-        result.data[0][3]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("backtrace"),
+        result.data[0][3].as_str().unwrap().to_lowercase().contains(
+            if let Ok(_) = std::env::var("RUST_BACKTRACE") {
+                "backtrace"
+            } else {
+                "<disabled>"
+            }
+        ),
         "{:?}",
         result
     );
