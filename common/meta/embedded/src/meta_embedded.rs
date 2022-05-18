@@ -51,9 +51,10 @@ impl MetaEmbedded {
     /// - `common_meta_sled_store::init_sled_db`
     /// - `common_meta_sled_store::init_temp_sled_db`
     pub async fn new(name: &str) -> common_exception::Result<MetaEmbedded> {
-        let mut config = RaftConfig::empty();
-
-        config.sled_tree_prefix = format!("{}-local-kv", name);
+        let mut config = RaftConfig {
+            sled_tree_prefix: format!("{}-local-kv", name),
+            ..Default::default()
+        };
 
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
