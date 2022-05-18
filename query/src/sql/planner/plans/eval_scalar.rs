@@ -10,7 +10,7 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// limitations under the License.
+// limitations under the License.#[derive(Clone, Debug)]
 
 use std::any::Any;
 
@@ -21,23 +21,24 @@ use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
+use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
 
+/// Evaluate scalar expression
 #[derive(Clone, Debug)]
-pub struct SortPlan {
-    pub items: Vec<SortItem>,
+pub struct EvalScalar {
+    pub items: Vec<ScalarItem>,
 }
 
-#[derive(Clone, Debug)]
-pub struct SortItem {
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScalarItem {
+    pub scalar: Scalar,
     pub index: IndexType,
-    pub asc: Option<bool>,
-    pub nulls_first: Option<bool>,
 }
 
-impl BasePlan for SortPlan {
+impl BasePlan for EvalScalar {
     fn plan_type(&self) -> PlanType {
-        PlanType::Sort
+        PlanType::EvalScalar
     }
 
     fn is_physical(&self) -> bool {
@@ -61,13 +62,13 @@ impl BasePlan for SortPlan {
     }
 }
 
-impl PhysicalPlan for SortPlan {
+impl PhysicalPlan for EvalScalar {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for SortPlan {
+impl LogicalPlan for EvalScalar {
     fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
         todo!()
     }

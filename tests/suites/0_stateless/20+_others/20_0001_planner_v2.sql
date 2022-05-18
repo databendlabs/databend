@@ -81,6 +81,12 @@ SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 
 -- u64, nullable(u8)
 SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 
+select number%2 as b from numbers(5) group by number % 2 having count(*) = 3 and sum(number) > 5;
+
+select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
+
+select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
+
 -- aggregator combinator
 -- distinct
 select sum_distinct(number) from ( select number % 100 as number from numbers(100000));

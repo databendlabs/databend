@@ -287,6 +287,7 @@ impl<'a> TypeChecker<'a> {
 
                     Ok((
                         AggregateFunction {
+                            display_name: format!("{:#}", expr),
                             func_name: func_name.to_string(),
                             distinct: *distinct,
                             params,
@@ -315,6 +316,7 @@ impl<'a> TypeChecker<'a> {
 
                 Ok((
                     AggregateFunction {
+                        display_name: format!("{:#}", expr),
                         func_name: "count".to_string(),
                         distinct: false,
                         params: vec![],

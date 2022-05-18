@@ -12,26 +12,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_exception::Result;
 
 use crate::sql::binder::Binder;
+use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::BoundColumnRef;
+use crate::sql::plans::EvalScalar;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::ScalarItem;
 use crate::sql::BindContext;
+use crate::sql::IndexType;
 
 impl<'a> Binder {
-    pub(super) fn bind_distinct(&self, bind_context: &BindContext, child: SExpr) -> Result<SExpr> {
+    pub(super) fn bind_distinct(
+        &self,
+        bind_context: &BindContext,
+        projections: &[ColumnBinding],
+        scalar_items: &mut HashMap<IndexType, ScalarItem>,
+        child: SExpr,
+    ) -> Result<SExpr> {
+        let scalar_items: Vec<ScalarItem> = scalar_items
+            .drain()
+            .map(|(_, item)| {
+                if bind_context.in_grouping {
+                    let mut group_checker = GroupingChecker::new(bind_context);
+                    let scalar = group_checker.resolve(&item.scalar)?;
+                    Ok(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
+                } else {
+                    Ok(item)
+                }
+            })
+            .collect::<Result<_>>()?;
+
+        let mut new_expr = child;
+        if !scalar_items.is_empty() {
+            let eval_scalar = EvalScalar {
+                items: scalar_items,
+            };
+            new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
+        }
+
         // Like aggregate, we just use scalar directly.
-        let group_items: Vec<Scalar> = bind_context
-            .all_column_bindings()
+        let group_items: Vec<ScalarItem> = projections
             .iter()
-            .map(|v| {
-                v.scalar
-                    .clone()
-                    .map(|scalar| *scalar)
-                    .unwrap_or_else(|| Scalar::BoundColumnRef(BoundColumnRef { column: v.clone() }))
+            .map(|v| ScalarItem {
+                scalar: Scalar::BoundColumnRef(BoundColumnRef { column: v.clone() }),
+                index: v.index,
             })
             .collect();
 
@@ -41,6 +75,6 @@ impl<'a> Binder {
             from_distinct: true,
         };
 
-        Ok(SExpr::create_unary(distinct_plan.into(), child))
+        Ok(SExpr::create_unary(distinct_plan.into(), new_expr))
     }
 }
