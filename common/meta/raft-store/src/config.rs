@@ -176,11 +176,15 @@ impl RaftConfig {
     }
 
     pub fn check(&self) -> MetaResult<()> {
-        if !self.join.is_empty() && self.single {
+        // There two cases:
+        // - both join and single is set
+        // - neither join nor single is set
+        if self.join.is_empty() != self.single {
             return Err(MetaError::InvalidConfig(String::from(
-                "--join and --single can not be both set",
+                "at least one of `single` and `join` needs to be enabled",
             )));
         }
+
         let self_addr = self.raft_api_listen_host_string();
         if self.join.contains(&self_addr) {
             return Err(MetaError::InvalidConfig(String::from(
