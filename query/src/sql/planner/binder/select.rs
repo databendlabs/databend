@@ -122,6 +122,10 @@ impl<'a> Binder {
             s_expr = self.bind_where(&from_context, expr, s_expr, true).await?;
         }
 
+        if stmt.distinct {
+            s_expr = self.bind_distinct(&output_context, s_expr)?;
+        }
+
         s_expr = self.bind_projection(&output_context, s_expr)?;
 
         if !order_by.is_empty() {

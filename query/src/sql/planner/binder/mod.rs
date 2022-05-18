@@ -27,6 +27,7 @@ use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod distinct;
 mod join;
 mod limit;
 mod project;
