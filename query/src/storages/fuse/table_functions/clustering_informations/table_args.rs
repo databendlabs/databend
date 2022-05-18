@@ -11,20 +11,13 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::validate_expression;
 use common_planners::Expression;
-use sqlparser::ast::Expr;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
-use sqlparser::tokenizer::Token;
-use sqlparser::tokenizer::Tokenizer;
 
-use crate::sessions::QueryContext;
-use crate::sql::statements::ExpressionAnalyzer;
+use crate::sql::PlanParser;
 use crate::storages::fuse::table_functions::string_value;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
@@ -45,22 +38,15 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub async fn get_cluster_keys(
-    ctx: Arc<QueryContext>,
-    table: &FuseTable,
-    definition: &str,
-) -> Result<Vec<Expression>> {
+pub async fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
     let cluster_keys = if !definition.is_empty() {
         let schema = table.schema();
-        let mut expressions = vec![];
-        let expression_analyzer = ExpressionAnalyzer::create(ctx);
-        let exprs = parse_cluster_keys(definition)?;
+        let exprs = PlanParser::parse_exprs(definition)?;
         for expr in exprs.iter() {
-            let expression = expression_analyzer.analyze(expr).await?;
-            validate_expression(&expression, &schema)?;
-            expressions.push(expression);
+            validate_expression(expr, &schema)?;
         }
-        expressions
+
+        exprs
     } else {
         table.cluster_keys()
     };
@@ -73,22 +59,4 @@ pub async fn get_cluster_keys(
     }
 
     Ok(cluster_keys)
-}
-
-fn parse_cluster_keys(definition: &str) -> Result<Vec<Expr>> {
-    let dialect = &GenericDialect {};
-    let mut tokenizer = Tokenizer::new(dialect, definition);
-    match tokenizer.tokenize() {
-        Ok((tokens, position_map)) => {
-            let mut parser = Parser::new(tokens, position_map, dialect);
-            parser.expect_token(&Token::LParen)?;
-            let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-            parser.expect_token(&Token::RParen)?;
-            Ok(exprs)
-        }
-        Err(tokenize_error) => Err(ErrorCode::SyntaxException(format!(
-            "Can not tokenize definition: {}, Error: {:?}",
-            definition, tokenize_error
-        ))),
-    }
 }

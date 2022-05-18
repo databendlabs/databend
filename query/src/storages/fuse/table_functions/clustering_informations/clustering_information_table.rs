@@ -129,7 +129,7 @@ impl Table for ClusteringInformationTable {
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        let cluster_keys = get_cluster_keys(ctx.clone(), tbl, &self.arg_cluster_keys).await?;
+        let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys).await?;
 
         let blocks = vec![
             ClusteringInformation::new(ctx.clone(), tbl, cluster_keys)
@@ -216,8 +216,7 @@ impl AsyncSource for FuseHistorySource {
                 .await?;
 
             let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-            let cluster_keys =
-                get_cluster_keys(self.ctx.clone(), tbl, &self.arg_cluster_keys).await?;
+            let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys).await?;
 
             Ok(Some(
                 ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)

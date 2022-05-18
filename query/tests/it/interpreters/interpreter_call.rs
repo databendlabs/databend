@@ -82,7 +82,7 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
         let expect =
-            "Code: 1006, displayText = expecting fuse table, but got table of engine type: SystemTables.";
+            "Code: 1015, displayText = expects table of engine FUSE, but got SystemTables.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -100,6 +100,107 @@ async fn test_call_fuse_snapshot_interpreter() -> Result<()> {
     // FuseHistory
     {
         let plan = PlanParser::parse(ctx.clone(), "call system$fuse_snapshot(default, a)").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_call_clustering_information_interpreter() -> Result<()> {
+    common_tracing::init_default_ut_tracing();
+
+    let ctx = crate::tests::create_query_context().await?;
+
+    // NumberArgumentsNotMatch
+    {
+        let plan = PlanParser::parse(ctx.clone(), "call system$clustering_information()").await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect = "Code: 1028, displayText = Function `CLUSTERING_INFORMATION` expect to have 2 arguments, but got 0.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // UnknownTable
+    {
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call system$clustering_information(default, test)",
+        )
+        .await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        assert_eq!(
+            res.err().unwrap().code(),
+            ErrorCode::UnknownTable("").code()
+        );
+    }
+
+    // BadArguments
+    {
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call system$clustering_information(system, tables)",
+        )
+        .await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CallInterpreter");
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect =
+            "Code: 1015, displayText = expects table of engine FUSE, but got SystemTables.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // Create table a
+    {
+        let query = "\
+            CREATE TABLE default.a(a bigint)\
+        ";
+
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
+    }
+
+    // Unclustered.
+    {
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call system$clustering_information(default, a)",
+        )
+        .await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect =
+            "Code: 1070, displayText = Invalid clustering keys or table a is not clustered.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    // Create table b
+    {
+        let query = "\
+        CREATE TABLE default.b(a bigint) cluster by(a)\
+    ";
+
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
+    }
+
+    // FuseHistory
+    {
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call system$clustering_information(default, b)",
+        )
+        .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
