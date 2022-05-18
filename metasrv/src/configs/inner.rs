@@ -38,7 +38,7 @@ impl Default for Config {
         Self {
             config_file: "".to_string(),
             log_level: "INFO".to_string(),
-            log_dir: "./_logs".to_string(),
+            log_dir: "./.databend/logs".to_string(),
             metric_api_address: "127.0.0.1:28001".to_string(),
             admin_api_address: "127.0.0.1:28002".to_string(),
             admin_tls_server_cert: "".to_string(),

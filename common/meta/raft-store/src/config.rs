@@ -117,7 +117,7 @@ impl Default for RaftConfig {
             raft_listen_host: "127.0.0.1".to_string(),
             raft_advertise_host: get_default_raft_advertise_host(),
             raft_api_port: 28004,
-            raft_dir: "./_meta".to_string(),
+            raft_dir: "./.databend/meta".to_string(),
             no_sync: false,
             snapshot_logs_since_last: 1024,
             heartbeat_interval: 1000,
