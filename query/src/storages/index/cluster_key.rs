@@ -41,7 +41,7 @@ pub struct ClusterStatistics {
 pub struct ClusteringInformationExecutor {
     blocks: Vec<BlockMeta>,
     // (start, end).
-    points_map: HashMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)>,
+    points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)>,
     const_block_count: usize,
 }
 
@@ -54,10 +54,8 @@ pub struct ClusteringInformation {
 }
 
 impl ClusteringInformationExecutor {
-    pub fn create_by_cluster(
-        blocks: Vec<BlockMeta>,
-    ) -> Result<Self> {
-        let mut points_map: HashMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> = HashMap::new();
+    pub fn create_by_cluster(blocks: Vec<BlockMeta>) -> Result<Self> {
+        let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
         let mut const_block_count = 0;
         for (i, block) in blocks.iter().enumerate() {
             // Todo(zhyass): if cluster_stats is none.
@@ -98,11 +96,7 @@ impl ClusteringInformationExecutor {
 
         let mut statis = Vec::new();
         let mut unfinished_parts: HashMap<usize, (usize, usize)> = HashMap::new();
-        for key in self.points_map.keys().sorted() {
-            let (start, end) = self.points_map.get(key).ok_or_else(|| {
-                ErrorCode::UnknownException(format!("Unable to get the points by key: {:?}", key))
-            })?;
-
+        for (key, (start, end)) in &self.points_map {
             let point_depth = unfinished_parts.len() + start.len();
 
             for (_, val) in unfinished_parts.iter_mut() {
@@ -123,16 +117,20 @@ impl ClusteringInformationExecutor {
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
-        let mut mp = BTreeMap::new();
         let length = statis.len();
-        for (overlap, depth) in statis {
-            let bucket = get_buckets(depth);
-            mp.entry(bucket).and_modify(|v| *v += 1).or_insert(1u32);
-            sum_overlap += overlap;
-            sum_depth += depth;
-        }
-        let average_depth = sum_depth as f64 / length as f64;
-        let average_overlaps = sum_overlap as f64 / length as f64;
+        let mp = statis
+            .into_iter()
+            .fold(BTreeMap::new(), |mut acc, (overlap, depth)| {
+                sum_overlap += overlap;
+                sum_depth += depth;
+
+                let bucket = get_buckets(depth);
+                acc.entry(bucket).and_modify(|v| *v += 1).or_insert(1u32);
+                acc
+            });
+        // round the float to 4 decimal places.
+        let average_depth = (10000.0 * sum_depth as f64 / length as f64).round() / 10000.0;
+        let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
 
         let objects = mp.iter().fold(
             serde_json::Map::with_capacity(mp.len()),

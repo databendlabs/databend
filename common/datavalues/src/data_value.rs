@@ -17,8 +17,6 @@
 
 use std::cmp::Ordering;
 use std::fmt;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -30,7 +28,7 @@ use serde_json::json;
 use crate::prelude::*;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, PartialOrd)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -49,26 +47,6 @@ pub enum DataValue {
 }
 
 impl Eq for DataValue {}
-
-#[allow(clippy::derive_hash_xor_eq)]
-impl Hash for DataValue {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            DataValue::Null => (),
-            DataValue::Boolean(v) => v.hash(state),
-            DataValue::Int64(v) => v.hash(state),
-            DataValue::UInt64(v) => v.hash(state),
-            DataValue::Float64(v) => {
-                let v = OrderedFloat::from(*v);
-                v.hash(state)
-            }
-            DataValue::String(v) => v.hash(state),
-            DataValue::Array(v) => v.hash(state),
-            DataValue::Struct(v) => v.hash(state),
-            DataValue::Variant(_) => todo!(),
-        }
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
 pub enum ValueType {
@@ -294,6 +272,12 @@ impl DataValue {
         };
 
         Ok(ret)
+    }
+}
+
+impl PartialOrd for DataValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 

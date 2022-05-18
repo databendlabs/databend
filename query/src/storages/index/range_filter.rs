@@ -43,6 +43,12 @@ pub struct ColumnStatistics {
     pub in_memory_size: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ClusterStatistics {
+    pub min: Vec<DataValue>,
+    pub max: Vec<DataValue>,
+}
+
 #[derive(Debug, Clone)]
 pub struct RangeFilter {
     origin: DataSchemaRef,

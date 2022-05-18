@@ -13,8 +13,6 @@
 // limitations under the License.
 
 mod bloom_filter;
-#[allow(unused)]
-mod cluster_key;
 mod index_min_max;
 mod index_sparse;
 pub mod range_filter;
@@ -22,12 +20,10 @@ pub mod range_filter;
 pub use bloom_filter::BloomFilter;
 pub use bloom_filter::BloomFilterExprEvalResult;
 pub use bloom_filter::BloomFilterIndexer;
-pub use cluster_key::ClusterStatistics;
-pub use cluster_key::ClusteringInformationExecutor;
-pub use cluster_key::ClusteringInformation;
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
+pub use range_filter::ClusterStatistics;
 pub use range_filter::ColumnStatistics;
 pub use range_filter::ColumnsStatistics;
 pub use range_filter::RangeFilter;

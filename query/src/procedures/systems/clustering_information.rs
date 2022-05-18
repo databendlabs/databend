@@ -16,22 +16,13 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::validate_expression;
-use common_planners::Expression;
-use sqlparser::ast::Expr;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
-use sqlparser::tokenizer::Token;
-use sqlparser::tokenizer::Tokenizer;
 
-use crate::catalogs::Catalog;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
-use crate::sql::statements::ExpressionAnalyzer;
+use crate::storages::fuse::table_functions::get_cluster_keys;
 use crate::storages::fuse::table_functions::ClusteringInformation;
 use crate::storages::fuse::FuseTable;
 use crate::storages::Table;
@@ -60,7 +51,7 @@ impl Procedure for ClusteringInformationProcedure {
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog()
+            .get_catalog(ctx.get_current_catalog())?
             .get_table(
                 tenant_id.as_str(),
                 database_name.as_str(),
@@ -95,40 +86,5 @@ impl Procedure for ClusteringInformationProcedure {
 
     fn schema(&self) -> Arc<DataSchema> {
         ClusteringInformation::schema()
-    }
-}
-
-async fn get_cluster_keys(
-    ctx: Arc<QueryContext>,
-    schema: DataSchemaRef,
-    definition: &str,
-) -> Result<Vec<Expression>> {
-    let exprs = parse_cluster_keys(definition)?;
-
-    let mut expressions = vec![];
-    let expression_analyzer = ExpressionAnalyzer::create(ctx);
-    for expr in exprs.iter() {
-        let expression = expression_analyzer.analyze(expr).await?;
-        validate_expression(&expression, &schema)?;
-        expressions.push(expression);
-    }
-    Ok(expressions)
-}
-
-fn parse_cluster_keys(definition: &str) -> Result<Vec<Expr>> {
-    let dialect = &GenericDialect {};
-    let mut tokenizer = Tokenizer::new(dialect, definition);
-    match tokenizer.tokenize() {
-        Ok((tokens, position_map)) => {
-            let mut parser = Parser::new(tokens, position_map, dialect);
-            parser.expect_token(&Token::LParen)?;
-            let exprs = parser.parse_comma_separated(Parser::parse_expr)?;
-            parser.expect_token(&Token::RParen)?;
-            Ok(exprs)
-        }
-        Err(tokenize_error) => Err(ErrorCode::SyntaxException(format!(
-            "Can not tokenize definition: {}, Error: {:?}",
-            definition, tokenize_error
-        ))),
     }
 }
