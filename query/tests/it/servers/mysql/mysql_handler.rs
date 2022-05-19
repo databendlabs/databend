@@ -62,7 +62,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
             Ok(_) => panic!("Expected rejected connection"),
             Err(error) => {
                 assert_eq!(error.code(), 1067);
-                assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded mysql_handler_thread_num config'");
+                assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded max_active_sessions config'");
             }
         };
 
@@ -99,7 +99,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
                 Err(error) => {
                     destroy_barrier.wait().await;
                     assert_eq!(error.code(), 1067);
-                    assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded mysql_handler_thread_num config'");
+                    assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded max_active_sessions config'");
                     CreateServerResult::Rejected
                 }
             }

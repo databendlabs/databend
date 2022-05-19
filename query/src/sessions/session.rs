@@ -50,6 +50,7 @@ pub struct Session {
     session_settings: Settings,
     #[ignore_malloc_size_of = "insignificant"]
     status: Arc<RwLock<SessionStatus>>,
+    pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
 
 impl Session {
@@ -58,12 +59,12 @@ impl Session {
         id: String,
         typ: SessionType,
         session_mgr: Arc<SessionManager>,
+        mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let session_settings = Settings::try_create(&conf)?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
-
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
@@ -72,7 +73,12 @@ impl Session {
             session_ctx,
             session_settings,
             status,
+            mysql_connection_id,
         }))
+    }
+
+    pub fn get_mysql_conn_id(self: &Arc<Self>) -> Option<u32> {
+        self.mysql_connection_id
     }
 
     pub fn get_id(self: &Arc<Self>) -> String {

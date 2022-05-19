@@ -15,6 +15,9 @@ export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
 export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 
+echo "Install dependence"
+python3 -m pip install --quiet mysql-connector-python
+
 echo "calling test suite"
 echo "Starting standalone DatabendQuery(debug)"
 ./scripts/ci/deploy/databend-query-standalone.sh

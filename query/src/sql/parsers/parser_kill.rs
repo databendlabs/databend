@@ -15,7 +15,9 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use sqlparser::ast::Ident;
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Token;
 
 use crate::sql::statements::DfKillStatement;
 use crate::sql::DfParser;
@@ -34,9 +36,25 @@ impl<'a> DfParser<'a> {
 
     // Parse 'KILL statement'.
     fn parse_kill<const KILL_QUERY: bool>(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        Ok(DfStatement::KillStatement(DfKillStatement {
-            object_id: self.parser.parse_identifier()?,
-            kill_query: KILL_QUERY,
-        }))
+        let token = self.parser.next_token();
+        match &token {
+            Token::Word(w) => Ok(DfStatement::KillStatement(DfKillStatement {
+                object_id: w.to_ident(),
+                kill_query: KILL_QUERY,
+            })),
+            // Sometimes MySQL Client could send `kill query connect_id`
+            // and the connect_id is a number, so we parse it as a SingleQuotedString.
+            Token::SingleQuotedString(s) | Token::Number(s, _) => {
+                Ok(DfStatement::KillStatement(DfKillStatement {
+                    object_id: Ident::with_quote('\'', s),
+                    kill_query: KILL_QUERY,
+                }))
+            }
+            Token::BackQuotedString(s) => Ok(DfStatement::KillStatement(DfKillStatement {
+                object_id: Ident::with_quote('`', s),
+                kill_query: KILL_QUERY,
+            })),
+            _ => self.expected("identifier", token),
+        }
     }
 }
