@@ -8,7 +8,7 @@ insert into t09_0014 values(4,4);
 select *  from t09_0014 order by b, a;
 
 --Bug in cluster mode: https://github.com/datafuselabs/databend/issues/5473
---select * from clustering_information('default','t09_0014');
+select * from clustering_information('default','t09_0014');
 
 -- Drop table.
 drop table t09_0014;
