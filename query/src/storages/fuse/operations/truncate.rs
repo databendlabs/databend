@@ -58,8 +58,9 @@ impl FuseTable {
             new_table_meta
                 .options
                 .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_loc);
-            // update table statistics
-            new_table_meta.statistics = Some(TableStatistics::default());
+
+            // update table statistics, all zeros
+            new_table_meta.statistics = TableStatistics::default();
 
             let table_id = self.table_info.ident.table_id;
             let table_version = self.table_info.ident.seq;

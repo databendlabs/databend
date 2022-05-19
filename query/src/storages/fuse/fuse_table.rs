@@ -239,16 +239,12 @@ impl Table for FuseTable {
     }
 
     async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
-        Ok(self
-            .table_info
-            .meta
-            .statistics
-            .as_ref()
-            .map(|s| TableStatistics {
-                num_rows: Some(s.number_of_rows),
-                data_size: Some(s.data_bytes),
-                data_size_compressed: Some(s.compressed_data_bytes),
-                index_length: None,
-            }))
+        let s = &self.table_info.meta.statistics;
+        Ok(Some(TableStatistics {
+            num_rows: Some(s.number_of_rows),
+            data_size: Some(s.data_bytes),
+            data_size_compressed: Some(s.compressed_data_bytes),
+            index_length: None, // we do not have it yet
+        }))
     }
 }

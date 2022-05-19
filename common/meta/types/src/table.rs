@@ -162,7 +162,7 @@ pub struct TableMeta {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
-    pub statistics: Option<TableStatistics>,
+    pub statistics: TableStatistics,
 }
 
 impl TableInfo {
@@ -222,7 +222,7 @@ impl Default for TableMeta {
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
-            statistics: None,
+            statistics: Default::default(),
         }
     }
 }

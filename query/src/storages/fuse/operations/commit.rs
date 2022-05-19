@@ -268,12 +268,12 @@ impl FuseTable {
         self::utils::remove_legacy_options(&mut new_table_meta.options);
 
         // update statistics
-        new_table_meta.statistics = Some(TableStatistics {
+        new_table_meta.statistics = TableStatistics {
             number_of_rows: stats.row_count,
             data_bytes: stats.uncompressed_byte_size,
             compressed_data_bytes: stats.compressed_byte_size,
             index_data_bytes: 0, // TODO we do not have it yet
-        });
+        };
 
         let req = UpdateTableMetaReq {
             table_id,

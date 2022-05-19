@@ -130,7 +130,11 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             comment: p.comment,
-            statistics: p.statistics.map(mt::TableStatistics::from_pb).transpose()?,
+            statistics: p
+                .statistics
+                .map(mt::TableStatistics::from_pb)
+                .transpose()?
+                .unwrap_or_default(),
         };
         Ok(v)
     }
@@ -146,7 +150,7 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             comment: self.comment.clone(),
-            statistics: self.statistics.as_ref().map(|v| v.to_pb()).transpose()?,
+            statistics: Some(self.statistics.to_pb()?),
         };
         Ok(p)
     }

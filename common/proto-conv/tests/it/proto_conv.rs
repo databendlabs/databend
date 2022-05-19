@@ -111,7 +111,7 @@ fn new_table_info() -> mt::TableInfo {
             created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
             updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
             comment: s("table_comment"),
-            statistics: None,
+            statistics: Default::default(),
         },
     }
 }
@@ -316,7 +316,7 @@ fn test_load_old() -> anyhow::Result<()> {
                 created_on: Utc.ymd(2014, 11, 28).and_hms(12, 0, 9),
                 updated_on: Utc.ymd(2014, 11, 29).and_hms(12, 0, 10),
                 comment: s("table_comment"),
-                statistics: None,
+                statistics: Default::default(),
             },
         };
         assert_eq!(want, got);

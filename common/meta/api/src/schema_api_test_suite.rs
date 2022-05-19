@@ -1139,7 +1139,7 @@ impl SchemaApiTestSuite {
                     data_bytes: 1,
                     ..Default::default()
                 };
-                new_table_meta.statistics = Some(table_statistics);
+                new_table_meta.statistics = table_statistics;
                 let table_id = table.ident.table_id;
                 let table_version = table.ident.seq;
                 mt.update_table_meta(UpdateTableMetaReq {
