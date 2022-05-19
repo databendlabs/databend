@@ -17,7 +17,10 @@ pub mod format_csv;
 mod format_factory;
 mod format_parquet;
 pub mod output_format;
-pub mod output_format_tsv;
+pub mod output_format_csv;
+mod output_format_ndjson;
+mod output_format_parquet;
+mod output_format_values;
 
 pub use format::InputFormat;
 pub use format::InputState;

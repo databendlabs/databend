@@ -31,6 +31,7 @@ use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
+use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalInnerJoin;
 use crate::sql::plans::Scalar;
@@ -63,11 +64,11 @@ impl<'a> Binder {
         let mut left_join_conditions: Vec<Scalar> = vec![];
         let mut right_join_conditions: Vec<Scalar> = vec![];
         let mut other_conditions: Vec<Scalar> = vec![];
-        let join_condition_resolver = JoinConditionResolver::new(
+        let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
             &left_context,
             &right_context,
-            &bind_context,
+            &mut bind_context,
             &join.condition,
         );
         join_condition_resolver
@@ -163,7 +164,7 @@ struct JoinConditionResolver<'a> {
 
     left_context: &'a BindContext,
     right_context: &'a BindContext,
-    join_context: &'a BindContext,
+    join_context: &'a mut BindContext,
     join_condition: &'a JoinCondition<'a>,
 }
 
@@ -172,7 +173,7 @@ impl<'a> JoinConditionResolver<'a> {
         ctx: Arc<QueryContext>,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
-        join_context: &'a BindContext,
+        join_context: &'a mut BindContext,
         join_condition: &'a JoinCondition<'a>,
     ) -> Self {
         Self {
@@ -185,7 +186,7 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     pub async fn resolve(
-        &self,
+        &mut self,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
@@ -200,11 +201,23 @@ impl<'a> JoinConditionResolver<'a> {
                 )
                 .await?;
             }
-            JoinCondition::Using(_) => {
-                return Err(ErrorCode::UnImplement("USING clause is not supported yet. Please specify join condition with ON clause."));
+            JoinCondition::Using(identifiers) => {
+                let using_columns = identifiers
+                    .iter()
+                    .map(|ident| ident.name.clone())
+                    .collect::<Vec<String>>();
+                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
+                    .await?;
             }
             JoinCondition::Natural => {
-                return Err(ErrorCode::UnImplement("NATURAL JOIN is not supported yet. Please specify join condition with ON clause."));
+                // NATURAL is a shorthand form of USING: it forms a USING list consisting of all column names that appear in both input tables
+                // As with USING, these columns appear only once in the output table
+                // Todo(xudong963) If there are no common column names, NATURAL JOIN behaves like JOIN ... ON TRUE, producing a cross-product join.
+                let mut using_columns = vec![];
+                // Find common columns in both input tables
+                self.find_using_columns(&mut using_columns)?;
+                self.resolve_using(using_columns, left_join_conditions, right_join_conditions)
+                    .await?
             }
             JoinCondition::None => {
                 return Err(ErrorCode::UnImplement("JOIN without condition is not supported yet. Please specify join condition with ON clause."));
@@ -252,44 +265,127 @@ impl<'a> JoinConditionResolver<'a> {
         //
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
         // For the predicates that aren't equi-predicate, we will lift them as a `Filter` operator.
-        if let Some((mut left, mut right)) = split_equivalent_predicate(predicate) {
-            let left_used_columns = left.used_columns();
-            let right_used_columns = right.used_columns();
-            let left_columns: ColumnSet = self.left_context.all_column_bindings().iter().fold(
-                ColumnSet::new(),
-                |mut acc, v| {
-                    acc.insert(v.index);
-                    acc
-                },
-            );
-            let right_columns: ColumnSet = self.right_context.all_column_bindings().iter().fold(
-                ColumnSet::new(),
-                |mut acc, v| {
-                    acc.insert(v.index);
-                    acc
-                },
-            );
-
-            // Bump types of left conditions and right conditions
-            let left_type = left.data_type();
-            let right_type = right.data_type();
-            let least_super_type = merge_types(&left_type, &right_type)?;
-            left = wrap_cast_if_needed(left, &least_super_type);
-            right = wrap_cast_if_needed(right, &least_super_type);
-
-            if left_used_columns.is_subset(&left_columns)
-                && right_used_columns.is_subset(&right_columns)
-            {
-                left_join_conditions.push(left);
-                right_join_conditions.push(right);
-            } else if left_used_columns.is_subset(&right_columns)
-                && right_used_columns.is_subset(&left_columns)
-            {
-                left_join_conditions.push(right);
-                right_join_conditions.push(left);
-            }
+        if let Some((left, right)) = split_equivalent_predicate(predicate) {
+            self.add_conditions(left, right, left_join_conditions, right_join_conditions)?;
         } else {
             other_join_conditions.push(predicate.clone());
+        }
+        Ok(())
+    }
+
+    async fn resolve_using(
+        &mut self,
+        using_columns: Vec<String>,
+        left_join_conditions: &mut Vec<Scalar>,
+        right_join_conditions: &mut Vec<Scalar>,
+    ) -> Result<()> {
+        for join_key in using_columns.iter() {
+            let join_key_name = join_key.as_str();
+            let left_scalar = if let Some(col_binding) = self
+                .left_context
+                .columns
+                .iter()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                Scalar::BoundColumnRef(BoundColumnRef {
+                    column: col_binding.clone(),
+                })
+            } else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "column {} specified in USING clause does not exist in left table",
+                    join_key_name
+                )));
+            };
+
+            let right_scalar = if let Some(col_binding) = self
+                .right_context
+                .columns
+                .iter()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                Scalar::BoundColumnRef(BoundColumnRef {
+                    column: col_binding.clone(),
+                })
+            } else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "column {} specified in USING clause does not exist in right table",
+                    join_key_name
+                )));
+            };
+
+            if let Some(col_binding) = self
+                .join_context
+                .columns
+                .iter_mut()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                col_binding.visible_in_unqualified_wildcard = false;
+            }
+
+            self.add_conditions(
+                left_scalar,
+                right_scalar,
+                left_join_conditions,
+                right_join_conditions,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn add_conditions(
+        &self,
+        mut left: Scalar,
+        mut right: Scalar,
+        left_join_conditions: &mut Vec<Scalar>,
+        right_join_conditions: &mut Vec<Scalar>,
+    ) -> Result<()> {
+        let left_used_columns = left.used_columns();
+        let right_used_columns = right.used_columns();
+        let left_columns: ColumnSet =
+            self.left_context
+                .all_column_bindings()
+                .iter()
+                .fold(ColumnSet::new(), |mut acc, v| {
+                    acc.insert(v.index);
+                    acc
+                });
+        let right_columns: ColumnSet =
+            self.right_context
+                .all_column_bindings()
+                .iter()
+                .fold(ColumnSet::new(), |mut acc, v| {
+                    acc.insert(v.index);
+                    acc
+                });
+
+        // Bump types of left conditions and right conditions
+        let left_type = left.data_type();
+        let right_type = right.data_type();
+        let least_super_type = merge_types(&left_type, &right_type)?;
+        left = wrap_cast_if_needed(left, &least_super_type);
+        right = wrap_cast_if_needed(right, &least_super_type);
+
+        if left_used_columns.is_subset(&left_columns)
+            && right_used_columns.is_subset(&right_columns)
+        {
+            left_join_conditions.push(left);
+            right_join_conditions.push(right);
+        } else if left_used_columns.is_subset(&right_columns)
+            && right_used_columns.is_subset(&left_columns)
+        {
+            left_join_conditions.push(right);
+            right_join_conditions.push(left);
+        }
+        Ok(())
+    }
+
+    fn find_using_columns(&self, using_columns: &mut Vec<String>) -> Result<()> {
+        for left_column in self.left_context.all_column_bindings().iter() {
+            for right_column in self.right_context.all_column_bindings().iter() {
+                if left_column.column_name == right_column.column_name {
+                    using_columns.push(left_column.column_name.clone());
+                }
+            }
         }
         Ok(())
     }

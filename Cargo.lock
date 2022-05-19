@@ -131,8 +131,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.11.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=2d70fbf46fd37f4ef532945c588be69a71998e44#2d70fbf46fd37f4ef532945c588be69a71998e44"
+version = "0.11.2"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=826a2b8#826a2b8ed8598a614c5df9115ea657d1e3c40184"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -1158,7 +1158,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes 1.1.0",
- "clap 3.1.8",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -1714,21 +1713,25 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-metrics",
  "common-tracing",
+ "env_logger",
  "futures",
+ "lazy_static",
  "maplit",
- "metrics",
  "num",
  "once_cell",
  "poem",
  "pretty_assertions",
+ "prometheus",
  "prost 0.9.0",
  "regex",
  "reqwest",
  "serde",
+ "serde-bridge",
  "serde_json",
+ "serfig",
  "sled",
+ "temp-env",
  "tempfile",
  "tokio-stream",
  "tonic",
@@ -2123,6 +2126,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
+dependencies = [
+ "atty",
+ "humantime",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -4747,6 +4763,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95e344cafeaeefe487300c361654bcfc85db3ac53619eeccced29f5ea18c4c70"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "libc",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "libc",
+ "memchr",
+ "parking_lot 0.11.2",
+ "procfs",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "prometheus-parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5543,9 +5590,9 @@ dependencies = [
 
 [[package]]
 name = "serde-env"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e25cbc2db78bdf2b85ae2bb9894106e14092f87e2c47191dc3d704d7dca78be"
+checksum = "4e03cfb2aa71df46bc21892a343552041c8712e97ace1a535e7f7e6eabeca6c0"
 dependencies = [
  "anyhow",
  "log",
@@ -5631,9 +5678,9 @@ dependencies = [
 
 [[package]]
 name = "serfig"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe138b57b8dea13fbe1d1b7007be08322bd60a76eb938f89113d3d82dcc480a"
+checksum = "782e2265bd0b75de9d0934d412ced9b790b1290f59c9ac2e56b859d69d210f18"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -5894,7 +5941,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=619e3b6#619e3b66d0a3b7eaaed69a66d452b37a5488dca4"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=45ead90#45ead90755aa86d5ff3f0faaa6c112d057b3494a"
 dependencies = [
  "hashbrown 0.12.0",
  "log",

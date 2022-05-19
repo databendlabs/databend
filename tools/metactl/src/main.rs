@@ -23,18 +23,20 @@ use std::net::SocketAddr;
 use anyhow::anyhow;
 use clap::Parser;
 use common_base::base::tokio;
-use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 use common_tracing::init_global_tracing;
-use databend_meta::configs::config::METASRV_GRPC_API_ADDRESS;
 use databend_meta::export::deserialize_to_kv_variant;
 use databend_meta::export::serialize_kv_variant;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::net::TcpSocket;
 
+/// TODO(xuanwo)
+///
+/// We should make metactl config keeps backward compatibility too.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version, author)]
 struct Config {
@@ -47,11 +49,121 @@ struct Config {
     #[clap(long)]
     pub export: bool,
 
-    #[clap(long, env = METASRV_GRPC_API_ADDRESS, default_value = "")]
+    #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
     pub grpc_api_address: String,
 
     #[clap(flatten)]
     pub raft_config: RaftConfig,
+}
+
+/// TODO: This is a temp copy of RaftConfig, we will migrate them in the future.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[clap(about, version, author)]
+#[serde(default)]
+pub struct RaftConfig {
+    /// Identify a config.
+    /// This is only meant to make debugging easier with more than one Config involved.
+    #[clap(long, default_value = "")]
+    pub config_id: String,
+
+    /// The local listening host for metadata communication.
+    /// This config does not need to be stored in raft-store,
+    /// only used when metasrv startup and listen to.
+    #[clap(long, default_value = "127.0.0.1")]
+    #[serde(alias = "kvsrv_listen_host")]
+    pub raft_listen_host: String,
+
+    /// The hostname that other nodes will use to connect this node.
+    /// This host should be stored in raft store and be replicated to the raft cluster,
+    /// i.e., when calling add_node().
+    /// Use `localhost` by default.
+    #[clap(long, default_value = "localhost")]
+    #[serde(alias = "kvsrv_advertise_host")]
+    pub raft_advertise_host: String,
+
+    /// The listening port for metadata communication.
+    #[clap(long, default_value = "28004")]
+    #[serde(alias = "kvsrv_api_port")]
+    pub raft_api_port: u32,
+
+    /// The dir to store persisted meta state, including raft logs, state machine etc.
+    #[clap(long, default_value = "./_meta")]
+    #[serde(alias = "kvsrv_raft_dir")]
+    pub raft_dir: String,
+
+    /// Whether to fsync meta to disk for every meta write(raft log, state machine etc).
+    /// No-sync brings risks of data loss during a crash.
+    /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
+    #[clap(long)]
+    #[serde(alias = "kvsrv_no_sync")]
+    pub no_sync: bool,
+
+    /// The number of logs since the last snapshot to trigger next snapshot.
+    #[clap(long, default_value = "1024")]
+    #[serde(alias = "kvsrv_snapshot_logs_since_last")]
+    pub snapshot_logs_since_last: u64,
+
+    /// The interval in milli seconds at which a leader send heartbeat message to followers.
+    /// Different value of this setting on leader and followers may cause unexpected behavior.
+    #[clap(long, default_value = "1000")]
+    #[serde(alias = "kvsrv_heartbeat_intervalt")]
+    pub heartbeat_interval: u64,
+
+    /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
+    #[clap(long, default_value = "4000")]
+    #[serde(alias = "kvsrv_install_snapshot_timeout")]
+    pub install_snapshot_timeout: u64,
+
+    /// The maximum number of applied logs to keep before purging
+    #[clap(long, default_value = "1000")]
+    #[serde(alias = "raft_max_applied_log_to_keep")]
+    pub max_applied_log_to_keep: u64,
+
+    /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
+    /// Otherwise it opens the previous one.
+    /// This is mainly for testing purpose.
+    #[clap(long)]
+    #[serde(alias = "kvsrv_single")]
+    pub single: bool,
+
+    /// Bring up a metasrv node and join a cluster.
+    ///
+    /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
+    #[clap(long, multiple_occurrences = true, multiple_values = true)]
+    #[serde(alias = "metasrv_join")]
+    pub join: Vec<String>,
+
+    /// The node id. Only used when this server is not initialized,
+    ///  e.g. --boot or --single for the first time.
+    ///  Otherwise this argument is ignored.
+    #[clap(long, default_value = "0")]
+    #[serde(alias = "kvsrv_id")]
+    pub id: u64,
+
+    /// For test only: specifies the tree name prefix
+    #[clap(long, default_value = "")]
+    pub sled_tree_prefix: String,
+}
+
+impl Default for RaftConfig {
+    fn default() -> Self {
+        Self {
+            config_id: "".to_string(),
+            raft_listen_host: "127.0.0.1".to_string(),
+            raft_advertise_host: get_default_raft_advertise_host(),
+            raft_api_port: 28004,
+            raft_dir: "./_meta".to_string(),
+            no_sync: false,
+            snapshot_logs_since_last: 1024,
+            heartbeat_interval: 1000,
+            install_snapshot_timeout: 4000,
+            max_applied_log_to_keep: 1000,
+            single: false,
+            join: vec![],
+            id: 0,
+            sled_tree_prefix: "".to_string(),
+        }
+    }
 }
 
 /// Usage:

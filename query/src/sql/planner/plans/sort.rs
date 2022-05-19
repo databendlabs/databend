@@ -21,7 +21,7 @@ use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
-use crate::sql::plans::Scalar;
+use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
 pub struct SortPlan {
@@ -30,7 +30,7 @@ pub struct SortPlan {
 
 #[derive(Clone, Debug)]
 pub struct SortItem {
-    pub expr: Scalar,
+    pub index: IndexType,
     pub asc: Option<bool>,
     pub nulls_first: Option<bool>,
 }

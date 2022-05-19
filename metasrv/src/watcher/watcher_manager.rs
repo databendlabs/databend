@@ -30,6 +30,7 @@ use common_tracing::tracing;
 use tonic::Status;
 
 use super::WatcherStream;
+use crate::metrics::incr_meta_metrics_watchers;
 
 pub type WatcherId = i64;
 pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
@@ -117,6 +118,8 @@ impl WatcherManagerCore {
     #[tracing::instrument(level = "debug", skip(self))]
     fn close_stream(&mut self, key: RangeMapKey<String, WatcherId>) {
         self.watcher_range_map.remove_by_key(&key);
+
+        incr_meta_metrics_watchers(-1);
     }
 
     async fn notify_event(&mut self, kv: StateMachineKvData) {
@@ -193,6 +196,8 @@ impl WatcherManagerCore {
 
         self.watcher_range_map
             .insert(range, watcher_id, watcher_stream);
+
+        incr_meta_metrics_watchers(1);
     }
 
     fn get_range_key(key: String, key_end: &Option<String>) -> Result<Range<String>, bool> {

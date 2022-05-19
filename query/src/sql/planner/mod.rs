@@ -51,6 +51,7 @@ impl Planner {
     pub async fn plan_sql<'a>(&mut self, sql: &'a str) -> Result<(NewPipeline, Vec<NewPipeline>)> {
         // Step 1: parse SQL text into AST
         let tokens = tokenize_sql(sql)?;
+
         let backtrace = Backtrace::new();
         let stmts = parse_sql(&tokens, &backtrace)?;
         if stmts.len() > 1 {

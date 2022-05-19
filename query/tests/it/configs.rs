@@ -68,11 +68,11 @@ jwt_key_file = ""
 
 [log]
 level = "INFO"
-dir = "./_logs"
+dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-embedded_dir = "./_meta_embedded"
+embedded_dir = "./.databend/meta_embedded"
 address = ""
 endpoints = []
 username = "root"
@@ -324,11 +324,11 @@ jwt_key_file = ""
 
 [log]
 level = "INFO"
-dir = "./_logs"
+dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-embedded_dir = "./_meta_embedded"
+embedded_dir = "./.databend/meta_embedded"
 address = ""
 endpoints = []
 username = "username_from_file"
@@ -342,7 +342,7 @@ type = "s3"
 num_cpus = 0
 
 [storage.fs]
-data_path = "_data"
+data_path = "./.datebend/data"
 
 [storage.s3]
 region = ""

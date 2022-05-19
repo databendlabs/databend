@@ -69,6 +69,25 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
         Ok(result)
     }
 
+    fn serialize_column_quoted(
+        &self,
+        column: &ColumnRef,
+        _format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+
+        let result: Vec<String> = column
+            .iter()
+            .map(|v| {
+                let mut date = NaiveDate::from_ymd(1970, 1, 1);
+                let d = Duration::days(v.to_i64().unwrap());
+                date.add_assign(d);
+                format!("\"{}\"", date.format(DATE_FMT))
+            })
+            .collect();
+        Ok(result)
+    }
+
     fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let result: Vec<Value> = array

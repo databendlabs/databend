@@ -23,7 +23,6 @@ use crate::sql::plans::ComparisonExpr;
 use crate::sql::plans::ComparisonOp;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
-use crate::sql::BindContext;
 
 // Visitor that find Expressions that match a particular predicate
 struct Finder<'a, F>
@@ -37,6 +36,7 @@ impl<'a, F> Finder<'a, F>
 where F: Fn(&Scalar) -> bool
 {
     /// Create a new finder with the `test_fn`
+    #[allow(dead_code)]
     fn new(find_fn: &'a F) -> Self {
         Self {
             find_fn,
@@ -59,42 +59,6 @@ where F: Fn(&Scalar) -> bool
 
         Ok(Recursion::Continue(self))
     }
-}
-
-fn find_scalars_in_scalar<F>(scalar: &Scalar, find_fn: &F) -> Vec<Scalar>
-where F: Fn(&Scalar) -> bool {
-    let Finder { scalars, .. } = scalar
-        .accept(Finder::new(find_fn))
-        .expect("no way to return error during recursion");
-    scalars
-}
-
-fn find_scalars_in_scalars<F>(scalars: &[Scalar], find_fn: &F) -> Vec<Scalar>
-where F: Fn(&Scalar) -> bool {
-    scalars
-        .iter()
-        .flat_map(|scalar| find_scalars_in_scalar(scalar, find_fn))
-        .fold(vec![], |mut acc, scalar| {
-            if !acc.contains(&scalar) {
-                acc.push(scalar)
-            }
-            acc
-        })
-}
-
-pub fn find_aggregate_scalars(scalars: &[Scalar]) -> Vec<Scalar> {
-    find_scalars_in_scalars(scalars, &|nest_scalar| {
-        matches!(nest_scalar, Scalar::AggregateFunction { .. })
-    })
-}
-
-pub fn find_aggregate_scalars_from_bind_context(bind_context: &BindContext) -> Result<Vec<Scalar>> {
-    let scalars = bind_context
-        .all_column_bindings()
-        .iter()
-        .flat_map(|col_binding| col_binding.scalar.clone().map(|s| *s))
-        .collect::<Vec<Scalar>>();
-    Ok(find_aggregate_scalars(&scalars))
 }
 
 pub fn split_conjunctions(scalar: &Scalar) -> Vec<Scalar> {

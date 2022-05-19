@@ -48,6 +48,15 @@ pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String>;
     fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>>;
     fn serialize_column(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<String>>;
+
+    fn serialize_column_quoted(
+        &self,
+        column: &ColumnRef,
+        format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        self.serialize_column(column, format)
+    }
+
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,

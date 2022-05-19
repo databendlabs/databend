@@ -144,6 +144,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         let builder: &mut MutableArrayColumn = Series::check_get_mutable_column(array)?;
         let inner_column: &mut MutablePrimitiveColumn<u8> =
             Series::check_get_mutable_column(builder.inner_column.as_mut())?;
+
         if state.events & 1 == 1 {
             inner_column.append_value(1u8);
             for i in 1..self.events_size {
@@ -153,7 +154,12 @@ impl AggregateFunction for AggregateRetentionFunction {
                     inner_column.append_value(0u8);
                 }
             }
+        } else {
+            for _ in 0..self.events_size {
+                inner_column.append_value(0u8);
+            }
         }
+
         builder.add_offset(self.events_size as usize);
         Ok(())
     }

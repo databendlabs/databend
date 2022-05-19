@@ -84,6 +84,10 @@ where
         }
     }
 
+    pub fn item_manager(&self) -> &Mgr {
+        &self.manager
+    }
+
     /// Return an raw pool item.
     ///
     /// The returned one may be an uninitialized one, i.e., it contains a None.

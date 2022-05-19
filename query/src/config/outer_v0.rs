@@ -714,7 +714,7 @@ pub struct LogConfig {
     pub level: String,
 
     /// Log file dir
-    #[clap(long = "log-dir", default_value = "./_logs")]
+    #[clap(long = "log-dir", default_value = "./.databend/logs")]
     #[serde(alias = "log_dir")]
     pub dir: String,
 
@@ -793,7 +793,10 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(long = "meta-embedded-dir", default_value = "./_meta_embedded")]
+    #[clap(
+        long = "meta-embedded-dir",
+        default_value = "./.databend/meta_embedded"
+    )]
     #[serde(alias = "meta_embedded_dir")]
     pub embedded_dir: String,
 
