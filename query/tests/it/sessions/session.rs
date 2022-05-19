@@ -30,6 +30,7 @@ async fn test_session() -> Result<()> {
         String::from("test-001"),
         SessionType::Dummy,
         session_manager,
+        None,
     )
     .await?;
 
@@ -75,6 +76,7 @@ async fn test_session_in_management_mode() -> Result<()> {
         String::from("test-001"),
         SessionType::Dummy,
         session_manager,
+        None,
     )
     .await?;
 
