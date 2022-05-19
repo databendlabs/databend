@@ -99,9 +99,11 @@ pub struct QueryResponse {
 impl QueryResponse {
     pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
         let state = r.state.clone();
-        let (data, next_url) = match r.data {
-            Some(d) => (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n))),
-            None => (JsonBlock::empty(), None),
+        let (data, next_url) = match (state.state, r.data) {
+            (ExecuteStateKind::Succeeded | ExecuteStateKind::Running, Some(d)) => {
+                (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n)))
+            }
+            _ => (JsonBlock::empty(), None),
         };
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();

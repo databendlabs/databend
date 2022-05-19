@@ -455,11 +455,13 @@ async fn test_query_log() -> Result<()> {
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.data.is_empty(), "{:?}", result);
 
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_some(), "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace  from system.query_log where log_type=3";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
