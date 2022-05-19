@@ -726,13 +726,23 @@ impl<'a> TypeChecker<'a> {
                 };
                 Some(self.resolve_function("version", &[&arg], None).await)
             }
-            "current_user" | "user" => match self.ctx.get_current_user() {
+            "current_user" => match self.ctx.get_current_user() {
                 Ok(user) => {
                     let arg = Expr::Literal {
                         span: &[],
                         lit: Literal::String(user.identity().to_string()),
                     };
                     Some(self.resolve_function("current_user", &[&arg], None).await)
+                }
+                Err(e) => Some(Err(e)),
+            },
+            "user" => match self.ctx.get_current_user() {
+                Ok(user) => {
+                    let arg = Expr::Literal {
+                        span: &[],
+                        lit: Literal::String(user.identity().to_string()),
+                    };
+                    Some(self.resolve_function("user", &[&arg], None).await)
                 }
                 Err(e) => Some(Err(e)),
             },
