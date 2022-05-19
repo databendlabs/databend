@@ -14,6 +14,9 @@ statement ok
 DROP USER if exists 'test-i'@'localhost';
 
 statement ok
+DROP USER if exists 'test-i@localhost';
+
+statement ok
 CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password';
 
 statement ok
@@ -43,7 +46,7 @@ CREATE USER 'test-h'@'localhost' IDENTIFIED WITH double_sha1_password BY 'passwo
 statement ok
 ALTER USER 'test-h'@'localhost' IDENTIFIED WITH double_sha1_password BY 'new-password';
 
-statement error 2202
+statement ok
 CREATE USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'password';
 
 statement ok
