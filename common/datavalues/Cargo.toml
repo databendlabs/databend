@@ -58,3 +58,7 @@ harness = false
 [[bench]]
 name = "data_type"
 harness = false
+
+[[bench]]
+name = "csv"
+harness = false

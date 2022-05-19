@@ -336,6 +336,9 @@ where
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
         self.values[idx]
     }
+    fn get_data_owned(&self, idx: usize) -> Self::OwnedItem {
+        self.values[idx].clone()
+    }
 
     fn scalar_iter(&self) -> Self::Iterator<'_> {
         self.iter().copied()

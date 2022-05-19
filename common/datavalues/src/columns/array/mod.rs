@@ -179,6 +179,11 @@ impl ScalarColumn for ArrayColumn {
         ArrayValueRef::Indexed { column: self, idx }
     }
 
+    #[inline]
+    fn get_data_owned(&self, idx: usize) -> Self::OwnedItem {
+        self.get(idx).into()
+    }
+
     fn scalar_iter(&self) -> Self::Iterator<'_> {
         ArrayValueIter::new(self)
     }

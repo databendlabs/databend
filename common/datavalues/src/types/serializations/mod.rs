@@ -88,6 +88,16 @@ pub trait TypeSerializer: Send + Sync {
         ))
     }
 
+    fn write_csv_field<'a>(
+        &self,
+        _column: &ColumnRef,
+        _row_num: usize,
+        _buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
     fn serialize_csv<'a>(
         &self,
         column: &'a ColumnRef,
@@ -99,9 +109,9 @@ pub trait TypeSerializer: Send + Sync {
 
     fn serialize_csv_inner<'a, F2>(
         &self,
-        column: &'a ColumnRef,
-        format: &FormatSettings,
-        nullable: NullInfo<F2>,
+        _column: &'a ColumnRef,
+        _format: &FormatSettings,
+        _nullable: NullInfo<F2>,
     ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
     where
         F2: Fn(usize) -> bool + 'a,
@@ -134,30 +144,4 @@ pub enum TypeSerializerImpl {
     Array(ArraySerializer),
     Struct(StructSerializer),
     Variant(VariantSerializer),
-}
-
-#[test]
-fn test_s() -> Result<()> {
-    use crate::TypeSerializer;
-    let col = Series::from_data(vec![true, false, true]);
-    let col = Series::from_data(vec!["a", "a", "bc"]);
-    let col = Series::from_data(vec![12, 23, 34]);
-
-    println!("{:?}", col);
-    let s = col.data_type().create_serializer();
-    let mut stream = s.serialize_csv(&col, &FormatSettings::default())?;
-    println!("{:?}", stream.next());
-    println!("{:?}", stream.next());
-    println!("{:?}", stream.next());
-    println!("{:?}", stream.next());
-
-    let col = Series::from_data(vec![Some(12), None, Some(34)]);
-    println!("{:?}", col);
-    let s = col.data_type().create_serializer();
-    let mut stream = s.serialize_csv(&col, &FormatSettings::default())?;
-    println!("{:?}", stream.next());
-    println!("{:?}", stream.next());
-    println!("{:?}", stream.next());
-    println!("{:?}", stream.next());
-    Ok(())
 }

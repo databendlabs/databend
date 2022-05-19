@@ -116,9 +116,9 @@ impl TypeSerializer for NullableSerializer {
 
     fn serialize_csv_inner<'a, F2>(
         &self,
-        column: &'a ColumnRef,
-        format: &FormatSettings,
-        nullable: NullInfo<F2>,
+        _column: &'a ColumnRef,
+        _format: &FormatSettings,
+        _nullable: NullInfo<F2>,
     ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
     where
         F2: Fn(usize) -> bool + 'a,

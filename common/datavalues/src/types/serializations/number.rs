@@ -26,6 +26,7 @@ use opensrv_clickhouse::types::HasSqlType;
 use serde_json::Value;
 use streaming_iterator::StreamingIterator;
 
+use crate::formats::lexical_to_bytes_mut_no_clear;
 use crate::prelude::*;
 use crate::serializations::formats::iterators::new_it;
 use crate::serializations::formats::iterators::NullInfo;
@@ -116,7 +117,7 @@ where T: PrimitiveType
     fn serialize_csv_inner<'a, F2>(
         &self,
         column: &'a ColumnRef,
-        format: &FormatSettings,
+        _format: &FormatSettings,
         nullable: NullInfo<F2>,
     ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
     where
@@ -129,5 +130,18 @@ where T: PrimitiveType
             vec![],
             nullable,
         ))
+    }
+
+    fn write_csv_field(
+        &self,
+        column: &ColumnRef,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        let col: &<T as Scalar>::ColumnType = unsafe { Series::static_cast(&column) };
+        let v = col.get_data_owned(row_num);
+        lexical_to_bytes_mut_no_clear(v, buf);
+        Ok(())
     }
 }

@@ -34,6 +34,9 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
     // Note: get_data has bad performance, avoid call this function inside the loop
     // Use `iter` instead
     fn get_data(&self, idx: usize) -> Self::RefItem<'_>;
+    fn get_data_owned(&self, _idx: usize) -> Self::OwnedItem {
+        unimplemented!()
+    }
 
     /// Get iterator of this column.
     fn scalar_iter(&self) -> Self::Iterator<'_>;
