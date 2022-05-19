@@ -21,7 +21,6 @@ mod column;
 mod column_with_field;
 mod const_;
 mod eq;
-mod filter;
 #[allow(clippy::ptr_arg)]
 mod group_hash;
 mod mutable;
@@ -40,7 +39,6 @@ pub use builder::*;
 pub use column::*;
 pub use column_with_field::*;
 pub use const_::*;
-pub use filter::*;
 pub use group_hash::GroupHash;
 pub use mutable::*;
 pub use null::*;

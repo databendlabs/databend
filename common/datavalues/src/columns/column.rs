@@ -36,7 +36,12 @@ pub trait Column: Send + Sync {
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
+
     fn data_type(&self) -> DataTypeImpl;
+
+    fn column_meta(&self) -> ColumnMeta {
+        ColumnMeta::Simple
+    }
 
     fn column_type_name(&self) -> String;
 

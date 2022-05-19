@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
@@ -103,6 +101,12 @@ impl Column for ArrayColumn {
         "Array".to_string()
     }
 
+    fn column_meta(&self) -> ColumnMeta {
+        ColumnMeta::Array {
+            data_type: self.data_type.clone(),
+        }
+    }
+
     fn len(&self) -> usize {
         self.offsets.len() - 1
     }
@@ -138,100 +142,15 @@ impl Column for ArrayColumn {
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
-        let mut builders = Vec::with_capacity(scattered_size);
-        for _i in 0..scattered_size {
-            builders.push(MutableArrayColumn::with_capacity_meta(
-                self.len(),
-                ColumnMeta::Array {
-                    data_type: self.data_type.clone(),
-                },
-            ));
-        }
-
-        for (row, index) in indices.iter().enumerate() {
-            builders[*index].push(ArrayValueRef::Indexed {
-                column: self,
-                idx: row,
-            });
-        }
-
-        builders.iter_mut().map(|b| b.to_column()).collect()
+        scatter_scalar_column(self, indices, scattered_size)
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let length = filter.values().len() - filter.values().null_count();
-        if length == self.len() {
-            return Arc::new(self.clone());
-        }
-        const CHUNK_SIZE: usize = 64;
-        let mut builder = MutableArrayColumn::with_capacity_meta(self.len(), ColumnMeta::Array {
-            data_type: self.data_type.clone(),
-        });
-
-        let (mut slice, offset, mut length) = filter.values().as_slice();
-        let mut start_index: usize = 0;
-
-        if offset > 0 {
-            let n = 8 - offset;
-            start_index += n;
-
-            filter
-                .values()
-                .iter()
-                .enumerate()
-                .take(n)
-                .for_each(|(idx, is_selected)| {
-                    if is_selected {
-                        builder.push(ArrayValueRef::Indexed { column: self, idx });
-                    }
-                });
-            slice = &slice[1..];
-            length -= n;
-        }
-
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
-        mask_chunks
-            .by_ref()
-            .enumerate()
-            .for_each(|(mask_index, mut mask)| {
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    let i = mask_index * CHUNK_SIZE + n + start_index;
-                    builder.push(ArrayValueRef::Indexed {
-                        column: self,
-                        idx: i,
-                    });
-
-                    mask = mask & (mask - 1);
-                }
-            });
-
-        let remainder_start = length - length % CHUNK_SIZE;
-        mask_chunks
-            .remainder_iter()
-            .enumerate()
-            .for_each(|(mask_index, is_selected)| {
-                if is_selected {
-                    let i = mask_index + remainder_start + start_index;
-                    builder.push(ArrayValueRef::Indexed {
-                        column: self,
-                        idx: i,
-                    });
-                }
-            });
-        builder.to_column()
+        filter_scalar_column(self, filter)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        debug_assert!(
-            offsets.len() == self.len(),
-            "Size of offsets must match size of column"
-        );
-
-        // match datatypes
-        // TODO: see https://github.com/ClickHouse/ClickHouse/blob/340b53ef853348758c9042b16a8599120ebc8d22/src/Columns/ColumnArray.cpp
-        todo!()
+        replicate_scalar_column(self, offsets)
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -253,11 +172,6 @@ impl ScalarColumn for ArrayColumn {
     type OwnedItem = ArrayValue;
     type RefItem<'a> = <ArrayValue as Scalar>::RefType<'a>;
     type Iterator<'a> = ArrayValueIter<'a>;
-
-    #[inline]
-    fn clone_column(&self) -> ColumnRef {
-        Arc::new(self.clone())
-    }
 
     #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {

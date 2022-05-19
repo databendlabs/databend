@@ -333,11 +333,6 @@ where
     type Iterator<'a> = Copied<std::slice::Iter<'a, T>>;
 
     #[inline]
-    fn clone_column(&self) -> ColumnRef {
-        Arc::new(self.clone())
-    }
-
-    #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
         self.values[idx]
     }

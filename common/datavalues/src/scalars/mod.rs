@@ -13,11 +13,13 @@
 // limitations under the License.
 
 mod column;
+mod common;
 mod iterator;
 mod type_;
 mod viewer;
 
 pub use column::*;
+pub use common::*;
 pub use iterator::*;
 pub use type_::*;
 pub use viewer::*;

@@ -107,49 +107,15 @@ impl Column for BooleanColumn {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        Series::filter_column(self, filter)
+        filter_scalar_column(self, filter)
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
-        let mut builders = Vec::with_capacity(scattered_size);
-        for _i in 0..scattered_size {
-            builders.push(MutableBooleanColumn::with_capacity(self.len()));
-        }
-
-        indices
-            .iter()
-            .zip(self.values())
-            .for_each(|(index, value)| {
-                builders[*index].append_value(value);
-            });
-
-        builders.iter_mut().map(|b| b.to_column()).collect()
+        scatter_scalar_column(self, indices, scattered_size)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        debug_assert!(
-            offsets.len() == self.len(),
-            "Size of offsets must match size of column"
-        );
-
-        if offsets.is_empty() {
-            return self.slice(0, 0);
-        }
-
-        let mut builder = MutableBooleanColumn::with_capacity(*offsets.last().unwrap());
-
-        let mut previous_offset: usize = 0;
-
-        (0..self.len()).for_each(|i| {
-            let offset: usize = offsets[i];
-            let data = self.values.get_bit(i);
-            builder
-                .values
-                .extend_constant(offset - previous_offset, data);
-            previous_offset = offset;
-        });
-
-        builder.to_column()
+        replicate_scalar_column(self, offsets)
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -166,11 +132,6 @@ impl ScalarColumn for BooleanColumn {
     type OwnedItem = bool;
     type RefItem<'a> = bool;
     type Iterator<'a> = BitmapValuesIter<'a>;
-
-    #[inline]
-    fn clone_column(&self) -> ColumnRef {
-        Arc::new(self.clone())
-    }
 
     #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
