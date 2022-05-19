@@ -1,10 +1,7 @@
-import datetime
 import json
-import os
 
 import environs
 import requests
-from ecdsa import SigningKey
 from mysql.connector.errors import Error
 from log import log
 
