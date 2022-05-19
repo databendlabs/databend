@@ -174,7 +174,7 @@ impl Catalog for HiveCatalog {
         ))
     }
 
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::UnImplement(
             "Cannot update table meta in HIVE catalog",
         ))
