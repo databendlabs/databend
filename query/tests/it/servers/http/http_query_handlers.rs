@@ -944,7 +944,7 @@ async fn test_download() -> Result<()> {
 
     // succeeded query
     let resp = download(&ep, &result.id).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
     let exp = "0\t1\n1\t2\n";
     assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
 
