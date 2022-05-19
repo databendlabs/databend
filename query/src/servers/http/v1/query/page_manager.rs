@@ -126,7 +126,7 @@ impl PageManager {
             if res.len() >= self.max_rows_per_page {
                 break;
             };
-            let block = self.block_buffer.pop().await?;
+            let (block, done) = self.block_buffer.pop().await?;
             match block {
                 Some(block) => {
                     if self.schema.fields().is_empty() {
@@ -143,20 +143,34 @@ impl PageManager {
                         let chunk: Vec<_> = iter.by_ref().take(self.max_rows_per_page).collect();
                         self.page_buffer.push_back(chunk)
                     }
+                    if done {
+                        self.block_end = true;
+                        break;
+                    }
                 }
-                None => match tp {
-                    Wait::Async => break,
-                    Wait::Deadline(t) => {
-                        let d = *t - Instant::now();
-                        if d.is_zero()
-                            || tokio::time::timeout(d, self.block_buffer.block_notify.notified())
+                None => {
+                    if done {
+                        self.block_end = true;
+                        break;
+                    }
+                    match tp {
+                        Wait::Async => break,
+                        Wait::Deadline(t) => {
+                            let now = Instant::now();
+                            let d = *t - now;
+                            if d.is_zero()
+                                || tokio::time::timeout(
+                                    d,
+                                    self.block_buffer.block_notify.notified(),
+                                )
                                 .await
                                 .is_err()
-                        {
-                            break;
+                            {
+                                break;
+                            }
                         }
-                    }
-                },
+                    };
+                }
             }
         }
         let block = JsonBlock {
@@ -164,7 +178,7 @@ impl PageManager {
             data: res,
         };
         if !self.block_end {
-            self.block_end = self.block_buffer.pop_done().await;
+            self.block_end = self.block_buffer.is_pop_done().await;
         }
         let end = self.block_end && self.page_buffer.is_empty();
         Ok((block, end))
