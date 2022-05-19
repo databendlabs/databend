@@ -255,6 +255,11 @@ impl ScalarColumn for ArrayColumn {
     type Iterator<'a> = ArrayValueIter<'a>;
 
     #[inline]
+    fn clone_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
+    #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
         ArrayValueRef::Indexed { column: self, idx }
     }

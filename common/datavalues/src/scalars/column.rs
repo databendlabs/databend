@@ -31,6 +31,8 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
     where Self: 'a;
     type Iterator<'a>: Iterator<Item = Self::RefItem<'a>> + ExactSizeIterator + TrustedLen;
 
+    fn clone_column(&self) -> ColumnRef;
+
     // Note: get_data has bad performance, avoid call this function inside the loop
     // Use `iter` instead
     fn get_data(&self, idx: usize) -> Self::RefItem<'_>;

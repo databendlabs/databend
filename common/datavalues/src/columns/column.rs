@@ -76,6 +76,7 @@ pub trait Column: Send + Sync {
     fn arc(&self) -> ColumnRef;
     fn as_arrow_array(&self) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
+
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef;
 
     /// scatter() partitions the input array into multiple arrays.
