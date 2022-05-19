@@ -1,9 +1,12 @@
+import datetime
 import json
+import os
 
+import environs
 import requests
+from ecdsa import SigningKey
 from mysql.connector.errors import Error
 from log import log
-
 headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -50,7 +53,7 @@ def get_query_options(response):
         elif "float" in type or "double" in type:
             ret = ret + "F"
         elif "bool" in type:
-             ret = ret + "B"
+            ret = ret + "B"
         else:
             ret = ret + "T"
     return ret
@@ -91,6 +94,8 @@ class HttpConnector():
         self._database = database
         self._session_max_idle_time = 300
         self._session = None
+        e = environs.Env()
+        self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
 
     def query(self, statement, session=None ):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)
@@ -112,12 +117,11 @@ class HttpConnector():
         }
         if session is not None:
             query_sql['session'] = session
-    
         response = requests.post(
             url,
             data=json.dumps(query_sql), 
             auth=(self._user,""),
-            headers=headers
+            headers={**headers, **self._additonal_headers}
         )
         try:
             return json.loads(response.content)
