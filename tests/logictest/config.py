@@ -23,11 +23,15 @@ def config_from_env():
 
     mysql_port = os.getenv("QUERY_MYSQL_HANDLER_PORT")
     if mysql_port is not None:
-        mysql_config['port'] = mysql_port
+        mysql_config['port'] = int(mysql_port)
+
+    http_host = os.getenv("QUERY_HTTP_HANDLER_HOST")
+    if http_host is not None:
+        http_config["host"] = http_host
 
     http_port = os.getenv("QUERY_HTTP_HANDLER_PORT")
     if http_port is not None:
-        http_config['port'] = http_port
+        http_config['port'] = int(http_port)
 
     mysql_database = os.getenv("MYSQL_DATABASE")
     if mysql_database is not None:
