@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
+use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
@@ -135,12 +137,90 @@ impl Column for ArrayColumn {
         }
     }
 
-    fn scatter(&self, _indices: &[usize], _scattered_size: usize) -> Vec<ColumnRef> {
-        todo!()
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut builders = Vec::with_capacity(scattered_size);
+        for _i in 0..scattered_size {
+            builders.push(MutableArrayColumn::with_capacity_meta(
+                self.len(),
+                ColumnMeta::Array {
+                    data_type: self.data_type.clone(),
+                },
+            ));
+        }
+
+        for (row, index) in indices.iter().enumerate() {
+            builders[*index].push(ArrayValueRef::Indexed {
+                column: self,
+                idx: row,
+            });
+        }
+
+        builders.iter_mut().map(|b| b.to_column()).collect()
     }
 
-    fn filter(&self, _filter: &BooleanColumn) -> ColumnRef {
-        todo!()
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        if length == self.len() {
+            return Arc::new(self.clone());
+        }
+        const CHUNK_SIZE: usize = 64;
+        let mut builder = MutableArrayColumn::with_capacity_meta(self.len(), ColumnMeta::Array {
+            data_type: self.data_type.clone(),
+        });
+
+        let (mut slice, offset, mut length) = filter.values().as_slice();
+        let mut start_index: usize = 0;
+
+        if offset > 0 {
+            let n = 8 - offset;
+            start_index += n;
+
+            filter
+                .values()
+                .iter()
+                .enumerate()
+                .take(n)
+                .for_each(|(idx, is_selected)| {
+                    if is_selected {
+                        builder.push(ArrayValueRef::Indexed { column: self, idx });
+                    }
+                });
+            slice = &slice[1..];
+            length -= n;
+        }
+
+        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+
+        mask_chunks
+            .by_ref()
+            .enumerate()
+            .for_each(|(mask_index, mut mask)| {
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    let i = mask_index * CHUNK_SIZE + n + start_index;
+                    builder.push(ArrayValueRef::Indexed {
+                        column: self,
+                        idx: i,
+                    });
+
+                    mask = mask & (mask - 1);
+                }
+            });
+
+        let remainder_start = length - length % CHUNK_SIZE;
+        mask_chunks
+            .remainder_iter()
+            .enumerate()
+            .for_each(|(mask_index, is_selected)| {
+                if is_selected {
+                    let i = mask_index + remainder_start + start_index;
+                    builder.push(ArrayValueRef::Indexed {
+                        column: self,
+                        idx: i,
+                    });
+                }
+            });
+        builder.to_column()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
