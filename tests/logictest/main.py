@@ -9,14 +9,14 @@ from config import mysql_config, http_config
 
 if __name__ == '__main__':
     disable_mysql_test = os.getenv("DISABLE_MYSQL_LOGIC_TEST")
-    if disable_mysql_test is not None:
+    if disable_mysql_test is None:
         mySQL = TestMySQL("mysql")
         mySQL.set_driver(mysql_config)
         mySQL.set_label("mysql")
         mySQL.run_sql_suite()
 
     disable_http_test = os.getenv("DISABLE_HTTP_LOGIC_TEST")
-    if disable_http_test is not None:
+    if disable_http_test is None:
         http = TestHttp("http")
         http.set_driver(http_config)
         http.set_label("http")
