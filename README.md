@@ -224,6 +224,7 @@ For general help in using Databend, please refer to the official documentation. 
 - [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
 - [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
+- [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
 ## Roadmap
 - [Roadmap v0.8](https://github.com/datafuselabs/databend/issues/4591)
