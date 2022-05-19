@@ -15,14 +15,12 @@
 use std::fs::File;
 use std::io::Write;
 
-use clap::Parser;
-use databend_meta::configs::config as meta_config;
 use databend_meta::configs::Config;
 use tempfile::tempdir;
 
 #[test]
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
-    let mut conf = Config::empty();
+    let mut conf = Config::default();
     assert!(!conf.tls_rpc_server_enabled());
     conf.grpc_tls_server_key = "test".to_owned();
     assert!(!conf.tls_rpc_server_enabled());
@@ -33,11 +31,7 @@ fn test_tls_rpc_enabled() -> anyhow::Result<()> {
 
 #[test]
 fn test_load_config() -> anyhow::Result<()> {
-    let cfg = Config::try_parse_from(vec!["test", "-c", "foo.toml"]).unwrap();
-    assert_eq!("foo.toml", cfg.config_file.as_str());
-
-    let cfg = Config::try_parse_from(vec!["test", "--config-file", "bar.toml"]).unwrap();
-    assert_eq!("bar.toml", cfg.config_file.as_str());
+    let _ = env_logger::try_init();
 
     let d = tempdir()?;
     let file_path = d.path().join("foo.toml");
@@ -72,35 +66,44 @@ sled_tree_prefix = "sled_foo"
              "#
     )?;
 
-    let mut cfg = Config::load_from_file(file_path.to_str().unwrap())?;
-    assert_eq!(cfg.log_level, "ERROR");
-    assert_eq!(cfg.log_dir, "foo/logs");
-    assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");
-    assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
-    assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
-    assert_eq!(cfg.admin_tls_server_key, "admin tls key");
-    assert_eq!(cfg.grpc_api_address, "127.0.0.1:10000");
-    assert_eq!(cfg.grpc_tls_server_cert, "grpc server cert");
-    assert_eq!(cfg.grpc_tls_server_key, "grpc server key");
-    assert_eq!(cfg.raft_config.config_id, "raft config id");
-    assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
-    assert_eq!(cfg.raft_config.raft_api_port, 11000);
-    assert_eq!(cfg.raft_config.raft_dir, "raft dir");
-    assert!(cfg.raft_config.no_sync);
-    assert_eq!(cfg.raft_config.snapshot_logs_since_last, 1000);
-    assert_eq!(cfg.raft_config.heartbeat_interval, 2000);
-    assert_eq!(cfg.raft_config.install_snapshot_timeout, 3000);
-    assert!(!cfg.raft_config.single);
-    assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
-    assert_eq!(cfg.raft_config.id, 20);
-    assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");
+    temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
+        let cfg = Config::load().expect("load must success");
+        assert_eq!(cfg.log_level, "ERROR");
+        assert_eq!(cfg.log_dir, "foo/logs");
+        assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");
+        assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
+        assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
+        assert_eq!(cfg.admin_tls_server_key, "admin tls key");
+        assert_eq!(cfg.grpc_api_address, "127.0.0.1:10000");
+        assert_eq!(cfg.grpc_tls_server_cert, "grpc server cert");
+        assert_eq!(cfg.grpc_tls_server_key, "grpc server key");
+        assert_eq!(cfg.raft_config.config_id, "raft config id");
+        assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
+        assert_eq!(cfg.raft_config.raft_api_port, 11000);
+        assert_eq!(cfg.raft_config.raft_dir, "raft dir");
+        assert!(cfg.raft_config.no_sync);
+        assert_eq!(cfg.raft_config.snapshot_logs_since_last, 1000);
+        assert_eq!(cfg.raft_config.heartbeat_interval, 2000);
+        assert_eq!(cfg.raft_config.install_snapshot_timeout, 3000);
+        assert!(!cfg.raft_config.single);
+        assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
+        assert_eq!(cfg.raft_config.id, 20);
+        assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");
+    });
 
-    // test overwrite configs with environment variables
-    std::env::set_var(meta_config::METASRV_LOG_LEVEL, "INFO");
-
-    Config::load_from_env(&mut cfg);
-    assert_eq!(cfg.log_level, "INFO");
-    std::env::remove_var(meta_config::METASRV_LOG_LEVEL);
+    temp_env::with_vars(
+        vec![
+            (
+                "METASRV_CONFIG_FILE",
+                Some(file_path.to_str().expect("must be valid str")),
+            ),
+            ("METASRV_LOG_LEVEL", Some("DEBUG")),
+        ],
+        || {
+            let cfg = Config::load().expect("load must success");
+            assert_eq!(cfg.log_level, "DEBUG");
+        },
+    );
 
     Ok(())
 }

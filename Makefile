@@ -133,5 +133,6 @@ clean:
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_meta*/ ./_logs*/ ./query/_logs*/ ./metasrv/_logs*/ ./stateless_test_data/
 	rm -rf ./common/base/_logs*/ ./common/meta/raft-store/_logs*/ ./common/meta/sled-store/_logs*/
+	rm -rf ./.databend ./query/.databend ./meta/.databend
 
 .PHONY: setup test run build fmt lint docker clean

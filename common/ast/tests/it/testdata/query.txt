@@ -1,4 +1,88 @@
 ---------- Input ----------
+select * from a limit 3 offset 4 format csv
+---------- Output ---------
+SELECT * FROM a LIMIT 3 OFFSET 4 FORMAT csv
+---------- AST ------------
+Query {
+    span: [
+        SELECT(0..6),
+        Multiply(7..8),
+        FROM(9..13),
+        Ident(14..15),
+        LIMIT(16..21),
+        LiteralNumber(22..23),
+        OFFSET(24..30),
+        LiteralNumber(31..32),
+        FORMAT(33..39),
+        CSV(40..43),
+    ],
+    body: Select(
+        SelectStmt {
+            span: [
+                SELECT(0..6),
+                Multiply(7..8),
+                FROM(9..13),
+                Ident(14..15),
+                LIMIT(16..21),
+                LiteralNumber(22..23),
+                OFFSET(24..30),
+                LiteralNumber(31..32),
+                FORMAT(33..39),
+                CSV(40..43),
+            ],
+            distinct: false,
+            select_list: [
+                QualifiedName(
+                    [
+                        Star,
+                    ],
+                ),
+            ],
+            from: Some(
+                Table {
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        name: "a",
+                        quote: None,
+                        span: Ident(14..15),
+                    },
+                    alias: None,
+                },
+            ),
+            selection: None,
+            group_by: [],
+            having: None,
+        },
+    ),
+    order_by: [],
+    limit: [
+        Literal {
+            span: [
+                LiteralNumber(22..23),
+            ],
+            lit: Number(
+                "3",
+            ),
+        },
+    ],
+    offset: Some(
+        Literal {
+            span: [
+                LiteralNumber(31..32),
+            ],
+            lit: Number(
+                "4",
+            ),
+        },
+    ),
+    format: Some(
+        "csv",
+    ),
+}
+
+
+---------- Input ----------
 select * from customer inner join orders on a = b limit 1
 ---------- Output ---------
 SELECT * FROM customer INNER JOIN orders ON a = b LIMIT 1
@@ -120,6 +204,7 @@ Query {
         },
     ],
     offset: None,
+    format: None,
 }
 
 
@@ -258,6 +343,7 @@ Query {
             ),
         },
     ),
+    format: None,
 }
 
 
@@ -333,6 +419,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
+    format: None,
 }
 
 
@@ -446,6 +533,7 @@ Query {
     order_by: [],
     limit: [],
     offset: None,
+    format: None,
 }
 
 
@@ -944,6 +1032,7 @@ Query {
                                 order_by: [],
                                 limit: [],
                                 offset: None,
+                                format: None,
                             },
                             alias: Some(
                                 TableAlias {
@@ -1054,6 +1143,7 @@ Query {
         },
     ],
     offset: None,
+    format: None,
 }
 
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate;
+mod eval_scalar;
 mod filter;
 mod hash_join;
 mod limit;
@@ -28,6 +29,8 @@ use std::any::Any;
 
 pub use aggregate::AggregatePlan;
 use enum_dispatch::enum_dispatch;
+pub use eval_scalar::EvalScalar;
+pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
@@ -35,8 +38,7 @@ pub use logical_get::LogicalGet;
 pub use logical_join::LogicalInnerJoin;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
-pub use project::ProjectItem;
-pub use project::ProjectPlan;
+pub use project::Project;
 pub use scalar::*;
 pub use sort::SortItem;
 pub use sort::SortPlan;
@@ -85,6 +87,7 @@ pub enum PlanType {
 
     // Operators that are both logical and physical
     Project,
+    EvalScalar,
     Filter,
     Aggregate,
     Sort,
@@ -103,7 +106,8 @@ pub enum BasePlanImpl {
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),
 
-    Project(ProjectPlan),
+    Project(Project),
+    EvalScalar(EvalScalar),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
     Sort(SortPlan),

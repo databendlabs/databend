@@ -18,12 +18,6 @@ use std::sync::Once;
 use common_base::infallible::RwLock;
 use common_tracing::tracing;
 use metrics::counter;
-use metrics::register_counter;
-use metrics::register_gauge;
-use metrics::register_histogram;
-use metrics::Counter;
-use metrics::Gauge;
-use metrics::Histogram;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 use once_cell::sync::Lazy;
@@ -33,28 +27,6 @@ static PROMETHEUS_HANDLE: Lazy<Arc<RwLock<Option<PrometheusHandle>>>> =
 
 pub const LABEL_KEY_TENANT: &str = "tenant";
 pub const LABEL_KEY_CLUSTER: &str = "cluster_name";
-
-pub const LABEL_NAMESPACE: &str = "namespace";
-pub const LABEL_SUBSYSTEM: &str = "subsystem";
-pub const LABEL_HELP: &str = "help";
-
-pub struct MetricOption {
-    name: String,
-    namespace: String,
-    subsystem: String,
-    help: String,
-}
-
-impl MetricOption {
-    pub fn new(name: String, namespace: String, subsystem: String, help: String) -> MetricOption {
-        MetricOption {
-            name,
-            namespace,
-            subsystem,
-            help,
-        }
-    }
-}
 
 #[inline]
 pub fn label_counter(name: &'static str, tenant_id: &str, cluster_id: &str) {
@@ -89,31 +61,4 @@ fn init_prometheus_recorder() {
 
 pub fn try_handle() -> Option<PrometheusHandle> {
     PROMETHEUS_HANDLE.as_ref().read().clone()
-}
-
-pub fn register_counter(opt: MetricOption) -> Counter {
-    let labels = [
-        (LABEL_NAMESPACE, opt.namespace.to_string()),
-        (LABEL_SUBSYSTEM, opt.subsystem.to_string()),
-        (LABEL_HELP, opt.help.to_string()),
-    ];
-    register_counter!(opt.name, &labels)
-}
-
-pub fn register_gauge(opt: MetricOption) -> Gauge {
-    let labels = [
-        (LABEL_NAMESPACE, opt.namespace.to_string()),
-        (LABEL_SUBSYSTEM, opt.subsystem.to_string()),
-        (LABEL_HELP, opt.help.to_string()),
-    ];
-    register_gauge!(opt.name, &labels)
-}
-
-pub fn register_histogram(opt: MetricOption) -> Histogram {
-    let labels = [
-        (LABEL_NAMESPACE, opt.namespace.to_string()),
-        (LABEL_SUBSYSTEM, opt.subsystem.to_string()),
-        (LABEL_HELP, opt.help.to_string()),
-    ];
-    register_histogram!(opt.name, &labels)
 }

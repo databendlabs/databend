@@ -32,7 +32,7 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::serialize_data_block;
+use crate::storages::fuse::io::serialize_data_blocks;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
@@ -169,7 +169,8 @@ impl Processor for FuseTableSink {
 
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let (size, meta_data) = serialize_data_block(block, &mut data)?;
+                let schema = block.schema().clone();
+                let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
                 self.state = State::Serialized {
                     data,
                     size,

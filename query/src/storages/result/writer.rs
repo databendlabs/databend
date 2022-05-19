@@ -22,7 +22,7 @@ use futures::StreamExt;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::serialize_data_block;
+use crate::storages::fuse::io::serialize_data_blocks;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics as FuseMetaStatistics;
 use crate::storages::fuse::statistics::accumulator::BlockStatistics;
@@ -88,7 +88,8 @@ impl ResultTableWriter {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
-        let (size, meta_data) = serialize_data_block(block, &mut data)?;
+        let schema = block.schema().clone();
+        let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
         self.data_accessor
             .object(&location)
             .write(data)

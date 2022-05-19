@@ -1,17 +1,17 @@
 # Usage:
 # databend-meta -c databend-meta-node-3.toml
 
-log_dir            = "./_logs3"
+log_dir            = "./.databend/logs3"
 metric_api_address = "0.0.0.0:28300"
 admin_api_address  = "0.0.0.0:28301"
 grpc_api_address   = "0.0.0.0:28302"
 
 [raft_config]
 id            = 3
-raft_dir      = "./_meta3"
+raft_dir      = "./.databend/meta3"
 raft_api_port = 28303
 
-# assign raft_{listen|advertise}_host in test config, 
+# assign raft_{listen|advertise}_host in test config,
 # so if something wrong in raft meta nodes communication we will catch bug in unit tests.
 raft_listen_host = "127.0.0.1"
 raft_advertise_host = "localhost"

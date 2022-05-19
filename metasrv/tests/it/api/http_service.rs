@@ -35,7 +35,7 @@ async fn test_http_service_tls_server() -> Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut conf = Config::empty();
+    let mut conf = Config::default();
     let addr_str = "127.0.0.1:30002";
 
     conf.admin_tls_server_key = TEST_SERVER_KEY.to_owned();

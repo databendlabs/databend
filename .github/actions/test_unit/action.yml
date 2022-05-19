@@ -24,7 +24,7 @@ runs:
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: unit-v2
+        sharedKey: unit-v3
 
     - shell: bash
       run: cargo test --no-fail-fast
@@ -69,6 +69,7 @@ runs:
           metasrv/_logs*/
           query/_logs*/
           store/_logs*/
+          .databend/
 
     # for cache
     - shell: bash

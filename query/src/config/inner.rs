@@ -262,7 +262,7 @@ pub struct MetaConfig {
 impl Default for MetaConfig {
     fn default() -> Self {
         Self {
-            embedded_dir: "./_meta_embedded".to_string(),
+            embedded_dir: "./.databend/meta_embedded".to_string(),
             address: "".to_string(),
             endpoints: vec![],
             username: "root".to_string(),

@@ -17,7 +17,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use databend_query::formats::output_format::OutputFormat;
 use databend_query::formats::output_format::OutputFormatType;
 use pretty_assertions::assert_eq;
 
@@ -57,18 +56,40 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
                 NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
             })
             .collect();
-        DataBlock::create(schema, columns)
+        DataBlock::create(schema.clone(), columns)
     } else {
         block
     };
-    let fmt = OutputFormatType::Tsv;
-    let format_setting = FormatSettings::default();
-    let json_block = String::from_utf8(fmt.serialize_block(&block, &format_setting)?)?;
-    let expect = "1\ta\t1\t1.1\t1970-01-02\n\
-                        2\tb\t1\t2.2\t1970-01-03\n\
-                        3\tc\t0\t3.3\t1970-01-04\n";
 
-    assert_eq!(&json_block, expect);
+    let mut format_setting = FormatSettings::default();
+
+    {
+        let fmt = OutputFormatType::Tsv;
+        let mut formater = fmt.create_format(schema.clone());
+        let buffer = formater.serialize_block(&block, &format_setting)?;
+
+        let json_block = String::from_utf8(buffer)?;
+        let expect = "1\ta\t1\t1.1\t1970-01-02\n\
+                            2\tb\t1\t2.2\t1970-01-03\n\
+                            3\tc\t0\t3.3\t1970-01-04\n";
+        assert_eq!(&json_block, expect);
+    }
+
+    {
+        format_setting.record_delimiter = vec![b'%'];
+        format_setting.field_delimiter = vec![b'$'];
+
+        let fmt = OutputFormatType::Csv;
+        let mut formater = fmt.create_format(schema);
+        let buffer = formater.serialize_block(&block, &format_setting)?;
+
+        let json_block = String::from_utf8(buffer)?;
+        let expect = "1$\"a\"$1$1.1$\"1970-01-02\"%\
+                            2$\"b\"$1$2.2$\"1970-01-03\"%\
+                            3$\"c\"$0$3.3$\"1970-01-04\"%";
+        assert_eq!(&json_block, expect);
+    }
+
     Ok(())
 }
 
