@@ -17,7 +17,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
-use common_meta_types::UserIdentity;
 use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -118,17 +117,13 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `BOOTSTRAP_TENANT` expect to have 5 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `BOOTSTRAP_TENANT` expect to have 1 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
     // Access denied
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
-        )
-        .await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -143,11 +138,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
     // Management Mode, without user option
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
-        )
-        .await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
@@ -163,20 +154,13 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
 
     // Management Mode, with user option
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
-        )
-        .await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         executor.execute(None).await?;
 
         let user_mgr = ctx.get_user_manager();
-        let user_info = user_mgr
-            .get_user("tenant1", UserIdentity::new("test_user", "%"))
-            .await?;
-        assert_eq!(user_info.grants.roles().len(), 1);
-        let role = &user_info.grants.roles()[0];
+        // should create account admin role
+        let role = "account_admin".to_string();
         let role_info = user_mgr.get_role("tenant1", role.clone()).await?;
         let mut grants = UserGrantSet::empty();
         grants.grant_privileges(
@@ -186,15 +170,21 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         assert_eq!(role_info.grants, grants);
     }
 
-    // Call again
+    // Idempotence on call bootstrap tenant
     {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
-        )
-        .await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$bootstrap_tenant(tenant1)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         executor.execute(None).await?;
+        let user_mgr = ctx.get_user_manager();
+        // should create account admin role
+        let role = "account_admin".to_string();
+        let role_info = user_mgr.get_role("tenant1", role.clone()).await?;
+        let mut grants = UserGrantSet::empty();
+        grants.grant_privileges(
+            &GrantObject::Global,
+            GrantObject::Global.available_privileges(),
+        );
+        assert_eq!(role_info.grants, grants);
     }
 
     Ok(())
