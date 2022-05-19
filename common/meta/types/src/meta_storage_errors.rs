@@ -78,6 +78,48 @@ impl DatabaseAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
+pub struct CreateDatabaseWithDropTime {
+    db_name: String,
+}
+
+impl CreateDatabaseWithDropTime {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UndropDbAlreadyExists: undrop {db_name} already exists")]
+pub struct UndropDbAlreadyExists {
+    db_name: String,
+}
+
+impl UndropDbAlreadyExists {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UndropDbHasNoHistory: undrop {db_name} has no db id history")]
+pub struct UndropDbHasNoHistory {
+    db_name: String,
+}
+
+impl UndropDbHasNoHistory {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -89,6 +131,48 @@ impl TableAlreadyExists {
         Self {
             table_name: table_name.into(),
             context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("CreateTableWithDropTime: create {table_name} with drop time")]
+pub struct CreateTableWithDropTime {
+    table_name: String,
+}
+
+impl CreateTableWithDropTime {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UndropTableAlreadyExists: undrop {table_name} already exists")]
+pub struct UndropTableAlreadyExists {
+    table_name: String,
+}
+
+impl UndropTableAlreadyExists {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UndropTableHasNoHistory: undrop {table_name} has no table id history")]
+pub struct UndropTableHasNoHistory {
+    table_name: String,
+}
+
+impl UndropTableHasNoHistory {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
         }
     }
 }
@@ -231,7 +315,25 @@ pub enum AppError {
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
+    CreateTableWithDropTime(#[from] CreateTableWithDropTime),
+
+    #[error(transparent)]
+    UndropTableAlreadyExists(#[from] UndropTableAlreadyExists),
+
+    #[error(transparent)]
+    UndropTableHasNoHistory(#[from] UndropTableHasNoHistory),
+
+    #[error(transparent)]
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
+
+    #[error(transparent)]
+    CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
+
+    #[error(transparent)]
+    UndropDbAlreadyExists(#[from] UndropDbAlreadyExists),
+
+    #[error(transparent)]
+    UndropDbHasNoHistory(#[from] UndropDbHasNoHistory),
 
     #[error(transparent)]
     UnknownDatabase(#[from] UnknownDatabase),
@@ -267,6 +369,24 @@ impl AppErrorMessage for DatabaseAlreadyExists {
     }
 }
 
+impl AppErrorMessage for CreateDatabaseWithDropTime {
+    fn message(&self) -> String {
+        format!("Create database '{}' with drop time", self.db_name)
+    }
+}
+
+impl AppErrorMessage for UndropDbAlreadyExists {
+    fn message(&self) -> String {
+        format!("Undrop database '{}' already exists", self.db_name)
+    }
+}
+
+impl AppErrorMessage for UndropDbHasNoHistory {
+    fn message(&self) -> String {
+        format!("Undrop database '{}' has no id history", self.db_name)
+    }
+}
+
 impl AppErrorMessage for UnknownTable {
     fn message(&self) -> String {
         format!("Unknown table '{}'", self.table_name)
@@ -280,6 +400,24 @@ impl AppErrorMessage for TableVersionMismatched {}
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
         format!("Table '{}' already exists", self.table_name)
+    }
+}
+
+impl AppErrorMessage for CreateTableWithDropTime {
+    fn message(&self) -> String {
+        format!("Create Table '{}' with drop time", self.table_name)
+    }
+}
+
+impl AppErrorMessage for UndropTableAlreadyExists {
+    fn message(&self) -> String {
+        format!("Undrop Table '{}' already exists", self.table_name)
+    }
+}
+
+impl AppErrorMessage for UndropTableHasNoHistory {
+    fn message(&self) -> String {
+        format!("Undrop Table '{}' has no table id list", self.table_name)
     }
 }
 
@@ -309,7 +447,21 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
             AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
             AppError::DatabaseAlreadyExists(err) => ErrorCode::DatabaseAlreadyExists(err.message()),
+            AppError::CreateDatabaseWithDropTime(err) => {
+                ErrorCode::CreateDatabaseWithDropTime(err.message())
+            }
+            AppError::UndropDbAlreadyExists(err) => ErrorCode::UndropDbAlreadyExists(err.message()),
+            AppError::UndropDbHasNoHistory(err) => ErrorCode::UndropDbHasNoHistory(err.message()),
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
+            AppError::CreateTableWithDropTime(err) => {
+                ErrorCode::CreateTableWithDropTime(err.message())
+            }
+            AppError::UndropTableAlreadyExists(err) => {
+                ErrorCode::UndropTableAlreadyExists(err.message())
+            }
+            AppError::UndropTableHasNoHistory(err) => {
+                ErrorCode::UndropTableHasNoHistory(err.message())
+            }
             AppError::TableVersionMismatched(err) => {
                 ErrorCode::TableVersionMismatched(err.message())
             }

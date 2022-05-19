@@ -129,6 +129,10 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             order_keys: p.order_keys,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
+            drop_on: match p.drop_on {
+                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
+                None => None,
+            },
             comment: p.comment,
         };
         Ok(v)
@@ -144,7 +148,30 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             order_keys: self.order_keys.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
+            drop_on: match self.drop_on {
+                Some(drop_on) => Some(drop_on.to_pb()?),
+                None => None,
+            },
             comment: self.comment.clone(),
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::TableIdList> for mt::TableIdList {
+    fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self {
+            table_id_list: p.ids,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableIdList, Incompatible> {
+        let p = pb::TableIdList {
+            ver: VER,
+            ids: self.table_id_list.clone(),
         };
         Ok(p)
     }

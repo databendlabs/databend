@@ -174,6 +174,12 @@ build_exceptions! {
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
     ViewAlreadyExists(2306),
+    CreateTableWithDropTime(2307),
+    UndropTableAlreadyExists(2308),
+    UndropTableHasNoHistory(2309),
+    CreateDatabaseWithDropTime(2310),
+    UndropDbAlreadyExists(2311),
+    UndropDbHasNoHistory(2312),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

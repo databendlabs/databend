@@ -16,14 +16,17 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
+use common_datavalues::chrono::Utc;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
 use common_meta_types::AppError;
 use common_meta_types::ConditionResult;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateDatabaseWithDropTime;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
+use common_meta_types::CreateTableWithDropTime;
 use common_meta_types::DBIdTableName;
 use common_meta_types::DatabaseAlreadyExists;
 use common_meta_types::DatabaseId;
@@ -31,6 +34,8 @@ use common_meta_types::DatabaseIdent;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DatabaseNameIdent;
+use common_meta_types::DbIdList;
+use common_meta_types::DbIdListKey;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -50,6 +55,8 @@ use common_meta_types::RenameTableReply;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableId;
+use common_meta_types::TableIdList;
+use common_meta_types::TableIdListKey;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -61,6 +68,14 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnOpResponse;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
+use common_meta_types::UndropDatabaseReply;
+use common_meta_types::UndropDatabaseReq;
+use common_meta_types::UndropDbAlreadyExists;
+use common_meta_types::UndropDbHasNoHistory;
+use common_meta_types::UndropTableAlreadyExists;
+use common_meta_types::UndropTableHasNoHistory;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
@@ -88,6 +103,12 @@ impl<KV: KVApi> SchemaApi for KV {
     ) -> Result<CreateDatabaseReply, MetaError> {
         let name_key = &req.name_ident;
 
+        if req.meta.drop_on.is_some() {
+            return Err(MetaError::AppError(AppError::CreateDatabaseWithDropTime(
+                CreateDatabaseWithDropTime::new(&name_key.db_name),
+            )));
+        }
+
         loop {
             // Get db by name to ensure absence
             let (db_id_seq, db_id) = get_id_value(self, name_key).await?;
@@ -106,17 +127,46 @@ impl<KV: KVApi> SchemaApi for KV {
                 };
             }
 
+            // get db id list from _fd_db_id_list/db_id
+            let dbid_idlist = DbIdListKey {
+                tenant: name_key.tenant.clone(),
+                db_name: name_key.db_name.clone(),
+            };
+            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+                get_struct_value(self, &dbid_idlist).await?;
+
+            let mut db_id_list = if db_id_list_seq == 0 {
+                DbIdList::new()
+            } else {
+                match db_id_list_opt {
+                    Some(list) => list,
+                    None => DbIdList::new(),
+                }
+            };
+
+            // Create db by inserting these record:
+            // (tenant, db_name) -> db_id
+            // (db_id) -> db_meta
+            // append db_id into _fd_db_id_list/<tenant>/<db_name>
+
             let db_id = fetch_id(self, DatabaseIdGen {}).await?;
             let id_key = DatabaseId { db_id };
 
             tracing::debug!(db_id, name_key = debug(&name_key), "new database id");
 
             {
+                // append db_id into db_id_list
+                db_id_list.append(db_id);
+
                 let txn_req = TxnRequest {
-                    condition: vec![txn_cond_seq(name_key, Eq, 0)?],
+                    condition: vec![
+                        txn_cond_seq(name_key, Eq, 0)?,
+                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
+                    ],
                     if_then: vec![
                         txn_op_put(name_key, serialize_id(db_id)?)?, // (tenant, db_name) -> db_id
                         txn_op_put(&id_key, serialize_struct(&req.meta)?)?, // (db_id) -> db_meta
+                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
                     ],
                     else_then: vec![],
                 };
@@ -148,7 +198,7 @@ impl<KV: KVApi> SchemaApi for KV {
             )
             .await;
 
-            let (db_id_seq, db_id, db_meta_seq, _db_meta) = match res {
+            let (db_id_seq, db_id, db_meta_seq, mut db_meta) = match res {
                 Ok(x) => x,
                 Err(e) => {
                     if let MetaError::AppError(AppError::UnknownDatabase(_)) = e {
@@ -161,11 +211,18 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             };
 
+            // Delete db by these operations:
+            // del (tenant, db_name) -> db_id
+            // set db_meta.drop_on = now and update (db_id) -> db_meta
+
             let db_id_key = DatabaseId { db_id };
 
             tracing::debug!(db_id, name_key = debug(&tenant_dbname), "drop_database");
 
             {
+                // update drop on time
+                db_meta.drop_on = Some(Utc::now());
+
                 let txn_req = TxnRequest {
                     condition: vec![
                         txn_cond_seq(tenant_dbname, Eq, db_id_seq)?,
@@ -173,7 +230,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     ],
                     if_then: vec![
                         txn_op_del(tenant_dbname)?, // (tenant, db_name) -> db_id
-                        txn_op_del(&db_id_key)?,    // (db_id) -> db_meta
+                        txn_op_put(&db_id_key, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                     ],
                     else_then: vec![],
                 };
@@ -189,6 +246,96 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 if succ {
                     return Ok(DropDatabaseReply {});
+                }
+            }
+        }
+    }
+
+    async fn undrop_database(
+        &self,
+        req: UndropDatabaseReq,
+    ) -> Result<UndropDatabaseReply, MetaError> {
+        let name_key = &req.name_ident;
+
+        loop {
+            let res =
+                get_db_or_err(self, name_key, format!("undrop_database: {}", &name_key)).await;
+
+            if res.is_ok() {
+                return Err(MetaError::AppError(AppError::UndropDbAlreadyExists(
+                    UndropDbAlreadyExists::new(&name_key.db_name),
+                )));
+            }
+
+            // get db id list from _fd_db_id_list/<tenant>/<db_name>
+            let dbid_idlist = DbIdListKey {
+                tenant: name_key.tenant.clone(),
+                db_name: name_key.db_name.clone(),
+            };
+            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+                get_struct_value(self, &dbid_idlist).await?;
+
+            let mut db_id_list = if db_id_list_seq == 0 {
+                return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
+                    UndropDbHasNoHistory::new(&name_key.db_name),
+                )));
+            } else {
+                match db_id_list_opt {
+                    Some(list) => list,
+                    None => {
+                        return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
+                            UndropDbHasNoHistory::new(&name_key.db_name),
+                        )))
+                    }
+                }
+            };
+
+            // Return error if there is no db id history.
+            let db_id = match db_id_list.pop() {
+                Some(db_id) => db_id,
+                None => {
+                    return Err(MetaError::AppError(AppError::UndropDbHasNoHistory(
+                        UndropDbHasNoHistory::new(&name_key.db_name),
+                    )))
+                }
+            };
+
+            // get tb_meta of the last db id
+            let dbid = DatabaseId { db_id };
+            let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
+                get_struct_value(self, &dbid).await?;
+
+            tracing::debug!(db_id, name_key = debug(&name_key), "undrop_database");
+
+            {
+                // reset drop on time
+                let mut db_meta = db_meta.unwrap();
+                db_meta.drop_on = None;
+
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        txn_cond_seq(name_key, Eq, 0)?,
+                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
+                        txn_cond_seq(&dbid, Eq, db_meta_seq)?,
+                    ],
+                    if_then: vec![
+                        txn_op_put(name_key, serialize_id(db_id)?)?, // (tenant, db_name) -> db_id
+                        txn_op_put(&dbid, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
+                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                tracing::debug!(
+                    name_key = debug(&name_key),
+                    succ = display(succ),
+                    "undrop_database"
+                );
+
+                if succ {
+                    return Ok(UndropDatabaseReply {});
                 }
             }
         }
@@ -222,8 +369,34 @@ impl<KV: KVApi> SchemaApi for KV {
             );
 
             // get new db, exists return err
-            let (db_id_seq, _db_id) = get_id_value(self, &tenant_newdbname).await?;
+            let (db_id_seq, db_id) = get_id_value(self, &tenant_newdbname).await?;
             db_has_to_not_exist(db_id_seq, &tenant_newdbname, "rename_database")?;
+
+            // get db id list from _fd_db_id_list/<tenant>/<db_name>
+            let dbid_idlist = DbIdListKey {
+                tenant: tenant_dbname.tenant.clone(),
+                db_name: tenant_dbname.db_name.clone(),
+            };
+            let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+                get_struct_value(self, &dbid_idlist).await?;
+            let mut db_id_list: DbIdList;
+            if db_id_list_seq == 0 {
+                db_id_list = DbIdList::new();
+                db_id_list.append(db_id);
+            } else {
+                match db_id_list_opt {
+                    Some(list) => db_id_list = list,
+                    None => {
+                        db_id_list = DbIdList::new();
+                        db_id_list.append(db_id);
+                    }
+                }
+            };
+
+            let new_dbid_idlist = DbIdListKey {
+                tenant: tenant_dbname.tenant.clone(),
+                db_name: req.new_db_name.clone(),
+            };
 
             // rename database
             {
@@ -232,11 +405,15 @@ impl<KV: KVApi> SchemaApi for KV {
                         // Prevent renaming or deleting in other threads.
                         txn_cond_seq(tenant_dbname, Eq, old_db_id_seq)?,
                         txn_cond_seq(&tenant_newdbname, Eq, 0)?,
+                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq)?,
                     ],
                     if_then: vec![
                         txn_op_del(tenant_dbname)?, // del old_db_name
                         //Renaming db should not affect the seq of db_meta. Just modify db name.
                         txn_op_put(&tenant_newdbname, serialize_id(old_db_id)?)?, // (tenant, new_db_name) -> old_db_id
+                        // move db_id_list from _fd_db_id_list/tenant/old_db_name to _fd_db_id_list/tenant/new_db_name
+                        txn_op_del(&dbid_idlist)?, // del (tenant, old_db_name) -> db_id_list
+                        txn_op_put(&new_dbid_idlist, serialize_struct(&db_id_list)?)?, // _fd_db_id_list/tenant/new_db_name -> db_id_list
                     ],
                     else_then: vec![],
                 };
@@ -274,6 +451,57 @@ impl<KV: KVApi> SchemaApi for KV {
         };
 
         Ok(Arc::new(db))
+    }
+
+    async fn get_database_history(
+        &self,
+        req: GetDatabaseReq,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
+        let tenant_dbname = &req.inner;
+
+        // get db id list from _fd_db_id_list/<tenant>/<db_name>
+        let dbid_idlist = DbIdListKey {
+            tenant: tenant_dbname.tenant.clone(),
+            db_name: tenant_dbname.db_name.clone(),
+        };
+        let (db_id_list_seq, db_id_list_opt): (_, Option<DbIdList>) =
+            get_struct_value(self, &dbid_idlist).await?;
+
+        let db_id_list = if db_id_list_seq == 0 {
+            return Ok(vec![]);
+        } else {
+            match db_id_list_opt {
+                Some(list) => list,
+                None => {
+                    return Ok(vec![]);
+                }
+            }
+        };
+
+        let mut db_info_list = vec![];
+        for db_id in db_id_list.id_list.iter() {
+            let dbid = DatabaseId { db_id: *db_id };
+
+            let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
+                get_struct_value(self, &dbid).await?;
+            if db_meta_seq == 0 || db_meta.is_none() {
+                tracing::error!("get_database_history cannot find {:?} db_meta", db_id);
+                continue;
+            }
+
+            let db = DatabaseInfo {
+                ident: DatabaseIdent {
+                    db_id: *db_id,
+                    seq: db_meta_seq,
+                },
+                name_ident: tenant_dbname.clone(),
+                meta: db_meta.unwrap(),
+            };
+
+            db_info_list.push(Arc::new(db));
+        }
+
+        return Ok(db_info_list);
     }
 
     async fn list_databases(
@@ -335,6 +563,12 @@ impl<KV: KVApi> SchemaApi for KV {
         let tenant_dbname_tbname = &req.name_ident;
         let tenant_dbname = req.name_ident.db_name_ident();
 
+        if req.table_meta.drop_on.is_some() {
+            return Err(MetaError::AppError(AppError::CreateTableWithDropTime(
+                CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
+            )));
+        }
+
         loop {
             // Get db by name to ensure presence
 
@@ -362,9 +596,27 @@ impl<KV: KVApi> SchemaApi for KV {
                 };
             }
 
-            // Create table by inserting two record:
+            // get table id list from _fd_table_id_list/db_id/table_name
+            let dbid_tbname_idlist = TableIdListKey {
+                db_id,
+                table_name: req.name_ident.table_name.clone(),
+            };
+            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+                get_struct_value(self, &dbid_tbname_idlist).await?;
+
+            let mut tb_id_list = if tb_id_list_seq == 0 {
+                TableIdList::new()
+            } else {
+                match tb_id_list_opt {
+                    Some(list) => list,
+                    None => TableIdList::new(),
+                }
+            };
+
+            // Create table by inserting these record:
             // (db_id, table_name) -> table_id
             // (table_id) -> table_meta
+            // append table_id into _fd_table_id_list/db_id/table_name
 
             let table_id = fetch_id(self, TableIdGen {}).await?;
 
@@ -377,6 +629,8 @@ impl<KV: KVApi> SchemaApi for KV {
             );
 
             {
+                tb_id_list.append(table_id);
+
                 let txn_req = TxnRequest {
                     condition: vec![
                         // db has not to change, i.e., no new table is created.
@@ -384,6 +638,8 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
                         // no other table with the same name is inserted.
                         txn_cond_seq(&dbid_tbname, Eq, 0)?,
+                        // no other table id with the same name is append.
+                        txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
                     ],
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
@@ -392,6 +648,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         txn_op_put(&dbid_tbname, serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
                         txn_op_put(&tbid, serialize_struct(&req.table_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
                     ],
                     else_then: vec![],
                 };
@@ -445,12 +702,12 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let tbid = TableId { table_id };
 
-            let (tb_meta_seq, _tb_meta): (_, Option<TableMeta>) =
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
                 get_struct_value(self, &tbid).await?;
 
-            // Delete table by deleting two record:
-            // (db_id, table_name) -> table_id
-            // (table_id) -> table_meta
+            // Delete table by these operations:
+            // del (db_id, table_name) -> table_id
+            // set table_meta.drop_on = now and update (table_id) -> table_meta
 
             tracing::debug!(
                 ident = display(&tbid),
@@ -459,6 +716,10 @@ impl<KV: KVApi> SchemaApi for KV {
             );
 
             {
+                // update drop on time
+                let mut tb_meta = tb_meta.unwrap();
+                tb_meta.drop_on = Some(Utc::now());
+
                 let txn_req = TxnRequest {
                     condition: vec![
                         // db has not to change, i.e., no new table is created.
@@ -475,7 +736,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
                         txn_op_del(&dbid_tbname)?, // (db_id, tb_name) -> tb_id
-                        txn_op_del(&tbid)?,        // (tb_id) -> tb_meta
+                        txn_op_put(&tbid, serialize_struct(&tb_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     else_then: vec![],
                 };
@@ -491,6 +752,121 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 if succ {
                     return Ok(DropTableReply {});
+                }
+            }
+        }
+    }
+
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError> {
+        let tenant_dbname_tbname = &req.name_ident;
+        let tenant_dbname = req.name_ident.db_name_ident();
+
+        loop {
+            // Get db by name to ensure presence
+
+            let (_, db_id, db_meta_seq, db_meta) =
+                get_db_or_err(self, &tenant_dbname, "undrop_table").await?;
+
+            // Get table by tenant,db_id, table_name to assert presence.
+
+            let dbid_tbname = DBIdTableName {
+                db_id,
+                table_name: req.name_ident.table_name.clone(),
+            };
+
+            // If table id already exists, return error.
+            let (tb_id_seq, table_id) = get_id_value(self, &dbid_tbname).await?;
+            if tb_id_seq > 0 || table_id > 0 {
+                return Err(MetaError::AppError(AppError::UndropTableAlreadyExists(
+                    UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
+                )));
+            }
+
+            // get table id list from _fd_table_id_list/db_id/table_name
+            let dbid_tbname_idlist = TableIdListKey {
+                db_id,
+                table_name: req.name_ident.table_name.clone(),
+            };
+            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+                get_struct_value(self, &dbid_tbname_idlist).await?;
+
+            let mut tb_id_list = if tb_id_list_seq == 0 {
+                return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
+                    UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                )));
+            } else {
+                match tb_id_list_opt {
+                    Some(list) => list,
+                    None => {
+                        return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
+                            UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                        )))
+                    }
+                }
+            };
+
+            // Return error if there is no table id history.
+            let table_id = match tb_id_list.pop() {
+                Some(table_id) => table_id,
+                None => {
+                    return Err(MetaError::AppError(AppError::UndropTableHasNoHistory(
+                        UndropTableHasNoHistory::new(&tenant_dbname_tbname.table_name),
+                    )))
+                }
+            };
+
+            // get tb_meta of the last table id
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
+                get_struct_value(self, &tbid).await?;
+
+            // pop table_id from _fd_table_id_list/db_id/table_name
+            // (db_id, table_name) -> table_id
+
+            tracing::debug!(
+                ident = display(&tbid),
+                name = display(&tenant_dbname_tbname),
+                "undrop table"
+            );
+
+            {
+                // reset drop on time
+                let mut tb_meta = tb_meta.unwrap();
+                tb_meta.drop_on = None;
+
+                let txn_req = TxnRequest {
+                    condition: vec![
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq)?,
+                        // still this table id
+                        txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
+                        // table is not changed
+                        txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                    ],
+                    if_then: vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
+                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
+                        txn_op_put(&dbid_tbname, serialize_id(table_id)?)?, // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
+                        txn_op_put(&tbid, serialize_struct(&tb_meta)?)?, // (tenant, db_id, tb_id) -> tb_meta
+                    ],
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                tracing::debug!(
+                    name = debug(&tenant_dbname_tbname),
+                    id = debug(&tbid),
+                    succ = display(succ),
+                    "undrop_table"
+                );
+
+                if succ {
+                    return Ok(UndropTableReply {});
                 }
             }
         }
@@ -532,6 +908,30 @@ impl<KV: KVApi> SchemaApi for KV {
                 )?;
             }
 
+            // get table id list from _fd_table_id_list/db_id/table_name
+            let dbid_tbname_idlist = TableIdListKey {
+                db_id,
+                table_name: req.name_ident.table_name.clone(),
+            };
+            let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+                get_struct_value(self, &dbid_tbname_idlist).await?;
+
+            let mut tb_id_list: TableIdList;
+            if tb_id_list_seq == 0 {
+                // tb_id_list not exists, may be is old table, so append table id into list
+                tb_id_list = TableIdList::new();
+                tb_id_list.append(table_id);
+            } else {
+                match tb_id_list_opt {
+                    Some(list) => tb_id_list = list,
+                    None => {
+                        // tb_id_list not exists, may be is old table, so append table id into list
+                        tb_id_list = TableIdList::new();
+                        tb_id_list.append(table_id);
+                    }
+                }
+            };
+
             // Get the renaming target db to ensure presence.
 
             let tenant_newdbname = DatabaseNameIdent {
@@ -550,6 +950,11 @@ impl<KV: KVApi> SchemaApi for KV {
             let (new_tb_id_seq, _new_tb_id) = get_id_value(self, &newdbid_newtbname).await?;
             table_has_to_not_exist(new_tb_id_seq, &tenant_newdbname_newtbname, "rename_table")?;
 
+            let new_dbid_tbname_idlist = TableIdListKey {
+                db_id: new_db_id,
+                table_name: req.new_table_name.clone(),
+            };
+
             {
                 let condition = vec![
                     // db has not to change, i.e., no new table is created.
@@ -560,6 +965,8 @@ impl<KV: KVApi> SchemaApi for KV {
                     // Updating the table meta is ok.
                     txn_cond_seq(&dbid_tbname, Eq, tb_id_seq)?,
                     txn_cond_seq(&newdbid_newtbname, Eq, 0)?,
+                    // no other table id with the same name is append.
+                    txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq)?,
                 ];
 
                 let mut then_ops = vec![
@@ -569,6 +976,9 @@ impl<KV: KVApi> SchemaApi for KV {
                     // to block the batch-delete-tables when deleting a db.
                     // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                     txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?)?, // (db_id) -> db_meta
+                    // move tb_id_list from _fd_table_id_list/db_id/old_table_name to _fd_table_id_list/db_id/new_table_name
+                    txn_op_del(&dbid_tbname_idlist)?, // del old (db_id, tb_name) -> tb_id
+                    txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/new_table_name -> tb_id_list
                 ];
 
                 if db_id != new_db_id {
@@ -658,6 +1068,72 @@ impl<KV: KVApi> SchemaApi for KV {
         };
 
         return Ok(Arc::new(tb_info));
+    }
+
+    async fn get_table_history(&self, req: GetTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+        let tenant_dbname_tbname = &req.inner;
+        let tenant_dbname = tenant_dbname_tbname.db_name_ident();
+
+        // Get db by name to ensure presence
+
+        let (db_id_seq, db_id) = get_id_value(self, &tenant_dbname).await?;
+        tracing::debug!(db_id_seq, db_id, ?tenant_dbname_tbname, "get database");
+
+        db_has_to_exist(
+            db_id_seq,
+            &tenant_dbname,
+            format!("get_table_history: {}", tenant_dbname_tbname),
+        )?;
+
+        // get table id list from _fd_table_id_list/db_id/table_name
+        let dbid_tbname_idlist = TableIdListKey {
+            db_id,
+            table_name: tenant_dbname_tbname.table_name(),
+        };
+        let (tb_id_list_seq, tb_id_list_opt): (_, Option<TableIdList>) =
+            get_struct_value(self, &dbid_tbname_idlist).await?;
+
+        let tb_id_list = if tb_id_list_seq == 0 {
+            return Ok(vec![]);
+        } else {
+            match tb_id_list_opt {
+                Some(list) => list,
+                None => {
+                    return Ok(vec![]);
+                }
+            }
+        };
+
+        tracing::debug!(name = display(&tenant_dbname_tbname), "get_table_history");
+
+        let mut tb_info_list = vec![];
+        for table_id in tb_id_list.table_id_list.iter() {
+            let tbid = TableId {
+                table_id: *table_id,
+            };
+
+            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) =
+                get_struct_value(self, &tbid).await?;
+            if tb_meta_seq == 0 || tb_meta.is_none() {
+                tracing::error!("get_table_history cannot find {:?} table_meta", table_id);
+                continue;
+            }
+
+            let tb_info = TableInfo {
+                ident: TableIdent {
+                    table_id: *table_id,
+                    seq: tb_meta_seq,
+                },
+                desc: tenant_dbname_tbname.to_string(),
+                name: tenant_dbname_tbname.table_name.clone(),
+                // Safe unwrap() because: tb_meta_seq > 0
+                meta: tb_meta.unwrap(),
+            };
+
+            tb_info_list.push(Arc::new(tb_info));
+        }
+
+        return Ok(tb_info_list);
     }
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {

@@ -139,7 +139,7 @@ impl SchemaApiTestSuite {
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
-                4, res.db_id,
+                5, res.db_id,
                 "second database id is 4: seq increment but no used"
             );
         }

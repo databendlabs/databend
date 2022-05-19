@@ -74,6 +74,16 @@ message DatabaseMeta {
 
   // Comment about this database.
   string comment = 22;
+
+  // The time table droped.
+  optional string drop_on = 23;
+}
+
+// Save db name id list history.
+message DbIdList {
+  uint64 ver = 100;
+
+  repeated uint64 ids = 1;
 }
 
 // Complete table info.
@@ -155,6 +165,16 @@ message TableMeta {
 
   // Comment about this table.
   string comment = 22;
+
+  // The time table droped.
+  optional string drop_on = 23;
+}
+
+// Save table name id list history.
+message TableIdList {
+  uint64 ver = 100;
+
+  repeated uint64 ids = 1;
 }
 
 // The schema of a table, such as column data types and other meta info.
@@ -175,7 +195,8 @@ message DataField {
   // The name of this column.
   string name = 1;
 
-  // A SQL style expression to define the default value for this field, represent as raw sql
+  // A SQL style expression to define the default value for this field,
+  // represent as raw sql
   optional string default_expr = 2;
 
   // Column data type

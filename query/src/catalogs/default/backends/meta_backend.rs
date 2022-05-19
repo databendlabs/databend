@@ -39,6 +39,10 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropDatabaseReply;
+use common_meta_types::UndropDatabaseReq;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
@@ -100,6 +104,14 @@ impl SchemaApi for MetaBackend {
             .await
     }
 
+    async fn undrop_database(
+        &self,
+        req: UndropDatabaseReq,
+    ) -> Result<UndropDatabaseReply, MetaError> {
+        self.query_backend(move |cli| async move { cli.undrop_database(req).await })
+            .await
+    }
+
     async fn get_database(
         &self,
         req: GetDatabaseReq,
@@ -124,6 +136,14 @@ impl SchemaApi for MetaBackend {
             .await
     }
 
+    async fn get_database_history(
+        &self,
+        req: GetDatabaseReq,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
+        self.query_backend(move |cli| async move { cli.get_database_history(req).await })
+            .await
+    }
+
     async fn create_table(
         &self,
         req: CreateTableReq,
@@ -141,6 +161,11 @@ impl SchemaApi for MetaBackend {
             .await
     }
 
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError> {
+        self.query_backend(move |cli| async move { cli.undrop_table(req).await })
+            .await
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
         self.query_backend(move |cli| async move { cli.rename_table(req).await })
             .await
@@ -148,6 +173,11 @@ impl SchemaApi for MetaBackend {
 
     async fn get_table(&self, req: GetTableReq) -> std::result::Result<Arc<TableInfo>, MetaError> {
         self.query_backend(move |cli| async move { cli.get_table(req).await })
+            .await
+    }
+
+    async fn get_table_history(&self, req: GetTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+        self.query_backend(move |cli| async move { cli.get_table_history(req).await })
             .await
     }
 
