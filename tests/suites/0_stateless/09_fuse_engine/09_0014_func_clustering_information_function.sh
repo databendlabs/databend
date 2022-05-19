@@ -10,7 +10,7 @@ echo "insert into t09_0014 values(0,3),(1,1);" | $MYSQL_CLIENT_CONNECT
 echo "insert into t09_0014 values(1,3),(2,1);" | $MYSQL_CLIENT_CONNECT
 echo "insert into t09_0014 values(4,4);" | $MYSQL_CLIENT_CONNECT
 echo "show value of table being cloned"
-echo "select *  from t09_0014" | $MYSQL_CLIENT_CONNECT
+echo "select *  from t09_0014 order by b, a" | $MYSQL_CLIENT_CONNECT
 
 ## Get the clustering information
 echo "select * from clustering_information('default','t09_0014')" | $MYSQL_CLIENT_CONNECT
