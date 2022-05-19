@@ -36,7 +36,12 @@ pub trait Column: Send + Sync {
     fn data_type_id(&self) -> TypeID {
         self.data_type().data_type_id()
     }
+
     fn data_type(&self) -> DataTypeImpl;
+
+    fn column_meta(&self) -> ColumnMeta {
+        ColumnMeta::Simple
+    }
 
     fn column_type_name(&self) -> String;
 
@@ -76,6 +81,7 @@ pub trait Column: Send + Sync {
     fn arc(&self) -> ColumnRef;
     fn as_arrow_array(&self) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
+
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef;
 
     /// scatter() partitions the input array into multiple arrays.

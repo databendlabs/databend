@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use opensrv_clickhouse::types::column::ArrayColumnData;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -63,15 +66,31 @@ impl TypeSerializer for ArraySerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, _column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        todo!()
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let column: &ArrayColumn = Series::check_get(column)?;
+        let mut result = Vec::with_capacity(column.len());
+        for i in 0..column.len() {
+            let val = column.get(i);
+            let s = serde_json::to_value(val)?;
+            result.push(s);
+        }
+        Ok(result)
     }
 
     fn serialize_clickhouse_format(
         &self,
-        _column: &ColumnRef,
-        _format: &FormatSettings,
+        column: &ColumnRef,
+        format: &FormatSettings,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
-        todo!()
+        let column: &ArrayColumn = Series::check_get(column)?;
+        let mut offsets = opensrv_clickhouse::types::column::List::with_capacity(column.len());
+        for offset in column.offsets().iter().skip(1) {
+            offsets.push(*offset as u64);
+        }
+
+        let inner_data = self
+            .inner
+            .serialize_clickhouse_format(column.values(), format)?;
+        Ok(Arc::new(ArrayColumnData::create(inner_data, offsets)))
     }
 }

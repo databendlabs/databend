@@ -25,8 +25,15 @@ pub struct ArrayDeserializer {
 
 impl TypeDeserializer for ArrayDeserializer {
     #[allow(clippy::uninit_vec)]
-    fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
-        todo!();
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+        let size = reader.read_uvarint()?;
+        let mut values = Vec::with_capacity(size as usize);
+        for _i in 0..size {
+            self.inner.de_binary(reader, _format)?;
+            values.push(self.inner.pop_data_value().unwrap());
+        }
+        self.builder.append_value(ArrayValue::new(values));
+        Ok(())
     }
 
     fn de_default(&mut self, _format: &FormatSettings) {
@@ -35,12 +42,22 @@ impl TypeDeserializer for ArrayDeserializer {
 
     fn de_fixed_binary_batch(
         &mut self,
-        _reader: &[u8],
-        _step: usize,
-        _rows: usize,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
         _format: &FormatSettings,
     ) -> Result<()> {
-        todo!();
+        for row in 0..rows {
+            let mut reader = &reader[step * row..];
+            let size = reader.read_uvarint()?;
+            let mut values = Vec::with_capacity(size as usize);
+            for _i in 0..size {
+                self.inner.de_binary(&mut reader, _format)?;
+                values.push(self.inner.pop_data_value().unwrap());
+            }
+            self.builder.append_value(ArrayValue::new(values));
+        }
+        Ok(())
     }
 
     fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {

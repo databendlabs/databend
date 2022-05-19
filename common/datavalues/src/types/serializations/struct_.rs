@@ -69,8 +69,16 @@ impl TypeSerializer for StructSerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, _column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        todo!()
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let column: &StructColumn = Series::check_get(column)?;
+
+        let mut result = Vec::with_capacity(column.len());
+        for i in 0..column.len() {
+            let val = column.get(i);
+            let s = serde_json::to_value(val)?;
+            result.push(s);
+        }
+        Ok(result)
     }
 
     fn serialize_clickhouse_format(
