@@ -282,6 +282,17 @@ pub fn compare_coercion(lhs_type: &DataTypeImpl, rhs_type: &DataTypeImpl) -> Res
         };
     }
 
+    // one of type is variant
+    {
+        if lhs_id.is_variant() {
+            return Ok(rhs_type.clone());
+        }
+
+        if rhs_id.is_variant() {
+            return Ok(lhs_type.clone());
+        }
+    }
+
     Err(ErrorCode::IllegalDataType(format!(
         "Can not compare {:?} with {:?}",
         lhs_type, rhs_type
