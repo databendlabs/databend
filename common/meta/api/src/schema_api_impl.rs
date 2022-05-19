@@ -838,7 +838,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             if tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(MetaError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "upsert_table_option"),
+                    UnknownTableId::new(req.table_id, "update_table_meta"),
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
@@ -847,7 +847,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         req.table_id,
                         req.seq,
                         tb_meta_seq,
-                        "upsert_table_option",
+                        "update_table_meta",
                     ),
                 )));
             }
@@ -865,11 +865,7 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
-            tracing::debug!(
-                id = debug(&tbid),
-                succ = display(succ),
-                "upsert_table_option"
-            );
+            tracing::debug!(id = debug(&tbid), succ = display(succ), "update_table_meta");
 
             if succ {
                 return Ok(UpdateTableMetaReply {});

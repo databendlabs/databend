@@ -1130,7 +1130,7 @@ impl SchemaApiTestSuite {
 
         tracing::info!("--- update table meta");
         {
-            tracing::info!("--- update table meta");
+            tracing::info!("--- update table meta, normal case");
             {
                 let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
