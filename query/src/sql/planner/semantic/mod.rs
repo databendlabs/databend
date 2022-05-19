@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod grouping_check;
 mod type_check;
 
+pub use grouping_check::GroupingChecker;
 pub use type_check::TypeChecker;

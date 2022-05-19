@@ -32,7 +32,7 @@ cluster_id = "test_cluster"
 
 [log]
 level = "DEBUG"
-dir = "./_logs"
+dir = "./.databend/logs"
 
 [meta]
 # To enable embedded meta-store, set meta_address to ""

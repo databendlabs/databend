@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -41,21 +40,8 @@ impl<'a> ExpressionBuilder<'a> {
         ExpressionBuilder { metadata }
     }
 
-    pub fn build_and_rename(
-        &self,
-        scalar: &Scalar,
-        index: IndexType,
-        input_schema: &DataSchemaRef,
-    ) -> Result<Expression> {
-        let mut expr = self.build(scalar)?;
-        // If the input_schema contains the field of expr,
-        // it means that its sub-plan has already processed the expression
-        // and we can directly convert it to column expression
-        if input_schema.has_field(expr.column_name().as_str()) {
-            expr = Expression::Column(expr.column_name());
-        } else {
-            expr = self.normalize_aggr_to_col(expr)?;
-        }
+    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
+        let expr = self.build(scalar)?;
         let column = self.metadata.column(index);
         Ok(Expression::Alias(
             format_field_name(column.name.as_str(), index),

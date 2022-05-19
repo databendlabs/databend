@@ -15,44 +15,45 @@
 use std::str::FromStr;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
-use crate::formats::output_format_tsv::TSVOutputFormat;
+use super::output_format_ndjson::NDJsonOutputFormat;
+use super::output_format_parquet::ParquetOutputFormat;
+use super::output_format_values::ValuesOutputFormat;
+use crate::formats::output_format_csv::CSVOutputFormat;
+use crate::formats::output_format_csv::TSVOutputFormat;
 
-pub trait OutputFormat: Send + Default {
+pub trait OutputFormat: Send {
     fn serialize_block(
-        &self,
+        &mut self,
         data_block: &DataBlock,
         format_setting: &FormatSettings,
     ) -> Result<Vec<u8>>;
+
+    fn finalize(&mut self) -> Result<Vec<u8>>;
 }
 
 #[derive(Clone, Copy)]
 pub enum OutputFormatType {
     Tsv,
+    Csv,
+    Parquet,
+    NDJson,
+    Values,
 }
 
 impl OutputFormatType {
-    pub fn with_default_setting(&self) -> impl OutputFormat {
+    pub fn create_format(&self, schema: DataSchemaRef) -> Box<dyn OutputFormat> {
         match self {
-            OutputFormatType::Tsv => TSVOutputFormat::default(),
+            OutputFormatType::Tsv => Box::new(TSVOutputFormat::create(schema)),
+            OutputFormatType::Csv => Box::new(CSVOutputFormat::create(schema)),
+            OutputFormatType::Parquet => Box::new(ParquetOutputFormat::create(schema)),
+            OutputFormatType::NDJson => Box::new(NDJsonOutputFormat::create(schema)),
+            OutputFormatType::Values => Box::new(ValuesOutputFormat::create(schema)),
         }
-    }
-
-    pub fn is_download_format(&self) -> bool {
-        matches!(self, Self::Tsv)
-    }
-}
-
-impl OutputFormat for OutputFormatType {
-    fn serialize_block(
-        &self,
-        block: &DataBlock,
-        format_setting: &FormatSettings,
-    ) -> Result<Vec<u8>> {
-        self.with_default_setting()
-            .serialize_block(block, format_setting)
     }
 }
 
@@ -63,11 +64,17 @@ impl Default for OutputFormatType {
 }
 
 impl FromStr for OutputFormatType {
-    type Err = String;
-    fn from_str(s: &str) -> std::result::Result<Self, String> {
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> std::result::Result<Self, ErrorCode> {
         match s.to_uppercase().as_str() {
             "TSV" => Ok(OutputFormatType::Tsv),
-            _ => Err("Unknown file format type, must be one of { TSV }".to_string()),
+            "CSV" => Ok(OutputFormatType::Csv),
+            "NDJSON" | "JSONEACHROW" => Ok(OutputFormatType::NDJson),
+            "PARQUET" => Ok(OutputFormatType::Parquet),
+            "VALUES" => Ok(OutputFormatType::Values),
+            _ => Err(ErrorCode::StrParseError(
+                "Unknown file format type, must be one of { TSV, CSV, PARQUET, Values, NDJSON | JSONEACHROW }".to_string(),
+            )),
         }
     }
 }

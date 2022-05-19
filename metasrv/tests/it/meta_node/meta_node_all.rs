@@ -542,7 +542,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     tracing::info!("restart all");
 
     // restart
-    let config = configs::Config::empty();
+    let config = configs::Config::default();
     let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)

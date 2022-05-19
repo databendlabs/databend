@@ -24,7 +24,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             level: "INFO".to_string(),
-            dir: "./_logs".to_string(),
+            dir: "./.databend/logs".to_string(),
             query_enabled: false,
         }
     }

@@ -11,7 +11,7 @@
 </h4>
 
 <div>
-<a href="https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA">
+<a href="https://link.databend.rs/join-slack">
 <img src="https://badgen.net/badge/Slack/Join%20Databend/0abd59?icon=slack" alt="slack" />
 </a>
 
@@ -220,7 +220,7 @@ Imagine that Parquet file f1 has `min_max.idx` of `[3, 5)` and Parquet file f2 h
 
 For general help in using Databend, please refer to the official documentation. For additional help, you can use one of these channels to ask a question:
 
-- [Slack](https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA) (For live discussion with the Community)
+- [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [Github](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
 - [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
