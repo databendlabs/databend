@@ -32,12 +32,16 @@ with NativeClient(name='client2>') as client2:
                                    passwd="root",
                                    port="3307")
     mycursor = mydb.cursor()
-    mycursor.execute("SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%select * from numbers(999999999)%'")
+    mycursor.execute(
+        "SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%select * from numbers(999999999)%'"
+    )
     res = mycursor.fetchone()
     kill_query = 'kill query ' + str(res[0]) + ';'
     client2.send(kill_query)
     client2.expect(prompt)
     time.sleep(5)
-    mycursor.execute("SELECT * FROM system.processes WHERE extra_info LIKE '%select * from numbers(999999999)%' AND extra_info NOT LIKE '%system.processes%'")
+    mycursor.execute(
+        "SELECT * FROM system.processes WHERE extra_info LIKE '%select * from numbers(999999999)%' AND extra_info NOT LIKE '%system.processes%'"
+    )
     res = mycursor.fetchone()
     assert res is None

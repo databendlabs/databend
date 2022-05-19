@@ -37,6 +37,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
@@ -85,6 +87,11 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError>;
+
+    async fn update_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply, MetaError>;
 
     // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
     //       Since `share` has nothing really to do with database or table.

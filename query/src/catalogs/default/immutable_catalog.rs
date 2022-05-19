@@ -30,6 +30,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
@@ -158,7 +160,14 @@ impl Catalog for ImmutableCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
-            "Commit table not allowed for system database {:?}",
+            "upsert table option not allowed for system database {:?}",
+            req
+        )))
+    }
+
+    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "update table meta not allowed for system database {:?}",
             req
         )))
     }

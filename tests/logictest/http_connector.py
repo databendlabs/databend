@@ -121,7 +121,10 @@ class HttpConnector():
         response = requests.post(url,
                                  data=json.dumps(query_sql),
                                  auth=(self._user, ""),
-                                 headers={**headers, **self._additonal_headers})
+                                 headers={
+                                     **headers,
+                                     **self._additonal_headers
+                                 })
         try:
             return json.loads(response.content)
         except Exception as err:

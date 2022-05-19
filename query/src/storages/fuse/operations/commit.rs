@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -27,8 +26,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MatchSeq;
 use common_meta_types::TableInfo;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
+use common_meta_types::TableStatistics;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_tracing::tracing;
 use uuid::Uuid;
 
@@ -190,6 +190,7 @@ impl FuseTable {
             catalog_name,
             self.get_table_info(),
             snapshot_loc.clone(),
+            &new_snapshot.summary,
         )
         .await;
 
@@ -249,28 +250,39 @@ impl FuseTable {
         catalog_name: &str,
         table_info: &TableInfo,
         new_snapshot_location: String,
-    ) -> Result<UpsertTableOptionReply> {
-        // TODO catalog name
+        stats: &Statistics,
+    ) -> Result<UpdateTableMetaReply> {
         let catalog = ctx.get_catalog(catalog_name)?;
-        let mut options = [(
-            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-            Some(new_snapshot_location),
-        )]
-        .into_iter()
-        .collect();
-
-        // if there were any legacy options keys, it is a good chance to remove them
-        self::utils::gather_legacy_options(table_info, &mut options);
 
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
-        let req = UpsertTableOptionReq {
+
+        let mut new_table_meta = table_info.meta.clone();
+
+        // set new snapshot location
+        new_table_meta
+            .options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
+
+        // remove legacy options
+        self::utils::remove_legacy_options(&mut new_table_meta.options);
+
+        // update statistics
+        new_table_meta.statistics = Some(TableStatistics {
+            number_of_rows: stats.row_count,
+            data_bytes: stats.uncompressed_byte_size,
+            compressed_data_bytes: stats.compressed_byte_size,
+            index_data_bytes: 0, // TODO we do not have it yet
+        });
+
+        let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
-            options,
+            new_table_meta,
         };
 
-        catalog.upsert_table_option(req).await
+        //catalog.upsert_table_option(req).await
+        catalog.update_table_meta(req).await
     }
 
     pub fn merge_append_operations(
@@ -309,6 +321,8 @@ impl FuseTable {
 }
 
 mod utils {
+    use std::collections::BTreeMap;
+
     use super::*;
     #[inline]
     pub async fn abort_operations(
@@ -334,16 +348,8 @@ mod utils {
         e.code() == ErrorCode::table_version_mismatched_code()
     }
 
-    #[inline]
     // check if there are any fuse table legacy options
-    pub fn gather_legacy_options(
-        table_info: &TableInfo,
-        options_of_upsert: &mut HashMap<String, Option<String>>,
-    ) {
-        let table_options = table_info.options();
-        if table_options.contains_key(OPT_KEY_LEGACY_SNAPSHOT_LOC) {
-            // remove the option by setting the value of option to None
-            options_of_upsert.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC.to_owned(), None);
-        }
+    pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
+        table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
 }

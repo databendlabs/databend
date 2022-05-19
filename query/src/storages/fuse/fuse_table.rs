@@ -238,16 +238,17 @@ impl Table for FuseTable {
         self.do_optimize(ctx, keep_last_snapshot).await
     }
 
-    async fn statistics(&self, ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
-        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
-        Ok(snapshot.map(|s| {
-            let summary = &s.summary;
-            TableStatistics {
-                num_rows: Some(summary.row_count),
-                data_size: Some(summary.uncompressed_byte_size),
-                data_size_compressed: Some(summary.compressed_byte_size),
+    async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+        Ok(self
+            .table_info
+            .meta
+            .statistics
+            .as_ref()
+            .map(|s| TableStatistics {
+                num_rows: Some(s.number_of_rows),
+                data_size: Some(s.data_bytes),
+                data_size_compressed: Some(s.compressed_data_bytes),
                 index_length: None,
-            }
-        }))
+            }))
     }
 }

@@ -137,6 +137,18 @@ pub struct TableInfo {
     pub meta: TableMeta,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableStatistics {
+    /// Number of rows
+    pub number_of_rows: u64,
+    // Size of data in bytes
+    pub data_bytes: u64,
+    /// Size of data compressed in bytes
+    pub compressed_data_bytes: u64,
+    /// Size of index data in bytes
+    pub index_data_bytes: u64,
+}
+
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.
@@ -150,6 +162,7 @@ pub struct TableMeta {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
+    pub statistics: Option<TableStatistics>,
 }
 
 impl TableInfo {
@@ -209,6 +222,7 @@ impl Default for TableMeta {
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
+            statistics: None,
         }
     }
 }
@@ -356,6 +370,13 @@ pub struct UpsertTableOptionReq {
     pub options: HashMap<String, Option<String>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UpdateTableMetaReq {
+    pub table_id: u64,
+    pub seq: MatchSeq,
+    pub new_table_meta: TableMeta,
+}
+
 impl UpsertTableOptionReq {
     pub fn new(
         table_ident: &TableIdent,
@@ -382,6 +403,9 @@ impl Display for UpsertTableOptionReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UpsertTableOptionReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UpdateTableMetaReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct GetTableReq {
