@@ -129,7 +129,7 @@ impl Table for ClusteringInformationTable {
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys).await?;
+        let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
 
         let blocks = vec![
             ClusteringInformation::new(ctx.clone(), tbl, cluster_keys)
@@ -153,7 +153,7 @@ impl Table for ClusteringInformationTable {
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![FuseHistorySource::create(
+            processors: vec![ClusteringInformationSource::create(
                 ctx,
                 output,
                 self.arg_database_name.to_owned(),
@@ -166,7 +166,7 @@ impl Table for ClusteringInformationTable {
     }
 }
 
-struct FuseHistorySource {
+struct ClusteringInformationSource {
     finish: bool,
     ctx: Arc<QueryContext>,
     arg_database_name: String,
@@ -174,7 +174,7 @@ struct FuseHistorySource {
     arg_cluster_keys: String,
 }
 
-impl FuseHistorySource {
+impl ClusteringInformationSource {
     pub fn create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
@@ -182,7 +182,7 @@ impl FuseHistorySource {
         arg_table_name: String,
         arg_cluster_keys: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
+        AsyncSourcer::create(ctx.clone(), output, ClusteringInformationSource {
             ctx,
             finish: false,
             arg_table_name,
@@ -192,7 +192,7 @@ impl FuseHistorySource {
     }
 }
 
-impl AsyncSource for FuseHistorySource {
+impl AsyncSource for ClusteringInformationSource {
     const NAME: &'static str = "clustering_information";
 
     type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
@@ -216,7 +216,7 @@ impl AsyncSource for FuseHistorySource {
                 .await?;
 
             let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-            let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys).await?;
+            let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
 
             Ok(Some(
                 ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)

@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use serde_json::json;
@@ -90,7 +91,8 @@ impl<'a> ClusteringInformation<'a> {
 
     fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<DataValue>, Vec<DataValue>)> {
         if self.table.cluster_keys() != self.cluster_keys || block.cluster_stats.is_none() {
-            todo!()
+            // Todo(zhyass): support manually specifying the cluster key.
+            return Err(ErrorCode::UnImplement("Unimplement error"));
         }
 
         let cluster_stats = block.cluster_stats.clone().unwrap();
@@ -108,6 +110,10 @@ impl<'a> ClusteringInformation<'a> {
             });
         }
 
+        // Gather all cluster statistics points to a sorted Map.
+        // Key: The cluster statistics points.
+        // Value: 0: The block indexes with key as min value;
+        //        1: The block indexes with key as max value;
         let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
         let mut total_constant_block_count = 0;
         for (i, block) in blocks.iter().enumerate() {
@@ -127,7 +133,10 @@ impl<'a> ClusteringInformation<'a> {
                 .or_insert((vec![], vec![i]));
         }
 
+        // calculate overlaps and depth.
         let mut statis = Vec::new();
+        // key: the block index.
+        // value: (overlaps, depth).
         let mut unfinished_parts: HashMap<usize, (usize, usize)> = HashMap::new();
         for (start, end) in points_map.values() {
             let point_depth = unfinished_parts.len() + start.len();
@@ -195,6 +204,10 @@ impl<'a> ClusteringInformation<'a> {
     }
 }
 
+// The histogram contains buckets with widths:
+// 1 to 16 with increments of 1.
+// For buckets larger than 16, increments of twice the width of the previous bucket (e.g. 32, 64, 128, …).
+// e.g. If val is 2, the bucket is 2. If val is 18, the bucket is 32.
 fn get_buckets(val: usize) -> u32 {
     let mut val = val as u32;
     if val <= 16 || val & (val - 1) == 0 {
