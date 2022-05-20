@@ -130,7 +130,7 @@ impl Function for RoundFunction {
         };
         let col = scalar_unary_op::<i64, _, _>(columns[0].column(), func, &mut eval_context)?;
         for micros in col.iter() {
-            let _ = check_timestamp(*micros)?;
+            check_timestamp(*micros)?;
         }
         Ok(col.arc())
     }

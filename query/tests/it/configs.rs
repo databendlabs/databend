@@ -372,7 +372,7 @@ protocol = "binary"
     )?;
 
     // Make sure all data flushed.
-    let _ = f.flush()?;
+    f.flush()?;
 
     temp_env::with_vars(
         vec![

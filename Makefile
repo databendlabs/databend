@@ -80,6 +80,7 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta*/
+	rm -rf .databend
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
 sqllogic-test: build-debug

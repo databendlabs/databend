@@ -19,8 +19,6 @@ mod transform;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -178,105 +176,15 @@ impl Column for StringColumn {
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
-        let mut builders = Vec::with_capacity(scattered_size);
-        for _i in 0..scattered_size {
-            builders.push(MutableStringColumn::with_capacity(self.len()));
-        }
-
-        indices.iter().zip(self.iter()).for_each(|(index, value)| {
-            builders[*index].append_value(value);
-        });
-
-        builders.iter_mut().map(|b| b.to_column()).collect()
+        scatter_scalar_column(self, indices, scattered_size)
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let length = filter.values().len() - filter.values().null_count();
-        if length == self.len() {
-            return Arc::new(self.clone());
-        }
-        const CHUNK_SIZE: usize = 64;
-
-        let mut builder = MutableStringColumn::with_capacity(length);
-        let values = self.values();
-        let (mut slice, offset, mut length) = filter.values().as_slice();
-        let mut start_index: usize = 0;
-
-        if offset > 0 {
-            let n = 8 - offset;
-            start_index += n;
-
-            filter
-                .values()
-                .iter()
-                .enumerate()
-                .take(n)
-                .for_each(|(i, is_selected)| {
-                    if is_selected {
-                        let start = self.offsets[i] as usize;
-                        let end = self.offsets[i + 1] as usize;
-                        builder.append_value(&values[start..end]);
-                    }
-                });
-            slice = &slice[1..];
-            length -= n;
-        }
-
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
-        mask_chunks
-            .by_ref()
-            .enumerate()
-            .for_each(|(mask_index, mut mask)| {
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    let i = mask_index * CHUNK_SIZE + n + start_index;
-                    let start = self.offsets[i] as usize;
-                    let end = self.offsets[i + 1] as usize;
-                    builder.append_value(&values[start..end]);
-                    mask = mask & (mask - 1);
-                }
-            });
-
-        let remainder_start = length - length % CHUNK_SIZE;
-        mask_chunks
-            .remainder_iter()
-            .enumerate()
-            .for_each(|(mask_index, is_selected)| {
-                if is_selected {
-                    let i = mask_index + remainder_start + start_index;
-                    let start = self.offsets[i] as usize;
-                    let end = self.offsets[i + 1] as usize;
-                    builder.append_value(&values[start..end]);
-                }
-            });
-        builder.to_column()
+        filter_scalar_column(self, filter)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        debug_assert!(
-            offsets.len() == self.len(),
-            "Size of offsets must match size of column"
-        );
-
-        if offsets.is_empty() {
-            return self.slice(0, 0);
-        }
-
-        let max_size = offsets.iter().max().unwrap();
-        let mut builder = MutableStringColumn::with_capacity(*max_size);
-
-        let mut previous_offset: usize = 0;
-
-        (0..self.len()).for_each(|i| {
-            let offset: usize = offsets[i];
-            let data = unsafe { self.value_unchecked(i) };
-            for _ in previous_offset..offset {
-                builder.append_value(data);
-            }
-            previous_offset = offset;
-        });
-        builder.to_column()
+        replicate_scalar_column(self, offsets)
     }
 
     fn convert_full_column(&self) -> ColumnRef {

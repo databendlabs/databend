@@ -4091,7 +4091,7 @@ dependencies = [
 [[package]]
 name = "opensrv-clickhouse"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+source = "git+https://github.com/datafuselabs/opensrv?rev=15786d3#15786d3aee58ee1b2430b748f4b958a437a22718"
 dependencies = [
  "async-trait",
  "byteorder",
