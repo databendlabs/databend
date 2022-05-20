@@ -70,7 +70,7 @@ impl ValueSource {
             }
             // Not the first row
             if rows != 0 {
-                let _ = reader.must_ignore_byte(b',')?;
+                reader.must_ignore_byte(b',')?;
             }
 
             self.parse_next_row(reader, col_size, &mut desers, &session_type)

@@ -87,7 +87,7 @@ async fn test_status() -> Result<()> {
     );
 
     let interpreter = run_query(sessions.clone()).await?;
-    let _ = interpreter.start().await?;
+    interpreter.start().await?;
     let status = get_status(&ep).await;
     assert_eq!(
         (

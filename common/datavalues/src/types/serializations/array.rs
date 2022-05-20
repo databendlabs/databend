@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -43,7 +44,7 @@ impl TypeSerializer for ArraySerializer {
 
                 let s = self.inner.serialize_value(val, format)?;
                 if quoted {
-                    res.push_str(&format!("'{}'", s));
+                    write!(res, "'{s}'").expect("write to string must succeed");
                 } else {
                     res.push_str(&s);
                 }

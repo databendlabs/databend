@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -46,7 +47,7 @@ impl TypeSerializer for StructSerializer {
 
                 let s = inner.serialize_value(val, format)?;
                 if typ.data_type_id().is_quoted() {
-                    res.push_str(&format!("'{}'", s));
+                    write!(res, "'{s}'").expect("write to string must succeed");
                 } else {
                     res.push_str(&s);
                 }
