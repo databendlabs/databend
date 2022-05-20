@@ -27,7 +27,7 @@ SELECT avg(number) FROM numbers(10);
 
 SELECT avg_if(number, number > 7) FROM numbers(10);
 +-----------------------------+
-| avgIf(number, (number > 7)) |
+| avg_if(number, (number > 7)) |
 +-----------------------------+
 |                         8.5 |
 +-----------------------------+
