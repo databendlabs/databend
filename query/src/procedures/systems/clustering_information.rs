@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -21,34 +21,35 @@ use common_exception::Result;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::table_functions::FuseSnapshot;
+use crate::storages::fuse::table_functions::get_cluster_keys;
+use crate::storages::fuse::table_functions::ClusteringInformation;
 use crate::storages::fuse::FuseTable;
 
-pub struct FuseSnapshotProcedure {}
+pub struct ClusteringInformationProcedure {}
 
-impl FuseSnapshotProcedure {
+impl ClusteringInformationProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
-        Ok(Box::new(FuseSnapshotProcedure {}))
+        Ok(Box::new(ClusteringInformationProcedure {}))
     }
 }
 
 #[async_trait::async_trait]
-impl Procedure for FuseSnapshotProcedure {
+impl Procedure for ClusteringInformationProcedure {
     fn name(&self) -> &str {
-        "FUSE_SNAPSHOT"
+        "CLUSTERING_INFORMATION"
     }
 
     fn features(&self) -> ProcedureFeatures {
+        // Todo(zhyass): ProcedureFeatures::default().variadic_arguments(2, 3)
         ProcedureFeatures::default().num_arguments(2)
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
-        let catalog_name = ctx.get_current_catalog();
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            .get_catalog(&catalog_name)?
+            .get_catalog(ctx.get_current_catalog())?
             .get_table(
                 tenant_id.as_str(),
                 database_name.as_str(),
@@ -57,11 +58,15 @@ impl Procedure for FuseSnapshotProcedure {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        let definition = if args.len() > 2 { &args[2] } else { "" };
+        let cluster_keys = get_cluster_keys(tbl, definition)?;
 
-        Ok(FuseSnapshot::new(ctx, tbl).get_history().await?)
+        Ok(ClusteringInformation::new(ctx, tbl, cluster_keys)
+            .get_clustering_info()
+            .await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        FuseSnapshot::schema()
+        ClusteringInformation::schema()
     }
 }

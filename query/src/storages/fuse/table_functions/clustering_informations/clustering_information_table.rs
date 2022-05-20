@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use super::fuse_snapshot::FuseSnapshot;
-use super::table_args::parse_func_history_args;
+use super::clustering_information::ClusteringInformation;
+use super::table_args::get_cluster_keys;
+use super::table_args::parse_func_table_args;
 use crate::catalogs::CATALOG_DEFAULT;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -46,46 +47,49 @@ use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
-const FUSE_FUNC_SNAPSHOT: &str = "fuse_snapshot";
+const FUSE_FUNC_CLUSTERING: &str = "clustering_information";
 
-pub struct FuseSnapshotTable {
+pub struct ClusteringInformationTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
+    // Todo(zhyass): support define cluster_keys.
+    arg_cluster_keys: String,
 }
 
-impl FuseSnapshotTable {
+impl ClusteringInformationTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
+        let (arg_database_name, arg_table_name) = parse_func_table_args(&table_args)?;
 
-        let engine = FUSE_FUNC_SNAPSHOT.to_owned();
+        let engine = FUSE_FUNC_CLUSTERING.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: FuseSnapshot::schema(),
+                schema: ClusteringInformation::schema(),
                 engine,
                 ..Default::default()
             },
         };
 
-        Ok(Arc::new(FuseSnapshotTable {
+        Ok(Arc::new(Self {
             table_info,
             arg_database_name,
             arg_table_name,
+            arg_cluster_keys: "".to_string(),
         }))
     }
 }
 
 #[async_trait::async_trait]
-impl Table for FuseSnapshotTable {
+impl Table for ClusteringInformationTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -116,9 +120,6 @@ impl Table for FuseSnapshotTable {
     ) -> Result<SendableDataBlockStream> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
-            // TODO (dantengsky) the name of catalog should be passed in:
-            //  - select * from fuse_snapshot([cat,] [db,] table_name)
-            //  - if "cat" and "db" are not specified, use the corresponding default values of `ctx`
             .get_catalog(CATALOG_DEFAULT)?
             .get_table(
                 tenant_id.as_str(),
@@ -126,12 +127,17 @@ impl Table for FuseSnapshotTable {
                 self.arg_table_name.as_str(),
             )
             .await?;
-
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        let blocks = vec![FuseSnapshot::new(ctx.clone(), tbl).get_history().await?];
+        let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
+
+        let blocks = vec![
+            ClusteringInformation::new(ctx.clone(), tbl, cluster_keys)
+                .get_clustering_info()
+                .await?,
+        ];
         Ok(Box::pin(DataBlockStream::create(
-            FuseSnapshot::schema(),
+            ClusteringInformation::schema(),
             None,
             blocks,
         )))
@@ -147,12 +153,12 @@ impl Table for FuseSnapshotTable {
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![FuseHistorySource::create(
+            processors: vec![ClusteringInformationSource::create(
                 ctx,
                 output,
                 self.arg_database_name.to_owned(),
                 self.arg_table_name.to_owned(),
-                CATALOG_DEFAULT.to_owned(),
+                self.arg_cluster_keys.to_owned(),
             )?],
         });
 
@@ -160,34 +166,34 @@ impl Table for FuseSnapshotTable {
     }
 }
 
-struct FuseHistorySource {
+struct ClusteringInformationSource {
     finish: bool,
     ctx: Arc<QueryContext>,
     arg_database_name: String,
     arg_table_name: String,
-    catalog_name: String,
+    arg_cluster_keys: String,
 }
 
-impl FuseHistorySource {
+impl ClusteringInformationSource {
     pub fn create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
-        catalog_name: String,
+        arg_cluster_keys: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, FuseHistorySource {
+        AsyncSourcer::create(ctx.clone(), output, ClusteringInformationSource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
-            catalog_name,
+            arg_cluster_keys,
         })
     }
 }
 
-impl AsyncSource for FuseHistorySource {
-    const NAME: &'static str = "fuse_snapshot";
+impl AsyncSource for ClusteringInformationSource {
+    const NAME: &'static str = "clustering_information";
 
     type BlockFuture<'a> = impl Future<Output = Result<Option<DataBlock>>> where Self: 'a;
 
@@ -201,7 +207,7 @@ impl AsyncSource for FuseHistorySource {
             let tenant_id = self.ctx.get_tenant();
             let tbl = self
                 .ctx
-                .get_catalog(&self.catalog_name)?
+                .get_catalog(CATALOG_DEFAULT)?
                 .get_table(
                     tenant_id.as_str(),
                     self.arg_database_name.as_str(),
@@ -210,16 +216,18 @@ impl AsyncSource for FuseHistorySource {
                 .await?;
 
             let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+            let cluster_keys = get_cluster_keys(tbl, &self.arg_cluster_keys)?;
+
             Ok(Some(
-                FuseSnapshot::new(self.ctx.clone(), tbl)
-                    .get_history()
+                ClusteringInformation::new(self.ctx.clone(), tbl, cluster_keys)
+                    .get_clustering_info()
                     .await?,
             ))
         }
     }
 }
 
-impl TableFunction for FuseSnapshotTable {
+impl TableFunction for ClusteringInformationTable {
     fn function_name(&self) -> &str {
         self.name()
     }

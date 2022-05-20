@@ -13,5 +13,10 @@
 //  limitations under the License.
 //
 
+mod clustering_information;
 mod clustering_information_table;
-mod fuse_snapshot_table;
+mod table_args;
+
+pub use clustering_information::ClusteringInformation;
+pub use clustering_information_table::ClusteringInformationTable;
+pub use table_args::*;
