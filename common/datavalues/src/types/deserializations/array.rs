@@ -90,7 +90,7 @@ impl TypeDeserializer for ArrayDeserializer {
                 }
             }
             if idx != 0 {
-                let _ = reader.must_ignore_byte(b',')?;
+                reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces()?;
             self.inner.de_text_quoted(reader, format)?;
