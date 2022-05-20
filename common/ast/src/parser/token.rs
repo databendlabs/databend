@@ -792,14 +792,6 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATEADD
-            | TokenKind::YEAR
-            | TokenKind::MONTH
-            | TokenKind::DAY
-            | TokenKind::HOUR
-            | TokenKind::MINUTE
-            | TokenKind::SECOND
-            | TokenKind::DOY
-            | TokenKind::DOW
             if !after_as => true,
             _ => false
         }
