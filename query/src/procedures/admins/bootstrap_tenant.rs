@@ -17,10 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
-use common_meta_types::UserInfo;
 use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use common_tracing::tracing;
@@ -45,32 +43,18 @@ impl Procedure for BootstrapTenantProcedure {
 
     // args:
     // tenant_id: string
-    // user_name: string
-    // host_name: string
-    // auth_type: string
-    // password: string
     fn features(&self) -> ProcedureFeatures {
         ProcedureFeatures::default()
-            .num_arguments(5)
+            .num_arguments(1)
             .management_mode_required(true)
             .user_option_flag(UserOptionFlag::TenantSetting)
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant = args[0].clone();
-        let user_name = args[1].clone();
-        let host_name = args[2].clone();
-        let auth_type = args[3].clone();
-        let password = args[4].clone();
         let user_mgr = ctx.get_user_manager();
 
-        tracing::info!(
-            "BootstrapTenant: tenant={}, user_name={}, host_name={}, auth_type={}",
-            tenant,
-            user_name,
-            host_name,
-            auth_type
-        );
+        tracing::info!("BootstrapTenantWithAccountAdminRole: tenant={}", tenant);
 
         // Create account admin role.
         let mut account_admin_role = RoleInfo::new("account_admin");
@@ -81,12 +65,6 @@ impl Procedure for BootstrapTenantProcedure {
         user_mgr
             .add_role(&tenant, account_admin_role.clone(), true)
             .await?;
-
-        // Create user.
-        let auth_info = AuthInfo::create(&Some(auth_type), &Some(password))?;
-        let mut user_info = UserInfo::new(&user_name, &host_name, auth_info);
-        user_info.grants.grant_role(account_admin_role.identity());
-        user_mgr.add_user(&tenant, user_info, true).await?;
 
         Ok(DataBlock::empty())
     }

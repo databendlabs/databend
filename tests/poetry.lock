@@ -582,6 +582,20 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
+name = "pyhamcrest"
+version = "2.0.3"
+description = "Hamcrest framework for matcher objects"
+category = "main"
+optional = false
+python-versions = ">=3.5"
+
+[package.extras]
+dev = ["sphinx (>=3.0,<4.0)", "alabaster (>=0.7,<1.0)", "pytest (>=5.0)", "pytest-sugar", "pytest-xdist", "coverage", "types-mock", "towncrier", "twine", "pytest-mypy", "flake8", "black", "tox", "tox-pyenv", "tox-asdf", "pytest-mypy-plugins"]
+docs = ["sphinx (>=3.0,<4.0)", "alabaster (>=0.7,<1.0)"]
+tests = ["pytest (>=5.0)", "pytest-sugar", "pytest-xdist", "coverage", "types-mock", "pytest-mypy-plugins"]
+tests-numpy = ["pytest (>=5.0)", "pytest-sugar", "pytest-xdist", "coverage", "types-mock", "numpy", "pytest-mypy-plugins"]
+
+[[package]]
 name = "pymysql"
 version = "1.0.2"
 description = "Pure Python MySQL Driver"
@@ -879,6 +893,14 @@ typeguard = ">=2.10.0"
 build = ["black", "coverage", "coveralls", "flake8", "isort (>=5.1,<6.0)", "mypy (==0.782)", "ipython", "sphinx", "sphinx-autobuild", "sphinx-kr-theme", "twine"]
 
 [[package]]
+name = "toml"
+version = "0.10.2"
+description = "Python Library for Tom's Obvious, Minimal Language"
+category = "main"
+optional = false
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
+
+[[package]]
 name = "typeguard"
 version = "2.13.3"
 description = "Run-time type checker for Python"
@@ -998,7 +1020,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "90af1972ba3a51a9461516b5ac63da177b0668efb523ffcf36171b2a0a1bc0e4"
+content-hash = "565f024a01b73e4f79a0ef8f8fdc95f24f92b24d5c11166460db398f8c994d64"
 
 [metadata.files]
 async-generator = [
@@ -1563,6 +1585,10 @@ pygments = [
     {file = "Pygments-2.11.2-py3-none-any.whl", hash = "sha256:44238f1b60a76d78fc8ca0528ee429702aae011c265fe6a8dd8b63049ae41c65"},
     {file = "Pygments-2.11.2.tar.gz", hash = "sha256:4e426f72023d88d03b2fa258de560726ce890ff3b630f88c21cbb8b2503b8c6a"},
 ]
+pyhamcrest = [
+    {file = "PyHamcrest-2.0.3-py3-none-any.whl", hash = "sha256:c29dc977154c49e17c30d1ed49a0a6e31cb0dc7bcf733ac4aa9cb58519c2b00c"},
+    {file = "PyHamcrest-2.0.3.tar.gz", hash = "sha256:dfb19cf6d71743e086fbb761ed7faea5aacbc8ec10c17a08b93ecde39192a3db"},
+]
 pymysql = [
     {file = "PyMySQL-1.0.2-py3-none-any.whl", hash = "sha256:41fc3a0c5013d5f039639442321185532e3e2c8924687abe6537de157d403641"},
     {file = "PyMySQL-1.0.2.tar.gz", hash = "sha256:816927a350f38d56072aeca5dfb10221fe1dc653745853d30a216637f5d7ad36"},
@@ -1745,6 +1771,10 @@ tabulate = [
 ]
 testslide = [
     {file = "TestSlide-2.7.0.tar.gz", hash = "sha256:23ece0b9f5b704b33b978e9c8797936034516adc3c4743ebdaed664aa700c3cb"},
+]
+toml = [
+    {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
+    {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
 typeguard = [
     {file = "typeguard-2.13.3-py3-none-any.whl", hash = "sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1"},

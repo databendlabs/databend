@@ -165,7 +165,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
 
             func.merge(addr.into(), addr2.into())?;
             let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
-            let _ = func.merge_result(addr.into(), array)?;
+            func.merge_result(addr.into(), array)?;
 
             let datatype = t.input_array.data_type();
             with_match_primitive_type_id!(datatype.data_type_id(), |$T| {
@@ -329,7 +329,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func.merge(addr1.into(), addr2.into())?;
 
             let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
-            let _ = func.merge_result(addr1.into(), array)?;
+            func.merge_result(addr1.into(), array)?;
 
             let datatype = t.input_array.data_type();
             with_match_primitive_type_id!(datatype.data_type_id(), |$T| {

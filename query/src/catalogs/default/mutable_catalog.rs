@@ -40,6 +40,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -270,6 +272,11 @@ impl Catalog for MutableCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         let res = self.ctx.meta.upsert_table_option(req).await?;
+        Ok(res)
+    }
+
+    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        let res = self.ctx.meta.update_table_meta(req).await?;
         Ok(res)
     }
 

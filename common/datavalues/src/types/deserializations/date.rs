@@ -35,7 +35,7 @@ where
 {
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: T = reader.read_scalar()?;
-        let _ = check_date(value.as_i32())?;
+        check_date(value.as_i32())?;
         self.builder.append_value(value);
         Ok(())
     }
@@ -54,7 +54,7 @@ where
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
-            let _ = check_date(value.as_i32())?;
+            check_date(value.as_i32())?;
             self.builder.append_value(value);
         }
         Ok(())
@@ -66,7 +66,7 @@ where
                 let mut reader = BufferReader::new(v.as_bytes());
                 let date = reader.read_date_text()?;
                 let days = uniform(date);
-                let _ = check_date(days.as_i32())?;
+                check_date(days.as_i32())?;
                 self.builder.append_value(days);
                 Ok(())
             }
@@ -78,7 +78,7 @@ where
         let mut reader = BufferReader::new(reader);
         let date = reader.read_date_text()?;
         let days = uniform(date);
-        let _ = check_date(days.as_i32())?;
+        check_date(days.as_i32())?;
         reader.must_eof()?;
         self.builder.append_value(days);
         Ok(())
@@ -92,7 +92,7 @@ where
         reader.must_ignore_byte(b'\'')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
-        let _ = check_date(days.as_i32())?;
+        check_date(days.as_i32())?;
         reader.must_ignore_byte(b'\'')?;
 
         self.builder.append_value(days);
@@ -102,7 +102,7 @@ where
     fn de_text<R: BufferRead>(&mut self, reader: &mut R, _format: &FormatSettings) -> Result<()> {
         let date = reader.read_date_text()?;
         let days = uniform(date);
-        let _ = check_date(days.as_i32())?;
+        check_date(days.as_i32())?;
         self.builder.append_value(days);
         Ok(())
     }
@@ -115,7 +115,7 @@ where
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
-        let _ = check_date(days.as_i32())?;
+        check_date(days.as_i32())?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
@@ -131,7 +131,7 @@ where
         reader.must_ignore_byte(b'"')?;
         let date = reader.read_date_text()?;
         let days = uniform(date);
-        let _ = check_date(days.as_i32())?;
+        check_date(days.as_i32())?;
         reader.must_ignore_byte(b'"')?;
 
         self.builder.append_value(days);
@@ -140,7 +140,7 @@ where
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()? as i32;
-        let _ = check_date(v)?;
+        check_date(v)?;
         self.builder.append_value(v.as_());
         Ok(())
     }

@@ -158,12 +158,12 @@ where
         if O::get_type_id() == TypeID::Date {
             let viewer = i32::try_create_viewer(&x)?;
             for x in viewer.iter() {
-                let _ = check_date(x.to_owned_scalar())?;
+                check_date(x.to_owned_scalar())?;
             }
         } else if O::get_type_id() == TypeID::Timestamp {
             let viewer = i64::try_create_viewer(&x)?;
             for x in viewer.iter() {
-                let _ = check_timestamp(x.to_owned_scalar())?;
+                check_timestamp(x.to_owned_scalar())?;
             }
         } else {
             return Err(ErrorCode::LogicalError(
