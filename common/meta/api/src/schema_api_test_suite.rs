@@ -28,12 +28,15 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::MatchSeq;
 use common_meta_types::RenameDatabaseReq;
 use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::TableNameIdent;
+use common_meta_types::TableStatistics;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
@@ -1047,6 +1050,130 @@ impl SchemaApiTestSuite {
             assert_eq!(want, got.as_ref().clone(), "get renamed table");
         }
 
+        Ok(())
+    }
+
+    pub async fn update_table_meta<MT: SchemaApi>(self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: Default::default(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            tracing::info!("create database res: {:?}", res);
+
+            assert_eq!(1, res.db_id, "first database id is 1");
+        }
+
+        tracing::info!("--- create and get table");
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: TableNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+            };
+
+            let _tb_ident_2 = {
+                let res = mt.create_table(req.clone()).await?;
+                assert!(res.table_id >= 1, "table id >= 1");
+                let tb_id = res.table_id;
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+                let seq = got.ident.seq;
+
+                let ident = TableIdent::new(tb_id, seq);
+
+                let want = TableInfo {
+                    ident: ident.clone(),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table");
+                ident
+            };
+        }
+
+        tracing::info!("--- update table meta");
+        {
+            tracing::info!("--- update table meta, normal case");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let mut new_table_meta = table.meta.clone();
+                let table_statistics = TableStatistics {
+                    data_bytes: 1,
+                    ..Default::default()
+                };
+                new_table_meta.statistics = table_statistics;
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                mt.update_table_meta(UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                })
+                .await?;
+
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.meta, new_table_meta);
+            }
+
+            tracing::info!("--- update table meta: version mismatch");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let new_table_meta = table.meta.clone();
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                let res = mt
+                    .update_table_meta(UpdateTableMetaReq {
+                        table_id,
+                        seq: MatchSeq::Exact(table_version + 1),
+                        new_table_meta: new_table_meta.clone(),
+                    })
+                    .await;
+
+                let err = res.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::table_version_mismatched_code(), err.code());
+            }
+        }
         Ok(())
     }
 
