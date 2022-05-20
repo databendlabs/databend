@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -105,7 +104,10 @@ impl ExecutorWorkerContext {
                 ))),
             };
 
-            tasks_queue.completed_async_task(workers_condvar, CompletedAsyncTask::create(clone_processor, worker_id, res));
+            tasks_queue.completed_async_task(
+                workers_condvar,
+                CompletedAsyncTask::create(clone_processor, worker_id, res),
+            );
         });
 
         Ok(None)

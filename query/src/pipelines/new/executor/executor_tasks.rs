@@ -18,10 +18,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::infallible::Mutex;
-use common_exception::{Result};
+use common_exception::Result;
 use petgraph::prelude::NodeIndex;
-use crate::pipelines::new::executor::executor_condvar::{WorkersWaitingStatus, WorkersCondvar};
 
+use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
+use crate::pipelines::new::executor::executor_condvar::WorkersWaitingStatus;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -43,7 +44,8 @@ impl ExecutorTasksQueue {
         self.finished.store(true, Ordering::Relaxed);
 
         let mut workers_tasks = self.workers_tasks.lock();
-        let mut wakeup_workers = Vec::with_capacity(workers_tasks.workers_waiting_status.waiting_size());
+        let mut wakeup_workers =
+            Vec::with_capacity(workers_tasks.workers_waiting_status.waiting_size());
 
         while workers_tasks.workers_waiting_status.waiting_size() != 0 {
             let worker_num = workers_tasks.workers_waiting_status.wakeup_any_worker();
@@ -77,12 +79,18 @@ impl ExecutorTasksQueue {
                 workers_condvar.inc_active_async_worker();
             }
 
-            if !workers_tasks.is_empty() && workers_tasks.workers_waiting_status.waiting_size() != 0 {
+            if !workers_tasks.is_empty() && workers_tasks.workers_waiting_status.waiting_size() != 0
+            {
                 let worker_id = context.get_worker_num();
                 let mut wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
 
-                if workers_tasks.workers_waiting_status.is_waiting(wakeup_worker_id) {
-                    workers_tasks.workers_waiting_status.wakeup_worker(wakeup_worker_id);
+                if workers_tasks
+                    .workers_waiting_status
+                    .is_waiting(wakeup_worker_id)
+                {
+                    workers_tasks
+                        .workers_waiting_status
+                        .wakeup_worker(wakeup_worker_id);
                 } else {
                     wakeup_worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
                 }
@@ -96,7 +104,9 @@ impl ExecutorTasksQueue {
 
         // When tasks queue is empty and all workers are waiting, no new tasks will be generated.
         let workers_condvar = context.get_workers_condvar();
-        if !workers_condvar.has_waiting_async_task() && workers_tasks.workers_waiting_status.is_last_active_worker() {
+        if !workers_condvar.has_waiting_async_task()
+            && workers_tasks.workers_waiting_status.is_last_active_worker()
+        {
             drop(workers_tasks);
             self.finish(workers_condvar.clone());
             return;
@@ -105,7 +115,9 @@ impl ExecutorTasksQueue {
         let worker_num = context.get_worker_num();
         workers_tasks.workers_waiting_status.wait_worker(worker_num);
         drop(workers_tasks);
-        context.get_workers_condvar().wait(worker_num, self.finished.clone());
+        context
+            .get_workers_condvar()
+            .wait(worker_num, self.finished.clone());
     }
 
     pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
@@ -133,8 +145,13 @@ impl ExecutorTasksQueue {
         if workers_tasks.workers_waiting_status.waiting_size() != 0 {
             let mut wake_worker_id = workers_tasks.best_worker_id(worker_id + 1);
 
-            if workers_tasks.workers_waiting_status.is_waiting(wake_worker_id) {
-                workers_tasks.workers_waiting_status.wakeup_worker(wake_worker_id);
+            if workers_tasks
+                .workers_waiting_status
+                .is_waiting(wake_worker_id)
+            {
+                workers_tasks
+                    .workers_waiting_status
+                    .wakeup_worker(wake_worker_id);
             } else {
                 wake_worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
             }
@@ -155,7 +172,9 @@ impl ExecutorTasksQueue {
 
         if workers_tasks.workers_waiting_status.waiting_size() != 0 {
             if workers_tasks.workers_waiting_status.is_waiting(worker_id) {
-                workers_tasks.workers_waiting_status.wakeup_worker(worker_id);
+                workers_tasks
+                    .workers_waiting_status
+                    .wakeup_worker(worker_id);
             } else {
                 worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
             }

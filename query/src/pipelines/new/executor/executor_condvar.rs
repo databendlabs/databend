@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::infallible::{Condvar};
+use common_base::infallible::Condvar;
 use common_base::infallible::Mutex;
-
 
 struct WorkerCondvar {
     mutex: Mutex<bool>,
@@ -75,13 +75,14 @@ impl WorkersCondvar {
         let mut wait_guard = self.workers_condvar[worker_id].mutex.lock();
 
         while !*wait_guard && !finished.load(Ordering::Relaxed) {
-            self.workers_condvar[worker_id].condvar.wait(&mut wait_guard);
+            self.workers_condvar[worker_id]
+                .condvar
+                .wait(&mut wait_guard);
         }
 
         *wait_guard = false;
     }
 }
-
 
 // Inspired by ClickHouse
 // All operations (except init) are O(1). especially wake any.
@@ -95,7 +96,11 @@ impl WorkersWaitingStatus {
     pub fn create(size: usize) -> WorkersWaitingStatus {
         let stack = (0..size).collect::<Vec<_>>();
         let worker_pos_in_stack = (0..size).collect::<Vec<_>>();
-        WorkersWaitingStatus { stack, worker_pos_in_stack, stack_size: 0 }
+        WorkersWaitingStatus {
+            stack,
+            worker_pos_in_stack,
+            stack_size: 0,
+        }
     }
 
     pub fn is_last_active_worker(&self) -> bool {
@@ -134,6 +139,9 @@ impl WorkersWaitingStatus {
 
     fn swap_worker_status(&mut self, first: usize, second: usize) {
         self.worker_pos_in_stack.swap(first, second);
-        self.stack.swap(self.worker_pos_in_stack[first], self.worker_pos_in_stack[second]);
+        self.stack.swap(
+            self.worker_pos_in_stack[first],
+            self.worker_pos_in_stack[second],
+        );
     }
 }

@@ -14,8 +14,8 @@
 
 mod pipeline_executor;
 
-mod executor_graph;
 mod executor_condvar;
+mod executor_graph;
 mod executor_tasks;
 mod executor_worker_context;
 mod pipeline_complete_executor;

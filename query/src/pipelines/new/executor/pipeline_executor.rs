@@ -22,8 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
 
-use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_condvar::WorkersCondvar;
+use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipeline::NewPipeline;
