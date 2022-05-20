@@ -295,7 +295,7 @@ pub enum TokenKind {
     #[token("DATE", ignore(ascii_case))]
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
-    DATEADD,
+    DATE_ADD,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -791,7 +791,7 @@ impl TokenKind {
             | TokenKind::WHERE
             // | TokenKind::WINDOW
             | TokenKind::WITH
-            | TokenKind::DATEADD
+            | TokenKind::DATE_ADD
             if !after_as => true,
             _ => false
         }
