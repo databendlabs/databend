@@ -792,7 +792,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
     );
     let date_add = map(
         rule! {
-            DATEADD ~ "(" ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+            DATE_ADD ~ "(" ~ #subexpr(0) ~ "," ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
         },
         |(_, _, date, _, interval, _, unit, _)| ExprElement::DateAdd {
             date,
@@ -818,7 +818,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan> {
             | #binary_op : "<operator>"
             | #unary_op : "<operator>"
             | #cast : "`CAST(... AS ...)`"
-            | #date_add: "`DATEADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+            | #date_add: "`DATE_ADD(..., ..., (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
             | #interval: "`INTERVAL ... (YEAR| MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
