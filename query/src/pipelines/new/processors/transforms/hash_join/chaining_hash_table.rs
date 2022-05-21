@@ -21,16 +21,18 @@ use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::Series;
+use common_datavalues::SmallVu8;
 use common_exception::Result;
 use common_planners::Expression;
 
 use crate::common::ExpressionEvaluator;
-use crate::pipelines::new::processors::transforms::hash_join::hash::HashUtil;
-use crate::pipelines::new::processors::transforms::hash_join::hash::HashVector;
+use crate::common::HashMap;
 use crate::pipelines::new::processors::transforms::hash_join::row::compare_and_combine;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::sessions::QueryContext;
 
 pub struct ChainingHashTable {
@@ -44,7 +46,7 @@ pub struct ChainingHashTable {
     ctx: Arc<QueryContext>,
 
     /// A shared big hash table stores all the rows from build side
-    hash_table: RwLock<Vec<Vec<RowPtr>>>,
+    hash_table: RwLock<HashMap<KeysRef, Vec<RowPtr>>>,
     row_space: RowSpace,
 }
 
@@ -63,95 +65,69 @@ impl ChainingHashTable {
             build_expressions,
             probe_expressions,
             ctx,
-            hash_table: RwLock::new(vec![]),
+            hash_table: RwLock::new(HashMap::create()),
         })
     }
 
-    fn hash(&self, columns: &[ColumnRef], row_count: usize) -> Result<HashVector> {
-        let hash_values = columns
-            .iter()
-            .map(HashUtil::compute_hash)
-            .collect::<Result<Vec<HashVector>>>()?;
-        Ok(HashUtil::combine_hashes(&hash_values, row_count))
-    }
+    fn serialize_keys(&self, keys: &Vec<ColumnRef>, num_rows: usize) -> Result<Vec<SmallVu8>> {
+        let mut serialized_keys = Vec::with_capacity(keys.len());
 
-    fn apply_bitmask(hash_vector: &HashVector, mask: u64) -> HashVector {
-        let mut result = HashVector::with_capacity(hash_vector.len());
-        for hash in hash_vector {
-            result.push(*hash & mask);
+        for _i in 0..num_rows {
+            serialized_keys.push(SmallVu8::new());
         }
-        result
-    }
 
-    fn compute_hash_table_size(rows_count: usize) -> usize {
-        // The next power of 2
-        let mut power = 1;
-        while power < rows_count {
-            power <<= 1;
+        for col in keys {
+            Series::serialize(col, &mut serialized_keys, None)?
         }
-        power
+        Ok(serialized_keys)
     }
 }
 
 impl HashJoinState for ChainingHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
+        let func_ctx = self.ctx.try_get_function_context()?;
         let build_keys = self
             .build_expressions
             .iter()
-            .map(|expr| {
-                ExpressionEvaluator::eval(self.ctx.try_get_function_context()?, expr, &input)
-            })
+            .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, &input))
             .collect::<Result<Vec<ColumnRef>>>()?;
 
-        let hash_values = self.hash(&build_keys, input.num_rows())?;
-
-        self.row_space.push(input, hash_values)?;
+        let serialized_build_keys = self.serialize_keys(&build_keys, input.num_rows())?;
+        self.row_space.push(input, serialized_build_keys)?;
 
         Ok(())
     }
 
     fn probe(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+        let func_ctx = self.ctx.try_get_function_context()?;
         let probe_keys = self
             .probe_expressions
             .iter()
-            .map(|expr| {
-                ExpressionEvaluator::eval(self.ctx.try_get_function_context()?, expr, input)
-            })
+            .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, input))
             .collect::<Result<Vec<ColumnRef>>>()?;
-
+        let serialized_probe_keys = self.serialize_keys(&probe_keys, input.num_rows())?;
         let hash_table = self.hash_table.read().unwrap();
-        let hash_values = self.hash(&probe_keys, input.num_rows())?;
-        let hash_values =
-            ChainingHashTable::apply_bitmask(&hash_values, (hash_table.len() - 1) as u64);
 
         let mut results: Vec<DataBlock> = vec![];
-        for (i, hash_value) in hash_values.iter().enumerate().take(input.num_rows()) {
-            let probe_result_ptrs = hash_table[*hash_value as usize].as_slice();
-            if probe_result_ptrs.is_empty() {
+        for (i, key) in serialized_probe_keys
+            .iter()
+            .enumerate()
+            .take(input.num_rows())
+        {
+            let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+            let probe_result_ptr = hash_table.find_key(&keys_ref);
+            if probe_result_ptr.is_none() {
                 // No matched row for current probe row
                 continue;
             }
+            let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
+            // `result_block` is the block of build table
             let result_block = self.row_space.gather(probe_result_ptrs)?;
-
             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            let mut replicated_probe_block = DataBlock::empty();
-            for (i, col) in probe_block.columns().iter().enumerate() {
-                let replicated_col = ConstColumn::new(col.clone(), result_block.num_rows()).arc();
-
-                replicated_probe_block = replicated_probe_block
-                    .add_column(replicated_col, probe_block.schema().field(i).clone())?;
-            }
-
             let build_keys = self
                 .build_expressions
                 .iter()
-                .map(|expr| {
-                    ExpressionEvaluator::eval(
-                        self.ctx.try_get_function_context()?,
-                        expr,
-                        &result_block,
-                    )
-                })
+                .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, &result_block))
                 .collect::<Result<Vec<ColumnRef>>>()?;
 
             let current_probe_keys: Vec<ColumnRef> = probe_keys
@@ -163,11 +139,11 @@ impl HashJoinState for ChainingHashTable {
                 .collect();
 
             let output = compare_and_combine(
-                replicated_probe_block,
+                &func_ctx,
+                probe_block,
                 result_block,
                 &build_keys,
                 &current_probe_keys,
-                self.ctx.clone(),
             )?;
             results.push(output);
         }
@@ -200,27 +176,22 @@ impl HashJoinState for ChainingHashTable {
 
     fn finish(&self) -> Result<()> {
         let mut hash_table = self.hash_table.write().unwrap();
-        hash_table.resize(
-            ChainingHashTable::compute_hash_table_size(self.row_space.num_rows()),
-            Default::default(),
-        );
 
-        {
-            let chunks = self.row_space.chunks.write().unwrap();
-            for chunk_index in 0..chunks.len() {
-                let chunk = &chunks[chunk_index];
-                let hash_values = ChainingHashTable::apply_bitmask(
-                    &chunk.hash_values,
-                    (hash_table.len() - 1) as u64,
-                );
-                for (row_index, hash_value) in hash_values.iter().enumerate().take(chunk.num_rows())
-                {
-                    let ptr = RowPtr {
-                        chunk_index: chunk_index as u32,
-                        row_index: row_index as u32,
-                    };
-
-                    hash_table[*hash_value as usize].push(ptr);
+        let chunks = self.row_space.chunks.write().unwrap();
+        for chunk_index in 0..chunks.len() {
+            let chunk = &chunks[chunk_index];
+            let mut inserted = true;
+            for (row_index, key) in chunk.keys.iter().enumerate().take(chunk.num_rows()) {
+                let ptr = RowPtr {
+                    chunk_index: chunk_index as u32,
+                    row_index: row_index as u32,
+                };
+                let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
+                let entity = hash_table.insert_key(&keys_ref, &mut inserted);
+                if inserted {
+                    entity.set_value(vec![ptr]);
+                } else {
+                    entity.get_mut_value().push(ptr);
                 }
             }
         }

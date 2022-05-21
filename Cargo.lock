@@ -1837,6 +1837,7 @@ dependencies = [
  "serfig",
  "sha1",
  "sha2 0.10.2",
+ "smallvec",
  "sqlparser",
  "temp-env",
  "tempfile",

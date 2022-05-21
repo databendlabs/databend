@@ -21,15 +21,17 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
 use common_planners::Expression;
+use smallvec::SmallVec;
 
 use crate::common::ExpressionEvaluator;
-use crate::pipelines::new::processors::transforms::hash_join::hash::HashVector;
-use crate::sessions::QueryContext;
+
+pub type KeysVector = Vec<SmallVec<[u8; 16]>>;
 
 pub struct Chunk {
     pub data_block: DataBlock,
-    pub hash_values: HashVector,
+    pub keys: KeysVector,
 }
 
 impl Chunk {
@@ -57,11 +59,8 @@ impl RowSpace {
         }
     }
 
-    pub fn push(&self, data_block: DataBlock, hash_values: HashVector) -> Result<()> {
-        let chunk = Chunk {
-            data_block,
-            hash_values,
-        };
+    pub fn push(&self, data_block: DataBlock, keys: KeysVector) -> Result<()> {
+        let chunk = Chunk { data_block, keys };
 
         {
             // Acquire write lock in current scope
@@ -70,14 +69,6 @@ impl RowSpace {
         }
 
         Ok(())
-    }
-
-    pub fn num_rows(&self) -> usize {
-        self.chunks
-            .read()
-            .unwrap()
-            .iter()
-            .fold(0, |acc, v| acc + v.num_rows())
     }
 
     // TODO(leiysky): gather into multiple blocks, since there are possibly massive results
@@ -98,6 +89,12 @@ impl RowSpace {
             }
         }
 
+        // If build_key doesn't have duplicated columns, the length of row_ptrs will be one.
+        // So we don't need to `concat_blocks`, directly return.
+        if data_blocks.len() == 1 {
+            return Ok(data_blocks[0].clone());
+        }
+
         if !data_blocks.is_empty() {
             let data_block = DataBlock::concat_blocks(&data_blocks)?;
             Ok(data_block)
@@ -113,11 +110,11 @@ impl RowSpace {
 
 // TODO(leiysky): compare in a more efficient way
 pub fn compare_and_combine(
+    func_ctx: &FunctionContext,
     probe_input: DataBlock,
     probe_result: DataBlock,
     build_keys: &[ColumnRef],
     probe_keys: &[ColumnRef],
-    ctx: Arc<QueryContext>,
 ) -> Result<DataBlock> {
     assert_eq!(build_keys.len(), probe_keys.len());
     let mut compare_exprs: Vec<Expression> = Vec::with_capacity(build_keys.len());
@@ -155,8 +152,7 @@ pub fn compare_and_combine(
 
     let data_block = DataBlock::create(Arc::new(DataSchema::new(data_fields)), columns);
 
-    let filter =
-        ExpressionEvaluator::eval(ctx.try_get_function_context()?, &predicate, &data_block)?;
+    let filter = ExpressionEvaluator::eval(func_ctx, &predicate, &data_block)?;
 
     let mut produce_block = probe_input;
     for (col, field) in probe_result

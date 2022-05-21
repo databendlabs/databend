@@ -35,6 +35,16 @@ pub struct HashTable<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower
     generics_hold: PhantomData<Key>,
 }
 
+unsafe impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> Send
+    for HashTable<Key, Entity, Grower>
+{
+}
+
+unsafe impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> Sync
+    for HashTable<Key, Entity, Grower>
+{
+}
+
 impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>, Grower: HashTableGrower> Drop
     for HashTable<Key, Entity, Grower>
 {
