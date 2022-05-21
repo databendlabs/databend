@@ -385,6 +385,8 @@ impl<'a> DfParser<'a> {
             self.parse_show_functions()
         } else if self.consume_token("ENGINES") {
             Ok(DfStatement::ShowEngines(DfShowEngines))
+        } else if self.consume_token("STAGES") {
+            self.parse_show_stages()
         } else {
             self.expected("show statement", self.parser.peek_token())
         }

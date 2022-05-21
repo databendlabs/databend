@@ -178,4 +178,6 @@ message UserStageInfo {
   CopyOptions copy_options = 5;
 
   string comment = 6;
+
+  string created_on = 7;
 }

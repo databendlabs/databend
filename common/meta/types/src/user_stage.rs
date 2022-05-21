@@ -14,10 +14,11 @@
 
 use std::str::FromStr;
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::StorageParams;
-
 /*
 -- Internal stage
 CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <internal_stage_name>
@@ -187,7 +188,7 @@ pub struct CopyOptions {
     pub size_limit: usize,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct UserStageInfo {
     pub stage_name: String,
@@ -196,6 +197,21 @@ pub struct UserStageInfo {
     pub file_format_options: FileFormatOptions,
     pub copy_options: CopyOptions,
     pub comment: String,
+    pub created_on: DateTime<Utc>,
+}
+
+impl Default for UserStageInfo {
+    fn default() -> Self {
+        UserStageInfo {
+            stage_name: "".to_string(),
+            stage_type: StageType::default(),
+            stage_params: StageParams::default(),
+            file_format_options: FileFormatOptions::default(),
+            copy_options: CopyOptions::default(),
+            comment: "".to_string(),
+            created_on: Utc::now(),
+        }
+    }
 }
 
 impl TryFrom<Vec<u8>> for UserStageInfo {

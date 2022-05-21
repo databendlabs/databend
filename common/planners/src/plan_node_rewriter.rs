@@ -76,6 +76,7 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowPlan;
+use crate::ShowUserStagePlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -182,7 +183,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::DropUserStage(plan) => self.rewrite_drop_user_stage(plan),
             PlanNode::DescribeUserStage(plan) => self.rewrite_describe_user_stage(plan),
             PlanNode::List(plan) => self.rewrite_list(plan),
-
+            PlanNode::ShowUserStage(plan) => self.rewrite_show_user_stage(plan),
             // UDF.
             PlanNode::CreateUserUDF(plan) => self.rewrite_create_user_udf(plan),
             PlanNode::DropUserUDF(plan) => self.rewrite_drop_user_udf(plan),
@@ -395,6 +396,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_describe_user_stage(&mut self, plan: &DescribeUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::DescribeUserStage(plan.clone()))
+    }
+
+    fn rewrite_show_user_stage(&mut self, plan: &ShowUserStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowUserStage(plan.clone()))
     }
 
     fn rewrite_list(&mut self, plan: &ListPlan) -> Result<PlanNode> {

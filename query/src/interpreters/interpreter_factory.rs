@@ -21,6 +21,7 @@ use common_planners::ShowPlan;
 
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::interpreter_user_stage_show::ShowUserStageInterpreter;
 use super::AlterViewInterpreter;
 use super::CreateUserStageInterpreter;
 use super::ListInterpreter;
@@ -169,6 +170,7 @@ impl InterpreterFactory {
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
+            PlanNode::ShowUserStage(v) => ShowUserStageInterpreter::try_create(ctx_clone, v),
 
             // others
             PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),

@@ -65,6 +65,7 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowPlan;
+use crate::ShowUserStagePlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -155,6 +156,7 @@ pub enum PlanNode {
     CreateUserStage(CreateUserStagePlan),
     DropUserStage(DropUserStagePlan),
     DescribeUserStage(DescribeUserStagePlan),
+    ShowUserStage(ShowUserStagePlan),
 
     // UDF.
     CreateUserUDF(CreateUserUDFPlan),
@@ -252,7 +254,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(v) => v.schema(),
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::DescribeUserStage(v) => v.schema(),
-
+            PlanNode::ShowUserStage(v) => v.schema(),
             // List
             PlanNode::List(v) => v.schema(),
 
@@ -351,6 +353,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::DescribeUserStage(_) => "DescribeUserStagePlan",
+            PlanNode::ShowUserStage(_) => "ShowUserStage",
 
             // List
             PlanNode::List(_) => "ListPlan",

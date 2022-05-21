@@ -25,6 +25,7 @@ use crate::sql::statements::DfCreateUserStage;
 use crate::sql::statements::DfDescribeUserStage;
 use crate::sql::statements::DfDropUserStage;
 use crate::sql::statements::DfList;
+use crate::sql::statements::DfShowUserStage;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -146,5 +147,10 @@ impl<'a> DfParser<'a> {
             pattern = self.parse_value_or_ident()?;
         }
         Ok(DfStatement::List(DfList { location, pattern }))
+    }
+
+    pub(crate) fn parse_show_stages(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let show_stage = DfShowUserStage {};
+        Ok(DfStatement::ShowStage(show_stage))
     }
 }

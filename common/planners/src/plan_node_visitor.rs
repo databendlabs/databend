@@ -66,6 +66,7 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowPlan;
+use crate::ShowUserStagePlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -194,7 +195,7 @@ pub trait PlanVisitor {
             PlanNode::DropUserStage(plan) => self.visit_drop_user_stage(plan),
             PlanNode::DescribeUserStage(plan) => self.visit_describe_user_stage(plan),
             PlanNode::List(plan) => self.visit_list(plan),
-
+            PlanNode::ShowUserStage(plan) => self.visit_show_user_stage(plan),
             // UDF.
             PlanNode::CreateUserUDF(plan) => self.visit_create_user_udf(plan),
             PlanNode::DropUserUDF(plan) => self.visit_drop_user_udf(plan),
@@ -380,6 +381,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_describe_user_stage(&mut self, _: &DescribeUserStagePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_user_stage(&mut self, _: &ShowUserStagePlan) -> Result<()> {
         Ok(())
     }
 

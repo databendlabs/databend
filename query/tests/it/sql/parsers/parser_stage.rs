@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateUserStage;
 use databend_query::sql::statements::DfList;
+use databend_query::sql::statements::DfShowUserStage;
 use databend_query::sql::*;
 
 use crate::sql::sql_parser::*;
@@ -75,5 +76,7 @@ fn create_stage_test() -> Result<()> {
             pattern: "*.csv".to_string(),
         }),
     )?;
+
+    expect_parse_ok("SHOW STAGES", DfStatement::ShowStage(DfShowUserStage {}))?;
     Ok(())
 }

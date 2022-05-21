@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_io::prelude::*;
 use common_meta_types as mt;
 use common_protos::pb;
@@ -552,6 +554,7 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
                 }
             })?)?,
             comment: p.comment,
+            created_on: DateTime::<Utc>::from_pb(p.created_on)?,
         })
     }
 
@@ -564,6 +567,7 @@ impl FromToProto<pb::UserStageInfo> for mt::UserStageInfo {
             file_format_options: Some(mt::FileFormatOptions::to_pb(&self.file_format_options)?),
             copy_options: Some(mt::CopyOptions::to_pb(&self.copy_options)?),
             comment: self.comment.clone(),
+            created_on: self.created_on.to_pb()?,
         })
     }
 }

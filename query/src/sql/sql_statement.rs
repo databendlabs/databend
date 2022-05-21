@@ -29,6 +29,7 @@ use super::statements::DfDropView;
 use super::statements::DfGrantRoleStatement;
 use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
+use super::statements::DfShowUserStage;
 use crate::sql::statements::DfAlterDatabase;
 use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
@@ -143,6 +144,7 @@ pub enum DfStatement<'a> {
     DropStage(DfDropUserStage),
     DescribeStage(DfDescribeUserStage),
     List(DfList),
+    ShowStage(DfShowUserStage),
 
     // Call
     Call(DfCall),

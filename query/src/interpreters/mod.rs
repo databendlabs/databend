@@ -64,6 +64,7 @@ mod interpreter_user_drop;
 mod interpreter_user_stage_create;
 mod interpreter_user_stage_describe;
 mod interpreter_user_stage_drop;
+mod interpreter_user_stage_show;
 mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
