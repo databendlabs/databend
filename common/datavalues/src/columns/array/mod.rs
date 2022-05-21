@@ -102,8 +102,9 @@ impl Column for ArrayColumn {
     }
 
     fn column_meta(&self) -> ColumnMeta {
+        let data_type: ArrayType = self.data_type.clone().try_into().unwrap();
         ColumnMeta::Array {
-            data_type: self.data_type.clone(),
+            inner_type: data_type.inner_type().clone(),
         }
     }
 

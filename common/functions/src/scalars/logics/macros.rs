@@ -45,7 +45,7 @@ macro_rules! impl_logic_expression {
                     let lhs_viewer_iter = lhs_viewer.iter();
                     let rhs_viewer_iter = rhs_viewer.iter();
 
-                    let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
+                    let mut builder = NullableColumnBuilder::<bool>::with_capacity_meta(input_rows, lhs.column_meta());
 
                     for (a, (idx, b)) in lhs_viewer_iter.zip(rhs_viewer_iter.enumerate()) {
                         let (val, valid) = $func(a, b, lhs_viewer.valid_at(idx), rhs_viewer.valid_at(idx));
