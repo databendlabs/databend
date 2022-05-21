@@ -17,9 +17,7 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
-use common_datavalues::Column;
 use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_datavalues::SmallVu8;
@@ -28,7 +26,6 @@ use common_planners::Expression;
 
 use crate::common::ExpressionEvaluator;
 use crate::common::HashMap;
-use crate::pipelines::new::processors::transforms::hash_join::row::compare_and_combine;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::new::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::new::processors::HashJoinState;
@@ -123,29 +120,17 @@ impl HashJoinState for ChainingHashTable {
             let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
             // `result_block` is the block of build table
             let result_block = self.row_space.gather(probe_result_ptrs)?;
-            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            let build_keys = self
-                .build_expressions
-                .iter()
-                .map(|expr| ExpressionEvaluator::eval(&func_ctx, expr, &result_block))
-                .collect::<Result<Vec<ColumnRef>>>()?;
+            let mut probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
 
-            let current_probe_keys: Vec<ColumnRef> = probe_keys
+            for (col, field) in result_block
+                .columns()
                 .iter()
-                .map(|col| {
-                    let column = col.slice(i, 1);
-                    ConstColumn::new(column, result_block.num_rows()).arc()
-                })
-                .collect();
+                .zip(result_block.schema().fields().iter())
+            {
+                probe_block = probe_block.add_column(col.clone(), field.clone())?;
+            }
 
-            let output = compare_and_combine(
-                &func_ctx,
-                probe_block,
-                result_block,
-                &build_keys,
-                &current_probe_keys,
-            )?;
-            results.push(output);
+            results.push(probe_block);
         }
 
         Ok(results)
