@@ -228,7 +228,7 @@ impl SeriesFrom<Vec<ArrayValue>, Vec<ArrayValue>> for Series {
             None => Int64Type::new_impl(),
         };
         let mut builder = MutableArrayColumn::with_capacity_meta(vals.len(), ColumnMeta::Array {
-            data_type: inner_data_type,
+            inner_type: inner_data_type,
         });
         for val in vals {
             builder.append_value(val);
