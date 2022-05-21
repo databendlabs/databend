@@ -13,10 +13,14 @@
 //  limitations under the License.
 //
 
+mod clustering_informations;
 mod fuse_segments;
 mod fuse_snapshots;
 mod table_args;
 
+pub use clustering_informations::get_cluster_keys;
+pub use clustering_informations::ClusteringInformation;
+pub use clustering_informations::ClusteringInformationTable;
 pub use fuse_segments::FuseSegment;
 pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;

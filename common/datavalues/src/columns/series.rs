@@ -301,7 +301,7 @@ macro_rules! impl_from_option_slices {
 for_all_scalar_types! { impl_from_option_iterator }
 for_all_scalar_types! { impl_from_option_slices }
 
-impl<'a, T: AsRef<[Option<Vu8>]>> SeriesFrom<T, [Option<Vu8>; 2]> for Series {
+impl<T: AsRef<[Option<Vu8>]>> SeriesFrom<T, [Option<Vu8>; 2]> for Series {
     fn from_data(v: T) -> ColumnRef {
         let iter = v.as_ref().iter();
         let capacity = get_iter_capacity(&iter);

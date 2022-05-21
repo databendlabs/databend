@@ -554,13 +554,12 @@ impl MetaNode {
         let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
 
-        let rst = self
-            .raft
+        self.raft
             .initialize(cluster_node_ids)
             .await
             .map_err(|x| MetaError::MetaServiceError(format!("{:?}", x)))?;
 
-        tracing::info!("initialized cluster, rst: {:?}", rst);
+        tracing::info!("initialized cluster");
 
         self.add_node(node_id, endpoint).await?;
 
