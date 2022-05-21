@@ -104,6 +104,7 @@ serde_json = "1.0.79"
 serfig = "0.0.1"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
+smallvec = { version = "1.8.0", features = ["write"] }
 tempfile = { version = "3.3.0", optional = true }
 thiserror = "1.0.30"
 threadpool = "1.8.1"
@@ -116,7 +117,6 @@ twox-hash = "1.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-smallvec = { version = "1.8.0", features = ["write"] }
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
