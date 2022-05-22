@@ -132,7 +132,7 @@ where T: PrimitiveType
         ))
     }
 
-    fn write_csv_field(
+    fn write_csv_field_not_null(
         &self,
         column: &ColumnRef,
         row_num: usize,

@@ -90,6 +90,16 @@ pub trait TypeSerializer: Send + Sync {
 
     fn write_csv_field<'a>(
         &self,
+        column: &ColumnRef,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+    ) -> Result<()> {
+        self.write_csv_field_not_null(column, row_num, buf, format)
+    }
+
+    fn write_csv_field_not_null<'a>(
+        &self,
         _column: &ColumnRef,
         _row_num: usize,
         _buf: &mut Vec<u8>,

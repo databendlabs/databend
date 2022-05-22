@@ -114,6 +114,23 @@ impl TypeSerializer for NullableSerializer {
         it
     }
 
+    fn write_csv_field<'a>(
+        &self,
+        column: &ColumnRef,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+    ) -> Result<()> {
+        let column: &NullableColumn = Series::check_get(&column)?;
+        if !column.null_at(row_num) {
+            self.inner
+                .write_csv_field_not_null(column.inner(), row_num, buf, format)?;
+        } else {
+            buf.extend_from_slice(&format.csv_null);
+        }
+        Ok(())
+    }
+
     fn serialize_csv_inner<'a, F2>(
         &self,
         _column: &'a ColumnRef,

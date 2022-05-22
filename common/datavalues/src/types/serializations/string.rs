@@ -19,7 +19,10 @@ use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
+use streaming_iterator::StreamingIterator;
 
+use crate::formats::iterators::new_it;
+use crate::formats::iterators::NullInfo;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -132,5 +135,35 @@ impl TypeSerializer for StringSerializer {
             })
             .collect();
         Ok(result)
+    }
+
+    fn serialize_csv_inner<'a, F2>(
+        &self,
+        column: &'a ColumnRef,
+        _format: &FormatSettings,
+        nullable: NullInfo<F2>,
+    ) -> Result<Box<dyn StreamingIterator<Item = [u8]> + 'a>>
+    where
+        F2: Fn(usize) -> bool + 'a,
+    {
+        let column2: &StringColumn = Series::check_get(&column)?;
+        Ok(new_it(
+            column2.iter(),
+            |x, buf| buf.extend_from_slice(x),
+            vec![],
+            nullable,
+        ))
+    }
+
+    fn write_csv_field_not_null<'a>(
+        &self,
+        column: &ColumnRef,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        let col: &<Vec<u8> as Scalar>::ColumnType = unsafe { Series::static_cast(&column) };
+        buf.extend_from_slice(col.get_data(row_num));
+        Ok(())
     }
 }

@@ -1,3 +1,4 @@
+use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
 use crate::ColumnRef;
@@ -41,18 +42,28 @@ pub fn write_iterator(col: &ColumnRef) -> Vec<u8> {
 }
 
 #[test]
-fn test_2() -> Result<()> {
+fn test_writers() -> Result<()> {
     use crate::Series;
     use crate::SeriesFrom;
     let col = Series::from_data(vec![12u8, 23u8, 34u8]);
     let exp = [49, 50, 50, 51, 51, 52];
     assert_eq!(write_iterator(&col), exp);
     assert_eq!(write_by_row(&col), exp);
+
+    let col = Series::from_data(vec!["12", "34"]);
+    let exp = "1234".to_string().as_bytes().to_vec();
+    assert_eq!(write_iterator(&col), exp);
+    assert_eq!(write_by_row(&col), exp);
+
+    let col = Series::from_data(vec![Some(12u8), None, Some(34u8)]);
+    let exp = [49, 50, 0, 51, 52];
+    assert_eq!(write_iterator(&col), exp);
+    assert_eq!(write_by_row(&col), exp);
     Ok(())
 }
 
 #[test]
-fn test_s() -> Result<()> {
+fn test_debug() -> Result<()> {
     use crate::Series;
     use crate::SeriesFrom;
     use crate::TypeSerializer;

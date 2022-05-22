@@ -28,6 +28,7 @@ pub struct FormatSettings {
     pub skip_header: bool,
     pub compression: Compression,
     pub timezone: Tz,
+    pub csv_null: Vec<u8>,
 }
 
 impl Default for FormatSettings {
@@ -39,6 +40,7 @@ impl Default for FormatSettings {
             skip_header: false,
             compression: Compression::None,
             timezone: "UTC".parse::<Tz>().unwrap(),
+            csv_null: vec![b'\0'], // for test
         }
     }
 }
