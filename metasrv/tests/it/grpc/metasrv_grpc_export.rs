@@ -53,7 +53,7 @@ async fn test_export() -> anyhow::Result<()> {
             }
         }
 
-        let mut grpc_client = client.make_conn().await?;
+        let mut grpc_client = client.make_client().await?;
 
         let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
 
