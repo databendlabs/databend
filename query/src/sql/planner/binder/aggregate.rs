@@ -146,11 +146,10 @@ impl<'a> AggregateRewriter<'a> {
 
         for (i, arg) in aggregate.args.iter().enumerate() {
             let name = format!("{}_arg_{}", &aggregate.func_name, i);
-            let index =
-                self.metadata
-                    .write()
-                    .unwrap()
-                    .add_column(name.clone(), arg.data_type(), None);
+            let index = self
+                .metadata
+                .write()
+                .add_column(name.clone(), arg.data_type(), None);
 
             // Generate a ColumnBinding for each argument of aggregates
             let column_binding = ColumnBinding {
@@ -175,7 +174,7 @@ impl<'a> AggregateRewriter<'a> {
             });
         }
 
-        let index = self.metadata.write().unwrap().add_column(
+        let index = self.metadata.write().add_column(
             aggregate.display_name.clone(),
             aggregate.return_type.clone(),
             None,
@@ -374,11 +373,9 @@ impl<'a> Binder {
             {
                 *index
             } else {
-                self.metadata.write().unwrap().add_column(
-                    group_item_name.clone(),
-                    data_type.clone(),
-                    None,
-                )
+                self.metadata
+                    .write()
+                    .add_column(group_item_name.clone(), data_type.clone(), None)
             };
 
             bind_context.aggregate_info.group_items.push(ScalarItem {

@@ -61,7 +61,7 @@ impl<'a> Binder {
             .resolve_data_source(tenant.as_str(), catalog, database, "one")
             .await?;
         let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-        let table_index = self.metadata.write().unwrap().add_table(
+        let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_owned(),
             database.to_string(),
             table_meta,
@@ -114,7 +114,6 @@ impl<'a> Binder {
                 let table_index = self
                     .metadata
                     .write()
-                    .unwrap()
                     .add_table(catalog, database, table_meta, source);
 
                 let (s_expr, mut bind_context) = self.bind_base_table(bind_context, table_index)?;
@@ -162,7 +161,7 @@ impl<'a> Binder {
                 let table = table_meta.as_table();
 
                 let source = table.read_plan(self.ctx.clone(), None).await?;
-                let table_index = self.metadata.write().unwrap().add_table(
+                let table_index = self.metadata.write().add_table(
                     CATALOG_DEFAULT.to_string(),
                     "system".to_string(),
                     table.clone(),
@@ -192,7 +191,7 @@ impl<'a> Binder {
         table_index: IndexType,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-        let metadata = self.metadata.read().unwrap();
+        let metadata = self.metadata.read();
         let columns = metadata.columns_by_table_index(table_index);
         let table = metadata.table(table_index);
         for column in columns.iter() {

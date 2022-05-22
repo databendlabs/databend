@@ -107,11 +107,10 @@ impl<'a> Binder {
         column_name: String,
         data_type: DataTypeImpl,
     ) -> ColumnBinding {
-        let index =
-            self.metadata
-                .write()
-                .unwrap()
-                .add_column(column_name.clone(), data_type.clone(), None);
+        let index = self
+            .metadata
+            .write()
+            .add_column(column_name.clone(), data_type.clone(), None);
         ColumnBinding {
             table_name,
             column_name,

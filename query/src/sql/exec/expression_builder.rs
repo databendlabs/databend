@@ -42,7 +42,7 @@ impl ExpressionBuilder {
 
     pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
         let expr = self.build(scalar)?;
-        let name = self.metadata.read().unwrap().column(index).name.clone();
+        let name = self.metadata.read().column(index).name.clone();
         Ok(Expression::Alias(
             format_field_name(name.as_str(), index),
             Box::new(expr),
@@ -116,7 +116,7 @@ impl ExpressionBuilder {
     }
 
     pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
-        let name = self.metadata.read().unwrap().column(index).name.clone();
+        let name = self.metadata.read().column(index).name.clone();
         Ok(Expression::Column(format_field_name(name.as_str(), index)))
     }
 

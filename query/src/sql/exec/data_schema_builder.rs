@@ -37,7 +37,7 @@ impl DataSchemaBuilder {
     pub fn build_project(&self, plan: &Project) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(plan.columns.len());
         for index in plan.columns.iter() {
-            let column_entry = self.metadata.read().unwrap().column(*index).clone();
+            let column_entry = self.metadata.read().column(*index).clone();
             let field_name = format_field_name(column_entry.name.as_str(), *index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
@@ -53,7 +53,7 @@ impl DataSchemaBuilder {
     ) -> Result<DataSchemaRef> {
         let mut fields = input_schema.fields().clone();
         for item in plan.items.iter() {
-            let column_entry = self.metadata.read().unwrap().column(item.index).clone();
+            let column_entry = self.metadata.read().column(item.index).clone();
             let field_name = format_field_name(column_entry.name.as_str(), item.index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
@@ -65,7 +65,7 @@ impl DataSchemaBuilder {
     pub fn build_physical_scan(&self, plan: &PhysicalScan) -> Result<DataSchemaRef> {
         let mut fields: Vec<DataField> = vec![];
         for index in plan.columns.iter() {
-            let column_entry = self.metadata.read().unwrap().column(*index).clone();
+            let column_entry = self.metadata.read().column(*index).clone();
             let field_name = format_field_name(column_entry.name.as_str(), *index);
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);
@@ -77,7 +77,7 @@ impl DataSchemaBuilder {
     pub fn build_canonical_schema(&self, columns: &[IndexType]) -> DataSchemaRef {
         let mut fields: Vec<DataField> = vec![];
         for index in columns {
-            let column_entry = self.metadata.read().unwrap().column(*index).clone();
+            let column_entry = self.metadata.read().column(*index).clone();
             let field_name = column_entry.name.clone();
             let field = DataField::new(field_name.as_str(), column_entry.data_type.clone());
             fields.push(field);

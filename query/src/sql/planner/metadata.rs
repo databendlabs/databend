@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
+use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_planners::ReadDataSourcePlan;
 

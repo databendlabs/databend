@@ -100,13 +100,7 @@ impl PipelineBuilder {
     }
 
     fn get_field_name(&self, column_index: IndexType) -> String {
-        let name = &self
-            .metadata
-            .read()
-            .unwrap()
-            .column(column_index)
-            .name
-            .clone();
+        let name = &self.metadata.read().column(column_index).name.clone();
         format_field_name(name.as_str(), column_index)
     }
 
@@ -131,7 +125,7 @@ impl PipelineBuilder {
         let mut projections = Vec::with_capacity(self.result_columns.len());
         let mut output_fields = Vec::with_capacity(self.result_columns.len());
         for (index, name) in self.result_columns.iter() {
-            let column_entry = self.metadata.read().unwrap().column(*index).clone();
+            let column_entry = self.metadata.read().column(*index).clone();
             projections.push(Expression::Alias(
                 name.clone(),
                 Box::new(Expression::Column(self.get_field_name(*index))),
@@ -327,12 +321,7 @@ impl PipelineBuilder {
         scan: &PhysicalScan,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let table_entry = self
-            .metadata
-            .read()
-            .unwrap()
-            .table(scan.table_index)
-            .clone();
+        let table_entry = self.metadata.read().table(scan.table_index).clone();
         let plan = table_entry.source;
 
         let table = self.ctx.build_table_from_source_plan(&plan)?;
@@ -342,7 +331,7 @@ impl PipelineBuilder {
         let projections: Vec<Expression> = columns
             .iter()
             .map(|index| {
-                let name = self.metadata.read().unwrap().column(*index).name.clone();
+                let name = self.metadata.read().column(*index).name.clone();
                 Expression::Alias(
                     self.get_field_name(*index),
                     Box::new(Expression::Column(name)),

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use plans::ScalarExpr;
