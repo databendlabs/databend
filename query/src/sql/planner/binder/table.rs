@@ -40,6 +40,7 @@ use crate::table_functions::TableFunction;
 impl<'a> Binder {
     pub(super) async fn bind_one_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &SelectStmt<'a>,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in &stmt.select_list {
@@ -60,14 +61,14 @@ impl<'a> Binder {
             .resolve_data_source(tenant.as_str(), catalog, database, "one")
             .await?;
         let source = table_meta.read_plan(self.ctx.clone(), None).await?;
-        let table_index = self.metadata.add_table(
+        let table_index = self.metadata.write().unwrap().add_table(
             CATALOG_DEFAULT.to_owned(),
             database.to_string(),
             table_meta,
             source,
         );
 
-        self.bind_base_table(table_index).await
+        self.bind_base_table(bind_context, table_index)
     }
 
     pub(super) async fn bind_table_reference(
@@ -112,9 +113,11 @@ impl<'a> Binder {
                 let source = table_meta.read_plan(self.ctx.clone(), None).await?;
                 let table_index = self
                     .metadata
+                    .write()
+                    .unwrap()
                     .add_table(catalog, database, table_meta, source);
 
-                let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
+                let (s_expr, mut bind_context) = self.bind_base_table(bind_context, table_index)?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;
                 }
@@ -125,10 +128,11 @@ impl<'a> Binder {
                 params,
                 alias,
             } => {
-                let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
+                let mut scalar_binder =
+                    ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
                 let mut args = Vec::with_capacity(params.len());
                 for arg in params.iter() {
-                    args.push(scalar_binder.bind_expr(arg).await?);
+                    args.push(scalar_binder.bind(arg).await?);
                 }
 
                 let expressions = args
@@ -158,14 +162,14 @@ impl<'a> Binder {
                 let table = table_meta.as_table();
 
                 let source = table.read_plan(self.ctx.clone(), None).await?;
-                let table_index = self.metadata.add_table(
+                let table_index = self.metadata.write().unwrap().add_table(
                     CATALOG_DEFAULT.to_string(),
                     "system".to_string(),
                     table.clone(),
                     source,
                 );
 
-                let (s_expr, mut bind_context) = self.bind_base_table(table_index).await?;
+                let (s_expr, mut bind_context) = self.bind_base_table(bind_context, table_index)?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias)?;
                 }
@@ -182,10 +186,15 @@ impl<'a> Binder {
         }
     }
 
-    async fn bind_base_table(&mut self, table_index: IndexType) -> Result<(SExpr, BindContext)> {
-        let mut bind_context = BindContext::new();
-        let columns = self.metadata.columns_by_table_index(table_index);
-        let table = self.metadata.table(table_index);
+    fn bind_base_table(
+        &mut self,
+        bind_context: &BindContext,
+        table_index: IndexType,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let metadata = self.metadata.read().unwrap();
+        let columns = metadata.columns_by_table_index(table_index);
+        let table = metadata.table(table_index);
         for column in columns.iter() {
             let column_binding = ColumnBinding {
                 table_name: Some(table.name.clone()),

@@ -36,7 +36,9 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::planner::metadata::optimize_remove_count_args;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -48,6 +50,7 @@ use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::SubqueryExpr;
+use crate::sql::plans::SubqueryType;
 use crate::sql::BindContext;
 
 /// A helper for type checking.
@@ -62,6 +65,7 @@ use crate::sql::BindContext;
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+    metadata: MetadataRef,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
@@ -69,10 +73,15 @@ pub struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(bind_context: &'a BindContext, ctx: Arc<QueryContext>) -> Self {
+    pub fn new(
+        bind_context: &'a BindContext,
+        ctx: Arc<QueryContext>,
+        metadata: MetadataRef,
+    ) -> Self {
         Self {
             bind_context,
             ctx,
+            metadata,
             in_aggregate_function: false,
         }
     }
@@ -328,7 +337,10 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Subquery { subquery, .. } => self.resolve_subquery(subquery, false, None).await,
+            Expr::Subquery { subquery, .. } => {
+                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
+                    .await
+            }
 
             Expr::MapAccess {
                 span,
@@ -679,11 +691,16 @@ impl<'a> TypeChecker<'a> {
 
     pub async fn resolve_subquery(
         &mut self,
+        typ: SubqueryType,
         subquery: &Query<'a>,
         allow_multi_rows: bool,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        let mut binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs());
+        let mut binder = Binder::new(
+            self.ctx.clone(),
+            self.ctx.get_catalogs(),
+            self.metadata.clone(),
+        );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
@@ -697,11 +714,16 @@ impl<'a> TypeChecker<'a> {
 
         let data_type = output_context.columns[0].data_type.clone();
 
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+        let rel_prop = rel_expr.derive_relational_prop()?;
+
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
             data_type: data_type.clone(),
             output_context: Box::new(output_context),
             allow_multi_rows,
+            typ,
+            outer_columns: rel_prop.outer_columns,
         };
 
         Ok((subquery_expr.into(), data_type))

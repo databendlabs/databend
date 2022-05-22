@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
@@ -21,6 +22,8 @@ use common_planners::ReadDataSourcePlan;
 
 use crate::sql::common::IndexType;
 use crate::storages::Table;
+
+pub type MetadataRef = Arc<RwLock<Metadata>>;
 
 #[derive(Clone)]
 pub struct TableEntry {

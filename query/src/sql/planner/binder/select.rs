@@ -53,7 +53,7 @@ impl<'a> Binder {
         let (mut s_expr, mut from_context) = if let Some(from) = &stmt.from {
             self.bind_table_reference(bind_context, from).await?
         } else {
-            self.bind_one_table(stmt).await?
+            self.bind_one_table(bind_context, stmt).await?
         };
 
         if let Some(expr) = &stmt.selection {
@@ -157,8 +157,9 @@ impl<'a> Binder {
         expr: &Expr<'a>,
         child: SExpr,
     ) -> Result<SExpr> {
-        let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
-        let (scalar, _) = scalar_binder.bind_expr(expr).await?;
+        let mut scalar_binder =
+            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+        let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = FilterPlan {
             predicates: split_conjunctions(&scalar),
             is_having: false,

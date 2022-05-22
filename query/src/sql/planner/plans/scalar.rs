@@ -260,10 +260,21 @@ impl ScalarExpr for CastExpr {
 }
 
 #[derive(Clone, Debug)]
+pub enum SubqueryType {
+    Any,
+    All,
+    Scalar,
+    Exists,
+    NotExists,
+}
+
+#[derive(Clone, Debug)]
 pub struct SubqueryExpr {
+    pub typ: SubqueryType,
     pub subquery: SExpr,
     pub data_type: DataTypeImpl,
     pub allow_multi_rows: bool,
+    pub outer_columns: ColumnSet,
     pub output_context: Box<BindContext>,
 }
 
@@ -273,7 +284,7 @@ impl ScalarExpr for SubqueryExpr {
     }
 
     fn used_columns(&self) -> ColumnSet {
-        todo!()
+        self.outer_columns.clone()
     }
 }
 

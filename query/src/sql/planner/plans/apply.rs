@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -23,15 +24,15 @@ use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 
-#[derive(Clone, Debug)]
-pub struct LimitPlan {
-    pub limit: Option<usize>,
-    pub offset: usize,
+/// Cartesian apply join operator.
+#[derive(Debug, Clone)]
+pub struct CrossApply {
+    pub correlated_columns: ColumnSet,
 }
 
-impl Operator for LimitPlan {
+impl Operator for CrossApply {
     fn plan_type(&self) -> PlanType {
-        PlanType::Limit
+        PlanType::CrossApply
     }
 
     fn is_physical(&self) -> bool {
@@ -51,14 +52,34 @@ impl Operator for LimitPlan {
     }
 }
 
-impl PhysicalPlan for LimitPlan {
+impl PhysicalPlan for CrossApply {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for LimitPlan {
+impl LogicalPlan for CrossApply {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        rel_expr.derive_relational_prop_child(0)
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+        let subquery_prop = rel_expr.derive_relational_prop_child(1)?;
+
+        // Derive output columns
+        let mut output_columns = input_prop.output_columns;
+        output_columns = output_columns
+            .union(&subquery_prop.output_columns)
+            .cloned()
+            .collect();
+
+        // Derive outer columns
+        let mut outer_columns = input_prop.outer_columns;
+        outer_columns = outer_columns
+            .union(&subquery_prop.outer_columns)
+            .cloned()
+            .collect();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+        })
     }
 }

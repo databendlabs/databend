@@ -31,7 +31,8 @@ use common_planners::RewriteHelper;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
-use super::plans::BasePlan;
+use super::plans::Operator;
+use super::MetadataRef;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
@@ -68,12 +69,11 @@ use crate::sql::plans::Project;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::SortPlan;
 use crate::sql::IndexType;
-use crate::sql::Metadata;
 
 /// Helper to build a `Pipeline` from `SExpr`
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
-    metadata: Metadata,
+    metadata: MetadataRef,
     result_columns: Vec<(IndexType, String)>,
     expression: SExpr,
     pipelines: Vec<NewPipeline>,
@@ -85,7 +85,7 @@ impl PipelineBuilder {
     pub fn new(
         ctx: Arc<QueryContext>,
         result_columns: Vec<(IndexType, String)>,
-        metadata: Metadata,
+        metadata: MetadataRef,
         expression: SExpr,
     ) -> Self {
         PipelineBuilder {
@@ -100,7 +100,13 @@ impl PipelineBuilder {
     }
 
     fn get_field_name(&self, column_index: IndexType) -> String {
-        let name = &self.metadata.column(column_index).name;
+        let name = &self
+            .metadata
+            .read()
+            .unwrap()
+            .column(column_index)
+            .name
+            .clone();
         format_field_name(name.as_str(), column_index)
     }
 
@@ -125,7 +131,7 @@ impl PipelineBuilder {
         let mut projections = Vec::with_capacity(self.result_columns.len());
         let mut output_fields = Vec::with_capacity(self.result_columns.len());
         for (index, name) in self.result_columns.iter() {
-            let column_entry = self.metadata.column(*index);
+            let column_entry = self.metadata.read().unwrap().column(*index).clone();
             projections.push(Expression::Alias(
                 name.clone(),
                 Box::new(Expression::Column(self.get_field_name(*index))),
@@ -229,7 +235,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
         let output_schema = schema_builder.build_project(project)?;
         let mut expressions = Vec::with_capacity(project.columns.len());
         for index in project.columns.iter() {
@@ -255,10 +261,10 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
         let output_schema = schema_builder.build_eval_scalar(eval_scalar, input_schema.clone())?;
         let mut expressions = Vec::with_capacity(eval_scalar.items.len());
-        let expr_builder = ExpressionBuilder::create(&self.metadata);
+        let expr_builder = ExpressionBuilder::create(self.metadata.clone());
         for item in eval_scalar.items.iter() {
             let scalar = &item.scalar;
             let expression = expr_builder.build_and_rename(scalar, item.index)?;
@@ -285,7 +291,7 @@ impl PipelineBuilder {
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
         let output_schema = input_schema.clone();
-        let eb = ExpressionBuilder::create(&self.metadata);
+        let eb = ExpressionBuilder::create(self.metadata.clone());
         let scalars = &filter.predicates;
         let pred = scalars.iter().cloned().reduce(|acc, v| {
             AndExpr {
@@ -321,8 +327,13 @@ impl PipelineBuilder {
         scan: &PhysicalScan,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let table_entry = self.metadata.table(scan.table_index);
-        let plan = table_entry.source.clone();
+        let table_entry = self
+            .metadata
+            .read()
+            .unwrap()
+            .table(scan.table_index)
+            .clone();
+        let plan = table_entry.source;
 
         let table = self.ctx.build_table_from_source_plan(&plan)?;
         self.ctx.try_set_partitions(plan.parts.clone())?;
@@ -331,14 +342,14 @@ impl PipelineBuilder {
         let projections: Vec<Expression> = columns
             .iter()
             .map(|index| {
-                let column_entry = self.metadata.column(*index);
+                let name = self.metadata.read().unwrap().column(*index).name.clone();
                 Expression::Alias(
                     self.get_field_name(*index),
-                    Box::new(Expression::Column(column_entry.name.clone())),
+                    Box::new(Expression::Column(name)),
                 )
             })
             .collect();
-        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
         let input_schema = schema_builder.build_canonical_schema(&columns);
         let output_schema = schema_builder.build_physical_scan(scan)?;
 
@@ -364,7 +375,7 @@ impl PipelineBuilder {
     ) -> Result<DataSchemaRef> {
         let mut output_fields = vec![];
         let mut agg_expressions = Vec::with_capacity(aggregate.aggregate_functions.len());
-        let expr_builder = ExpressionBuilder::create(&self.metadata);
+        let expr_builder = ExpressionBuilder::create(self.metadata.clone());
         for item in aggregate.aggregate_functions.iter() {
             let expr = expr_builder.build(&item.scalar)?;
             agg_expressions.push(expr);
@@ -480,10 +491,10 @@ impl PipelineBuilder {
         mut child_pipeline: NewPipeline,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        let builder = DataSchemaBuilder::new(&self.metadata);
+        let builder = DataSchemaBuilder::new(self.metadata.clone());
         let output_schema = builder.build_join(probe_schema.clone(), build_schema.clone());
 
-        let eb = ExpressionBuilder::create(&self.metadata);
+        let eb = ExpressionBuilder::create(self.metadata.clone());
         let build_expressions = hash_join
             .build_keys
             .iter()
@@ -563,7 +574,7 @@ impl PipelineBuilder {
             })
         }
 
-        let schema_builder = DataSchemaBuilder::new(&self.metadata);
+        let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
         let output_schema = schema_builder.build_sort(&input_schema, expressions.as_slice())?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
