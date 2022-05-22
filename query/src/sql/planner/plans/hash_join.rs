@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
@@ -28,7 +26,7 @@ pub struct PhysicalHashJoin {
     pub probe_keys: Vec<Scalar>,
 }
 
-impl BasePlan for PhysicalHashJoin {
+impl Operator for PhysicalHashJoin {
     fn plan_type(&self) -> PlanType {
         PlanType::PhysicalHashJoin
     }
@@ -47,10 +45,6 @@ impl BasePlan for PhysicalHashJoin {
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
         None
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

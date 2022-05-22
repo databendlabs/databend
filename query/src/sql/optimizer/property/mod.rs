@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod builder;
+
 use std::collections::HashSet;
+
+pub use builder::RelExpr;
 
 use crate::sql::common::IndexType;
 
@@ -43,30 +47,15 @@ impl RequiredProperty {
         _physical_prop: &PhysicalProperty,
     ) -> bool {
         self.required_columns()
-            .is_subset(relational_prop.output_columns())
+            .is_subset(&relational_prop.output_columns)
     }
 }
 
 #[derive(Default, Clone)]
 pub struct RelationalProperty {
-    output_columns: ColumnSet,
-}
-
-impl RelationalProperty {
-    pub fn create(output_columns: ColumnSet) -> Self {
-        RelationalProperty { output_columns }
-    }
-
-    pub fn output_columns(&self) -> &ColumnSet {
-        &self.output_columns
-    }
+    pub output_columns: ColumnSet,
+    pub outer_columns: ColumnSet,
 }
 
 #[derive(Default, Clone)]
 pub struct PhysicalProperty {}
-
-impl PhysicalProperty {
-    pub fn create() -> Self {
-        PhysicalProperty {}
-    }
-}

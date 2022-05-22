@@ -165,8 +165,9 @@ impl<'a> Binder {
                     }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let scalar_binder = ScalarBinder::new(input_context, self.ctx.clone());
-                    let (bound_expr, _) = scalar_binder.bind_expr(expr).await?;
+                    let mut scalar_binder =
+                        ScalarBinder::new(input_context, self.ctx.clone(), self.metadata.clone());
+                    let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {

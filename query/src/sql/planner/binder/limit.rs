@@ -31,7 +31,7 @@ impl<'a> Binder {
         limit: Option<&Expr<'a>>,
         offset: &Option<Expr<'a>>,
     ) -> Result<SExpr> {
-        let type_checker = TypeChecker::new(bind_context, self.ctx.clone());
+        let type_checker = TypeChecker::new(bind_context, self.ctx.clone(), self.metadata.clone());
 
         let limit_cnt = match limit {
             Some(Expr::Literal { span: _, lit: x }) => {

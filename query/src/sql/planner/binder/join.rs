@@ -31,6 +31,7 @@ use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalInnerJoin;
@@ -66,6 +67,7 @@ impl<'a> Binder {
         let mut other_conditions: Vec<Scalar> = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
+            self.metadata.clone(),
             &left_context,
             &right_context,
             &mut bind_context,
@@ -162,6 +164,8 @@ pub fn check_duplicate_join_tables(
 struct JoinConditionResolver<'a> {
     ctx: Arc<QueryContext>,
 
+    metadata: MetadataRef,
+
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a mut BindContext,
@@ -171,6 +175,7 @@ struct JoinConditionResolver<'a> {
 impl<'a> JoinConditionResolver<'a> {
     pub fn new(
         ctx: Arc<QueryContext>,
+        metadata: MetadataRef,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a mut BindContext,
@@ -178,6 +183,7 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Self {
         Self {
             ctx,
+            metadata,
             left_context,
             right_context,
             join_context,
@@ -227,14 +233,15 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     async fn resolve_on(
-        &self,
+        &mut self,
         condition: &Expr<'a>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(self.join_context, self.ctx.clone());
-        let (scalar, _) = scalar_binder.bind_expr(condition).await?;
+        let mut scalar_binder =
+            ScalarBinder::new(self.join_context, self.ctx.clone(), self.metadata.clone());
+        let (scalar, _) = scalar_binder.bind(condition).await?;
         let conjunctions = split_conjunctions(&scalar);
 
         for expr in conjunctions.iter() {

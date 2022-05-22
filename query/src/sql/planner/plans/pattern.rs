@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 
@@ -24,7 +22,7 @@ pub struct PatternPlan {
     pub plan_type: PlanType,
 }
 
-impl BasePlan for PatternPlan {
+impl Operator for PatternPlan {
     fn plan_type(&self) -> PlanType {
         self.plan_type.clone()
     }
@@ -47,9 +45,5 @@ impl BasePlan for PatternPlan {
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
         None
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

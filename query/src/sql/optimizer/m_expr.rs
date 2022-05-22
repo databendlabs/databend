@@ -19,8 +19,8 @@ use crate::sql::optimizer::pattern_extractor::PatternExtractor;
 use crate::sql::optimizer::rule::RulePtr;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
-use crate::sql::plans::BasePlanImpl;
+use crate::sql::plans::Operator;
+use crate::sql::plans::RelOperator;
 use crate::sql::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
@@ -28,12 +28,12 @@ use crate::sql::IndexType;
 #[derive(Clone)]
 pub struct MExpr {
     group_index: IndexType,
-    plan: BasePlanImpl,
+    plan: RelOperator,
     children: Vec<IndexType>,
 }
 
 impl MExpr {
-    pub fn create(group_index: IndexType, plan: BasePlanImpl, children: Vec<IndexType>) -> Self {
+    pub fn create(group_index: IndexType, plan: RelOperator, children: Vec<IndexType>) -> Self {
         MExpr {
             group_index,
             plan,
@@ -49,7 +49,7 @@ impl MExpr {
         self.group_index
     }
 
-    pub fn plan(&self) -> BasePlanImpl {
+    pub fn plan(&self) -> RelOperator {
         self.plan.clone()
     }
 
