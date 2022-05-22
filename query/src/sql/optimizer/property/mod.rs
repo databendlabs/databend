@@ -57,21 +57,5 @@ pub struct RelationalProperty {
     pub outer_columns: ColumnSet,
 }
 
-impl RelationalProperty {
-    // pub fn output_columns(&self) -> &ColumnSet {
-    //     &self.output_columns
-    // }
-
-    // pub fn outer_columns(&self) -> &ColumnSet {
-    //     &self.outer_columns
-    // }
-}
-
 #[derive(Default, Clone)]
 pub struct PhysicalProperty {}
-
-impl PhysicalProperty {
-    pub fn create() -> Self {
-        PhysicalProperty {}
-    }
-}
