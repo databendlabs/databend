@@ -30,6 +30,7 @@ pub use crate::sql::planner::binder::BindContext;
 use crate::sql::planner::binder::Binder;
 
 pub(crate) mod binder;
+mod format;
 mod metadata;
 pub mod plans;
 mod semantic;
