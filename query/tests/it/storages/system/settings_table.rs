@@ -41,7 +41,7 @@ async fn test_settings_table() -> Result<()> {
     "| group_by_two_level_threshold   | 10000   | 10000   | SESSION | The threshold of keys to open two-level aggregation, default value: 10000                          | UInt64 |",
     "| max_block_size                 | 10000   | 10000   | SESSION | Maximum block size for reading                                                                     | UInt64 |",
     "| max_threads                    | 2       | 16      | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.  | UInt64 |",
-    "| record_delimiter               |         |         | SESSION | Format record_delimiter, default value:                                                            | String |",
+    "| record_delimiter               | \\n      | \\n      | SESSION | Format record_delimiter, default value: \\n                                                         | String |",
     "| skip_header                    | 0       | 0       | SESSION | Whether to skip the input header, default value: 0                                                 | UInt64 |",
     "| storage_read_buffer_size       | 1048576 | 1048576 | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                     | UInt64 |",
     "| timezone                       | UTC     | UTC     | SESSION | Timezone, default value: UTC,                                                                      | String |",
