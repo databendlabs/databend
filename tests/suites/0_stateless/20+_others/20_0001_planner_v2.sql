@@ -203,4 +203,14 @@ select * from t1 natural join t2;
 drop table t1;
 drop table t2;
 
+-- Join: right table with duplicate build keys
+select '===Inner Join with duplicate keys===';
+create table t1(a int, b int);
+insert into t1 values(1, 2), (1, 3), (2, 4);
+create table t2(c int, d int);
+insert into t2 values(1, 2), (2, 6);
+select * from t2 inner join t1 on t1.a = t2.c;
+drop table t1;
+drop table t2;
+
 set enable_planner_v2 = 0;
