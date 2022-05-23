@@ -288,6 +288,15 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(|(_, data_type)| DataField::new("", data_type.clone()))
                         .collect();
+
+                    // Rewrite `count(distinct)` to `uniq(...)`
+                    let (func_name, distinct) =
+                        if func_name.eq_ignore_ascii_case("count") && *distinct {
+                            ("count_distinct", false)
+                        } else {
+                            (func_name, *distinct)
+                        };
+
                     let agg_func = AggregateFunctionFactory::instance().get(
                         func_name,
                         params.clone(),
@@ -298,11 +307,11 @@ impl<'a> TypeChecker<'a> {
                         AggregateFunction {
                             display_name: format!("{:#}", expr),
                             func_name: func_name.to_string(),
-                            distinct: *distinct,
+                            distinct,
                             params,
                             args: if optimize_remove_count_args(
                                 func_name,
-                                *distinct,
+                                distinct,
                                 args.as_slice(),
                             ) {
                                 vec![]
