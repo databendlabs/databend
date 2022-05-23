@@ -806,7 +806,7 @@ impl<'a> TypeChecker<'a> {
         let (trim_source, _) = self.resolve(expr, Some(StringType::new_impl())).await?;
 
         let args = vec![trim_source, trim_scalar];
-        let func = FunctionFactory::instance().get(func_name, &vec![&StringType::new_impl(); 2])?;
+        let func = FunctionFactory::instance().get(func_name, &[&StringType::new_impl(); 2])?;
 
         Ok((
             FunctionCall {

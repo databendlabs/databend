@@ -112,7 +112,7 @@ impl TrimOperator for TrimLeading {
 pub struct TrimTrailing;
 
 impl TrimOperator for TrimTrailing {
-    // impl TrimOperator for TrimTrialer {
+    // impl TrimOperator for TrimTrailing {
     fn apply<'a>(&'a mut self, str: &'a [u8], trim_str: &'a [u8], buffer: &mut Vec<u8>) {
         let chunk_size = trim_str.len();
         for (idx, chunk) in str.rchunks(chunk_size).enumerate() {
@@ -149,13 +149,10 @@ impl TrimOperator for TrimBoth {
             .find(|(_, chunk)| chunk != &trim_str)
             .map(|(idx, _)| idx);
 
-        match (start_idx, end_idx) {
-            (Some(start_index), Some(end_index)) => {
-                buffer.extend_from_slice(
-                    &str[start_index * chunk_size..str.len() - end_index * chunk_size],
-                );
-            }
-            _ => {}
+        if let (Some(start_index), Some(end_index)) = (start_idx, end_idx) {
+            buffer.extend_from_slice(
+                &str[start_index * chunk_size..str.len() - end_index * chunk_size],
+            );
         }
     }
 }
