@@ -203,4 +203,18 @@ select * from t1 natural join t2;
 drop table t1;
 drop table t2;
 
+-- trim function
+select '===Trim functuon===';
+select trim(leading ' ' from '      abc');
+select trim(leading ' ' from '');
+select trim(leading 'ab' from 'abab');
+select trim(leading 'ab' from 'abc');
+select trim(trailing ' ' from 'abc    ');
+select trim(trailing ' ' from '');
+select trim(trailing 'ab' from 'abab');
+select trim(trailing 'ab' from 'cab');
+select trim(both 'ab' from 'abab');
+select trim(both 'ab' from 'abcab');
+select trim(' abc ');
+
 set enable_planner_v2 = 0;
