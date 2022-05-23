@@ -21,6 +21,27 @@ The database return right with diffrent handlers, for example mysql and http
 ## Run logic test
 1. python3 main.py
 
+## Docker build, or use our latest build.
+
+### build
+
+docker build -t sqllogic/test:latest .
+
+### Usage
+
+1. Image release: public.ecr.aws/k3y0u5f2/sqllogic/test:latest
+2. Set envs
+- DISABLE_MYSQL_LOGIC_TEST
+- DISABLE_HTTP_LOGIC_TEST
+- QUERY_MYSQL_HANDLER_HOST
+- QUERY_MYSQL_HANDLER_PORT
+- MYSQL_DATABASE
+- MYSQL_USER
+- QUERY_HTTP_HANDLER_HOST
+- QUERY_HTTP_HANDLER_PORT
+- ADDITIONAL_HEADERS
+3. docker run --name logictest --network host public.ecr.aws/k3y0u5f2/sqllogic/test:latest
+
 # Learn More
 
 See pr: https://github.com/datafuselabs/databend/pull/5048

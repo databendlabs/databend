@@ -293,7 +293,11 @@ class SuiteRunner(object):
 
     def assert_execute_query(self, statement):
         actual = safe_execute(lambda: self.execute_query(statement), statement)
-        f = format_value(actual, len(statement.s_type.query_type))
+        try:
+            f = format_value(actual, len(statement.s_type.query_type))
+        except Exception:
+            log.warning("{} statement type is query but return nothing".format(statement))
+            raise
         assert statement.results is not None and len(
             statement.results) > 0, "No result found {}".format(statement)
         hasResult = False
