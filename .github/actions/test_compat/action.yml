@@ -1,0 +1,40 @@
+name: "Test old metasrv is compatible with new query"
+description: "Download old binaries and current binaries, run stateless test with old `meta` and latest `query`"
+inputs:
+  profile:
+    description: ""
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
+        path: ./current/
+
+    - uses: dsaltares/fetch-gh-release-asset@master
+      with:
+        repo: 'datafuselabs/databend'
+        # 2022-05-23
+        version: 'tags/v0.7.57-nightly'
+        file: 'databend-v0.7.57-nightly-x86_64-unknown-linux-gnu.tar.gz'
+
+    - shell: bash
+      run: |
+        mkdir ./old
+        tar -xf databend-v0.7.57-nightly-x86_64-unknown-linux-gnu.tar.gz -C ./old
+
+    - name: Test compatibility
+      shell: bash
+      run: |
+        chmod +x ./tests/compat/test-compat.sh
+        ./tests/compat/test-compat.sh
