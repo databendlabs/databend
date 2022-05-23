@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod exec;
-mod expr_parser;
-mod optimizer;
-mod parsers;
-mod plan_parser;
-mod planner;
-mod sql_parser;
-mod statements;
+mod format;

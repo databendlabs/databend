@@ -31,7 +31,7 @@ use common_planners::RewriteHelper;
 pub use util::decode_field_name;
 pub use util::format_field_name;
 
-use super::plans::Operator;
+use super::plans::RelOperator;
 use super::MetadataRef;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::AggregatorParams;
@@ -64,7 +64,6 @@ use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LimitPlan;
 use crate::sql::plans::PhysicalHashJoin;
 use crate::sql::plans::PhysicalScan;
-use crate::sql::plans::PlanType;
 use crate::sql::plans::Project;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::SortPlan;
@@ -160,37 +159,31 @@ impl PipelineBuilder {
 
         let plan = expression.plan();
 
-        match plan.plan_type() {
-            PlanType::PhysicalScan => {
-                let physical_scan: PhysicalScan = plan.try_into()?;
-                self.build_physical_scan(&physical_scan, pipeline)
+        match plan {
+            RelOperator::PhysicalScan(physical_scan) => {
+                self.build_physical_scan(physical_scan, pipeline)
             }
-            PlanType::Project => {
-                let project: Project = plan.try_into()?;
+            RelOperator::Project(project) => {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
-                self.build_project(&project, input_schema, pipeline)
+                self.build_project(project, input_schema, pipeline)
             }
-            PlanType::EvalScalar => {
-                let eval_scalar: EvalScalar = plan.try_into()?;
+            RelOperator::EvalScalar(eval_scalar) => {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
-                self.build_eval_scalar(&eval_scalar, input_schema, pipeline)
+                self.build_eval_scalar(eval_scalar, input_schema, pipeline)
             }
-            PlanType::Filter => {
-                let filter: FilterPlan = plan.try_into()?;
+            RelOperator::Filter(filter) => {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
-                self.build_filter(&filter, input_schema, pipeline)
+                self.build_filter(filter, input_schema, pipeline)
             }
-            PlanType::Aggregate => {
-                let aggregate: AggregatePlan = plan.try_into()?;
+            RelOperator::Aggregate(aggregate) => {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
-                self.build_aggregate(&aggregate, input_schema, pipeline)
+                self.build_aggregate(aggregate, input_schema, pipeline)
             }
-            PlanType::PhysicalHashJoin => {
-                let hash_join: PhysicalHashJoin = plan.try_into()?;
+            RelOperator::PhysicalHashJoin(hash_join) => {
                 let probe_schema =
                     self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
                 let mut child_pipeline = NewPipeline::create();
@@ -200,24 +193,22 @@ impl PipelineBuilder {
                     &mut child_pipeline,
                 )?;
                 self.build_hash_join(
-                    &hash_join,
+                    hash_join,
                     build_schema,
                     probe_schema,
                     child_pipeline,
                     pipeline,
                 )
             }
-            PlanType::Sort => {
-                let sort_plan: SortPlan = plan.try_into()?;
+            RelOperator::Sort(sort_plan) => {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
-                self.build_order_by(&sort_plan, input_schema, pipeline)
+                self.build_order_by(sort_plan, input_schema, pipeline)
             }
-            PlanType::Limit => {
-                let limit_plan: LimitPlan = plan.try_into()?;
+            RelOperator::Limit(limit_plan) => {
                 let input_schema =
                     self.build_pipeline(context, &expression.children()[0], pipeline)?;
-                self.build_limit(&limit_plan, input_schema, pipeline)
+                self.build_limit(limit_plan, input_schema, pipeline)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }

@@ -88,7 +88,7 @@ impl Memo {
 
         let plan = expression.plan();
 
-        let group_expression = MExpr::create(group_index, plan, children_group);
+        let group_expression = MExpr::create(group_index, plan.clone(), children_group);
         self.insert_m_expr(group_index, group_expression)?;
 
         Ok(group_index)
