@@ -119,18 +119,22 @@ impl HashJoinState for ChainingHashTable {
             }
             let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
             // `result_block` is the block of build table
-            let result_block = self.row_space.gather(probe_result_ptrs)?;
-            let mut probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+            let result_blocks = self.row_space.gather(probe_result_ptrs)?;
+            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
 
-            for (col, field) in result_block
-                .columns()
-                .iter()
-                .zip(result_block.schema().fields().iter())
-            {
-                probe_block = probe_block.add_column(col.clone(), field.clone())?;
+            for result_block in result_blocks.iter() {
+                assert_eq!(result_block.clone().num_rows(), 1);
+                assert_eq!(probe_block.clone().num_rows(), 1);
+                let mut input_block = probe_block.clone();
+                for (col, field) in result_block
+                    .columns()
+                    .iter()
+                    .zip(result_block.schema().fields().iter())
+                {
+                    input_block = input_block.add_column(col.clone(), field.clone())?;
+                }
+                results.push(input_block);
             }
-
-            results.push(probe_block);
         }
 
         Ok(results)

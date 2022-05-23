@@ -64,7 +64,7 @@ impl RowSpace {
     }
 
     // TODO(leiysky): gather into multiple blocks, since there are possibly massive results
-    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
+    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<Vec<DataBlock>> {
         let mut data_blocks = vec![];
 
         {
@@ -81,18 +81,7 @@ impl RowSpace {
             }
         }
 
-        // If build_key doesn't have duplicated columns, the length of row_ptrs will be one.
-        // So we don't need to `concat_blocks`, directly return.
-        if data_blocks.len() == 1 {
-            return Ok(data_blocks[0].clone());
-        }
-
-        if !data_blocks.is_empty() {
-            let data_block = DataBlock::concat_blocks(&data_blocks)?;
-            Ok(data_block)
-        } else {
-            Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
-        }
+        Ok(data_blocks)
     }
 
     fn gather_single_chunk(&self, chunk: &Chunk, indices: &[u32]) -> Result<DataBlock> {
