@@ -59,4 +59,12 @@ impl InsertPlan {
     pub fn has_select_plan(&self) -> bool {
         matches!(&self.source, InsertInputSource::SelectPlan(_))
     }
+
+    pub fn format(&self) -> Option<&str> {
+        match &self.source {
+            InsertInputSource::SelectPlan(_) => None,
+            InsertInputSource::StreamingWithFormat(v) => Some(v.as_str()),
+            InsertInputSource::Values(_) => Some("values"),
+        }
+    }
 }

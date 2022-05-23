@@ -19,6 +19,7 @@ mod get;
 mod get_path;
 mod json_extract_path_text;
 mod length;
+mod object_keys;
 mod parse_json;
 mod semi_structured;
 
@@ -30,6 +31,7 @@ pub use get::GetIgnoreCaseFunction;
 pub use get_path::GetPathFunction;
 pub use json_extract_path_text::JsonExtractPathTextFunction;
 pub use length::VariantArrayLengthFunction;
+pub use object_keys::ObjectKeysFunction;
 pub use parse_json::ParseJsonFunction;
 pub use parse_json::TryParseJsonFunction;
 pub use semi_structured::SemiStructuredFunction;

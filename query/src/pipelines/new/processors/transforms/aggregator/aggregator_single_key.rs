@@ -143,7 +143,7 @@ impl Aggregator for SingleStateAggregator<true> {
         for (index, func) in self.funcs.iter().enumerate() {
             let place = self.places[index];
             let array: &mut dyn MutableColumn = aggr_values[index].borrow_mut();
-            let _ = func.merge_result(place, array)?;
+            func.merge_result(place, array)?;
         }
 
         let mut columns: Vec<ColumnRef> = Vec::with_capacity(self.funcs.len());

@@ -1,7 +1,13 @@
-statement error 2603
+statement ok
+DROP FUNCTION IF EXISTS cal;
+
+statement ok
+DROP FUNCTION IF EXISTS notnull;
+
+statement ok
 CREATE FUNCTION cal AS (a,b,c,d,e) -> a + c * (e / b) - d;
 
-statement error 2603
+statement ok
 CREATE FUNCTION notnull AS (p) -> not(is_null(p));
 
 statement query B label(mysql,http)
@@ -28,3 +34,8 @@ SELECT cal(1, 2, 3, 4, 6);
 ----  
 6.0
 
+statement ok
+DROP FUNCTION cal;
+
+statement ok
+DROP FUNCTION notnull;

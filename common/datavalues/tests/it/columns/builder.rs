@@ -77,7 +77,8 @@ fn test_builder() -> Result<()> {
         let size = column.len();
 
         if column.is_nullable() {
-            let mut builder = NullableColumnBuilder::<T>::with_capacity(size);
+            let mut builder =
+                NullableColumnBuilder::<T>::with_capacity_meta(size, column.column_meta());
             let viewer = T::try_create_viewer(column)?;
 
             for i in 0..viewer.size() {

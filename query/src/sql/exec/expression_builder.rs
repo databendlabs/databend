@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -30,35 +29,22 @@ use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
-use crate::sql::Metadata;
+use crate::sql::MetadataRef;
 
-pub struct ExpressionBuilder<'a> {
-    metadata: &'a Metadata,
+pub struct ExpressionBuilder {
+    metadata: MetadataRef,
 }
 
-impl<'a> ExpressionBuilder<'a> {
-    pub fn create(metadata: &'a Metadata) -> Self {
+impl ExpressionBuilder {
+    pub fn create(metadata: MetadataRef) -> Self {
         ExpressionBuilder { metadata }
     }
 
-    pub fn build_and_rename(
-        &self,
-        scalar: &Scalar,
-        index: IndexType,
-        input_schema: &DataSchemaRef,
-    ) -> Result<Expression> {
-        let mut expr = self.build(scalar)?;
-        // If the input_schema contains the field of expr,
-        // it means that its sub-plan has already processed the expression
-        // and we can directly convert it to column expression
-        if input_schema.has_field(expr.column_name().as_str()) {
-            expr = Expression::Column(expr.column_name());
-        } else {
-            expr = self.normalize_aggr_to_col(expr)?;
-        }
-        let column = self.metadata.column(index);
+    pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
+        let expr = self.build(scalar)?;
+        let name = self.metadata.read().column(index).name.clone();
         Ok(Expression::Alias(
-            format_field_name(column.name.as_str(), index),
+            format_field_name(name.as_str(), index),
             Box::new(expr),
         ))
     }
@@ -130,11 +116,8 @@ impl<'a> ExpressionBuilder<'a> {
     }
 
     pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
-        let column = self.metadata.column(index);
-        Ok(Expression::Column(format_field_name(
-            column.name.as_str(),
-            index,
-        )))
+        let name = self.metadata.read().column(index).name.clone();
+        Ok(Expression::Column(format_field_name(name.as_str(), index)))
     }
 
     pub fn build_literal(

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -46,7 +47,7 @@ impl TypeSerializer for StructSerializer {
 
                 let s = inner.serialize_value(val, format)?;
                 if typ.data_type_id().is_quoted() {
-                    res.push_str(&format!("'{}'", s));
+                    write!(res, "'{s}'").expect("write to string must succeed");
                 } else {
                     res.push_str(&s);
                 }
@@ -69,8 +70,16 @@ impl TypeSerializer for StructSerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, _column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
-        todo!()
+    fn serialize_json(&self, column: &ColumnRef, _format: &FormatSettings) -> Result<Vec<Value>> {
+        let column: &StructColumn = Series::check_get(column)?;
+
+        let mut result = Vec::with_capacity(column.len());
+        for i in 0..column.len() {
+            let val = column.get(i);
+            let s = serde_json::to_value(val)?;
+            result.push(s);
+        }
+        Ok(result)
     }
 
     fn serialize_clickhouse_format(

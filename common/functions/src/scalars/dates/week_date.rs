@@ -159,7 +159,7 @@ where
                 let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
                 let viewer = i32::try_create_viewer(&col)?;
                 for days in viewer.iter() {
-                    let _ = check_date(days)?;
+                    check_date(days)?;
                 }
                 Ok(col)
             }
@@ -172,7 +172,7 @@ where
                 let col = PrimitiveColumn::<R>::from_owned_iterator(iter).arc();
                 let viewer = i32::try_create_viewer(&col)?;
                 for days in viewer.iter() {
-                    let _ = check_date(days)?;
+                    check_date(days)?;
                 }
                 Ok(col)
             }

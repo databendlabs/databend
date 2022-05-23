@@ -195,7 +195,7 @@ COPY INTO books FROM '@my_int_stage' files=('books.parquet') file_format = (type
 ### Step 6. Verify the Loaded Data
 
 ```sql
-SELECT * FROM Books;
+SELECT * FROM books;
 +------------------------------+----------------------+-------+
 | title                        | author               | date  |
 +------------------------------+----------------------+-------+

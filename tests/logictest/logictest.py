@@ -37,7 +37,7 @@ def is_empty_line(line):
 def get_lines(suite_path):
     with open(suite_path, encoding="UTF-8") as reader:
         for line_idx, line in enumerate(reader.readlines()):
-            yield line_idx, line.rstrip('\n ') # keep tab /t
+            yield line_idx, line.rstrip('\n ')  # keep tab /t
 
 
 # return a single statement
@@ -282,7 +282,7 @@ class SuiteRunner(object):
         )
 
     def assert_query_equal(self, f, resultset, statement):
-        # use join after split instead of strip 
+        # use join after split instead of strip
         compare_f = "".join(f.split())
         compare_result = "".join(resultset[2].split())
         assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \

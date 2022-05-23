@@ -12,30 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
+use common_exception::Result;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
-use crate::sql::plans::Scalar;
-use crate::sql::IndexType;
 
 #[derive(Clone, Debug)]
-pub struct ProjectPlan {
-    pub items: Vec<ProjectItem>,
+pub struct Project {
+    pub columns: ColumnSet,
 }
 
-#[derive(Clone, Debug)]
-pub struct ProjectItem {
-    pub expr: Scalar,
-    pub index: IndexType,
-}
-
-impl BasePlan for ProjectPlan {
+impl Operator for Project {
     fn plan_type(&self) -> PlanType {
         PlanType::Project
     }
@@ -49,26 +43,29 @@ impl BasePlan for ProjectPlan {
     }
 
     fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
+        Some(self)
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
+        Some(self)
     }
 }
 
-impl PhysicalPlan for ProjectPlan {
+impl PhysicalPlan for Project {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for ProjectPlan {
-    fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
-        todo!()
+impl LogicalPlan for Project {
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        let input_prop = rel_expr.derive_relational_prop()?;
+        let mut output_columns = input_prop.output_columns;
+        output_columns = output_columns.union(&self.columns).cloned().collect();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns: input_prop.outer_columns,
+        })
     }
 }

@@ -136,7 +136,7 @@ const config = {
                         items: [
                             {
                                 label: 'Slack',
-                                href: 'https://join.slack.com/t/datafusecloud/shared_invite/zt-nojrc9up-50IRla1Y1h56rqwCTkkDJA',
+                                href: 'https://link.databend.rs/join-slack',
                             },
                             {
                                 label: 'Twitter',

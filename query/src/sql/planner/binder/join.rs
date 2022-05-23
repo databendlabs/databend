@@ -31,6 +31,7 @@ use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::binder::scalar::ScalarBinder;
 use crate::sql::planner::binder::Binder;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::BoundColumnRef;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LogicalInnerJoin;
@@ -66,6 +67,7 @@ impl<'a> Binder {
         let mut other_conditions: Vec<Scalar> = vec![];
         let mut join_condition_resolver = JoinConditionResolver::new(
             self.ctx.clone(),
+            self.metadata.clone(),
             &left_context,
             &right_context,
             &mut bind_context,
@@ -162,6 +164,8 @@ pub fn check_duplicate_join_tables(
 struct JoinConditionResolver<'a> {
     ctx: Arc<QueryContext>,
 
+    metadata: MetadataRef,
+
     left_context: &'a BindContext,
     right_context: &'a BindContext,
     join_context: &'a mut BindContext,
@@ -171,6 +175,7 @@ struct JoinConditionResolver<'a> {
 impl<'a> JoinConditionResolver<'a> {
     pub fn new(
         ctx: Arc<QueryContext>,
+        metadata: MetadataRef,
         left_context: &'a BindContext,
         right_context: &'a BindContext,
         join_context: &'a mut BindContext,
@@ -178,6 +183,7 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Self {
         Self {
             ctx,
+            metadata,
             left_context,
             right_context,
             join_context,
@@ -227,14 +233,15 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     async fn resolve_on(
-        &self,
+        &mut self,
         condition: &Expr<'a>,
         left_join_conditions: &mut Vec<Scalar>,
         right_join_conditions: &mut Vec<Scalar>,
         other_join_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
-        let scalar_binder = ScalarBinder::new(self.join_context, self.ctx.clone());
-        let (scalar, _) = scalar_binder.bind_expr(condition).await?;
+        let mut scalar_binder =
+            ScalarBinder::new(self.join_context, self.ctx.clone(), self.metadata.clone());
+        let (scalar, _) = scalar_binder.bind(condition).await?;
         let conjunctions = split_conjunctions(&scalar);
 
         for expr in conjunctions.iter() {
@@ -281,45 +288,50 @@ impl<'a> JoinConditionResolver<'a> {
     ) -> Result<()> {
         for join_key in using_columns.iter() {
             let join_key_name = join_key.as_str();
-            let mut left_scalars = vec![];
-            for col_binding in self.left_context.columns.iter() {
-                if col_binding.column_name == join_key_name {
-                    left_scalars.push(Scalar::BoundColumnRef(BoundColumnRef {
-                        column: col_binding.clone(),
-                    }));
-                }
-            }
-            if left_scalars.is_empty() {
+            let left_scalar = if let Some(col_binding) = self
+                .left_context
+                .columns
+                .iter()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                Scalar::BoundColumnRef(BoundColumnRef {
+                    column: col_binding.clone(),
+                })
+            } else {
                 return Err(ErrorCode::SemanticError(format!(
                     "column {} specified in USING clause does not exist in left table",
                     join_key_name
                 )));
-            }
-            assert_eq!(left_scalars.len(), 1);
-            let mut right_scalars = vec![];
-            for col_binding in self.right_context.columns.iter() {
-                if col_binding.column_name == join_key_name {
-                    right_scalars.push(Scalar::BoundColumnRef(BoundColumnRef {
-                        column: col_binding.clone(),
-                    }));
-                }
-            }
-            if right_scalars.is_empty() {
+            };
+
+            let right_scalar = if let Some(col_binding) = self
+                .right_context
+                .columns
+                .iter()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                Scalar::BoundColumnRef(BoundColumnRef {
+                    column: col_binding.clone(),
+                })
+            } else {
                 return Err(ErrorCode::SemanticError(format!(
                     "column {} specified in USING clause does not exist in right table",
                     join_key_name
                 )));
+            };
+
+            if let Some(col_binding) = self
+                .join_context
+                .columns
+                .iter_mut()
+                .find(|col_binding| col_binding.column_name == join_key_name)
+            {
+                col_binding.visible_in_unqualified_wildcard = false;
             }
-            assert_eq!(right_scalars.len(), 1);
-            for col_binding in self.join_context.columns.iter_mut() {
-                if col_binding.column_name == join_key_name {
-                    col_binding.visible_in_unqualified_wildcard = false;
-                    break;
-                }
-            }
+
             self.add_conditions(
-                left_scalars[0].clone(),
-                right_scalars[0].clone(),
+                left_scalar,
+                right_scalar,
                 left_join_conditions,
                 right_join_conditions,
             )?;

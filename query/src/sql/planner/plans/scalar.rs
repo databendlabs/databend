@@ -50,6 +50,8 @@ pub enum Scalar {
     ComparisonExpr(ComparisonExpr),
     AggregateFunction(AggregateFunction),
     FunctionCall(FunctionCall),
+    // TODO(leiysky): maybe we don't need this variant any more
+    // after making functions static typed?
     Cast(CastExpr),
     SubqueryExpr(SubqueryExpr),
 }
@@ -194,6 +196,8 @@ impl ScalarExpr for ComparisonExpr {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AggregateFunction {
+    pub display_name: String,
+
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<DataValue>,
@@ -256,10 +260,21 @@ impl ScalarExpr for CastExpr {
 }
 
 #[derive(Clone, Debug)]
+pub enum SubqueryType {
+    Any,
+    All,
+    Scalar,
+    Exists,
+    NotExists,
+}
+
+#[derive(Clone, Debug)]
 pub struct SubqueryExpr {
+    pub typ: SubqueryType,
     pub subquery: SExpr,
     pub data_type: DataTypeImpl,
     pub allow_multi_rows: bool,
+    pub outer_columns: ColumnSet,
     pub output_context: Box<BindContext>,
 }
 
@@ -269,7 +284,7 @@ impl ScalarExpr for SubqueryExpr {
     }
 
     fn used_columns(&self) -> ColumnSet {
-        todo!()
+        self.outer_columns.clone()
     }
 }
 

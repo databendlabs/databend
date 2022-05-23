@@ -37,7 +37,7 @@ error:
   --> SQL:1:50
   |
 1 | select * from customer natural inner join orders on a = b
-  |                                                  ^^ expected `(`, `.`, <Ident>, <QuotedString>, `AS`, `INNER`, or 12 more ...
+  |                                                  ^^ expected `(`, `.`, <Ident>, <QuotedString>, `AS`, `INNER`, or 13 more ...
 
 
 ---------- Input ----------

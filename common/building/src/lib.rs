@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod git;
+
 use std::path::Path;
 
 use common_tracing::tracing;
+use git2::Repository;
 use vergen::vergen;
 use vergen::Config;
 use vergen::ShaKind;
@@ -32,9 +35,18 @@ pub fn setup() {
 
 pub fn add_building_env_vars() {
     set_env_config();
-    add_env_git_tag();
-    add_env_commit_authors();
     add_env_credits_info();
+    match Repository::discover(".") {
+        Ok(repo) => {
+            add_env_git_tag(&repo);
+            add_env_commit_authors(&repo);
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            println!("cargo:rustc-env=VERGEN_GIT_SEMVER=unknown");
+            println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS=unknown");
+        }
+    };
 }
 
 pub fn set_env_config() {
@@ -46,29 +58,18 @@ pub fn set_env_config() {
     }
 }
 
-// Get the latest tag:
-// git describe --tags --abbrev=0
-// v0.6.99-nightly
-pub fn add_env_git_tag() {
-    let r = run_script::run_script!(r#"git describe --tags --abbrev=0"#);
-    let tag = match r {
-        Ok((_, output, _)) => output,
-        Err(e) => e.to_string(),
-    };
-    println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", tag);
+pub fn add_env_git_tag(repo: &Repository) {
+    match git::get_latest_tag(repo) {
+        Ok(tag) => println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", tag),
+        Err(e) => println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", e),
+    }
 }
 
-pub fn add_env_commit_authors() {
-    let r = run_script::run_script!(
-        // use email to uniq authors
-        r#"git shortlog HEAD -sne | awk '{$1=""; sub(" ", "    \""); print }' | awk -F'<' '!x[$1]++' | \
-        awk -F'<' '!x[$2]++' | awk -F'<' '{gsub(/ +$/, "\",", $1); print $1}' | sort | xargs"#
-    );
-    let authors = match r {
-        Ok((_, output, _)) => output,
-        Err(e) => e.to_string(),
-    };
-    println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS={}", authors);
+pub fn add_env_commit_authors(repo: &Repository) {
+    match git::get_commit_authors(repo) {
+        Ok(authors) => println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS={}", authors),
+        Err(e) => println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS={}", e),
+    }
 }
 
 pub fn add_env_credits_info() {

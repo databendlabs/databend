@@ -83,7 +83,7 @@ async fn test_select() -> PoemResult<()> {
     }
 
     {
-        let (status, body) = server.post("select ", "1").await;
+        let (status, body) = server.post("select 1", "").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "1\n");
     }
@@ -136,7 +136,7 @@ async fn test_insert_format_values() -> PoemResult<()> {
 
     {
         let (status, body) = server
-            .post("insert into table t1 values", "(0, 'a'), (1, 'b')")
+            .post("insert into table t1 format values", "(0, 'a'), (1, 'b')")
             .await;
         assert_ok!(status, body);
         assert_error!(body, "");

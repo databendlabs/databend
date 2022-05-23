@@ -69,6 +69,12 @@ async fn test_meta_embedded_table_upsert_option() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_table_update_meta() -> anyhow::Result<()> {
+    let mt = MetaEmbedded::new_temp().await?;
+    SchemaApiTestSuite {}.update_table_meta(&mt).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_list() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     SchemaApiTestSuite {}.table_list(&mt).await

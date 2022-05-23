@@ -52,6 +52,22 @@ impl TypeSerializer for TimestampSerializer {
         Ok(result)
     }
 
+    fn serialize_column_quoted(
+        &self,
+        column: &ColumnRef,
+        format: &FormatSettings,
+    ) -> Result<Vec<String>> {
+        let column: &PrimitiveColumn<i64> = Series::check_get(column)?;
+        let result: Vec<String> = column
+            .iter()
+            .map(|v| {
+                let dt = self.to_timestamp(v, &format.timezone);
+                format!("\"{}\"", dt.format(TIME_FMT))
+            })
+            .collect();
+        Ok(result)
+    }
+
     fn serialize_json(&self, column: &ColumnRef, format: &FormatSettings) -> Result<Vec<Value>> {
         let array: &PrimitiveColumn<i64> = Series::check_get(column)?;
         let result: Vec<Value> = array

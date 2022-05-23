@@ -26,7 +26,7 @@ fmt:
 
 lint:
 	cargo fmt
-	cargo clippy --tests -- -D warnings
+	cargo clippy --all -- -D warnings
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
@@ -80,7 +80,12 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta*/
+	rm -rf .databend
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
+
+sqllogic-test: build-debug
+	rm -rf ./_meta*/
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
 management-test: build-debug
 	rm -rf ./_meta*/
@@ -97,7 +102,7 @@ stateless-cluster-test-tls: build-debug
 metactl-test: build-debug
 	bash ./tests/metactl/test-metactl.sh
 
-test: unit-test stateless-test metactl-test
+test: unit-test stateless-test sqllogic-test metactl-test
 
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
@@ -129,5 +134,6 @@ clean:
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
 	rm -rf ./_meta*/ ./_logs*/ ./query/_logs*/ ./metasrv/_logs*/ ./stateless_test_data/
 	rm -rf ./common/base/_logs*/ ./common/meta/raft-store/_logs*/ ./common/meta/sled-store/_logs*/
+	rm -rf ./.databend ./query/.databend ./meta/.databend
 
 .PHONY: setup test run build fmt lint docker clean

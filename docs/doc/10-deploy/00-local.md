@@ -190,7 +190,7 @@ INSERT INTO t1 VALUES(1), (2);
 ```
 
 ```sql
-SELECT * FROM t1
+SELECT * FROM t1;
 ```
 
 ```text

@@ -14,19 +14,23 @@
 
 use std::sync::Arc;
 
+pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
+use self::subquery::SubqueryRewriter;
 use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
-use crate::sql::planner::metadata::Metadata;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::storages::Table;
 
 mod aggregate;
 mod bind_context;
+mod distinct;
 mod join;
 mod limit;
 mod project;
@@ -35,6 +39,8 @@ mod scalar_common;
 mod scalar_visitor;
 mod select;
 mod sort;
+mod subquery;
+mod table;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
@@ -46,22 +52,28 @@ mod sort;
 pub struct Binder {
     ctx: Arc<QueryContext>,
     catalogs: Arc<CatalogManager>,
-    metadata: Metadata,
+    metadata: MetadataRef,
 }
 
 impl<'a> Binder {
-    pub fn new(ctx: Arc<QueryContext>, catalogs: Arc<CatalogManager>) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        catalogs: Arc<CatalogManager>,
+        metadata: MetadataRef,
+    ) -> Self {
         Binder {
             ctx,
             catalogs,
-            metadata: Metadata::create(),
+            metadata,
         }
     }
 
     pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
         let init_bind_context = BindContext::new();
-        let (s_expr, bind_context) = self.bind_statement(&init_bind_context, stmt).await?;
-        Ok(BindResult::create(s_expr, bind_context, self.metadata))
+        let (mut s_expr, bind_context) = self.bind_statement(&init_bind_context, stmt).await?;
+        let mut rewriter = SubqueryRewriter::new();
+        s_expr = rewriter.rewrite(&s_expr)?;
+        Ok(BindResult::create(s_expr, bind_context))
     }
 
     async fn bind_statement(
@@ -87,20 +99,38 @@ impl<'a> Binder {
         let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
         Ok(table_meta)
     }
+
+    /// Create a new ColumnBinding with assigned index
+    pub(super) fn create_column_binding(
+        &mut self,
+        table_name: Option<String>,
+        column_name: String,
+        data_type: DataTypeImpl,
+    ) -> ColumnBinding {
+        let index = self
+            .metadata
+            .write()
+            .add_column(column_name.clone(), data_type.clone(), None);
+        ColumnBinding {
+            table_name,
+            column_name,
+            index,
+            data_type,
+            visible_in_unqualified_wildcard: true,
+        }
+    }
 }
 
 pub struct BindResult {
     pub s_expr: SExpr,
     pub bind_context: BindContext,
-    pub metadata: Metadata,
 }
 
 impl BindResult {
-    pub fn create(s_expr: SExpr, bind_context: BindContext, metadata: Metadata) -> Self {
+    pub fn create(s_expr: SExpr, bind_context: BindContext) -> Self {
         BindResult {
             s_expr,
             bind_context,
-            metadata,
         }
     }
 }
