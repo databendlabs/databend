@@ -87,6 +87,8 @@ select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
 
 select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
 
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name);
+
 -- aggregator combinator
 -- distinct
 select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
