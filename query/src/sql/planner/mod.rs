@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_ast::parser::error::Backtrace;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
+use common_base::infallible::RwLock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use plans::ScalarExpr;
@@ -35,6 +36,7 @@ mod semantic;
 
 pub use metadata::ColumnEntry;
 pub use metadata::Metadata;
+pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 
 use crate::pipelines::new::NewPipeline;
@@ -59,7 +61,8 @@ impl Planner {
         }
 
         // Step 2: bind AST with catalog, and generate a pure logical SExpr
-        let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs());
+        let metadata = Arc::new(RwLock::new(Metadata::create()));
+        let binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs(), metadata.clone());
         let bind_result = binder.bind(&stmts[0]).await?;
 
         // Step 3: optimize the SExpr with optimizers, and generate optimized physical SExpr
@@ -71,7 +74,7 @@ impl Planner {
         let pb = PipelineBuilder::new(
             self.ctx.clone(),
             result_columns,
-            bind_result.metadata,
+            metadata.clone(),
             optimized_expr,
         );
         let pipelines = pb.spawn()?;

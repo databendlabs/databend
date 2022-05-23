@@ -1,5 +1,6 @@
 import json
 
+import environs
 import requests
 from mysql.connector.errors import Error
 from log import log
@@ -96,6 +97,8 @@ class HttpConnector():
         self._database = database
         self._session_max_idle_time = 300
         self._session = None
+        e = environs.Env()
+        self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
 
     def query(self, statement, session=None):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)
@@ -115,11 +118,13 @@ class HttpConnector():
         query_sql = {'sql': parseSQL(statement)}
         if session is not None:
             query_sql['session'] = session
-
         response = requests.post(url,
                                  data=json.dumps(query_sql),
                                  auth=(self._user, ""),
-                                 headers=headers)
+                                 headers={
+                                     **headers,
+                                     **self._additonal_headers
+                                 })
         try:
             return json.loads(response.content)
         except Exception as err:

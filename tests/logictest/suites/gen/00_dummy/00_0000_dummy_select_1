@@ -77,6 +77,6 @@ SELECT 'That\'s good.';
 ----  
 That's good.
 
-statement error 1015
+statement error 1065
 SELECT *; 
 

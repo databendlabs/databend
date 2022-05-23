@@ -134,6 +134,11 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
                 None => None,
             },
             comment: p.comment,
+            statistics: p
+                .statistics
+                .map(mt::TableStatistics::from_pb)
+                .transpose()?
+                .unwrap_or_default(),
         };
         Ok(v)
     }
@@ -153,6 +158,33 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
                 None => None,
             },
             comment: self.comment.clone(),
+            statistics: Some(self.statistics.to_pb()?),
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::TableStatistics> for mt::TableStatistics {
+    fn from_pb(p: pb::TableStatistics) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self {
+            number_of_rows: p.number_of_rows,
+            data_bytes: p.data_bytes,
+            compressed_data_bytes: p.compressed_data_bytes,
+            index_data_bytes: p.index_data_bytes,
+        };
+
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableStatistics, Incompatible> {
+        let p = pb::TableStatistics {
+            ver: VER,
+            number_of_rows: self.number_of_rows,
+            data_bytes: self.data_bytes,
+            compressed_data_bytes: self.compressed_data_bytes,
+            index_data_bytes: self.index_data_bytes,
         };
         Ok(p)
     }

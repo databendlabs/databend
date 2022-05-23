@@ -41,6 +41,8 @@ use common_meta_types::UndropDatabaseReply;
 use common_meta_types::UndropDatabaseReq;
 use common_meta_types::UndropTableReply;
 use common_meta_types::UndropTableReq;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
@@ -103,6 +105,11 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError>;
+
+    async fn update_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply, MetaError>;
 
     // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
     //       Since `share` has nothing really to do with database or table.

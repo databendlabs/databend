@@ -16,7 +16,7 @@ use databend_query::sql::optimizer::MExpr;
 use databend_query::sql::optimizer::Memo;
 use databend_query::sql::optimizer::PatternExtractor;
 use databend_query::sql::optimizer::SExpr;
-use databend_query::sql::plans::BasePlan;
+use databend_query::sql::plans::Operator;
 use databend_query::sql::plans::PatternPlan;
 use databend_query::sql::plans::PlanType;
 

@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.#[derive(Clone, Debug)]
 
-use std::any::Any;
+use common_exception::Result;
 
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::plans::Scalar;
+use crate::sql::plans::ScalarExpr;
 use crate::sql::IndexType;
 
 /// Evaluate scalar expression
@@ -36,7 +39,7 @@ pub struct ScalarItem {
     pub index: IndexType,
 }
 
-impl BasePlan for EvalScalar {
+impl Operator for EvalScalar {
     fn plan_type(&self) -> PlanType {
         PlanType::EvalScalar
     }
@@ -56,10 +59,6 @@ impl BasePlan for EvalScalar {
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
         todo!()
     }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl PhysicalPlan for EvalScalar {
@@ -69,7 +68,30 @@ impl PhysicalPlan for EvalScalar {
 }
 
 impl LogicalPlan for EvalScalar {
-    fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
-        todo!()
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        let input_prop = rel_expr.derive_relational_prop()?;
+
+        // Derive output columns
+        let mut output_columns = input_prop.output_columns;
+        for item in self.items.iter() {
+            output_columns.insert(item.index);
+        }
+
+        // Derive outer columns
+        let mut outer_columns = input_prop.outer_columns;
+        for item in self.items.iter() {
+            let used_columns = item.scalar.used_columns();
+            let outer = used_columns
+                .difference(&output_columns)
+                .cloned()
+                .collect::<ColumnSet>();
+            outer_columns = outer_columns.union(&outer).cloned().collect();
+        }
+        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+        })
     }
 }

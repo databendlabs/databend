@@ -166,8 +166,11 @@ message TableMeta {
   // Comment about this table.
   string comment = 22;
 
+  // Statistics of this table.
+  optional TableStatistics statistics = 23;
+
   // The time table droped.
-  optional string drop_on = 23;
+  optional string drop_on = 24;
 }
 
 // Save table name id list history.
@@ -186,6 +189,24 @@ message DataSchema {
 
   // Other optional table info
   map<string, string> metadata = 2;
+}
+
+// The statistics of a table
+message TableStatistics {
+
+  uint64 ver = 100;
+
+  // Number of rows
+  uint64 number_of_rows = 1;
+
+  // Size of data in bytes
+  uint64 data_bytes = 2;
+
+  // Size of compressed data in bytes
+  uint64 compressed_data_bytes = 3;
+
+  // Size of index data in bytes
+  uint64 index_data_bytes = 4;
 }
 
 // One field, AKA column

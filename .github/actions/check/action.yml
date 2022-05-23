@@ -34,7 +34,7 @@ runs:
 
     - name: Clippy
       shell: bash
-      run: cargo clippy --tests -- -D warnings
+      run: cargo clippy --all -- -D warnings
 
     - name: Audit dependencies
       shell: bash

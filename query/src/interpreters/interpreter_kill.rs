@@ -36,6 +36,25 @@ impl KillInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: KillPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(KillInterpreter { ctx, plan }))
     }
+
+    async fn execute_kill(&self, session_id: &String) -> Result<SendableDataBlockStream> {
+        match self.ctx.get_session_by_id(session_id).await {
+            None => Err(ErrorCode::UnknownSession(format!(
+                "Not found session id {}",
+                session_id
+            ))),
+            Some(kill_session) if self.plan.kill_connection => {
+                kill_session.force_kill_session();
+                let schema = Arc::new(DataSchema::empty());
+                Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+            }
+            Some(kill_session) => {
+                kill_session.force_kill_query();
+                let schema = Arc::new(DataSchema::empty());
+                Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -54,21 +73,23 @@ impl Interpreter for KillInterpreter {
             .await?;
 
         let id = &self.plan.id;
-        match self.ctx.get_session_by_id(id).await {
-            None => Err(ErrorCode::UnknownSession(format!(
-                "Not found session id {}",
-                id
-            ))),
-            Some(kill_session) if self.plan.kill_connection => {
-                kill_session.force_kill_session();
-                let schema = Arc::new(DataSchema::empty());
-                Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
+        // If press Ctrl + C, MySQL Client will create a new session and send query
+        // `kill query mysql_connection_id` to server.
+        // the type of connection_id is u32, if parse success get session by connection_id,
+        // otherwise use the session_id.
+        // More info Link to: https://github.com/datafuselabs/databend/discussions/5405.
+        match id.parse::<u32>() {
+            Ok(mysql_conn_id) => {
+                let session_id = self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)).await;
+                match session_id {
+                    Some(get) => self.execute_kill(&get).await,
+                    None => Err(ErrorCode::UnknownSession(format!(
+                        "MySQL connection id {} not found session id",
+                        mysql_conn_id
+                    ))),
+                }
             }
-            Some(kill_session) => {
-                kill_session.force_kill_query();
-                let schema = Arc::new(DataSchema::empty());
-                Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
-            }
+            Err(_) => self.execute_kill(id).await,
         }
     }
 }

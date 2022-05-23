@@ -138,7 +138,7 @@ impl DFHash for f64 {
     }
 }
 
-impl<'a> DFHash for bool {
+impl DFHash for bool {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         Hash::hash(self, state);

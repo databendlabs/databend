@@ -29,7 +29,7 @@ use crate::sql::optimizer::rule::RuleSet;
 use crate::sql::optimizer::rule::TransformState;
 use crate::sql::optimizer::RequiredProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
+use crate::sql::plans::Operator;
 use crate::sql::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and

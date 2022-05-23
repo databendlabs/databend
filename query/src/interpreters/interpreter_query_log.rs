@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -277,7 +278,7 @@ impl InterpreterQueryLog {
             .get_settings()
             .get_setting_values_short()
         {
-            session_settings.push_str(&format!("{}={}, ", key, value));
+            write!(session_settings, "{}={}, ", key, value).expect("write to string must succeed");
         }
         session_settings.push_str("scope: SESSION");
 
@@ -394,7 +395,7 @@ impl InterpreterQueryLog {
             .get_settings()
             .get_setting_values_short()
         {
-            session_settings.push_str(&format!("{}={}, ", key, value));
+            write!(session_settings, "{}={}, ", key, value).expect("write to string must succeed");
         }
         session_settings.push_str("scope: SESSION");
 

@@ -79,6 +79,8 @@ use common_meta_types::UndropTableReq;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
@@ -1291,6 +1293,58 @@ impl<KV: KVApi> SchemaApi for KV {
 
             if succ {
                 return Ok(UpsertTableOptionReply {});
+            }
+        }
+    }
+
+    async fn update_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply, MetaError> {
+        let tbid = TableId {
+            table_id: req.table_id,
+        };
+        let req_seq = req.seq;
+
+        loop {
+            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
+                get_struct_value(self, &tbid).await?;
+
+            tracing::debug!(ident = display(&tbid), "update_table_meta");
+
+            if tb_meta_seq == 0 || table_meta.is_none() {
+                return Err(MetaError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, "update_table_meta"),
+                )));
+            }
+            if req_seq.match_seq(tb_meta_seq).is_err() {
+                return Err(MetaError::AppError(AppError::from(
+                    TableVersionMismatched::new(
+                        req.table_id,
+                        req.seq,
+                        tb_meta_seq,
+                        "update_table_meta",
+                    ),
+                )));
+            }
+
+            let txn_req = TxnRequest {
+                condition: vec![
+                    // table is not changed
+                    txn_cond_seq(&tbid, Eq, tb_meta_seq)?,
+                ],
+                if_then: vec![
+                    txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?)?, // tb_id -> tb_meta
+                ],
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            tracing::debug!(id = debug(&tbid), succ = display(succ), "update_table_meta");
+
+            if succ {
+                return Ok(UpdateTableMetaReply {});
             }
         }
     }

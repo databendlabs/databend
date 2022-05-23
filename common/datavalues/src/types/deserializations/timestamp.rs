@@ -27,7 +27,7 @@ pub struct TimestampDeserializer {
 impl TypeDeserializer for TimestampDeserializer {
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: i64 = reader.read_scalar()?;
-        let _ = check_timestamp(value)?;
+        check_timestamp(value)?;
         self.builder.append_value(value);
         Ok(())
     }
@@ -46,7 +46,7 @@ impl TypeDeserializer for TimestampDeserializer {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: i64 = reader.read_scalar()?;
-            let _ = check_timestamp(value)?;
+            check_timestamp(value)?;
             self.builder.append_value(value);
         }
         Ok(())
@@ -60,7 +60,7 @@ impl TypeDeserializer for TimestampDeserializer {
                 let ts = reader.read_timestamp_text(&format.timezone)?;
 
                 let micros = ts.timestamp_micros();
-                let _ = check_timestamp(micros)?;
+                check_timestamp(micros)?;
                 self.builder.append_value(micros.as_());
                 Ok(())
             }
@@ -76,7 +76,7 @@ impl TypeDeserializer for TimestampDeserializer {
         reader.must_ignore_byte(b'\'')?;
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
-        let _ = check_timestamp(micros)?;
+        check_timestamp(micros)?;
         reader.must_ignore_byte(b'\'')?;
         self.builder.append_value(micros.as_());
         Ok(())
@@ -86,7 +86,7 @@ impl TypeDeserializer for TimestampDeserializer {
         let mut reader = BufferReader::new(reader);
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
-        let _ = check_timestamp(micros)?;
+        check_timestamp(micros)?;
         reader.must_eof()?;
         self.builder.append_value(micros.as_());
         Ok(())
@@ -95,7 +95,7 @@ impl TypeDeserializer for TimestampDeserializer {
     fn de_text<R: BufferRead>(&mut self, reader: &mut R, format: &FormatSettings) -> Result<()> {
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
-        let _ = check_timestamp(micros)?;
+        check_timestamp(micros)?;
         self.builder.append_value(micros.as_());
         Ok(())
     }
@@ -108,7 +108,7 @@ impl TypeDeserializer for TimestampDeserializer {
         let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
-        let _ = check_timestamp(micros)?;
+        check_timestamp(micros)?;
         if maybe_quote {
             reader.must_ignore(|f| f == b'\'' || f == b'"')?;
         }
@@ -124,7 +124,7 @@ impl TypeDeserializer for TimestampDeserializer {
         reader.must_ignore_byte(b'"')?;
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
-        let _ = check_timestamp(micros)?;
+        check_timestamp(micros)?;
         reader.must_ignore_byte(b'"')?;
 
         self.builder.append_value(micros.as_());
@@ -133,7 +133,7 @@ impl TypeDeserializer for TimestampDeserializer {
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()?;
-        let _ = check_timestamp(v)?;
+        check_timestamp(v)?;
         self.builder.append_value(v.as_());
         Ok(())
     }

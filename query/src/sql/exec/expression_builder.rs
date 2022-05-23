@@ -29,22 +29,22 @@ use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::IndexType;
-use crate::sql::Metadata;
+use crate::sql::MetadataRef;
 
-pub struct ExpressionBuilder<'a> {
-    metadata: &'a Metadata,
+pub struct ExpressionBuilder {
+    metadata: MetadataRef,
 }
 
-impl<'a> ExpressionBuilder<'a> {
-    pub fn create(metadata: &'a Metadata) -> Self {
+impl ExpressionBuilder {
+    pub fn create(metadata: MetadataRef) -> Self {
         ExpressionBuilder { metadata }
     }
 
     pub fn build_and_rename(&self, scalar: &Scalar, index: IndexType) -> Result<Expression> {
         let expr = self.build(scalar)?;
-        let column = self.metadata.column(index);
+        let name = self.metadata.read().column(index).name.clone();
         Ok(Expression::Alias(
-            format_field_name(column.name.as_str(), index),
+            format_field_name(name.as_str(), index),
             Box::new(expr),
         ))
     }
@@ -116,11 +116,8 @@ impl<'a> ExpressionBuilder<'a> {
     }
 
     pub fn build_column_ref(&self, index: IndexType) -> Result<Expression> {
-        let column = self.metadata.column(index);
-        Ok(Expression::Column(format_field_name(
-            column.name.as_str(),
-            index,
-        )))
+        let name = self.metadata.read().column(index).name.clone();
+        Ok(Expression::Column(format_field_name(name.as_str(), index)))
     }
 
     pub fn build_literal(

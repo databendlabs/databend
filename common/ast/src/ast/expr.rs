@@ -702,7 +702,7 @@ impl<'a> Display for Expr<'a> {
                 unit,
                 ..
             } => {
-                write!(f, "DATEADD({date}, INTERVAL {interval} {unit})")?;
+                write!(f, "DATE_ADD({date}, INTERVAL {interval} {unit})")?;
             }
         }
 

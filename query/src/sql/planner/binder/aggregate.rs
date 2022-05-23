@@ -29,6 +29,7 @@ use crate::sql::binder::select::SelectList;
 use crate::sql::binder::Binder;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::SExpr;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::GroupingChecker;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AggregatePlan;
@@ -44,7 +45,6 @@ use crate::sql::plans::Scalar;
 use crate::sql::plans::ScalarExpr;
 use crate::sql::plans::ScalarItem;
 use crate::sql::BindContext;
-use crate::sql::Metadata;
 
 #[derive(Default, Clone, PartialEq, Debug)]
 pub struct AggregateInfo {
@@ -77,11 +77,11 @@ pub struct AggregateInfo {
 
 struct AggregateRewriter<'a> {
     pub bind_context: &'a mut BindContext,
-    pub metadata: &'a mut Metadata,
+    pub metadata: MetadataRef,
 }
 
 impl<'a> AggregateRewriter<'a> {
-    pub fn new(bind_context: &'a mut BindContext, metadata: &'a mut Metadata) -> Self {
+    pub fn new(bind_context: &'a mut BindContext, metadata: MetadataRef) -> Self {
         Self {
             bind_context,
             metadata,
@@ -148,6 +148,7 @@ impl<'a> AggregateRewriter<'a> {
             let name = format!("{}_arg_{}", &aggregate.func_name, i);
             let index = self
                 .metadata
+                .write()
                 .add_column(name.clone(), arg.data_type(), None);
 
             // Generate a ColumnBinding for each argument of aggregates
@@ -173,7 +174,7 @@ impl<'a> AggregateRewriter<'a> {
             });
         }
 
-        let index = self.metadata.add_column(
+        let index = self.metadata.write().add_column(
             aggregate.display_name.clone(),
             aggregate.return_type.clone(),
             None,
@@ -210,7 +211,7 @@ impl<'a> Binder {
         select_list: &mut SelectList<'a>,
     ) -> Result<()> {
         for item in select_list.items.iter_mut() {
-            let mut rewriter = AggregateRewriter::new(bind_context, &mut self.metadata);
+            let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
             let new_scalar = rewriter.visit(&item.scalar)?;
             item.scalar = new_scalar;
         }
@@ -225,9 +226,10 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         having: &Expr<'a>,
     ) -> Result<Scalar> {
-        let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
-        let (scalar, _) = scalar_binder.bind_expr(having).await?;
-        let mut rewriter = AggregateRewriter::new(bind_context, &mut self.metadata);
+        let mut scalar_binder =
+            ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
+        let (scalar, _) = scalar_binder.bind(having).await?;
+        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         rewriter.visit(&scalar)
     }
 
@@ -347,9 +349,10 @@ impl<'a> Binder {
             }
 
             // Resolve scalar item and alias item
-            let scalar_binder = ScalarBinder::new(bind_context, self.ctx.clone());
+            let mut scalar_binder =
+                ScalarBinder::new(bind_context, self.ctx.clone(), self.metadata.clone());
             let (scalar_expr, data_type) = scalar_binder
-                .bind_expr(expr)
+                .bind(expr)
                 .await
                 .or_else(|e| Self::resolve_alias_item(expr, available_aliases, e))?;
 
@@ -371,6 +374,7 @@ impl<'a> Binder {
                 *index
             } else {
                 self.metadata
+                    .write()
                     .add_column(group_item_name.clone(), data_type.clone(), None)
             };
 

@@ -88,7 +88,7 @@ impl Function for ArrayGetFunction {
                 let meta = if inner_type.is_array() {
                     let inner_array_type: ArrayType = self.array_type.inner_type().clone().try_into()?;
                     ColumnMeta::Array {
-                        data_type: inner_array_type.inner_type().clone(),
+                        inner_type: inner_array_type.inner_type().clone(),
                     }
                 } else {
                     ColumnMeta::Simple
