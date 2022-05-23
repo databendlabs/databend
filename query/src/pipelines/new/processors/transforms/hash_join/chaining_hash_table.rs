@@ -17,7 +17,9 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 
 use common_datablocks::DataBlock;
+use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::ConstColumn;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_datavalues::SmallVu8;
@@ -119,22 +121,25 @@ impl HashJoinState for ChainingHashTable {
             }
             let probe_result_ptrs = probe_result_ptr.unwrap().get_value();
             // `result_block` is the block of build table
-            let result_blocks = self.row_space.gather(probe_result_ptrs)?;
+            let result_block = self.row_space.gather(probe_result_ptrs)?;
             let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
+            let mut replicated_probe_block = DataBlock::empty();
+            for (i, col) in probe_block.columns().iter().enumerate() {
+                let replicated_col = ConstColumn::new(col.clone(), result_block.num_rows()).arc();
 
-            for result_block in result_blocks.iter() {
-                assert_eq!(result_block.clone().num_rows(), 1);
-                assert_eq!(probe_block.clone().num_rows(), 1);
-                let mut input_block = probe_block.clone();
-                for (col, field) in result_block
-                    .columns()
-                    .iter()
-                    .zip(result_block.schema().fields().iter())
-                {
-                    input_block = input_block.add_column(col.clone(), field.clone())?;
-                }
-                results.push(input_block);
+                replicated_probe_block = replicated_probe_block
+                    .add_column(replicated_col, probe_block.schema().field(i).clone())?;
             }
+            for (col, field) in result_block
+                .columns()
+                .iter()
+                .zip(result_block.schema().fields().iter())
+            {
+                replicated_probe_block =
+                    replicated_probe_block.add_column(col.clone(), field.clone())?;
+            }
+
+            results.push(replicated_probe_block);
         }
 
         Ok(results)

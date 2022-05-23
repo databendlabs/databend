@@ -63,9 +63,9 @@ impl RowSpace {
         Ok(())
     }
 
-    // TODO(leiysky): gather into multiple blocks, since there are possibly massive results
-    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<Vec<DataBlock>> {
+    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
         let mut data_blocks = vec![];
+        let mut indices = vec![];
 
         {
             // Acquire read lock in current scope
@@ -76,12 +76,24 @@ impl RowSpace {
                     row_ptr.row_index,
                 ])?;
                 if !block.is_empty() {
+                    indices.push((data_blocks.len(), 0));
                     data_blocks.push(block);
                 }
             }
         }
 
-        Ok(data_blocks)
+        // If build_key doesn't have duplicated columns, the length of row_ptrs will be one.
+        // So we don't need to `gather_blocks`, directly return.
+        if data_blocks.len() == 1 {
+            return Ok(data_blocks[0].clone());
+        }
+
+        if !data_blocks.is_empty() {
+            let data_block = DataBlock::gather_blocks(&data_blocks, indices.as_slice())?;
+            Ok(data_block)
+        } else {
+            Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
+        }
     }
 
     fn gather_single_chunk(&self, chunk: &Chunk, indices: &[u32]) -> Result<DataBlock> {
