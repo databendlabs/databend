@@ -12,26 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod display_rel_operator;
 use std::fmt::Display;
-mod indent_format;
+use std::fmt::Write;
 
-pub struct FormatTreeNode<T: Display> {
-    payload: T,
-    children: Vec<Self>,
-}
+use common_exception::Result;
+
+use super::FormatTreeNode;
+
+static INDENT_SIZE: usize = 4;
 
 impl<T> FormatTreeNode<T>
 where T: Display
 {
-    pub fn new(payload: T) -> Self {
-        Self {
-            payload,
-            children: vec![],
-        }
+    pub fn format_indent(&self) -> Result<String> {
+        let mut buf = String::new();
+        self.format_indent_impl(0, &mut buf)?;
+        Ok(buf)
     }
 
-    pub fn with_children(payload: T, children: Vec<Self>) -> Self {
-        Self { payload, children }
+    fn format_indent_impl(&self, indent: usize, f: &mut String) -> Result<()> {
+        writeln!(f, "{}{}", " ".repeat(indent), &self.payload).unwrap();
+        for child in self.children.iter() {
+            child.format_indent_impl(indent + INDENT_SIZE, f)?;
+        }
+        Ok(())
     }
 }

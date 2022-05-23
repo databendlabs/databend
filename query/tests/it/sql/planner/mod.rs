@@ -12,26 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod display_rel_operator;
-use std::fmt::Display;
-mod indent_format;
-
-pub struct FormatTreeNode<T: Display> {
-    payload: T,
-    children: Vec<Self>,
-}
-
-impl<T> FormatTreeNode<T>
-where T: Display
-{
-    pub fn new(payload: T) -> Self {
-        Self {
-            payload,
-            children: vec![],
-        }
-    }
-
-    pub fn with_children(payload: T, children: Vec<Self>) -> Self {
-        Self { payload, children }
-    }
-}
+mod format;
