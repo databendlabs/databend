@@ -97,19 +97,31 @@ async fn test_simple_sql() -> Result<()> {
 
 #[tokio::test]
 async fn test_return_when_finish() -> Result<()> {
-    let sql = "select * from numbers(1)";
     let wait_time_secs = 5;
-    let start_time = std::time::Instant::now();
-    let (status, result) = post_sql(sql, wait_time_secs).await?;
-    let duration = start_time.elapsed().as_secs_f64();
+    let sql = "create table t1(a int)";
+    let ep = create_endpoint();
+    let (status, result) = post_sql_to_endpoint(&ep, sql, wait_time_secs).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-    // should not wait until wait_time_secs even if there is no more data
-    assert!(
-        duration < 1.0,
-        "duration {} is too large than expect",
-        duration
-    );
+    for (sql, state) in [
+        ("select * from numbers(1)", ExecuteStateKind::Succeeded),
+        ("bad sql", ExecuteStateKind::Failed), // parse fail
+        ("select cast(null as boolean)", ExecuteStateKind::Failed), // execute fail at once
+        ("create table t1(a int)", ExecuteStateKind::Failed),
+    ] {
+        let start_time = std::time::Instant::now();
+        let (status, result) = post_sql_to_endpoint(&ep, sql, wait_time_secs).await?;
+        let duration = start_time.elapsed().as_secs_f64();
+        let msg = || format!("{}: {:?}", sql, result);
+        assert_eq!(status, StatusCode::OK, "{}", msg());
+        assert_eq!(result.state, state, "{}", msg());
+        // should not wait until wait_time_secs even if there is no more data
+        assert!(
+            duration < 1.0,
+            "duration {} is too large than expect",
+            msg()
+        );
+    }
     Ok(())
 }
 
