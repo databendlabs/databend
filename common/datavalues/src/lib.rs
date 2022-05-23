@@ -18,7 +18,6 @@
 
 #![feature(generic_associated_types)]
 #![feature(trusted_len)]
-#![feature(bool_to_option)]
 
 #[macro_use]
 mod macros;
