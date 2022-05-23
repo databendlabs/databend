@@ -23,8 +23,8 @@ mkdir -p ./target/debug/
 chmod +x ./current/*
 chmod +x ./old/*
 
-cp ./current/databend-query ./target/debug/
-cp ./old/databend-meta      ./target/debug/
+cp ./old/databend-query    ./target/debug/
+cp ./current/databend-meta ./target/debug/
 
 ./target/debug/databend-meta --version
 ./target/debug/databend-query --version
