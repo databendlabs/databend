@@ -40,7 +40,7 @@ docker build -t sqllogic/test:latest .
 - QUERY_HTTP_HANDLER_HOST
 - QUERY_HTTP_HANDLER_PORT
 - ADDITIONAL_HEADERS
-3. docker run --name logictest --network host public.ecr.aws/k3y0u5f2/sqllogic/test:latest
+3. docker run --name logictest --rm --network host public.ecr.aws/k3y0u5f2/sqllogic/test:latest
 
 # Learn More
 
