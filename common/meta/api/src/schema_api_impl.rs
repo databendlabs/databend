@@ -66,7 +66,7 @@ use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_meta_types::UpdateTableMetaReply;
 use common_meta_types::UpdateTableMetaReq;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_proto_conv::FromToProto;
@@ -1059,7 +1059,7 @@ where
 /// Ids may not be consecutive.
 async fn fetch_id<T: KVApiKey>(kv_api: &impl KVApi, generator: T) -> Result<u64, MetaError> {
     let res = kv_api
-        .upsert_kv(UpsertKVAction {
+        .upsert_kv(UpsertKVReq {
             key: generator.to_key(),
             seq: MatchSeq::Any,
             value: Operation::Update(b"".to_vec()),
