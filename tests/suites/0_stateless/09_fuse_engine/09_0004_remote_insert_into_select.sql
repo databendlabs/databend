@@ -3,7 +3,7 @@ CREATE DATABASE db_09_004;
 USE db_09_004;
 
 -- the same as 12_0000_insert_into_select.sql, expect the engine here is fuse
-CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date, f Date, g DateTime, h String) Engine = Fuse;
 CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse;
 
 INSERT INTO t1 (a,b,c,d,e) select * from t3; -- {ErrorCode 1006}

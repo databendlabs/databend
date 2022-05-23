@@ -10,12 +10,12 @@ CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
 CREATE TABLE t(c1 int) ENGINE = Null; -- {ErrorCode 2302}
 
 
-create table t2(a int,b int) engine=Memory;
+create table t2(a int,b int) Engine = Fuse;
 insert into t2 values(1,1),(2,2);
 select a+b from t2;
 
-create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
-create table t2(a int,b int) engine=Memory; -- {ErrorCode 2302}
+create table t2(a int,b int) Engine = Fuse; -- {ErrorCode 2302}
+create table t2(a int,b int) Engine = Fuse; -- {ErrorCode 2302}
 create table t2(a INT auto_increment); -- {ErrorCode 1022}
 
 create table t3(a int,b int) engine=Memory CLUSTER BY(a); -- {ErrorCode 2703}
@@ -30,9 +30,11 @@ DROP TABLE IF EXISTS t3;
 DROP TABLE IF EXISTS t4;
 
 -- prepare test databases for testing 'create table like' and 'as select' statements.
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
 CREATE DATABASE db1;
 CREATE DATABASE db2;
-CREATE TABLE db1.test1(a INT, b INT null) ENGINE=memory;
+CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse;
 INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4);
 
 SELECT '====BEGIN TEST CREATE TABLE LIKE STATEMENT====';

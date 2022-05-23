@@ -11,7 +11,7 @@ SELECT REGEXP_INSTR('µå周çб', '周');
 SELECT REGEXP_INSTR('周 周周 周周周 周周周周', '周+', 2, 3, 1);
 --
 DROP TABLE IF EXISTS t1;
-CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, ro Int64 NULL, mt String NULL) Engine = Memory;
+CREATE TABLE t1(s String NULL, pat String NULL, pos Int64 NULL, occu Int64 NULL, ro Int64 NULL, mt String NULL) Engine = Fuse;
 INSERT INTO t1 (s, pat, pos, occu, ro, mt) VALUES (NULL, 'dog', 1, 1, 1, ''), ('dog cat dog', 'dog', NULL, 1, 1, 'c'), ('dog cat dog', 'dog', 1, 1, 1, 'c'), ('dog cat dog', 'dog', 1, 1, 1, NULL);
 SELECT s FROM t1 WHERE REGEXP_INSTR(s, pat, pos, occu, ro, mt) = 4;
 DROP TABLE t1;

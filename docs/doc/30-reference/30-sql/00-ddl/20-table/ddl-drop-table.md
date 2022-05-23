@@ -13,6 +13,6 @@ DROP TABLE [IF EXISTS] [db.]name
 ## Examples
 
 ```sql
-CREATE TABLE test(a INT, b VARCHAR) Engine = Memory;
+CREATE TABLE test(a INT, b VARCHAR) Engine = Fuse;
 DROP TABLE test;
 ```

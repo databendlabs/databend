@@ -166,7 +166,7 @@ select number+number as number from numbers(10) order by number asc offset 5;
 -- Memory engine
 select '====Memory Table====';
 drop table if exists temp;
-create table temp (a int) engine = Memory;
+create table temp (a int) Engine = Fuse;
 insert into temp values (1);
 select a from temp;
 drop table temp;
