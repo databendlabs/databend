@@ -55,7 +55,7 @@ impl FuseTable {
         while let Some(snapshot) = snapshots.try_next().await? {
             if let Some(ts) = snapshot.timestamp {
                 // break on the first one
-                if ts > time_point {
+                if ts <= time_point {
                     instant = Some(snapshot)
                 }
             }
