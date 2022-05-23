@@ -107,33 +107,36 @@ impl<'a> TableSnapshotReader<'a> {
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
     ) -> Pin<Box<dyn futures::stream::Stream<Item = Result<Arc<TableSnapshot>>> + 'a>> {
-        let version = format_version;
         let stream = stream::try_unfold(
-            (self, location_gen, location, version),
-            |(reader, gen, loc, ver)| async move {
-                let snapshot = match reader.read(loc, None, ver).await {
-                    Ok(s) => Ok(Some(s)),
-                    Err(e) => {
-                        if e.code() == ErrorCode::storage_not_found_code() {
-                            Ok(None)
-                        } else {
-                            Err(e)
+            (self, location_gen, Some((location, format_version))),
+            |(reader, gen, next)| async move {
+                // TODO simplify these
+                if let Some((loc, ver)) = next {
+                    let snapshot = match reader.read(loc, None, ver).await {
+                        Ok(s) => Ok(Some(s)),
+                        Err(e) => {
+                            if e.code() == ErrorCode::storage_not_found_code() {
+                                Ok(None)
+                            } else {
+                                Err(e)
+                            }
                         }
-                    }
-                };
-
-                match snapshot {
-                    Ok(Some(snapshot)) => {
-                        if let Some((id, v)) = snapshot.prev_snapshot_id {
-                            let new_ver = v;
-                            let new_loc = gen.snapshot_location_from_uuid(&id, v)?;
-                            Ok(Some((snapshot, (reader, gen, new_loc, new_ver))))
-                        } else {
-                            Ok(None)
+                    };
+                    match snapshot {
+                        Ok(Some(snapshot)) => {
+                            if let Some((id, v)) = snapshot.prev_snapshot_id {
+                                let new_ver = v;
+                                let new_loc = gen.snapshot_location_from_uuid(&id, v)?;
+                                Ok(Some((snapshot, (reader, gen, Some((new_loc, new_ver))))))
+                            } else {
+                                Ok(Some((snapshot, (reader, gen, None))))
+                            }
                         }
+                        Ok(None) => Ok(None),
+                        Err(e) => Err(e),
                     }
-                    Ok(None) => Ok(None),
-                    Err(e) => Err(e),
+                } else {
+                    Ok(None)
                 }
             },
         );
