@@ -47,6 +47,15 @@ pub use variant::*;
 
 use crate::serializations::formats::iterators::NullInfo;
 
+pub trait ColSerializer: Send + Sync {
+    fn write_csv_field(
+        &self,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+    ) -> Result<()>;
+}
+
 #[enum_dispatch]
 pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue, format: &FormatSettings) -> Result<String>;
@@ -126,6 +135,13 @@ pub trait TypeSerializer: Send + Sync {
     where
         F2: Fn(usize) -> bool + 'a,
     {
+        Err(ErrorCode::UnImplement(""))
+    }
+
+    fn get_csv_serializer<'a>(
+        &self,
+        _column: &'a ColumnRef,
+    ) -> Result<Box<dyn ColSerializer + 'a>> {
         Err(ErrorCode::UnImplement(""))
     }
 }

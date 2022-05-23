@@ -41,6 +41,18 @@ pub fn write_iterator(col: &ColumnRef) -> Vec<u8> {
     buf
 }
 
+pub fn write_embedded(col: &ColumnRef) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1000 * 1000);
+    let s = col.data_type().create_serializer();
+    let rows = col.len();
+    let ss = s.get_csv_serializer(col).unwrap();
+    let f = &FormatSettings::default();
+    for row in 0..rows {
+        ss.write_csv_field(row, &mut buf, f).unwrap();
+    }
+    buf
+}
+
 #[test]
 fn test_writers() -> Result<()> {
     use crate::Series;
@@ -49,16 +61,25 @@ fn test_writers() -> Result<()> {
     let exp = [49, 50, 50, 51, 51, 52];
     assert_eq!(write_iterator(&col), exp);
     assert_eq!(write_by_row(&col), exp);
-
-    let col = Series::from_data(vec!["12", "34"]);
-    let exp = "1234".to_string().as_bytes().to_vec();
-    assert_eq!(write_iterator(&col), exp);
-    assert_eq!(write_by_row(&col), exp);
+    assert_eq!(write_embedded(&col), exp);
 
     let col = Series::from_data(vec![Some(12u8), None, Some(34u8)]);
     let exp = [49, 50, 0, 51, 52];
     assert_eq!(write_iterator(&col), exp);
     assert_eq!(write_by_row(&col), exp);
+    assert_eq!(write_embedded(&col), exp);
+
+    let col = Series::from_data(vec!["12", "34"]);
+    let exp = "1234".to_string().as_bytes().to_vec();
+    assert_eq!(write_iterator(&col), exp);
+    assert_eq!(write_by_row(&col), exp);
+    assert_eq!(write_embedded(&col), exp);
+
+    let col = Series::from_data(vec![Some(12u8), None, Some(34u8)]);
+    let exp = [49, 50, 0, 51, 52];
+    assert_eq!(write_iterator(&col), exp);
+    assert_eq!(write_by_row(&col), exp);
+    assert_eq!(write_embedded(&col), exp);
     Ok(())
 }
 

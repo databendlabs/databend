@@ -144,4 +144,31 @@ where T: PrimitiveType
         lexical_to_bytes_mut_no_clear(v, buf);
         Ok(())
     }
+
+    fn get_csv_serializer<'a>(&self, column: &'a ColumnRef) -> Result<Box<dyn ColSerializer + 'a>> {
+        let column2: &PrimitiveColumn<T> = Series::check_get(&column)?;
+        let s = NumberColSerialize {
+            values: column2.values(),
+        };
+        Ok(Box::new(s))
+    }
+}
+
+#[derive(Clone)]
+pub struct NumberColSerialize<'a, T: PrimitiveType> {
+    pub(crate) values: &'a [T],
+}
+
+impl<'a, T> ColSerializer for NumberColSerialize<'a, T>
+where T: PrimitiveType + lexical_core::ToLexical
+{
+    fn write_csv_field(
+        &self,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        lexical_to_bytes_mut_no_clear(self.values[row_num].clone(), buf);
+        Ok(())
+    }
 }

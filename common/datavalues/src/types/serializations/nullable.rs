@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use opensrv_clickhouse::types::column::NullableColumnData;
@@ -22,6 +23,7 @@ use streaming_iterator::StreamingIterator;
 
 use crate::prelude::DataValue;
 use crate::serializations::formats::iterators::NullInfo;
+use crate::ColSerializer;
 use crate::Column;
 use crate::ColumnRef;
 use crate::NullableColumn;
@@ -141,5 +143,37 @@ impl TypeSerializer for NullableSerializer {
         F2: Fn(usize) -> bool + 'a,
     {
         unreachable!()
+    }
+
+    fn get_csv_serializer<'a>(&self, column: &'a ColumnRef) -> Result<Box<dyn ColSerializer + 'a>> {
+        let column: &NullableColumn = Series::check_get(&column)?;
+
+        let cs = NullableColSerializer {
+            validity: column.ensure_validity(),
+            inner: self.inner.get_csv_serializer(column.inner())?,
+        };
+        Ok(Box::new(cs))
+    }
+}
+
+//#[derive(Clone)]
+pub struct NullableColSerializer<'a> {
+    validity: &'a Bitmap,
+    inner: Box<dyn ColSerializer + 'a>,
+}
+
+impl<'a> ColSerializer for NullableColSerializer<'a> {
+    fn write_csv_field(
+        &self,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+    ) -> Result<()> {
+        if self.validity.get_bit(row_num) {
+            self.inner.write_csv_field(row_num, buf, format)?;
+        } else {
+            buf.extend_from_slice(&format.csv_null);
+        }
+        Ok(())
     }
 }

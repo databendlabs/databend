@@ -166,4 +166,28 @@ impl TypeSerializer for StringSerializer {
         buf.extend_from_slice(col.get_data(row_num));
         Ok(())
     }
+
+    //  move it to DataType later
+    fn get_csv_serializer<'a>(&self, column: &'a ColumnRef) -> Result<Box<dyn ColSerializer + 'a>> {
+        let col: &StringColumn = Series::check_get(&column)?;
+        let s = StringColSerializer { col };
+        Ok(Box::new(s))
+    }
+}
+
+#[derive(Clone)]
+pub struct StringColSerializer<'a> {
+    pub(crate) col: &'a StringColumn,
+}
+
+impl<'a> ColSerializer for StringColSerializer<'a> {
+    fn write_csv_field(
+        &self,
+        row_num: usize,
+        buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        buf.extend_from_slice(unsafe { self.col.value_unchecked(row_num) });
+        Ok(())
+    }
 }

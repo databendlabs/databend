@@ -46,6 +46,13 @@ fn add_group(c: &mut Criterion, typ: &str, creator: ColumnCreator, item_size: us
                     b.iter(|| csv::write_iterator(&col));
                 },
             );
+            group.bench_with_input(
+                BenchmarkId::new(bench_name(typ, &null_name, "embedded"), size),
+                &log2_size,
+                |b, _| {
+                    b.iter(|| csv::write_embedded(&col));
+                },
+            );
         }
     });
 }
