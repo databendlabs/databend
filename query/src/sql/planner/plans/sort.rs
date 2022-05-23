@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
+use common_exception::Result;
 
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 use crate::sql::IndexType;
@@ -35,7 +36,7 @@ pub struct SortItem {
     pub nulls_first: Option<bool>,
 }
 
-impl BasePlan for SortPlan {
+impl Operator for SortPlan {
     fn plan_type(&self) -> PlanType {
         PlanType::Sort
     }
@@ -49,15 +50,11 @@ impl BasePlan for SortPlan {
     }
 
     fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
+        Some(self)
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
+        Some(self)
     }
 }
 
@@ -68,7 +65,7 @@ impl PhysicalPlan for SortPlan {
 }
 
 impl LogicalPlan for SortPlan {
-    fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
-        todo!()
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        rel_expr.derive_relational_prop_child(0)
     }
 }

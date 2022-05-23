@@ -14,4 +14,6 @@ SELECT sum(r[0]) as r1, sum(r[1]) as r2, sum(r[2]) as r3 FROM (SELECT uid, reten
 
 SELECT uid, retention(date = '2018-08-06', date = '2018-08-07', date = '2018-08-08') AS r FROM retention_test WHERE uid = 999 GROUP BY uid;
 
+SELECT uid FROM (SELECT uid,retention(date = '2018-08-06', date = '2018-08-07') AS r FROM retention_test WHERE date = '2018-08-06' OR date = '2018-08-07' GROUP BY uid) WHERE r[0] = 1 ORDER BY uid desc limit 1;
+
 DROP TABLE retention_test;
