@@ -122,12 +122,12 @@ impl MetaGrpcClient {
     ) -> std::result::Result<Arc<MetaGrpcClient>, Infallible> {
         let mgr = MetaChannelManager {
             timeout: Some(Duration::from_secs(conf.client_timeout_in_second)),
-            conf: conf.meta_service_config.tls_conf.clone(),
+            conf: conf.metasrv_config.tls_conf.clone(),
         };
 
-        let addr = conf.meta_service_config.address.to_string();
-        let endpoints = if !conf.meta_service_config.endpoints.is_empty() {
-            conf.meta_service_config.endpoints.clone()
+        let addr = conf.metasrv_config.address.to_string();
+        let endpoints = if !conf.metasrv_config.endpoints.is_empty() {
+            conf.metasrv_config.endpoints.clone()
         } else {
             vec![addr]
         };
@@ -135,8 +135,8 @@ impl MetaGrpcClient {
         let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: RwLock::new(endpoints),
-            username: conf.meta_service_config.username.to_string(),
-            password: conf.meta_service_config.password.to_string(),
+            username: conf.metasrv_config.username.to_string(),
+            password: conf.metasrv_config.password.to_string(),
             token: RwLock::new(None),
         });
 

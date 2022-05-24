@@ -301,8 +301,7 @@ impl MetaConfig {
         };
 
         MetaGrpcClientConf {
-            meta_service_config: meta_config.clone(),
-            kv_service_config: meta_config,
+            metasrv_config: meta_config,
             client_timeout_in_second: self.client_timeout_in_second,
         }
     }

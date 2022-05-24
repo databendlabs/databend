@@ -46,7 +46,7 @@ impl MetaClientProvider {
 
     /// Get kv async client, operations trait defined in KVApi.
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
-        let local = self.grpc_conf.meta_service_config.address.is_empty();
+        let local = self.grpc_conf.metasrv_config.address.is_empty();
         if local {
             let meta_store = common_meta_embedded::MetaEmbedded::get_meta().await?;
             Ok(meta_store)

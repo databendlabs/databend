@@ -16,7 +16,6 @@ use common_grpc::RpcClientConf;
 
 #[derive(Clone, Debug, Default)]
 pub struct MetaGrpcClientConf {
-    pub meta_service_config: RpcClientConf,
-    pub kv_service_config: RpcClientConf,
+    pub metasrv_config: RpcClientConf,
     pub client_timeout_in_second: u64,
 }
