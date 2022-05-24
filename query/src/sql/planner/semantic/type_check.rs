@@ -850,17 +850,19 @@ impl<'a> TypeChecker<'a> {
 
     async fn resolve_array(&self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
         let mut values = Vec::with_capacity(exprs.len());
-        let mut first_data_type = DataTypeImpl::Boolean(BooleanType::default());
-        for (idx, expr) in exprs.iter().enumerate() {
+        let mut first_data_type = None;
+        for expr in exprs.iter() {
             match expr {
                 Expr::Literal { lit, .. } => {
                     let (value, data_type) = self.resolve_literal(lit, None)?;
-                    if idx == 0 {
-                        first_data_type = data_type;
-                    } else if data_type != first_data_type {
-                        return Err(ErrorCode::SemanticError(expr.span().display_error(
-                            "Values in array should have same type".to_string(),
-                        )));
+                    if let Some(dy) = first_data_type.as_ref() {
+                        if !data_type.eq(dy) {
+                            return Err(ErrorCode::SemanticError(expr.span().display_error(
+                                "Values in array should have same type".to_string(),
+                            )));
+                        }
+                    } else {
+                        first_data_type = Some(data_type);
                     }
                     values.push(value);
                 }
