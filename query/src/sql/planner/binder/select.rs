@@ -109,7 +109,11 @@ impl<'a> Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        Ok((s_expr, from_context))
+        let mut output_context = BindContext::new();
+        output_context.parent = from_context.parent;
+        output_context.columns = from_context.columns;
+
+        Ok((s_expr, output_context))
     }
 
     #[async_recursion]

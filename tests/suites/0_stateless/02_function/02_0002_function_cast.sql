@@ -30,10 +30,10 @@ SELECT '33'::unsigned = 33;
 SELECT '-33aa'::signed = 33; -- {ErrorCode 1010}
 SELECT 33::string = '33';
 
-select "truE"::boolean;
-select not "FalSe"::boolean;
-select "false"::boolean = not "true"::boolean;
-select "FalSex"::boolean; -- {ErrorCode 1010}
+select 'truE'::boolean;
+select not 'FalSe'::boolean;
+select 'false'::boolean = not 'true'::boolean;
+select 'FalSex'::boolean; -- {ErrorCode 1010}
 
 
 SELECT '===DATE/DATETIME===';

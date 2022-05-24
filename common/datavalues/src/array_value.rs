@@ -18,6 +18,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use itertools::EitherOrBoth::Both;
+use itertools::EitherOrBoth::Left;
+use itertools::EitherOrBoth::Right;
+use itertools::Itertools;
+
 use crate::prelude::*;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
@@ -73,17 +78,40 @@ pub enum ArrayValueRef<'a> {
     ValueRef { val: &'a ArrayValue },
 }
 
+impl<'a> ArrayValueRef<'a> {
+    pub fn values(&self) -> Vec<DataValue> {
+        match self {
+            ArrayValueRef::Indexed { column, idx } => {
+                let value = column.get(*idx);
+                value.as_array().unwrap()
+            }
+            ArrayValueRef::ValueRef { val } => val.values.clone(),
+        }
+    }
+}
+
 impl PartialEq for ArrayValueRef<'_> {
-    fn eq(&self, _other: &Self) -> bool {
-        // TODO(b41sh): implement PartialEq for ArrayValueRef
-        false
+    fn eq(&self, other: &Self) -> bool {
+        self.values().eq(&other.values())
     }
 }
 
 impl PartialOrd for ArrayValueRef<'_> {
-    fn partial_cmp(&self, _other: &Self) -> Option<Ordering> {
-        // TODO(b41sh): implement PartialOrd for ArrayValueRef
-        Some(Ordering::Equal)
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let l = self.values();
+        let r = other.values();
+        let it = l.iter().zip_longest(r.iter()).find_map(|e| match e {
+            Both(ls, rs) => match ls.partial_cmp(rs) {
+                Some(ord) => match ord {
+                    Ordering::Equal => None,
+                    other => Some(other),
+                },
+                None => None,
+            },
+            Left(_) => Some(Ordering::Greater),
+            Right(_) => Some(Ordering::Less),
+        });
+        it.or(Some(Ordering::Equal))
     }
 }
 
