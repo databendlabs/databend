@@ -19,6 +19,7 @@ jobs:
           download_translations: true
           config: '.github/crowdin.yml'
           base_url: 'https://databend.crowdin.com'
+          base_path: '.'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
