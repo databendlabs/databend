@@ -21,8 +21,8 @@ use common_exception::ErrorCode;
 use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_types::AuthInfo;
-use common_meta_types::GetKVActionReply;
-use common_meta_types::MGetKVActionReply;
+use common_meta_types::GetKVReply;
+use common_meta_types::MGetKVReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
@@ -31,8 +31,8 @@ use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReq;
 use common_meta_types::UserIdentity;
 use mockall::predicate::*;
 use mockall::*;
@@ -44,15 +44,15 @@ mock! {
     impl KVApi for KV {
         async fn upsert_kv(
             &self,
-            act: UpsertKVAction,
+            act: UpsertKVReq,
         ) -> Result<UpsertKVActionReply, MetaError>;
 
-        async fn get_kv(&self, key: &str) -> Result<GetKVActionReply,MetaError>;
+        async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
 
         async fn mget_kv(
             &self,
             key: &[String],
-        ) -> Result<MGetKVActionReply,MetaError>;
+        ) -> Result<MGetKVReply,MetaError>;
 
         async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
 
@@ -102,7 +102,7 @@ mod add {
             let test_key = test_key.clone();
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKVAction::new(
+                .with(predicate::eq(UpsertKVReq::new(
                     &test_key,
                     test_seq,
                     value.clone(),
@@ -122,7 +122,7 @@ mod add {
             let test_key = test_key.clone();
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKVAction::new(
+                .with(predicate::eq(UpsertKVReq::new(
                     &test_key,
                     test_seq,
                     value.clone(),
@@ -153,7 +153,7 @@ mod add {
         {
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKVAction::new(
+                .with(predicate::eq(UpsertKVReq::new(
                     &test_key,
                     test_seq,
                     value.clone(),
@@ -414,7 +414,7 @@ mod drop {
             escape_for_key(&format_user_key(test_user, test_hostname))?
         );
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVAction::new(
+            .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
                 MatchSeq::Any,
                 Operation::Delete,
@@ -440,7 +440,7 @@ mod drop {
             escape_for_key(&format_user_key(test_user, test_hostname))?
         );
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVAction::new(
+            .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
                 MatchSeq::Any,
                 Operation::Delete,
@@ -515,7 +515,7 @@ mod update {
             serialize_struct(&new_user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVAction::new(
+            .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
                 MatchSeq::GE(1),
                 Operation::Update(new_value_with_old_salt.clone()),
@@ -597,7 +597,7 @@ mod update {
 
         // upsert should be called
         kv.expect_upsert_kv()
-            .with(predicate::function(move |act: &UpsertKVAction| {
+            .with(predicate::function(move |act: &UpsertKVReq| {
                 act.key == test_key.as_str() && act.seq == MatchSeq::GE(1)
             }))
             .times(1)
@@ -659,7 +659,7 @@ mod set_user_privileges {
         let new_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVAction::new(
+            .with(predicate::eq(UpsertKVReq::new(
                 &test_key,
                 MatchSeq::GE(1),
                 Operation::Update(new_value),

@@ -34,19 +34,19 @@ pub struct ListKVReq {
 }
 
 pub type UpsertKVActionReply = Change<Vec<u8>>;
-pub type GetKVActionReply = Option<SeqV<Vec<u8>>>;
-pub type MGetKVActionReply = Vec<Option<SeqV<Vec<u8>>>>;
+pub type GetKVReply = Option<SeqV<Vec<u8>>>;
+pub type MGetKVReply = Vec<Option<SeqV<Vec<u8>>>>;
 pub type PrefixListReply = Vec<(String, SeqV<Vec<u8>>)>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct UpsertKVAction {
+pub struct UpsertKVReq {
     pub key: String,
     pub seq: MatchSeq,
     pub value: Operation<Vec<u8>>,
     pub value_meta: Option<KVMeta>,
 }
 
-impl UpsertKVAction {
+impl UpsertKVReq {
     pub fn new(
         key: &str,
         seq: MatchSeq,
