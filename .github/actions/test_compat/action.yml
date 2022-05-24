@@ -45,3 +45,17 @@ runs:
       run: |
         chmod +x ./tests/compat/test-compat.sh
         build-tool bash ./tests/compat/test-compat.sh
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: test-compat
+        path: |
+          _local_fs/
+          _logs*/
+          _meta*/
+          metasrv/_logs*/
+          query/_logs*/
+          store/_logs*/
+          nohup.out
