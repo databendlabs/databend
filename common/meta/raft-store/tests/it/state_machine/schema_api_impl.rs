@@ -109,7 +109,9 @@ async fn test_meta_embedded_table_drop_undrop_list_history() -> anyhow::Result<(
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    SchemaApiTestSuite {}.table_drop_undrop_list_history(&sm).await
+    SchemaApiTestSuite {}
+        .table_drop_undrop_list_history(&sm)
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
