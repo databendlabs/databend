@@ -21,6 +21,10 @@ jobs:
           base_url: 'https://databend.crowdin.com'
           base_path: '.'
 
+          # Avoid adding too many not translated files
+          skip_untranslated_files: true
+          export_only_approved: true
+          # Make sure crowdin robot agree our template
           pull_request_body: |
             I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
 
