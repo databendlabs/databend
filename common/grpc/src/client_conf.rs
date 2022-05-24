@@ -40,7 +40,14 @@ pub struct RpcClientConf {
 }
 
 impl RpcClientConf {
+    /// Whether a remote metasrv is specified.
+    ///
+    /// - `address` is an old config that accept only one address.
+    /// - `endpoints` accepts multiple endpoint candidates.
+    ///
+    /// If either of these two is configured(non-empty), use remote metasrv.
+    /// Otherwise, use a local embedded meta
     pub fn local_mode(&self) -> bool {
-        self.address.is_empty()
+        self.address.is_empty() && self.endpoints.is_empty()
     }
 }
