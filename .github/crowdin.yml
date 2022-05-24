@@ -1,4 +1,4 @@
-project_id_env: 2
+project_id: "2"
 api_token_env: CROWDIN_PERSONAL_TOKEN
 
 # See docs from https://docusaurus.io/docs/i18n/crowdin
