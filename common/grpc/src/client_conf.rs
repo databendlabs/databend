@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::time::Duration;
+
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientTlsConfig {
     pub rpc_tls_server_root_ca_cert: String,
@@ -32,6 +34,9 @@ pub struct RpcClientConf {
     pub username: String,
     pub password: String,
     pub tls_conf: Option<RpcClientTlsConfig>,
+
+    /// Timeout for an RPC
+    pub timeout: Option<Duration>,
 }
 
 impl RpcClientConf {

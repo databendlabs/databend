@@ -17,9 +17,9 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_grpc::RpcClientConf;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
-use common_meta_grpc::MetaGrpcClientConf;
 
 // Since there is a pending dependency issue,
 // StoreApiProvider is temporarily moved from store-api-sdk
@@ -28,11 +28,11 @@ use common_meta_grpc::MetaGrpcClientConf;
 
 #[derive(Clone)]
 pub struct MetaClientProvider {
-    grpc_conf: MetaGrpcClientConf,
+    grpc_conf: RpcClientConf,
 }
 
 impl MetaClientProvider {
-    pub fn new(grpc_conf: MetaGrpcClientConf) -> Self {
+    pub fn new(grpc_conf: RpcClientConf) -> Self {
         MetaClientProvider { grpc_conf }
     }
 
@@ -46,7 +46,7 @@ impl MetaClientProvider {
 
     /// Get kv async client, operations trait defined in KVApi.
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
-        let local = self.grpc_conf.metasrv_config.address.is_empty();
+        let local = self.grpc_conf.address.is_empty();
         if local {
             let meta_store = common_meta_embedded::MetaEmbedded::get_meta().await?;
             Ok(meta_store)
