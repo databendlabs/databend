@@ -87,6 +87,8 @@ select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
 
 select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
 
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name);
+
 -- aggregator combinator
 -- distinct
 select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
@@ -122,6 +124,8 @@ select * from t2 inner join t on t.a = t2.c;
 select * from t2 inner join t on t.a = t2.c + 1;
 select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
+
+select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
 
 -- order by
 select '====ORDER_BY====';
@@ -212,5 +216,19 @@ insert into t2 values(1, 2), (2, 6);
 select * from t2 inner join t1 on t1.a = t2.c;
 drop table t1;
 drop table t2;
+
+-- trim function
+select '===Trim Functuon===';
+select trim(leading ' ' from '      abc');
+select trim(leading ' ' from '');
+select trim(leading 'ab' from 'abab');
+select trim(leading 'ab' from 'abc');
+select trim(trailing ' ' from 'abc    ');
+select trim(trailing ' ' from '');
+select trim(trailing 'ab' from 'abab');
+select trim(trailing 'ab' from 'cab');
+select trim(both 'ab' from 'abab');
+select trim(both 'ab' from 'abcab');
+select trim(' abc ');
 
 set enable_planner_v2 = 0;

@@ -1,0 +1,41 @@
+name: Crowdin Action
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  synchronize-with-crowdin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: crowdin action
+        uses: crowdin/github-action@1.4.9
+        with:
+          upload_translations: true
+          download_translations: true
+          config: '.github/crowdin.yml'
+          base_url: 'https://databend.crowdin.com'
+          base_path: '.'
+
+          # Avoid adding too many not translated files
+          skip_untranslated_files: true
+          export_only_approved: true
+          # Make sure crowdin robot agree our template
+          pull_request_body: |
+            I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+
+            ## Summary
+
+            Update i18n files
+
+            ## Changelog
+
+            - Not for changelog (changelog entry is not required)
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}

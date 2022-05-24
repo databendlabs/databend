@@ -24,7 +24,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TenantQuota;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 
 use super::quota_api::QuotaApi;
 
@@ -70,7 +70,7 @@ impl QuotaApi for QuotaMgr {
         };
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 &self.key,
                 match_seq,
                 Operation::Update(value),

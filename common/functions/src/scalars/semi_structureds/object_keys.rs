@@ -81,7 +81,7 @@ impl Function for ObjectKeysFunction {
         }
 
         Ok(ArrayColumn::from_data(
-            StringType::new_impl(),
+            DataTypeImpl::Array(ArrayType::create(StringType::new_impl())),
             offsets.into(),
             data_column.to_column(),
         )

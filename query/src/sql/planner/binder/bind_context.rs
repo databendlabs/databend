@@ -42,7 +42,8 @@ pub struct ColumnBinding {
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Default, Debug)]
 pub struct BindContext {
-    parent: Option<Box<BindContext>>,
+    pub parent: Option<Box<BindContext>>,
+
     pub columns: Vec<ColumnBinding>,
 
     pub aggregate_info: AggregateInfo,
