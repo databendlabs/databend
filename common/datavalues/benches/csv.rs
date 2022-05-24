@@ -39,13 +39,13 @@ fn add_group(c: &mut Criterion, typ: &str, creator: ColumnCreator, item_size: us
                     b.iter(|| csv::write_by_row(&col));
                 },
             );
-            group.bench_with_input(
-                BenchmarkId::new(bench_name(typ, &null_name, "iter"), size),
-                &log2_size,
-                |b, _| {
-                    b.iter(|| csv::write_iterator(&col));
-                },
-            );
+            // group.bench_with_input(
+            //     BenchmarkId::new(bench_name(typ, &null_name, "iter"), size),
+            //     &log2_size,
+            //     |b, _| {
+            //         b.iter(|| csv::write_iterator(&col));
+            //     },
+            // );
             group.bench_with_input(
                 BenchmarkId::new(bench_name(typ, &null_name, "embedded"), size),
                 &log2_size,
@@ -59,7 +59,7 @@ fn add_group(c: &mut Criterion, typ: &str, creator: ColumnCreator, item_size: us
 
 fn add_benchmark(c: &mut Criterion) {
     add_group(c, "i32", create_primitive_array, 1);
-    for strlen in [10, 100, 1000] {
+    for strlen in [10, 100] {
         let typ = format!("str[{}]", strlen);
         add_group(c, &typ, create_string_array, strlen);
     }
