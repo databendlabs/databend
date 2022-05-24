@@ -13,4 +13,5 @@
 //  limitations under the License.
 //
 
+mod clustering_information_table;
 mod fuse_snapshot_table;

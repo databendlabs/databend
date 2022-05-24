@@ -36,7 +36,9 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::planner::metadata::optimize_remove_count_args;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::AggregateFunction;
 use crate::sql::plans::AndExpr;
 use crate::sql::plans::BoundColumnRef;
@@ -48,6 +50,7 @@ use crate::sql::plans::FunctionCall;
 use crate::sql::plans::OrExpr;
 use crate::sql::plans::Scalar;
 use crate::sql::plans::SubqueryExpr;
+use crate::sql::plans::SubqueryType;
 use crate::sql::BindContext;
 
 /// A helper for type checking.
@@ -62,6 +65,7 @@ use crate::sql::BindContext;
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+    metadata: MetadataRef,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
@@ -69,10 +73,15 @@ pub struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(bind_context: &'a BindContext, ctx: Arc<QueryContext>) -> Self {
+    pub fn new(
+        bind_context: &'a BindContext,
+        ctx: Arc<QueryContext>,
+        metadata: MetadataRef,
+    ) -> Self {
         Self {
             bind_context,
             ctx,
+            metadata,
             in_aggregate_function: false,
         }
     }
@@ -279,6 +288,15 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(|(_, data_type)| DataField::new("", data_type.clone()))
                         .collect();
+
+                    // Rewrite `count(distinct)` to `uniq(...)`
+                    let (func_name, distinct) =
+                        if func_name.eq_ignore_ascii_case("count") && *distinct {
+                            ("count_distinct", false)
+                        } else {
+                            (func_name, *distinct)
+                        };
+
                     let agg_func = AggregateFunctionFactory::instance().get(
                         func_name,
                         params.clone(),
@@ -287,12 +305,13 @@ impl<'a> TypeChecker<'a> {
 
                     Ok((
                         AggregateFunction {
+                            display_name: format!("{:#}", expr),
                             func_name: func_name.to_string(),
-                            distinct: *distinct,
+                            distinct,
                             params,
                             args: if optimize_remove_count_args(
                                 func_name,
-                                *distinct,
+                                distinct,
                                 args.as_slice(),
                             ) {
                                 vec![]
@@ -315,6 +334,7 @@ impl<'a> TypeChecker<'a> {
 
                 Ok((
                     AggregateFunction {
+                        display_name: format!("{:#}", expr),
                         func_name: "count".to_string(),
                         distinct: false,
                         params: vec![],
@@ -326,7 +346,10 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
-            Expr::Subquery { subquery, .. } => self.resolve_subquery(subquery, false, None).await,
+            Expr::Subquery { subquery, .. } => {
+                self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
+                    .await
+            }
 
             Expr::MapAccess {
                 span,
@@ -369,6 +392,20 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Extract { kind, expr, .. } => {
                 self.resolve_extract_expr(kind, expr, required_type).await
+            }
+
+            Expr::Interval { expr, unit, .. } => {
+                self.resolve_interval(expr, unit, required_type).await
+            }
+
+            Expr::DateAdd {
+                date,
+                interval,
+                unit,
+                ..
+            } => {
+                self.resolve_date_add(date, interval, unit, required_type)
+                    .await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
@@ -553,13 +590,126 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    pub async fn resolve_interval(
+        &mut self,
+        arg: &Expr<'a>,
+        interval_kind: &IntervalKind,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        match interval_kind {
+            IntervalKind::Year => {
+                self.resolve_function(
+                    "to_interval_year",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Year)),
+                )
+                .await
+            }
+            IntervalKind::Month => {
+                self.resolve_function(
+                    "to_interval_month",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Month)),
+                )
+                .await
+            }
+            IntervalKind::Day => {
+                self.resolve_function(
+                    "to_interval_day",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Day)),
+                )
+                .await
+            }
+            IntervalKind::Hour => {
+                self.resolve_function(
+                    "to_interval_hour",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Hour)),
+                )
+                .await
+            }
+            IntervalKind::Minute => {
+                self.resolve_function(
+                    "to_interval_minute",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Minute)),
+                )
+                .await
+            }
+            IntervalKind::Second => {
+                self.resolve_function(
+                    "to_interval_second",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Second)),
+                )
+                .await
+            }
+            IntervalKind::Doy => {
+                self.resolve_function(
+                    "to_interval_doy",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Doy)),
+                )
+                .await
+            }
+            IntervalKind::Dow => {
+                self.resolve_function(
+                    "to_interval_dow",
+                    &[arg],
+                    Some(IntervalType::new_impl(IntervalKind::Dow)),
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn resolve_date_add(
+        &mut self,
+        date: &Expr<'a>,
+        interval: &Expr<'a>,
+        interval_kind: &IntervalKind,
+        _required_type: Option<DataTypeImpl>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let mut args = vec![];
+        let mut arg_types = vec![];
+
+        let (date, date_type) = self.resolve(date, None).await?;
+        args.push(date);
+        arg_types.push(date_type);
+
+        let (interval, interval_type) =
+            self.resolve_interval(interval, interval_kind, None).await?;
+        args.push(interval);
+        arg_types.push(interval_type);
+
+        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+
+        let func = FunctionFactory::instance().get("date_add", &arg_types_ref)?;
+        Ok((
+            FunctionCall {
+                arguments: args,
+                func_name: "date_add".to_string(),
+                arg_types: arg_types.to_vec(),
+                return_type: func.return_type(),
+            }
+            .into(),
+            func.return_type(),
+        ))
+    }
+
     pub async fn resolve_subquery(
         &mut self,
+        typ: SubqueryType,
         subquery: &Query<'a>,
         allow_multi_rows: bool,
         _required_type: Option<DataTypeImpl>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        let mut binder = Binder::new(self.ctx.clone(), self.ctx.get_catalogs());
+        let mut binder = Binder::new(
+            self.ctx.clone(),
+            self.ctx.get_catalogs(),
+            self.metadata.clone(),
+        );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
@@ -573,11 +723,16 @@ impl<'a> TypeChecker<'a> {
 
         let data_type = output_context.columns[0].data_type.clone();
 
+        let rel_expr = RelExpr::with_s_expr(&s_expr);
+        let rel_prop = rel_expr.derive_relational_prop()?;
+
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
             data_type: data_type.clone(),
             output_context: Box::new(output_context),
             allow_multi_rows,
+            typ,
+            outer_columns: rel_prop.outer_columns,
         };
 
         Ok((subquery_expr.into(), data_type))
@@ -635,20 +790,12 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => DataValue::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => DataValue::Boolean(*boolean),
             Literal::Null => DataValue::Null,
-            Literal::Interval(interval) => {
-                let num = interval.value.parse::<i64>()?;
-                DataValue::Int64(num)
-            }
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
 
-        let data_type = if let Literal::Interval(interval) = literal {
-            IntervalType::new_impl(interval.kind)
-        } else {
-            value.data_type()
-        };
+        let data_type = value.data_type();
 
         Ok((value, data_type))
     }

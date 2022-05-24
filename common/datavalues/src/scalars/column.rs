@@ -102,5 +102,5 @@ pub trait ScalarColumnBuilder: MutableColumn {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ColumnMeta {
     Simple,
-    Array { data_type: DataTypeImpl },
+    Array { inner_type: DataTypeImpl },
 }

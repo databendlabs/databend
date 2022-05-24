@@ -37,11 +37,11 @@ use crate::sessions::SessionType;
 use crate::sessions::Settings;
 use crate::Config;
 
-#[derive(Clone, MallocSizeOf)]
+#[derive(MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) typ: SessionType,
+    pub(in crate::sessions) typ: RwLock<SessionType>,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -50,6 +50,7 @@ pub struct Session {
     session_settings: Settings,
     #[ignore_malloc_size_of = "insignificant"]
     status: Arc<RwLock<SessionStatus>>,
+    pub(in crate::sessions) mysql_connection_id: Option<u32>,
 }
 
 impl Session {
@@ -58,29 +59,40 @@ impl Session {
         id: String,
         typ: SessionType,
         session_mgr: Arc<SessionManager>,
+        mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let session_settings = Settings::try_create(&conf)?;
         let ref_count = Arc::new(AtomicUsize::new(0));
         let status = Arc::new(Default::default());
-
         Ok(Arc::new(Session {
             id,
-            typ,
+            typ: RwLock::new(typ),
             session_mgr,
             ref_count,
             session_ctx,
             session_settings,
             status,
+            mysql_connection_id,
         }))
+    }
+
+    pub fn get_mysql_conn_id(self: &Arc<Self>) -> Option<u32> {
+        self.mysql_connection_id
     }
 
     pub fn get_id(self: &Arc<Self>) -> String {
         self.id.clone()
     }
 
-    pub fn get_type(self: &Arc<Self>) -> SessionType {
-        self.typ.clone()
+    pub fn get_type(&self) -> SessionType {
+        let lock = self.typ.read();
+        lock.clone()
+    }
+
+    pub fn set_type(&self, typ: SessionType) {
+        let mut lock = self.typ.write();
+        *lock = typ;
     }
 
     pub fn is_aborting(self: &Arc<Self>) -> bool {

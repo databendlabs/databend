@@ -68,11 +68,11 @@ jwt_key_file = ""
 
 [log]
 level = "INFO"
-dir = "./_logs"
+dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-embedded_dir = "./_meta_embedded"
+embedded_dir = "./.databend/meta_embedded"
 address = ""
 endpoints = []
 username = "root"
@@ -110,7 +110,7 @@ root = ""
 
 [catalog]
 meta_store_address = "127.0.0.1:9083"
-protocol = "Binary"
+protocol = "binary"
 "#;
 
     let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
@@ -324,11 +324,11 @@ jwt_key_file = ""
 
 [log]
 level = "INFO"
-dir = "./_logs"
+dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-embedded_dir = "./_meta_embedded"
+embedded_dir = "./.databend/meta_embedded"
 address = ""
 endpoints = []
 username = "username_from_file"
@@ -342,7 +342,7 @@ type = "s3"
 num_cpus = 0
 
 [storage.fs]
-data_path = "_data"
+data_path = "./.datebend/data"
 
 [storage.s3]
 region = ""
@@ -366,13 +366,13 @@ root = ""
 
 [catalog]
 meta_store_address = "127.0.0.1:9083"
-protocol = "Binary"
+protocol = "binary"
     "#
         .as_bytes(),
     )?;
 
     // Make sure all data flushed.
-    let _ = f.flush()?;
+    f.flush()?;
 
     temp_env::with_vars(
         vec![

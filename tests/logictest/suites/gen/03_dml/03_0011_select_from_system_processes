@@ -1,0 +1,3 @@
+-- ignore results
+statement ok
+select state, database from system.processes;

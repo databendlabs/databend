@@ -1,15 +1,23 @@
-from tests.logictest.mysql_runner import TestMySQL
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+import os
 
-config = {
-    'user': 'root',
-    'password': 'root',
-    'host': '127.0.0.1',
-    "port": 3307,
-    'database': 'default',
-    'raise_on_warnings': True
-}
+from mysql_runner import TestMySQL
+from http_runner import TestHttp
+
+from config import mysql_config, http_config
+
 if __name__ == '__main__':
-    mySQL = TestMySQL("mysql")
-    mySQL.set_driver(config)
-    mySQL.set_label("mysql")
-    mySQL.run_sql_suite()
+    disable_mysql_test = os.getenv("DISABLE_MYSQL_LOGIC_TEST")
+    if disable_mysql_test is None:
+        mySQL = TestMySQL("mysql")
+        mySQL.set_driver(mysql_config)
+        mySQL.set_label("mysql")
+        mySQL.run_sql_suite()
+
+    disable_http_test = os.getenv("DISABLE_HTTP_LOGIC_TEST")
+    if disable_http_test is None:
+        http = TestHttp("http")
+        http.set_driver(http_config)
+        http.set_label("http")
+        http.run_sql_suite()

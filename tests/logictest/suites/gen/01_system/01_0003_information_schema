@@ -1,0 +1,38 @@
+statement query T 
+show tables from information_schema;
+
+----  
+COLUMNS
+KEYWORDS
+SCHEMATA
+TABLES
+VIEWS
+
+statement query T 
+SHOW TABLES FROM INFORMATION_SCHEMA;
+
+----  
+COLUMNS
+KEYWORDS
+SCHEMATA
+TABLES
+VIEWS
+
+statement query B label(mysql,http)
+select count(1) > 1 from information_schema.columns;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select count(1) > 1 from information_Schema.Columns;
+
+----  mysql
+1
+
+----  http
+true
+

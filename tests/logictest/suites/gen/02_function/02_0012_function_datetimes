@@ -1,0 +1,1250 @@
+statement ok
+set timezone = 'UTC';
+
+statement query B label(mysql,http)
+SELECT today() >= 18869;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT now() >= 1630295616;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query TB label(mysql,http)
+select  to_datetime(1630320462000000), to_int64(to_datetime(1630320462000000))  = 1630320462000000;
+
+----  mysql
+2021-08-30 10:47:42 1
+
+----  http
+2021-08-30 10:47:42 true
+
+statement query TB label(mysql,http)
+select  to_date(18869), to_uint32(to_date(18869))  = 18869;
+
+----  mysql
+2021-08-30 1
+
+----  http
+2021-08-30 true
+
+statement query TB label(mysql,http)
+select  to_datetime(1640019661000000), to_int64(to_datetime(1640019661000000))  = 1640019661000000;
+
+----  mysql
+2021-12-20 17:01:01 1
+
+----  http
+2021-12-20 17:01:01 true
+
+statement query T 
+select  to_date('1000-01-01');
+
+----  
+1000-01-01
+
+statement query T 
+select  to_date('9999-12-31');
+
+----  
+9999-12-31
+
+statement error 1010
+select  to_date('10000-12-31'); 
+
+statement error 1068
+select  to_date('0999-12-31'); 
+
+statement query T 
+select  to_datetime('1000-01-01 00:00:00');
+
+----  
+1000-01-01 00:00:00
+
+statement query T 
+select  to_datetime('9999-12-31 23:59:59');
+
+----  
+9999-12-31 23:59:59
+
+statement error 1010
+select  to_datetime('10000-01-01 00:00:00'); 
+
+statement error 1069
+select  to_datetime('0999-12-31 23:59:59'); 
+
+statement query B label(mysql,http)
+select typeof(today() + 3) = 'DATE';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select typeof(today() - 3) = 'DATE';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select typeof(now() - 3) = 'TIMESTAMP(6)';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select typeof(to_datetime(1640019661000000)) = 'TIMESTAMP(6)';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select today() + 1 - today() = 1;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select typeof(today() - today()) = 'INT';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select typeof(now() - now()) = 'INT';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select sum(today() + number - today()) = 45 from numbers(10);
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select today() - 1 = yesterday();
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select today() - yesterday()  = 1;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select today() + 1 = tomorrow();
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select tomorrow() - today() = 1;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query I 
+select toYYYYMM(to_datetime(1630833797000000));
+
+----  
+202109
+
+statement query I 
+select toYYYYMM(to_date(18875));
+
+----  
+202109
+
+statement query B label(mysql,http)
+select toYYYYMM(to_datetime(1630833797000000))  =  202109;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toYYYYMM(to_date(18875))  =  202109;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===round===';
+
+----  
+===round===
+
+statement query T 
+select timeSlot(to_datetime(1630320462000000));
+
+----  
+2021-08-30 10:30:00
+
+statement query T 
+select toStartOfHour(to_datetime(1630320462000000));
+
+----  
+2021-08-30 10:00:00
+
+statement query T 
+select toStartOfFifteenMinutes(to_datetime(1630320462000000));
+
+----  
+2021-08-30 10:45:00
+
+statement query T 
+select toStartOfMinute(to_datetime(1630320462000000));
+
+----  
+2021-08-30 10:47:00
+
+statement query T 
+select toStartOfFiveMinutes(to_datetime(1630320462000000));
+
+----  
+2021-08-30 10:45:00
+
+statement query T 
+select toStartOfTenMinutes(to_datetime(1630320462000000));
+
+----  
+2021-08-30 10:40:00
+
+statement query B label(mysql,http)
+select timeSlot(now()) <= now();
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===round-end===';
+
+----  
+===round-end===
+
+statement query T 
+select '===toYYYYMMDDhhmmss===';
+
+----  
+===toYYYYMMDDhhmmss===
+
+statement query I 
+select toYYYYMMDDhhmmss(to_datetime(1630833797000000));
+
+----  
+20210905092317
+
+statement query I 
+select toYYYYMMDDhhmmss(to_date(18875));
+
+----  
+20210905000000
+
+statement query B label(mysql,http)
+select toYYYYMMDDhhmmss(to_datetime(1630833797000000))  =  20210905092317;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toYYYYMMDDhhmmss(to_date(18875))  =  20210905000000;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toYYYYMMDDhhmmss===';
+
+----  
+===toYYYYMMDDhhmmss===
+
+statement query T 
+select '===toYYYYMMDD===';
+
+----  
+===toYYYYMMDD===
+
+statement query I 
+select toYYYYMMDD(to_datetime(1630833797000000));
+
+----  
+20210905
+
+statement query I 
+select toYYYYMMDD(to_date(18875));
+
+----  
+20210905
+
+statement query B label(mysql,http)
+select toYYYYMMDD(to_datetime(1630833797000000))  =  20210905;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toYYYYMMDD(to_date(18875))  =  20210905;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toYYYYMMDD===';
+
+----  
+===toYYYYMMDD===
+
+statement query T 
+select '===toStartOf===';
+
+----  
+===toStartOf===
+
+statement query T 
+select toStartOfYear(to_datetime(1630812366000000));
+
+----  
+2021-01-01
+
+statement query T 
+select toStartOfISOYear(to_datetime(1630812366000000));
+
+----  
+2021-01-04
+
+statement query T 
+select toStartOfYear(to_date(18869));
+
+----  
+2021-01-01
+
+statement query T 
+select toStartOfISOYear(to_date(18869));
+
+----  
+2021-01-04
+
+statement query T 
+select toStartOfQuarter(to_datetime(1631705259000000));
+
+----  
+2021-07-01
+
+statement query T 
+select toStartOfQuarter(to_datetime(1621078059000000));
+
+----  
+2021-04-01
+
+statement query T 
+select toStartOfMonth(to_datetime(1631705259000000));
+
+----  
+2021-09-01
+
+statement query T 
+select toStartOfQuarter(to_date(18885));
+
+----  
+2021-07-01
+
+statement query T 
+select toStartOfQuarter(to_date(18762));
+
+----  
+2021-04-01
+
+statement query T 
+select toStartOfMonth(to_date(18885));
+
+----  
+2021-09-01
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000));
+
+----  
+2021-09-19
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 0);
+
+----  
+2021-09-19
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 1);
+
+----  
+2021-09-20
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 2);
+
+----  
+2021-09-19
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 3);
+
+----  
+2021-09-20
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 4);
+
+----  
+2021-09-19
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 5);
+
+----  
+2021-09-20
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 6);
+
+----  
+2021-09-19
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 7);
+
+----  
+2021-09-20
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 8);
+
+----  
+2021-09-19
+
+statement query T 
+select toStartOfWeek(to_datetime(1632397739000000), 9);
+
+----  
+2021-09-20
+
+statement query T 
+select toStartOfWeek(to_date(18769));
+
+----  
+2021-05-16
+
+statement query T 
+select toStartOfWeek(to_date(18769), 0);
+
+----  
+2021-05-16
+
+statement query T 
+select toStartOfWeek(to_date(18769), 1);
+
+----  
+2021-05-17
+
+statement query T 
+select toStartOfWeek(to_date(18769), 2);
+
+----  
+2021-05-16
+
+statement query T 
+select toStartOfWeek(to_date(18769), 3);
+
+----  
+2021-05-17
+
+statement query T 
+select toStartOfWeek(to_date(18769), 4);
+
+----  
+2021-05-16
+
+statement query T 
+select toStartOfWeek(to_date(18769), 5);
+
+----  
+2021-05-17
+
+statement query T 
+select toStartOfWeek(to_date(18769), 6);
+
+----  
+2021-05-16
+
+statement query T 
+select toStartOfWeek(to_date(18769), 7);
+
+----  
+2021-05-17
+
+statement query T 
+select toStartOfWeek(to_date(18769), 8);
+
+----  
+2021-05-16
+
+statement query T 
+select toStartOfWeek(to_date(18769), 9);
+
+----  
+2021-05-17
+
+statement error 1068
+select toStartOfWeek(to_date('1000-01-01')); 
+
+statement error 1068
+select toStartOfWeek(to_datetime('1000-01-01 00:00:00')); 
+
+statement query T 
+select '===toStartOf===';
+
+----  
+===toStartOf===
+
+statement query T 
+select '===addYears===';
+
+----  
+===addYears===
+
+statement query T 
+select addYears(to_date(18321), cast(1, UINT8));  -- 2020-2-29 + 1 year
+
+----  
+2021-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(1, UINT16));
+
+----  
+2021-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(1, UINT32));
+
+----  
+2021-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(1, UINT64));
+
+----  
+2021-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(-1, INT8));
+
+----  
+2019-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(-1, INT16));
+
+----  
+2019-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(-1, INT32));
+
+----  
+2019-02-28
+
+statement query T 
+select addYears(to_date(18321), cast(-1, INT64));
+
+----  
+2019-02-28
+
+statement query T 
+select addYears(to_datetime(1582970400000000), cast(50, INT8)); -- 2020-2-29T10:00:00 + 50 years
+
+----  
+2070-02-28 10:00:00
+
+statement query T 
+select addYears(to_datetime(1582970400000000), cast(-50, INT8)); -- 2020-2-29T10:00:00 - 50 years
+
+----  
+1970-02-28 10:00:00
+
+statement error 1068
+select addYears(to_date('9999-12-31'), 1); 
+
+statement error 1069
+select addYears(to_datetime('9999-12-31 23:59:59'), 1); 
+
+statement query T 
+select '===addYears===';
+
+----  
+===addYears===
+
+statement query T 
+select '===subtractMonths===';
+
+----  
+===subtractMonths===
+
+statement query T 
+select subtractMonths(to_date(18321), cast(13, INT16)); -- 2020-2-29 - 13 months
+
+----  
+2019-01-29
+
+statement query T 
+select to_date(18321) -  interval '13' month;
+
+----  
+2019-01-29
+
+statement query T 
+select subtractMonths(to_datetime(1582970400000000), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
+
+----  
+2009-12-29 10:00:00
+
+statement query T 
+select to_datetime(1582970400000000) -  interval '122' month;
+
+----  
+2009-12-29 10:00:00
+
+statement error 1068
+select subtractMonths(to_date('1000-01-01'), 1); 
+
+statement error 1069
+select subtractMonths(to_datetime('1000-01-01 00:00:00'), 1); 
+
+statement query T 
+select '===subtractMonths===';
+
+----  
+===subtractMonths===
+
+statement query T 
+select '===addDays===';
+
+----  
+===addDays===
+
+statement query T 
+select addDays(to_date(18321), cast(1, INT16)); -- 2020-2-29 + 1 day
+
+----  
+2020-03-01
+
+statement query T 
+select to_date(18321) + interval '1' day;
+
+----  
+2020-03-01
+
+statement query T 
+select addDays(to_datetime(1582970400000000), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
+
+----  
+2020-02-28 10:00:00
+
+statement query T 
+select to_datetime(1582970400000000) + interval '-1' day;
+
+----  
+2020-02-28 10:00:00
+
+statement error 1068
+select addDays(to_date('9999-12-31'), 1); 
+
+statement error 1069
+select addDays(to_datetime('9999-12-31 23:59:59'), 1); 
+
+statement query T 
+select '===addDays===';
+
+----  
+===addDays===
+
+statement query T 
+select '===addHours===';
+
+----  
+===addHours===
+
+statement query T 
+select addHours(to_datetime(1582970400000000), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
+
+----  
+2020-03-01 11:00:00
+
+statement query T 
+select to_datetime(1582970400000000) + interval '25' hour;
+
+----  
+2020-03-01 11:00:00
+
+statement query T 
+select addHours(to_date(18321), cast(1.2, Float32));
+
+----  
+2020-02-29 01:00:00
+
+statement error 1069
+select addHours(to_date('9999-12-31'), 24); 
+
+statement error 1069
+select addHours(to_datetime('9999-12-31 23:59:59'), 1); 
+
+statement query T 
+select '===addHours===';
+
+----  
+===addHours===
+
+statement query T 
+select '===subtractMinutes===';
+
+----  
+===subtractMinutes===
+
+statement query T 
+select subtractMinutes(to_datetime(1582970400000000), cast(1, INT32)); -- 2020-2-29T10:00:00 - 1 minutes
+
+----  
+2020-02-29 09:59:00
+
+statement error 1069
+select subtractMinutes(to_date('1000-01-01'), 1); 
+
+statement error 1069
+select subtractMinutes(to_datetime('1000-01-01 00:00:00'), 1); 
+
+statement query T 
+select '===subtractMinutes===';
+
+----  
+===subtractMinutes===
+
+statement query T 
+select '===addSeconds===';
+
+----  
+===addSeconds===
+
+statement query T 
+select addSeconds(to_datetime(1582970400000000), cast(61, INT32)); -- 2020-2-29T10:00:00 + 61 seconds
+
+----  
+2020-02-29 10:01:01
+
+statement query T 
+select '===addSeconds===';
+
+----  
+===addSeconds===
+
+statement query T 
+select '===toMonth===';
+
+----  
+===toMonth===
+
+statement query I 
+select toMonth(to_datetime(1633081817000000));
+
+----  
+10
+
+statement query I 
+select toMonth(to_date(18901));
+
+----  
+10
+
+statement query B label(mysql,http)
+select toMonth(to_datetime(1633081817000000))  =  10;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toMonth(to_date(18901))  =  10;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toMonth===';
+
+----  
+===toMonth===
+
+statement query T 
+select '===toDayOfYear===';
+
+----  
+===toDayOfYear===
+
+statement query I 
+select toDayOfYear(to_datetime(1633173324000000));
+
+----  
+275
+
+statement query I 
+select toDayOfYear(to_date(18902));
+
+----  
+275
+
+statement query B label(mysql,http)
+select toDayOfYear(to_datetime(1633173324000000))  =  275;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toDayOfYear(to_date(18902))  =  275;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toDayOfYear===';
+
+----  
+===toDayOfYear===
+
+statement query T 
+select '===toDayOfMonth===';
+
+----  
+===toDayOfMonth===
+
+statement query I 
+select toDayOfMonth(to_datetime(1633173324000000));
+
+----  
+2
+
+statement query I 
+select toDayOfMonth(to_date(18902));
+
+----  
+2
+
+statement query B label(mysql,http)
+select toDayOfMonth(to_datetime(1633173324000000))  =  2;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toDayOfMonth(to_date(18902))  =  2;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toDayOfMonth===';
+
+----  
+===toDayOfMonth===
+
+statement query T 
+select '===toDayOfWeek===';
+
+----  
+===toDayOfWeek===
+
+statement query I 
+select toDayOfWeek(to_datetime(1633173324000000));
+
+----  
+6
+
+statement query I 
+select toDayOfWeek(to_date(18902));
+
+----  
+6
+
+statement query B label(mysql,http)
+select toDayOfWeek(to_datetime(1633173324000000))  =  6;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select toDayOfWeek(to_date(18902))  =  6;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toDayOfWeek===';
+
+----  
+===toDayOfWeek===
+
+statement query T 
+select '===toHour===';
+
+----  
+===toHour===
+
+statement query B label(mysql,http)
+select toHour(to_datetime(1634551542000000))  =  10;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toHour===';
+
+----  
+===toHour===
+
+statement query T 
+select '===toMinute===';
+
+----  
+===toMinute===
+
+statement query B label(mysql,http)
+select toMinute(to_datetime(1634551542000000))  =  5;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toMinute===';
+
+----  
+===toMinute===
+
+statement query T 
+select '===toSecond===';
+
+----  
+===toSecond===
+
+statement query B label(mysql,http)
+select toSecond(to_datetime(1634551542000000))  =  42;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toSecond===';
+
+----  
+===toSecond===
+
+statement query T 
+select '===toMonday===';
+
+----  
+===toMonday===
+
+statement query B label(mysql,http)
+select toMonday(to_datetime(1634614318000000))  =  to_date('2021-10-18');
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toMonday===';
+
+----  
+===toMonday===
+
+statement query T 
+select '===toYear===';
+
+----  
+===toYear===
+
+statement query B label(mysql,http)
+select toYear(to_datetime(1646404329000000)) = 2022;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===toYear===';
+
+----  
+===toYear===
+
+statement query T 
+select '===EXTRACT===';
+
+----  
+===EXTRACT===
+
+statement query B label(mysql,http)
+select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select EXTRACT(MONTH FROM to_datetime('2022-03-04 22:32:09')) = 3;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select EXTRACT(DAY FROM to_datetime('2022-03-04 22:32:09')) = 4;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select EXTRACT(HOUR FROM to_datetime('2022-03-04 22:32:09')) = 22;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select EXTRACT(MINUTE FROM to_datetime('2022-03-04 22:32:09')) = 32;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select EXTRACT(SECOND FROM to_datetime('2022-03-04 22:32:09')) = 9;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===EXTRACT===';
+
+----  
+===EXTRACT===
+
+statement query T 
+select '===CMP===';
+
+----  
+===CMP===
+
+statement query B label(mysql,http)
+select to_datetime('2022-04-01 06:50:20')   = '2022-04-01 06:50:20';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select to_datetime('2022-04-01 06:50:20')   > '2022-04-01 04:50:20';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20';
+
+----  mysql
+1
+
+----  http
+true
+
+statement query T 
+select '===INSERT===';
+
+----  
+===INSERT===
+
+statement ok
+drop table if exists ts;
+
+statement ok
+create table ts(a DateTime(6), b DateTime, c Date);
+
+statement ok
+insert into ts values(now(), now(), today());
+
+statement query B label(mysql,http)
+select to_datetime(a) = to_datetime(b) from ts;
+
+----  mysql
+1
+
+----  http
+true
+
+statement ok
+drop table if exists ts;
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(a datetime, b DateTime(3), c Date);
+
+statement ok
+insert into t values('2022-04-02 15:10:28', '2022-04-02 15:10:28', '1000-01-01');
+
+statement ok
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999-12-31');
+
+statement error 1069
+insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '2020-10-10'); 
+
+statement error 1010
+insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10'); 
+
+statement error 1068
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '0999-10-10'); 
+
+statement error 1010
+insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10'); 
+
+statement query TTT label(mysql,http)
+select * from t order by b;
+
+----  mysql
+2022-04-02 15:10:28 2022-04-02 15:10:28 1000-01-01
+2022-04-02 15:10:28.221000 2022-04-02 15:10:28.221000 9999-12-31
+
+----  http
+2022-04-02 15:10:28 2022-04-02 15:10:28 1000-01-01
+2022-04-02 15:10:28 2022-04-02 15:10:28 9999-12-31
+
+statement ok
+drop table t;
+

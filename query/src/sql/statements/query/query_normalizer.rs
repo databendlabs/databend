@@ -204,7 +204,7 @@ impl QueryNormalizer {
             match item {
                 SelectItem::Wildcard => {
                     if query.from.is_empty() {
-                        return Err(ErrorCode::LogicalError(
+                        return Err(ErrorCode::SemanticError(
                             "SELECT * with no tables specified is not valid",
                         ));
                     }

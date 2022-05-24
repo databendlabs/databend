@@ -131,8 +131,8 @@ dependencies = [
 
 [[package]]
 name = "arrow2"
-version = "0.11.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=2d70fbf46fd37f4ef532945c588be69a71998e44#2d70fbf46fd37f4ef532945c588be69a71998e44"
+version = "0.11.2"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=826a2b8#826a2b8ed8598a614c5df9115ea657d1e3c40184"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -884,10 +884,11 @@ dependencies = [
 name = "common-building"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cargo-license",
  "cargo_metadata",
  "common-tracing",
- "run_script",
+ "git2",
  "vergen",
 ]
 
@@ -902,16 +903,6 @@ dependencies = [
  "ritelinked",
  "tempfile",
  "walkdir",
-]
-
-[[package]]
-name = "common-configs"
-version = "0.1.0"
-dependencies = [
- "clap 3.1.8",
- "common-base",
- "common-exception",
- "serde",
 ]
 
 [[package]]
@@ -1034,7 +1025,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "common-base",
- "common-configs",
  "common-exception",
  "common-tracing",
  "hyper",
@@ -1145,7 +1135,6 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
- "common-configs",
  "common-exception",
  "common-grpc",
  "common-meta-api",
@@ -1170,7 +1159,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes 1.1.0",
- "clap 3.1.8",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -1726,21 +1714,25 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-metrics",
  "common-tracing",
+ "env_logger",
  "futures",
+ "lazy_static",
  "maplit",
- "metrics",
  "num",
  "once_cell",
  "poem",
  "pretty_assertions",
+ "prometheus",
  "prost 0.9.0",
  "regex",
  "reqwest",
  "serde",
+ "serde-bridge",
  "serde_json",
+ "serfig",
  "sled",
+ "temp-env",
  "tempfile",
  "tokio-stream",
  "tonic",
@@ -1792,7 +1784,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
- "common-configs",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
@@ -1851,6 +1842,7 @@ dependencies = [
  "serfig",
  "sha1",
  "sha2 0.10.2",
+ "smallvec",
  "sqlparser",
  "temp-env",
  "tempfile",
@@ -2007,12 +1999,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
-name = "dunce"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "453440c271cf5577fd2a40e4942540cb7d0d2f85e27c8d07dd0023c925a67541"
-
-[[package]]
 name = "dyn-clone"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2143,6 +2129,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
+dependencies = [
+ "atty",
+ "humantime",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -2355,17 +2354,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
-name = "fsio"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09e87827efaf94c7a44b562ff57de06930712fe21b530c3797cdede26e6377eb"
-dependencies = [
- "dunce",
- "rand 0.8.5",
- "users",
-]
-
-[[package]]
 name = "funty"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2563,9 +2551,9 @@ checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
 
 [[package]]
 name = "git2"
-version = "0.13.25"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f29229cc1b24c0e6062f6e742aa3e256492a5323365e5ed3413599f8a5eff7d6"
+checksum = "d0155506aab710a86160ddb504a480d2964d7ab5b9e62419be69e0032bc5931c"
 dependencies = [
  "bitflags",
  "libc",
@@ -3277,9 +3265,9 @@ checksum = "5916d2ae698f6de9bfb891ad7a8d65c09d232dc58cc4ac433c7da3b2fd84bc2b"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.12.26+1.3.0"
+version = "0.13.4+1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19e1c899248e606fbfe68dcb31d8b0176ebab833b103824af31bddf4b7457494"
+checksum = "d0fa6563431ede25f5cc7f6d803c6afbc1c5d3ad3d4925d12c882bf2b526f5d1"
 dependencies = [
  "cc",
  "libc",
@@ -4095,7 +4083,7 @@ dependencies = [
 [[package]]
 name = "opensrv-clickhouse"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+source = "git+https://github.com/datafuselabs/opensrv?rev=15786d3#15786d3aee58ee1b2430b748f4b958a437a22718"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -4767,6 +4755,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "procfs"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95e344cafeaeefe487300c361654bcfc85db3ac53619eeccced29f5ea18c4c70"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "flate2",
+ "hex",
+ "lazy_static",
+ "libc",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f64969ffd5dd8f39bd57a68ac53c163a095ed9d0fb707146da1b27025a3504"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "libc",
+ "memchr",
+ "parking_lot 0.11.2",
+ "procfs",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "prometheus-parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5303,15 +5322,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "run_script"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd85213e37f76b40186ee781cf3a689b05c518c3102c987acf679c573d8e4ef"
-dependencies = [
- "fsio",
-]
-
-[[package]]
 name = "rust-embed"
 version = "6.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5563,9 +5573,9 @@ dependencies = [
 
 [[package]]
 name = "serde-env"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e25cbc2db78bdf2b85ae2bb9894106e14092f87e2c47191dc3d704d7dca78be"
+checksum = "4e03cfb2aa71df46bc21892a343552041c8712e97ace1a535e7f7e6eabeca6c0"
 dependencies = [
  "anyhow",
  "log",
@@ -5651,9 +5661,9 @@ dependencies = [
 
 [[package]]
 name = "serfig"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe138b57b8dea13fbe1d1b7007be08322bd60a76eb938f89113d3d82dcc480a"
+checksum = "782e2265bd0b75de9d0934d412ced9b790b1290f59c9ac2e56b859d69d210f18"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -5914,7 +5924,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=619e3b6#619e3b66d0a3b7eaaed69a66d452b37a5488dca4"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=45ead90#45ead90755aa86d5ff3f0faaa6c112d057b3494a"
 dependencies = [
  "hashbrown 0.12.0",
  "log",
@@ -6764,16 +6774,6 @@ dependencies = [
  "matches",
  "percent-encoding",
  "serde",
-]
-
-[[package]]
-name = "users"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
-dependencies = [
- "libc",
- "log",
 ]
 
 [[package]]

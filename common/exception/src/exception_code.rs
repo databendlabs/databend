@@ -122,6 +122,7 @@ build_exceptions! {
     InvalidTimezone(1067),
     InvalidDate(1068),
     InvalidTimestamp(1069),
+    InvalidClusterKeys(1070),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -201,6 +202,11 @@ build_exceptions! {
 
     // Variable error codes.
     UnknownVariable(2801),
+
+    // Tenant quota error codes.
+    IllegalTenantQuotaFormat(2901),
+    TenantQuotaUnknown(2902),
+    TenantQuotaExceeded(2903),
 }
 
 // Storage errors [3001, 4000].

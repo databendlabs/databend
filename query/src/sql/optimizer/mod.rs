@@ -31,6 +31,7 @@ pub use optimize_context::OptimizeContext;
 pub use pattern_extractor::PatternExtractor;
 pub use property::ColumnSet;
 pub use property::PhysicalProperty;
+pub use property::RelExpr;
 pub use property::RelationalProperty;
 pub use property::RequiredProperty;
 pub use s_expr::SExpr;

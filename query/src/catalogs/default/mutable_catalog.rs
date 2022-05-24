@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_grpc::MetaGrpcClientConf;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
@@ -41,6 +40,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -99,9 +100,9 @@ impl MutableCatalog {
         } else {
             tracing::info!("use remote meta");
 
-            let meta_client_provider = Arc::new(MetaClientProvider::new(MetaGrpcClientConf::from(
-                &conf.meta,
-            )));
+            let meta_client_provider = Arc::new(MetaClientProvider::new(
+                conf.meta.to_meta_grpc_client_conf(),
+            ));
             let meta_backend = MetaBackend::create(meta_client_provider);
             Arc::new(meta_backend)
         };
@@ -271,6 +272,11 @@ impl Catalog for MutableCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         let res = self.ctx.meta.upsert_table_option(req).await?;
+        Ok(res)
+    }
+
+    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        let res = self.ctx.meta.update_table_meta(req).await?;
         Ok(res)
     }
 

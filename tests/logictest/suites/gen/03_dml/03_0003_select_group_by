@@ -1,0 +1,179 @@
+statement ok
+SELECT max(number) FROM numbers_mt(0) GROUP BY number % 4;
+
+statement ok
+SELECT max(number) FROM numbers_mt (10) WHERE number > 99999999998 GROUP BY number % 3;
+
+statement query FI 
+SELECT avg(number), max(number+1)+1 FROM numbers_mt(10000) where number > 2 GROUP BY 1;
+
+----  
+5001.0 10001
+
+statement query II 
+SELECT number%3 as c1, number%2 as c2 FROM numbers_mt(10000) where number > 2 group by number%3, number%2 order by c1,c2;
+
+----  
+0 0
+0 1
+1 0
+1 1
+2 0
+2 1
+
+statement query I 
+SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 order by c1;
+
+----  
+0
+1
+2
+
+statement query IT 
+SELECT count(*), name FROM system.credits WHERE name='ahash' GROUP BY name;
+
+----  
+1 ahash
+
+statement query IT 
+SELECT count(1), name FROM system.credits WHERE name='ahash' GROUP BY name;
+
+----  
+1 ahash
+
+statement query T 
+SELECT '==GROUP BY Strings==';
+
+----  
+==GROUP BY Strings==
+
+statement query III 
+SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3 ;
+
+----  
+0 0 5
+0 4 5
+0 8 5
+
+statement query T 
+SELECT '==GROUP BY nullables==';
+
+----  
+==GROUP BY nullables==
+
+statement ok
+CREATE TABLE t(a UInt64 null, b UInt32 null, c UInt32) Engine = Fuse;
+
+statement ok
+INSERT INTO t(a,b, c)  SELECT if (number % 3 = 1, null, number) as a, number + 3 as b, number + 4 as c FROM numbers(10);
+
+statement query II 
+SELECT a%3 as a1, count(1) as ct from t GROUP BY a1 ORDER BY a1,ct;
+
+----  
+None 3
+0 4
+2 3
+
+statement query III 
+SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, a2;
+
+----  
+None None 3
+0 0 2
+0 2 2
+1 0 2
+1 2 1
+
+statement query III 
+SELECT a%2 as a1, to_uint64(c % 3) as c, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
+
+----  
+None 2 3
+0 0 2
+0 1 2
+1 0 1
+1 1 2
+
+statement query III 
+SELECT to_uint64(c % 3) as c, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c ORDER BY a1, c, ct;
+
+----  
+2 None 3
+0 0 2
+1 0 2
+0 1 1
+1 1 2
+
+statement ok
+DROP table t;
+
+statement query T 
+SELECT '==GROUP BY DATETIMES==';
+
+----  
+==GROUP BY DATETIMES==
+
+statement ok
+CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32);
+
+statement ok
+insert into t_datetime select to_date('2022-04-01') + number % 2,  to_datetime('2022-04-01 00:00:00') + number % 2, 1 from numbers(10);
+
+statement query TI 
+select created_at, sum(count) from t_datetime group by created_at order by created_at;
+
+----  
+2022-04-01 5
+2022-04-02 5
+
+statement query TI label(mysql,http)
+select created_time, sum(count) from t_datetime group by created_time order by created_time;
+
+----  mysql
+2022-04-01 00:00:00 5
+2022-04-01 00:00:00.000001 5
+
+----  http
+2022-04-01 00:00:00 5
+2022-04-01 00:00:00 5
+
+statement ok
+drop table t_datetime;
+
+statement query II 
+SELECT number, count(*) FROM numbers_mt(10000) group by number order by number limit 5;
+
+----  
+0 1
+1 1
+2 1
+3 1
+4 1
+
+statement ok
+set group_by_two_level_threshold=10;
+
+statement query II 
+SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
+
+----  
+0 1
+1 1
+2 1
+3 1
+4 1
+
+statement ok
+set group_by_two_level_threshold=1000000000;
+
+statement query II 
+SELECT number, count(*) FROM numbers_mt(1000) group by number order by number limit 5;
+
+----  
+0 1
+1 1
+2 1
+3 1
+4 1
+

@@ -19,7 +19,7 @@ common-io = { path = "../io" }
 common-macros = { path = "../macros" }
 
 # Github dependencies
-opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
+opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }
 
 # Crates.io dependencies
 chrono = "0.4.19"

@@ -180,12 +180,13 @@ impl ExecuteState {
 
         let executor_clone = executor.clone();
         let ctx_clone = ctx.clone();
+        let block_buffer_clone = block_buffer.clone();
         ctx.try_spawn(async move {
             if let Err(err) =
                 execute(interpreter, ctx_clone, block_buffer, executor_clone.clone()).await
             {
-                let kill = err.message().starts_with("aborted");
-                Executor::stop(&executor_clone, Err(err), kill).await
+                Executor::stop(&executor_clone, Err(err), false).await;
+                block_buffer_clone.stop_push().await;
             };
         })?;
 
@@ -230,6 +231,7 @@ async fn execute(
                 block_buffer.push(block.clone(), part_ptr).await;
             }
             Err(err) => {
+                block_buffer.stop_push().await;
                 if let Some(writer) = result_table_writer {
                     writer.abort().await?;
                 }

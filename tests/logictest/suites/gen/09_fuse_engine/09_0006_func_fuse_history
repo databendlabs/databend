@@ -1,0 +1,42 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0006;
+
+statement ok
+CREATE DATABASE db_09_0006;
+
+statement ok
+USE db_09_0006;
+
+statement ok
+create table t(a uint64);
+
+statement ok
+insert into t values (1);
+
+statement query II 
+select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row_count desc limit 1;
+
+----  
+1 1
+
+statement ok
+insert into t values (2);
+
+statement query II 
+select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row_count desc limit 1;
+
+----  
+2 2
+
+statement error 1025
+select * from fuse_snapshot('db_09_0006', 'not_exist'); 
+
+statement error 1003
+select * from fuse_snapshot('not_exist', 'not_exist'); 
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP DATABASE db_09_0006;
+

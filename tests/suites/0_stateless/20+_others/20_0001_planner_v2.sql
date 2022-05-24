@@ -8,7 +8,7 @@ select number as a, number + 1 as b from numbers(1);
 select number as a, number + 1 as b from numbers(1) group by a, number order by number;
 
 select '====SCALAR_EXPRESSION====';
-select interval '1' day, extract(day from to_date('2022-05-13'));
+select extract(day from to_date('2022-05-13'));
 
 -- Comparison expressions
 select '====COMPARISON====';
@@ -80,6 +80,14 @@ SELECT a%2 as a1, a%3 as a2, count(0) as ct FROM t GROUP BY a1, a2 ORDER BY a1, 
 SELECT a%2 as a1, to_uint64(c % 3) as c1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
 -- u64, nullable(u8)
 SELECT to_uint64(c % 3) as c1, a%2 as a1, count(0) as ct FROM t GROUP BY a1, c1 ORDER BY a1, c1, ct;
+
+select number%2 as b from numbers(5) group by number % 2 having count(*) = 3 and sum(number) > 5;
+
+select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
+
+select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
+
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name);
 
 -- aggregator combinator
 -- distinct
@@ -174,5 +182,37 @@ drop table t;
 select '====Context Function====';
 use default;
 select database();
+
+-- distinct
+select '==== Distinct =====';
+SELECT DISTINCT * FROM numbers(3) ORDER BY  number;
+SELECT DISTINCT 1 FROM numbers(3);
+SELECT DISTINCT (number %3) as c FROM numbers(1000) ORDER BY c;
+SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDER BY c;
+
+-- Inner join with using
+select '===Inner Join with Using===';
+drop table if exists t1;
+create table t1(a int, b int);
+insert into t1 values(7, 8), (3, 4), (5, 6);
+drop table if exists t2;
+create table t2(a int, d int);
+insert into t2 values(1, 2), (3, 4), (5, 6);
+select * from t1 join t2 using(a);
+select t1.a from t1 join t2 using(a);
+select t2.d from t1 join t2 using(a);
+select * from t1 natural join t2;
+drop table t1;
+drop table t2;
+
+-- Join: right table with duplicate build keys
+select '===Inner Join with duplicate keys===';
+create table t1(a int, b int);
+insert into t1 values(1, 2), (1, 3), (2, 4);
+create table t2(c int, d int);
+insert into t2 values(1, 2), (2, 6);
+select * from t2 inner join t1 on t1.a = t2.c;
+drop table t1;
+drop table t2;
 
 set enable_planner_v2 = 0;

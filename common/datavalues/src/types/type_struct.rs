@@ -110,12 +110,33 @@ impl DataType for StructType {
         .into()
     }
 
-    fn create_deserializer(&self, _capacity: usize) -> TypeDeserializerImpl {
-        todo!()
+    fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
+        let inners_mutable = self
+            .types
+            .iter()
+            .map(|v| v.create_mutable(capacity))
+            .collect();
+
+        let inners_desers = self
+            .types
+            .iter()
+            .map(|v| v.create_deserializer(capacity))
+            .collect();
+
+        StructDeserializer {
+            builder: MutableStructColumn::from_data(self.clone().into(), inners_mutable),
+            inner: inners_desers,
+        }
+        .into()
     }
 
-    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
-        todo!()
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        let inners = self
+            .types
+            .iter()
+            .map(|v| v.create_mutable(capacity))
+            .collect();
+        Box::new(MutableStructColumn::from_data(self.clone().into(), inners))
     }
 
     fn create_column(&self, datas: &[DataValue]) -> common_exception::Result<ColumnRef> {

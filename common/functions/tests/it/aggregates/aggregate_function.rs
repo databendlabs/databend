@@ -289,7 +289,7 @@ fn test_aggregate_function() -> Result<()> {
             func.merge(addr1.into(), addr2.into())?;
             {
                 let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
-                let _ = func.merge_result(addr1.into(), array)?;
+                func.merge_result(addr1.into(), array)?;
             }
 
             let res_col = t.input_array.to_column();
@@ -610,8 +610,8 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
 
             let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
 
-            let _ = func.merge_result(addr1.into(), array)?;
-            let _ = func.merge_result(addr2.into(), array)?;
+            func.merge_result(addr1.into(), array)?;
+            func.merge_result(addr2.into(), array)?;
 
             let datatype = t.input_array.data_type();
             with_match_primitive_type_id!(datatype.data_type_id(), |$T| {
@@ -829,7 +829,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
 
             func.merge(addr1.into(), addr2.into())?;
             let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
-            let _ = func.merge_result(addr1.into(), array)?;
+            func.merge_result(addr1.into(), array)?;
 
             let datatype = t.input_array.data_type();
             with_match_primitive_type_id!(datatype.data_type_id(), |$T| {
@@ -891,7 +891,7 @@ fn test_covariance_with_comparable_data_sets() -> Result<()> {
         let addr = arena.alloc_layout(func.state_layout());
         func.init_state(addr.into());
         func.accumulate(addr.into(), &arrays, None, 2000)?;
-        let _ = func.merge_result(addr.into(), array)?;
+        func.merge_result(addr.into(), array)?;
         let array = array
             .as_mut_any()
             .downcast_ref::<MutablePrimitiveColumn<f64>>()
@@ -988,7 +988,7 @@ fn test_aggregate_function_on_boolean() -> Result<()> {
             func.merge(addr1.into(), addr2.into())?;
             {
                 let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
-                let _ = func.merge_result(addr1.into(), array)?;
+                func.merge_result(addr1.into(), array)?;
             }
 
             let datatype = t.expect_array.data_type();

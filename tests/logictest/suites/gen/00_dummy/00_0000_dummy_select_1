@@ -1,0 +1,82 @@
+statement query I 
+SELECT 1;
+
+----  
+1
+
+statement error 1058
+SELECT x; 
+
+statement query T 
+SELECT 'a';
+
+----  
+a
+
+statement query B label(mysql,http)
+SELECT NOT(1=1);
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT NOT(1);
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT NOT(1=1) from numbers(3);
+
+----  mysql
+0
+0
+0
+
+----  http
+false
+false
+false
+
+statement query B label(mysql,http)
+SELECT TRUE;
+
+----  mysql
+1
+
+----  http
+true
+
+statement query B label(mysql,http)
+SELECT FALSE;
+
+----  mysql
+0
+
+----  http
+false
+
+statement query B label(mysql,http)
+SELECT NOT(TRUE);
+
+----  mysql
+0
+
+----  http
+false
+
+statement query T 
+SELECT 'That\'s good.';
+
+----  
+That's good.
+
+statement error 1065
+SELECT *; 
+

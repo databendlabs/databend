@@ -73,14 +73,14 @@ pub fn reduce_block_stats<T: Borrow<ColumnsStatistics>>(stats: &[T]) -> Result<C
             let min = min_stats
                 .iter()
                 .filter(|s| !s.is_null())
-                .min_by(|&x, &y| x.partial_cmp(y).unwrap_or(Ordering::Equal))
+                .min_by(|&x, &y| x.cmp(y))
                 .cloned()
                 .unwrap_or(DataValue::Null);
 
             let max = max_stats
                 .iter()
                 .filter(|s| !s.is_null())
-                .max_by(|&x, &y| x.partial_cmp(y).unwrap_or(Ordering::Equal))
+                .max_by(|&x, &y| x.cmp(y))
                 .cloned()
                 .unwrap_or(DataValue::Null);
 
@@ -113,18 +113,14 @@ pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
                     break;
                 }
                 (_, true) => break,
-                _ => {
-                    if let Some(cmp) = l.partial_cmp(r) {
-                        match cmp {
-                            Ordering::Equal => continue,
-                            Ordering::Less => break,
-                            Ordering::Greater => {
-                                min = stat.min.clone();
-                                break;
-                            }
-                        }
+                _ => match l.cmp(r) {
+                    Ordering::Equal => continue,
+                    Ordering::Less => break,
+                    Ordering::Greater => {
+                        min = stat.min.clone();
+                        break;
                     }
-                }
+                },
             }
         }
 
@@ -135,18 +131,14 @@ pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
                     break;
                 }
                 (_, true) => break,
-                _ => {
-                    if let Some(cmp) = l.partial_cmp(r) {
-                        match cmp {
-                            Ordering::Equal => continue,
-                            Ordering::Less => {
-                                max = stat.max.clone();
-                                break;
-                            }
-                            Ordering::Greater => break,
-                        }
+                _ => match l.cmp(r) {
+                    Ordering::Equal => continue,
+                    Ordering::Less => {
+                        max = stat.max.clone();
+                        break;
                     }
-                }
+                    Ordering::Greater => break,
+                },
             }
         }
     }

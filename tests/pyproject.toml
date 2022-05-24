@@ -16,6 +16,10 @@ mysql-connector-python = "^8.0.28"
 SQLAlchemy = "^1.4.35"
 clickhouse-driver = "^0.2.3"
 PyMySQL = "^1.0.2"
+six = "^1.16.0"
+PyHamcrest = "^2.0.2"
+requests = "^2.27.1"
+toml = "^0.10.2"
 
 [tool.poetry.dev-dependencies]
 

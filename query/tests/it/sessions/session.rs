@@ -28,8 +28,9 @@ async fn test_session() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        SessionType::Test,
+        SessionType::Dummy,
         session_manager,
+        None,
     )
     .await?;
 
@@ -73,8 +74,9 @@ async fn test_session_in_management_mode() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        SessionType::Test,
+        SessionType::Dummy,
         session_manager,
+        None,
     )
     .await?;
 

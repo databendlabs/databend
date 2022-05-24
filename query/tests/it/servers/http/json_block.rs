@@ -107,3 +107,12 @@ fn test_data_block_nullable() -> Result<()> {
 fn test_data_block_not_nullable() -> Result<()> {
     test_data_block(false)
 }
+
+#[test]
+fn test_empty_block() -> Result<()> {
+    let block = DataBlock::empty();
+    let format = FormatSettings::default();
+    let json_block = JsonBlock::new(&block, &format)?;
+    assert!(json_block.is_empty());
+    Ok(())
+}

@@ -31,7 +31,7 @@ simd = ["arrow/simd"]
 arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2", default-features = false, features = [
     "io_parquet",
     "io_parquet_compression",
-], rev = "2d70fbf46fd37f4ef532945c588be69a71998e44" }
+], rev = "826a2b8" }
 
 # Crates.io dependencies
 arrow-format = { version = "0.4.0", features = ["flight-data", "flight-service", "ipc"] }

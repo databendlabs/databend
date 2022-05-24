@@ -56,6 +56,7 @@ pub struct DfQueryStatement {
     pub order_by: Vec<OrderByExpr>,
     pub limit: Option<Expr>,
     pub offset: Option<Offset>,
+    pub format: Option<String>,
 }
 
 #[async_trait::async_trait]

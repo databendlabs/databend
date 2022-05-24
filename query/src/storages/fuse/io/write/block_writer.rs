@@ -24,6 +24,7 @@ use common_arrow::parquet::write::Version;
 use common_arrow::parquet::FileMetaData;
 use common_arrow::write_parquet_file;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
@@ -36,31 +37,40 @@ pub async fn write_block(
 ) -> Result<(u64, FileMetaData)> {
     // we need a configuration of block size threshold here
     let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-    let result = serialize_data_block(block, &mut buf)?;
+
+    let schema = block.schema().clone();
+    let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
 
     data_accessor.object(location).write(buf).await?;
 
     Ok(result)
 }
 
-pub fn serialize_data_block(block: DataBlock, buf: &mut Vec<u8>) -> Result<(u64, FileMetaData)> {
-    let arrow_schema = block.schema().to_arrow();
+pub fn serialize_data_blocks(
+    blocks: Vec<DataBlock>,
+    schema: &DataSchemaRef,
+    buf: &mut Vec<u8>,
+) -> Result<(u64, FileMetaData)> {
+    let arrow_schema = schema.to_arrow();
 
     let row_group_write_options = WriteOptions {
         write_statistics: false,
         compression: CompressionOptions::Lz4Raw,
         version: Version::V2,
     };
-    let batch = Chunk::try_from(block)?;
+    let batches = blocks
+        .iter()
+        .map(|b| Chunk::try_from(b.clone()))
+        .collect::<Result<Vec<_>>>()?;
+
     let encodings: Vec<_> = arrow_schema
         .fields
         .iter()
         .map(|f| col_encoding(&f.data_type))
         .collect();
 
-    let iter = vec![Ok(batch)];
     let row_groups = RowGroupIterator::try_new(
-        iter.into_iter(),
+        batches.iter().map(|c| Ok(c.clone())),
         &arrow_schema,
         row_group_write_options,
         encodings,

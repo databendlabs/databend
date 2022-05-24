@@ -13,14 +13,12 @@
 // limitations under the License.
 use std::env;
 use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use clap::Args;
 use clap::Parser;
 use common_base::base::mask_string;
-use common_configs::HiveCatalogConfig;
-use common_configs::LogConfig;
-use common_configs::MetaConfig;
-use common_configs::QueryConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::StorageAzblobConfig as InnerStorageAzblobConfig;
@@ -29,6 +27,7 @@ use common_io::prelude::StorageFsConfig as InnerStorageFsConfig;
 use common_io::prelude::StorageHdfsConfig as InnerStorageHdfsConfig;
 use common_io::prelude::StorageParams;
 use common_io::prelude::StorageS3Config as InnerStorageS3Config;
+use common_tracing::Config as InnerLogConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -37,6 +36,9 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
+use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
+use super::inner::MetaConfig as InnerMetaConfig;
+use super::inner::QueryConfig as InnerQueryConfig;
 
 /// Outer config for `query`.
 ///
@@ -122,11 +124,11 @@ impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
             config_file: inner.config_file,
-            query: inner.query,
-            log: inner.log,
-            meta: inner.meta,
-            storage: StorageConfig::from(inner.storage),
-            catalog: inner.catalog,
+            query: inner.query.into(),
+            log: inner.log.into(),
+            meta: inner.meta.into(),
+            storage: inner.storage.into(),
+            catalog: inner.catalog.into(),
         }
     }
 }
@@ -137,11 +139,11 @@ impl TryInto<InnerConfig> for Config {
     fn try_into(self) -> Result<InnerConfig> {
         Ok(InnerConfig {
             config_file: self.config_file,
-            query: self.query,
-            log: self.log,
-            meta: self.meta,
+            query: self.query.try_into()?,
+            log: self.log.try_into()?,
+            meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
-            catalog: self.catalog,
+            catalog: self.catalog.try_into()?,
         })
     }
 }
@@ -473,5 +475,417 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
             name_node: self.name_node,
             root: self.hdfs_root,
         })
+    }
+}
+
+/// Query config group.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct QueryConfig {
+    /// Tenant id for get the information from the MetaSrv.
+    #[clap(long, default_value = "admin")]
+    pub tenant_id: String,
+
+    /// ID for construct the cluster.
+    #[clap(long, default_value_t)]
+    pub cluster_id: String,
+
+    #[clap(long, default_value_t)]
+    pub num_cpus: u64,
+
+    #[clap(long, default_value = "127.0.0.1")]
+    pub mysql_handler_host: String,
+
+    #[clap(long, default_value = "3307")]
+    pub mysql_handler_port: u16,
+
+    #[clap(long, default_value = "256")]
+    pub max_active_sessions: u64,
+
+    #[clap(long, default_value = "127.0.0.1")]
+    pub clickhouse_handler_host: String,
+
+    #[clap(long, default_value = "9000")]
+    pub clickhouse_handler_port: u16,
+
+    #[clap(long, default_value = "127.0.0.1")]
+    pub http_handler_host: String,
+
+    #[clap(long, default_value = "8000")]
+    pub http_handler_port: u16,
+
+    #[clap(long, default_value = "10000")]
+    pub http_handler_result_timeout_millis: u64,
+
+    #[clap(long, default_value = "127.0.0.1:9090")]
+    pub flight_api_address: String,
+
+    #[clap(long, default_value = "127.0.0.1:8080")]
+    pub admin_api_address: String,
+
+    #[clap(long, default_value = "127.0.0.1:7070")]
+    pub metric_api_address: String,
+
+    #[clap(long, default_value_t)]
+    pub http_handler_tls_server_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub http_handler_tls_server_key: String,
+
+    #[clap(long, default_value_t)]
+    pub http_handler_tls_server_root_ca_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub api_tls_server_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub api_tls_server_key: String,
+
+    #[clap(long, default_value_t)]
+    pub api_tls_server_root_ca_cert: String,
+
+    /// rpc server cert
+    #[clap(long, default_value_t)]
+    pub rpc_tls_server_cert: String,
+
+    /// key for rpc server cert
+    #[clap(long, default_value_t)]
+    pub rpc_tls_server_key: String,
+
+    /// Certificate for client to identify query rpc server
+    #[clap(long, default_value_t)]
+    pub rpc_tls_query_server_root_ca_cert: String,
+
+    #[clap(long, default_value = "localhost")]
+    pub rpc_tls_query_service_domain_name: String,
+
+    /// Table engine memory enabled
+    #[clap(long, parse(try_from_str), default_value = "true")]
+    pub table_engine_memory_enabled: bool,
+
+    /// Database engine github enabled
+    #[clap(long, parse(try_from_str), default_value = "true")]
+    pub database_engine_github_enabled: bool,
+
+    #[clap(long, default_value = "5000")]
+    pub wait_timeout_mills: u64,
+
+    #[clap(long, default_value = "10000")]
+    pub max_query_log_size: usize,
+
+    /// Table Cached enabled
+    #[clap(long)]
+    pub table_cache_enabled: bool,
+
+    /// Max number of cached table snapshot
+    #[clap(long, default_value = "256")]
+    pub table_cache_snapshot_count: u64,
+
+    /// Max number of cached table segment
+    #[clap(long, default_value = "10240")]
+    pub table_cache_segment_count: u64,
+
+    /// Max number of cached table block meta
+    #[clap(long, default_value = "102400")]
+    pub table_cache_block_meta_count: u64,
+
+    /// Table memory cache size (mb)
+    #[clap(long, default_value = "256")]
+    pub table_memory_cache_mb_size: u64,
+
+    /// Table disk cache folder root
+    #[clap(long, default_value = "_cache")]
+    pub table_disk_cache_root: String,
+
+    /// Table disk cache size (mb)
+    #[clap(long, default_value = "1024")]
+    pub table_disk_cache_mb_size: u64,
+
+    /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
+    #[clap(long)]
+    pub management_mode: bool,
+
+    #[clap(long, default_value_t)]
+    pub jwt_key_file: String,
+}
+
+impl Default for QueryConfig {
+    fn default() -> Self {
+        InnerQueryConfig::default().into()
+    }
+}
+
+impl TryInto<InnerQueryConfig> for QueryConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerQueryConfig> {
+        Ok(InnerQueryConfig {
+            tenant_id: self.tenant_id,
+            cluster_id: self.cluster_id,
+            num_cpus: self.num_cpus,
+            mysql_handler_host: self.mysql_handler_host,
+            mysql_handler_port: self.mysql_handler_port,
+            max_active_sessions: self.max_active_sessions,
+            clickhouse_handler_host: self.clickhouse_handler_host,
+            clickhouse_handler_port: self.clickhouse_handler_port,
+            http_handler_host: self.http_handler_host,
+            http_handler_port: self.http_handler_port,
+            http_handler_result_timeout_millis: self.http_handler_result_timeout_millis,
+            flight_api_address: self.flight_api_address,
+            admin_api_address: self.admin_api_address,
+            metric_api_address: self.metric_api_address,
+            http_handler_tls_server_cert: self.http_handler_tls_server_cert,
+            http_handler_tls_server_key: self.http_handler_tls_server_key,
+            http_handler_tls_server_root_ca_cert: self.http_handler_tls_server_root_ca_cert,
+            api_tls_server_cert: self.api_tls_server_cert,
+            api_tls_server_key: self.api_tls_server_key,
+            api_tls_server_root_ca_cert: self.api_tls_server_root_ca_cert,
+            rpc_tls_server_cert: self.rpc_tls_server_cert,
+            rpc_tls_server_key: self.rpc_tls_server_key,
+            rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
+            rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
+            table_engine_memory_enabled: self.table_engine_memory_enabled,
+            database_engine_github_enabled: self.database_engine_github_enabled,
+            wait_timeout_mills: self.wait_timeout_mills,
+            max_query_log_size: self.max_query_log_size,
+            table_cache_enabled: self.table_cache_enabled,
+            table_cache_snapshot_count: self.table_cache_snapshot_count,
+            table_cache_segment_count: self.table_cache_segment_count,
+            table_cache_block_meta_count: self.table_cache_block_meta_count,
+            table_memory_cache_mb_size: self.table_memory_cache_mb_size,
+            table_disk_cache_root: self.table_disk_cache_root,
+            table_disk_cache_mb_size: self.table_disk_cache_mb_size,
+            management_mode: self.management_mode,
+            jwt_key_file: self.jwt_key_file,
+        })
+    }
+}
+
+impl From<InnerQueryConfig> for QueryConfig {
+    fn from(inner: InnerQueryConfig) -> Self {
+        Self {
+            tenant_id: inner.tenant_id,
+            cluster_id: inner.cluster_id,
+            num_cpus: inner.num_cpus,
+            mysql_handler_host: inner.mysql_handler_host,
+            mysql_handler_port: inner.mysql_handler_port,
+            max_active_sessions: inner.max_active_sessions,
+            clickhouse_handler_host: inner.clickhouse_handler_host,
+            clickhouse_handler_port: inner.clickhouse_handler_port,
+            http_handler_host: inner.http_handler_host,
+            http_handler_port: inner.http_handler_port,
+            http_handler_result_timeout_millis: inner.http_handler_result_timeout_millis,
+            flight_api_address: inner.flight_api_address,
+            admin_api_address: inner.admin_api_address,
+            metric_api_address: inner.metric_api_address,
+            http_handler_tls_server_cert: inner.http_handler_tls_server_cert,
+            http_handler_tls_server_key: inner.http_handler_tls_server_key,
+            http_handler_tls_server_root_ca_cert: inner.http_handler_tls_server_root_ca_cert,
+            api_tls_server_cert: inner.api_tls_server_cert,
+            api_tls_server_key: inner.api_tls_server_key,
+            api_tls_server_root_ca_cert: inner.api_tls_server_root_ca_cert,
+            rpc_tls_server_cert: inner.rpc_tls_server_cert,
+            rpc_tls_server_key: inner.rpc_tls_server_key,
+            rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
+            rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
+            table_engine_memory_enabled: inner.table_engine_memory_enabled,
+            database_engine_github_enabled: inner.database_engine_github_enabled,
+            wait_timeout_mills: inner.wait_timeout_mills,
+            max_query_log_size: inner.max_query_log_size,
+            table_cache_enabled: inner.table_cache_enabled,
+            table_cache_snapshot_count: inner.table_cache_snapshot_count,
+            table_cache_segment_count: inner.table_cache_segment_count,
+            table_cache_block_meta_count: inner.table_cache_block_meta_count,
+            table_memory_cache_mb_size: inner.table_memory_cache_mb_size,
+            table_disk_cache_root: inner.table_disk_cache_root,
+            table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
+            management_mode: inner.management_mode,
+            jwt_key_file: inner.jwt_key_file,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LogConfig {
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long = "log-level", default_value = "INFO")]
+    #[serde(alias = "log_level")]
+    pub level: String,
+
+    /// Log file dir
+    #[clap(long = "log-dir", default_value = "./.databend/logs")]
+    #[serde(alias = "log_dir")]
+    pub dir: String,
+
+    /// Log file dir
+    #[clap(long = "log-query-enabled")]
+    #[serde(alias = "log_query_enabled")]
+    pub query_enabled: bool,
+}
+
+impl Default for LogConfig {
+    fn default() -> Self {
+        InnerLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerLogConfig> for LogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerLogConfig> {
+        Ok(InnerLogConfig {
+            level: self.level,
+            dir: self.dir,
+            query_enabled: self.query_enabled,
+        })
+    }
+}
+
+impl From<InnerLogConfig> for LogConfig {
+    fn from(inner: InnerLogConfig) -> Self {
+        Self {
+            level: inner.level,
+            dir: inner.dir,
+            query_enabled: inner.query_enabled,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct HiveCatalogConfig {
+    #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
+    pub meta_store_address: String,
+    #[clap(long = "hive-thrift-protocol", default_value = "binary")]
+    pub protocol: String,
+}
+
+impl Default for HiveCatalogConfig {
+    fn default() -> Self {
+        InnerHiveCatalogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerHiveCatalogConfig> for HiveCatalogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerHiveCatalogConfig> {
+        Ok(InnerHiveCatalogConfig {
+            meta_store_address: self.meta_store_address,
+            protocol: self.protocol.parse()?,
+        })
+    }
+}
+
+impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
+    fn from(inner: InnerHiveCatalogConfig) -> Self {
+        Self {
+            meta_store_address: inner.meta_store_address,
+            protocol: inner.protocol.to_string(),
+        }
+    }
+}
+
+/// Meta config group.
+/// TODO(xuanwo): All meta_xxx should be rename to xxx.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct MetaConfig {
+    /// The dir to store persisted meta state for a embedded meta store
+    #[clap(
+        long = "meta-embedded-dir",
+        default_value = "./.databend/meta_embedded"
+    )]
+    #[serde(alias = "meta_embedded_dir")]
+    pub embedded_dir: String,
+
+    /// MetaStore backend address
+    #[clap(long = "meta-address", default_value_t)]
+    #[serde(alias = "meta_address")]
+    pub address: String,
+
+    #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
+    pub endpoints: Vec<String>,
+
+    /// MetaStore backend user name
+    #[clap(long = "meta-username", default_value = "root")]
+    #[serde(alias = "meta_username")]
+    pub username: String,
+
+    /// MetaStore backend user password
+    #[clap(long = "meta-password", default_value_t)]
+    #[serde(alias = "meta_password")]
+    pub password: String,
+
+    /// Timeout for each client request, in seconds
+    #[clap(long = "meta-client-timeout-in-second", default_value = "10")]
+    #[serde(alias = "meta_client_timeout_in_second")]
+    pub client_timeout_in_second: u64,
+
+    /// Certificate for client to identify meta rpc serve
+    #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
+    pub rpc_tls_meta_server_root_ca_cert: String,
+
+    #[clap(long = "meta-rpc-tls-meta-service-domain-name", default_value_t)]
+    pub rpc_tls_meta_service_domain_name: String,
+}
+
+impl Default for MetaConfig {
+    fn default() -> Self {
+        InnerMetaConfig::default().into()
+    }
+}
+
+impl TryInto<InnerMetaConfig> for MetaConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerMetaConfig> {
+        Ok(InnerMetaConfig {
+            embedded_dir: self.embedded_dir,
+            address: self.address,
+            endpoints: self.endpoints,
+            username: self.username,
+            password: self.password,
+            client_timeout_in_second: self.client_timeout_in_second,
+            rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
+            rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
+        })
+    }
+}
+
+impl From<InnerMetaConfig> for MetaConfig {
+    fn from(inner: InnerMetaConfig) -> Self {
+        Self {
+            embedded_dir: inner.embedded_dir,
+            address: inner.address,
+            endpoints: inner.endpoints,
+            username: inner.username,
+            password: inner.password,
+            client_timeout_in_second: inner.client_timeout_in_second,
+            rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
+            rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
+        }
+    }
+}
+
+impl Debug for MetaConfig {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("MetaConfig")
+            .field("address", &self.address)
+            .field("endpoints", &self.endpoints)
+            .field("username", &self.username)
+            .field("password", &mask_string(&self.password, 3))
+            .field("embedded_dir", &self.embedded_dir)
+            .field("client_timeout_in_second", &self.client_timeout_in_second)
+            .field(
+                "rpc_tls_meta_server_root_ca_cert",
+                &self.rpc_tls_meta_server_root_ca_cert,
+            )
+            .field(
+                "rpc_tls_meta_service_domain_name",
+                &self.rpc_tls_meta_service_domain_name,
+            )
+            .finish()
     }
 }

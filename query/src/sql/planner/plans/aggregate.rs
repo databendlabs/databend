@@ -12,26 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
+use common_exception::Result;
 
-use super::Scalar;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BasePlan;
 use crate::sql::plans::LogicalPlan;
+use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
+use crate::sql::plans::ScalarItem;
 
 #[derive(Clone, Debug)]
 pub struct AggregatePlan {
     // group by scalar expressions, such as: group by col1 asc, col2 desc;
-    pub group_items: Vec<Scalar>,
+    pub group_items: Vec<ScalarItem>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
-    pub aggregate_functions: Vec<Scalar>,
+    pub aggregate_functions: Vec<ScalarItem>,
+    // True if the plan is generated from distinct, else the plan is a normal aggregate;
+    pub from_distinct: bool,
 }
 
-impl BasePlan for AggregatePlan {
+impl Operator for AggregatePlan {
     fn plan_type(&self) -> PlanType {
         PlanType::Aggregate
     }
@@ -44,16 +48,12 @@ impl BasePlan for AggregatePlan {
         true
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
-        todo!()
-    }
-
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
+        Some(self)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+        Some(self)
     }
 }
 
@@ -64,7 +64,28 @@ impl PhysicalPlan for AggregatePlan {
 }
 
 impl LogicalPlan for AggregatePlan {
-    fn compute_relational_prop(&self, _expression: &SExpr) -> RelationalProperty {
-        todo!()
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        // Derive output columns
+        let mut output_columns = ColumnSet::new();
+        for group_item in self.group_items.iter() {
+            output_columns.insert(group_item.index);
+        }
+        for agg in self.aggregate_functions.iter() {
+            output_columns.insert(agg.index);
+        }
+
+        // Derive outer columns
+        let outer_columns = input_prop
+            .outer_columns
+            .difference(&output_columns)
+            .cloned()
+            .collect();
+
+        Ok(RelationalProperty {
+            output_columns,
+            outer_columns,
+        })
     }
 }

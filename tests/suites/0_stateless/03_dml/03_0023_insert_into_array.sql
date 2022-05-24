@@ -139,4 +139,14 @@ INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, null),
 select * from t15;
 select arr[0], arr[1] from t15;
 
+select '==Array(Int64) Nullable==';
+
+CREATE TABLE IF NOT EXISTS t16(id Int, arr Array(Int64) Null) Engine = fuse;
+
+INSERT INTO t16 (id, arr) VALUES(1, [1,2,3,4]), (2, [5,6,7,8]), (3, null);
+
+select * from t16;
+select arr[0], arr[1] from t16;
+select arr[0], arr[1] from t16 where arr[1] = 6 order by arr[2] desc;
+
 DROP DATABASE db1;

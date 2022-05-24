@@ -1,0 +1,20 @@
+name: Add issues into projects
+
+on:
+  issues:
+    types:
+      - opened
+      - transferred
+      - labeled
+
+jobs:
+  add-to-storage:
+    name: Add issue to storage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@main
+        with:
+          project-url: https://github.com/orgs/datafuselabs/projects/5
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          labeled: A-storage
+          label-operator: OR

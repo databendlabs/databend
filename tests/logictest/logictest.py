@@ -3,13 +3,12 @@ import collections
 import glob
 import os
 import re
-import logging
+
 import six
 from hamcrest import assert_that, is_, none, is_not
 
-logging.basicConfig(level=logging.INFO)
+from log import log
 
-log = logging.getLogger(__name__)
 # statement is a statement in sql logic test
 state_regex = r"^\s*statement\s+(?P<statement>((?P<ok>OK)|((?P<error>)ERROR\s*(?P<expectError>.*))|(?P<query>QUERY\s*((" \
               r"ERROR\s+(?P<queryError>.*))|(?P<queryOptions>.*)))))$"
@@ -36,9 +35,9 @@ def is_empty_line(line):
 
 # iterate lines over a file and return a iterator
 def get_lines(suite_path):
-    with open(suite_path) as reader:
+    with open(suite_path, encoding="UTF-8") as reader:
         for line_idx, line in enumerate(reader.readlines()):
-            yield line_idx, line.rstrip()
+            yield line_idx, line.rstrip('\n ')  # keep tab /t
 
 
 # return a single statement
@@ -58,6 +57,9 @@ def get_result(lines):
     val = 0
     for line_idx, line in lines:
         val = line_idx
+        if line.startswith('\t'):  # tab as empty row in results
+            result_lines.append(line)
+            continue
         if is_empty_line(line) and result_label is None:
             continue
         if is_empty_line(line) and result_label is not None:
@@ -187,10 +189,12 @@ def get_statements(suite_path, suite_name):
         text = get_single_statement(lines)
         results = []
         if s.type == "query" and s.query_type is not None:
-            results.append(get_result(lines))
-        if s.label is not None:
-            for i in s.label:
+            # TODO need a better way to get all results
+            if s.label is None:
                 results.append(get_result(lines))
+            else:
+                for i in s.label:
+                    results.append(get_result(lines))
         yield ParsedStatement(line_idx, s, suite_name, text, results)
 
 
@@ -240,9 +244,19 @@ class SuiteRunner(object):
                     (filename, os.path.relpath(filename, self.path)))
 
     def execute(self):
-        for (file_path, suite_name) in self.statement_files:
-            for state in get_statements(file_path, suite_name):
-                self.execute_statement(state)
+        # batch execute use single session
+        if callable(getattr(self, "batch_execute")):
+            # case batch
+            for (file_path, suite_name) in self.statement_files:
+                statement_list = list()
+                for state in get_statements(file_path, suite_name):
+                    statement_list.append(state)
+                self.batch_execute(statement_list)
+        else:
+            # case one by one
+            for (file_path, suite_name) in self.statement_files:
+                for state in get_statements(file_path, suite_name):
+                    self.execute_statement(state)
 
     def execute_statement(self, statement):
         if self.show_query_on_execution:
@@ -268,7 +282,10 @@ class SuiteRunner(object):
         )
 
     def assert_query_equal(self, f, resultset, statement):
-        assert f.strip() == resultset[2].strip(), "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
+        # use join after split instead of strip
+        compare_f = "".join(f.split())
+        compare_result = "".join(resultset[2].split())
+        assert compare_f == compare_result, "Expected:\n{}\n Actual:\n{}\n Statement:{}\n Start " \
                                                   "Line: {}, Result Label: {}".format(resultset[2].rstrip(),
                                                                                       f.rstrip(),
                                                                                       str(statement), resultset[1],

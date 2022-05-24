@@ -40,12 +40,12 @@ table_disk_cache_mb_size = 10240
 
 [log]
 level = "ERROR"
-dir = "./_logs"
+dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
 # To enable embedded meta-store, set meta_address to ""
-meta_embedded_dir = "_meta_embedded_1"
+meta_embedded_dir = "./.databend/meta_embedded_1"
 meta_address = "0.0.0.0:9191"
 meta_username = "root"
 meta_password = "root"
@@ -58,4 +58,4 @@ type = "fs"
 
 # FS storage.
 [storage.fs]
-data_path = "stateless_test_data"
+data_path = "./.databend/stateless_test_data"

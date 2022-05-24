@@ -7,7 +7,7 @@ Attempts to forcibly terminate the currently running queries.
 ## Syntax
 
 ```
-KILL QUERY|CONNECTION <query_id>
+KILL QUERY|CONNECTION <session_id>
 ```
 
 ## Examples

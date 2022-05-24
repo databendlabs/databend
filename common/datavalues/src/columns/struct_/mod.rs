@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod mutable;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+pub use mutable::MutableStructColumn;
 
 use crate::prelude::*;
 
@@ -43,6 +45,10 @@ impl StructColumn {
         Self { values, data_type }
     }
 
+    pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypeImpl) -> Self {
+        Self { values, data_type }
+    }
+
     pub fn from_arrow_array(array: &dyn Array) -> Self {
         Self::new(
             array
@@ -51,10 +57,6 @@ impl StructColumn {
                 .unwrap()
                 .clone(),
         )
-    }
-
-    pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypeImpl) -> Self {
-        Self { values, data_type }
     }
 
     pub fn values(&self) -> &[ColumnRef] {

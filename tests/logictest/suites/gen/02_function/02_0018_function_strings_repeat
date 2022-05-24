@@ -1,0 +1,187 @@
+statement query T 
+select '=======> array_array';
+
+----  
+=======> array_array
+
+statement ok
+CREATE TABLE strings_repeat_sample_u8(s String, n Uint8) engine=Memory;
+
+statement ok
+CREATE TABLE strings_repeat_sample_u16 (s String, n Uint16) engine=Memory;
+
+statement ok
+CREATE TABLE strings_repeat_sample_u32 (s String, n Uint32) engine=Memory;
+
+statement ok
+CREATE TABLE strings_repeat_sample_u64 (s String, n Uint64) engine=Memory;
+
+statement ok
+INSERT INTO strings_repeat_sample_u8 VALUES ('abc', 3), ('abc', 0);
+
+statement ok
+INSERT INTO strings_repeat_sample_u16 VALUES ('abc', 3), ('abc', 0);
+
+statement ok
+INSERT INTO strings_repeat_sample_u32 VALUES ('abc', 3), ('abc', 0);
+
+statement ok
+INSERT INTO strings_repeat_sample_u64 VALUES ('abc', 3), ('abc', 0);
+
+statement query T 
+select repeat(s, n) from strings_repeat_sample_u8;
+
+----  
+abcabcabc
+	
+
+statement query T 
+select repeat(s, n) from strings_repeat_sample_u16;
+
+----  
+abcabcabc
+	
+
+statement query T 
+select repeat(s, n) from strings_repeat_sample_u32;
+
+----  
+abcabcabc
+	
+
+statement query T 
+select repeat(s, n) from strings_repeat_sample_u64;
+
+----  
+abcabcabc
+	
+
+statement ok
+drop table strings_repeat_sample_u8;
+
+statement ok
+drop table strings_repeat_sample_u16;
+
+statement ok
+drop table strings_repeat_sample_u32;
+
+statement ok
+drop table strings_repeat_sample_u64;
+
+statement query T 
+select '=======> const_const';
+
+----  
+=======> const_const
+
+statement query T 
+select repeat('abc', 3);
+
+----  
+abcabcabc
+
+statement query T 
+select repeat('abc', 0);
+
+----  
+	
+
+statement query T 
+select '=======> const_array';
+
+----  
+=======> const_array
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u8(n Uint8) engine=Memory;
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u16 (n Uint16) engine=Memory;
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u32 (n Uint32) engine=Memory;
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u64 (n Uint64) engine=Memory;
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u8 VALUES (3), (0);
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u16 VALUES (3), (0);
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u32 VALUES (3), (0);
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u64 VALUES (3), (0);
+
+statement query T 
+select repeat('abc', n) from strings_repeat_sample_2_u8;
+
+----  
+abcabcabc
+	
+
+statement query T 
+select repeat('abc', n) from strings_repeat_sample_2_u16;
+
+----  
+abcabcabc
+	
+
+statement query T 
+select repeat('abc', n) from strings_repeat_sample_2_u32;
+
+----  
+abcabcabc
+	
+
+statement query T 
+select repeat('abc', n) from strings_repeat_sample_2_u64;
+
+----  
+abcabcabc
+	
+
+statement ok
+drop table strings_repeat_sample_2_u8;
+
+statement ok
+drop table strings_repeat_sample_2_u16;
+
+statement ok
+drop table strings_repeat_sample_2_u32;
+
+statement ok
+drop table strings_repeat_sample_2_u64;
+
+statement query T 
+select '=======> array_const';
+
+----  
+=======> array_const
+
+statement ok
+CREATE TABLE strings_repeat_sample_3(s String) engine=Memory;
+
+statement ok
+INSERT INTO strings_repeat_sample_3 VALUES ('abc'), ('def');
+
+statement query T 
+select repeat(s, 3) from strings_repeat_sample_3;
+
+----  
+abcabcabc
+defdefdef
+
+statement query T 
+select repeat(s, 0) from strings_repeat_sample_3;
+
+----  
+	
+	
+
+statement ok
+drop table strings_repeat_sample_3;
+

@@ -82,6 +82,10 @@ impl FuseTable {
         &self.meta_location_generator
     }
 
+    pub fn cluster_keys(&self) -> Vec<Expression> {
+        self.order_keys.clone()
+    }
+
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
         let table_id = table_info.ident.table_id;
         let db_id = table_info
@@ -238,16 +242,13 @@ impl Table for FuseTable {
         self.do_optimize(ctx, keep_last_snapshot).await
     }
 
-    async fn statistics(&self, ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
-        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
-        Ok(snapshot.map(|s| {
-            let summary = &s.summary;
-            TableStatistics {
-                num_rows: Some(summary.row_count),
-                data_size: Some(summary.uncompressed_byte_size),
-                data_size_compressed: Some(summary.compressed_byte_size),
-                index_length: None,
-            }
+    async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+        let s = &self.table_info.meta.statistics;
+        Ok(Some(TableStatistics {
+            num_rows: Some(s.number_of_rows),
+            data_size: Some(s.data_bytes),
+            data_size_compressed: Some(s.compressed_data_bytes),
+            index_length: None, // we do not have it yet
         }))
     }
 }

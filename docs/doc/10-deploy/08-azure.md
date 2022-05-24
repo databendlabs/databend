@@ -167,7 +167,7 @@ INSERT INTO t1 VALUES(1), (2);
 ```
 
 ```sql
-SELECT * FROM T1
+SELECT * FROM T1;
 ```
 ```text
   +------+

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 mod aggregate;
+mod apply;
+mod eval_scalar;
 mod filter;
 mod hash_join;
 mod limit;
@@ -24,10 +26,12 @@ mod project;
 mod scalar;
 mod sort;
 
-use std::any::Any;
-
 pub use aggregate::AggregatePlan;
+pub use apply::CrossApply;
+use common_exception::Result;
 use enum_dispatch::enum_dispatch;
+pub use eval_scalar::EvalScalar;
+pub use eval_scalar::ScalarItem;
 pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
@@ -35,18 +39,18 @@ pub use logical_get::LogicalGet;
 pub use logical_join::LogicalInnerJoin;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
-pub use project::ProjectItem;
-pub use project::ProjectPlan;
+pub use project::Project;
 pub use scalar::*;
 pub use sort::SortItem;
 pub use sort::SortPlan;
 
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
 
 #[enum_dispatch]
-pub trait BasePlan: Any {
+pub trait Operator {
     fn plan_type(&self) -> PlanType;
 
     fn is_physical(&self) -> bool;
@@ -57,15 +61,13 @@ pub trait BasePlan: Any {
         false
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan>;
-
     fn as_logical(&self) -> Option<&dyn LogicalPlan>;
 
-    fn as_any(&self) -> &dyn Any;
+    fn as_physical(&self) -> Option<&dyn PhysicalPlan>;
 }
 
 pub trait LogicalPlan {
-    fn compute_relational_prop(&self, expression: &SExpr) -> RelationalProperty;
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty>;
 }
 
 pub trait PhysicalPlan {
@@ -85,29 +87,34 @@ pub enum PlanType {
 
     // Operators that are both logical and physical
     Project,
+    EvalScalar,
     Filter,
     Aggregate,
     Sort,
     Limit,
+    CrossApply,
 
     // Pattern
     Pattern,
 }
 
-#[enum_dispatch(BasePlan)]
+/// Relational operators
+#[enum_dispatch(Operator)]
 #[derive(Clone, Debug)]
-pub enum BasePlanImpl {
+pub enum RelOperator {
     LogicalGet(LogicalGet),
     LogicalInnerJoin(LogicalInnerJoin),
 
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),
 
-    Project(ProjectPlan),
+    Project(Project),
+    EvalScalar(EvalScalar),
     Filter(FilterPlan),
     Aggregate(AggregatePlan),
     Sort(SortPlan),
     Limit(LimitPlan),
+    CrossApply(CrossApply),
 
     Pattern(PatternPlan),
 }

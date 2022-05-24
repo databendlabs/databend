@@ -1,0 +1,60 @@
+statement ok
+DROP DATABASE IF EXISTS showtable;
+
+statement ok
+CREATE DATABASE showtable;
+
+statement ok
+CREATE TABLE showtable.t1(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtable.t2(c1 int) ENGINE = Null;
+
+statement ok
+CREATE TABLE showtable.t3(c1 int) ENGINE = Null;
+
+statement ok
+use showtable;
+
+statement ok
+SHOW TABLES;
+
+statement ok
+SHOW TABLES LIKE 't%';
+
+statement ok
+SHOW TABLES LIKE 't2';
+
+statement ok
+SHOW TABLES LIKE 't';
+
+statement ok
+SHOW TABLES WHERE table_name LIKE 't%';
+
+statement ok
+SHOW TABLES WHERE table_name = 't%' AND 1 = 0;
+
+statement ok
+SHOW TABLES WHERE table_name = 't2' OR 1 = 1;
+
+statement ok
+SHOW TABLES WHERE table_name = 't2' AND 1 = 1;
+
+statement ok
+USE default;
+
+statement ok
+SHOW TABLES FROM showtables WHERE table_name LIKE 't%';
+
+statement ok
+SHOW TABLES FROM showtables WHERE table_name = "t%" AND 1 = 0;
+
+statement ok
+SHOW TABLES FROM showtables WHERE table_name = 't2' OR 1 = 1;
+
+statement ok
+SHOW TABLES FROM showtables WHERE table_name = 't2' AND 1 = 1;
+
+statement ok
+DROP DATABASE showtable;
+

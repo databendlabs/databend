@@ -29,7 +29,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    let conf = Config::empty();
+    let conf = Config::default();
     let cluster_router = Route::new()
         .at("/v1/config", get(config_handler))
         .data(conf.clone());

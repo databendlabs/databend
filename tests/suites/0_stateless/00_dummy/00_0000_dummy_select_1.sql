@@ -8,4 +8,4 @@ SELECT TRUE;
 SELECT FALSE;
 SELECT NOT(TRUE);
 SELECT 'That\'s good.';
-SELECT *; -- {ErrorCode 1015}
+SELECT *; -- {ErrorCode 1065}

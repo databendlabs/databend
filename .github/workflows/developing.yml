@@ -8,11 +8,15 @@ on:
       - 'docs/**'
       - 'website/**'
       - '**.md'
+      - 'scripts/setup/**'
+      - '.devcontainer/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - 'website/**'
       - '**.md'
+      - 'scripts/setup/**'
+      - '.devcontainer/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}

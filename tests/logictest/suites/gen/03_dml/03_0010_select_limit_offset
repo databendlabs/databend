@@ -1,0 +1,164 @@
+statement query T 
+select '=== Test limit ===';
+
+----  
+=== Test limit ===
+
+statement query I 
+select number from numbers(100) order by number asc limit 10;
+
+----  
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query T 
+select '==================';
+
+----  
+==================
+
+statement query I 
+select number from numbers(100) order by number*2 asc limit 10;
+
+----  
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement query T 
+select '=== Test limit n, m ===';
+
+----  
+=== Test limit n, m ===
+
+statement query I 
+select number from numbers(100) order by number asc limit 10, 10;
+
+----  
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query T 
+select '==================';
+
+----  
+==================
+
+statement query I 
+select number from numbers(100) order by number-2 asc limit 10, 10;
+
+----  
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query T 
+select '=== Test limit with offset ===';
+
+----  
+=== Test limit with offset ===
+
+statement query I 
+select number from numbers(100) order by number asc limit 10 offset 10;
+
+----  
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query T 
+select '==============================';
+
+----  
+==============================
+
+statement query I 
+select number from numbers(100) order by number/2 asc limit 10 offset 10;
+
+----  
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+statement query T 
+select '=== Test offset ===';
+
+----  
+=== Test offset ===
+
+statement query I 
+select number from numbers(10) order by number asc offset 5;
+
+----  
+5
+6
+7
+8
+9
+
+statement query T 
+select '===================';
+
+----  
+===================
+
+statement query I 
+select number from numbers(10) order by number+number asc offset 5;
+
+----  
+5
+6
+7
+8
+9
+
+statement query I 
+select number from numbers(10000000000000) limit 1;
+
+----  
+0
+

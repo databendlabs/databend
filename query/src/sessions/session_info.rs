@@ -36,6 +36,7 @@ pub struct ProcessInfo {
     pub memory_usage: i64,
     pub dal_metrics: Option<DalMetrics>,
     pub scan_progress_value: Option<ProgressValues>,
+    pub mysql_connection_id: Option<u32>,
 }
 
 impl Session {
@@ -57,7 +58,7 @@ impl Session {
 
         ProcessInfo {
             id: self.id.clone(),
-            typ: self.typ.clone().to_string(),
+            typ: self.get_type().to_string(),
             state: self.process_state(status),
             database: status.get_current_database(),
             user: status.get_current_user(),
@@ -67,6 +68,7 @@ impl Session {
             memory_usage,
             dal_metrics: Session::query_dal_metrics(status),
             scan_progress_value: Session::query_scan_progress_value(status),
+            mysql_connection_id: self.mysql_connection_id,
         }
     }
 
@@ -79,7 +81,7 @@ impl Session {
     }
 
     fn process_extra_info(self: &Arc<Self>, status: &SessionContext) -> Option<String> {
-        match self.typ {
+        match self.get_type() {
             SessionType::FlightRPC => Session::rpc_extra_info(status),
             _ => Session::query_extra_info(status),
         }
