@@ -19,6 +19,19 @@ jobs:
           download_translations: true
           config: '.github/crowdin.yml'
           base_url: 'https://databend.crowdin.com'
+          base_path: '.'
+
+          pull_request_body: |
+            I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+
+            ## Summary
+
+            Update i18n files
+
+            ## Changelog
+
+            - Not for changelog (changelog entry is not required)
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
