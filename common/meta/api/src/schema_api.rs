@@ -77,7 +77,7 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_database_history(
         &self,
-        req: GetDatabaseReq,
+        req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     // table
@@ -92,7 +92,7 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError>;
 
-    async fn get_table_history(&self, req: GetTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
+    async fn get_table_history(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 

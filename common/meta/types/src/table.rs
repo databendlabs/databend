@@ -275,7 +275,7 @@ impl Display for TableInfo {
 /// Save table name id list history.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct TableIdList {
-    pub table_id_list: Vec<u64>,
+    pub id_list: Vec<u64>,
 }
 
 impl TableIdList {
@@ -284,21 +284,25 @@ impl TableIdList {
     }
 
     pub fn append(&mut self, table_id: u64) {
-        self.table_id_list.push(table_id);
+        self.id_list.push(table_id);
     }
 
     pub fn is_empty(&self) -> bool {
-        self.table_id_list.is_empty()
+        self.id_list.is_empty()
     }
 
     pub fn pop(&mut self) -> Option<u64> {
-        self.table_id_list.pop()
+        self.id_list.pop()
+    }
+
+    pub fn last(&mut self) -> Option<&u64> {
+        self.id_list.last()
     }
 }
 
 impl Display for TableIdList {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DB.Table id list: {:?}", self.table_id_list)
+        write!(f, "DB.Table id list: {:?}", self.id_list)
     }
 }
 

@@ -135,6 +135,10 @@ impl DbIdList {
     pub fn pop(&mut self) -> Option<u64> {
         self.id_list.pop()
     }
+
+    pub fn last(&mut self) -> Option<&u64> {
+        self.id_list.last()
+    }
 }
 
 impl Display for DbIdList {

@@ -181,6 +181,10 @@ build_exceptions! {
     CreateDatabaseWithDropTime(2310),
     UndropDbAlreadyExists(2311),
     UndropDbHasNoHistory(2312),
+    UndropTableWithNoDropTime(2313),
+    DropTableWithDropTime(2314),
+    DropDbWithDropTime(2315),
+    UndropDbWithNoDropTime(2316),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

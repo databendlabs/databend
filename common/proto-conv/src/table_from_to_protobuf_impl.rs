@@ -194,16 +194,14 @@ impl FromToProto<pb::TableIdList> for mt::TableIdList {
     fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
         check_ver(p.ver)?;
 
-        let v = Self {
-            table_id_list: p.ids,
-        };
+        let v = Self { id_list: p.ids };
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<pb::TableIdList, Incompatible> {
         let p = pb::TableIdList {
             ver: VER,
-            ids: self.table_id_list.clone(),
+            ids: self.id_list.clone(),
         };
         Ok(p)
     }

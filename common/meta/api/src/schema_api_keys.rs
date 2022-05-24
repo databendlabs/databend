@@ -193,7 +193,7 @@ impl KVApiKey for TableId {
     }
 }
 
-/// "_fd_table_id_list/<db_id>/<tb_name> -> table_id_list"
+/// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
 impl KVApiKey for TableIdListKey {
     const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
 

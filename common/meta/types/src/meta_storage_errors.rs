@@ -92,6 +92,34 @@ impl CreateDatabaseWithDropTime {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("DropDbWithDropTime: drop {db_name} with drop_on time")]
+pub struct DropDbWithDropTime {
+    db_name: String,
+}
+
+impl DropDbWithDropTime {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UndropDbWithNoDropTime: undrop {db_name} with no drop_on time")]
+pub struct UndropDbWithNoDropTime {
+    db_name: String,
+}
+
+impl UndropDbWithNoDropTime {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
 #[error("UndropDbAlreadyExists: undrop {db_name} already exists")]
 pub struct UndropDbAlreadyExists {
     db_name: String,
@@ -156,6 +184,34 @@ pub struct UndropTableAlreadyExists {
 }
 
 impl UndropTableAlreadyExists {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("UndropTableWithNoDropTime: undrop {table_name} with no drop_on time")]
+pub struct UndropTableWithNoDropTime {
+    table_name: String,
+}
+
+impl UndropTableWithNoDropTime {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("DropTableWithDropTime: drop {table_name} with drop_on time")]
+pub struct DropTableWithDropTime {
+    table_name: String,
+}
+
+impl DropTableWithDropTime {
     pub fn new(table_name: impl Into<String>) -> Self {
         Self {
             table_name: table_name.into(),
@@ -321,6 +377,12 @@ pub enum AppError {
     UndropTableAlreadyExists(#[from] UndropTableAlreadyExists),
 
     #[error(transparent)]
+    UndropTableWithNoDropTime(#[from] UndropTableWithNoDropTime),
+
+    #[error(transparent)]
+    DropTableWithDropTime(#[from] DropTableWithDropTime),
+
+    #[error(transparent)]
     UndropTableHasNoHistory(#[from] UndropTableHasNoHistory),
 
     #[error(transparent)]
@@ -328,6 +390,12 @@ pub enum AppError {
 
     #[error(transparent)]
     CreateDatabaseWithDropTime(#[from] CreateDatabaseWithDropTime),
+
+    #[error(transparent)]
+    DropDbWithDropTime(#[from] DropDbWithDropTime),
+
+    #[error(transparent)]
+    UndropDbWithNoDropTime(#[from] UndropDbWithNoDropTime),
 
     #[error(transparent)]
     UndropDbAlreadyExists(#[from] UndropDbAlreadyExists),
@@ -439,6 +507,30 @@ impl AppErrorMessage for UnknownShareId {
     }
 }
 
+impl AppErrorMessage for UndropTableWithNoDropTime {
+    fn message(&self) -> String {
+        format!("Undrop table '{}' with no drop_on time", self.table_name)
+    }
+}
+
+impl AppErrorMessage for DropTableWithDropTime {
+    fn message(&self) -> String {
+        format!("Drop table '{}' with drop_on time", self.table_name)
+    }
+}
+
+impl AppErrorMessage for UndropDbWithNoDropTime {
+    fn message(&self) -> String {
+        format!("Undrop db '{}' with no drop_on time", self.db_name)
+    }
+}
+
+impl AppErrorMessage for DropDbWithDropTime {
+    fn message(&self) -> String {
+        format!("Drop db '{}' with drop_on time", self.db_name)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -452,6 +544,14 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UndropDbAlreadyExists(err) => ErrorCode::UndropDbAlreadyExists(err.message()),
             AppError::UndropDbHasNoHistory(err) => ErrorCode::UndropDbHasNoHistory(err.message()),
+            AppError::UndropTableWithNoDropTime(err) => {
+                ErrorCode::UndropTableWithNoDropTime(err.message())
+            }
+            AppError::DropTableWithDropTime(err) => ErrorCode::DropTableWithDropTime(err.message()),
+            AppError::DropDbWithDropTime(err) => ErrorCode::DropDbWithDropTime(err.message()),
+            AppError::UndropDbWithNoDropTime(err) => {
+                ErrorCode::UndropDbWithNoDropTime(err.message())
+            }
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())

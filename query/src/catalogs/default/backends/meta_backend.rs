@@ -140,7 +140,7 @@ impl SchemaApi for MetaBackend {
 
     async fn get_database_history(
         &self,
-        req: GetDatabaseReq,
+        req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         self.query_backend(move |cli| async move { cli.get_database_history(req).await })
             .await
@@ -178,7 +178,7 @@ impl SchemaApi for MetaBackend {
             .await
     }
 
-    async fn get_table_history(&self, req: GetTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
+    async fn get_table_history(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
         self.query_backend(move |cli| async move { cli.get_table_history(req).await })
             .await
     }
