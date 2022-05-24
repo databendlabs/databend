@@ -31,14 +31,21 @@ pub struct DfShowTables {
     pub kind: DfShowKind,
     pub showfull: bool,
     pub fromdb: Option<String>,
+    pub with_history: bool,
 }
 
 impl DfShowTables {
-    pub fn create(kind: DfShowKind, showfull: bool, fromdb: Option<String>) -> DfShowTables {
+    pub fn create(
+        kind: DfShowKind,
+        showfull: bool,
+        fromdb: Option<String>,
+        with_history: bool,
+    ) -> DfShowTables {
         DfShowTables {
             kind,
             showfull,
             fromdb,
+            with_history,
         }
     }
 }
