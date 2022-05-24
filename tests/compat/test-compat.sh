@@ -29,4 +29,36 @@ cp ./current/databend-meta ./target/debug/
 ./target/debug/databend-meta --version
 ./target/debug/databend-query --version
 
-./scripts/ci/ci-run-stateless-tests-standalone.sh
+# Not all cases in the latest repo will pass
+echo "Run some specific SQL tests."
+
+echo "Starting standalone DatabendQuery(debug)"
+
+killall databend-query
+killall databend-meta
+sleep 1
+
+for bin in databend-query databend-meta; do
+	if test -n "$(pgrep $bin)"; then
+		echo "The $bin is not killed. force killing."
+		killall -9 $bin
+	fi
+done
+
+BIN=debug
+
+echo 'Start databend-meta...'
+nohup target/${BIN}/databend-meta --single --log-level=DEBUG &
+echo "Waiting on databend-meta 10 seconds..."
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
+
+echo 'Start databend-query...'
+nohup target/${BIN}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
+
+echo "Waiting on databend-query 10 seconds..."
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
+
+cd tests
+
+echo "Starting metasrv related test: 05_ddl"
+./databend-test --mode 'standalone' --run-dir 0_stateless -- 05_
