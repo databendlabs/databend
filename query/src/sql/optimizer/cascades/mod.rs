@@ -180,7 +180,7 @@ impl CascadesOptimizer {
                 // }
 
                 let children = self.optimize_m_expr(m_expr, required_prop)?;
-                let result = SExpr::create(plan, children, None);
+                let result = SExpr::create(plan.clone(), children, None);
                 return Ok(result);
             }
         }

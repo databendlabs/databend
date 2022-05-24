@@ -87,6 +87,8 @@ select count(*) from numbers(5) group by number % 2 having number % 2 + 1 = 2;
 
 select number, sum(number) from numbers(10) group by 1, number having sum(number) = 5;
 
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name);
+
 -- aggregator combinator
 -- distinct
 select sum_distinct(number) from ( select number % 100 as number from numbers(100000));
@@ -203,8 +205,18 @@ select * from t1 natural join t2;
 drop table t1;
 drop table t2;
 
+-- Join: right table with duplicate build keys
+select '===Inner Join with duplicate keys===';
+create table t1(a int, b int);
+insert into t1 values(1, 2), (1, 3), (2, 4);
+create table t2(c int, d int);
+insert into t2 values(1, 2), (2, 6);
+select * from t2 inner join t1 on t1.a = t2.c;
+drop table t1;
+drop table t2;
+
 -- trim function
-select '===Trim functuon===';
+select '===Trim Functuon===';
 select trim(leading ' ' from '      abc');
 select trim(leading ' ' from '');
 select trim(leading 'ab' from 'abab');
