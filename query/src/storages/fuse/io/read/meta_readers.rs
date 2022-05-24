@@ -110,7 +110,6 @@ impl<'a> TableSnapshotReader<'a> {
         let stream = stream::try_unfold(
             (self, location_gen, Some((location, format_version))),
             |(reader, gen, next)| async move {
-                // TODO simplify these
                 if let Some((loc, ver)) = next {
                     let snapshot = match reader.read(loc, None, ver).await {
                         Ok(s) => Ok(Some(s)),

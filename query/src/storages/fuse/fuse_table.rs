@@ -214,6 +214,7 @@ impl Table for FuseTable {
     }
 
     fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }
 

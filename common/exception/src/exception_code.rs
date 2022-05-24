@@ -162,6 +162,7 @@ build_exceptions! {
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),
     TableNotWritable(2012),
+    TableHistoricalDataNotFound(2013),
 
     // User api error codes.
     UnknownUser(2201),

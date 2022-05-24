@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableStatistics;
 use futures::TryStreamExt;
@@ -31,32 +32,35 @@ impl FuseTable {
         &self,
         ctx: &Arc<QueryContext>,
         time_point: DateTime<Utc>,
-    ) -> Result<Option<Arc<FuseTable>>> {
+    ) -> Result<Arc<FuseTable>> {
         let snapshot_location = if let Some(loc) = self.snapshot_loc() {
             loc
         } else {
             // not an error?
-            return Ok(None);
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Empty Table has no historical data",
+            ));
         };
 
         let snapshot_version = self.snapshot_format_version();
         let reader = MetaReaders::table_snapshot_reader(ctx);
 
         // grab the table history
+        // snapshots are order by timestamp DESC.
         let mut snapshots = reader.snapshot_history(
             snapshot_location,
             snapshot_version,
             self.meta_location_generator().clone(),
         );
 
-        // Find the instant which matched ths given `time_point`.
-        // The history returned is ordered by timestamp desc.
+        // Find the instant which matches ths given `time_point`.
         let mut instant = None;
         while let Some(snapshot) = snapshots.try_next().await? {
             if let Some(ts) = snapshot.timestamp {
                 // break on the first one
                 if ts <= time_point {
-                    instant = Some(snapshot)
+                    instant = Some(snapshot);
+                    break;
                 }
             }
         }
@@ -68,7 +72,7 @@ impl FuseTable {
             // we should NOT use it other than a pure place holder.
             // Fortunately, historical table should be read-only.
             // - Although, caller of fuse table will not perform mutation on a historical table
-            //   but in case there is careless refactorings, an extra attribute `read_only` is
+            //   but in case there are careless mistakes, an extra attribute `read_only` is
             //   added the FuseTable, and during mutation operations, FuseTable will check it.
             // - Figuring out better way...
             let mut table_info = self.table_info.clone();
@@ -103,9 +107,11 @@ impl FuseTable {
             // let's instantiate it
             let read_only = true;
             let fuse_tbl = FuseTable::do_create(table_info, read_only)?;
-            Ok(Some(fuse_tbl.into()))
+            Ok(fuse_tbl.into())
         } else {
-            Ok(None)
+            Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found",
+            ))
         }
     }
 }
