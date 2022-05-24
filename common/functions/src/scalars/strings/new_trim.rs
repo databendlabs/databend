@@ -25,7 +25,7 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 pub trait TrimOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, _str: &'a [u8], _trim_str: &'a [u8], _buf: &mut Vec<u8>);
+    fn apply<'a>(&'a mut self, _str: &'a [u8], _trim_str: &'a [u8], _buffer: &mut Vec<u8>);
 }
 
 #[derive(Clone)]
@@ -99,11 +99,13 @@ impl TrimOperator for TrimLeading {
     #[inline]
     fn apply<'a>(&'a mut self, str: &'a [u8], trim_str: &'a [u8], buffer: &mut Vec<u8>) {
         let chunk_size = trim_str.len();
-        for (idx, chunk) in str.chunks(chunk_size).enumerate() {
-            if chunk != trim_str {
-                buffer.extend_from_slice(&str[idx * chunk_size..]);
-                return;
-            }
+        let start_index = str
+            .chunks(chunk_size)
+            .enumerate()
+            .find(|(_, chunk)| *chunk != trim_str);
+
+        if let Some((idx, _)) = start_index {
+            buffer.extend_from_slice(&str[idx * chunk_size..]);
         }
     }
 }
@@ -112,15 +114,15 @@ impl TrimOperator for TrimLeading {
 pub struct TrimTrailing;
 
 impl TrimOperator for TrimTrailing {
-    // impl TrimOperator for TrimTrailing {
     fn apply<'a>(&'a mut self, str: &'a [u8], trim_str: &'a [u8], buffer: &mut Vec<u8>) {
         let chunk_size = trim_str.len();
-        for (idx, chunk) in str.rchunks(chunk_size).enumerate() {
-            if chunk != trim_str {
-                let trim_bytes = idx * chunk_size;
-                buffer.extend_from_slice(&str[..str.len() - trim_bytes]);
-                return;
-            }
+        let end_index = str
+            .rchunks(chunk_size)
+            .enumerate()
+            .find(|(_, chunk)| *chunk != trim_str);
+
+        if let Some((idx, _)) = end_index {
+            buffer.extend_from_slice(&str[..str.len() - idx * chunk_size])
         }
     }
 }
@@ -129,30 +131,28 @@ impl TrimOperator for TrimTrailing {
 pub struct TrimBoth;
 
 impl TrimOperator for TrimBoth {
-    // impl TrimOperator for TrimBoth {
     fn apply<'a>(&'a mut self, str: &'a [u8], trim_str: &'a [u8], buffer: &mut Vec<u8>) {
         let chunk_size = trim_str.len();
-        let start_idx = str
+        let start_index = str
             .chunks(chunk_size)
             .enumerate()
             .find(|(_, chunk)| chunk != &trim_str)
             .map(|(idx, _)| idx);
 
         // Trim all
-        if matches!(start_idx, Some(idx) if idx * chunk_size == str.len()) {
+        if start_index.is_none() {
             return;
         }
 
-        let end_idx = str
+        let end_index = str
             .rchunks(chunk_size)
             .enumerate()
             .find(|(_, chunk)| chunk != &trim_str)
             .map(|(idx, _)| idx);
 
-        if let (Some(start_index), Some(end_index)) = (start_idx, end_idx) {
-            buffer.extend_from_slice(
-                &str[start_index * chunk_size..str.len() - end_index * chunk_size],
-            );
+        if let (Some(start_idx), Some(end_idx)) = (start_index, end_index) {
+            buffer
+                .extend_from_slice(&str[start_idx * chunk_size..str.len() - end_idx * chunk_size]);
         }
     }
 }
