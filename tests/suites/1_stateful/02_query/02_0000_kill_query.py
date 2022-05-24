@@ -30,11 +30,15 @@ with NativeClient(name='client1>') as client1:
     time.sleep(0.1)
 
     mycursor = mydb.cursor()
-    mycursor.execute("SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%SELECT SLEEP(2.9)%' AND extra_info NOT LIKE '%system.processes%';")
+    mycursor.execute(
+        "SELECT mysql_connection_id FROM system.processes WHERE extra_info LIKE '%SELECT SLEEP(2.9)%' AND extra_info NOT LIKE '%system.processes%';"
+    )
     res = mycursor.fetchone()
     kill_query = 'kill query ' + str(res[0]) + ';'
     mycursor.execute(kill_query)
     time.sleep(0.1)
-    mycursor.execute("SELECT * FROM system.processes WHERE extra_info LIKE '%SELECT SLEEP(2.9)%' AND extra_info NOT LIKE '%system.processes%';")
+    mycursor.execute(
+        "SELECT * FROM system.processes WHERE extra_info LIKE '%SELECT SLEEP(2.9)%' AND extra_info NOT LIKE '%system.processes%';"
+    )
     res = mycursor.fetchone()
     assert res is None
