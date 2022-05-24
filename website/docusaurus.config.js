@@ -13,11 +13,24 @@ const config = {
     tagline: 'The modern Cloud Data Warehouse, activate your object storage(S3, Azure Blob, or MinIO) for real-time analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
-    onBrokenLinks: 'throw',
+    onBrokenLinks: 'warn',
     onBrokenMarkdownLinks: 'warn',
     favicon: 'img/favicon.svg',
     organizationName: 'datafuselabs',
     projectName: 'databend',
+
+    i18n: {
+        defaultLocale: 'en-US',
+        locales: ['en-US', 'zh-CN'],
+        localeConfigs: {
+            'en-US': {
+                label: 'English',
+            },
+            'zh-CN': {
+                label: '简体中文',
+            },
+        },
+    },
 
     presets: [
         [
@@ -100,6 +113,16 @@ const config = {
                       label: 'GitHub',
                       position: 'right',
                   },
+                    {
+                        type: 'localeDropdown',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                to: 'https://databend.crowdin.com/databend',
+                                label: 'Help Us Translate',
+                            },
+                        ],
+                    },
                 ],
             },
             footer: {
