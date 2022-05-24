@@ -53,10 +53,16 @@ pub struct FuseTable {
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
     pub(crate) order_keys: Vec<Expression>,
+    pub(crate) read_only: bool,
 }
 
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let r = Self::do_create(table_info, false)?;
+        Ok(r)
+    }
+
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let mut order_keys = Vec::new();
         if let Some(order) = &table_info.meta.order_keys {
@@ -67,6 +73,7 @@ impl FuseTable {
             table_info,
             order_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            read_only,
         }))
     }
 
@@ -116,7 +123,7 @@ impl FuseTable {
 
     pub fn snapshot_format_version(&self) -> u64 {
         match self.snapshot_loc() {
-            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
+            Some(loc) => TableMetaLocationGenerator::snapshot_version(loc.as_str()),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
                 // in this case, we just returns the current snapshot version
@@ -142,6 +149,17 @@ impl FuseTable {
                 tbl.engine()
             ))
         })
+    }
+
+    pub fn check_mutable(&self) -> Result<()> {
+        if self.read_only {
+            Err(ErrorCode::TableNotWritable(format!(
+                "Table {} is in read-only mode",
+                self.table_info.desc.as_str()
+            )))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -182,7 +200,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx, &plan.push_downs).await
+        self.do_read(ctx, &plan.push_downs)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
@@ -196,6 +214,7 @@ impl Table for FuseTable {
     }
 
     fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }
 
@@ -205,6 +224,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
+        self.check_mutable()?;
         let log_entry_stream = self.append_chunks(ctx, stream).await?;
         let data_block_stream =
             log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
@@ -221,6 +241,7 @@ impl Table for FuseTable {
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
+        self.check_mutable()?;
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
@@ -235,10 +256,12 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_truncate(ctx, truncate_plan).await
     }
 
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
+        self.check_mutable()?;
         self.do_optimize(ctx, keep_last_snapshot).await
     }
 

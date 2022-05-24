@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::io::BufReader;
+use futures::stream;
 use opendal::BytesReader;
 
 use super::cached_reader::CachedReader;
@@ -97,6 +99,47 @@ impl<'a> TableSnapshotReader<'a> {
         }
 
         Ok(snapshots)
+    }
+
+    pub fn snapshot_history(
+        &'a self,
+        location: String,
+        format_version: u64,
+        location_gen: TableMetaLocationGenerator,
+    ) -> Pin<Box<dyn futures::stream::Stream<Item = Result<Arc<TableSnapshot>>> + 'a>> {
+        let stream = stream::try_unfold(
+            (self, location_gen, Some((location, format_version))),
+            |(reader, gen, next)| async move {
+                if let Some((loc, ver)) = next {
+                    let snapshot = match reader.read(loc, None, ver).await {
+                        Ok(s) => Ok(Some(s)),
+                        Err(e) => {
+                            if e.code() == ErrorCode::storage_not_found_code() {
+                                Ok(None)
+                            } else {
+                                Err(e)
+                            }
+                        }
+                    };
+                    match snapshot {
+                        Ok(Some(snapshot)) => {
+                            if let Some((id, v)) = snapshot.prev_snapshot_id {
+                                let new_ver = v;
+                                let new_loc = gen.snapshot_location_from_uuid(&id, v)?;
+                                Ok(Some((snapshot, (reader, gen, Some((new_loc, new_ver))))))
+                            } else {
+                                Ok(Some((snapshot, (reader, gen, None))))
+                            }
+                        }
+                        Ok(None) => Ok(None),
+                        Err(e) => Err(e),
+                    }
+                } else {
+                    Ok(None)
+                }
+            },
+        );
+        Box::pin(stream)
     }
 }
 

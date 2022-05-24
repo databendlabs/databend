@@ -56,8 +56,8 @@ const config = {
                     priority: 0.5,
                 },
                 gtag: {
-                  trackingID: 'G-WBQPTTG4ZG',
-                  anonymizeIP: true,
+                    trackingID: 'G-WBQPTTG4ZG',
+                    anonymizeIP: true,
                 },
             }),
         ],
@@ -92,27 +92,27 @@ const config = {
                     src: 'img/favicon.svg',
                 },
                 items: [
-                  {
-                    to: '/doc',
-                    label: 'Documentation',
-                    position: 'right',
-                  },
-                  {
-                     to: '/doc/contributing/good-pr',
-                     label: 'Contributing',
-                     position: 'right',
-                  },
-                  {
-                      href: 'https://perf.databend.rs',
-                      label: 'Benchmarking',
-                      position: 'right',
-                  },
-                  {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
-                  {
-                      href: 'https://github.com/datafuselabs/databend',
-                      label: 'GitHub',
-                      position: 'right',
-                  },
+                    {
+                        to: '/doc',
+                        label: 'Documentation',
+                        position: 'right',
+                    },
+                    {
+                        to: '/doc/contributing/good-pr',
+                        label: 'Contributing',
+                        position: 'right',
+                    },
+                    {
+                        href: 'https://perf.databend.rs',
+                        label: 'Benchmarking',
+                        position: 'right',
+                    },
+                    {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
+                    {
+                        href: 'https://github.com/datafuselabs/databend',
+                        label: 'GitHub',
+                        position: 'right',
+                    },
                     {
                         type: 'localeDropdown',
                         position: 'right',
