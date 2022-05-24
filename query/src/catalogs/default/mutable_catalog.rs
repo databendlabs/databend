@@ -40,6 +40,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
 use common_meta_types::UpdateTableMetaReply;
 use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
@@ -145,6 +147,14 @@ impl MutableCatalog {
         };
         self.ctx.database_factory.get_database(ctx, db_info)
     }
+
+    fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.get_table_by_info(item.as_ref())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -245,11 +255,21 @@ impl Catalog for MutableCatalog {
             .list_tables(ListTableReq::new(tenant, db_name))
             .await?;
 
-        table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.get_table_by_info(item.as_ref())?;
-            acc.push(tbl);
-            Ok(acc)
-        })
+        self.load_tables(table_infos)
+    }
+
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self
+            .ctx
+            .meta
+            .get_table_history(ListTableReq::new(tenant, db_name))
+            .await?;
+
+        self.load_tables(table_infos)
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
@@ -259,6 +279,11 @@ impl Catalog for MutableCatalog {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+        let res = self.ctx.meta.undrop_table(req).await?;
         Ok(res)
     }
 

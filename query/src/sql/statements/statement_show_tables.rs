@@ -57,6 +57,7 @@ impl AnalyzableStatement for DfShowTables {
         let mut kind = PlanShowKind::All;
         let showfull = self.showfull;
         let fromdb = self.fromdb.clone();
+        let with_history = self.with_history;
         match &self.kind {
             DfShowKind::All => {}
             DfShowKind::Like(v) => {
@@ -72,6 +73,7 @@ impl AnalyzableStatement for DfShowTables {
                 kind,
                 showfull,
                 fromdb,
+                with_history,
             }),
         ))))
     }

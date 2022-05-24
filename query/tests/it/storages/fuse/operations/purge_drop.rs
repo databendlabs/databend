@@ -34,14 +34,5 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     // let's Drop
     let qry = format!("drop table '{}'.'{}'", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
-    // there should be no files left inside test root (dirs are kept, though)
-    check_data_dir(
-        &fixture,
-        "drop table: there should be no file left",
-        0,
-        0,
-        0,
-    )
-    .await;
     Ok(())
 }

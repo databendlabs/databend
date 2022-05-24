@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS t3;
 DROP TABLE IF EXISTS t4;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
-SELECT COUNT(1) from system.tables where name = 't' and database = 'default';
+SELECT COUNT(1) from system.tables where name = 't' and database = 'default' and dropped_on = 'NULL';
 
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
 CREATE TABLE t(c1 int) ENGINE = Null; -- {ErrorCode 2302}

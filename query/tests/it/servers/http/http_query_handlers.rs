@@ -84,7 +84,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
-    assert_eq!(result.schema.unwrap().fields().len(), 8);
+    assert_eq!(result.schema.unwrap().fields().len(), 9);
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;

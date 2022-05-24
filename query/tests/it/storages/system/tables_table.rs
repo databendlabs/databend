@@ -27,7 +27,26 @@ async fn test_tables_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 8);
+    assert_eq!(block.num_columns(), 9);
+
+    // check column "dropped_on"
+    for x in &result {
+        for row in 0..x.num_rows() {
+            // index of column dropped_on is 4
+            let column = x.column(4);
+            let str = column.get_checked(row)?.to_string();
+            // All of them should be NULL
+            assert_eq!("NULL", str)
+        }
+    }
+
+    // regex is crazy, just remove the column "dropped_on" before assertions
+    // - do not know which line or pattern is not matched
+    // - we need better approaches for scenario like this
+    let mut without_dropped = Vec::new();
+    for x in result {
+        without_dropped.push(x.remove_column("dropped_on")?)
+    }
 
     let expected = vec![
         r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
@@ -57,7 +76,7 @@ async fn test_tables_table() -> Result<()> {
         r"\| system             \| users        \| SystemUsers        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\+--------------------\+--------------\+--------------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
     ];
-    common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq_with_regex(expected, without_dropped.as_slice());
 
     Ok(())
 }
