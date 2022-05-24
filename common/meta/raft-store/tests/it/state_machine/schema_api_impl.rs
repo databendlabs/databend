@@ -103,6 +103,18 @@ async fn test_meta_embedded_table_upsert_option() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_table_drop_undrop_list_history() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_raft_store_ut!();
+    let _ent = ut_span.enter();
+    let tc = new_raft_test_context();
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
+
+    SchemaApiTestSuite {}
+        .table_drop_undrop_list_history(&sm)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_update_meta() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_raft_store_ut!();
     let _ent = ut_span.enter();
