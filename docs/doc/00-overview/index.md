@@ -1,6 +1,6 @@
 ---
 title: What is Databend?
-slug: ../
+slug: /
 ---
 
 Databend is an open-source **Elastic** and **Workload-Aware** Modern Cloud Data Warehouse.
