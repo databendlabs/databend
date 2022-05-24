@@ -13,11 +13,12 @@ jobs:
         uses: actions/checkout@v2
 
       - name: crowdin action
-        uses: crowdin/github-action@1.0.4
+        uses: crowdin/github-action@1.4.9
         with:
           upload_translations: true
           download_translations: true
           config: '.github/crowdin.yml'
+          base_url: 'https://databend.crowdin.com'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
