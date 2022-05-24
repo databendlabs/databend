@@ -125,6 +125,8 @@ select * from t2 inner join t on t.a = t2.c + 1;
 select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
+select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
+
 -- order by
 select '====ORDER_BY====';
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
