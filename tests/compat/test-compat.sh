@@ -1,7 +1,5 @@
 #!/bin/sh
 
-set -o errexit
-
 usage()
 {
     echo "test query being compatible with old metasrv"
