@@ -1,0 +1,39 @@
+---
+title: toDayOfYear
+---
+
+Converts a date or date with time to a UInt16 number containing the number of the day of the year (1-366).
+
+## Syntax
+
+```sql
+toDayOfYear( <expr> )
+```
+
+## Arguments
+
+| Arguments      | Description   |
+| -------------- | ------------- |
+| `<expr>` | date/datetime |
+
+## Return Type
+
+A `UInt16` number datatype.
+
+## Examples
+
+```sql
+SELECT toDayOfYear(to_date(18869));
++----------------------------+
+| toDayOfYear(to_date(18869)) |
++----------------------------+
+|                        242 |
++----------------------------+
+
+SELECT toDayOfYear(now());
++--------------------+
+| toDayOfYear(now()) |
++--------------------+
+|                 88 |
++--------------------+
+```

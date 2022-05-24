@@ -1,0 +1,39 @@
+---
+title: toMonth
+---
+
+Converts a date or date with time to a UInt8 number containing the month number (1-12).
+
+## Syntax
+
+```sql
+toMonth( <expr> )
+```
+
+## Arguments
+
+| Arguments      | Description   |
+| -------------- | ------------- |
+| `<expr>` | date/datetime |
+
+## Return Type
+
+ `UInt8` datatype.
+
+## Examples
+
+```sql
+SELECT toMonth(to_date(18869));
++------------------------+
+| toMonth(to_date(18869)) |
++------------------------+
+|                      8 |
++------------------------+
+
+ SELECT toMonth(to_datetime(1630812366));
++---------------------------------+
+| toMonth(to_datetime(1630812366)) |
++---------------------------------+
+|                               9 |
++---------------------------------+
+```
