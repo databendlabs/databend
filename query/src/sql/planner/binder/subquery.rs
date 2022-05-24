@@ -36,7 +36,7 @@ impl SubqueryRewriter {
     }
 
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        match s_expr.plan() {
+        match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {
                 let input = self.rewrite(s_expr.child(0)?)?;
 
@@ -49,7 +49,7 @@ impl SubqueryRewriter {
                     }
                 }
 
-                Ok(SExpr::create_unary(s_expr.plan(), expr))
+                Ok(SExpr::create_unary(s_expr.plan().clone(), expr))
             }
             RelOperator::Filter(mut plan) => {
                 let input = self.rewrite(s_expr.child(0)?)?;
@@ -63,7 +63,7 @@ impl SubqueryRewriter {
                     }
                 }
 
-                Ok(SExpr::create_unary(s_expr.plan(), expr))
+                Ok(SExpr::create_unary(s_expr.plan().clone(), expr))
             }
             RelOperator::Aggregate(mut plan) => {
                 let input = self.rewrite(s_expr.child(0)?)?;
@@ -85,17 +85,17 @@ impl SubqueryRewriter {
                     }
                 }
 
-                Ok(SExpr::create_unary(s_expr.plan(), expr))
+                Ok(SExpr::create_unary(s_expr.plan().clone(), expr))
             }
 
             RelOperator::LogicalInnerJoin(_) => Ok(SExpr::create_binary(
-                s_expr.plan(),
+                s_expr.plan().clone(),
                 self.rewrite(s_expr.child(0)?)?,
                 self.rewrite(s_expr.child(1)?)?,
             )),
 
             RelOperator::Project(_) | RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(
-                SExpr::create_unary(s_expr.plan(), self.rewrite(s_expr.child(0)?)?),
+                SExpr::create_unary(s_expr.plan().clone(), self.rewrite(s_expr.child(0)?)?),
             ),
 
             RelOperator::LogicalGet(_) => Ok(s_expr.clone()),

@@ -49,8 +49,8 @@ impl MExpr {
         self.group_index
     }
 
-    pub fn plan(&self) -> RelOperator {
-        self.plan.clone()
+    pub fn plan(&self) -> &RelOperator {
+        &self.plan
     }
 
     pub fn children(&self) -> &Vec<IndexType> {

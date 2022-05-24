@@ -36,6 +36,7 @@ impl FuseTable {
 
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
+                &prev_snapshot.timestamp,
                 Some((prev_id, prev_snapshot.format_version())),
                 prev_snapshot.schema.clone(),
                 Default::default(),

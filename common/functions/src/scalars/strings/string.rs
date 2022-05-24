@@ -55,7 +55,10 @@ use crate::scalars::SpaceFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
+use crate::scalars::TrimBothFunction;
 use crate::scalars::TrimFunction;
+use crate::scalars::TrimLeadingFunction;
+use crate::scalars::TrimTrailingFunction;
 use crate::scalars::UnhexFunction;
 use crate::scalars::UpperFunction;
 
@@ -68,6 +71,9 @@ impl StringFunction {
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());
         factory.register("trim", TrimFunction::desc());
+        factory.register("trim_leading", TrimLeadingFunction::desc());
+        factory.register("trim_trailing", TrimTrailingFunction::desc());
+        factory.register("trim_both", TrimBothFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
         factory.register("quote", QuoteFunction::desc());
         factory.register("lower", LowerFunction::desc());
