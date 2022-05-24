@@ -22,8 +22,8 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
@@ -50,7 +50,7 @@ async fn test_restart() -> anyhow::Result<()> {
     tracing::info!("--- upsert kv");
     {
         let res = client
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 "foo",
                 MatchSeq::Any,
                 Operation::Update(b"bar".to_vec()),
@@ -211,7 +211,7 @@ async fn test_join() -> anyhow::Result<()> {
             let k = format!("join-{}", i);
 
             let res = cli
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     k.as_str(),
                     MatchSeq::Any,
                     Operation::Update(k.clone().into_bytes()),

@@ -105,5 +105,20 @@ sled_tree_prefix = "sled_foo"
         },
     );
 
+    // Test raft config.
+    temp_env::with_vars(
+        vec![
+            (
+                "METASRV_CONFIG_FILE",
+                Some(file_path.to_str().expect("must be valid str")),
+            ),
+            ("KVSRV_API_PORT", Some("123")),
+        ],
+        || {
+            let cfg = Config::load().expect("load must success");
+            assert_eq!(cfg.raft_config.raft_api_port, 123);
+        },
+    );
+
     Ok(())
 }

@@ -65,6 +65,10 @@ impl ActionHandler {
                 let r = self.meta_node.mget_kv(&a.keys).await;
                 RaftReply::from(r)
             }
+            MetaGrpcReadReq::ListKV(a) => {
+                let r = self.meta_node.prefix_list_kv(&a.prefix).await;
+                RaftReply::from(r)
+            }
             MetaGrpcReadReq::PrefixListKV(a) => {
                 let r = self.meta_node.prefix_list_kv(&a.0).await;
                 RaftReply::from(r)
