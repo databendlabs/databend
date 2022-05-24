@@ -14,11 +14,9 @@
 
 mod grpc_action;
 mod grpc_client;
-mod grpc_client_conf;
 mod kv_api_impl;
 
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcWriteReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::MetaGrpcClient;
-pub use grpc_client_conf::MetaGrpcClientConf;

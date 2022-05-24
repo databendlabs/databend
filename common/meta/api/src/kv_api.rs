@@ -38,12 +38,12 @@ where T: KVApi
 
 #[async_trait]
 pub trait KVApi: Send + Sync {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVActionReply, MetaError>;
+    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVActionReply, MetaError>;
 
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError>;
 
     // mockall complains about AsRef... so we use String here
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, MetaError>;
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError>;
 
     async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
 

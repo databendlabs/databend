@@ -14,4 +14,5 @@
 
 mod meta_client;
 
-pub use meta_client::MetaClientProvider;
+pub use meta_client::MetaStore;
+pub use meta_client::MetaStoreProvider;

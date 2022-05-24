@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
@@ -46,10 +45,9 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use super::backends::MetaBackend;
 use super::catalog_context::CatalogContext;
 use crate::catalogs::catalog::Catalog;
-use crate::common::MetaClientProvider;
+use crate::common::MetaStoreProvider;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
@@ -84,27 +82,10 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     pub async fn try_create_with_config(conf: Config) -> Result<Self> {
-        // - `address` is an old config that accept only one address.
-        // - `endpoints` accepts multiple endpoint candidates.
-        //
-        // If either of these two is configured(non-empty), use remote metasrv.
-        // Otherwise, use a local embedded meta
-        let local_mode = conf.meta.address.is_empty() && conf.meta.endpoints.is_empty();
-
-        let meta: Arc<dyn SchemaApi> = if local_mode {
-            tracing::info!("use embedded meta");
-            // TODO(xp): This can only be used for test: data will be removed when program quit.
-
-            let meta_embedded = MetaEmbedded::get_meta().await?;
-            meta_embedded
-        } else {
-            tracing::info!("use remote meta");
-
-            let meta_client_provider = Arc::new(MetaClientProvider::new(
-                conf.meta.to_meta_grpc_client_conf(),
-            ));
-            let meta_backend = MetaBackend::create(meta_client_provider);
-            Arc::new(meta_backend)
+        let meta = {
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+            let meta_backend = provider.try_get_meta_store().await?;
+            meta_backend
         };
 
         let tenant = conf.query.tenant_id.clone();
@@ -140,7 +121,7 @@ impl MutableCatalog {
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let ctx = DatabaseContext {
-            meta: self.ctx.meta.clone(),
+            meta: self.ctx.meta.clone().arc(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx.database_factory.get_database(ctx, db_info)
@@ -210,7 +191,7 @@ impl Catalog for MutableCatalog {
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
         let ctx = StorageContext {
-            meta: self.ctx.meta.clone(),
+            meta: self.ctx.meta.clone().arc(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         storage.get_table(ctx, table_info)
