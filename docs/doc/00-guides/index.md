@@ -1,5 +1,5 @@
 ---
-title: How-to Guides
+title: Guides
 ---
 
 ## Deployment
