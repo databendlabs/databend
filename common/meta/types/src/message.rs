@@ -24,11 +24,11 @@ use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::AppliedState;
 use crate::Endpoint;
-use crate::GetKVActionReply;
+use crate::GetKVReply;
 use crate::GetKVReq;
 use crate::ListKVReq;
 use crate::LogEntry;
-use crate::MGetKVActionReply;
+use crate::MGetKVReply;
 use crate::MGetKVReq;
 use crate::NodeId;
 use crate::PrefixListReply;
@@ -90,8 +90,8 @@ pub enum ForwardResponse {
     Leave(()),
     AppliedState(AppliedState),
 
-    GetKV(GetKVActionReply),
-    MGetKV(MGetKVActionReply),
+    GetKV(GetKVReply),
+    MGetKV(MGetKVReply),
     ListKV(PrefixListReply),
 }
 

@@ -18,7 +18,7 @@ use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use regex::Regex;
@@ -43,7 +43,7 @@ async fn test_export() -> anyhow::Result<()> {
         {
             for k in ["foo", "bar", "wow"] {
                 client
-                    .upsert_kv(UpsertKVAction::new(
+                    .upsert_kv(UpsertKVReq::new(
                         k,
                         MatchSeq::Any,
                         Operation::Update(k.as_bytes().to_vec()),

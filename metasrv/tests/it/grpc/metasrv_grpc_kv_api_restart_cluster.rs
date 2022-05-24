@@ -23,7 +23,7 @@ use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
 use crate::init_meta_ut;
@@ -56,7 +56,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 
             let k = make_key(tc, key_suffix);
             let res = client
-                .upsert_kv(UpsertKVAction {
+                .upsert_kv(UpsertKVReq {
                     key: k.clone(),
                     seq: MatchSeq::Any,
                     value: Operation::Update(k.clone().into_bytes()),
@@ -151,7 +151,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
             let k = make_key(tc, key_suffix);
             if i == 0 {
                 let res = client
-                    .upsert_kv(UpsertKVAction {
+                    .upsert_kv(UpsertKVReq {
                         key: k.clone(),
                         seq: MatchSeq::Any,
                         value: Operation::Update(k.clone().into_bytes()),
@@ -162,7 +162,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
             } else {
                 let client = tc.grpc_client().await.unwrap();
                 let res = client
-                    .upsert_kv(UpsertKVAction {
+                    .upsert_kv(UpsertKVReq {
                         key: k.clone(),
                         seq: MatchSeq::Any,
                         value: Operation::Update(k.clone().into_bytes()),
