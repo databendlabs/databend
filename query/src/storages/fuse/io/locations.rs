@@ -66,11 +66,11 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
-        let snaphost_version = SnapshotVersion::try_from(version)?;
-        Ok(snaphost_version.create(id, &self.prefix))
+        let snapshot_version = SnapshotVersion::try_from(version)?;
+        Ok(snapshot_version.create(id, &self.prefix))
     }
 
-    pub fn snaphost_version(location: impl AsRef<str>) -> u64 {
+    pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
         if location.as_ref().ends_with(SNAPHOST_V1.suffix()) {
             SNAPHOST_V1.version()
         } else {
