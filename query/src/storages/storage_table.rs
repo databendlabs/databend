@@ -150,6 +150,7 @@ pub trait Table: Sync + Send {
     }
 }
 
+#[derive(Debug)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
     pub data_size: Option<u64>,
