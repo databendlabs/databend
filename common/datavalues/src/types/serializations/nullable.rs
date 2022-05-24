@@ -123,10 +123,11 @@ impl TypeSerializer for NullableSerializer {
         buf: &mut Vec<u8>,
         format: &FormatSettings,
     ) -> Result<()> {
-        let column: &NullableColumn = Series::check_get(&column)?;
+        let column: &NullableColumn = Series::check_get(&column).unwrap();
         if !column.null_at(row_num) {
             self.inner
-                .write_csv_field_not_null(column.inner(), row_num, buf, format)?;
+                .write_csv_field_not_null(column.inner(), row_num, buf, format)
+                .unwrap();
         } else {
             buf.extend_from_slice(&format.csv_null);
         }
@@ -170,7 +171,7 @@ impl<'a> ColSerializer for NullableColSerializer<'a> {
         format: &FormatSettings,
     ) -> Result<()> {
         if self.validity.get_bit(row_num) {
-            self.inner.write_csv_field(row_num, buf, format)?;
+            self.inner.write_csv_field(row_num, buf, format).unwrap();
         } else {
             buf.extend_from_slice(&format.csv_null);
         }

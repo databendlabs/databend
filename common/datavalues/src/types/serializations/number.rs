@@ -139,8 +139,10 @@ where T: PrimitiveType
         buf: &mut Vec<u8>,
         _format: &FormatSettings,
     ) -> Result<()> {
-        let col: &<T as Scalar>::ColumnType = unsafe { Series::static_cast(&column) };
-        let v = col.get_data_owned(row_num);
+        //let col: &<T as Scalar>::ColumnType = unsafe { Series::static_cast(&column) };
+        //let v = col.get_data_owned(row_num);
+        let col: &PrimitiveColumn<T> = Series::check_get(&column).unwrap();
+        let v = unsafe { col.value_unchecked(row_num) };
         lexical_to_bytes_mut_no_clear(v, buf);
         Ok(())
     }
