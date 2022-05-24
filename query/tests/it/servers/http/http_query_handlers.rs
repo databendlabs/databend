@@ -1041,3 +1041,24 @@ async fn test_download_killed() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_func_object_keys() -> Result<()> {
+    let route = create_endpoint();
+
+    let sqls = vec![
+        ("CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj OBJECT, var VARIANT) Engine=Fuse;", 0),
+        ("INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));", 0),
+        ("SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;", 1),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.data.len(), data_len);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    }
+    Ok(())
+}
