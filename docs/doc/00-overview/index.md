@@ -1,5 +1,5 @@
 ---
-title: What is Databend?
+title: Overview
 slug: /
 ---
 
