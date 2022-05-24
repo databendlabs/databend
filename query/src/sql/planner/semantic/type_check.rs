@@ -857,12 +857,10 @@ impl<'a> TypeChecker<'a> {
                     let (value, data_type) = self.resolve_literal(lit, None)?;
                     if idx == 0 {
                         first_data_type = data_type;
-                    } else {
-                        if data_type != first_data_type {
-                            return Err(ErrorCode::SemanticError(expr.span().display_error(
-                                "Values in array should have same type".to_string(),
-                            )));
-                        }
+                    } else if data_type != first_data_type {
+                        return Err(ErrorCode::SemanticError(expr.span().display_error(
+                            "Values in array should have same type".to_string(),
+                        )));
                     }
                     values.push(value);
                 }
