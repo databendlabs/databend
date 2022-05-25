@@ -49,8 +49,8 @@ use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::v1::multipart_format::MultipartFormat;
-use crate::servers::http::v1::sequential_format_source::MultipartWorker;
+use crate::servers::http::v1::multipart_format::{MultipartFormat, MultipartWorkerNew};
+use crate::servers::http::v1::sequential_format_source::SequentialMultipartWorker;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
@@ -78,7 +78,7 @@ fn execute_query(
     context: Arc<QueryContext>,
     node: PlanNode,
     source_builder: SourcePipeBuilder,
-) -> impl Future<Output = Result<()>> {
+) -> impl Future<Output=Result<()>> {
     async move {
         let interpreter = InterpreterFactory::get(context, node)?;
 
@@ -406,23 +406,14 @@ fn format_source_pipe_builder(
     schema: DataSchemaRef,
     multipart: Multipart,
     format_settings: &FormatSettings,
-) -> Result<(MultipartWorker, SourcePipeBuilder)> {
-    let ports = vec![OutputPort::create()];
-    let mut source_pipe_builder = SourcePipeBuilder::create();
-    let (worker, sources) = MultipartFormat::input_sources(
+) -> Result<(Box<dyn MultipartWorkerNew>, SourcePipeBuilder)> {
+    MultipartFormat::input_sources(
         format,
         context.clone(),
         multipart,
         schema,
         format_settings.clone(),
-        ports.clone(),
-    )?;
-
-    for (index, source) in sources.into_iter().enumerate() {
-        source_pipe_builder.add_source(ports[index].clone(), source);
-    }
-
-    Ok((worker, source_pipe_builder))
+    )
 }
 
 async fn ndjson_source_pipe_builder(

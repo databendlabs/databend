@@ -3,13 +3,15 @@ use std::sync::Arc;
 use poem::web::Multipart;
 use common_base::base::{Progress, ProgressValues};
 use common_base::base::tokio::io::AsyncReadExt;
-use common_base::base::tokio::sync::mpsc::{Receiver, Sender};
+use async_channel::Receiver;
+use async_channel::Sender;
 use common_datablocks::DataBlock;
 use crate::pipelines::new::processors::Processor;
 use common_exception::{ErrorCode, Result};
 use crate::formats::{InputFormat, InputState};
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
+use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
 
 pub struct ParallelMultipartWorker {
     multipart: Multipart,
@@ -30,20 +32,11 @@ impl ParallelMultipartWorker {
 
         true
     }
+}
 
-    fn read_buf(&self, buf: &[u8], state: &mut Box<dyn InputState>) -> Result<Option<Box<dyn InputState>>> {
-        let read_size = self.input_format.read_buf(buf, state)?;
-
-        if read_size != buf.len() {
-            let new_state = self.input_format.create_state();
-            let prepared_state = replace(state, new_state);
-            return Ok(Some(prepared_state));
-        }
-
-        Ok(None)
-    }
-
-    pub async fn work(&mut self) {
+#[async_trait::async_trait]
+impl MultipartWorkerNew for ParallelMultipartWorker {
+    async fn work(&mut self) {
         if let Some(tx) = self.tx.take() {
             'outer: loop {
                 match self.multipart.next_field().await {
@@ -86,14 +79,21 @@ impl ParallelMultipartWorker {
                                         false => &buf[0..sz],
                                     };
 
-                                    let send_res = match self.read_buf(&buf_slice, &mut state) {
-                                        Ok(None) => true,
-                                        Err(cause) => Self::send(&tx, Err(cause)).await,
-                                        Ok(Some(state)) => Self::send(&tx, Ok(state)).await,
+                                    let read_size = match self.input_format.read_buf(buf_slice, &mut state) {
+                                        Ok(read_size) => read_size,
+                                        Err(cause) => {
+                                            Self::send(&tx, Err(cause)).await;
+                                            break 'outer;
+                                        }
                                     };
 
-                                    if !send_res {
-                                        break 'outer;
+                                    if read_size != buf.len() {
+                                        let new_state = self.input_format.create_state();
+                                        let prepared_state = replace(&mut state, new_state);
+
+                                        if !Self::send(&tx, Ok(prepared_state)).await {
+                                            break 'outer;
+                                        }
                                     }
                                 }
                                 Err(cause) => {
@@ -209,7 +209,7 @@ impl Processor for ParallelInputFormatSource {
 
     async fn async_process(&mut self) -> Result<()> {
         if let State::NeedReceiveData = replace(&mut self.state, State::NeedReceiveData) {
-            if let Some(receive_res) = self.data_receiver.recv().await {
+            if let Ok(receive_res) = self.data_receiver.recv().await {
                 let receive_bytes = receive_res?;
 
                 self.state = State::ReceivedData(receive_bytes);

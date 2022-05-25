@@ -1763,6 +1763,7 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "async-channel",
  "async-compat",
  "async-recursion",
  "async-stream",

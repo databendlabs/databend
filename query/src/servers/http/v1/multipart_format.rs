@@ -34,8 +34,15 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::servers::http::v1::sequential_format_source::{MultipartWorker, SequentialInputFormatSource};
+use crate::pipelines::new::SourcePipeBuilder;
+use crate::servers::http::v1::parallel_format_source::{ParallelInputFormatSource, ParallelMultipartWorker};
+use crate::servers::http::v1::sequential_format_source::{SequentialMultipartWorker, SequentialInputFormatSource};
 use crate::sessions::QueryContext;
+
+#[async_trait::async_trait]
+pub trait MultipartWorkerNew: Send {
+    async fn work(&mut self);
+}
 
 pub struct MultipartFormat;
 
@@ -46,27 +53,57 @@ impl MultipartFormat {
         multipart: Multipart,
         schema: DataSchemaRef,
         settings: FormatSettings,
-        ports: Vec<Arc<OutputPort>>,
-    ) -> Result<(MultipartWorker, Vec<ProcessorPtr>)> {
-        let input_format = FormatFactory::instance().get_input(name, schema, settings)?;
+    ) -> Result<(Box<dyn MultipartWorkerNew>, SourcePipeBuilder)> {
+        let mut source_pipe_builder = SourcePipeBuilder::create();
+        let input_format = FormatFactory::instance().get_input(name, schema.clone(), settings.clone())?;
 
-        if ports.len() != 1 || input_format.support_parallel() {
-            return Err(ErrorCode::UnImplement(
-                "Unimplemented parallel input format.",
-            ));
+        let query_settings = ctx.get_settings();
+        if query_settings.get_max_threads()? != 1 && input_format.support_parallel() {
+            let max_threads = query_settings.get_max_threads()? as usize;
+
+            let (tx, rx) = async_channel::bounded(10);
+
+            for _index in 0..max_threads {
+                let schema = schema.clone();
+                let settings = settings.clone();
+                let output_port = OutputPort::create();
+                let scan_progress = ctx.get_scan_progress();
+
+                source_pipe_builder.add_source(
+                    output_port.clone(),
+                    ParallelInputFormatSource::create(
+                        output_port,
+                        scan_progress,
+                        FormatFactory::instance().get_input(name, schema, settings)?,
+                        rx.clone(),
+                    )?,
+                );
+            }
+
+            Ok((
+                Box::new(ParallelMultipartWorker::create(multipart, tx, input_format)),
+                source_pipe_builder,
+            ))
+        } else {
+            let output = OutputPort::create();
+
+            let (tx, rx) = common_base::base::tokio::sync::mpsc::channel(2);
+
+            source_pipe_builder.add_source(
+                output.clone(),
+                SequentialInputFormatSource::create(
+                    output,
+                    input_format,
+                    rx,
+                    ctx.get_scan_progress(),
+                )?,
+            );
+
+            Ok((
+                Box::new(SequentialMultipartWorker::create(multipart, tx)),
+                source_pipe_builder,
+            ))
         }
-
-        let (tx, rx) = common_base::base::tokio::sync::mpsc::channel(2);
-
-        Ok((
-            MultipartWorker::create(multipart, tx),
-            vec![SequentialInputFormatSource::create(
-                ports[0].clone(),
-                input_format,
-                rx,
-                ctx.get_scan_progress(),
-            )?],
-        ))
     }
 }
 

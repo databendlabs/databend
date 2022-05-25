@@ -11,18 +11,22 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::Result;
+use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
 
-pub struct MultipartWorker {
+pub struct SequentialMultipartWorker {
     multipart: Multipart,
     tx: Option<Sender<Result<Vec<u8>>>>,
 }
 
-impl MultipartWorker {
-    pub fn create(multipart: Multipart, tx: Sender<Result<Vec<u8>>>) -> MultipartWorker {
-        MultipartWorker { multipart, tx: Some(tx) }
+impl SequentialMultipartWorker {
+    pub fn create(multipart: Multipart, tx: Sender<Result<Vec<u8>>>) -> SequentialMultipartWorker {
+        SequentialMultipartWorker { multipart, tx: Some(tx) }
     }
+}
 
-    pub async fn work(&mut self) {
+#[async_trait::async_trait]
+impl MultipartWorkerNew for SequentialMultipartWorker {
+    async fn work(&mut self) {
         if let Some(tx) = self.tx.take() {
             'outer: loop {
                 match self.multipart.next_field().await {
