@@ -29,7 +29,7 @@ pub struct ExpressionEvaluator;
 
 impl ExpressionEvaluator {
     pub fn eval(
-        func_ctx: FunctionContext,
+        func_ctx: &FunctionContext,
         expression: &Expression,
         block: &DataBlock,
     ) -> Result<ColumnRef> {
@@ -49,7 +49,7 @@ impl ExpressionEvaluator {
             } => data_type.create_constant_column(value, block.num_rows()),
 
             Expression::UnaryExpression { op, expr } => {
-                let result = Self::eval(func_ctx.clone(), expr, block)?;
+                let result = Self::eval(func_ctx, expr, block)?;
                 let arg_types: Vec<DataTypeImpl> = vec![result.data_type()];
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
                 let func = FunctionFactory::instance().get(op, &arg_types2)?;
@@ -58,12 +58,12 @@ impl ExpressionEvaluator {
                     result.clone(),
                     DataField::new("", result.data_type()),
                 )];
-                func.eval(func_ctx, &columns, block.num_rows())
+                func.eval(func_ctx.clone(), &columns, block.num_rows())
             }
 
             Expression::BinaryExpression { left, op, right } => {
-                let left_result = Self::eval(func_ctx.clone(), left.as_ref(), block)?;
-                let right_result = Self::eval(func_ctx.clone(), right.as_ref(), block)?;
+                let left_result = Self::eval(func_ctx, left.as_ref(), block)?;
+                let right_result = Self::eval(func_ctx, right.as_ref(), block)?;
                 let arg_types: Vec<DataTypeImpl> =
                     vec![left_result.data_type(), right_result.data_type()];
                 let arg_types2: Vec<&DataTypeImpl> = arg_types.iter().collect();
@@ -79,13 +79,13 @@ impl ExpressionEvaluator {
                         DataField::new("", right_result.data_type()),
                     ),
                 ];
-                func.eval(func_ctx, &columns, block.num_rows())
+                func.eval(func_ctx.clone(), &columns, block.num_rows())
             }
 
             Expression::ScalarFunction { op, args } => {
                 let results = args
                     .iter()
-                    .map(|expr| Self::eval(func_ctx.clone(), expr, block))
+                    .map(|expr| Self::eval(func_ctx, expr, block))
                     .collect::<Result<Vec<ColumnRef>>>()?;
                 let arg_types: Vec<DataTypeImpl> =
                     results.iter().map(|col| col.data_type()).collect();
@@ -98,7 +98,7 @@ impl ExpressionEvaluator {
                         ColumnWithField::new(col.clone(), DataField::new("", col.data_type()))
                     })
                     .collect();
-                func.eval(func_ctx, &columns, block.num_rows())
+                func.eval(func_ctx.clone(), &columns, block.num_rows())
             }
 
             Expression::AggregateFunction { .. } => Err(ErrorCode::LogicalError(
@@ -112,7 +112,7 @@ impl ExpressionEvaluator {
             Expression::Cast {
                 expr, data_type, ..
             } => {
-                let result = Self::eval(func_ctx.clone(), expr, block)?;
+                let result = Self::eval(func_ctx, expr, block)?;
                 let func_name = "cast".to_string();
                 let from_type = result.data_type();
                 let type_name = data_type.name();
@@ -128,7 +128,7 @@ impl ExpressionEvaluator {
                     DataField::new("", result.data_type()),
                 )];
 
-                func.eval(func_ctx, &columns, block.num_rows())
+                func.eval(func_ctx.clone(), &columns, block.num_rows())
             }
 
             Expression::ScalarSubquery { name, .. } => {
@@ -146,7 +146,7 @@ impl ExpressionEvaluator {
             Expression::MapAccess { args, .. } => {
                 let results = args
                     .iter()
-                    .map(|expr| Self::eval(func_ctx.clone(), expr, block))
+                    .map(|expr| Self::eval(func_ctx, expr, block))
                     .collect::<Result<Vec<ColumnRef>>>()?;
                 let arg_types: Vec<DataTypeImpl> =
                     results.iter().map(|col| col.data_type()).collect();
@@ -160,7 +160,7 @@ impl ExpressionEvaluator {
                         ColumnWithField::new(col.clone(), DataField::new("", col.data_type()))
                     })
                     .collect();
-                func.eval(func_ctx, &columns, block.num_rows())
+                func.eval(func_ctx.clone(), &columns, block.num_rows())
             }
 
             Expression::Wildcard => Err(ErrorCode::LogicalError("Unsupported wildcard expression")),

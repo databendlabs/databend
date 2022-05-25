@@ -54,8 +54,8 @@ impl SExpr {
         Self::create(plan, vec![], None)
     }
 
-    pub fn plan(&self) -> RelOperator {
-        self.plan.clone()
+    pub fn plan(&self) -> &RelOperator {
+        &self.plan
     }
 
     pub fn children(&self) -> &[SExpr] {

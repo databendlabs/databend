@@ -19,7 +19,9 @@ use std::fmt::Debug;
 use common_meta_types::DBIdTableName;
 use common_meta_types::DatabaseId;
 use common_meta_types::DatabaseNameIdent;
+use common_meta_types::DbIdListKey;
 use common_meta_types::TableId;
+use common_meta_types::TableIdListKey;
 use kv_api_key::check_segment;
 use kv_api_key::check_segment_absent;
 use kv_api_key::check_segment_present;
@@ -33,8 +35,10 @@ use crate::KVApiKeyError;
 
 const PREFIX_DATABASE: &str = "__fd_database";
 const PREFIX_DATABASE_BY_ID: &str = "__fd_database_by_id";
+const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
 const PREFIX_TABLE: &str = "__fd_table";
 const PREFIX_TABLE_BY_ID: &str = "__fd_table_by_id";
+const PREFIX_TABLE_ID_LIST: &str = "__fd_table_id_list";
 const PREFIX_ID_GEN: &str = "__fd_id_gen";
 
 /// Key for database id generator
@@ -100,6 +104,38 @@ impl KVApiKey for DatabaseId {
     }
 }
 
+/// "_fd_db_id_list/<tenant>/<db_name> -> db_id_list"
+impl KVApiKey for DbIdListKey {
+    const PREFIX: &'static str = PREFIX_DB_ID_LIST;
+
+    fn to_key(&self) -> String {
+        format!(
+            "{}/{}/{}",
+            Self::PREFIX,
+            escape(&self.tenant),
+            escape(&self.db_name),
+        )
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let tenant = check_segment_present(elts.next(), 1, s)?;
+
+        let db_name = check_segment_present(elts.next(), 2, s)?;
+
+        check_segment_absent(elts.next(), 3, s)?;
+
+        let tenant = unescape(tenant)?;
+        let db_name = unescape(db_name)?;
+
+        Ok(DbIdListKey { tenant, db_name })
+    }
+}
+
 /// "__fd_table/<db_id>/<tb_name>"
 impl KVApiKey for DBIdTableName {
     const PREFIX: &'static str = PREFIX_TABLE;
@@ -154,6 +190,40 @@ impl KVApiKey for TableId {
         check_segment_absent(elts.next(), 2, s)?;
 
         Ok(TableId { table_id: tb_id })
+    }
+}
+
+/// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
+impl KVApiKey for TableIdListKey {
+    const PREFIX: &'static str = PREFIX_TABLE_ID_LIST;
+
+    fn to_key(&self) -> String {
+        format!(
+            "{}/{}/{}",
+            Self::PREFIX,
+            self.db_id,
+            escape(&self.table_name),
+        )
+    }
+
+    fn from_key(s: &str) -> Result<Self, KVApiKeyError> {
+        let mut elts = s.split('/');
+
+        let prefix = check_segment_present(elts.next(), 0, s)?;
+        check_segment(prefix, 0, Self::PREFIX)?;
+
+        let db_id = check_segment_present(elts.next(), 1, s)?;
+        let db_id = decode_id(db_id)?;
+
+        let tb_name = check_segment_present(elts.next(), 2, s)?;
+        let tb_name = unescape(tb_name)?;
+
+        check_segment_absent(elts.next(), 3, s)?;
+
+        Ok(TableIdListKey {
+            db_id,
+            table_name: tb_name,
+        })
     }
 }
 

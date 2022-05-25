@@ -8,12 +8,15 @@ on:
       - 'docs/**'
       - 'website/**'
       - '**.md'
+      - 'scripts/setup/**'
+      - '.devcontainer/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - 'website/**'
       - '**.md'
       - 'scripts/setup/**'
+      - '.devcontainer/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -76,6 +79,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_metactl
+
+  test_compat:
+    runs-on: ubuntu-latest
+    needs: build_linux
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_compat
 
   test_stateless_standalone_linux:
     runs-on: ubuntu-latest

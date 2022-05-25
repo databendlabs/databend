@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod chaining_hash_table;
-mod hash;
 mod hash_table;
 mod row;
 

@@ -76,6 +76,10 @@ impl TableNameIdent {
         }
     }
 
+    pub fn table_name(&self) -> String {
+        self.table_name.clone()
+    }
+
     pub fn db_name_ident(&self) -> DatabaseNameIdent {
         DatabaseNameIdent {
             tenant: self.tenant.clone(),
@@ -114,6 +118,18 @@ pub struct TableId {
 impl Display for TableId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.table_id)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableIdListKey {
+    pub db_id: u64,
+    pub table_name: String,
+}
+
+impl Display for TableIdListKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.'{}'", self.db_id, self.table_name)
     }
 }
 
@@ -162,6 +178,9 @@ pub struct TableMeta {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
+
+    // if used in CreateTableReq, this field MUST set to None.
+    pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
 }
 
@@ -222,6 +241,7 @@ impl Default for TableMeta {
             created_on: Default::default(),
             updated_on: Default::default(),
             comment: "".to_string(),
+            drop_on: None,
             statistics: Default::default(),
         }
     }
@@ -231,8 +251,13 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Schema: {}, Options: {:?} CreatedOn: {:?}",
-            self.engine, self.engine_options, self.schema, self.options, self.created_on
+            "Engine: {}={:?}, Schema: {}, Options: {:?} CreatedOn: {:?} DropOn: {:?}",
+            self.engine,
+            self.engine_options,
+            self.schema,
+            self.options,
+            self.created_on,
+            self.drop_on,
         )
     }
 }
@@ -244,6 +269,40 @@ impl Display for TableInfo {
             "DB.Table: {}, Table: {}-{}, Engine: {}",
             self.desc, self.name, self.ident, self.meta.engine
         )
+    }
+}
+
+/// Save table name id list history.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct TableIdList {
+    pub id_list: Vec<u64>,
+}
+
+impl TableIdList {
+    pub fn new() -> TableIdList {
+        TableIdList::default()
+    }
+
+    pub fn append(&mut self, table_id: u64) {
+        self.id_list.push(table_id);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.id_list.is_empty()
+    }
+
+    pub fn pop(&mut self) -> Option<u64> {
+        self.id_list.pop()
+    }
+
+    pub fn last(&mut self) -> Option<&u64> {
+        self.id_list.last()
+    }
+}
+
+impl Display for TableIdList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DB.Table id list: {:?}", self.id_list)
     }
 }
 
@@ -318,6 +377,38 @@ impl Display for DropTableReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UndropTableReq {
+    pub name_ident: TableNameIdent,
+}
+
+impl UndropTableReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn db_name(&self) -> &str {
+        &self.name_ident.db_name
+    }
+    pub fn table_name(&self) -> &str {
+        &self.name_ident.table_name
+    }
+}
+
+impl Display for UndropTableReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "undrop_table:{}/{}-{}",
+            self.tenant(),
+            self.db_name(),
+            self.table_name()
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UndropTableReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTableReq {

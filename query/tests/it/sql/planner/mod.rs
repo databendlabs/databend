@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_grpc::RpcClientConf;
-
-#[derive(Clone, Debug, Default)]
-pub struct MetaGrpcClientConf {
-    pub meta_service_config: RpcClientConf,
-    pub kv_service_config: RpcClientConf,
-    pub client_timeout_in_second: u64,
-}
+mod format;
