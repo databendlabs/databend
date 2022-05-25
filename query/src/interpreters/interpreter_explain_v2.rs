@@ -23,8 +23,10 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
+use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 use crate::sql::Planner;
 
@@ -52,8 +54,11 @@ impl Interpreter for ExplainInterpreterV2 {
             .ok_or_else(|| ErrorCode::LogicalError("explain kind shouldn't be none"))?
         {
             ExplainKind::Syntax => self.explain_syntax(plan, metadata.clone()).await?,
+            ExplainKind::Pipeline => {
+                self.explain_pipeline(plan, bind_context, metadata.clone())
+                    .await?
+            }
             ExplainKind::Graph => todo!(),
-            ExplainKind::Pipeline => todo!(),
         };
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
@@ -86,5 +91,34 @@ impl ExplainInterpreterV2 {
         let result = plan.to_format_tree(&metadata.clone()).format_indent()?;
         let formatted_plan = Series::from_data(vec![result]);
         Ok(DataBlock::create(self.schema.clone(), vec![formatted_plan]))
+    }
+
+    pub async fn explain_pipeline(
+        &self,
+        plan: SExpr,
+        bind_context: BindContext,
+        metadata: MetadataRef,
+    ) -> Result<DataBlock> {
+        let mut planner = Planner::new(self.ctx.clone());
+        let (root_pipeline, pipelines) =
+            planner.build_pipeline(plan, bind_context, metadata).await?;
+        let mut merged_pipeline = NewPipeline::create();
+        for pipeline in pipelines.iter() {
+            for pipe in pipeline.pipes.iter() {
+                merged_pipeline.add_pipe(pipe.clone())
+            }
+        }
+        for pipe in root_pipeline.pipes.iter() {
+            merged_pipeline.add_pipe(pipe.clone());
+        }
+        let formatted_pipeline = Series::from_data(
+            format!("{:?}", merged_pipeline)
+                .lines()
+                .map(|s| s.as_bytes())
+                .collect::<Vec<_>>(),
+        );
+        Ok(DataBlock::create(self.schema.clone(), vec![
+            formatted_pipeline,
+        ]))
     }
 }
