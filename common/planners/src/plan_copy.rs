@@ -62,6 +62,7 @@ pub struct CopyPlan {
 }
 
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
+#[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum CopyMode {
     IntoTable {

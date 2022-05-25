@@ -32,11 +32,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::StageSource;
 use crate::formats::output_format::OutputFormatType;
-
 use crate::pipelines::new::processors::port::OutputPort;
-
-
-
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -149,7 +145,7 @@ impl Table for StageTable {
         let path = format!(
             "{}/{}.{}",
             self.table_info.path,
-            uuid::Uuid::new_v4().to_string(),
+            uuid::Uuid::new_v4(),
             format_name.to_ascii_lowercase()
         );
 

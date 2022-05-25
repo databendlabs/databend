@@ -164,12 +164,12 @@ impl CopyInterpreter {
     async fn execute_copy_into_stage(
         &self,
         stage_table_info: &StageTableInfo,
-        query: &Box<PlanNode>,
+        query: &PlanNode,
     ) -> Result<SendableDataBlockStream> {
         let table = StageTable::try_create(stage_table_info.clone())?;
 
         let select_interpreter = SelectInterpreter::try_create(self.ctx.clone(), SelectPlan {
-            input: Arc::new((**query).clone()),
+            input: Arc::new(query.clone()),
         })?;
 
         let stream = select_interpreter.execute(None).await?;
@@ -238,7 +238,7 @@ impl Interpreter for CopyInterpreter {
                     .copy_files_to_table(catalog_name, db_name, tbl_name, from, files)
                     .await?;
 
-                let table = self.ctx.get_table(&catalog_name, db_name, tbl_name).await?;
+                let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
                 // Commit.
                 table
@@ -254,7 +254,10 @@ impl Interpreter for CopyInterpreter {
             CopyMode::IntoStage {
                 stage_table_info,
                 query,
-            } => self.execute_copy_into_stage(stage_table_info, query).await,
+            } => {
+                self.execute_copy_into_stage(stage_table_info, query.as_ref())
+                    .await
+            }
         }
     }
 }

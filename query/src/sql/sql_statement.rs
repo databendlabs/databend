@@ -71,6 +71,7 @@ use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 
 /// Tokens parsed by `DFParser` are converted into these values.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement<'a> {
     // ANSI SQL AST node

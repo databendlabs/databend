@@ -45,7 +45,7 @@ impl<'a> DfParser<'a> {
         let name;
         let mut query = None;
         let mut columns = vec![];
-        if location.starts_with("@") {
+        if location.starts_with('@') {
             self.parser.expect_keyword(Keyword::FROM)?;
             if self.parser.consume_token(&Token::LParen) {
                 query = Some(self.parser.parse_query()?);
