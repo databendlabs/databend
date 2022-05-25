@@ -17,6 +17,8 @@
 
 use std::collections::BTreeMap;
 
+use sqlparser::ast::ObjectName;
+use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::IsOptional;
 use sqlparser::parser::ParserError;
@@ -30,14 +32,41 @@ impl<'a> DfParser<'a> {
     // copy into table from [?] ...
     pub(crate) fn parse_copy(&mut self) -> Result<DfStatement<'a>, ParserError> {
         self.parser.expect_keyword(Keyword::INTO)?;
-        let name = self.parser.parse_object_name()?;
-        let columns = self
-            .parser
-            .parse_parenthesized_column_list(IsOptional::Optional)?;
+        let mut location = match self.parser.next_token() {
+            Token::AtString(s) => {
+                format!("@{}", s)
+            }
+            unexpected => {
+                self.parser.prev_token();
+                "".to_string()
+            }
+        };
 
-        // from 's3://mybucket/data/files'
-        self.parser.expect_keyword(Keyword::FROM)?;
-        let location = self.parser.parse_literal_string()?;
+        let name;
+        let mut query = None;
+        let mut columns = vec![];
+        if location.starts_with("@") {
+            self.parser.expect_keyword(Keyword::FROM)?;
+            if self.parser.consume_token(&Token::LParen) {
+                query = Some(self.parser.parse_query()?);
+                name = ObjectName(vec![]);
+                self.parser.expect_token(&Token::RParen)?;
+            } else {
+                name = self.parser.parse_object_name()?;
+                let subquery = format!("SELECT * FROM {}", name);
+                let mut inner_parser = DfParser::new_with_dialect(&subquery, &GenericDialect {})?;
+                query = Some(inner_parser.parser.parse_query()?);
+            }
+        } else {
+            name = self.parser.parse_object_name()?;
+            columns = self
+                .parser
+                .parse_parenthesized_column_list(IsOptional::Optional)?;
+
+            // from 's3://mybucket/data/files'
+            self.parser.expect_keyword(Keyword::FROM)?;
+            location = self.parser.parse_literal_string()?;
+        }
 
         // credentials=(aws_key_id='$AWS_ACCESS_KEY_ID' aws_secret_key='$AWS_SECRET_ACCESS_KEY')
         let mut credential_options = BTreeMap::default();
@@ -118,6 +147,7 @@ impl<'a> DfParser<'a> {
             on_error,
             size_limit,
             validation_mode,
+            query,
         }))
     }
 }
