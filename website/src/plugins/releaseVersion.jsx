@@ -29,7 +29,7 @@ export function getLatest(){
               setTimeout(()=>{
                 let text = button?.previousSibling?.innerText;
                 if (button?.parentNode?.previousSibling) {
-                  text = button?.parentNode.previousSibling?.innerText;;
+                  text = button?.parentNode?.previousSibling?.innerText;;
                 }
                 copyToClipboard(String(text).trim())
                }, 1)
