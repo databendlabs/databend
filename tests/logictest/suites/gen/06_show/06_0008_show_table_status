@@ -75,7 +75,7 @@ statement query TTITITITTTTTTTTTT
 SHOW TABLE STATUS FROM showtabstat WHERE Name = 't4';
 
 ----  
-t4 FUSE 0 None None None None None None None None 1970-01-01 00:00:00.000 +0000 None None None None 
+t4 FUSE 0 None 0 None 0 None None None None 1970-01-01 00:00:00.000 +0000 None None None None 
 
 statement ok
 insert into showtabstat.t4 values(1);
