@@ -341,7 +341,6 @@ pub async fn check_data_dir(
     let mut ss_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
-    // avoid ugly line wrapping
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
