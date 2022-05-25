@@ -86,7 +86,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.schema.is_some(), "{:?}", result);
     assert_eq!(
         result.schema.as_ref().unwrap().fields().len(),
-        8,
+        9,
         "{:?}",
         result
     );

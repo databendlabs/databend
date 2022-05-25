@@ -36,6 +36,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUnDropTable;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -110,6 +111,14 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::DropTable(drop))
+    }
+
+    // Drop table.
+    pub(crate) fn parse_undrop_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let drop = DfUnDropTable { name: table_name };
+
+        Ok(DfStatement::UnDropTable(drop))
     }
 
     // Alter table

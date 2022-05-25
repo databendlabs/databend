@@ -34,6 +34,7 @@ impl TablesTable {
             'BASE TABLE' AS table_type,
             engine AS engine,
             created_on AS create_time,
+            dropped_on AS drop_time,
             0 AS data_length,
             0 AS index_length,
             '' AS table_comment,

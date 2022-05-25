@@ -14,34 +14,32 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::DropTablePlan;
+use common_planners::UnDropTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
-use crate::storages::view::view_table::VIEW_ENGINE;
 
-pub struct DropTableInterpreter {
+pub struct UnDropTableInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropTablePlan,
+    plan: UnDropTablePlan,
 }
 
-impl DropTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropTableInterpreter { ctx, plan }))
+impl UnDropTableInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UnDropTablePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(UnDropTableInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropTableInterpreter {
+impl Interpreter for UnDropTableInterpreter {
     fn name(&self) -> &str {
-        "DropTableInterpreter"
+        "UndropTableInterpreter"
     }
 
     async fn execute(
@@ -50,13 +48,8 @@ impl Interpreter for DropTableInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.db.as_str();
-        let tbl_name = self.plan.table.as_str();
-        let tbl = self
-            .ctx
-            .get_table(catalog_name, db_name, tbl_name)
-            .await
-            .ok();
 
+        // shall we add UserPrivilege::Type::UnDrop ?
         self.ctx
             .get_current_session()
             .validate_privilege(
@@ -65,17 +58,8 @@ impl Interpreter for DropTableInterpreter {
             )
             .await?;
 
-        if let Some(table) = &tbl {
-            if table.get_table_info().engine() == VIEW_ENGINE {
-                return Err(ErrorCode::UnexpectedError(format!(
-                    "{}.{} is VIEW, please use `DROP VIEW {}.{}`",
-                    &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table
-                )));
-            }
-        };
-
         let catalog = self.ctx.get_catalog(catalog_name)?;
-        catalog.drop_table(self.plan.clone().into()).await?;
+        catalog.undrop_table(self.plan.clone().into()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
