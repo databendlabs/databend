@@ -33,6 +33,7 @@ pub struct AuthMgr {
 pub enum Credential {
     Jwt {
         token: String,
+        hostname: Option<String>,
     },
     Password {
         name: String,
@@ -52,7 +53,10 @@ impl AuthMgr {
 
     pub async fn auth(&self, credential: &Credential) -> Result<(Option<String>, UserInfo)> {
         match credential {
-            Credential::Jwt { token: t } => {
+            Credential::Jwt {
+                token: t,
+                hostname: h,
+            } => {
                 let jwt = match &self.jwt {
                     Some(j) => j.parse_jwt(t.as_str()).await?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
@@ -64,6 +68,15 @@ impl AuthMgr {
                     .tenant_id
                     .clone()
                     .unwrap_or_else(|| self.tenant.clone());
+                let identity = UserIdentity {
+                    username: user_name.to_string(),
+                    hostname: h.as_ref().unwrap_or(&"%".to_string()).to_string(),
+                };
+                if identity.is_root() && !identity.is_localhost() {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "root user can only login from localhost",
+                    ));
+                }
                 if let Some(ref ensure_user) = claims.extra.ensure_user {
                     let mut user_info = UserInfo::new(user_name, "%", AuthInfo::JWT);
                     if let Some(ref roles) = ensure_user.roles {
@@ -85,6 +98,15 @@ impl AuthMgr {
                 password: p,
                 hostname: h,
             } => {
+                let identity = UserIdentity {
+                    username: n.to_string(),
+                    hostname: h.as_ref().unwrap_or(&"%".to_string()).to_string(),
+                };
+                if identity.is_root() && !identity.is_localhost() {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "root user can only login from localhost",
+                    ));
+                }
                 let user = self
                     .user_mgr
                     .get_user_with_client_ip(
