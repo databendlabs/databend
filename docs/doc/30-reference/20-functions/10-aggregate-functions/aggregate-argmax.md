@@ -14,8 +14,8 @@ ARG_MAX(arg, val)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| arg | Argument |
-| val | Value |
+| arg | Argument of [any data type that Databend supports](../../10-data-types/Index.md) |
+| val | Value of [any data type that Databend supports](../../10-data-types/Index.md)|
 
 ## Return Type
 

@@ -225,7 +225,7 @@ async fn execute(
                 };
                 let part_ptr = result_table_writer
                     .as_mut()
-                    .unwrap()
+                    .ok_or_else(|| ErrorCode::UnknownException("server error"))?
                     .append_block(block.clone())
                     .await?;
                 block_buffer.push(block.clone(), part_ptr).await;

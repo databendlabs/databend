@@ -20,6 +20,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::Stoppable;
 use common_meta_api::KVApi;
+use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
@@ -142,7 +143,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
 
     async fn test_write_read_on_every_node(
         tcs: &[MetaSrvTestContext],
-        client: &MetaGrpcClient,
+        client: &ClientHandle,
         key_suffix: &str,
     ) -> anyhow::Result<()> {
         tracing::info!("--- test write on every node: {}", key_suffix);
