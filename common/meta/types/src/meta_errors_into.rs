@@ -17,7 +17,9 @@ use std::fmt::Display;
 use anyerror::AnyError;
 use common_exception::ErrorCode;
 use prost::EncodeError;
+use tonic::Code;
 
+use crate::meta_network_errors::InvalidArgument;
 use crate::ConnectionError;
 use crate::MetaError;
 use crate::MetaNetworkError;
@@ -97,9 +99,30 @@ where E: Display + Send + Sync + 'static
 // ser/de to/from tonic::Status
 impl From<tonic::Status> for MetaError {
     fn from(status: tonic::Status) -> Self {
-        MetaError::MetaNetworkError(MetaNetworkError::ConnectionError(ConnectionError::new(
-            status, "",
-        )))
+        match status.code() {
+            Code::InvalidArgument => MetaError::MetaNetworkError(
+                MetaNetworkError::InvalidArgument(InvalidArgument::new(status, "")),
+            ),
+            // Code::Ok => {}
+            // Code::Cancelled => {}
+            // Code::Unknown => {}
+            // Code::DeadlineExceeded => {}
+            // Code::NotFound => {}
+            // Code::AlreadyExists => {}
+            // Code::PermissionDenied => {}
+            // Code::ResourceExhausted => {}
+            // Code::FailedPrecondition => {}
+            // Code::Aborted => {}
+            // Code::OutOfRange => {}
+            // Code::Unimplemented => {}
+            // Code::Internal => {}
+            // Code::Unavailable => {}
+            // Code::DataLoss => {}
+            // Code::Unauthenticated => {}
+            _ => MetaError::MetaNetworkError(MetaNetworkError::ConnectionError(
+                ConnectionError::new(status, ""),
+            )),
+        }
     }
 }
 

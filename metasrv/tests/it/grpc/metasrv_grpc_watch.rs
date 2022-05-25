@@ -26,7 +26,7 @@ use common_meta_types::UpsertKVReq;
 use crate::init_meta_ut;
 
 async fn upsert_kv_client_main(addr: String, updates: Vec<UpsertKVReq>) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)?;
 
     // update some kv
     for update in updates.iter() {
@@ -42,7 +42,7 @@ async fn test_watch_main(
     mut watch_events: Vec<Event>,
     updates: Vec<UpsertKVReq>,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None).await?;
+    let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None)?;
 
     // let mut grpc_client = client.make_conn().await?;
 

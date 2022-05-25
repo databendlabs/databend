@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use once_cell::sync::Lazy;
+use semver::Version;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let git_tag = option_env!("VERGEN_GIT_SEMVER");
@@ -29,4 +30,18 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
         _ => String::new(),
     };
     ver
+});
+
+pub static QUERY_SEMVER: Lazy<Version> = Lazy::new(|| {
+    //
+    let build_semver = option_env!("VERGEN_GIT_SEMVER");
+    let semver = build_semver.expect("VERGEN_GIT_SEMVER can not be None");
+
+    let semver = if semver.starts_with("v") {
+        &semver[1..]
+    } else {
+        semver
+    };
+
+    Version::parse(semver).expect(&format!("Invalid semver: {:?}", semver))
 });

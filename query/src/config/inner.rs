@@ -34,6 +34,7 @@ use super::outer_v0::Config as OuterV0Config;
 /// All function should implemented based on this Config.
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Config {
+    pub cmd: String,
     pub config_file: String,
 
     // Query engine config.

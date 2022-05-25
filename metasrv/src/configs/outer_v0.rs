@@ -31,6 +31,13 @@ use super::inner::Config as InnerConfig;
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
+    /// Run a command
+    ///
+    /// Supported commands:
+    /// - `ver`: print version and quit.
+    #[clap(long, default_value = "")]
+    pub cmd: String,
+
     #[clap(long, short = 'c', default_value = "")]
     pub config_file: String,
 
@@ -69,11 +76,10 @@ impl Default for Config {
     }
 }
 
-impl TryInto<InnerConfig> for Config {
-    type Error = MetaError;
-
-    fn try_into(self) -> MetaResult<InnerConfig> {
-        Ok(InnerConfig {
+impl Into<InnerConfig> for Config {
+    fn into(self) -> InnerConfig {
+        InnerConfig {
+            cmd: self.cmd,
             config_file: self.config_file,
             log_level: self.log_level,
             log_dir: self.log_dir,
@@ -83,14 +89,15 @@ impl TryInto<InnerConfig> for Config {
             grpc_api_address: self.grpc_api_address,
             grpc_tls_server_cert: self.grpc_tls_server_cert,
             grpc_tls_server_key: self.grpc_tls_server_key,
-            raft_config: self.raft_config.try_into()?,
-        })
+            raft_config: self.raft_config.into(),
+        }
     }
 }
 
 impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
+            cmd: inner.cmd,
             config_file: inner.config_file,
             log_level: inner.log_level,
             log_dir: inner.log_dir,
@@ -235,6 +242,8 @@ impl Into<Config> for ConfigViaEnv {
         };
 
         Config {
+            // cmd should only be passed in from CLI
+            cmd: "".to_string(),
             config_file: self.metasrv_config_file,
             log_level: self.metasrv_log_level,
             log_dir: self.metasrv_log_dir,
@@ -331,11 +340,9 @@ impl Default for RaftConfig {
     }
 }
 
-impl TryInto<InnerRaftConfig> for RaftConfig {
-    type Error = MetaError;
-
-    fn try_into(self) -> MetaResult<InnerRaftConfig> {
-        let irc = InnerRaftConfig {
+impl Into<InnerRaftConfig> for RaftConfig {
+    fn into(self) -> InnerRaftConfig {
+        InnerRaftConfig {
             config_id: self.config_id,
             raft_listen_host: self.raft_listen_host,
             raft_advertise_host: self.raft_advertise_host,
@@ -350,11 +357,7 @@ impl TryInto<InnerRaftConfig> for RaftConfig {
             join: self.join,
             id: self.id,
             sled_tree_prefix: self.sled_tree_prefix,
-        };
-
-        irc.check()?;
-
-        Ok(irc)
+        }
     }
 }
 
