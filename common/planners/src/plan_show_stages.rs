@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clusters_table;
-mod columns_table;
-mod configs_table;
-mod contributors_table;
-mod credits_table;
-mod databases_table;
-mod engines_table;
-mod functions_table;
-mod metrics_table;
-mod query_log_table;
-mod roles_table;
-mod settings_table;
-mod stages_table;
-mod tables_table;
-mod tracing_table;
-mod users_table;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ShowStagesPlan {}

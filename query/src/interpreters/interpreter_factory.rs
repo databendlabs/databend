@@ -24,6 +24,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::AlterViewInterpreter;
 use super::CreateUserStageInterpreter;
 use super::ListInterpreter;
+use super::ShowStagesInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
@@ -120,6 +121,9 @@ impl InterpreterFactory {
             }
             PlanNode::Show(ShowPlan::ShowRoles(v)) => {
                 ShowRolesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowStages(v)) => {
+                ShowStagesInterpreter::try_create(ctx_clone, v)
             }
 
             // Database related transforms.

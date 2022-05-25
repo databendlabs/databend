@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::str::FromStr;
 
 use common_exception::ErrorCode;
@@ -51,6 +52,16 @@ copyOptions ::=
 pub enum StageType {
     Internal,
     External,
+}
+
+impl fmt::Display for StageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            StageType::Internal => "Internal",
+            StageType::External => "External",
+        };
+        write!(f, "{}", name)
+    }
 }
 
 impl Default for StageType {
