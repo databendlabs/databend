@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::ExplainKind;
 use common_ast::ast::Identifier;
 use common_ast::ast::TableAlias;
 use common_ast::parser::error::DisplayError as _;
@@ -52,6 +53,8 @@ pub struct BindContext {
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
+
+    pub explain_kind: Option<ExplainKind>,
 }
 
 impl BindContext {
@@ -65,6 +68,7 @@ impl BindContext {
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
+            explain_kind: None,
         }
     }
 

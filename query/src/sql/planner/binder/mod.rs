@@ -19,6 +19,7 @@ pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
 use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::subquery::SubqueryRewriter;
@@ -83,7 +84,19 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         match stmt {
             Statement::Query(query) => self.bind_query(bind_context, query).await,
-            _ => todo!(),
+            Statement::Explain { query, kind } => match query.as_ref() {
+                Statement::Query(query) => {
+                    let (expr, mut bind_context) = self.bind_query(bind_context, query).await?;
+                    bind_context.explain_kind = Some(kind.clone());
+                    Ok((expr, bind_context))
+                }
+                _ => todo!(),
+            },
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplement stmt {stmt} in binder"
+                )));
+            }
         }
     }
 
