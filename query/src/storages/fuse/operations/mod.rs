@@ -15,6 +15,7 @@
 mod append;
 mod commit;
 mod fuse_sink;
+mod navigate;
 mod operation_log;
 mod optimize;
 mod read;

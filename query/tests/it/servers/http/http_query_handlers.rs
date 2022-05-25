@@ -79,19 +79,29 @@ async fn test_simple_sql() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
-    assert_eq!(result.data.len(), 10);
+    assert_eq!(result.data.len(), 10, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some());
-    assert!(result.schema.is_some());
-    assert_eq!(result.schema.unwrap().fields().len(), 8);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert_eq!(
+        result.schema.as_ref().unwrap().fields().len(),
+        8,
+        "{:?}",
+        result
+    );
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_none(), "{:?}", result.error);
-    assert!(result.schema.is_some());
-    assert_eq!(result.schema.unwrap().fields().len(), 1);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert_eq!(
+        result.schema.as_ref().unwrap().fields().len(),
+        1,
+        "{:?}",
+        result
+    );
     Ok(())
 }
 
@@ -131,12 +141,12 @@ async fn test_bad_sql() -> Result<()> {
     let ep = create_endpoint();
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK);
-    assert!(result.error.is_some());
-    assert_eq!(result.data.len(), 0);
-    assert!(result.next_uri.is_none());
-    assert_eq!(result.state, ExecuteStateKind::Failed);
-    assert!(result.stats.scan_progress.is_none());
-    assert!(result.schema.is_none());
+    assert!(result.error.is_some(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Failed, "{:?}", result);
+    assert!(result.stats.scan_progress.is_none(), "{:?}", result);
+    assert!(result.schema.is_none(), "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=3";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -175,15 +185,15 @@ async fn test_async() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 0);
     assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 0);
-    assert_eq!(result.next_uri, Some(next_uri));
-    assert!(result.stats.scan_progress.is_some());
-    assert!(result.schema.is_some());
-    assert_eq!(result.state, ExecuteStateKind::Running,);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert_eq!(result.next_uri, Some(next_uri), "{:?}", result);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
     sleep(Duration::from_millis(100)).await;
 
     // get page, support retry
@@ -191,39 +201,39 @@ async fn test_async() -> Result<()> {
         let uri = make_page_uri(query_id, 0);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result);
         assert_eq!(result.data.len(), 1, "{:?}", result);
-        assert!(result.next_uri.is_none());
-        assert!(result.schema.is_some());
-        assert!(result.stats.scan_progress.is_some());
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert!(result.next_uri.is_none(), "{:?}", result);
+        assert!(result.schema.is_some(), "{:?}", result);
+        assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
 
     // get state
     let uri = make_state_uri(query_id);
     let (status, result) = get_uri_checked(&ep, &uri).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert!(result.error.is_none(), "{:?}", result.error);
-    assert_eq!(result.data.len(), 0);
-    assert!(result.next_uri.is_none());
-    assert!(result.schema.is_some());
-    assert!(result.stats.scan_progress.is_some());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // get page not expected
     let uri = make_page_uri(query_id, 1);
     let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(body, "wrong page number 1");
 
     // delete
     let status = delete_query(&ep, query_id).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
 }
@@ -243,7 +253,7 @@ async fn test_buffer_size() -> Result<()> {
             buf_size,
             result
         );
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(status, StatusCode::OK, "{} {:?}", buf_size, result);
     }
     Ok(())
 }
@@ -255,29 +265,30 @@ async fn test_pagination() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 1);
     assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 2);
-    assert_eq!(result.next_uri, Some(next_uri));
-    assert!(result.stats.scan_progress.is_some());
-    assert!(result.schema.is_some());
+    assert_eq!(result.data.len(), 2, "{:?}", result);
+    assert_eq!(result.next_uri, Some(next_uri), "{:?}", result);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
 
     for page in 0..5 {
+        let msg = || format!("page {}: {:?}", page, result);
         let uri = make_page_uri(query_id, page);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
-        assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none(), "{:?}", result);
-        assert_eq!(result.data.len(), 2, "{:?}", result);
-        assert!(result.schema.is_some());
-        assert!(result.stats.scan_progress.is_some());
+        assert_eq!(status, StatusCode::OK, "{:?}", msg());
+        assert!(result.error.is_none(), "{:?}", msg());
+        assert_eq!(result.data.len(), 2, "{:?}", msg());
+        assert!(result.schema.is_some(), "{:?}", result);
+        assert!(result.stats.scan_progress.is_some(), "{:?}", msg());
         if page == 4 {
-            assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-            assert!(result.next_uri.is_none());
+            assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", msg());
+            assert!(result.next_uri.is_none(), "{:?}", msg());
         } else {
-            assert!(result.next_uri.is_some());
+            assert!(result.next_uri.is_some(), "{:?}", msg());
         }
     }
 
@@ -286,25 +297,25 @@ async fn test_pagination() -> Result<()> {
     let (status, result) = get_uri_checked(&ep, &uri).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none(), "{:?}", result.error);
-    assert_eq!(result.data.len(), 0);
-    assert!(result.next_uri.is_none());
-    assert!(result.schema.is_some());
-    assert!(result.stats.scan_progress.is_some());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // get page not expected
     let uri = make_page_uri(query_id, 6);
     let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(body, "wrong page number 6");
 
     // delete
     let status = delete_query(&ep, query_id).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
 
     let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
 }
@@ -344,19 +355,19 @@ async fn test_http_session() -> Result<()> {
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 0);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.next_uri, None, "{:?}", result);
-    assert!(result.stats.scan_progress.is_some());
-    assert!(result.schema.is_some());
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     let session_id = &result.session_id.unwrap();
 
     let json = serde_json::json!({"sql": "select database()", "session": {"id": session_id}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
-    assert_eq!(result.data[0][0], "system",);
+    assert_eq!(result.data[0][0], "system", "{:?}", result);
     Ok(())
 }
 
@@ -373,18 +384,18 @@ async fn test_result_timeout() -> Result<()> {
     let sql = "select sleep(0.1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
-    assert_eq!(status, StatusCode::OK);
-    let query_id = result.id;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    let query_id = result.id.clone();
     let next_uri = make_page_uri(&query_id, 0);
-    assert_eq!(result.next_uri, Some(next_uri.clone()));
+    assert_eq!(result.next_uri, Some(next_uri.clone()), "{:?}", result);
 
     sleep(Duration::from_millis(110)).await;
     let response = get_uri(&ep, &next_uri).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
     sleep(std::time::Duration::from_millis(210)).await;
     let response = get_uri(&ep, &next_uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     Ok(())
 }
 
@@ -429,9 +440,9 @@ async fn test_system_tables() -> Result<()> {
             "{}",
             error_message
         );
-        assert!(result.stats.scan_progress.is_some());
+        assert!(result.stats.scan_progress.is_some(), "{:?}", result);
         assert!(result.next_uri.is_none(), "{:?}", result);
-        assert!(result.schema.is_some());
+        assert!(result.schema.is_some(), "{:?}", result);
     }
     Ok(())
 }
@@ -449,10 +460,10 @@ async fn test_insert() -> Result<()> {
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
         let (status, result) = post_json_to_endpoint(&route, &json).await?;
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result.error);
-        assert_eq!(result.data.len(), data_len);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.data.len(), data_len, "{:?}", result);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     }
     Ok(())
 }
@@ -520,11 +531,11 @@ async fn test_query_log() -> Result<()> {
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert!(result.error.is_none());
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
 
-    let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    let response = get_uri(&ep, &result.kill_uri.as_ref().unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -832,7 +843,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
     let res = resp.json::<QueryResponse>().await;
-    assert!(res.is_ok());
+    assert!(res.is_ok(), "{:?}", res);
     let res = res.unwrap();
     assert!(!res.data.is_empty(), "{:?}", res);
     Ok(())
@@ -900,9 +911,9 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
         .await;
     assert!(resp.is_ok(), "{:?}", resp.err());
     let resp = resp.unwrap();
-    assert!(resp.status().is_success());
+    assert!(resp.status().is_success(), "{:?}", resp);
     let res = resp.json::<QueryResponse>().await;
-    assert!(res.is_ok());
+    assert!(res.is_ok(), "{:?}", res);
     let res = res.unwrap();
     assert!(!res.data.is_empty(), "{:?}", res);
     Ok(())
@@ -952,20 +963,42 @@ async fn test_download() -> Result<()> {
     let sql = "select number, number + 1 from numbers(2)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert_eq!(result.data.len(), 2);
+    assert_eq!(result.data.len(), 2, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     // succeeded query
     let resp = download(&ep, &result.id).await;
     assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
-    let exp = "0\t1\n1\t2\n";
+    let exp = "0,1\n1,2\n";
     assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
 
     // not exist
     let mut resp = download(&ep, "123").await;
     let exp = "not exists";
     assert!(resp.take_body().into_string().await.unwrap().contains(exp));
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
+
+    // basic check for formats
+    let query_id = &result.id;
+    for (fmt, formatted) in [
+        ("tsv", "0\t1\n1\t2\n"),
+        ("csv", "0,1\n1,2\n"),
+        (
+            "ndjson",
+            "{\"number\":0,\"(number + 1)\":1}\n{\"number\":1,\"(number + 1)\":2}\n",
+        ),
+        ("values", "(0,1),(1,2)"),
+    ] {
+        let uri = format!("/v1/query/{}/download?format={}", query_id, fmt);
+        let resp = get_uri(&ep, &uri).await;
+        assert_eq!(resp.status(), StatusCode::OK, "{} {}", fmt, formatted);
+        assert_eq!(
+            resp.into_body().into_string().await.unwrap(),
+            formatted,
+            "{}",
+            fmt
+        );
+    }
     Ok(())
 }
 
@@ -975,17 +1008,17 @@ async fn test_download_non_select() -> Result<()> {
     let sql = "show databases";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_none(), "{:?}", result.error);
+    assert!(result.error.is_none(), "{:?}", result);
     let num_row = result.data.len();
 
     let resp = download(&ep, &result.id).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", result);
     let body = resp.into_body().into_string().await.unwrap();
     assert_eq!(
         body.split('\n').filter(|x| !x.is_empty()).count(),
         num_row,
-        "'{}'",
-        body
+        "{:?}",
+        result
     );
     Ok(())
 }
@@ -1000,7 +1033,7 @@ async fn test_download_failed() -> Result<()> {
     let mut resp = download(&ep, &result.id).await;
     let exp = "not exists";
     assert!(resp.take_body().into_string().await.unwrap().contains(exp));
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
 }
@@ -1017,10 +1050,10 @@ async fn test_download_killed() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
 
     let response = get_uri(&ep, &result.final_uri.unwrap()).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
 
     let resp = download(&ep, &result.id).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
     let exp = "0\n";
     assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
 
@@ -1028,16 +1061,41 @@ async fn test_download_killed() -> Result<()> {
     let sql = "select sleep(1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
 
     let response = get_uri(&ep, &result.kill_uri.unwrap()).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::OK, "{:?}", response);
 
     let mut resp = download(&ep, query_id).await;
     let exp = "not exists";
-    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert!(
+        resp.take_body().into_string().await.unwrap().contains(exp),
+        "{:?}",
+        resp
+    );
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", resp);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_func_object_keys() -> Result<()> {
+    let route = create_endpoint();
+
+    let sqls = vec![
+        ("CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj OBJECT, var VARIANT) Engine=Fuse;", 0),
+        ("INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));", 0),
+        ("SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;", 1),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(result.data.len(), data_len);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    }
     Ok(())
 }

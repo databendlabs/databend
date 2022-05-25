@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_api::KVApi;
 use common_meta_api::SchemaApi;
 use common_meta_grpc::MetaGrpcClient;
 use pretty_assertions::assert_eq;
@@ -93,7 +94,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let c = r.make_conn().await;
+    let c = r.get_kv("foo").await;
     assert!(c.is_err());
 
     if let Err(e) = c {

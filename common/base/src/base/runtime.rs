@@ -29,6 +29,7 @@ pub trait TrySpawn {
     /// Tries to spawn a new asynchronous task, returning a tokio::JoinHandle for it.
     ///
     /// It allows to return an error before spawning the task.
+    #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
@@ -37,6 +38,7 @@ pub trait TrySpawn {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     ///
     /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
+    #[track_caller]
     fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
@@ -47,6 +49,7 @@ pub trait TrySpawn {
 }
 
 impl<S: TrySpawn> TrySpawn for Arc<S> {
+    #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
@@ -55,6 +58,7 @@ impl<S: TrySpawn> TrySpawn for Arc<S> {
         self.as_ref().try_spawn(task)
     }
 
+    #[track_caller]
     fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
@@ -139,6 +143,7 @@ impl Runtime {
 }
 
 impl TrySpawn for Runtime {
+    #[track_caller]
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,

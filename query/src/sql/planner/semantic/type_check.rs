@@ -19,6 +19,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::Query;
+use common_ast::ast::TrimWhere;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::error::DisplayError;
 use common_datavalues::BooleanType;
@@ -27,6 +28,7 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::IntervalKind;
 use common_datavalues::IntervalType;
+use common_datavalues::StringType;
 use common_datavalues::TimestampType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -407,6 +409,11 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_date_add(date, interval, unit, required_type)
                     .await
             }
+            Expr::Trim {
+                expr, trim_where, ..
+            } => self.try_resolve_trim_function(expr, trim_where).await,
+
+            Expr::Array { exprs, .. } => self.resolve_array(exprs).await,
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
@@ -778,6 +785,47 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    async fn try_resolve_trim_function(
+        &mut self,
+        expr: &Expr<'a>,
+        trim_where: &Option<(TrimWhere, Box<Expr<'a>>)>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let (func_name, trim_scalar) = if let Some((trim_type, trim_expr)) = trim_where {
+            let func_name = match trim_type {
+                TrimWhere::Leading => "trim_leading",
+                TrimWhere::Trailing => "trim_trailing",
+                TrimWhere::Both => "trim_both",
+            };
+
+            let (trim_scalar, _) = self
+                .resolve(trim_expr, Some(StringType::new_impl()))
+                .await?;
+            (func_name, trim_scalar)
+        } else {
+            let trim_scalar = ConstantExpr {
+                value: DataValue::String(" ".as_bytes().to_vec()),
+                data_type: StringType::new_impl(),
+            }
+            .into();
+            ("trim_both", trim_scalar)
+        };
+
+        let (trim_source, _) = self.resolve(expr, Some(StringType::new_impl())).await?;
+        let args = vec![trim_source, trim_scalar];
+        let func = FunctionFactory::instance().get(func_name, &[&StringType::new_impl(); 2])?;
+
+        Ok((
+            FunctionCall {
+                arguments: args,
+                func_name: func_name.to_string(),
+                arg_types: vec![StringType::new_impl(); 2],
+                return_type: func.return_type(),
+            }
+            .into(),
+            func.return_type(),
+        ))
+    }
+
     /// Resolve literal values.
     pub fn resolve_literal(
         &self,
@@ -798,5 +846,43 @@ impl<'a> TypeChecker<'a> {
         let data_type = value.data_type();
 
         Ok((value, data_type))
+    }
+
+    async fn resolve_array(&self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut values = Vec::with_capacity(exprs.len());
+        let mut first_data_type = None;
+        for expr in exprs.iter() {
+            match expr {
+                Expr::Literal { lit, .. } => {
+                    let (value, data_type) = self.resolve_literal(lit, None)?;
+                    if let Some(dy) = first_data_type.as_ref() {
+                        if !data_type.eq(dy) {
+                            return Err(ErrorCode::SemanticError(expr.span().display_error(
+                                "Values in array should have same type".to_string(),
+                            )));
+                        }
+                    } else {
+                        first_data_type = Some(data_type);
+                    }
+                    values.push(value);
+                }
+                _ => {
+                    return Err(ErrorCode::SemanticError(
+                        expr.span()
+                            .display_error("Array only supports literal exprs".to_string()),
+                    ));
+                }
+            }
+        }
+        let array = DataValue::Array(values);
+        let data_type = array.data_type();
+        Ok((
+            ConstantExpr {
+                value: array,
+                data_type: data_type.clone(),
+            }
+            .into(),
+            data_type,
+        ))
     }
 }

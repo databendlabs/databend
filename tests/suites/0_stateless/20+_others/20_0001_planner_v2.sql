@@ -217,4 +217,23 @@ select * from t2 inner join t1 on t1.a = t2.c;
 drop table t1;
 drop table t2;
 
+-- trim function
+select '===Trim Functuon===';
+select trim(leading ' ' from '      abc');
+select trim(leading ' ' from '');
+select trim(leading 'ab' from 'abab');
+select trim(leading 'ab' from 'abc');
+select trim(trailing ' ' from 'abc    ');
+select trim(trailing ' ' from '');
+select trim(trailing 'ab' from 'abab');
+select trim(trailing 'ab' from 'cab');
+select trim(both 'ab' from 'abab');
+select trim(both 'ab' from 'abcab');
+select trim(' abc ');
+
+-- Select Array Literal
+select '===Array Literal===';
+select [1, 2, 3];
+select [];
+
 set enable_planner_v2 = 0;

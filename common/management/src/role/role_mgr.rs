@@ -26,7 +26,7 @@ use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_meta_types::UserPrivilegeSet;
 
 use crate::role::role_api::RoleApi;
@@ -67,7 +67,7 @@ impl RoleMgr {
 
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 &key,
                 match_seq,
                 Operation::Update(value),
@@ -96,7 +96,7 @@ impl RoleApi for RoleMgr {
         let value = serde_json::to_vec(&role_info)?;
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVAction::new(
+        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
             &key,
             match_seq,
             Operation::Update(value),
@@ -199,12 +199,7 @@ impl RoleApi for RoleMgr {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVAction::new(
-                &key,
-                seq.into(),
-                Operation::Delete,
-                None,
-            ))
+            .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
             .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())

@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 mod io;
+mod meta;
 mod operations;
 mod pruning;
 mod statistics;

@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use common_base::base::tokio;
 use common_meta_api::KVApiBuilder;
 use common_meta_api::KVApiTestSuite;
+use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_tracing::tracing_futures::Instrument;
 
@@ -32,8 +33,8 @@ struct Builder {
 }
 
 #[async_trait]
-impl KVApiBuilder<Arc<MetaGrpcClient>> for Builder {
-    async fn build(&self) -> Arc<MetaGrpcClient> {
+impl KVApiBuilder<Arc<ClientHandle>> for Builder {
+    async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
         let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None)
@@ -48,7 +49,7 @@ impl KVApiBuilder<Arc<MetaGrpcClient>> for Builder {
         client
     }
 
-    async fn build_cluster(&self) -> Vec<Arc<MetaGrpcClient>> {
+    async fn build_cluster(&self) -> Vec<Arc<ClientHandle>> {
         let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
 
         let cluster = vec![

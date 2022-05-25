@@ -14,6 +14,7 @@
 //
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
@@ -57,6 +58,18 @@ impl Display for DatabaseId {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DbIdListKey {
+    pub tenant: String,
+    pub db_name: String,
+}
+
+impl Display for DbIdListKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.db_name)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
@@ -65,6 +78,9 @@ pub struct DatabaseMeta {
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
+
+    // if used in CreateDatabaseReq, this field MUST set to None.
+    pub drop_on: Option<DateTime<Utc>>,
 }
 
 impl Default for DatabaseMeta {
@@ -76,6 +92,7 @@ impl Default for DatabaseMeta {
             created_on: Utc::now(),
             updated_on: Utc::now(),
             comment: "".to_string(),
+            drop_on: None,
         }
     }
 }
@@ -93,6 +110,40 @@ impl Display for DatabaseMeta {
 impl DatabaseInfo {
     pub fn engine(&self) -> &str {
         &self.meta.engine
+    }
+}
+
+/// Save db name id list history.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Default, PartialEq)]
+pub struct DbIdList {
+    pub id_list: Vec<u64>,
+}
+
+impl DbIdList {
+    pub fn new() -> DbIdList {
+        DbIdList::default()
+    }
+
+    pub fn append(&mut self, table_id: u64) {
+        self.id_list.push(table_id);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.id_list.is_empty()
+    }
+
+    pub fn pop(&mut self) -> Option<u64> {
+        self.id_list.pop()
+    }
+
+    pub fn last(&mut self) -> Option<&u64> {
+        self.id_list.last()
+    }
+}
+
+impl Display for DbIdList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DB id list: {:?}", self.id_list)
     }
 }
 
@@ -156,6 +207,24 @@ impl Display for DropDatabaseReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UndropDatabaseReq {
+    pub name_ident: DatabaseNameIdent,
+}
+
+impl Display for UndropDatabaseReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "undrop_db:{}/{}",
+            self.name_ident.tenant, self.name_ident.db_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UndropDatabaseReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct GetDatabaseReq {
