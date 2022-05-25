@@ -24,6 +24,7 @@ use common_base::containers::Pool;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
+use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -54,7 +55,6 @@ use tonic::Status;
 use crate::grpc_action::MetaGrpcReadReq;
 use crate::grpc_action::MetaGrpcWriteReq;
 use crate::grpc_action::RequestFor;
-use crate::MetaGrpcClientConf;
 
 #[derive(Debug)]
 struct MetaChannelManager {
@@ -118,16 +118,16 @@ const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl MetaGrpcClient {
     pub async fn try_new(
-        conf: &MetaGrpcClientConf,
+        conf: &RpcClientConf,
     ) -> std::result::Result<Arc<MetaGrpcClient>, Infallible> {
         let mgr = MetaChannelManager {
-            timeout: Some(Duration::from_secs(conf.client_timeout_in_second)),
-            conf: conf.meta_service_config.tls_conf.clone(),
+            timeout: conf.timeout,
+            conf: conf.tls_conf.clone(),
         };
 
-        let addr = conf.meta_service_config.address.to_string();
-        let endpoints = if !conf.meta_service_config.endpoints.is_empty() {
-            conf.meta_service_config.endpoints.clone()
+        let addr = conf.address.to_string();
+        let endpoints = if !conf.endpoints.is_empty() {
+            conf.endpoints.clone()
         } else {
             vec![addr]
         };
@@ -135,8 +135,8 @@ impl MetaGrpcClient {
         let client = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: RwLock::new(endpoints),
-            username: conf.meta_service_config.username.to_string(),
-            password: conf.meta_service_config.password.to_string(),
+            username: conf.username.to_string(),
+            password: conf.password.to_string(),
             token: RwLock::new(None),
         });
 
