@@ -49,8 +49,8 @@ use crate::interpreters::InterpreterFactory;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::v1::multipart_format::{MultipartFormat, MultipartWorkerNew};
-use crate::servers::http::v1::sequential_format_source::SequentialMultipartWorker;
+use crate::servers::http::v1::multipart_format::MultipartFormat;
+use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
@@ -78,7 +78,7 @@ fn execute_query(
     context: Arc<QueryContext>,
     node: PlanNode,
     source_builder: SourcePipeBuilder,
-) -> impl Future<Output=Result<()>> {
+) -> impl Future<Output = Result<()>> {
     async move {
         let interpreter = InterpreterFactory::get(context, node)?;
 

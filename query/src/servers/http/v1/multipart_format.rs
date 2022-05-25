@@ -12,31 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::mem::replace;
 use std::sync::Arc;
 
-use common_base::base::tokio::io::AsyncReadExt;
-use common_base::base::tokio::sync::mpsc::Receiver;
-use common_base::base::tokio::sync::mpsc::Sender;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use poem::web::Multipart;
 
 use crate::formats::FormatFactory;
-use crate::formats::InputFormat;
-use crate::formats::InputState;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::SourcePipeBuilder;
-use crate::servers::http::v1::parallel_format_source::{ParallelInputFormatSource, ParallelMultipartWorker};
-use crate::servers::http::v1::sequential_format_source::{SequentialMultipartWorker, SequentialInputFormatSource};
+use crate::servers::http::v1::parallel_format_source::ParallelInputFormatSource;
+use crate::servers::http::v1::parallel_format_source::ParallelMultipartWorker;
+use crate::servers::http::v1::sequential_format_source::SequentialInputFormatSource;
+use crate::servers::http::v1::sequential_format_source::SequentialMultipartWorker;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
@@ -55,7 +44,8 @@ impl MultipartFormat {
         settings: FormatSettings,
     ) -> Result<(Box<dyn MultipartWorkerNew>, SourcePipeBuilder)> {
         let mut source_pipe_builder = SourcePipeBuilder::create();
-        let input_format = FormatFactory::instance().get_input(name, schema.clone(), settings.clone())?;
+        let input_format =
+            FormatFactory::instance().get_input(name, schema.clone(), settings.clone())?;
 
         let query_settings = ctx.get_settings();
         if query_settings.get_max_threads()? != 1 && input_format.support_parallel() {
@@ -106,5 +96,3 @@ impl MultipartFormat {
         }
     }
 }
-
-

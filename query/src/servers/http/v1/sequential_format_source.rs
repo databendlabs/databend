@@ -1,16 +1,22 @@
-use poem::web::Multipart;
-use common_base::base::tokio::sync::mpsc::{Receiver, Sender};
+use std::mem::replace;
 use std::sync::Arc;
-use common_base::base::{Progress, ProgressValues};
+
+use common_base::base::tokio::io::AsyncReadExt;
+use common_base::base::tokio::sync::mpsc::Receiver;
+use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
-use std::mem::replace;
-use common_base::base::tokio::io::AsyncReadExt;
-use crate::formats::{InputFormat, InputState};
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 use common_exception::Result;
+use poem::web::Multipart;
+
+use crate::formats::InputFormat;
+use crate::formats::InputState;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
 use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
 
 pub struct SequentialMultipartWorker {
@@ -20,7 +26,10 @@ pub struct SequentialMultipartWorker {
 
 impl SequentialMultipartWorker {
     pub fn create(multipart: Multipart, tx: Sender<Result<Vec<u8>>>) -> SequentialMultipartWorker {
-        SequentialMultipartWorker { multipart, tx: Some(tx) }
+        SequentialMultipartWorker {
+            multipart,
+            tx: Some(tx),
+        }
     }
 }
 

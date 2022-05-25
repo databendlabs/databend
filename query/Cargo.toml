@@ -60,6 +60,7 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "45
 
 # Crates.io dependencies
 ahash = "0.7.6"
+async-channel = "1.6.1"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"
@@ -116,7 +117,6 @@ twox-hash = "1.6.2"
 typetag = "0.1.8"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-async-channel = "1.6.1"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }

@@ -1,16 +1,22 @@
 use std::mem::replace;
 use std::sync::Arc;
-use poem::web::Multipart;
-use common_base::base::{Progress, ProgressValues};
-use common_base::base::tokio::io::AsyncReadExt;
+
 use async_channel::Receiver;
 use async_channel::Sender;
+use common_base::base::tokio::io::AsyncReadExt;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
-use crate::pipelines::new::processors::Processor;
-use common_exception::{ErrorCode, Result};
-use crate::formats::{InputFormat, InputState};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use poem::web::Multipart;
+
+use crate::formats::InputFormat;
+use crate::formats::InputState;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
 use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
 
 pub struct ParallelMultipartWorker {
@@ -20,11 +26,22 @@ pub struct ParallelMultipartWorker {
 }
 
 impl ParallelMultipartWorker {
-    pub fn create(multipart: Multipart, tx: Sender<Result<Box<dyn InputState>>>, input_format: Box<dyn InputFormat>) -> ParallelMultipartWorker {
-        ParallelMultipartWorker { multipart, input_format, tx: Some(tx) }
+    pub fn create(
+        multipart: Multipart,
+        tx: Sender<Result<Box<dyn InputState>>>,
+        input_format: Box<dyn InputFormat>,
+    ) -> ParallelMultipartWorker {
+        ParallelMultipartWorker {
+            multipart,
+            input_format,
+            tx: Some(tx),
+        }
     }
 
-    async fn send(tx: &Sender<Result<Box<dyn InputState>>>, data: Result<Box<dyn InputState>>) -> bool {
+    async fn send(
+        tx: &Sender<Result<Box<dyn InputState>>>,
+        data: Result<Box<dyn InputState>>,
+    ) -> bool {
         if let Err(cause) = tx.send(data).await {
             common_tracing::tracing::warn!("Multipart channel disconnect. {}", cause);
             return false;
@@ -74,18 +91,19 @@ impl MultipartWorkerNew for ParallelMultipartWorker {
                                     break 'read;
                                 }
                                 Ok(sz) => {
-                                    let mut buf_slice = match sz == buf.len() {
+                                    let buf_slice = match sz == buf.len() {
                                         true => &buf[..],
                                         false => &buf[0..sz],
                                     };
 
-                                    let read_size = match self.input_format.read_buf(buf_slice, &mut state) {
-                                        Ok(read_size) => read_size,
-                                        Err(cause) => {
-                                            Self::send(&tx, Err(cause)).await;
-                                            break 'outer;
-                                        }
-                                    };
+                                    let read_size =
+                                        match self.input_format.read_buf(buf_slice, &mut state) {
+                                            Ok(read_size) => read_size,
+                                            Err(cause) => {
+                                                Self::send(&tx, Err(cause)).await;
+                                                break 'outer;
+                                            }
+                                        };
 
                                     if read_size != buf.len() {
                                         let new_state = self.input_format.create_state();
@@ -97,7 +115,7 @@ impl MultipartWorkerNew for ParallelMultipartWorker {
                                     }
                                 }
                                 Err(cause) => {
-                                    if let Err(cause) = tx
+                                    if let Err(_cause) = tx
                                         .send(Err(ErrorCode::BadBytes(format!(
                                             "Read part to field bytes error, cause {:?}, filename: '{}'",
                                             cause,
@@ -123,7 +141,6 @@ impl MultipartWorkerNew for ParallelMultipartWorker {
         }
     }
 }
-
 
 enum State {
     Finished,
