@@ -263,11 +263,25 @@ impl Catalog for MutableCatalog {
         tenant: &str,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self
+        // `get_table_history` will not fetch the tables that created before the
+        // "metasrv time travel functions" is added.
+        // thus, only the table-infos of dropped tables are used.
+        let mut dropped = self
             .ctx
             .meta
             .get_table_history(ListTableReq::new(tenant, db_name))
+            .await?
+            .into_iter()
+            .filter(|i| i.meta.drop_on.is_some())
+            .collect::<Vec<_>>();
+
+        let mut table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(tenant, db_name))
             .await?;
+
+        table_infos.append(&mut dropped);
 
         self.load_tables(table_infos)
     }

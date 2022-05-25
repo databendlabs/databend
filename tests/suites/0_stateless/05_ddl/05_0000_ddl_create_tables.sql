@@ -4,7 +4,14 @@ DROP TABLE IF EXISTS t3;
 DROP TABLE IF EXISTS t4;
 
 CREATE TABLE t(c1 int) ENGINE = Null;
-SELECT COUNT(1) from system.tables where name = 't' and database = 'default' and dropped_on = 'NULL';
+
+-- As part of the functionality of time travel, system.tables now
+-- - contains dropped-tables
+-- - has an extra column `dropped_on`
+-- it is NOT backward compatible.
+--
+-- The following case is moved to 20_005_system_tables_with_dropped
+--SELECT COUNT(1) from system.tables where name = 't' and database = 'default' and dropped_on = 'NULL';
 
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
 CREATE TABLE t(c1 int) ENGINE = Null; -- {ErrorCode 2302}

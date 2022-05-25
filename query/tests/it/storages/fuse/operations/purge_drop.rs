@@ -17,7 +17,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
-use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 

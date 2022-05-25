@@ -40,9 +40,7 @@ async fn test_tables_table() -> Result<()> {
         }
     }
 
-    // regex is crazy, just remove the column "dropped_on" before assertions
-    // - do not know which line or pattern is not matched
-    // - we need better approaches for scenario like this
+    // hard to tweak the regex assertion  just remove the column "dropped_on" :)
     let mut without_dropped = Vec::new();
     for x in result {
         without_dropped.push(x.remove_column("dropped_on")?)
