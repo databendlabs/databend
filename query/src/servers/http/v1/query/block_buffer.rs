@@ -18,31 +18,30 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
+use crate::storages::result::ResultQueryInfo;
+use crate::storages::result::ResultTableWriter;
 
-struct BlockInfo {
-    pub num_row: usize,
+trait BlockGetter {}
+
+pub struct BlockInfo {
     pub part_info: PartInfoPtr,
+    pub reader: Arc<BlockReader>,
+}
+
+impl BlockInfo {
+    async fn get_block(&self) -> Result<DataBlock> {
+        self.reader.read(self.part_info.clone()).await
+    }
 }
 
 enum BlockDataOrInfo {
     Data(DataBlock),
     Info(BlockInfo),
-}
-
-impl BlockDataOrInfo {
-    fn num_rows(&self) -> usize {
-        match self {
-            BlockDataOrInfo::Data(d) => d.num_rows(),
-            BlockDataOrInfo::Info(i) => i.num_row,
-        }
-    }
 }
 
 pub struct BlockBufferInner {
@@ -51,7 +50,6 @@ pub struct BlockBufferInner {
     curr_rows: usize,
     max_rows: usize,
     blocks: VecDeque<BlockDataOrInfo>,
-    block_reader: Option<Arc<BlockReader>>,
     block_notify: Arc<Notify>,
 }
 
@@ -62,7 +60,6 @@ impl BlockBufferInner {
             push_stopped: false,
             curr_rows: 0,
             blocks: Default::default(),
-            block_reader: None,
             max_rows,
             block_notify,
         }
@@ -70,39 +67,37 @@ impl BlockBufferInner {
 }
 
 impl BlockBufferInner {
-    fn push_block(&mut self, block: DataBlock, part_info: PartInfoPtr) {
+    fn try_push_block(&mut self, block: DataBlock) -> bool {
         if self.pop_stopped {
-            return;
+            return false;
         }
-        let b = if self.curr_rows + block.num_rows() <= self.max_rows {
-            BlockDataOrInfo::Data(block)
+        if self.curr_rows + block.num_rows() >= self.max_rows {
+            false
         } else {
-            BlockDataOrInfo::Info(BlockInfo {
-                num_row: block.num_rows(),
-                part_info,
-            })
-        };
-        self.curr_rows += b.num_rows();
-        self.blocks.push_back(b);
+            self.push_block(block);
+            true
+        }
+    }
+
+    fn push_block(&mut self, block: DataBlock) {
+        self.curr_rows += block.num_rows();
+        self.blocks.push_back(BlockDataOrInfo::Data(block));
         self.block_notify.notify_one();
     }
 
-    pub fn init_reader(&mut self, ctx: Arc<QueryContext>, schema: DataSchemaRef) -> Result<()> {
-        let projection = (0..schema.fields().len())
-            .into_iter()
-            .collect::<Vec<usize>>();
+    fn push_info(&mut self, block_info: BlockInfo) {
+        self.blocks.push_back(BlockDataOrInfo::Info(block_info));
+        self.block_notify.notify_one();
+    }
 
-        self.block_reader = Some(BlockReader::create(
-            ctx.get_storage_operator()?,
-            schema,
-            projection,
-        )?);
-        Ok(())
+    fn stop_push(&mut self) {
+        self.push_stopped = true;
+        self.block_notify.notify_one();
     }
 
     async fn pop(&mut self) -> (Option<BlockDataOrInfo>, bool) {
         let block = self.blocks.pop_front();
-        if let Some(ref b) = block {
+        if let Some(BlockDataOrInfo::Data(b)) = &block {
             self.curr_rows -= b.num_rows();
         }
         let done = self.is_pop_done();
@@ -111,11 +106,6 @@ impl BlockBufferInner {
 
     fn is_pop_done(&self) -> bool {
         self.push_stopped && self.blocks.is_empty()
-    }
-
-    fn stop_push(&mut self) {
-        self.push_stopped = true;
-        self.block_notify.notify_one();
     }
 
     pub fn stop_pop(&mut self) {
@@ -142,15 +132,6 @@ impl BlockBuffer {
         })
     }
 
-    pub async fn init_reader(
-        self: &Arc<Self>,
-        ctx: Arc<QueryContext>,
-        schema: DataSchemaRef,
-    ) -> Result<()> {
-        let mut guard = self.buffer.lock().await;
-        guard.init_reader(ctx, schema)
-    }
-
     pub async fn pop(self: &Arc<Self>) -> Result<(Option<DataBlock>, bool)> {
         let (block, done) = {
             let mut guard = self.buffer.lock().await;
@@ -161,30 +142,10 @@ impl BlockBuffer {
             None => None,
             Some(o) => match o {
                 BlockDataOrInfo::Data(b) => Some(b),
-                BlockDataOrInfo::Info(p) => {
-                    let reader = {
-                        let guard = self.buffer.lock().await;
-                        guard
-                            .block_reader
-                            .as_ref()
-                            .ok_or_else(|| ErrorCode::UnknownException("block buffer pop fail"))?
-                            .clone()
-                    };
-                    Some(reader.read(p.part_info).await?)
-                }
+                BlockDataOrInfo::Info(i) => Some(i.get_block().await?),
             },
         };
         Ok((r, done))
-    }
-
-    pub async fn push(self: &Arc<Self>, block: DataBlock, part_info: PartInfoPtr) {
-        let mut guard = self.buffer.lock().await;
-        guard.push_block(block, part_info)
-    }
-
-    pub async fn stop_push(self: &Arc<Self>) {
-        let mut guard = self.buffer.lock().await;
-        guard.stop_push()
     }
 
     pub async fn stop_pop(self: &Arc<Self>) {
@@ -195,5 +156,101 @@ impl BlockBuffer {
     pub async fn is_pop_done(self: &Arc<Self>) -> bool {
         let guard = self.buffer.lock().await;
         guard.is_pop_done()
+    }
+
+    pub async fn try_push_block(&self, block: DataBlock) -> bool {
+        let mut guard = self.buffer.lock().await;
+        guard.try_push_block(block)
+    }
+
+    pub async fn push_info(&self, block_info: BlockInfo) {
+        let mut guard = self.buffer.lock().await;
+        guard.push_info(block_info)
+    }
+
+    async fn push(&self, block: DataBlock) -> Result<()> {
+        let mut guard = self.buffer.lock().await;
+        guard.push_block(block);
+        Ok(())
+    }
+
+    pub(crate) async fn stop_push(&self) -> Result<()> {
+        let mut guard = self.buffer.lock().await;
+        guard.stop_push();
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+pub trait BlockBufferWriter: Send {
+    async fn push(&mut self, block: DataBlock) -> Result<()>;
+    async fn stop_push(&mut self, abort: bool) -> Result<()>;
+}
+
+pub struct BlockBufferWriterMemOnly(pub Arc<BlockBuffer>);
+
+#[async_trait::async_trait]
+impl BlockBufferWriter for BlockBufferWriterMemOnly {
+    async fn push(&mut self, block: DataBlock) -> Result<()> {
+        self.0.push(block).await
+    }
+
+    async fn stop_push(&mut self, _abort: bool) -> Result<()> {
+        self.0.stop_push().await
+    }
+}
+
+pub struct BlockBufferWriterWithResultTable {
+    buffer: Arc<BlockBuffer>,
+    reader: Arc<BlockReader>,
+    writer: ResultTableWriter,
+}
+
+impl BlockBufferWriterWithResultTable {
+    pub async fn create(
+        buffer: Arc<BlockBuffer>,
+        ctx: Arc<QueryContext>,
+        query_info: ResultQueryInfo,
+    ) -> Result<Box<dyn BlockBufferWriter>> {
+        let schema = query_info.schema.clone();
+        let writer = ResultTableWriter::new(ctx.clone(), query_info).await?;
+        let projection = (0..schema.fields().len())
+            .into_iter()
+            .collect::<Vec<usize>>();
+
+        let reader = BlockReader::create(ctx.get_storage_operator()?, schema, projection)?;
+        Ok(Box::new(Self {
+            buffer,
+            reader,
+            writer,
+        }))
+    }
+}
+
+#[async_trait::async_trait]
+impl BlockBufferWriter for BlockBufferWriterWithResultTable {
+    async fn push(&mut self, block: DataBlock) -> Result<()> {
+        let block_clone = block.clone();
+        if self.buffer.try_push_block(block).await {
+            let _ = self.writer.append_block(block_clone).await?;
+        } else {
+            let part_info = self.writer.append_block(block_clone).await?;
+            let block_info = BlockInfo {
+                part_info,
+                reader: self.reader.clone(),
+            };
+            self.buffer.push_info(block_info).await;
+        }
+        Ok(())
+    }
+
+    async fn stop_push(&mut self, abort: bool) -> Result<()> {
+        if abort {
+            self.writer.abort().await?;
+        } else {
+            self.writer.commit().await?;
+        }
+        self.buffer.stop_push().await?;
+        Ok(())
     }
 }
