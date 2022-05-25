@@ -18,20 +18,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ExplainPlan;
-use common_planners::ExplainType;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizers;
-use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
-use crate::sql::BindContext;
-use crate::sql::Metadata;
 use crate::sql::MetadataRef;
 use crate::sql::Planner;
 

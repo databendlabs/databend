@@ -44,7 +44,6 @@ pub use metadata::MetadataRef;
 pub use metadata::TableEntry;
 
 use crate::pipelines::new::NewPipeline;
-use crate::sql::binder::BindResult;
 
 pub struct Planner {
     ctx: Arc<QueryContext>,
