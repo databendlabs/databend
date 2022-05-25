@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
@@ -25,7 +24,6 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
-use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct UnDropTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -50,14 +48,8 @@ impl Interpreter for UnDropTableInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.db.as_str();
-        let tbl_name = self.plan.table.as_str();
-        let tbl = self
-            .ctx
-            .get_table(catalog_name, db_name, tbl_name)
-            .await
-            .ok();
 
-        // TODO : add UserPrivilege::Type::UnDrop
+        // shall we add UserPrivilege::Type::UnDrop ?
         self.ctx
             .get_current_session()
             .validate_privilege(
@@ -65,15 +57,6 @@ impl Interpreter for UnDropTableInterpreter {
                 UserPrivilegeType::Drop,
             )
             .await?;
-
-        if let Some(table) = &tbl {
-            if table.get_table_info().engine() == VIEW_ENGINE {
-                return Err(ErrorCode::UnexpectedError(format!(
-                    "{}.{} is VIEW, please use `DROP VIEW {}.{}`",
-                    &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table
-                )));
-            }
-        };
 
         let catalog = self.ctx.get_catalog(catalog_name)?;
         catalog.undrop_table(self.plan.clone().into()).await?;
