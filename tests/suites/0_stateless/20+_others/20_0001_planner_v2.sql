@@ -231,4 +231,9 @@ select trim(both 'ab' from 'abab');
 select trim(both 'ab' from 'abcab');
 select trim(' abc ');
 
+-- Select Array Literal
+select '===Array Literal===';
+select [1, 2, 3];
+select [];
+
 set enable_planner_v2 = 0;
