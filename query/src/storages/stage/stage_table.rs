@@ -32,11 +32,11 @@ use common_streams::SendableDataBlockStream;
 
 use super::StageSource;
 use crate::formats::output_format::OutputFormatType;
-use crate::pipelines::new::processors::port::InputPort;
+
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::Sink;
-use crate::pipelines::new::processors::Sinker;
+
+
+
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
@@ -140,7 +140,7 @@ impl Table for StageTable {
         ctx: Arc<QueryContext>,
         _catalog_name: &str,
         operations: Vec<DataBlock>,
-        overwrite: bool,
+        _overwrite: bool,
     ) -> Result<()> {
         let format_name = format!(
             "{:?}",

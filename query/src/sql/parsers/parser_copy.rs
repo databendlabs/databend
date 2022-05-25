@@ -36,7 +36,7 @@ impl<'a> DfParser<'a> {
             Token::AtString(s) => {
                 format!("@{}", s)
             }
-            unexpected => {
+            _ => {
                 self.parser.prev_token();
                 "".to_string()
             }

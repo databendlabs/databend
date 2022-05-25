@@ -208,7 +208,6 @@ impl Interpreter for CopyInterpreter {
                 catalog_name,
                 db_name,
                 tbl_name,
-                tbl_id,
                 files,
                 pattern,
                 from,
