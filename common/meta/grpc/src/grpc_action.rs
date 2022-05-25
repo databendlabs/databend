@@ -16,7 +16,10 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::WatchRequest;
+use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::CreateShareReply;
 use common_meta_types::CreateShareReq;
 use common_meta_types::DropShareReply;
@@ -24,19 +27,29 @@ use common_meta_types::DropShareReq;
 use common_meta_types::GetKVReply;
 use common_meta_types::GetKVReq;
 use common_meta_types::GetShareReq;
+use common_meta_types::ListKVReply;
 use common_meta_types::ListKVReq;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MGetKVReq;
-use common_meta_types::PrefixListReply;
 use common_meta_types::ShareInfo;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::TxnReply;
+use common_meta_types::TxnRequest;
+use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
+use tonic::codegen::InterceptedService;
+use tonic::transport::Channel;
 use tonic::Request;
 
+use crate::grpc_client::AuthInterceptor;
+use crate::message::ExportReq;
+use crate::message::MakeClient;
+
+/// Bind a request type to its corresponding response type.
 pub trait RequestFor {
     type Reply;
 }
 
+// TODO: reduce this and MetaGrpcReadReq into one enum?
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcWriteReq {
@@ -127,17 +140,27 @@ impl RequestFor for MGetKVReq {
     type Reply = MGetKVReply;
 }
 
-// impl RequestFor for PrefixListReq {
-//     type Reply = PrefixListReply;
-// }
-
 impl RequestFor for ListKVReq {
-    type Reply = PrefixListReply;
+    type Reply = ListKVReply;
 }
 
 impl RequestFor for UpsertKVReq {
-    type Reply = UpsertKVActionReply;
+    type Reply = UpsertKVReply;
 }
+
+impl RequestFor for WatchRequest {
+    type Reply = tonic::codec::Streaming<WatchResponse>;
+}
+
+impl RequestFor for ExportReq {
+    type Reply = tonic::codec::Streaming<WatchResponse>;
+}
+
+impl RequestFor for MakeClient {
+    type Reply = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
+}
+
+// -- share
 
 impl RequestFor for CreateShareReq {
     type Reply = CreateShareReply;
@@ -149,4 +172,8 @@ impl RequestFor for DropShareReq {
 
 impl RequestFor for GetShareReq {
     type Reply = Arc<ShareInfo>;
+}
+
+impl RequestFor for TxnRequest {
+    type Reply = TxnReply;
 }

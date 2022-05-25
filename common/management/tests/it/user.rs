@@ -22,16 +22,16 @@ use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_types::AuthInfo;
 use common_meta_types::GetKVReply;
+use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::PasswordHashMethod;
-use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use common_meta_types::UserIdentity;
 use mockall::predicate::*;
@@ -45,7 +45,7 @@ mock! {
         async fn upsert_kv(
             &self,
             act: UpsertKVReq,
-        ) -> Result<UpsertKVActionReply, MetaError>;
+        ) -> Result<UpsertKVReply, MetaError>;
 
         async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
 
@@ -54,7 +54,7 @@ mock! {
             key: &[String],
         ) -> Result<MGetKVReply,MetaError>;
 
-        async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
+        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
 
         async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
 
@@ -109,7 +109,7 @@ mod add {
                     None,
                 )))
                 .times(1)
-                .return_once(|_u| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(1, v)))));
+                .return_once(|_u| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
             let user_mgr = UserMgr::create(api, "tenant1")?;
             let res = user_mgr.add_user(user_info);
@@ -130,7 +130,7 @@ mod add {
                 )))
                 .times(1)
                 .returning(|_u| {
-                    Ok(UpsertKVActionReply::new(
+                    Ok(UpsertKVReply::new(
                         Some(SeqV::new(1, vec![])),
                         Some(SeqV::new(1, vec![])),
                     ))
@@ -160,7 +160,7 @@ mod add {
                     None,
                 )))
                 .times(1)
-                .returning(|_u| Ok(UpsertKVActionReply::new(None, None)));
+                .returning(|_u| Ok(UpsertKVReply::new(None, None)));
 
             let kv = Arc::new(api);
 
@@ -421,7 +421,7 @@ mod drop {
                 None,
             )))
             .times(1)
-            .returning(|_k| Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None)));
+            .returning(|_k| Ok(UpsertKVReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), None);
@@ -447,7 +447,7 @@ mod drop {
                 None,
             )))
             .times(1)
-            .returning(|_k| Ok(UpsertKVActionReply::new(None, None)));
+            .returning(|_k| Ok(UpsertKVReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), None);
@@ -522,7 +522,7 @@ mod update {
                 None,
             )))
             .times(1)
-            .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
+            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(0, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
@@ -601,7 +601,7 @@ mod update {
                 act.key == test_key.as_str() && act.seq == MatchSeq::GE(1)
             }))
             .times(1)
-            .returning(|_| Ok(UpsertKVActionReply::new(None, None)));
+            .returning(|_| Ok(UpsertKVReply::new(None, None)));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
@@ -666,7 +666,7 @@ mod set_user_privileges {
                 None,
             )))
             .times(1)
-            .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
+            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(0, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;

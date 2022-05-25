@@ -19,14 +19,15 @@ use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_grpc::ClientHandle;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::GetKVReply;
+use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MetaError;
-use common_meta_types::PrefixListReply;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
@@ -39,7 +40,7 @@ pub struct MetaStoreProvider {
 #[derive(Clone)]
 pub enum MetaStore {
     L(Arc<MetaEmbedded>),
-    R(Arc<MetaGrpcClient>),
+    R(Arc<ClientHandle>),
 }
 
 impl MetaStore {
@@ -57,10 +58,7 @@ impl MetaStore {
 
 #[async_trait::async_trait]
 impl KVApi for MetaStore {
-    async fn upsert_kv(
-        &self,
-        act: UpsertKVReq,
-    ) -> std::result::Result<UpsertKVActionReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> std::result::Result<UpsertKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.upsert_kv(act).await,
             MetaStore::R(x) => x.upsert_kv(act).await,
@@ -81,10 +79,7 @@ impl KVApi for MetaStore {
         }
     }
 
-    async fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> std::result::Result<PrefixListReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> std::result::Result<ListKVReply, MetaError> {
         match self {
             MetaStore::L(x) => x.prefix_list_kv(prefix).await,
             MetaStore::R(x) => x.prefix_list_kv(prefix).await,

@@ -50,4 +50,16 @@ impl RpcClientConf {
     pub fn local_mode(&self) -> bool {
         self.address.is_empty() && self.endpoints.is_empty()
     }
+
+    /// Returns a list of endpoints.
+    ///
+    /// It is compatible with the old single `address` config, by converting it to a vec.
+    pub fn get_endpoints(&self) -> Vec<String> {
+        if !self.endpoints.is_empty() {
+            self.endpoints.clone()
+        } else {
+            let addr = self.address.to_string();
+            vec![addr]
+        }
+    }
 }

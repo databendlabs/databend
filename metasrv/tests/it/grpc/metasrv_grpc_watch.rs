@@ -44,11 +44,9 @@ async fn test_watch_main(
 ) -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None).await?;
 
-    let mut grpc_client = client.make_conn().await?;
+    // let mut grpc_client = client.make_conn().await?;
 
-    let request = tonic::Request::new(watch);
-
-    let mut client_stream = grpc_client.watch(request).await?.into_inner();
+    let mut client_stream = client.request(watch).await?;
 
     let _h = tokio::spawn(upsert_kv_client_main(addr, updates));
 
