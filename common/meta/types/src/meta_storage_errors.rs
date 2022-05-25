@@ -120,20 +120,6 @@ impl UndropDbWithNoDropTime {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
-#[error("UndropDbAlreadyExists: undrop {db_name} already exists")]
-pub struct UndropDbAlreadyExists {
-    db_name: String,
-}
-
-impl UndropDbAlreadyExists {
-    pub fn new(db_name: impl Into<String>) -> Self {
-        Self {
-            db_name: db_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
 #[error("UndropDbHasNoHistory: undrop {db_name} has no db id history")]
 pub struct UndropDbHasNoHistory {
     db_name: String,
@@ -398,9 +384,6 @@ pub enum AppError {
     UndropDbWithNoDropTime(#[from] UndropDbWithNoDropTime),
 
     #[error(transparent)]
-    UndropDbAlreadyExists(#[from] UndropDbAlreadyExists),
-
-    #[error(transparent)]
     UndropDbHasNoHistory(#[from] UndropDbHasNoHistory),
 
     #[error(transparent)]
@@ -440,12 +423,6 @@ impl AppErrorMessage for DatabaseAlreadyExists {
 impl AppErrorMessage for CreateDatabaseWithDropTime {
     fn message(&self) -> String {
         format!("Create database '{}' with drop time", self.db_name)
-    }
-}
-
-impl AppErrorMessage for UndropDbAlreadyExists {
-    fn message(&self) -> String {
-        format!("Undrop database '{}' already exists", self.db_name)
     }
 }
 
@@ -542,7 +519,6 @@ impl From<AppError> for ErrorCode {
             AppError::CreateDatabaseWithDropTime(err) => {
                 ErrorCode::CreateDatabaseWithDropTime(err.message())
             }
-            AppError::UndropDbAlreadyExists(err) => ErrorCode::UndropDbAlreadyExists(err.message()),
             AppError::UndropDbHasNoHistory(err) => ErrorCode::UndropDbHasNoHistory(err.message()),
             AppError::UndropTableWithNoDropTime(err) => {
                 ErrorCode::UndropTableWithNoDropTime(err.message())

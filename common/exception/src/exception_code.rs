@@ -181,7 +181,6 @@ build_exceptions! {
     UndropTableAlreadyExists(2308),
     UndropTableHasNoHistory(2309),
     CreateDatabaseWithDropTime(2310),
-    UndropDbAlreadyExists(2311),
     UndropDbHasNoHistory(2312),
     UndropTableWithNoDropTime(2313),
     DropTableWithDropTime(2314),

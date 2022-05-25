@@ -131,7 +131,6 @@ pub use meta_storage_errors::ShareAlreadyExists;
 pub use meta_storage_errors::TableAlreadyExists;
 pub use meta_storage_errors::TableVersionMismatched;
 pub use meta_storage_errors::ToMetaStorageError;
-pub use meta_storage_errors::UndropDbAlreadyExists;
 pub use meta_storage_errors::UndropDbHasNoHistory;
 pub use meta_storage_errors::UndropDbWithNoDropTime;
 pub use meta_storage_errors::UndropTableAlreadyExists;
