@@ -236,4 +236,8 @@ select '===Array Literal===';
 select [1, 2, 3];
 select [];
 
+select '====Correlated Subquery====';
+select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
+
 set enable_planner_v2 = 0;

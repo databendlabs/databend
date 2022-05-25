@@ -27,6 +27,7 @@ use crate::sql::plans::PlanType;
 /// Cartesian apply join operator.
 #[derive(Debug, Clone)]
 pub struct CrossApply {
+    pub subquery_output: ColumnSet,
     pub correlated_columns: ColumnSet,
 }
 

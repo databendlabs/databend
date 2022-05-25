@@ -23,7 +23,6 @@ use enum_dispatch::enum_dispatch;
 use crate::sql::binder::ColumnBinding;
 use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::SExpr;
-use crate::sql::BindContext;
 
 #[enum_dispatch]
 pub trait ScalarExpr {
@@ -275,7 +274,6 @@ pub struct SubqueryExpr {
     pub data_type: DataTypeImpl,
     pub allow_multi_rows: bool,
     pub outer_columns: ColumnSet,
-    pub output_context: Box<BindContext>,
 }
 
 impl ScalarExpr for SubqueryExpr {

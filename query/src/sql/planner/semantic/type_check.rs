@@ -348,6 +348,11 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
+            Expr::Exists { subquery, .. } => {
+                self.resolve_subquery(SubqueryType::Exists, subquery, true, None)
+                    .await
+            }
+
             Expr::Subquery { subquery, .. } => {
                 self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
                     .await
@@ -736,7 +741,6 @@ impl<'a> TypeChecker<'a> {
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
             data_type: data_type.clone(),
-            output_context: Box::new(output_context),
             allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
