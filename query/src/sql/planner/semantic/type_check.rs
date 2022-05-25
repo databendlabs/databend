@@ -413,6 +413,8 @@ impl<'a> TypeChecker<'a> {
                 expr, trim_where, ..
             } => self.try_resolve_trim_function(expr, trim_where).await,
 
+            Expr::Array { exprs, .. } => self.resolve_array(exprs).await,
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -844,5 +846,43 @@ impl<'a> TypeChecker<'a> {
         let data_type = value.data_type();
 
         Ok((value, data_type))
+    }
+
+    async fn resolve_array(&self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut values = Vec::with_capacity(exprs.len());
+        let mut first_data_type = None;
+        for expr in exprs.iter() {
+            match expr {
+                Expr::Literal { lit, .. } => {
+                    let (value, data_type) = self.resolve_literal(lit, None)?;
+                    if let Some(dy) = first_data_type.as_ref() {
+                        if !data_type.eq(dy) {
+                            return Err(ErrorCode::SemanticError(expr.span().display_error(
+                                "Values in array should have same type".to_string(),
+                            )));
+                        }
+                    } else {
+                        first_data_type = Some(data_type);
+                    }
+                    values.push(value);
+                }
+                _ => {
+                    return Err(ErrorCode::SemanticError(
+                        expr.span()
+                            .display_error("Array only supports literal exprs".to_string()),
+                    ));
+                }
+            }
+        }
+        let array = DataValue::Array(values);
+        let data_type = array.data_type();
+        Ok((
+            ConstantExpr {
+                value: array,
+                data_type: data_type.clone(),
+            }
+            .into(),
+            data_type,
+        ))
     }
 }

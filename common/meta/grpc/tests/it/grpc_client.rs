@@ -52,7 +52,8 @@ async fn test_grpc_client_handshake_timeout() {
     let res = MetaGrpcClient::try_create(vec![srv_addr], "", "", Some(timeout), None)
         .await
         .unwrap();
-    let client = res.make_conn().await;
+
+    let client = res.make_client().await;
     let got = client.unwrap_err();
     let got = ErrorCode::from(got).message();
     let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";

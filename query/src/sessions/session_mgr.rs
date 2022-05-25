@@ -80,6 +80,7 @@ impl SessionManager {
             if storage_num_cpus == 0 {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }
+
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
 
@@ -88,6 +89,7 @@ impl SessionManager {
         let storage_operator = Self::init_storage_operator(&conf)
             .await?
             .layer(DalRuntime::new(storage_runtime.inner()));
+
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));

@@ -20,4 +20,5 @@ pub mod service;
 
 pub use expression_evaluator::ExpressionEvaluator;
 pub use hashtable::*;
-pub use meta::MetaClientProvider;
+pub use meta::MetaStore;
+pub use meta::MetaStoreProvider;

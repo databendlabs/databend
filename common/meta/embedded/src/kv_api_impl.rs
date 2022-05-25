@@ -16,19 +16,19 @@ use async_trait::async_trait;
 use common_meta_api::KVApi;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_types::GetKVReply;
+use common_meta_types::ListKVReply;
 use common_meta_types::MGetKVReply;
 use common_meta_types::MetaError;
-use common_meta_types::PrefixListReply;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 
 use crate::MetaEmbedded;
 
 #[async_trait]
 impl KVApi for MetaEmbedded {
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVActionReply, MetaError> {
+    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await
     }
@@ -43,7 +43,7 @@ impl KVApi for MetaEmbedded {
         sm.mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.prefix_list_kv(prefix).await
     }

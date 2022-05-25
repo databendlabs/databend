@@ -19,6 +19,7 @@ use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 
@@ -163,7 +164,11 @@ impl BlockBuffer {
                 BlockDataOrInfo::Info(p) => {
                     let reader = {
                         let guard = self.buffer.lock().await;
-                        guard.block_reader.as_ref().unwrap().clone()
+                        guard
+                            .block_reader
+                            .as_ref()
+                            .ok_or_else(|| ErrorCode::UnknownException("block buffer pop fail"))?
+                            .clone()
                     };
                     Some(reader.read(p.part_info).await?)
                 }

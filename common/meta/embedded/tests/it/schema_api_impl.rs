@@ -77,6 +77,14 @@ async fn test_meta_embedded_table_drop_undrop_list_history() -> anyhow::Result<(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_embedded_database_drop_undrop_list_history() -> anyhow::Result<()> {
+    let mt = MetaEmbedded::new_temp().await?;
+    SchemaApiTestSuite {}
+        .database_drop_undrop_list_history(&mt)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_table_update_meta() -> anyhow::Result<()> {
     let mt = MetaEmbedded::new_temp().await?;
     SchemaApiTestSuite {}.update_table_meta(&mt).await

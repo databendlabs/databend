@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod backends;
 mod catalog_context;
 mod database_catalog;
 mod immutable_catalog;

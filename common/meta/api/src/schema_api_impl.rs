@@ -72,7 +72,6 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
 use common_meta_types::UndropDatabaseReply;
 use common_meta_types::UndropDatabaseReq;
-use common_meta_types::UndropDbAlreadyExists;
 use common_meta_types::UndropDbHasNoHistory;
 use common_meta_types::UndropDbWithNoDropTime;
 use common_meta_types::UndropTableAlreadyExists;
@@ -274,8 +273,11 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_db_or_err(self, name_key, format!("undrop_database: {}", &name_key)).await;
 
             if res.is_ok() {
-                return Err(MetaError::AppError(AppError::UndropDbAlreadyExists(
-                    UndropDbAlreadyExists::new(&name_key.db_name),
+                return Err(MetaError::AppError(AppError::DatabaseAlreadyExists(
+                    DatabaseAlreadyExists::new(
+                        &name_key.db_name,
+                        format!("undrop_database: {} has already existed", name_key.db_name),
+                    ),
                 )));
             }
 
@@ -312,7 +314,7 @@ impl<KV: KVApi> SchemaApi for KV {
                 }
             };
 
-            // get tb_meta of the last db id
+            // get db_meta of the last db id
             let dbid = DatabaseId { db_id };
             let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
                 get_struct_value(self, &dbid).await?;
@@ -398,12 +400,14 @@ impl<KV: KVApi> SchemaApi for KV {
                 get_struct_value(self, &dbid_idlist).await?;
             let mut db_id_list: DbIdList;
             if db_id_list_seq == 0 {
+                // may the the database is created before add db_id_list, so we just add the id into the list.
                 db_id_list = DbIdList::new();
                 db_id_list.append(old_db_id);
             } else {
                 match db_id_list_opt {
                     Some(list) => db_id_list = list,
                     None => {
+                        // may the the database is created before add db_id_list, so we just add the id into the list.
                         db_id_list = DbIdList::new();
                         db_id_list.append(old_db_id);
                     }
@@ -995,14 +999,14 @@ impl<KV: KVApi> SchemaApi for KV {
 
             let mut tb_id_list: TableIdList;
             if tb_id_list_seq == 0 {
-                // tb_id_list not exists, may be is old table, so append table id into list
+                // may the the table is created before add db_id_list, so we just add the id into the list.
                 tb_id_list = TableIdList::new();
                 tb_id_list.append(table_id);
             } else {
                 match tb_id_list_opt {
                     Some(list) => tb_id_list = list,
                     None => {
-                        // tb_id_list not exists, may be is old table, so append table id into list
+                        // may the the table is created before add db_id_list, so we just add the id into the list.
                         tb_id_list = TableIdList::new();
                         tb_id_list.append(table_id);
                     }

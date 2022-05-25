@@ -28,7 +28,7 @@ use common_meta_types::NodeInfo;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 
 use crate::cluster::ClusterApi;
@@ -127,12 +127,12 @@ impl ClusterApi for ClusterMgr {
         ));
 
         match upsert_node.await? {
-            UpsertKVActionReply {
+            UpsertKVReply {
                 ident: None,
                 prev: Some(_),
                 result: None,
             } => Ok(()),
-            UpsertKVActionReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
+            UpsertKVReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
                 "unknown node {:?}",
                 node_id
             ))),
@@ -152,12 +152,12 @@ impl ClusterApi for ClusterMgr {
                 .upsert_kv(UpsertKVReq::new(&node_key, seq, Operation::AsIs, meta));
 
         match upsert_meta.await? {
-            UpsertKVActionReply {
+            UpsertKVReply {
                 ident: None,
                 prev: Some(_),
                 result: Some(SeqV { seq: s, .. }),
             } => Ok(s),
-            UpsertKVActionReply { .. } => self.add_node(node.clone()).await,
+            UpsertKVReply { .. } => self.add_node(node.clone()).await,
         }
     }
 }

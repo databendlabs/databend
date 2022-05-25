@@ -287,3 +287,6 @@ c
 
 c
 abc
+===Array Literal===
+[1, 2, 3]
+[]

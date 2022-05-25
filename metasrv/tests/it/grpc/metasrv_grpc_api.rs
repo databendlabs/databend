@@ -22,7 +22,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MetaRaftError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVReply;
 use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 use pretty_assertions::assert_eq;
@@ -61,7 +61,7 @@ async fn test_restart() -> anyhow::Result<()> {
         tracing::debug!("set kv res: {:?}", res);
         let res = res?;
         assert_eq!(
-            UpsertKVActionReply::new(
+            UpsertKVReply::new(
                 None,
                 Some(SeqV {
                     seq: 1,
@@ -222,7 +222,7 @@ async fn test_join() -> anyhow::Result<()> {
             tracing::debug!("set kv res: {:?}", res);
             let res = res?;
             assert_eq!(
-                UpsertKVActionReply::new(
+                UpsertKVReply::new(
                     None,
                     Some(SeqV {
                         seq: 1 + i as u64,
