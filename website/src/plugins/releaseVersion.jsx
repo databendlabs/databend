@@ -27,7 +27,10 @@ export function getLatest(){
           if (button?.getAttribute('aria-label') === 'Copy code to clipboard') {
             button.addEventListener("click", ()=>{
               setTimeout(()=>{
-                const text = button?.previousSibling?.innerText;
+                let text = button?.previousSibling?.innerText;
+                if (button?.parentNode?.previousSibling) {
+                  text = button?.parentNode.previousSibling?.innerText;;
+                }
                 copyToClipboard(String(text).trim())
                }, 1)
             }, false);
