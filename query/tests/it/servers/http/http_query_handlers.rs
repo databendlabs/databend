@@ -969,7 +969,7 @@ async fn test_download() -> Result<()> {
     // succeeded query
     let resp = download(&ep, &result.id).await;
     assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
-    let exp = "0\t1\n1\t2\n";
+    let exp = "0,1\n1,2\n";
     assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
 
     // not exist
@@ -977,6 +977,28 @@ async fn test_download() -> Result<()> {
     let exp = "not exists";
     assert!(resp.take_body().into_string().await.unwrap().contains(exp));
     assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
+
+    // basic check for formats
+    let query_id = &result.id;
+    for (fmt, formatted) in [
+        ("tsv", "0\t1\n1\t2\n"),
+        ("csv", "0,1\n1,2\n"),
+        (
+            "ndjson",
+            "{\"number\":0,\"(number + 1)\":1}\n{\"number\":1,\"(number + 1)\":2}\n",
+        ),
+        ("values", "(0,1),(1,2)"),
+    ] {
+        let uri = format!("/v1/query/{}/download?format={}", query_id, fmt);
+        let resp = get_uri(&ep, &uri).await;
+        assert_eq!(resp.status(), StatusCode::OK, "{} {}", fmt, formatted);
+        assert_eq!(
+            resp.into_body().into_string().await.unwrap(),
+            formatted,
+            "{}",
+            fmt
+        );
+    }
     Ok(())
 }
 
