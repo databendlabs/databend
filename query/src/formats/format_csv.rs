@@ -163,6 +163,10 @@ impl CsvInputFormat {
 }
 
 impl InputFormat for CsvInputFormat {
+    fn support_parallel(&self) -> bool {
+        true
+    }
+
     fn create_state(&self) -> Box<dyn InputState> {
         Box::new(CsvInputState {
             quotes: 0,

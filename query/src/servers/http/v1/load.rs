@@ -50,7 +50,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::StreamSourceV2;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::servers::http::v1::multipart_format::MultipartFormat;
-use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
+use crate::servers::http::v1::multipart_format::MultipartWorker;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sql::PlanParser;
@@ -406,7 +406,7 @@ fn format_source_pipe_builder(
     schema: DataSchemaRef,
     multipart: Multipart,
     format_settings: &FormatSettings,
-) -> Result<(Box<dyn MultipartWorkerNew>, SourcePipeBuilder)> {
+) -> Result<(Box<dyn MultipartWorker>, SourcePipeBuilder)> {
     MultipartFormat::input_sources(
         format,
         context.clone(),

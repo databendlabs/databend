@@ -29,7 +29,7 @@ use crate::servers::http::v1::sequential_format_source::SequentialMultipartWorke
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
-pub trait MultipartWorkerNew: Send {
+pub trait MultipartWorker: Send {
     async fn work(&mut self);
 }
 
@@ -42,7 +42,7 @@ impl MultipartFormat {
         multipart: Multipart,
         schema: DataSchemaRef,
         settings: FormatSettings,
-    ) -> Result<(Box<dyn MultipartWorkerNew>, SourcePipeBuilder)> {
+    ) -> Result<(Box<dyn MultipartWorker>, SourcePipeBuilder)> {
         let mut source_pipe_builder = SourcePipeBuilder::create();
         let input_format =
             FormatFactory::instance().get_input(name, schema.clone(), settings.clone())?;

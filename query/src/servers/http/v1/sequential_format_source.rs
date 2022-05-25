@@ -1,3 +1,17 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::mem::replace;
 use std::sync::Arc;
 
@@ -17,7 +31,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::servers::http::v1::multipart_format::MultipartWorkerNew;
+use crate::servers::http::v1::multipart_format::MultipartWorker;
 
 pub struct SequentialMultipartWorker {
     multipart: Multipart,
@@ -34,7 +48,7 @@ impl SequentialMultipartWorker {
 }
 
 #[async_trait::async_trait]
-impl MultipartWorkerNew for SequentialMultipartWorker {
+impl MultipartWorker for SequentialMultipartWorker {
     async fn work(&mut self) {
         if let Some(tx) = self.tx.take() {
             'outer: loop {
