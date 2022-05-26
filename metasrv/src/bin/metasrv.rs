@@ -26,7 +26,6 @@ use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::init_meta_metrics_recorder;
-use databend_meta::metrics::MetricService;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -53,14 +52,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     let mut stop_handler = StopHandle::create();
     let stop_tx = StopHandle::install_termination_handle();
-
-    // Metric API service.
-    {
-        let mut srv = MetricService::create(conf.clone());
-        srv.start().await.expect("Failed to start metrics server");
-        tracing::info!("Metric API server listening on {}", conf.metric_api_address);
-        stop_handler.push(srv);
-    }
 
     // HTTP API service.
     {
