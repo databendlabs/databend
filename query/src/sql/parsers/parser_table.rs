@@ -105,9 +105,12 @@ impl<'a> DfParser<'a> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
 
+        let all = self.parser.parse_keyword(Keyword::ALL);
+
         let drop = DfDropTable {
             if_exists,
             name: table_name,
+            all,
         };
 
         Ok(DfStatement::DropTable(drop))
