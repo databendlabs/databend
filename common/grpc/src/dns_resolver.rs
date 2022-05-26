@@ -141,7 +141,7 @@ impl Future for DNSServiceFuture {
 pub struct ConnectionFactory;
 
 impl ConnectionFactory {
-    pub fn create_rpc_channel(
+    pub async fn create_rpc_channel(
         addr: impl ToString,
         timeout: Option<Duration>,
         rpc_client_config: Option<RpcClientTlsConfig>,
@@ -153,7 +153,8 @@ impl ConnectionFactory {
         inner_connector.set_keepalive(None);
         inner_connector.enforce_http(false);
 
-        match endpoint.connect_with_connector_lazy(inner_connector) {
+        // check connection immediately
+        match endpoint.connect_with_connector(inner_connector).await {
             Ok(channel) => Ok(channel),
             Err(error) => Err(GrpcConnectionError::CannotConnect {
                 uri: endpoint.uri().to_string(),
