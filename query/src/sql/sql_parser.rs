@@ -374,9 +374,10 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_show(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let full: bool = self.consume_token("FULL");
-        if self.consume_token("TABLES") {
-            self.parse_show_tables(full)
+        if self.consume_token("FULL") && self.consume_token("TABLES") {
+            self.parse_show_tables(true)
+        } else if self.consume_token("TABLES") {
+            self.parse_show_tables(false)
         } else if self.consume_token("TABLE") && self.consume_token("STATUS") {
             self.parse_show_tab_stat()
         } else if self.consume_token("DATABASES") || self.consume_token("SCHEMAS") {
@@ -401,6 +402,8 @@ impl<'a> DfParser<'a> {
             self.parse_show_functions()
         } else if self.consume_token("ENGINES") {
             Ok(DfStatement::ShowEngines(DfShowEngines))
+        } else if self.consume_token("STAGES") {
+            self.parse_show_stages()
         } else {
             self.expected("show statement", self.parser.peek_token())
         }

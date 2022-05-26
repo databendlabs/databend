@@ -54,6 +54,7 @@ impl SystemDatabase {
             )),
             system::EnginesTable::create(sys_db_meta.next_table_id()),
             system::RolesTable::create(sys_db_meta.next_table_id()),
+            system::StagesTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {
