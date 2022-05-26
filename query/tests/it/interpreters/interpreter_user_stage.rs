@@ -14,6 +14,7 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
+use common_meta_types::TenantQuota;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::*;
 use futures::StreamExt;
@@ -66,6 +67,27 @@ async fn test_user_stage_interpreter() -> Result<()> {
     let user_mgr = ctx.get_user_manager();
     let stage = user_mgr.get_stage(&tenant, "test_stage").await;
     assert!(stage.is_ok());
+
+    // quota limit
+    {
+        let quota_api = user_mgr.get_tenant_quota_api_client(&tenant)?;
+        let quota = TenantQuota {
+            max_stages: 1,
+            ..Default::default()
+        };
+        quota_api.set_quota(&quota, None).await?;
+        let query =
+            "CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CreateUserStageInterpreter");
+        let res = executor.execute(None).await;
+        assert!(res.is_err());
+        assert_eq!(
+            res.err().unwrap().to_string(),
+            "Code: 2903, displayText = Max stages quota exceeded 1."
+        )
+    }
 
     // drop
     {

@@ -52,7 +52,10 @@ impl Interpreter for CreateUserInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
+
         let user_mgr = self.ctx.get_user_manager();
+        user_mgr.ensure_builtin_roles(&tenant).await?;
+
         let user_info = UserInfo {
             auth_info: plan.auth_info.clone(),
             name: plan.user.username,

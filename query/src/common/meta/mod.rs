@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_client;
+mod meta_store;
 
-pub use meta_client::MetaStore;
-pub use meta_client::MetaStoreProvider;
+pub use meta_store::MetaStore;
+pub use meta_store::MetaStoreProvider;

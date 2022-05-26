@@ -230,6 +230,10 @@ impl<'a> DfParser<'a> {
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
+                        "UNDROP" => {
+                            self.parser.next_token();
+                            self.parse_undrop()
+                        }
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -353,6 +357,16 @@ impl<'a> DfParser<'a> {
                 Keyword::FUNCTION => self.parse_drop_udf(),
                 Keyword::STAGE => self.parse_drop_stage(),
                 Keyword::VIEW => self.parse_drop_view(),
+                _ => self.expected("drop statement", Token::Word(w)),
+            },
+            unexpected => self.expected("drop statement", unexpected),
+        }
+    }
+
+    fn parse_undrop(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_undrop_table(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),

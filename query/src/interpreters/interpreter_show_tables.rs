@@ -50,24 +50,57 @@ impl ShowTablesInterpreter {
         }
 
         let showfull = self.plan.showfull;
-        let select_cols = if showfull {
-            format!(
-                "table_name as Tables_in_{}, table_type as Table_type, table_catalog, engine, create_time, num_rows, data_size, data_compressed_size, index_size",
-                database
-            )
+
+        let mut select_builder = SimpleSelectBuilder::from("information_schema.tables");
+
+        if showfull {
+            select_builder
+                .with_column(format!("table_name as Tables_in_{database}"))
+                .with_column("table_type as Table_type")
+                .with_column("table_catalog")
+                .with_column("engine")
+                .with_column("create_time");
+            if self.plan.with_history {
+                select_builder.with_column("drop_time");
+            } else {
+                select_builder
+                    .with_column("num_rows")
+                    .with_column("data_size")
+                    .with_column("data_compressed_size")
+                    .with_column("index_size");
+            };
         } else {
-            format!("table_name as Tables_in_{}", database)
+            select_builder.with_column(format!("table_name as Tables_in_{database}"));
+            if self.plan.with_history {
+                select_builder.with_column("drop_time");
+            };
+        }
+
+        select_builder
+            .with_order_by("table_schema")
+            .with_order_by("table_name");
+
+        // filter out dropped tables if not showing history
+        if !self.plan.with_history {
+            select_builder.with_filter("drop_time = 'NULL'");
         };
 
         match &self.plan.kind {
             PlanShowKind::All => {
-                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' ORDER BY table_schema, table_name", select_cols, database))
+                select_builder.with_filter(format!("table_schema = '{database}'"));
+                Ok(select_builder.build())
             }
             PlanShowKind::Like(v) => {
-                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND table_name LIKE {} ORDER BY table_schema, table_name", select_cols, database, v))
+                select_builder
+                    .with_filter(format!("table_schema = '{database}'"))
+                    .with_filter(format!("table_name LIKE {v}"));
+                Ok(select_builder.build())
             }
             PlanShowKind::Where(v) => {
-                Ok(format!("SELECT {} FROM information_schema.tables WHERE table_schema = '{}' AND ({}) ORDER BY table_schema, table_name", select_cols, database, v))
+                select_builder
+                    .with_filter(format!("table_schema = '{database}'"))
+                    .with_filter(format!("({v})"));
+                Ok(select_builder.build())
             }
         }
     }
@@ -93,5 +126,69 @@ impl Interpreter for ShowTablesInterpreter {
         } else {
             return Err(ErrorCode::LogicalError("Show tables build query error"));
         }
+    }
+}
+
+struct SimpleSelectBuilder {
+    from: String,
+    columns: Vec<String>,
+    filters: Vec<String>,
+    order_bys: Vec<String>,
+}
+
+impl SimpleSelectBuilder {
+    fn from(table_name: &str) -> SimpleSelectBuilder {
+        SimpleSelectBuilder {
+            from: table_name.to_owned(),
+            columns: vec![],
+            filters: vec![],
+            order_bys: vec![],
+        }
+    }
+    fn with_column(&mut self, col_name: impl Into<String>) -> &mut Self {
+        self.columns.push(col_name.into());
+        self
+    }
+
+    fn with_filter(&mut self, col_name: impl Into<String>) -> &mut Self {
+        self.filters.push(col_name.into());
+        self
+    }
+
+    fn with_order_by(&mut self, order_by: &str) -> &mut Self {
+        self.order_bys.push(order_by.to_owned());
+        self
+    }
+
+    fn build(self) -> String {
+        let columns = {
+            let s = self.columns.join(",");
+            if !s.is_empty() {
+                s
+            } else {
+                "*".to_owned()
+            }
+        };
+
+        let order_bys = {
+            let s = self.order_bys.join(",");
+            if !s.is_empty() {
+                format!("ORDER BY {s}")
+            } else {
+                s
+            }
+        };
+
+        let filters = {
+            let s = self.filters.join(" and ");
+            if !s.is_empty() {
+                format!("where {s}")
+            } else {
+                "".to_owned()
+            }
+        };
+
+        let from = self.from;
+        format!("SELECT {columns} FROM {from} {filters} {order_bys} ")
     }
 }

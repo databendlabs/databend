@@ -32,6 +32,8 @@ impl<'a> DfParser<'a> {
     // parse show tables.
     pub(crate) fn parse_show_tables(&mut self, full: bool) -> Result<DfStatement<'a>, ParserError> {
         let mut fromdb = None;
+        let history = self.consume_token("HISTORY");
+
         if self.consume_token("FROM") | self.consume_token("IN") {
             fromdb = Some(self.parser.parse_object_name()?.0[0].value.clone());
         }
@@ -41,17 +43,20 @@ impl<'a> DfParser<'a> {
                 DfShowKind::All,
                 full,
                 fromdb,
+                history,
             ))),
             Token::Word(w) => match w.keyword {
                 Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::Like(self.parser.parse_identifier()?),
                     full,
                     fromdb,
+                    history,
                 ))),
                 Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::create(
                     DfShowKind::Where(self.parser.parse_expr()?),
                     full,
                     fromdb,
+                    history,
                 ))),
                 _ => self.expected("like or where", tok),
             },

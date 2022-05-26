@@ -17,7 +17,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
-use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -34,14 +33,5 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     // let's Drop
     let qry = format!("drop table '{}'.'{}'", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
-    // there should be no files left inside test root (dirs are kept, though)
-    check_data_dir(
-        &fixture,
-        "drop table: there should be no file left",
-        0,
-        0,
-        0,
-    )
-    .await;
     Ok(())
 }

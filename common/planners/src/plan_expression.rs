@@ -28,7 +28,7 @@ use crate::ExpressionVisitor;
 use crate::PlanNode;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    ["database", "version", "current_user"]
+    ["database", "version", "current_user", "user"]
         .iter()
         .copied()
         .collect()

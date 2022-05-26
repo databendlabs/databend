@@ -77,13 +77,6 @@ impl Interpreter for DropTableInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name)?;
         catalog.drop_table(self.plan.clone().into()).await?;
 
-        // `drop_table` throws several types of exceptions
-        // thus `optimize` operation is executed after it.
-        if let Some(tbl) = tbl {
-            let keep_last_snapshot = false;
-            tbl.optimize(self.ctx.clone(), keep_last_snapshot).await?;
-        }
-
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

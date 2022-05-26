@@ -68,6 +68,7 @@ use crate::sql::statements::DfShowTabStat;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUnDropTable;
 use crate::sql::statements::DfUseDatabase;
 
 /// Tokens parsed by `DFParser` are converted into these values.
@@ -93,6 +94,7 @@ pub enum DfStatement<'a> {
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
+    UnDropTable(DfUnDropTable),
     AlterTable(DfAlterTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),

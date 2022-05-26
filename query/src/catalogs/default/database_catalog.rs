@@ -31,6 +31,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
 use common_meta_types::UpdateTableMetaReply;
 use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
@@ -283,6 +285,41 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while list tables)",
+            ));
+        }
+
+        let db_name = if Self::is_case_insensitive_db(db_name) {
+            db_name.to_uppercase()
+        } else {
+            db_name.to_string()
+        };
+
+        let r = self
+            .immutable_catalog
+            .list_tables_history(tenant, &db_name)
+            .await;
+        match r {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                    self.mutable_catalog
+                        .list_tables_history(tenant, &db_name)
+                        .await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -317,6 +354,24 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.drop_table(req).await;
         }
         self.mutable_catalog.drop_table(req).await
+    }
+
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
+        if req.tenant().is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while undrop table)",
+            ));
+        }
+        tracing::info!("UnDrop table from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), req.db_name())
+            .await?
+        {
+            return self.immutable_catalog.undrop_table(req).await;
+        }
+        self.mutable_catalog.undrop_table(req).await
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
