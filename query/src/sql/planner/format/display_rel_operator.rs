@@ -15,6 +15,7 @@
 use std::fmt::Display;
 
 use common_datavalues::format_data_type_sql;
+use itertools::Itertools;
 
 use super::FormatTreeNode;
 use crate::sql::optimizer::SExpr;
@@ -202,9 +203,9 @@ pub fn format_physical_scan(
 pub fn format_project(
     f: &mut std::fmt::Formatter<'_>,
     _metadata: &MetadataRef,
-    _op: &Project,
+    op: &Project,
 ) -> std::fmt::Result {
-    write!(f, "Project")
+    write!(f, "Project: [{}]", op.columns.iter().join(","))
 }
 
 pub fn format_eval_scalar(

@@ -58,7 +58,9 @@ impl Interpreter for ExplainInterpreterV2 {
                 self.explain_pipeline(plan, bind_context, metadata.clone())
                     .await?
             }
-            ExplainKind::Graph => todo!(),
+            ExplainKind::Graph => {
+                return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
+            }
         };
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

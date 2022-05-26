@@ -90,11 +90,15 @@ impl<'a> Binder {
                     bind_context.explain_kind = Some(kind.clone());
                     Ok((expr, bind_context))
                 }
-                _ => todo!(),
+                _ => {
+                    return Err(ErrorCode::UnImplement(format!(
+                        "UnImplemented stmt {stmt} in explain"
+                    )));
+                }
             },
             _ => {
                 return Err(ErrorCode::UnImplement(format!(
-                    "UnImplement stmt {stmt} in binder"
+                    "UnImplemented stmt {stmt} in binder"
                 )));
             }
         }

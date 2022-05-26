@@ -303,3 +303,15 @@ abc
 7
 8
 9
+===Explain===
+\n    Project: [a,b]\n        EvalScalar: []\n            Filter: [a > 0]\n                PhysicalScan: default.default.t1\n
+===Explain Pipeline===
+ProjectionTransform × 1 processor
+  ProjectionTransform × 1 processor
+    ProjectionTransform × 1 processor
+      TransformHashJoin × 1 processor
+        ProjectionTransform × 1 processor
+          FuseEngineSource × 1 processor
+BuildHashTable × 1 processor
+  ProjectionTransform × 1 processor
+    FuseEngineSource × 1 processor
