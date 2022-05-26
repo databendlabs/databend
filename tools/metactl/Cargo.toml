@@ -15,6 +15,7 @@ test = false
 [dependencies]
 # Workspace dependencies
 common-base = { path = "../../common/base" }
+common-meta-api = { path = "../../common/meta/api" }
 common-meta-grpc = { path = "../../common/meta/grpc" }
 common-meta-raft-store = { path = "../../common/meta/raft-store" }
 common-meta-sled-store = { path = "../../common/meta/sled-store" }

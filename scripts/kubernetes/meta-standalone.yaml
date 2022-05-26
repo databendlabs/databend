@@ -60,8 +60,6 @@ spec:
               value: /mnt/data/log
             - name: KVSRV_RAFT_DIR
               value: /mnt/data/raft
-            - name: METASRV_METRIC_API_ADDRESS
-              value: "$(POD_IP):28001"
             - name: ADMIN_API_ADDRESS
               value: "$(POD_IP):28002"
             - name: METASRV_GRPC_API_ADDRESS

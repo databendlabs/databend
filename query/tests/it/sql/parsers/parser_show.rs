@@ -19,6 +19,7 @@ use databend_query::sql::statements::DfShowEngines;
 use databend_query::sql::statements::DfShowFunctions;
 use databend_query::sql::statements::DfShowKind;
 use databend_query::sql::statements::DfShowSettings;
+use databend_query::sql::statements::DfShowStages;
 use databend_query::sql::statements::DfShowTabStat;
 use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::*;
@@ -379,6 +380,16 @@ fn show_tab_stat_test() -> Result<()> {
             DfShowKind::All,
             Some("ss".to_string()),
         )),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn show_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW STAGES",
+        DfStatement::ShowStages(DfShowStages::create(DfShowKind::All)),
     )?;
 
     Ok(())

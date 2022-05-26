@@ -296,7 +296,8 @@ class SuiteRunner(object):
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
-            log.warning("{} statement type is query but return nothing".format(statement))
+            log.warning("{} statement type is query but return nothing".format(
+                statement))
             raise
         assert statement.results is not None and len(
             statement.results) > 0, "No result found {}".format(statement)

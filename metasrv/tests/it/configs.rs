@@ -70,7 +70,6 @@ sled_tree_prefix = "sled_foo"
         let cfg = Config::load().expect("load must success");
         assert_eq!(cfg.log_level, "ERROR");
         assert_eq!(cfg.log_dir, "foo/logs");
-        assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");
         assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
         assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
         assert_eq!(cfg.admin_tls_server_key, "admin tls key");
