@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 
-use crate::sql::optimizer::ColumnSet;
 use crate::sql::optimizer::PhysicalProperty;
 use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
@@ -25,13 +24,11 @@ use crate::sql::plans::PhysicalPlan;
 use crate::sql::plans::PlanType;
 
 #[derive(Clone, Debug)]
-pub struct Project {
-    pub columns: ColumnSet,
-}
+pub struct Max1Row;
 
-impl Operator for Project {
+impl Operator for Max1Row {
     fn plan_type(&self) -> PlanType {
-        PlanType::Project
+        PlanType::Max1Row
     }
 
     fn is_physical(&self) -> bool {
@@ -42,27 +39,23 @@ impl Operator for Project {
         true
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
+    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
         Some(self)
     }
 
-    fn as_logical(&self) -> Option<&dyn LogicalPlan> {
+    fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
         Some(self)
     }
 }
 
-impl PhysicalPlan for Project {
+impl PhysicalPlan for Max1Row {
     fn compute_physical_prop(&self, _expression: &SExpr) -> PhysicalProperty {
         todo!()
     }
 }
 
-impl LogicalPlan for Project {
+impl LogicalPlan for Max1Row {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
-        Ok(RelationalProperty {
-            output_columns: self.columns.clone(),
-            outer_columns: input_prop.outer_columns,
-        })
+        rel_expr.derive_relational_prop_child(0)
     }
 }
