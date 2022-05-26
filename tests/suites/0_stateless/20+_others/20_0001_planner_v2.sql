@@ -218,7 +218,7 @@ drop table t1;
 drop table t2;
 
 -- trim function
-select '===Trim Functuon===';
+select '===Trim Function===';
 select trim(leading ' ' from '      abc');
 select trim(leading ' ' from '');
 select trim(leading 'ab' from 'abab');
@@ -249,5 +249,9 @@ select '===Explain Pipeline===';
 explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 drop table t1;
 drop table t2;
+-- position function
+select '===Position Function===';
+SELECT POSITION('bar' IN 'foobarbar');
+SELECT POSITION('xbar' IN 'foobar');
 
 set enable_planner_v2 = 0;

@@ -420,6 +420,12 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Array { exprs, .. } => self.resolve_array(exprs).await,
 
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => self.resolve_position(substr_expr, str_expr).await,
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
@@ -898,5 +904,49 @@ impl<'a> TypeChecker<'a> {
             .into(),
             data_type,
         ))
+    }
+
+    async fn resolve_position(
+        &self,
+        substr_expr: &'_ Expr<'a>,
+        str_expr: &'_ Expr<'a>,
+    ) -> Result<(Scalar, DataTypeImpl)> {
+        let first_str = self.match_expr(substr_expr)?;
+        let second_str = self.match_expr(str_expr)?;
+        let index = DataValue::UInt64(match second_str.find(first_str.as_str()) {
+            None => 0,
+            Some(idx) => idx + 1,
+        } as u64);
+        Ok((
+            ConstantExpr {
+                value: index.clone(),
+                data_type: index.data_type(),
+            }
+            .into(),
+            index.data_type(),
+        ))
+    }
+
+    fn match_expr(&self, expr: &'_ Expr<'a>) -> Result<String> {
+        dbg!(expr.clone());
+        let expr_str = match expr {
+            Expr::Literal { lit, .. } => {
+                let (value, data_type) = self.resolve_literal(lit, None)?;
+                if !data_type.eq(&DataTypeImpl::String(StringType {})) {
+                    return Err(ErrorCode::SemanticError(
+                        expr.span()
+                            .display_error("substr_expr should be String".to_string()),
+                    ));
+                }
+                value.to_string()
+            }
+            _ => {
+                return Err(ErrorCode::SemanticError(
+                    expr.span()
+                        .display_error("Position only supports literal expr".to_string()),
+                ));
+            }
+        };
+        Ok(expr_str)
     }
 }
