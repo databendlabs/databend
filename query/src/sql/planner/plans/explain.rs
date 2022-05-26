@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::ExplainKind;
-use common_exception::Result;
 
-use crate::sql::optimizer::RelExpr;
-use crate::sql::optimizer::RelationalProperty;
 use crate::sql::plans::LogicalPlan;
 use crate::sql::plans::Operator;
 use crate::sql::plans::PhysicalPlan;
@@ -41,16 +38,10 @@ impl Operator for ExplainPlan {
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        Some(self)
+        None
     }
 
     fn as_physical(&self) -> Option<&dyn PhysicalPlan> {
         None
-    }
-}
-
-impl LogicalPlan for ExplainPlan {
-    fn derive_relational_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        Ok(RelationalProperty::default())
     }
 }

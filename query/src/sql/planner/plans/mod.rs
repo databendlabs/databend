@@ -84,7 +84,6 @@ pub enum PlanType {
     // Logical operators
     LogicalGet,
     LogicalInnerJoin,
-    Explain,
 
     // Physical operators
     PhysicalScan,
@@ -102,6 +101,9 @@ pub enum PlanType {
 
     // Pattern
     Pattern,
+
+    // Explain
+    Explain,
 }
 
 /// Relational operators
@@ -110,7 +112,6 @@ pub enum PlanType {
 pub enum RelOperator {
     LogicalGet(LogicalGet),
     LogicalInnerJoin(LogicalInnerJoin),
-    Explain(ExplainPlan),
 
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),
@@ -125,4 +126,6 @@ pub enum RelOperator {
     Max1Row(Max1Row),
 
     Pattern(PatternPlan),
+
+    Explain(ExplainPlan),
 }
