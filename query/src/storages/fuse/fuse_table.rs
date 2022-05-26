@@ -30,6 +30,7 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
+use sqlparser::ast::Instant;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -273,5 +274,17 @@ impl Table for FuseTable {
             data_size_compressed: Some(s.compressed_data_bytes),
             index_length: None, // we do not have it yet
         }))
+    }
+
+    async fn navigate_to(
+        &self,
+        ctx: Arc<QueryContext>,
+        instant: &Instant,
+    ) -> Result<Arc<dyn Table>> {
+        let Instant::SnapshotID(snapshot_id) = instant;
+        let res = self
+            .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
+            .await?;
+        Ok(res)
     }
 }

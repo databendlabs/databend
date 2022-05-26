@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
+use sqlparser::ast::Instant;
 use sqlparser::ast::JoinOperator;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::Query;
@@ -101,7 +102,10 @@ impl JoinedSchemaAnalyzer {
     async fn table(&self, item: &TableRPNItem) -> Result<JoinedSchema> {
         // TODO(Winter): await query_context.get_table
         let (catalog, database, table) = resolve_table(&self.ctx, &item.name, "SELECT")?;
-        let read_table = self.ctx.get_table(&catalog, &database, &table).await?;
+        let mut read_table = self.ctx.get_table(&catalog, &database, &table).await?;
+        if let Some(instant) = &item.instant {
+            read_table = read_table.navigate_to(self.ctx.clone(), instant).await?
+        }
         let tbl_info = read_table.get_table_info();
 
         if tbl_info.engine() == VIEW_ENGINE {
@@ -171,6 +175,7 @@ impl JoinedSchemaAnalyzer {
 struct TableRPNItem {
     name: ObjectName,
     alias: Option<TableAlias>,
+    instant: Option<Instant>,
 }
 
 struct DerivedRPNItem {
@@ -210,6 +215,7 @@ impl RelationRPNBuilder {
         self.rpn.push(RelationRPNItem::Table(TableRPNItem {
             name: ObjectName(vec![Ident::new("system"), Ident::new("one")]),
             alias: None,
+            instant: None,
         }));
     }
 
@@ -249,6 +255,7 @@ impl RelationRPNBuilder {
                 args,
                 alias,
                 with_hints,
+                instant,
             } => {
                 if !with_hints.is_empty() {
                     return Err(ErrorCode::SyntaxException(
@@ -257,7 +264,7 @@ impl RelationRPNBuilder {
                 }
 
                 match args.is_empty() {
-                    true => self.visit_table(name, alias),
+                    true => self.visit_table(name, alias, instant),
                     false => self.visit_table_function(name, args, alias),
                 }
             }
@@ -283,10 +290,16 @@ impl RelationRPNBuilder {
         }
     }
 
-    fn visit_table(&mut self, name: &ObjectName, alias: &Option<TableAlias>) -> Result<()> {
+    fn visit_table(
+        &mut self,
+        name: &ObjectName,
+        alias: &Option<TableAlias>,
+        instant: &Option<Instant>,
+    ) -> Result<()> {
         self.rpn.push(RelationRPNItem::Table(TableRPNItem {
             name: name.clone(),
             alias: alias.clone(),
+            instant: instant.clone(),
         }));
         Ok(())
     }

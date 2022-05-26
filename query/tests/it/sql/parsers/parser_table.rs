@@ -129,6 +129,7 @@ fn create_table() -> Result<()> {
                     alias: None,
                     args: vec![],
                     with_hints: vec![],
+                    instant: None,
                 },
                 joins: vec![],
             }],
