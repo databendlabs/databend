@@ -258,7 +258,7 @@ impl ScalarExpr for CastExpr {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SubqueryType {
     Any,
     All,
