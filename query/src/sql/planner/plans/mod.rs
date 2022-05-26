@@ -15,6 +15,7 @@
 mod aggregate;
 mod apply;
 mod eval_scalar;
+mod explain;
 mod filter;
 mod hash_join;
 mod limit;
@@ -33,6 +34,7 @@ use common_exception::Result;
 use enum_dispatch::enum_dispatch;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
+pub use explain::ExplainPlan;
 pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
@@ -82,6 +84,7 @@ pub enum PlanType {
     // Logical operators
     LogicalGet,
     LogicalInnerJoin,
+    Explain,
 
     // Physical operators
     PhysicalScan,
@@ -107,6 +110,7 @@ pub enum PlanType {
 pub enum RelOperator {
     LogicalGet(LogicalGet),
     LogicalInnerJoin(LogicalInnerJoin),
+    Explain(ExplainPlan),
 
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),

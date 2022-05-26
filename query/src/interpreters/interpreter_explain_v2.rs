@@ -23,9 +23,10 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
+use crate::sql::plans::ExplainPlan;
+use crate::sql::plans::RelOperator;
 use crate::sql::BindContext;
 use crate::sql::MetadataRef;
 use crate::sql::Planner;
@@ -47,25 +48,26 @@ impl Interpreter for ExplainInterpreterV2 {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let mut planner = Planner::new(self.ctx.clone());
-        let (plan, bind_context, metadata) = planner.build_sexpr(self.query.as_str()).await?;
-        let block = match bind_context
-            .explain_kind
-            .as_ref()
-            .ok_or_else(|| ErrorCode::LogicalError("explain kind shouldn't be none"))?
-        {
-            ExplainKind::Syntax => self.explain_syntax(plan, metadata.clone()).await?,
-            ExplainKind::Pipeline => {
-                self.explain_pipeline(plan, bind_context, metadata.clone())
-                    .await?
-            }
-            ExplainKind::Graph => {
-                return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
+        let (expr, bind_context, metadata) = planner.build_sexpr(self.query.as_str()).await?;
+        let blocks = match expr.plan() {
+            RelOperator::Explain(ExplainPlan { explain_kind }) => match explain_kind {
+                ExplainKind::Syntax => self.explain_syntax(expr, metadata.clone()).await?,
+                ExplainKind::Pipeline => {
+                    self.explain_pipeline(expr, bind_context, metadata.clone())
+                        .await?
+                }
+                ExplainKind::Graph => {
+                    return Err(ErrorCode::UnImplement("ExplainKind graph is unimplemented"));
+                }
+            },
+            _ => {
+                return Err(ErrorCode::LogicalError("RelOperator should be explain"));
             }
         };
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,
-            vec![block],
+            blocks,
         )))
     }
 
@@ -89,10 +91,16 @@ impl ExplainInterpreterV2 {
         }))
     }
 
-    pub async fn explain_syntax(&self, plan: SExpr, metadata: MetadataRef) -> Result<DataBlock> {
+    pub async fn explain_syntax(
+        &self,
+        plan: SExpr,
+        metadata: MetadataRef,
+    ) -> Result<Vec<DataBlock>> {
         let result = plan.to_format_tree(&metadata).format_indent()?;
         let formatted_plan = Series::from_data(vec![result]);
-        Ok(DataBlock::create(self.schema.clone(), vec![formatted_plan]))
+        Ok(vec![DataBlock::create(self.schema.clone(), vec![
+            formatted_plan,
+        ])])
     }
 
     pub async fn explain_pipeline(
@@ -100,27 +108,32 @@ impl ExplainInterpreterV2 {
         plan: SExpr,
         bind_context: BindContext,
         metadata: MetadataRef,
-    ) -> Result<DataBlock> {
+    ) -> Result<Vec<DataBlock>> {
         let mut planner = Planner::new(self.ctx.clone());
-        let (root_pipeline, pipelines) =
-            planner.build_pipeline(plan, bind_context, metadata).await?;
-        let mut merged_pipeline = NewPipeline::create();
+        let (root_pipeline, pipelines) = planner
+            .build_pipeline(plan.child(0)?.clone(), bind_context, metadata)
+            .await?;
+        let mut blocks = vec![];
+        // Format root pipeline
+        blocks.push(DataBlock::create(self.schema.clone(), vec![
+            Series::from_data(
+                format!("{:?}", root_pipeline)
+                    .lines()
+                    .map(|s| s.as_bytes())
+                    .collect::<Vec<_>>(),
+            ),
+        ]));
+        // Format child pipelines
         for pipeline in pipelines.iter() {
-            for pipe in pipeline.pipes.iter() {
-                merged_pipeline.add_pipe(pipe.clone())
-            }
+            blocks.push(DataBlock::create(self.schema.clone(), vec![
+                Series::from_data(
+                    format!("{:?}", pipeline)
+                        .lines()
+                        .map(|s| s.as_bytes())
+                        .collect::<Vec<_>>(),
+                ),
+            ]));
         }
-        for pipe in root_pipeline.pipes.iter() {
-            merged_pipeline.add_pipe(pipe.clone());
-        }
-        let formatted_pipeline = Series::from_data(
-            format!("{:?}", merged_pipeline)
-                .lines()
-                .map(|s| s.as_bytes())
-                .collect::<Vec<_>>(),
-        );
-        Ok(DataBlock::create(self.schema.clone(), vec![
-            formatted_pipeline,
-        ]))
+        Ok(blocks)
     }
 }

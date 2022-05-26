@@ -108,6 +108,10 @@ impl Metadata {
         self.columns.get(index).unwrap()
     }
 
+    pub fn columns(&self) -> &[ColumnEntry] {
+        self.columns.as_slice()
+    }
+
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         let mut result = vec![];
         for col in self.columns.iter() {

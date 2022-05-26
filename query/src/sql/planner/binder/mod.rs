@@ -27,6 +27,7 @@ use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
+use crate::sql::plans::ExplainPlan;
 use crate::storages::Table;
 
 mod aggregate;
@@ -86,9 +87,12 @@ impl<'a> Binder {
             Statement::Query(query) => self.bind_query(bind_context, query).await,
             Statement::Explain { query, kind } => match query.as_ref() {
                 Statement::Query(query) => {
-                    let (expr, mut bind_context) = self.bind_query(bind_context, query).await?;
-                    bind_context.explain_kind = Some(kind.clone());
-                    Ok((expr, bind_context))
+                    let (expr, bind_context) = self.bind_query(bind_context, query).await?;
+                    let explain_plan = ExplainPlan {
+                        explain_kind: kind.clone(),
+                    };
+                    let new_expr = SExpr::create_unary(explain_plan.into(), expr);
+                    Ok((new_expr, bind_context))
                 }
                 _ => {
                     return Err(ErrorCode::UnImplement(format!(
