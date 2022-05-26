@@ -52,12 +52,6 @@ async fn test_metrics() -> common_exception::Result<()> {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = response.into_body().into_vec().await.unwrap();
-    let metrics =
-        serde_json::from_str::<serde_json::Value>(String::from_utf8_lossy(&body).as_ref())?;
-
-    metrics["has_leader"].as_u64().unwrap();
-
     meta_node.stop().await?;
 
     Ok(())
