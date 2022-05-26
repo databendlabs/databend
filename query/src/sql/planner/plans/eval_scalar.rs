@@ -57,7 +57,7 @@ impl Operator for EvalScalar {
     }
 
     fn as_logical(&self) -> Option<&dyn LogicalPlan> {
-        todo!()
+        Some(self)
     }
 }
 
@@ -69,7 +69,7 @@ impl PhysicalPlan for EvalScalar {
 
 impl LogicalPlan for EvalScalar {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop()?;
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
         let mut output_columns = input_prop.output_columns;

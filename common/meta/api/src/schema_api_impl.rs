@@ -16,6 +16,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use anyerror::AnyError;
+use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_meta_types::txn_condition;
 use common_meta_types::txn_op::Request;
@@ -97,6 +98,8 @@ use crate::KVApi;
 use crate::KVApiKey;
 use crate::SchemaApi;
 use crate::TableIdGen;
+
+const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
 /// SchemaApi is implemented upon KVApi.
 /// Thus every type that impl KVApi impls SchemaApi.
@@ -522,6 +525,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let db_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut db_info_list = vec![];
+        let utc: DateTime<Utc> = Utc::now();
         for db_id_list_key in db_id_list_keys.iter() {
             // get db id list from _fd_db_id_list/<tenant>/<db_name>
             let dbid_idlist = DbIdListKey {
@@ -551,6 +555,10 @@ impl<KV: KVApi> SchemaApi for KV {
                     tracing::error!("get_database_history cannot find {:?} db_meta", db_id);
                     continue;
                 }
+                let db_meta = db_meta.unwrap();
+                if is_db_out_of_retention_time(&db_meta, &utc) {
+                    continue;
+                }
 
                 let db = DatabaseInfo {
                     ident: DatabaseIdent {
@@ -561,7 +569,7 @@ impl<KV: KVApi> SchemaApi for KV {
                         tenant: db_id_list_key.tenant.clone(),
                         db_name: db_id_list_key.db_name.clone(),
                     },
-                    meta: db_meta.unwrap(),
+                    meta: db_meta,
                 };
 
                 db_info_list.push(Arc::new(db));
@@ -1211,6 +1219,7 @@ impl<KV: KVApi> SchemaApi for KV {
         let table_id_list_keys = list_keys(self, &dbid_tbname_idlist).await?;
 
         let mut tb_info_list = vec![];
+        let utc: DateTime<Utc> = Utc::now();
         for table_id_list_key in table_id_list_keys.iter() {
             // get table id list from _fd_table_id_list/db_id/table_name
             let dbid_tbname_idlist = TableIdListKey {
@@ -1245,6 +1254,12 @@ impl<KV: KVApi> SchemaApi for KV {
                     continue;
                 }
 
+                // Safe unwrap() because: tb_meta_seq > 0
+                let tb_meta = tb_meta.unwrap();
+                if is_table_out_of_retention_time(&tb_meta, &utc) {
+                    continue;
+                }
+
                 let tenant_dbname_tbname: TableNameIdent = TableNameIdent {
                     tenant: tenant_dbname.tenant.clone(),
                     db_name: tenant_dbname.db_name.clone(),
@@ -1258,8 +1273,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     },
                     desc: tenant_dbname_tbname.to_string(),
                     name: table_id_list_key.table_name.clone(),
-                    // Safe unwrap() because: tb_meta_seq > 0
-                    meta: tb_meta.unwrap(),
+                    meta: tb_meta,
                 };
 
                 tb_info_list.push(Arc::new(tb_info));
@@ -1483,6 +1497,26 @@ impl<KV: KVApi> SchemaApi for KV {
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
+}
+
+// Return true if table is out of `DATA_RETENTION_TIME_IN_DAYS option,
+// use DEFAULT_DATA_RETENTION_SECONDS by default.
+fn is_table_out_of_retention_time(table_meta: &TableMeta, now: &DateTime<Utc>) -> bool {
+    if let Some(drop_on) = table_meta.drop_on {
+        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+    }
+
+    false
+}
+
+// Return true if db is out of `DATA_RETENTION_TIME_IN_DAYS option,
+// use DEFAULT_DATA_RETENTION_SECONDS by default.
+fn is_db_out_of_retention_time(db_meta: &DatabaseMeta, now: &DateTime<Utc>) -> bool {
+    if let Some(drop_on) = db_meta.drop_on {
+        return now.timestamp() - drop_on.timestamp() > DEFAULT_DATA_RETENTION_SECONDS;
+    }
+
+    false
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)

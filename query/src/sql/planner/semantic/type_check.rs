@@ -348,6 +348,11 @@ impl<'a> TypeChecker<'a> {
                 ))
             }
 
+            Expr::Exists { subquery, .. } => {
+                self.resolve_subquery(SubqueryType::Exists, subquery, true, None)
+                    .await
+            }
+
             Expr::Subquery { subquery, .. } => {
                 self.resolve_subquery(SubqueryType::Scalar, subquery, false, None)
                     .await
@@ -722,7 +727,7 @@ impl<'a> TypeChecker<'a> {
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
-        if output_context.columns.len() > 1 {
+        if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
                 "Scalar subquery must return only one column",
             ));
@@ -736,7 +741,6 @@ impl<'a> TypeChecker<'a> {
         let subquery_expr = SubqueryExpr {
             subquery: s_expr,
             data_type: data_type.clone(),
-            output_context: Box::new(output_context),
             allow_multi_rows,
             typ,
             outer_columns: rel_prop.outer_columns,
