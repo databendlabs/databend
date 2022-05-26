@@ -208,7 +208,9 @@ impl<'a> DfParser<'a> {
                         self.parse_revoke()
                     }
                     Keyword::COPY => {
+                        *self = Self::new_with_dialect(self.sql, &SnowflakeDialect {})?;
                         self.parser.next_token();
+
                         self.parse_copy()
                     }
                     Keyword::CALL => {
@@ -228,6 +230,10 @@ impl<'a> DfParser<'a> {
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
+                        "UNDROP" => {
+                            self.parser.next_token();
+                            self.parse_undrop()
+                        }
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -357,10 +363,21 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_undrop(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_undrop_table(),
+                _ => self.expected("drop statement", Token::Word(w)),
+            },
+            unexpected => self.expected("drop statement", unexpected),
+        }
+    }
+
     fn parse_show(&mut self) -> Result<DfStatement<'a>, ParserError> {
-        let full: bool = self.consume_token("FULL");
-        if self.consume_token("TABLES") {
-            self.parse_show_tables(full)
+        if self.consume_token("FULL") && self.consume_token("TABLES") {
+            self.parse_show_tables(true)
+        } else if self.consume_token("TABLES") {
+            self.parse_show_tables(false)
         } else if self.consume_token("TABLE") && self.consume_token("STATUS") {
             self.parse_show_tab_stat()
         } else if self.consume_token("DATABASES") || self.consume_token("SCHEMAS") {
@@ -385,6 +402,8 @@ impl<'a> DfParser<'a> {
             self.parse_show_functions()
         } else if self.consume_token("ENGINES") {
             Ok(DfStatement::ShowEngines(DfShowEngines))
+        } else if self.consume_token("STAGES") {
+            self.parse_show_stages()
         } else {
             self.expected("show statement", self.parser.peek_token())
         }

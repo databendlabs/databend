@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
+use crate::plan_table_undrop::UnDropTablePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -149,6 +150,7 @@ pub trait PlanRewriter: Sized {
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
+            PlanNode::UnDropTable(plan) => self.rewrite_undrop_table(plan),
             PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
@@ -403,6 +405,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropTable(plan.clone()))
+    }
+
+    fn rewrite_undrop_table(&mut self, plan: &UnDropTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::UnDropTable(plan.clone()))
     }
 
     fn rewrite_drop_database(&mut self, plan: &DropDatabasePlan) -> Result<PlanNode> {

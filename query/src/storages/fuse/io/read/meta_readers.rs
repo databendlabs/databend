@@ -106,7 +106,7 @@ impl<'a> TableSnapshotReader<'a> {
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
-    ) -> Pin<Box<dyn futures::stream::Stream<Item = Result<Arc<TableSnapshot>>> + 'a>> {
+    ) -> Pin<Box<dyn futures::stream::Stream<Item = Result<Arc<TableSnapshot>>> + 'a + Send>> {
         let stream = stream::try_unfold(
             (self, location_gen, Some((location, format_version))),
             |(reader, gen, next)| async move {

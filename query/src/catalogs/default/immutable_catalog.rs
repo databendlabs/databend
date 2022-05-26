@@ -30,6 +30,8 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
 use common_meta_types::UpdateTableMetaReply;
 use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
@@ -137,6 +139,14 @@ impl Catalog for ImmutableCatalog {
         self.sys_db_meta.get_all_tables(db_name)
     }
 
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        self.list_tables(tenant, db_name).await
+    }
+
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create table in system database",
@@ -146,6 +156,12 @@ impl Catalog for ImmutableCatalog {
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::UnImplement(
             "Cannot drop table in system database",
+        ))
+    }
+
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop table in system database",
         ))
     }
 

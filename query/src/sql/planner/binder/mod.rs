@@ -71,7 +71,7 @@ impl<'a> Binder {
     pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
         let init_bind_context = BindContext::new();
         let (mut s_expr, bind_context) = self.bind_statement(&init_bind_context, stmt).await?;
-        let mut rewriter = SubqueryRewriter::new();
+        let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
         s_expr = rewriter.rewrite(&s_expr)?;
         Ok(BindResult::create(s_expr, bind_context))
     }

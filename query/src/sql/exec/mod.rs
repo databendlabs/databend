@@ -44,9 +44,11 @@ use crate::pipelines::new::processors::SinkBuildHashTable;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::processors::SortMergeCompactor;
 use crate::pipelines::new::processors::TransformAggregator;
+use crate::pipelines::new::processors::TransformApply;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::processors::TransformHashJoinProbe;
 use crate::pipelines::new::processors::TransformLimit;
+use crate::pipelines::new::processors::TransformMax1Row;
 use crate::pipelines::new::processors::TransformSortMerge;
 use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::new::NewPipeline;
@@ -59,6 +61,7 @@ use crate::sql::exec::util::check_physical;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::AggregatePlan;
 use crate::sql::plans::AndExpr;
+use crate::sql::plans::CrossApply;
 use crate::sql::plans::EvalScalar;
 use crate::sql::plans::FilterPlan;
 use crate::sql::plans::LimitPlan;
@@ -75,7 +78,7 @@ pub struct PipelineBuilder {
     metadata: MetadataRef,
     result_columns: Vec<(IndexType, String)>,
     expression: SExpr,
-    pipelines: Vec<NewPipeline>,
+    pub pipelines: Vec<NewPipeline>,
     limit: Option<usize>,
     offset: usize,
 }
@@ -147,17 +150,17 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_pipeline(
+    pub fn build_pipeline(
         &mut self,
         context: Arc<QueryContext>,
-        expression: &SExpr,
+        s_expr: &SExpr,
         pipeline: &mut NewPipeline,
     ) -> Result<DataSchemaRef> {
-        if !check_physical(expression) {
+        if !check_physical(s_expr) {
             return Err(ErrorCode::LogicalError("Invalid physical plan"));
         }
 
-        let plan = expression.plan();
+        let plan = s_expr.plan();
 
         match plan {
             RelOperator::PhysicalScan(physical_scan) => {
@@ -165,31 +168,31 @@ impl PipelineBuilder {
             }
             RelOperator::Project(project) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_project(context, project, input_schema, pipeline)
             }
             RelOperator::EvalScalar(eval_scalar) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_eval_scalar(context, eval_scalar, input_schema, pipeline)
             }
             RelOperator::Filter(filter) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_filter(context, filter, input_schema, pipeline)
             }
             RelOperator::Aggregate(aggregate) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_aggregate(context, aggregate, input_schema, pipeline)
             }
             RelOperator::PhysicalHashJoin(hash_join) => {
                 let probe_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 let mut child_pipeline = NewPipeline::create();
                 let build_schema = self.build_pipeline(
                     QueryContext::create_from(context.clone()),
-                    &expression.children()[1],
+                    s_expr.child(1)?,
                     &mut child_pipeline,
                 )?;
                 self.build_hash_join(
@@ -203,13 +206,30 @@ impl PipelineBuilder {
             }
             RelOperator::Sort(sort_plan) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_order_by(context, sort_plan, input_schema, pipeline)
             }
             RelOperator::Limit(limit_plan) => {
                 let input_schema =
-                    self.build_pipeline(context.clone(), &expression.children()[0], pipeline)?;
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
                 self.build_limit(context, limit_plan, input_schema, pipeline)
+            }
+            RelOperator::CrossApply(apply_plan) => {
+                let input_schema =
+                    self.build_pipeline(context.clone(), s_expr.child(0)?, pipeline)?;
+                self.build_apply(
+                    context,
+                    apply_plan,
+                    s_expr.child(1)?,
+                    input_schema,
+                    pipeline,
+                )
+            }
+            RelOperator::Max1Row(_) => {
+                let input_schema = self.build_pipeline(context, s_expr.child(0)?, pipeline)?;
+                pipeline
+                    .add_transform(|input, output| Ok(TransformMax1Row::create(input, output)))?;
+                Ok(input_schema)
             }
             _ => Err(ErrorCode::LogicalError("Invalid physical plan")),
         }
@@ -645,5 +665,40 @@ impl PipelineBuilder {
         })?;
 
         Ok(input_schema)
+    }
+
+    fn build_apply(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        apply_plan: &CrossApply,
+        subquery: &SExpr,
+        input_schema: DataSchemaRef,
+        pipeline: &mut NewPipeline,
+    ) -> Result<DataSchemaRef> {
+        let schema_builder = DataSchemaBuilder::new(self.metadata.clone());
+        let subquery_schema = DataSchemaRefExt::create(
+            apply_plan
+                .subquery_output
+                .iter()
+                .map(|index| {
+                    let col = self.metadata.read().column(*index).clone();
+                    DataField::new(
+                        format_field_name(col.name.as_str(), col.column_index).as_str(),
+                        col.data_type.clone(),
+                    )
+                })
+                .collect(),
+        );
+        pipeline.add_transform(|input, output| {
+            Ok(TransformApply::create(
+                input,
+                output,
+                ctx.clone(),
+                self.metadata.clone(),
+                apply_plan.correlated_columns.clone(),
+                subquery.clone(),
+            ))
+        })?;
+        Ok(schema_builder.build_join(input_schema, subquery_schema))
     }
 }
