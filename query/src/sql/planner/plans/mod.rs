@@ -15,6 +15,7 @@
 mod aggregate;
 mod apply;
 mod eval_scalar;
+mod explain;
 mod filter;
 mod hash_join;
 mod limit;
@@ -33,6 +34,7 @@ use common_exception::Result;
 use enum_dispatch::enum_dispatch;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
+pub use explain::ExplainPlan;
 pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
@@ -99,6 +101,9 @@ pub enum PlanType {
 
     // Pattern
     Pattern,
+
+    // Explain
+    Explain,
 }
 
 /// Relational operators
@@ -121,4 +126,6 @@ pub enum RelOperator {
     Max1Row(Max1Row),
 
     Pattern(PatternPlan),
+
+    Explain(ExplainPlan),
 }
