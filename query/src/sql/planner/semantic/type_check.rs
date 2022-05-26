@@ -727,7 +727,7 @@ impl<'a> TypeChecker<'a> {
         let bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
         let (s_expr, output_context) = binder.bind_query(&bind_context, subquery).await?;
 
-        if output_context.columns.len() > 1 {
+        if typ == SubqueryType::Scalar && output_context.columns.len() > 1 {
             return Err(ErrorCode::SemanticError(
                 "Scalar subquery must return only one column",
             ));

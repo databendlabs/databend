@@ -278,7 +278,14 @@ pub struct SubqueryExpr {
 
 impl ScalarExpr for SubqueryExpr {
     fn data_type(&self) -> DataTypeImpl {
-        self.data_type.clone()
+        match &self.typ {
+            SubqueryType::Scalar => self.data_type.clone(),
+
+            SubqueryType::Any
+            | SubqueryType::All
+            | SubqueryType::Exists
+            | SubqueryType::NotExists => BooleanType::new_impl(),
+        }
     }
 
     fn used_columns(&self) -> ColumnSet {
