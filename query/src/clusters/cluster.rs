@@ -213,14 +213,16 @@ impl Cluster {
                             node.flight_address.clone(),
                             None,
                             Some(config.query.to_rpc_client_tls_config()),
-                        )?,
+                        )
+                        .await?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_rpc_channel(
                             node.flight_address.clone(),
                             None,
                             None,
-                        )?,
+                        )
+                        .await?,
                     ))),
                 };
             }

@@ -38,7 +38,6 @@ use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
-use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
@@ -52,6 +51,7 @@ use common_meta_types::TxnRequest;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
+use rand::Rng;
 use serde::de::DeserializeOwned;
 use tonic::async_trait;
 use tonic::client::GrpcService;
@@ -59,7 +59,6 @@ use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
 use tonic::transport::Channel;
-use tonic::transport::Endpoint;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
@@ -78,8 +77,9 @@ struct MetaChannelManager {
 }
 
 impl MetaChannelManager {
-    fn build_endpoint(&self, addr: &String) -> std::result::Result<Endpoint, MetaError> {
-        let ch = ConnectionFactory::create_rpc_endpoint(addr, self.timeout, self.conf.clone())
+    async fn build_channel(&self, addr: &String) -> std::result::Result<Channel, MetaError> {
+        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+            .await
             .map_err(|e| match e {
                 GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
                     AnyError::new(&e).add_context(|| "while creating rpc channel"),
@@ -97,18 +97,12 @@ impl MetaChannelManager {
 
 #[async_trait]
 impl ItemManager for MetaChannelManager {
-    type Key = Vec<String>;
+    type Key = String;
     type Item = Channel;
     type Error = MetaError;
 
-    async fn build(&self, endpoints: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
-        let channel_eps: std::result::Result<Vec<Endpoint>, MetaError> = (*endpoints)
-            .iter()
-            .map(|a| self.build_endpoint(a))
-            .collect();
-        let channel_eps = channel_eps?;
-        let ch = Channel::balance_list(channel_eps.into_iter());
-        Ok(ch)
+    async fn build(&self, addr: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
+        self.build_channel(addr).await
     }
 
     async fn check(&self, mut ch: Self::Item) -> std::result::Result<Self::Item, Self::Error> {
@@ -346,7 +340,37 @@ impl MetaGrpcClient {
             let eps = self.endpoints.read().await;
             debug_assert!(!eps.is_empty());
 
-            self.conn_pool.get(&*eps).await?
+            let num_eps = eps.len();
+            let mut start = rand::thread_rng().gen_range(0..10);
+            let end = start + num_eps;
+            let item = loop {
+                if start == end {
+                    break Err(MetaError::InvalidConfig("endpoints is empty".to_string()));
+                } else {
+                    let addr = eps.get(start % num_eps).unwrap();
+                    let ch = self.conn_pool.get(addr).await;
+                    match ch {
+                        Ok(c) => {
+                            break Ok(c);
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "grpc_client create channel with {} faild, err: {:?}",
+                                addr,
+                                e
+                            );
+                            if start == end - 1 {
+                                // reach to last addr
+                                break Err(e);
+                            }
+                            start += 1;
+                            continue;
+                        }
+                    }
+                }
+            };
+
+            item?
         };
 
         let mut client = MetaServiceClient::new(channel.clone());
@@ -378,25 +402,6 @@ impl MetaGrpcClient {
 
         let mut eps = self.endpoints.write().await;
         *eps = endpoints;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn sync_endpoints(&self) -> Result<()> {
-        let endpoints = {
-            let eps = self.endpoints.read().await;
-            (*eps).clone()
-        };
-        let channel = self.conn_pool.get(&endpoints).await?;
-
-        let mut client = MetaServiceClient::new(channel.clone());
-        let endpoints = client
-            .member_list(Request::new(MemberListRequest {
-                data: "".to_string(),
-            }))
-            .await?;
-        let result: Vec<String> = endpoints.into_inner().data;
-        self.set_endpoints(result).await?;
         Ok(())
     }
 
