@@ -36,7 +36,7 @@ pub struct CreateTablePlan {
 
     pub table_meta: TableMeta,
 
-    pub order_keys: Vec<Expression>,
+    pub cluster_keys: Vec<Expression>,
     pub as_select: Option<Box<PlanNode>>,
 }
 

@@ -86,7 +86,7 @@ async fn test_block_pruner() -> Result<()> {
             ..Default::default()
         },
         as_select: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
@@ -228,7 +228,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
             ..Default::default()
         },
         as_select: None,
-        order_keys: vec![],
+        cluster_keys: vec![],
     };
 
     let catalog = ctx.get_catalog("default")?;

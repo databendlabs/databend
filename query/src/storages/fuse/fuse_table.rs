@@ -52,7 +52,7 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) order_keys: Vec<Expression>,
+    pub(crate) cluster_keys: Vec<Expression>,
     pub(crate) read_only: bool,
 }
 
@@ -64,14 +64,14 @@ impl FuseTable {
 
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let mut order_keys = Vec::new();
-        if let Some(order) = &table_info.meta.order_keys {
-            order_keys = PlanParser::parse_exprs(order)?;
+        let mut cluster_keys = Vec::new();
+        if let Some(order) = &table_info.meta.cluster_keys {
+            cluster_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {
             table_info,
-            order_keys,
+            cluster_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
         }))
@@ -182,7 +182,7 @@ impl Table for FuseTable {
     }
 
     fn cluster_keys(&self) -> Vec<Expression> {
-        self.order_keys.clone()
+        self.cluster_keys.clone()
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

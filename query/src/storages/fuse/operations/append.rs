@@ -67,7 +67,7 @@ impl FuseTable {
             block_per_seg,
             self.meta_location_generator().clone(),
             self.table_info.schema().clone(),
-            self.order_keys.clone(),
+            self.cluster_keys.clone(),
         )
         .await;
 
@@ -117,13 +117,13 @@ impl FuseTable {
             )
         })?;
 
-        let mut cluster_keys_index = Vec::with_capacity(self.order_keys.len());
+        let mut cluster_keys_index = Vec::with_capacity(self.cluster_keys.len());
         let mut expression_executor = None;
-        if !self.order_keys.is_empty() {
+        if !self.cluster_keys.is_empty() {
             let input_schema = self.table_info.schema();
             let mut merged = input_schema.fields().clone();
 
-            for expr in &self.order_keys {
+            for expr in &self.cluster_keys {
                 let cname = expr.column_name();
                 let index = match merged.iter().position(|x| x.name() == &cname) {
                     None => {
@@ -144,7 +144,7 @@ impl FuseTable {
                         transform_output_port,
                         input_schema.clone(),
                         output_schema.clone(),
-                        self.order_keys.clone(),
+                        self.cluster_keys.clone(),
                         ctx.clone(),
                     )
                 })?;
@@ -169,7 +169,7 @@ impl FuseTable {
 
             // sort
             let sort_descs: Vec<SortColumnDescription> = self
-                .order_keys
+                .cluster_keys
                 .iter()
                 .map(|expr| SortColumnDescription {
                     column_name: expr.column_name(),

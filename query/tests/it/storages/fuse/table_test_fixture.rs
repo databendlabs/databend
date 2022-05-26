@@ -135,11 +135,11 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                order_keys: Some("(id)".to_string()),
+                cluster_keys: Some("(id)".to_string()),
                 ..Default::default()
             },
             as_select: None,
-            order_keys: vec![col("id")],
+            cluster_keys: vec![col("id")],
         }
     }
 

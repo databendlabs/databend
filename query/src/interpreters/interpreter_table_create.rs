@@ -95,7 +95,7 @@ impl Interpreter for CreateTableInterpreter {
 
         match engine_desc {
             Some(engine) => {
-                if !self.plan.order_keys.is_empty() && !engine.support_order_key {
+                if !self.plan.cluster_keys.is_empty() && !engine.support_order_key {
                     return Err(ErrorCode::UnsupportedEngineParams(format!(
                         "Unsupported cluster key for engine: {}",
                         engine.engine_name
