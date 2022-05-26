@@ -179,6 +179,7 @@ async fn test_bad_sql() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "flaky, to be investigated"]
 async fn test_async() -> Result<()> {
     let ep = create_endpoint();
     let sql = "select sleep(0.01)";
@@ -372,6 +373,7 @@ async fn test_http_session() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore = "flaky, to be investigated"]
 async fn test_result_timeout() -> Result<()> {
     let session_manager = SessionManagerBuilder::create()
         .http_handler_result_time_out(200u64)
@@ -957,6 +959,7 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
 }
 
 #[tokio::test]
+#[ignore = "flaky, to be investigated"]
 async fn test_download() -> Result<()> {
     let ep = create_endpoint();
 
@@ -1003,6 +1006,7 @@ async fn test_download() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "flaky, to be investigated"]
 async fn test_download_non_select() -> Result<()> {
     let ep = create_endpoint();
     let sql = "show databases";
@@ -1024,6 +1028,7 @@ async fn test_download_non_select() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "flaky, to be investigated"]
 async fn test_download_failed() -> Result<()> {
     let ep = create_endpoint();
     let sql = "xxx";
@@ -1039,6 +1044,7 @@ async fn test_download_failed() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "flaky, to be investigated"]
 async fn test_download_killed() -> Result<()> {
     let ep = create_endpoint();
 
