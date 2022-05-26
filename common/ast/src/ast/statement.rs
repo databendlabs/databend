@@ -67,6 +67,7 @@ pub enum Statement<'a> {
         database: Option<Identifier<'a>>,
         full: bool,
         limit: Option<ShowLimit<'a>>,
+        with_history: bool,
     },
     ShowCreateTable {
         database: Option<Identifier<'a>>,
@@ -95,6 +96,10 @@ pub enum Statement<'a> {
     },
     DropTable {
         if_exists: bool,
+        database: Option<Identifier<'a>>,
+        table: Identifier<'a>,
+    },
+    UnDropTable {
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
     },
@@ -421,12 +426,16 @@ impl<'a> Display for Statement<'a> {
                 database,
                 full,
                 limit,
+                with_history,
             } => {
                 write!(f, "SHOW")?;
                 if *full {
                     write!(f, " FULL")?;
                 }
                 write!(f, " TABLES")?;
+                if *with_history {
+                    write!(f, " HISTORY")?;
+                }
                 if let Some(database) = database {
                     write!(f, " FROM {database}")?;
                 }
@@ -508,6 +517,10 @@ impl<'a> Display for Statement<'a> {
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
+                write_period_separated_list(f, database.iter().chain(Some(table)))?;
+            }
+            Statement::UnDropTable { database, table } => {
+                write!(f, "UNDROP TABLE ")?;
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
             }
             Statement::AlterTable {
