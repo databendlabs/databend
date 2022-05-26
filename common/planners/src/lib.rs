@@ -106,6 +106,7 @@ pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_broadcast::BroadcastPlan;
 pub use plan_call::CallPlan;
+pub use plan_copy::CopyMode;
 pub use plan_copy::CopyPlan;
 pub use plan_copy::ValidationMode;
 pub use plan_database_create::CreateDatabasePlan;
