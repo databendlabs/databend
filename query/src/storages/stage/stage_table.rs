@@ -175,6 +175,9 @@ impl Table for StageTable {
             bytes.extend_from_slice(bs.as_slice());
         }
 
+        let bs = output_format.finalize()?;
+        bytes.extend_from_slice(bs.as_slice());
+
         ctx.get_dal_context()
             .get_metrics()
             .inc_write_bytes(bytes.len());
