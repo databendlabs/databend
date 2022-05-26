@@ -928,7 +928,6 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn match_expr(&self, expr: &'_ Expr<'a>) -> Result<String> {
-        dbg!(expr.clone());
         let expr_str = match expr {
             Expr::Literal { lit, .. } => {
                 let (value, data_type) = self.resolve_literal(lit, None)?;
