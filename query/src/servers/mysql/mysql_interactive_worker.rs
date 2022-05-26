@@ -48,7 +48,6 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::users::CertifiedInfo;
-use crate::users::Credential;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
@@ -233,33 +232,16 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
 
         let ctx = self.session.create_query_context().await?;
-        let auth_manager = ctx.get_auth_manager();
-        let credential = Credential::Password {
-            name: user_name.to_string(),
-            password: Some(salt.to_vec()),
-            hostname: Some(client_ip.to_string()),
-        };
-        return match auth_manager.auth(&credential).await {
-            Ok((tenant_id, user_info)) => {
-                self.session.set_current_user(user_info);
-                if let Some(tenant_id) = tenant_id {
-                    self.session.set_current_tenant(tenant_id);
-                }
-                Ok(true)
-            }
-            Err(e) => {
-                tracing::error!(
-                    "MySQL handler authenticate failed, \
-                             user: {}, \
-                             client_ip: {}, \
-                             cause: {:?}",
-                    user_name,
-                    client_ip,
-                    e
-                );
-                Ok(false)
-            }
-        };
+        let user_manager = ctx.get_user_manager();
+        let user_info = user_manager
+            .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
+            .await?;
+
+        let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
+        if authed {
+            self.session.set_current_user(user_info);
+        }
+        Ok(authed)
     }
 
     async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {

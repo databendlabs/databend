@@ -225,7 +225,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .await;
         assert!(res.is_err());
         assert_eq!(
-            "Code: 1051, displayText = root user can only login from localhost.",
+            "Code: 2201, displayText = 'root'@'%'.",
             res.err().unwrap().to_string()
         );
     }

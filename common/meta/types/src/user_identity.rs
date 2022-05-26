@@ -33,7 +33,7 @@ impl UserIdentity {
     }
 
     pub fn is_root(&self) -> bool {
-        self.username.eq_ignore_ascii_case("root")
+        self.username.eq("root")
     }
 }
 

@@ -349,12 +349,14 @@ async fn test_user_manager_with_root_user() -> Result<()> {
 
     // Get user via username `root` and hostname `otherhost`.
     {
-        let user = user_mgr
+        let res = user_mgr
             .get_user(tenant, UserIdentity::new(username2, hostname3))
-            .await?;
-        assert_eq!(user.name, username2);
-        assert_eq!(user.hostname, hostname3);
-        assert!(user.grants.entries().is_empty());
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = 'root'@'otherhost'.",
+            res.err().unwrap().to_string()
+        );
     }
 
     Ok(())

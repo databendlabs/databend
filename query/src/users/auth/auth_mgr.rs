@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 
 use crate::users::auth::jwt::JwtAuthenticator;
@@ -68,15 +67,6 @@ impl AuthMgr {
                     .tenant_id
                     .clone()
                     .unwrap_or_else(|| self.tenant.clone());
-                let identity = UserIdentity {
-                    username: user_name.to_string(),
-                    hostname: h.as_ref().unwrap_or(&"%".to_string()).to_string(),
-                };
-                if identity.is_root() && !identity.is_localhost() {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "root user can only login from localhost",
-                    ));
-                }
                 if let Some(ref ensure_user) = claims.extra.ensure_user {
                     let mut user_info = UserInfo::new(user_name, "%", AuthInfo::JWT);
                     if let Some(ref roles) = ensure_user.roles {
@@ -84,29 +74,25 @@ impl AuthMgr {
                             user_info.grants.grant_role(role);
                         }
                     }
-                    self.user_mgr.add_user(&tenant, user_info, true).await?;
-                }
-                Ok((
-                    Some(tenant.clone()),
                     self.user_mgr
-                        .get_user(&tenant, UserIdentity::new(user_name, "%"))
-                        .await?,
-                ))
+                        .add_user(&tenant, user_info.clone(), true)
+                        .await?;
+                }
+                let user = self
+                    .user_mgr
+                    .get_user_with_client_ip(
+                        &tenant,
+                        user_name,
+                        h.as_ref().unwrap_or(&"%".to_string()),
+                    )
+                    .await?;
+                Ok((Some(tenant.clone()), user))
             }
             Credential::Password {
                 name: n,
                 password: p,
                 hostname: h,
             } => {
-                let identity = UserIdentity {
-                    username: n.to_string(),
-                    hostname: h.as_ref().unwrap_or(&"%".to_string()).to_string(),
-                };
-                if identity.is_root() && !identity.is_localhost() {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "root user can only login from localhost",
-                    ));
-                }
                 let user = self
                     .user_mgr
                     .get_user_with_client_ip(

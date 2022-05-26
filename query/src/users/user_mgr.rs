@@ -36,6 +36,11 @@ impl UserApiProvider {
                         UserPrivilegeSet::available_privileges_on_global(),
                     );
                     user_info.option.set_all_flag();
+                } else if user.is_root() {
+                    return Err(ErrorCode::UnknownUser(format!(
+                        "'{}'@'{}'",
+                        user.username, user.hostname
+                    )));
                 }
                 Ok(user_info)
             }
@@ -60,7 +65,7 @@ impl UserApiProvider {
             .await
             .map(Some)
             .or_else(|e| {
-                if e.code() == ErrorCode::unknown_user_code() {
+                if e.code() == ErrorCode::unknown_user_code() && !client_ip.eq("%") {
                     Ok(None)
                 } else {
                     Err(e)
