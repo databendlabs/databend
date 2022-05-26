@@ -23,6 +23,7 @@ use common_meta_types::OnErrorMode;
 use common_meta_types::StageParams;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
+use common_planners::CopyMode;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -31,14 +32,18 @@ use common_planners::StageTableInfo;
 use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
+use sqlparser::ast::Query;
 
 use super::location_to_stage_path;
 use super::parse_copy_file_format_options;
 use super::parse_stage_storage;
+use super::DfQueryStatement;
 use crate::sessions::QueryContext;
 use crate::sql::statements::resolve_table;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::DfStatement;
+use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCopy {
@@ -53,26 +58,12 @@ pub struct DfCopy {
     pub on_error: String,
     pub size_limit: String,
     pub validation_mode: String,
+    pub query: Option<Query>,
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCopy {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (catalog_name, db_name, tbl_name) = resolve_table(&ctx, &self.name, "COPY")?;
-        let table = ctx.get_table(&catalog_name, &db_name, &tbl_name).await?;
-        let mut schema = table.schema();
-        let tbl_id = table.get_id();
-
-        if !self.columns.is_empty() {
-            let fields = self
-                .columns
-                .iter()
-                .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
-                .collect::<Result<Vec<_>>>()?;
-
-            schema = DataSchemaRefExt::create(fields);
-        }
-
         // Stage info.
         let (mut stage_info, path) = if self.location.starts_with('@') {
             self.analyze_named(&ctx).await?
@@ -109,37 +100,73 @@ impl AnalyzableStatement for DfCopy {
         let validation_mode = ValidationMode::from_str(self.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        // Read source plan.
-        let from = ReadDataSourcePlan {
-            catalog: catalog_name.clone(),
-            source_info: SourceInfo::StageSource(StageTableInfo {
-                schema: schema.clone(),
-                stage_info,
-                path,
-                files: vec![],
-            }),
-            scan_fields: None,
-            parts: vec![],
-            statistics: Default::default(),
-            description: "".to_string(),
-            tbl_args: None,
-            push_downs: None,
-        };
+        let plan_node = if let Some(query) = &self.query {
+            let statement = DfQueryStatement::try_from(query.clone())?;
+            let query =
+                PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx.clone())
+                    .await?;
 
-        // Pattern.
-        let pattern = self.pattern.clone();
+            CopyPlan {
+                validation_mode,
+                copy_mode: CopyMode::IntoStage {
+                    stage_table_info: StageTableInfo {
+                        schema: query.schema(),
+                        stage_info,
+                        path,
+                        files: vec![],
+                    },
+                    query: Box::new(query),
+                },
+            }
+        } else {
+            let (catalog_name, db_name, tbl_name) = resolve_table(&ctx, &self.name, "COPY")?;
+            let table = ctx.get_table(&catalog_name, &db_name, &tbl_name).await?;
+            let mut schema = table.schema();
+            let tbl_id = table.get_id();
 
-        // Copy plan.
-        let plan_node = CopyPlan {
-            catalog_name,
-            db_name,
-            tbl_name,
-            tbl_id,
-            schema,
-            from,
-            validation_mode,
-            files: self.files.clone(),
-            pattern,
+            if !self.columns.is_empty() {
+                let fields = self
+                    .columns
+                    .iter()
+                    .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
+                    .collect::<Result<Vec<_>>>()?;
+
+                schema = DataSchemaRefExt::create(fields);
+            }
+
+            // Read source plan.
+            let from = ReadDataSourcePlan {
+                catalog: catalog_name.clone(),
+                source_info: SourceInfo::StageSource(StageTableInfo {
+                    schema: schema.clone(),
+                    stage_info,
+                    path,
+                    files: vec![],
+                }),
+                scan_fields: None,
+                parts: vec![],
+                statistics: Default::default(),
+                description: "".to_string(),
+                tbl_args: None,
+                push_downs: None,
+            };
+
+            // Pattern.
+            let pattern = self.pattern.clone();
+
+            CopyPlan {
+                validation_mode,
+                copy_mode: CopyMode::IntoTable {
+                    catalog_name,
+                    db_name,
+                    tbl_name,
+                    tbl_id,
+                    schema,
+                    from,
+                    files: self.files.clone(),
+                    pattern,
+                },
+            }
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(

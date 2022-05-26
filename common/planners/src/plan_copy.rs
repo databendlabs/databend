@@ -19,7 +19,9 @@ use std::str::FromStr;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
+use crate::PlanNode;
 use crate::ReadDataSourcePlan;
+use crate::StageTableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub enum ValidationMode {
@@ -54,34 +56,73 @@ impl FromStr for ValidationMode {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CopyPlan {
-    pub catalog_name: String,
-    pub db_name: String,
-    pub tbl_name: String,
-    pub tbl_id: MetaId,
-    pub schema: DataSchemaRef,
-    pub from: ReadDataSourcePlan,
+    pub copy_mode: CopyMode,
+
     pub validation_mode: ValidationMode,
-    pub files: Vec<String>,
-    pub pattern: String,
+}
+
+/// CopyPlan supports CopyIntoTable & CopyIntoStage
+#[allow(clippy::large_enum_variant)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub enum CopyMode {
+    IntoTable {
+        catalog_name: String,
+        db_name: String,
+        tbl_name: String,
+        tbl_id: MetaId,
+        files: Vec<String>,
+        pattern: String,
+        schema: DataSchemaRef,
+        from: ReadDataSourcePlan,
+    },
+
+    IntoStage {
+        stage_table_info: StageTableInfo,
+        query: Box<PlanNode>,
+    },
 }
 
 impl CopyPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        match &self.copy_mode {
+            CopyMode::IntoTable { schema, .. } => schema.clone(),
+            CopyMode::IntoStage {
+                stage_table_info, ..
+            } => stage_table_info.schema.clone(),
+        }
     }
 }
 
 impl Debug for CopyPlan {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Copy into {:}.{:}", self.db_name, self.tbl_name)?;
-        write!(f, ", {:?}", self.from)?;
-        if !self.files.is_empty() {
-            write!(f, " ,files:{:?}", self.files)?;
+        match &self.copy_mode {
+            CopyMode::IntoTable {
+                db_name,
+                tbl_name,
+                files,
+                pattern,
+                from,
+                ..
+            } => {
+                write!(f, "Copy into {:}.{:}", db_name, tbl_name)?;
+                write!(f, ", {:?}", from)?;
+                if !files.is_empty() {
+                    write!(f, " ,files:{:?}", files)?;
+                }
+                if !pattern.is_empty() {
+                    write!(f, " ,pattern:{:?}", pattern)?;
+                }
+                write!(f, " ,validation_mode:{:?}", self.validation_mode)?;
+            }
+            CopyMode::IntoStage {
+                stage_table_info,
+                query,
+            } => {
+                write!(f, "Copy into {:?}", stage_table_info)?;
+                write!(f, ", query: {:?})", query)?;
+            }
         }
-        if !self.pattern.is_empty() {
-            write!(f, " ,pattern:{:?}", self.pattern)?;
-        }
-        write!(f, " ,validation_mode:{:?}", self.validation_mode)
+        Ok(())
     }
 }
