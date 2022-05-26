@@ -152,7 +152,7 @@ pub async fn streaming_load(
     let settings = context.get_settings();
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
-            let value = value.to_str().unwrap();
+            let value = value.to_str().map_err(InternalServerError)?;
             let value = value.trim_matches(|p| p == '"' || p == '\'');
             let value = parse_escape_string(value.as_bytes());
             settings
@@ -177,7 +177,7 @@ pub async fn streaming_load(
     if context
         .get_settings()
         .get_enable_new_processor_framework()
-        .unwrap()
+        .map_err(InternalServerError)?
         != 0
         && context.get_cluster().is_empty()
     {
@@ -428,13 +428,13 @@ async fn ndjson_source_pipe_builder(
             .bytes()
             .await
             .map_err_to_code(ErrorCode::BadBytes, || "Read part to field bytes error")
-            .unwrap();
+            .map_err(InternalServerError)?;
         let cursor = Cursor::new(bytes);
-        let ndjson_source = builder.build(cursor).unwrap();
+        let ndjson_source = builder.build(cursor).map_err(InternalServerError)?;
         let output_port = OutputPort::create();
         let source =
             StreamSourceV2::create(ctx.clone(), Box::new(ndjson_source), output_port.clone())
-                .unwrap();
+                .map_err(InternalServerError)?;
         source_pipe_builder.add_source(output_port, source);
     }
     Ok(source_pipe_builder)

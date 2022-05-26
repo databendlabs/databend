@@ -45,6 +45,7 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
+use crate::users::UserApiProvider;
 use crate::Config;
 
 pub struct SessionManager {
@@ -62,6 +63,8 @@ pub struct SessionManager {
     storage_operator: RwLock<Operator>,
     storage_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
+
+    user_api_provider: RwLock<Arc<UserApiProvider>>,
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
@@ -80,6 +83,7 @@ impl SessionManager {
             if storage_num_cpus == 0 {
                 storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
             }
+
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
 
@@ -88,6 +92,7 @@ impl SessionManager {
         let storage_operator = Self::init_storage_operator(&conf)
             .await?
             .layer(DalRuntime::new(storage_runtime.inner()));
+
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
@@ -102,7 +107,7 @@ impl SessionManager {
         let mysql_conn_map = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
 
         Ok(Arc::new(SessionManager {
-            conf: RwLock::new(conf),
+            conf: RwLock::new(conf.clone()),
             catalogs: RwLock::new(catalogs),
             discovery: RwLock::new(discovery),
             http_query_manager,
@@ -114,6 +119,7 @@ impl SessionManager {
             storage_operator: RwLock::new(storage_operator),
             storage_runtime: Arc::new(storage_runtime),
             _guards,
+            user_api_provider: RwLock::new(UserApiProvider::create_global(conf).await?),
             mysql_conn_map,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
         }))
@@ -145,6 +151,10 @@ impl SessionManager {
 
     pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.storage_runtime.clone()
+    }
+
+    pub fn get_user_api_provider(&self) -> Arc<UserApiProvider> {
+        self.user_api_provider.read().clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -350,6 +360,9 @@ impl SessionManager {
     }
 
     pub async fn reload_config(&self) -> Result<()> {
+        // TODO(xp): Potential race condition if fields are updated one by one.
+        //           These fields should all be got prepared then update in one atomic update.
+
         let config = {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
@@ -377,6 +390,11 @@ impl SessionManager {
         {
             let discovery = ClusterDiscovery::create_global(config.clone()).await?;
             *self.discovery.write() = discovery;
+        }
+
+        {
+            let x = UserApiProvider::create_global(config).await?;
+            *self.user_api_provider.write() = x;
         }
 
         Ok(())

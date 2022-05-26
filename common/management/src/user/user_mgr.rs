@@ -25,7 +25,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
@@ -72,7 +72,7 @@ impl UserMgr {
 
         let kv_api = self.kv_api.clone();
         let res = kv_api
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 &key,
                 match_seq,
                 Operation::Update(value),
@@ -98,7 +98,7 @@ impl UserApi for UserMgr {
         let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(UpsertKVAction::new(
+        let upsert_kv = kv_api.upsert_kv(UpsertKVReq::new(
             &key,
             match_seq,
             Operation::Update(value),
@@ -223,12 +223,7 @@ impl UserApi for UserMgr {
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVAction::new(
-                &key,
-                seq.into(),
-                Operation::Delete,
-                None,
-            ))
+            .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
             .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())

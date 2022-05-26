@@ -85,7 +85,9 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         let conf = session.get_config();
-        let user_manager = UserApiProvider::create_global(conf.clone()).await?;
+
+        let user_manager = session.session_mgr.get_user_api_provider();
+
         Ok(Arc::new(QueryContextShared {
             session,
             cluster_cache,

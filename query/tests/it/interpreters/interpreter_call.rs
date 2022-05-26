@@ -302,7 +302,7 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `TENANT_QUOTA` expect to have [1, 3] arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `TENANT_QUOTA` expect to have [1, 5] arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -331,26 +331,27 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+-------------------------+",
-            "| max_databases | max_tables_per_database |",
-            "+---------------+-------------------------+",
-            "| 0             | 0                       |",
-            "+---------------+-------------------------+",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| max_databases | max_tables_per_database | max_stages | max_files_per_stage |",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| 0             | 0                       | 0          | 0                   |",
+            "+---------------+-------------------------+------------+---------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     {
-        let plan = PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 7, 5)").await?;
+        let plan =
+            PlanParser::parse(ctx.clone(), "call admin$tenant_quota(tenant1, 7, 5, 3, 3)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+-------------------------+",
-            "| max_databases | max_tables_per_database |",
-            "+---------------+-------------------------+",
-            "| 7             | 5                       |",
-            "+---------------+-------------------------+",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| max_databases | max_tables_per_database | max_stages | max_files_per_stage |",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| 7             | 5                       | 3          | 3                   |",
+            "+---------------+-------------------------+------------+---------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -361,11 +362,11 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+-------------------------+",
-            "| max_databases | max_tables_per_database |",
-            "+---------------+-------------------------+",
-            "| 8             | 5                       |",
-            "+---------------+-------------------------+",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| max_databases | max_tables_per_database | max_stages | max_files_per_stage |",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| 8             | 5                       | 3          | 3                   |",
+            "+---------------+-------------------------+------------+---------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
@@ -376,11 +377,11 @@ async fn test_call_tenant_quota_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+---------------+-------------------------+",
-            "| max_databases | max_tables_per_database |",
-            "+---------------+-------------------------+",
-            "| 8             | 5                       |",
-            "+---------------+-------------------------+",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| max_databases | max_tables_per_database | max_stages | max_files_per_stage |",
+            "+---------------+-------------------------+------------+---------------------+",
+            "| 8             | 5                       | 3          | 3                   |",
+            "+---------------+-------------------------+------------+---------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

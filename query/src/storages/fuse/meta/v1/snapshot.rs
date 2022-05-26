@@ -12,6 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::ops::Add;
+
+use chrono::DateTime;
+use chrono::Utc;
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -30,6 +34,10 @@ pub struct TableSnapshot {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
 
+    /// previous snapshot
+    pub timestamp: Option<DateTime<Utc>>,
+
+    /// previous snapshot
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
 
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
@@ -48,14 +56,26 @@ pub struct TableSnapshot {
 impl TableSnapshot {
     pub fn new(
         snapshot_id: SnapshotId,
+        prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
         schema: DataSchema,
         summary: Statistics,
         segments: Vec<Location>,
     ) -> Self {
+        // timestamp of the snapshot should always larger than the previous one's
+        let now = Utc::now();
+        let mut timestamp = Some(now);
+        if let Some(prev_instant) = prev_timestamp {
+            if prev_instant > &now {
+                // if local time is smaller, use the timestamp of previous snapshot, plus 1 ms
+                timestamp = Some(prev_instant.add(chrono::Duration::milliseconds(1)))
+            }
+        };
+
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id,
+            timestamp,
             prev_snapshot_id,
             schema,
             summary,
@@ -75,6 +95,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
+            timestamp: None,
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
             schema: s.schema,
             summary: s.summary,
