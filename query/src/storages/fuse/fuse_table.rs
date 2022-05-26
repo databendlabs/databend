@@ -89,10 +89,6 @@ impl FuseTable {
         &self.meta_location_generator
     }
 
-    pub fn cluster_keys(&self) -> Vec<Expression> {
-        self.order_keys.clone()
-    }
-
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
         let table_id = table_info.ident.table_id;
         let db_id = table_info
@@ -183,6 +179,10 @@ impl Table for FuseTable {
 
     fn has_exact_total_row_count(&self) -> bool {
         true
+    }
+
+    fn cluster_keys(&self) -> Vec<Expression> {
+        self.order_keys.clone()
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

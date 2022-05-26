@@ -120,6 +120,7 @@ impl Processor for SinkTransform {
         if self.input_schema != output_schema {
             input_stream = Box::pin(AddOnStream::try_create(
                 input_stream,
+                tbl.cluster_keys(),
                 input_schema,
                 output_schema,
                 self.ctx.clone(),

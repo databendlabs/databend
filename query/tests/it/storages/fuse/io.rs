@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -29,24 +27,13 @@ use databend_query::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use num::Integer;
-use opendal::ops::OpWrite;
-use opendal::services::fs;
-use opendal::Accessor;
-use opendal::BytesWriter;
-use opendal::Operator;
-use tempfile::TempDir;
 use uuid::Uuid;
 
+use crate::tests::create_query_context;
+
 #[tokio::test]
-async fn test_fuse_table_block_appender() {
-    let tmp_dir = TempDir::new().unwrap();
-    let local_fs = Operator::new(
-        fs::Backend::build()
-            .root(tmp_dir.path().to_str().unwrap())
-            .finish()
-            .await
-            .unwrap(),
-    );
+async fn test_fuse_table_block_appender() -> Result<()> {
+    let ctx = create_query_context().await?;
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
 
     // single segment
@@ -55,11 +42,13 @@ async fn test_fuse_table_block_appender() {
 
     let locs = TableMetaLocationGenerator::with_prefix(".".to_owned());
     let segments = BlockStreamWriter::write_block_stream(
-        local_fs.clone(),
+        ctx.clone(),
         Box::pin(block_stream),
         DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs.clone(),
+        schema.clone(),
+        vec![],
     )
     .await
     .collect::<Vec<_>>()
@@ -76,16 +65,18 @@ async fn test_fuse_table_block_appender() {
     let number_of_blocks = 30;
     let max_rows_per_block = 3;
     let max_blocks_per_segment = 1;
-    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
+    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
     let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
     let block_stream = futures::stream::iter(blocks);
 
     let segments = BlockStreamWriter::write_block_stream(
-        local_fs.clone(),
+        ctx.clone(),
         Box::pin(block_stream),
         max_rows_per_block,
         max_blocks_per_segment,
         locs.clone(),
+        schema.clone(),
+        vec![],
     )
     .await
     .collect::<Vec<_>>()
@@ -100,21 +91,24 @@ async fn test_fuse_table_block_appender() {
     // empty blocks
     let block_stream = futures::stream::iter(vec![]);
     let segments = BlockStreamWriter::write_block_stream(
-        local_fs,
+        ctx,
         Box::pin(block_stream),
         DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs,
+        schema,
+        vec![],
     )
     .await
     .collect::<Vec<_>>()
     .await;
 
-    assert!(segments.is_empty())
+    assert!(segments.is_empty());
+    Ok(())
 }
 
 #[test]
-fn test_block_compactor() -> common_exception::Result<()> {
+fn test_block_compactor() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create(schema.clone(), vec![Series::from_data(col)]);
@@ -250,7 +244,7 @@ fn test_block_compactor() -> common_exception::Result<()> {
 }
 
 #[tokio::test]
-async fn test_block_stream_writer() -> common_exception::Result<()> {
+async fn test_block_stream_writer() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create(schema.clone(), vec![Series::from_data(col)]);
@@ -264,15 +258,16 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
         let block_stream =
             futures::stream::iter(std::iter::repeat(Ok(sample_block)).take(num_blocks));
 
-        let data_accessor = Arc::new(MockDataAccessor::new());
-        let operator = Operator::new(data_accessor.clone());
+        let ctx = create_query_context().await?;
         let locs = TableMetaLocationGenerator::with_prefix(".".to_owned());
         let stream = BlockStreamWriter::write_block_stream(
-            operator,
+            ctx,
             Box::pin(block_stream),
             max_rows_per_block,
             max_blocks_per_segment,
             locs,
+            DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]),
+            vec![],
         )
         .await;
         let segs = stream.try_collect::<Vec<_>>().await?;
@@ -280,12 +275,8 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
         // verify the number of blocks
         let expected_blocks =
             Integer::div_ceil(&(rows_per_sample_block * num_blocks), &max_rows_per_block);
-        assert_eq!(
-            expected_blocks,
-            data_accessor.blocks_written(),
-            "case: {}",
-            case_name
-        );
+        let actual_blocks = segs.iter().fold(0, |acc, x| acc + x.blocks.len());
+        assert_eq!(expected_blocks, actual_blocks, "case: {}", case_name);
 
         // verify the number of segment
         let expected_segments = Integer::div_ceil(&expected_blocks, &max_blocks_per_segment);
@@ -334,31 +325,4 @@ fn test_meta_locations() -> Result<()> {
     let snapshot_loc = locs.snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
     assert!(snapshot_loc.starts_with(test_prefix));
     Ok(())
-}
-
-use common_base::infallible::Mutex;
-
-#[derive(Debug)]
-struct MockDataAccessor {
-    put_stream_called: Arc<Mutex<usize>>,
-}
-
-impl MockDataAccessor {
-    fn new() -> Self {
-        Self {
-            put_stream_called: Arc::new(Mutex::new(0)),
-        }
-    }
-
-    fn blocks_written(&self) -> usize {
-        *self.put_stream_called.lock()
-    }
-}
-#[async_trait::async_trait]
-impl Accessor for MockDataAccessor {
-    async fn write(&self, _args: &OpWrite) -> std::io::Result<BytesWriter> {
-        let called = &mut *self.put_stream_called.lock();
-        *called += 1;
-        Ok(Box::new(vec![]))
-    }
 }
