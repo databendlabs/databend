@@ -56,9 +56,8 @@ impl Planner {
 
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(NewPipeline, Vec<NewPipeline>)> {
         let (optimized_expr, bind_context, metadata) = self.build_sexpr(sql).await?;
-        Ok(self
-            .build_pipeline(optimized_expr, bind_context, metadata)
-            .await?)
+        self.build_pipeline(optimized_expr, bind_context, metadata)
+            .await
     }
 
     pub async fn build_sexpr(&mut self, sql: &str) -> Result<(SExpr, BindContext, MetadataRef)> {
@@ -80,11 +79,7 @@ impl Planner {
         let optimize_context = OptimizeContext::create_with_bind_context(&bind_result.bind_context);
         let optimized_expr = optimize(bind_result.s_expr, optimize_context)?;
 
-        Ok((
-            optimized_expr,
-            bind_result.bind_context.clone(),
-            metadata.clone(),
-        ))
+        Ok((optimized_expr, bind_result.bind_context, metadata.clone()))
     }
 
     pub async fn build_pipeline(
@@ -95,12 +90,7 @@ impl Planner {
     ) -> Result<(NewPipeline, Vec<NewPipeline>)> {
         // Step 4: build executable Pipeline with SExpr
         let result_columns = bind_context.result_columns();
-        let pb = PipelineBuilder::new(
-            self.ctx.clone(),
-            result_columns,
-            metadata.clone(),
-            optimized_expr,
-        );
-        Ok(pb.spawn()?)
+        let pb = PipelineBuilder::new(self.ctx.clone(), result_columns, metadata, optimized_expr);
+        pb.spawn()
     }
 }

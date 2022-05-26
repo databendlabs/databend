@@ -88,7 +88,7 @@ impl ExplainInterpreterV2 {
     }
 
     pub async fn explain_syntax(&self, plan: SExpr, metadata: MetadataRef) -> Result<DataBlock> {
-        let result = plan.to_format_tree(&metadata.clone()).format_indent()?;
+        let result = plan.to_format_tree(&metadata).format_indent()?;
         let formatted_plan = Series::from_data(vec![result]);
         Ok(DataBlock::create(self.schema.clone(), vec![formatted_plan]))
     }
