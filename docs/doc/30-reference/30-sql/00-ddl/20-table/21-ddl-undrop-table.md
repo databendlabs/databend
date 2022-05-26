@@ -17,7 +17,7 @@ UNDROP TABLE [db.]name
 
 :::tip
 * If a table with the same name already exists, `UNDROP` will get the error: `ERROR 1105 (HY000): Code: 2308, displayText = Undrop Table 'test' already exists.`
-* `UNDROP` relies on the Databend time travel feature.
+* `UNDROP` relies on the Databend time travel feature, the table can be restored only within a retention period, default is 24 hours.
 
 :::
 
