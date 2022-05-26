@@ -35,6 +35,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 use crate::sessions::Settings;
+use crate::users::RoleCacheMgr;
 use crate::Config;
 
 #[derive(MallocSizeOf)]
@@ -254,5 +255,9 @@ impl Session {
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {
         self.status.clone()
+    }
+
+    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
+        self.session_mgr.get_role_cache_manager()
     }
 }
