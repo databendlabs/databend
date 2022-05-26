@@ -908,11 +908,11 @@ impl<'a> TypeChecker<'a> {
 
     async fn resolve_position(
         &self,
-        substr_expr: &'_ Expr<'a>,
-        str_expr: &'_ Expr<'a>,
+        substr_expr: &Expr<'a>,
+        str_expr: &Expr<'a>,
     ) -> Result<(Scalar, DataTypeImpl)> {
-        let first_str = self.match_expr(substr_expr)?;
-        let second_str = self.match_expr(str_expr)?;
+        let first_str = self.resolve_position_arg(substr_expr)?;
+        let second_str = self.resolve_position_arg(str_expr)?;
         let index = DataValue::UInt64(match second_str.find(first_str.as_str()) {
             None => 0,
             Some(idx) => idx + 1,
@@ -927,11 +927,11 @@ impl<'a> TypeChecker<'a> {
         ))
     }
 
-    fn match_expr(&self, expr: &'_ Expr<'a>) -> Result<String> {
+    fn resolve_position_arg(&self, expr: &Expr<'a>) -> Result<String> {
         let expr_str = match expr {
             Expr::Literal { lit, .. } => {
                 let (value, data_type) = self.resolve_literal(lit, None)?;
-                if !data_type.eq(&DataTypeImpl::String(StringType {})) {
+                if data_type != StringType::new_impl() {
                     return Err(ErrorCode::SemanticError(
                         expr.span()
                             .display_error("substr_expr should be String".to_string()),
@@ -942,7 +942,7 @@ impl<'a> TypeChecker<'a> {
             _ => {
                 return Err(ErrorCode::SemanticError(
                     expr.span()
-                        .display_error("Position only supports literal expr".to_string()),
+                        .display_error(format!("Position doesn't support expr {expr}")),
                 ));
             }
         };
