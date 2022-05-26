@@ -285,7 +285,6 @@ impl FuseTable {
             new_table_meta,
         };
 
-        //catalog.upsert_table_option(req).await
         catalog.update_table_meta(req).await
     }
 
