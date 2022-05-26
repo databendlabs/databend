@@ -63,13 +63,13 @@ fn test_inet_aton_function() -> Result<()> {
             name: "invalid input",
             columns: vec![Series::from_data([Some("1.1.1.1"), Some("batman")])],
             expect: Series::from_data(vec![Option::<u32>::None]),
-            error: "Failed to parse 'batman' into a IPV4 address, invalid IP address syntax",
+            error: "Failed to parse 'batman' into a IPV4 address, invalid IPv4 address syntax",
         },
         ScalarFunctionTest {
             name: "empty string",
             columns: vec![Series::from_data([Some("1.1.1.1"), Some("")])],
             expect: Series::from_data(vec![Option::<u32>::None]),
-            error: "Failed to parse '' into a IPV4 address, invalid IP address syntax",
+            error: "Failed to parse '' into a IPV4 address, invalid IPv4 address syntax",
         },
     ];
 

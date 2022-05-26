@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use common_base::base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_io::prelude::FormatSettings;
 use common_tracing::tracing;
+use poem::error::BadRequest;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
@@ -26,6 +29,7 @@ use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
+use poem::web::Query;
 use poem::Body;
 use poem::IntoResponse;
 use poem::Route;
@@ -99,9 +103,11 @@ pub struct QueryResponse {
 impl QueryResponse {
     pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
         let state = r.state.clone();
-        let (data, next_url) = match r.data {
-            Some(d) => (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n))),
-            None => (JsonBlock::empty(), None),
+        let (data, next_url) = match (state.state, r.data) {
+            (ExecuteStateKind::Succeeded | ExecuteStateKind::Running, Some(d)) => {
+                (d.page.data, d.next_page_no.map(|n| make_page_uri(&id, n)))
+            }
+            _ => (JsonBlock::empty(), None),
         };
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();
@@ -264,12 +270,21 @@ fn query_id_not_found(query_id: String) -> PoemError {
     )
 }
 
+#[derive(Deserialize)]
+struct DownloadHandlerParams {
+    pub format: Option<String>,
+}
+
 #[poem::handler]
 async fn result_download_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
+    Query(params): Query<DownloadHandlerParams>,
 ) -> PoemResult<Body> {
+    let default_format = "csv".to_string();
     let session = ctx.get_session(SessionType::HTTPQuery);
+    let format =
+        OutputFormatType::from_str(&params.format.unwrap_or(default_format)).map_err(BadRequest)?;
 
     let ctx = session
         .create_query_context()
@@ -287,7 +302,7 @@ async fn result_download_handler(
         })?;
 
     let stream = result_table
-        .download(ctx, OutputFormatType::Tsv)
+        .download(ctx, format)
         .await
         .map_err(InternalServerError)?;
 

@@ -122,6 +122,7 @@ build_exceptions! {
     InvalidTimezone(1067),
     InvalidDate(1068),
     InvalidTimestamp(1069),
+    InvalidClusterKeys(1070),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),
@@ -160,6 +161,8 @@ build_exceptions! {
 
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),
+    TableNotWritable(2012),
+    TableHistoricalDataNotFound(2013),
 
     // User api error codes.
     UnknownUser(2201),
@@ -174,6 +177,15 @@ build_exceptions! {
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
     ViewAlreadyExists(2306),
+    CreateTableWithDropTime(2307),
+    UndropTableAlreadyExists(2308),
+    UndropTableHasNoHistory(2309),
+    CreateDatabaseWithDropTime(2310),
+    UndropDbHasNoHistory(2312),
+    UndropTableWithNoDropTime(2313),
+    DropTableWithDropTime(2314),
+    DropDbWithDropTime(2315),
+    UndropDbWithNoDropTime(2316),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

@@ -60,7 +60,7 @@ impl Rule for RuleImplementHashJoin {
     }
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let plan = expression.plan();
+        let plan = expression.plan().clone();
         let logical_inner_join: LogicalInnerJoin = plan.try_into()?;
 
         let result = SExpr::create(

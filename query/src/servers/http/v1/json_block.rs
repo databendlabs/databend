@@ -36,6 +36,9 @@ pub fn block_to_json_value_columns(
     block: &DataBlock,
     format: &FormatSettings,
 ) -> Result<Vec<Vec<JsonValue>>> {
+    if block.is_empty() {
+        return Ok(vec![]);
+    }
     let mut col_table = Vec::new();
     let columns_size = block.columns().len();
     for col_index in 0..columns_size {
@@ -112,6 +115,9 @@ impl From<JsonBlock> for Vec<Vec<JsonValue>> {
 }
 
 fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
+    if col_table.is_empty() {
+        return vec![];
+    }
     let num_row = col_table[0].len();
     let mut row_table = Vec::with_capacity(num_row);
     for _ in 0..num_row {

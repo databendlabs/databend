@@ -39,7 +39,7 @@ async fn test_metrics() -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None).await?;
 
     // add a watcher
-    let mut grpc_client = client.make_conn().await?;
+    let mut grpc_client = client.make_client().await?;
 
     let watch = WatchRequest {
         key: "a".to_string(),

@@ -36,6 +36,7 @@ pub struct ProcessInfo {
     pub memory_usage: i64,
     pub dal_metrics: Option<DalMetrics>,
     pub scan_progress_value: Option<ProgressValues>,
+    pub mysql_connection_id: Option<u32>,
 }
 
 impl Session {
@@ -67,6 +68,7 @@ impl Session {
             memory_usage,
             dal_metrics: Session::query_dal_metrics(status),
             scan_progress_value: Session::query_scan_progress_value(status),
+            mysql_connection_id: self.mysql_connection_id,
         }
     }
 

@@ -30,6 +30,10 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
@@ -135,6 +139,14 @@ impl Catalog for ImmutableCatalog {
         self.sys_db_meta.get_all_tables(db_name)
     }
 
+    async fn list_tables_history(
+        &self,
+        tenant: &str,
+        db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        self.list_tables(tenant, db_name).await
+    }
+
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create table in system database",
@@ -144,6 +156,12 @@ impl Catalog for ImmutableCatalog {
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::UnImplement(
             "Cannot drop table in system database",
+        ))
+    }
+
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop table in system database",
         ))
     }
 
@@ -158,7 +176,14 @@ impl Catalog for ImmutableCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
-            "Commit table not allowed for system database {:?}",
+            "upsert table option not allowed for system database {:?}",
+            req
+        )))
+    }
+
+    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "update table meta not allowed for system database {:?}",
             req
         )))
     }

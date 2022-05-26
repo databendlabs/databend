@@ -13,6 +13,10 @@
 //  limitations under the License.
 //
 
-mod meta_backend;
+mod clustering_information;
+mod clustering_information_table;
+mod table_args;
 
-pub use meta_backend::MetaBackend;
+pub use clustering_information::ClusteringInformation;
+pub use clustering_information_table::ClusteringInformationTable;
+pub use table_args::*;

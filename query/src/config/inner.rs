@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use std::time::Duration;
 
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
@@ -24,7 +25,6 @@ use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_io::prelude::StorageConfig;
-use common_meta_grpc::MetaGrpcClientConf;
 use common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;
@@ -287,8 +287,8 @@ impl MetaConfig {
         }
     }
 
-    pub fn to_meta_grpc_client_conf(&self) -> MetaGrpcClientConf {
-        let meta_config = RpcClientConf {
+    pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
+        RpcClientConf {
             address: self.address.clone(),
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
@@ -298,12 +298,8 @@ impl MetaConfig {
             } else {
                 None
             },
-        };
 
-        MetaGrpcClientConf {
-            meta_service_config: meta_config.clone(),
-            kv_service_config: meta_config,
-            client_timeout_in_second: self.client_timeout_in_second,
+            timeout: Some(Duration::from_secs(self.client_timeout_in_second)),
         }
     }
 }

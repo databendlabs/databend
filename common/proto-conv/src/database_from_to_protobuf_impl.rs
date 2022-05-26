@@ -115,6 +115,10 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
             options: p.options,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
+            drop_on: match p.drop_on {
+                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
+                None => None,
+            },
             comment: p.comment,
         };
         Ok(v)
@@ -128,7 +132,28 @@ impl FromToProto<pb::DatabaseMeta> for mt::DatabaseMeta {
             options: self.options.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
+            drop_on: match self.drop_on {
+                Some(drop_on) => Some(drop_on.to_pb()?),
+                None => None,
+            },
             comment: self.comment.clone(),
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::DbIdList> for mt::DbIdList {
+    fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self { id_list: p.ids };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
+        let p = pb::DbIdList {
+            ver: VER,
+            ids: self.id_list.clone(),
         };
         Ok(p)
     }

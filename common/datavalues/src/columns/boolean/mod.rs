@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
-use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -109,84 +107,15 @@ impl Column for BooleanColumn {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let selected = filter.values().len() - filter.values().null_count();
-        if selected == self.len() {
-            return Arc::new(self.clone());
-        }
-        let mut bitmap = MutableBitmap::with_capacity(selected);
-        let (value_slice, _, value_length) = self.values().as_slice();
-        let (slice, _, length) = filter.values().as_slice();
-
-        let mut chunks = BitChunksExact::<u64>::new(value_slice, value_length);
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
-        chunks
-            .by_ref()
-            .zip(mask_chunks.by_ref())
-            .for_each(|(chunk, mut mask)| {
-                while mask != 0 {
-                    let n = mask.trailing_zeros() as usize;
-                    let value: bool = chunk & (1 << n) != 0;
-                    bitmap.push(value);
-                    mask = mask & (mask - 1);
-                }
-            });
-
-        chunks
-            .remainder_iter()
-            .zip(mask_chunks.remainder_iter())
-            .for_each(|(value, is_selected)| {
-                if is_selected {
-                    bitmap.push(value);
-                }
-            });
-
-        let col = BooleanColumn {
-            values: bitmap.into(),
-        };
-        Arc::new(col)
+        filter_scalar_column(self, filter)
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
-        let mut builders = Vec::with_capacity(scattered_size);
-        for _i in 0..scattered_size {
-            builders.push(MutableBooleanColumn::with_capacity(self.len()));
-        }
-
-        indices
-            .iter()
-            .zip(self.values())
-            .for_each(|(index, value)| {
-                builders[*index].append_value(value);
-            });
-
-        builders.iter_mut().map(|b| b.to_column()).collect()
+        scatter_scalar_column(self, indices, scattered_size)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        debug_assert!(
-            offsets.len() == self.len(),
-            "Size of offsets must match size of column"
-        );
-
-        if offsets.is_empty() {
-            return self.slice(0, 0);
-        }
-
-        let mut builder = MutableBooleanColumn::with_capacity(*offsets.last().unwrap());
-
-        let mut previous_offset: usize = 0;
-
-        (0..self.len()).for_each(|i| {
-            let offset: usize = offsets[i];
-            let data = self.values.get_bit(i);
-            builder
-                .values
-                .extend_constant(offset - previous_offset, data);
-            previous_offset = offset;
-        });
-
-        builder.to_column()
+        replicate_scalar_column(self, offsets)
     }
 
     fn convert_full_column(&self) -> ColumnRef {

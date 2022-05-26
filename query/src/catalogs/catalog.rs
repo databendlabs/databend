@@ -30,6 +30,10 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
@@ -91,10 +95,13 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<Arc<dyn Table>>;
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables_history(&self, tenant: &str, db_name: &str)
+        -> Result<Vec<Arc<dyn Table>>>;
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply>;
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
@@ -116,6 +123,8 @@ pub trait Catalog: DynClone + Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
+
+    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply>;
 
     ///
     /// Table function

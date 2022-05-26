@@ -20,6 +20,7 @@ use common_exception::Result;
 
 use crate::sessions::QueryContext;
 use crate::sql::planner::binder::BindContext;
+use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::planner::semantic::TypeChecker;
 use crate::sql::plans::Scalar;
 
@@ -27,15 +28,25 @@ use crate::sql::plans::Scalar;
 pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
     ctx: Arc<QueryContext>,
+    metadata: MetadataRef,
 }
 
 impl<'a> ScalarBinder<'a> {
-    pub fn new(bind_context: &'a BindContext, ctx: Arc<QueryContext>) -> Self {
-        ScalarBinder { bind_context, ctx }
+    pub fn new(
+        bind_context: &'a BindContext,
+        ctx: Arc<QueryContext>,
+        metadata: MetadataRef,
+    ) -> Self {
+        ScalarBinder {
+            bind_context,
+            ctx,
+            metadata,
+        }
     }
 
-    pub async fn bind_expr(&self, expr: &Expr<'a>) -> Result<(Scalar, DataTypeImpl)> {
-        let mut type_checker = TypeChecker::new(self.bind_context, self.ctx.clone());
+    pub async fn bind(&mut self, expr: &Expr<'a>) -> Result<(Scalar, DataTypeImpl)> {
+        let mut type_checker =
+            TypeChecker::new(self.bind_context, self.ctx.clone(), self.metadata.clone());
         type_checker.resolve(expr, None).await
     }
 }

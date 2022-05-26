@@ -16,7 +16,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::UpsertTableOptionReq;
+use common_meta_types::MatchSeq;
+use common_meta_types::TableStatistics;
+use common_meta_types::UpdateTableMetaReq;
 use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
@@ -34,6 +36,7 @@ impl FuseTable {
 
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
+                &prev_snapshot.timestamp,
                 Some((prev_id, prev_snapshot.format_version())),
                 prev_snapshot.schema.clone(),
                 Default::default(),
@@ -50,12 +53,24 @@ impl FuseTable {
                 let keep_last_snapshot = false;
                 self.do_optimize(ctx.clone(), keep_last_snapshot).await?
             }
+
+            let mut new_table_meta = self.table_info.meta.clone();
+            // update snapshot location
+            new_table_meta
+                .options
+                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_loc);
+
+            // update table statistics, all zeros
+            new_table_meta.statistics = TableStatistics::default();
+
+            let table_id = self.table_info.ident.table_id;
+            let table_version = self.table_info.ident.seq;
             ctx.get_catalog(&plan.catalog)?
-                .upsert_table_option(UpsertTableOptionReq::new(
-                    &self.table_info.ident,
-                    OPT_KEY_SNAPSHOT_LOCATION,
-                    new_snapshot_loc,
-                ))
+                .update_table_meta(UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta,
+                })
                 .await?;
         }
 

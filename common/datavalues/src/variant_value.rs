@@ -20,6 +20,10 @@ use std::ops::Deref;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::EitherOrBoth::Both;
+use itertools::EitherOrBoth::Left;
+use itertools::EitherOrBoth::Right;
+use itertools::Itertools;
 use serde_json::Value;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -100,28 +104,45 @@ impl Ord for VariantValue {
         match (self.as_ref(), other.as_ref()) {
             (Value::Null, Value::Null) => Ordering::Equal,
             (Value::Array(a1), Value::Array(a2)) => {
-                for (v1, v2) in a1.iter().zip(a2) {
-                    if !v1.eq(v2) {
-                        return VariantValue::from(v1).cmp(&VariantValue::from(v2));
+                let it = a1.iter().zip_longest(a2.iter()).find_map(|e| match e {
+                    Both(v1, v2) => {
+                        match VariantValue::from(v1).partial_cmp(&VariantValue::from(v2)) {
+                            Some(ord) => match ord {
+                                Ordering::Equal => None,
+                                other => Some(other),
+                            },
+                            None => None,
+                        }
                     }
+                    Left(_) => Some(Ordering::Greater),
+                    Right(_) => Some(Ordering::Less),
+                });
+                match it {
+                    Some(ord) => ord,
+                    None => Ordering::Equal,
                 }
-                a1.len().cmp(&a2.len())
             }
             (Value::Object(o1), Value::Object(o2)) => {
-                for (k1, k2) in o1.keys().zip(o2.keys()) {
-                    if k1.eq(k2) {
-                        let v1 = o1.get(k1).unwrap();
-                        let v2 = o2.get(k2).unwrap();
-
-                        let res = VariantValue::from(v1).cmp(&VariantValue::from(v2));
-                        if res == Ordering::Equal {
-                            continue;
+                let it = o1.keys().zip_longest(o2.keys()).find_map(|e| match e {
+                    Both(k1, k2) => match k1.cmp(k2) {
+                        Ordering::Equal => {
+                            let v1 = o1.get(k1).unwrap();
+                            let v2 = o2.get(k2).unwrap();
+                            match VariantValue::from(v1).cmp(&VariantValue::from(v2)) {
+                                Ordering::Equal => None,
+                                other => Some(other),
+                            }
                         }
-                        return res;
-                    }
-                    return k1.cmp(k2).reverse();
+                        Ordering::Greater => Some(Ordering::Less),
+                        Ordering::Less => Some(Ordering::Greater),
+                    },
+                    Left(_) => Some(Ordering::Greater),
+                    Right(_) => Some(Ordering::Less),
+                });
+                match it {
+                    Some(ord) => ord,
+                    None => Ordering::Equal,
                 }
-                o1.len().cmp(&o2.len())
             }
             (Value::String(v1), Value::String(v2)) => v1.cmp(v2),
             (Value::Number(v1), Value::Number(v2)) => {

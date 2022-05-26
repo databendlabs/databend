@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate;
+mod apply;
 mod eval_scalar;
 mod filter;
 mod hash_join;
@@ -25,9 +26,9 @@ mod project;
 mod scalar;
 mod sort;
 
-use std::any::Any;
-
 pub use aggregate::AggregatePlan;
+pub use apply::CrossApply;
+use common_exception::Result;
 use enum_dispatch::enum_dispatch;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
@@ -44,11 +45,12 @@ pub use sort::SortItem;
 pub use sort::SortPlan;
 
 use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelExpr;
 use crate::sql::optimizer::RelationalProperty;
 use crate::sql::optimizer::SExpr;
 
 #[enum_dispatch]
-pub trait BasePlan: Any {
+pub trait Operator {
     fn plan_type(&self) -> PlanType;
 
     fn is_physical(&self) -> bool;
@@ -59,15 +61,13 @@ pub trait BasePlan: Any {
         false
     }
 
-    fn as_physical(&self) -> Option<&dyn PhysicalPlan>;
-
     fn as_logical(&self) -> Option<&dyn LogicalPlan>;
 
-    fn as_any(&self) -> &dyn Any;
+    fn as_physical(&self) -> Option<&dyn PhysicalPlan>;
 }
 
 pub trait LogicalPlan {
-    fn compute_relational_prop(&self, expression: &SExpr) -> RelationalProperty;
+    fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty>;
 }
 
 pub trait PhysicalPlan {
@@ -92,14 +92,16 @@ pub enum PlanType {
     Aggregate,
     Sort,
     Limit,
+    CrossApply,
 
     // Pattern
     Pattern,
 }
 
-#[enum_dispatch(BasePlan)]
+/// Relational operators
+#[enum_dispatch(Operator)]
 #[derive(Clone, Debug)]
-pub enum BasePlanImpl {
+pub enum RelOperator {
     LogicalGet(LogicalGet),
     LogicalInnerJoin(LogicalInnerJoin),
 
@@ -112,6 +114,7 @@ pub enum BasePlanImpl {
     Aggregate(AggregatePlan),
     Sort(SortPlan),
     Limit(LimitPlan),
+    CrossApply(CrossApply),
 
     Pattern(PatternPlan),
 }

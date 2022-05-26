@@ -43,7 +43,7 @@ impl Series {
             with_match_scalar_type!(type_id, |$T| {
                 let col: &<$T as Scalar>::ColumnType = Series::check_get(column)?;
                 type Builder = <<$T as Scalar>::ColumnType as ScalarColumn>::Builder;
-                let mut builder = Builder::with_capacity(indices.len());
+                let mut builder = Builder::with_capacity_meta(indices.len(), col.column_meta());
 
                 for index in indices {
                     builder.push( col.get_data(index.to_usize()) );

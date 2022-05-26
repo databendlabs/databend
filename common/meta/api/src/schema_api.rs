@@ -37,6 +37,12 @@ use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UndropDatabaseReply;
+use common_meta_types::UndropDatabaseReq;
+use common_meta_types::UndropTableReply;
+use common_meta_types::UndropTableReq;
+use common_meta_types::UpdateTableMetaReply;
+use common_meta_types::UpdateTableMetaReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
@@ -52,6 +58,11 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError>;
 
+    async fn undrop_database(
+        &self,
+        req: UndropDatabaseReq,
+    ) -> Result<UndropDatabaseReply, MetaError>;
+
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError>;
 
     async fn list_databases(
@@ -64,15 +75,24 @@ pub trait SchemaApi: Send + Sync {
         req: RenameDatabaseReq,
     ) -> Result<RenameDatabaseReply, MetaError>;
 
+    async fn get_database_history(
+        &self,
+        req: ListDatabaseReq,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
+
     // table
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError>;
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError>;
 
+    async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, MetaError>;
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError>;
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError>;
+
+    async fn get_table_history(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 
@@ -85,6 +105,11 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, MetaError>;
+
+    async fn update_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply, MetaError>;
 
     // TODO: Disabled temporarily: Consider move them to another trait such as `ShareApi` or else.
     //       Since `share` has nothing really to do with database or table.

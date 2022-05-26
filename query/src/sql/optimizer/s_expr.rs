@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::plans::BasePlan;
-use crate::sql::plans::BasePlanImpl;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::sql::plans::Operator;
 use crate::sql::plans::PlanType;
+use crate::sql::plans::RelOperator;
 use crate::sql::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
 pub struct SExpr {
-    plan: BasePlanImpl,
+    plan: RelOperator,
     children: Vec<SExpr>,
 
     original_group: Option<IndexType>,
@@ -28,7 +31,7 @@ pub struct SExpr {
 
 impl SExpr {
     pub fn create(
-        plan: BasePlanImpl,
+        plan: RelOperator,
         children: Vec<SExpr>,
         original_group: Option<IndexType>,
     ) -> Self {
@@ -39,24 +42,30 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: BasePlanImpl, child: SExpr) -> Self {
+    pub fn create_unary(plan: RelOperator, child: SExpr) -> Self {
         Self::create(plan, vec![child], None)
     }
 
-    pub fn create_binary(plan: BasePlanImpl, left_child: SExpr, right_child: SExpr) -> Self {
+    pub fn create_binary(plan: RelOperator, left_child: SExpr, right_child: SExpr) -> Self {
         Self::create(plan, vec![left_child, right_child], None)
     }
 
-    pub fn create_leaf(plan: BasePlanImpl) -> Self {
+    pub fn create_leaf(plan: RelOperator) -> Self {
         Self::create(plan, vec![], None)
     }
 
-    pub fn plan(&self) -> BasePlanImpl {
-        self.plan.clone()
+    pub fn plan(&self) -> &RelOperator {
+        &self.plan
     }
 
     pub fn children(&self) -> &[SExpr] {
         &self.children
+    }
+
+    pub fn child(&self, n: usize) -> Result<&SExpr> {
+        self.children
+            .get(n)
+            .ok_or_else(|| ErrorCode::LogicalError(format!("Invalid children index: {}", n)))
     }
 
     pub fn arity(&self) -> usize {

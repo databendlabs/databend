@@ -26,7 +26,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_meta_types::UserDefinedFunction;
 
 use crate::udf::UdfApi;
@@ -71,7 +71,7 @@ impl UdfApi for UdfMgr {
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
         let upsert_info = self
             .kv_api
-            .upsert_kv(UpsertKVAction::new(&key, seq, val, None));
+            .upsert_kv(UpsertKVReq::new(&key, seq, val, None));
 
         let res = upsert_info.await?.into_add_result()?;
 
@@ -99,7 +99,7 @@ impl UdfApi for UdfMgr {
         let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
         let upsert_info =
             self.kv_api
-                .upsert_kv(UpsertKVAction::new(&key, MatchSeq::from(seq), val, None));
+                .upsert_kv(UpsertKVReq::new(&key, MatchSeq::from(seq), val, None));
 
         let res = upsert_info.await?;
         match res.result {
@@ -144,12 +144,7 @@ impl UdfApi for UdfMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    seq.into(),
-                    Operation::Delete,
-                    None,
-                ))
+                .upsert_kv(UpsertKVReq::new(&key, seq.into(), Operation::Delete, None))
                 .await
         };
         let res = upsert_kv.await?;

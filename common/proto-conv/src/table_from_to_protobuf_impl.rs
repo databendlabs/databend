@@ -129,7 +129,16 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             order_keys: p.order_keys,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
+            drop_on: match p.drop_on {
+                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
+                None => None,
+            },
             comment: p.comment,
+            statistics: p
+                .statistics
+                .map(mt::TableStatistics::from_pb)
+                .transpose()?
+                .unwrap_or_default(),
         };
         Ok(v)
     }
@@ -144,7 +153,55 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             order_keys: self.order_keys.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
+            drop_on: match self.drop_on {
+                Some(drop_on) => Some(drop_on.to_pb()?),
+                None => None,
+            },
             comment: self.comment.clone(),
+            statistics: Some(self.statistics.to_pb()?),
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::TableStatistics> for mt::TableStatistics {
+    fn from_pb(p: pb::TableStatistics) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self {
+            number_of_rows: p.number_of_rows,
+            data_bytes: p.data_bytes,
+            compressed_data_bytes: p.compressed_data_bytes,
+            index_data_bytes: p.index_data_bytes,
+        };
+
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableStatistics, Incompatible> {
+        let p = pb::TableStatistics {
+            ver: VER,
+            number_of_rows: self.number_of_rows,
+            data_bytes: self.data_bytes,
+            compressed_data_bytes: self.compressed_data_bytes,
+            index_data_bytes: self.index_data_bytes,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::TableIdList> for mt::TableIdList {
+    fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self { id_list: p.ids };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableIdList, Incompatible> {
+        let p = pb::TableIdList {
+            ver: VER,
+            ids: self.id_list.clone(),
         };
         Ok(p)
     }

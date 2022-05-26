@@ -71,7 +71,7 @@ impl MutableArrayColumn {
 impl Default for MutableArrayColumn {
     fn default() -> Self {
         Self::with_capacity_meta(0, ColumnMeta::Array {
-            data_type: UInt64Type::new_impl(),
+            inner_type: UInt64Type::new_impl(),
         })
     }
 }
@@ -145,15 +145,15 @@ impl ScalarColumnBuilder for MutableArrayColumn {
 
     fn with_capacity_meta(capacity: usize, meta: ColumnMeta) -> Self {
         match meta {
-            ColumnMeta::Array { data_type } => {
+            ColumnMeta::Array { inner_type } => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
 
                 Self {
-                    inner_data_type: data_type.clone(),
+                    inner_data_type: inner_type.clone(),
                     last_offset: 0,
                     offsets,
-                    inner_column: data_type.create_mutable(capacity),
+                    inner_column: inner_type.create_mutable(capacity),
                 }
             }
             _ => panic!("must be ColumnMeta::Array"),

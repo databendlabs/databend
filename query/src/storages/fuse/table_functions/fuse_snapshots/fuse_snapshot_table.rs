@@ -18,7 +18,6 @@ use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -128,12 +127,7 @@ impl Table for FuseSnapshotTable {
             )
             .await?;
 
-        let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "expecting fuse table, but got table of engine type: {}",
-                tbl.get_table_info().meta.engine
-            ))
-        })?;
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
         let blocks = vec![FuseSnapshot::new(ctx.clone(), tbl).get_history().await?];
         Ok(Box::pin(DataBlockStream::create(

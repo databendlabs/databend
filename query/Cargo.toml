@@ -54,7 +54,7 @@ common-tracing = { path = "../common/tracing" }
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
-opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
+opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "967477f1", package = "opensrv-mysql" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "45ead90" }
 
@@ -88,7 +88,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
 once_cell = "1.10.0"
-opendal = { version = "0.6.2", features = ["retry"] }
+opendal = { version = "0.6.3", features = ["retry"] }
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"
@@ -104,6 +104,7 @@ serde_json = "1.0.79"
 serfig = "0.0.2"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
+smallvec = { version = "1.8.0", features = ["write"] }
 tempfile = { version = "3.3.0", optional = true }
 thiserror = "1.0.30"
 threadpool = "1.8.1"

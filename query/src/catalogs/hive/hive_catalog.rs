@@ -134,6 +134,16 @@ impl Catalog for HiveCatalog {
         todo!()
     }
 
+    async fn list_tables_history(
+        &self,
+        _tenant: &str,
+        _db_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::UnImplement(
+            "Cannot list table history in HIVE catalog",
+        ))
+    }
+
     async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create table in HIVE catalog",
@@ -142,6 +152,12 @@ impl Catalog for HiveCatalog {
 
     async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::UnImplement("Cannot drop table in HIVE catalog"))
+    }
+
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot undrop table in HIVE catalog",
+        ))
     }
 
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
@@ -171,6 +187,12 @@ impl Catalog for HiveCatalog {
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(
             "Cannot upsert table option in HIVE catalog",
+        ))
+    }
+
+    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot update table meta in HIVE catalog",
         ))
     }
 

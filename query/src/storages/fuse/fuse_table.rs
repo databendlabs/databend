@@ -53,10 +53,16 @@ pub struct FuseTable {
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
     pub(crate) order_keys: Vec<Expression>,
+    pub(crate) read_only: bool,
 }
 
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let r = Self::do_create(table_info, false)?;
+        Ok(r)
+    }
+
+    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let mut order_keys = Vec::new();
         if let Some(order) = &table_info.meta.order_keys {
@@ -67,6 +73,7 @@ impl FuseTable {
             table_info,
             order_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
+            read_only,
         }))
     }
 
@@ -80,6 +87,10 @@ impl FuseTable {
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
+    }
+
+    pub fn cluster_keys(&self) -> Vec<Expression> {
+        self.order_keys.clone()
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
@@ -112,7 +123,7 @@ impl FuseTable {
 
     pub fn snapshot_format_version(&self) -> u64 {
         match self.snapshot_loc() {
-            Some(loc) => TableMetaLocationGenerator::snaphost_version(loc.as_str()),
+            Some(loc) => TableMetaLocationGenerator::snapshot_version(loc.as_str()),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
                 // in this case, we just returns the current snapshot version
@@ -138,6 +149,17 @@ impl FuseTable {
                 tbl.engine()
             ))
         })
+    }
+
+    pub fn check_mutable(&self) -> Result<()> {
+        if self.read_only {
+            Err(ErrorCode::TableNotWritable(format!(
+                "Table {} is in read-only mode",
+                self.table_info.desc.as_str()
+            )))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -178,7 +200,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx, &plan.push_downs).await
+        self.do_read(ctx, &plan.push_downs)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
@@ -192,6 +214,7 @@ impl Table for FuseTable {
     }
 
     fn append2(&self, ctx: Arc<QueryContext>, pipeline: &mut NewPipeline) -> Result<()> {
+        self.check_mutable()?;
         self.do_append2(ctx, pipeline)
     }
 
@@ -201,6 +224,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
+        self.check_mutable()?;
         let log_entry_stream = self.append_chunks(ctx, stream).await?;
         let data_block_stream =
             log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
@@ -217,6 +241,7 @@ impl Table for FuseTable {
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
+        self.check_mutable()?;
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
@@ -231,23 +256,22 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_truncate(ctx, truncate_plan).await
     }
 
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
+        self.check_mutable()?;
         self.do_optimize(ctx, keep_last_snapshot).await
     }
 
-    async fn statistics(&self, ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
-        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
-        Ok(snapshot.map(|s| {
-            let summary = &s.summary;
-            TableStatistics {
-                num_rows: Some(summary.row_count),
-                data_size: Some(summary.uncompressed_byte_size),
-                data_size_compressed: Some(summary.compressed_byte_size),
-                index_length: None,
-            }
+    async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
+        let s = &self.table_info.meta.statistics;
+        Ok(Some(TableStatistics {
+            num_rows: Some(s.number_of_rows),
+            data_size: Some(s.data_bytes),
+            data_size_compressed: Some(s.compressed_data_bytes),
+            index_length: None, // we do not have it yet
         }))
     }
 }

@@ -109,7 +109,7 @@ impl IfFunction {
                 let l_val = left_viewer.value_at(0);
                 let rhs_viewer = $T::try_create_viewer(&rhs)?;
 
-                let mut builder: NullableColumnBuilder<$T> = NullableColumnBuilder::with_capacity(input_rows);
+                let mut builder: NullableColumnBuilder<$T> =  NullableColumnBuilder::with_capacity_meta(input_rows, lhs.column_meta());
 
                 let iter = cond_col.iter().zip(rhs_viewer.iter().enumerate());
 
@@ -216,7 +216,7 @@ impl IfFunction {
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
             let lhs_viewer = $T::try_create_viewer(&lhs)?;
             let rhs_viewer = $T::try_create_viewer(&rhs)?;
-            let mut builder = NullableColumnBuilder::<$T>::with_capacity(input_rows);
+            let mut builder = NullableColumnBuilder::<$T>::with_capacity_meta(input_rows, lhs.column_meta());
             for ((predicate, l), (row, r)) in cond_col
                 .iter()
                 .zip(lhs_viewer.iter())

@@ -42,7 +42,8 @@ pub struct ColumnBinding {
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Default, Debug)]
 pub struct BindContext {
-    _parent: Option<Box<BindContext>>,
+    pub parent: Option<Box<BindContext>>,
+
     pub columns: Vec<ColumnBinding>,
 
     pub aggregate_info: AggregateInfo,
@@ -60,7 +61,7 @@ impl BindContext {
 
     pub fn with_parent(parent: Box<BindContext>) -> Self {
         BindContext {
-            _parent: Some(parent),
+            parent: Some(parent),
             columns: vec![],
             aggregate_info: Default::default(),
             in_grouping: false,
@@ -108,21 +109,39 @@ impl BindContext {
         table: Option<String>,
         column: &Identifier,
     ) -> Result<ColumnBinding> {
-        // TODO: lookup parent context to support correlated subquery
         let mut result = vec![];
-        if let Some(table) = table {
+
+        let mut bind_context: &BindContext = self;
+        // Lookup parent context to support correlated subquery
+        loop {
             for column_binding in self.columns.iter() {
-                if let Some(table_name) = &column_binding.table_name {
-                    if table_name == &table && column_binding.column_name == column.name {
+                match (&table, &column_binding.table_name) {
+                    // No qualified table name specified
+                    (None, None) | (None, Some(_))
+                        if column.name.to_lowercase() == column_binding.column_name =>
+                    {
                         result.push(column_binding.clone());
                     }
+
+                    // Qualified column reference
+                    (Some(table), Some(table_name))
+                        if table == table_name
+                            && column.name.to_lowercase() == column_binding.column_name =>
+                    {
+                        result.push(column_binding.clone());
+                    }
+                    _ => {}
                 }
             }
-        } else {
-            for column_binding in self.columns.iter() {
-                if column_binding.column_name == column.name {
-                    result.push(column_binding.clone());
-                }
+
+            if !result.is_empty() {
+                break;
+            }
+
+            if let Some(ref parent) = bind_context.parent {
+                bind_context = parent;
+            } else {
+                break;
             }
         }
 
