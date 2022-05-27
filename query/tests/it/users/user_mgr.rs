@@ -295,14 +295,16 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
-    // Get user via username `default` and hostname `otherhost`.
+    // Get user via username `default` and hostname `otherhost` will be denied.
     {
-        let user = user_mgr
+        let res = user_mgr
             .get_user(tenant, UserIdentity::new(username1, hostname3))
-            .await?;
-        assert_eq!(user.name, username1);
-        assert_eq!(user.hostname, hostname3);
-        assert!(user.grants.entries().is_empty());
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = only accept root from localhost 'default'@'otherhost'.",
+            res.err().unwrap().to_string()
+        );
     }
 
     // Get user via username `root` and hostname `127.0.0.1`.
@@ -347,14 +349,16 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
-    // Get user via username `root` and hostname `otherhost`.
+    // Get user via username `root` and hostname `otherhost` will be denied.
     {
-        let user = user_mgr
+        let res = user_mgr
             .get_user(tenant, UserIdentity::new(username2, hostname3))
-            .await?;
-        assert_eq!(user.name, username2);
-        assert_eq!(user.hostname, hostname3);
-        assert!(user.grants.entries().is_empty());
+            .await;
+        assert!(res.is_err());
+        assert_eq!(
+            "Code: 2201, displayText = only accept root from localhost 'root'@'otherhost'.",
+            res.err().unwrap().to_string()
+        );
     }
 
     Ok(())

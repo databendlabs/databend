@@ -38,6 +38,7 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::storages::view::view_table::QUERY;
 use crate::storages::view::view_table::VIEW_ENGINE;
+use crate::storages::NavigationPoint;
 
 pub struct JoinedSchemaAnalyzer {
     ctx: Arc<QueryContext>,
@@ -103,8 +104,11 @@ impl JoinedSchemaAnalyzer {
         // TODO(Winter): await query_context.get_table
         let (catalog, database, table) = resolve_table(&self.ctx, &item.name, "SELECT")?;
         let mut read_table = self.ctx.get_table(&catalog, &database, &table).await?;
-        if let Some(instant) = &item.instant {
-            read_table = read_table.navigate_to(self.ctx.clone(), instant).await?
+        if let Some(Instant::SnapshotID(s)) = &item.instant {
+            let navigation_point = NavigationPoint::SnapshotID(s.to_owned());
+            read_table = read_table
+                .navigate_to(self.ctx.clone(), &navigation_point)
+                .await?
         }
         let tbl_info = read_table.get_table_info();
 

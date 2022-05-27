@@ -663,7 +663,7 @@ async fn test_auth_basic() -> Result<()> {
     post_sql_to_endpoint(&ep, &sql, 1).await?;
 
     let basic = headers::Authorization::basic(user_name, password);
-    test_auth_post(&ep, user_name, basic).await?;
+    test_auth_post(&ep, user_name, basic, &"%").await?;
     Ok(())
 }
 
@@ -715,11 +715,17 @@ async fn test_auth_jwt() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear).await?;
+    // root user can only login in localhost
+    test_auth_post(&ep, user_name, bear, "127.0.0.1").await?;
     Ok(())
 }
 
-async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header) -> Result<()> {
+async fn test_auth_post(
+    ep: &EndpointType,
+    user_name: &str,
+    header: impl Header,
+    host: &str,
+) -> Result<()> {
     let sql = "select current_user()";
 
     let json = serde_json::json!({"sql": sql.to_string()});
@@ -747,7 +753,7 @@ async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header)
     assert_eq!(v[0].len(), 1);
     assert_eq!(
         v[0][0],
-        serde_json::Value::String(format!("'{}'@'%'", user_name))
+        serde_json::Value::String(format!("'{}'@'{}'", user_name, host))
     );
     Ok(())
 }
@@ -804,7 +810,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear).await?;
+    test_auth_post(&ep, user_name, bear, &"%").await?;
     Ok(())
 }
 

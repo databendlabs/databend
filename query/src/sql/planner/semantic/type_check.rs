@@ -420,6 +420,15 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Array { exprs, .. } => self.resolve_array(exprs).await,
 
+            Expr::Position {
+                substr_expr,
+                str_expr,
+                ..
+            } => {
+                self.resolve_function("locate", &[substr_expr.as_ref(), str_expr.as_ref()], None)
+                    .await
+            }
+
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
                 expr
