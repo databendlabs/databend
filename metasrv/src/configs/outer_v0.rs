@@ -40,9 +40,6 @@ pub struct Config {
     #[clap(long, default_value = "./.databend/logs")]
     pub log_dir: String,
 
-    #[clap(long, default_value = "127.0.0.1:28001")]
-    pub metric_api_address: String,
-
     #[clap(long, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
 
@@ -80,7 +77,6 @@ impl TryInto<InnerConfig> for Config {
             config_file: self.config_file,
             log_level: self.log_level,
             log_dir: self.log_dir,
-            metric_api_address: self.metric_api_address,
             admin_api_address: self.admin_api_address,
             admin_tls_server_cert: self.admin_tls_server_cert,
             admin_tls_server_key: self.admin_tls_server_key,
@@ -98,7 +94,6 @@ impl From<InnerConfig> for Config {
             config_file: inner.config_file,
             log_level: inner.log_level,
             log_dir: inner.log_dir,
-            metric_api_address: inner.metric_api_address,
             admin_api_address: inner.admin_api_address,
             admin_tls_server_cert: inner.admin_tls_server_cert,
             admin_tls_server_key: inner.admin_tls_server_key,
@@ -150,21 +145,36 @@ impl Config {
     }
 }
 
+/// #[serde(flatten)] doesn't work correctly for env.
+/// We should work around it by flatten them manully.
+/// We are seeking for better solutions.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct ConfigViaEnv {
     pub metasrv_config_file: String,
     pub metasrv_log_level: String,
     pub metasrv_log_dir: String,
-    pub metasrv_metric_api_address: String,
     pub admin_api_address: String,
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
     pub metasrv_grpc_api_address: String,
     pub grpc_tls_server_cert: String,
     pub grpc_tls_server_key: String,
-    #[serde(flatten)]
-    pub raft_config: RaftConfigViaEnv,
+
+    pub config_id: String,
+    pub kvsrv_listen_host: String,
+    pub kvsrv_advertise_host: String,
+    pub kvsrv_api_port: u32,
+    pub kvsrv_raft_dir: String,
+    pub kvsrv_no_sync: bool,
+    pub kvsrv_snapshot_logs_since_last: u64,
+    pub kvsrv_heartbeat_intervalt: u64,
+    pub kvsrv_install_snapshot_timeout: u64,
+    pub raft_max_applied_log_to_keep: u64,
+    pub kvsrv_single: bool,
+    pub metasrv_join: Vec<String>,
+    pub kvsrv_id: u64,
+    pub sled_tree_prefix: String,
 }
 
 impl Default for ConfigViaEnv {
@@ -179,14 +189,26 @@ impl From<Config> for ConfigViaEnv {
             metasrv_config_file: cfg.config_file,
             metasrv_log_level: cfg.log_level,
             metasrv_log_dir: cfg.log_dir,
-            metasrv_metric_api_address: cfg.metric_api_address,
             admin_api_address: cfg.admin_api_address,
             admin_tls_server_cert: cfg.admin_tls_server_cert,
             admin_tls_server_key: cfg.admin_tls_server_key,
             metasrv_grpc_api_address: cfg.grpc_api_address,
             grpc_tls_server_cert: cfg.grpc_tls_server_cert,
             grpc_tls_server_key: cfg.grpc_tls_server_key,
-            raft_config: cfg.raft_config.into(),
+            config_id: cfg.raft_config.config_id,
+            kvsrv_listen_host: cfg.raft_config.raft_listen_host,
+            kvsrv_advertise_host: cfg.raft_config.raft_advertise_host,
+            kvsrv_api_port: cfg.raft_config.raft_api_port,
+            kvsrv_raft_dir: cfg.raft_config.raft_dir,
+            kvsrv_no_sync: cfg.raft_config.no_sync,
+            kvsrv_snapshot_logs_since_last: cfg.raft_config.snapshot_logs_since_last,
+            kvsrv_heartbeat_intervalt: cfg.raft_config.heartbeat_interval,
+            kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
+            raft_max_applied_log_to_keep: cfg.raft_config.max_applied_log_to_keep,
+            kvsrv_single: cfg.raft_config.single,
+            metasrv_join: cfg.raft_config.join,
+            kvsrv_id: cfg.raft_config.id,
+            sled_tree_prefix: cfg.raft_config.sled_tree_prefix,
         }
     }
 }
@@ -195,18 +217,34 @@ impl From<Config> for ConfigViaEnv {
 #[allow(clippy::from_over_into)]
 impl Into<Config> for ConfigViaEnv {
     fn into(self) -> Config {
+        let raft_config = RaftConfig {
+            config_id: self.config_id,
+            raft_listen_host: self.kvsrv_listen_host,
+            raft_advertise_host: self.kvsrv_advertise_host,
+            raft_api_port: self.kvsrv_api_port,
+            raft_dir: self.kvsrv_raft_dir,
+            no_sync: self.kvsrv_no_sync,
+            snapshot_logs_since_last: self.kvsrv_snapshot_logs_since_last,
+            heartbeat_interval: self.kvsrv_heartbeat_intervalt,
+            install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
+            max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
+            single: self.kvsrv_single,
+            join: self.metasrv_join,
+            id: self.kvsrv_id,
+            sled_tree_prefix: self.sled_tree_prefix,
+        };
+
         Config {
             config_file: self.metasrv_config_file,
             log_level: self.metasrv_log_level,
             log_dir: self.metasrv_log_dir,
-            metric_api_address: self.metasrv_metric_api_address,
             admin_api_address: self.admin_api_address,
             admin_tls_server_cert: self.admin_tls_server_cert,
             admin_tls_server_key: self.admin_tls_server_key,
             grpc_api_address: self.metasrv_grpc_api_address,
             grpc_tls_server_cert: self.grpc_tls_server_cert,
             grpc_tls_server_key: self.grpc_tls_server_key,
-            raft_config: self.raft_config.into(),
+            raft_config,
         }
     }
 }
@@ -337,76 +375,6 @@ impl From<InnerRaftConfig> for RaftConfig {
             join: inner.join,
             id: inner.id,
             sled_tree_prefix: inner.sled_tree_prefix,
-        }
-    }
-}
-
-/// The compatible layer for env.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
-pub struct RaftConfigViaEnv {
-    pub config_id: String,
-    pub kvsrv_listen_host: String,
-    pub kvsrv_advertise_host: String,
-    pub kvsrv_api_port: u32,
-    pub kvsrv_raft_dir: String,
-    pub kvsrv_no_sync: bool,
-    pub kvsrv_snapshot_logs_since_last: u64,
-    pub kvsrv_heartbeat_intervalt: u64,
-    pub kvsrv_install_snapshot_timeout: u64,
-    pub raft_max_applied_log_to_keep: u64,
-    pub kvsrv_single: bool,
-    pub metasrv_join: Vec<String>,
-    pub kvsrv_id: u64,
-    pub sled_tree_prefix: String,
-}
-
-impl Default for RaftConfigViaEnv {
-    fn default() -> Self {
-        RaftConfig::default().into()
-    }
-}
-
-impl From<RaftConfig> for RaftConfigViaEnv {
-    fn from(cfg: RaftConfig) -> Self {
-        Self {
-            config_id: cfg.config_id,
-            kvsrv_listen_host: cfg.raft_listen_host,
-            kvsrv_advertise_host: cfg.raft_advertise_host,
-            kvsrv_api_port: cfg.raft_api_port,
-            kvsrv_raft_dir: cfg.raft_dir,
-            kvsrv_no_sync: cfg.no_sync,
-            kvsrv_snapshot_logs_since_last: cfg.snapshot_logs_since_last,
-            kvsrv_heartbeat_intervalt: cfg.heartbeat_interval,
-            kvsrv_install_snapshot_timeout: cfg.install_snapshot_timeout,
-            raft_max_applied_log_to_keep: cfg.max_applied_log_to_keep,
-            kvsrv_single: cfg.single,
-            metasrv_join: cfg.join,
-            kvsrv_id: cfg.id,
-            sled_tree_prefix: cfg.sled_tree_prefix,
-        }
-    }
-}
-
-// Implement Into target on RaftConfigViaEnv to make the transform logic more clear.
-#[allow(clippy::from_over_into)]
-impl Into<RaftConfig> for RaftConfigViaEnv {
-    fn into(self) -> RaftConfig {
-        RaftConfig {
-            config_id: self.config_id,
-            raft_listen_host: self.kvsrv_listen_host,
-            raft_advertise_host: self.kvsrv_advertise_host,
-            raft_api_port: self.kvsrv_api_port,
-            raft_dir: self.kvsrv_raft_dir,
-            no_sync: self.kvsrv_no_sync,
-            snapshot_logs_since_last: self.kvsrv_snapshot_logs_since_last,
-            heartbeat_interval: self.kvsrv_heartbeat_intervalt,
-            install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
-            max_applied_log_to_keep: self.raft_max_applied_log_to_keep,
-            single: self.kvsrv_single,
-            join: self.metasrv_join,
-            id: self.kvsrv_id,
-            sled_tree_prefix: self.sled_tree_prefix,
         }
     }
 }

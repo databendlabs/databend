@@ -56,7 +56,7 @@ common-tracing = { path = "../common/tracing" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "15786d3", package = "opensrv-clickhouse" }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "967477f1", package = "opensrv-mysql" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "45ead90" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7d74a3c" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
@@ -89,7 +89,7 @@ num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
 once_cell = "1.10.0"
-opendal = { version = "0.6.2", features = ["retry"] }
+opendal = { version = "0.6.3", features = ["retry"] }
 openssl = { version = "0.10", features = ["vendored"] }
 paste = "1.0.7"
 petgraph = "0.6.0"

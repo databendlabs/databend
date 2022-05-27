@@ -43,7 +43,7 @@ impl ContextFunction {
             "version" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_fuse_version().into_bytes(),
             ))],
-            "current_user" => vec![Expression::create_literal(DataValue::String(
+            "current_user" | "user" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_current_user()?.identity().to_string().into_bytes(),
             ))],
             "connection_id" => vec![Expression::create_literal(DataValue::String(

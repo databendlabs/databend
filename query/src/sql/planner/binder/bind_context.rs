@@ -114,7 +114,7 @@ impl BindContext {
         let mut bind_context: &BindContext = self;
         // Lookup parent context to support correlated subquery
         loop {
-            for column_binding in self.columns.iter() {
+            for column_binding in bind_context.columns.iter() {
                 match (&table, &column_binding.table_name) {
                     // No qualified table name specified
                     (None, None) | (None, Some(_))

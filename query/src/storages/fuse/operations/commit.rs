@@ -146,6 +146,7 @@ impl FuseTable {
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx).await?;
         let prev_version = self.snapshot_format_version();
+        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
@@ -162,6 +163,7 @@ impl FuseTable {
         let new_snapshot = if overwrite {
             TableSnapshot::new(
                 Uuid::new_v4(),
+                &prev_timestamp,
                 prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
                 schema,
                 summary,
@@ -228,6 +230,7 @@ impl FuseTable {
             statistics
         };
         let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_snapshot_timestamp = previous.as_ref().and_then(|v| v.timestamp);
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
@@ -237,6 +240,7 @@ impl FuseTable {
 
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
+            &prev_snapshot_timestamp,
             prev_snapshot_id,
             schema.clone(),
             stats,
@@ -281,7 +285,6 @@ impl FuseTable {
             new_table_meta,
         };
 
-        //catalog.upsert_table_option(req).await
         catalog.update_table_meta(req).await
     }
 

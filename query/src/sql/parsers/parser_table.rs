@@ -36,6 +36,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUnDropTable;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -62,10 +63,10 @@ impl<'a> DfParser<'a> {
         let engine = self.parse_table_engine()?;
 
         // parse cluster key
-        let mut order_keys = vec![];
+        let mut cluster_keys = vec![];
         if self.parser.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.parser.expect_token(&Token::LParen)?;
-            order_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+            cluster_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
             self.parser.expect_token(&Token::RParen)?;
         }
 
@@ -90,7 +91,7 @@ impl<'a> DfParser<'a> {
             name: table_name,
             columns,
             engine,
-            order_keys,
+            cluster_keys,
             options,
             like: table_like,
             query,
@@ -110,6 +111,14 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::DropTable(drop))
+    }
+
+    // Drop table.
+    pub(crate) fn parse_undrop_table(&mut self) -> Result<DfStatement<'a>, ParserError> {
+        let table_name = self.parser.parse_object_name()?;
+        let drop = DfUnDropTable { name: table_name };
+
+        Ok(DfStatement::UnDropTable(drop))
     }
 
     // Alter table

@@ -94,7 +94,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         table_create_sql.push_str(table_engine.as_str());
 
         let table_info = table.get_table_info();
-        if let Some(order_keys_str) = &table_info.meta.order_keys {
+        if let Some(order_keys_str) = &table_info.meta.cluster_keys {
             table_create_sql.push_str(format!(" CLUSTER BY {}", order_keys_str).as_str());
         }
 

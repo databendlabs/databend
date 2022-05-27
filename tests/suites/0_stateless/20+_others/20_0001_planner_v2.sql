@@ -125,6 +125,8 @@ select * from t2 inner join t on t.a = t2.c + 1;
 select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c;
 select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
 
+select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
+
 -- order by
 select '====ORDER_BY====';
 SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 asc;
@@ -212,6 +214,39 @@ insert into t1 values(1, 2), (1, 3), (2, 4);
 create table t2(c int, d int);
 insert into t2 values(1, 2), (2, 6);
 select * from t2 inner join t1 on t1.a = t2.c;
+drop table t1;
+drop table t2;
+
+-- trim function
+select '===Trim Functuon===';
+select trim(leading ' ' from '      abc');
+select trim(leading ' ' from '');
+select trim(leading 'ab' from 'abab');
+select trim(leading 'ab' from 'abc');
+select trim(trailing ' ' from 'abc    ');
+select trim(trailing ' ' from '');
+select trim(trailing 'ab' from 'abab');
+select trim(trailing 'ab' from 'cab');
+select trim(both 'ab' from 'abab');
+select trim(both 'ab' from 'abcab');
+select trim(' abc ');
+
+-- Select Array Literal
+select '===Array Literal===';
+select [1, 2, 3];
+select [];
+
+select '====Correlated Subquery====';
+select * from numbers(10) as t where exists (select * from numbers(2) as t1 where t.number = t1.number);
+select (select number from numbers(10) as t1 where t.number = t1.number) from numbers(10) as t order by number;
+
+-- explain
+select '===Explain===';
+create table t1(a int, b int);
+create table t2(a int, b int);
+explain select t1.a from t1 where a > 0;
+select '===Explain Pipeline===';
+explain pipeline select t1.a from t1 join t2 on t1.a = t2.a;
 drop table t1;
 drop table t2;
 

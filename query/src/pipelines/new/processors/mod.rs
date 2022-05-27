@@ -15,6 +15,7 @@
 pub mod port;
 pub mod processor;
 
+mod format;
 mod port_trigger;
 mod resize_processor;
 mod sinks;
@@ -56,6 +57,7 @@ pub use transforms::SortMergeCompactor;
 pub use transforms::SubQueriesPuller;
 pub use transforms::TransformAddOn;
 pub use transforms::TransformAggregator;
+pub use transforms::TransformApply;
 pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
 pub use transforms::TransformCompact;
@@ -66,5 +68,6 @@ pub use transforms::TransformHashJoinProbe;
 pub use transforms::TransformHaving;
 pub use transforms::TransformLimit;
 pub use transforms::TransformLimitBy;
+pub use transforms::TransformMax1Row;
 pub use transforms::TransformSortMerge;
 pub use transforms::TransformSortPartial;

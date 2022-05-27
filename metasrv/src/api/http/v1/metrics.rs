@@ -15,19 +15,15 @@
 use std::sync::Arc;
 
 use poem::web::Data;
-use poem::web::Json;
-use serde_json;
 
 use crate::meta_service::MetaNode;
-use crate::metrics::meta_metrics_to_json;
+use crate::metrics::meta_metrics_to_prometheus_string;
 
 /// GET /v1/metrics
 ///
 /// return the metrics.
 /// The response content is the same as `MetaMetrics` in metrics/meta_metrics.rs
 #[poem::handler]
-pub async fn metrics_handler(
-    _meta_node: Data<&Arc<MetaNode>>,
-) -> poem::Result<Json<serde_json::Value>> {
-    Ok(Json(meta_metrics_to_json()))
+pub async fn metrics_handler(_meta_node: Data<&Arc<MetaNode>>) -> poem::Result<String> {
+    Ok(meta_metrics_to_prometheus_string())
 }

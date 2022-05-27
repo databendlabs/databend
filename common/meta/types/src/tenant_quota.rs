@@ -20,11 +20,17 @@ use serde::Serialize;
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct TenantQuota {
-    // The max database can be created in the tenant.
+    // The max databases can be created in the tenant.
     pub max_databases: u32,
 
-    // The max table per database can be created in the tenant.
+    // The max tables per database can be created in the tenant.
     pub max_tables_per_database: u32,
+
+    // The max stages can be created in the tenant.
+    pub max_stages: u32,
+
+    // The max files per stage can be created in the tenant.
+    pub max_files_per_stage: u32,
 }
 
 impl TryFrom<Vec<u8>> for TenantQuota {

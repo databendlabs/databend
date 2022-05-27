@@ -19,6 +19,7 @@ pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
 use common_datavalues::DataTypeImpl;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use self::subquery::SubqueryRewriter;
@@ -26,6 +27,7 @@ use crate::catalogs::CatalogManager;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
+use crate::sql::plans::ExplainPlan;
 use crate::storages::Table;
 
 mod aggregate;
@@ -71,7 +73,7 @@ impl<'a> Binder {
     pub async fn bind(mut self, stmt: &Statement<'a>) -> Result<BindResult> {
         let init_bind_context = BindContext::new();
         let (mut s_expr, bind_context) = self.bind_statement(&init_bind_context, stmt).await?;
-        let mut rewriter = SubqueryRewriter::new();
+        let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
         s_expr = rewriter.rewrite(&s_expr)?;
         Ok(BindResult::create(s_expr, bind_context))
     }
@@ -83,7 +85,26 @@ impl<'a> Binder {
     ) -> Result<(SExpr, BindContext)> {
         match stmt {
             Statement::Query(query) => self.bind_query(bind_context, query).await,
-            _ => todo!(),
+            Statement::Explain { query, kind } => match query.as_ref() {
+                Statement::Query(query) => {
+                    let (expr, bind_context) = self.bind_query(bind_context, query).await?;
+                    let explain_plan = ExplainPlan {
+                        explain_kind: kind.clone(),
+                    };
+                    let new_expr = SExpr::create_unary(explain_plan.into(), expr);
+                    Ok((new_expr, bind_context))
+                }
+                _ => {
+                    return Err(ErrorCode::UnImplement(format!(
+                        "UnImplemented stmt {stmt} in explain"
+                    )));
+                }
+            },
+            _ => {
+                return Err(ErrorCode::UnImplement(format!(
+                    "UnImplemented stmt {stmt} in binder"
+                )));
+            }
         }
     }
 

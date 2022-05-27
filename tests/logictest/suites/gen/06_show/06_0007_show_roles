@@ -4,6 +4,6 @@ CREATE ROLE 'test';
 statement query TI 
 SHOW ROLES;
 
-----  
+----
+account_admin 0
 test 0
-

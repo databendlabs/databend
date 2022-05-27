@@ -1,4 +1,19 @@
 ---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: meta-service-pv-volume
+  labels:
+    type: local
+spec:
+  storageClassName: local-storage
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/databend/meta"
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -45,8 +60,6 @@ spec:
               value: /mnt/data/log
             - name: KVSRV_RAFT_DIR
               value: /mnt/data/raft
-            - name: METASRV_METRIC_API_ADDRESS
-              value: "$(POD_IP):28001"
             - name: ADMIN_API_ADDRESS
               value: "$(POD_IP):28002"
             - name: METASRV_GRPC_API_ADDRESS
@@ -83,6 +96,8 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        storageClassName: local-storage
+        volumeName: meta-service-pv-volume
         resources:
           requests:
             storage: 1Gi

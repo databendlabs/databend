@@ -174,6 +174,7 @@ where
         let fmt_level = meta.level().as_str();
         write!(writer, "{:>5} ", fmt_level)?;
 
+        write!(writer, "{:0>15?} ", std::thread::current().name())?;
         write!(writer, "{:0>2?} ", std::thread::current().id())?;
 
         if let Some(scope) = ctx.event_scope() {

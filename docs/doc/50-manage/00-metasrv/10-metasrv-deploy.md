@@ -7,7 +7,7 @@ description:
 
 :::tip
 
-Expected deployment time: ** 5 minutes ⏱ **
+Expected deployment time: **5 minutes ⏱**
 
 :::
 
@@ -41,7 +41,6 @@ or a cluster of 3 or 5 nodes for production use.
                                '~~~~~~~~~~~~~~~~'
 ```
 
-
 ## 1. Download
 
 You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../../60-contributing/00-building-from-source.md).
@@ -49,6 +48,7 @@ You can find the latest binaries on the [github release](https://github.com/data
 ```shell
 mkdir databend && cd databend
 ```
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -70,6 +70,7 @@ tar xzvf databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
 ```
 
 You can find two executable files:
+
 ```shell
 ls
 # databend-meta databend-query
@@ -77,7 +78,6 @@ ls
 
 </TabItem>
 </Tabs>
-
 
 ## 2. Deploy databend-meta
 
@@ -117,7 +117,6 @@ curl -I  http://127.0.0.1:28101/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-
 ### 2.2 Cluster mode
 
 In this chapter we will deploy a `databend-meta` cluster with 3 nodes.
@@ -140,7 +139,6 @@ cluster.
 
 ```shell title="databend-meta-1.toml"
 log_dir            = "metadata/_logs1"
-metric_api_address = "0.0.0.0:28100"
 admin_api_address  = "0.0.0.0:28101"
 grpc_api_address   = "0.0.0.0:9191"
 
@@ -152,7 +150,6 @@ raft_listen_host    = "127.0.0.1"
 raft_advertise_host = "localhost"
 ```
 
-- `metric_api_address` is the service for metrics collection.
 - `admin_api_address` is the service for retrieving cluster status.
 - `grpc_api_address` is the service for applications to write or read metadata.
 
@@ -185,15 +182,13 @@ curl -I  http://127.0.0.1:28101/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-
-### 2.2.4 Create config files for other 2 nodes:
+### 2.2.4 Create config files for other 2 nodes
 
 The config for other nodes are similar, except the `single` should be replaced
 with `join`, and the `id` has to be different.
 
 ```shell title="databend-meta-2.toml"
 log_dir            = "metadata/_logs2"
-metric_api_address = "0.0.0.0:28200"
 admin_api_address  = "0.0.0.0:28201"
 grpc_api_address   = "0.0.0.0:28202"
 
@@ -208,7 +203,6 @@ join                = ["localhost:28103"]
 
 ```shell title="databend-meta-3.toml"
 log_dir            = "metadata/_logs3"
-metric_api_address = "0.0.0.0:28300"
 admin_api_address  = "0.0.0.0:28301"
 grpc_api_address   = "0.0.0.0:28302"
 
@@ -224,8 +218,7 @@ join                = ["localhost:28103"]
 The arg `join` specifies a list of raft addresses(`<raft_advertise_host>:<raft_api_port>`) of nodes in the existing cluster it wants to
 be joined to.
 
-
-### Start other nodes.
+### Start other nodes
 
 ```shell
 ./databend-meta -c ./databend-meta-2.toml > meta2.log 2>&1 &

@@ -16,6 +16,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
+use crate::plan_table_undrop::UnDropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -163,6 +164,7 @@ pub trait PlanVisitor {
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
+            PlanNode::UnDropTable(plan) => self.visit_undrop_table(plan),
             PlanNode::RenameTable(plan) => self.visit_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
@@ -395,6 +397,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_drop_table(&mut self, _: &DropTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_undrop_table(&mut self, _: &UnDropTablePlan) -> Result<()> {
         Ok(())
     }
 

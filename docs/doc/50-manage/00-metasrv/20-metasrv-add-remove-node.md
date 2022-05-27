@@ -7,7 +7,7 @@ description:
 
 :::tip
 
-Expected deployment time: ** 5 minutes ⏱ **
+Expected deployment time: **5 minutes ⏱**
 
 :::
 
@@ -22,7 +22,6 @@ E.g., to add a new node with id `7`, the config toml would look like:
 
 ```shell title="databend-meta-7.toml"
 log_dir            = "metadata/_logs7"
-metric_api_address = "0.0.0.0:28700"
 admin_api_address  = "0.0.0.0:28701"
 grpc_api_address   = "0.0.0.0:28702"
 

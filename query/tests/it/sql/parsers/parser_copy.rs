@@ -58,6 +58,7 @@ fn copy_from_external_test() -> Result<()> {
             on_error: "".to_string(),
             size_limit: "".to_string(),
             validation_mode: "".to_string(),
+            query: None,
         }),
     }];
 

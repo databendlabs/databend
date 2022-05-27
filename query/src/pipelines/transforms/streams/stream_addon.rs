@@ -17,9 +17,10 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
+use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::Expression;
@@ -39,12 +40,14 @@ pub struct AddOnStream {
     default_nonexpr_fields: Vec<DataField>,
 
     expression_executor: ExpressionExecutor,
+    sort_columns_descriptions: Vec<SortColumnDescription>,
     output_schema: DataSchemaRef,
 }
 
 impl AddOnStream {
     pub fn try_create(
         input: SendableDataBlockStream,
+        cluster_keys: Vec<Expression>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
@@ -74,7 +77,35 @@ impl AddOnStream {
             }
         }
 
-        let schema_after_default_expr = Arc::new(DataSchema::new(default_expr_fields.clone()));
+        let mut output_schema = output_schema;
+        let mut sort_columns_descriptions = Vec::new();
+        if !cluster_keys.is_empty() {
+            let mut merged = output_schema.fields().clone();
+            for expr in &cluster_keys {
+                let cname = expr.column_name();
+                if !merged.iter().any(|x| x.name() == &cname) {
+                    let field = expr.to_data_field(&input_schema)?;
+                    merged.push(field.clone());
+
+                    default_expr_fields.push(field);
+                    default_exprs.push(expr.clone());
+                }
+            }
+
+            output_schema = DataSchemaRefExt::create(merged);
+
+            // sort
+            sort_columns_descriptions = cluster_keys
+                .iter()
+                .map(|expr| SortColumnDescription {
+                    column_name: expr.column_name(),
+                    asc: true,
+                    nulls_first: false,
+                })
+                .collect();
+        }
+
+        let schema_after_default_expr = DataSchemaRefExt::create(default_expr_fields.clone());
         let expression_executor = ExpressionExecutor::try_create(
             ctx,
             "stream_addon",
@@ -89,6 +120,7 @@ impl AddOnStream {
             default_expr_fields,
             default_nonexpr_fields,
             expression_executor,
+            sort_columns_descriptions,
             output_schema,
         })
     }
@@ -111,7 +143,13 @@ impl AddOnStream {
 
             block = block.add_column(column, f.clone())?;
         }
-        block.resort(self.output_schema.clone())
+
+        let block = block.resort(self.output_schema.clone())?;
+        if self.sort_columns_descriptions.is_empty() {
+            Ok(block)
+        } else {
+            DataBlock::sort_block(&block, &self.sort_columns_descriptions, None)
+        }
     }
 }
 

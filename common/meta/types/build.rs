@@ -104,6 +104,18 @@ fn build_proto() {
             "TxnReply",
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
+        .type_attribute(
+            "WatchRequest",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "WatchResponse",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "Event",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
         .compile(&protos, &[&proto_dir])
         .unwrap();
 }

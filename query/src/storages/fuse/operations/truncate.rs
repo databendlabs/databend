@@ -36,6 +36,7 @@ impl FuseTable {
 
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
+                &prev_snapshot.timestamp,
                 Some((prev_id, prev_snapshot.format_version())),
                 prev_snapshot.schema.clone(),
                 Default::default(),
@@ -50,7 +51,7 @@ impl FuseTable {
 
             if plan.purge {
                 let keep_last_snapshot = false;
-                self.do_optimize(ctx.clone(), keep_last_snapshot).await?
+                self.do_gc(&ctx, keep_last_snapshot).await?
             }
 
             let mut new_table_meta = self.table_info.meta.clone();

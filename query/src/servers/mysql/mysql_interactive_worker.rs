@@ -34,6 +34,7 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tokio_stream::StreamExt;
 
+use crate::interpreters::ExplainInterpreterV2;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
@@ -302,6 +303,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
                     {
                         // New planner is enabled, and the statement is ensured to be `SELECT` statement.
                         SelectInterpreterV2::try_create(context.clone(), query)?
+                    } else if settings.get_enable_new_processor_framework()? != 0
+                        && context.get_cluster().is_empty()
+                        && settings.get_enable_planner_v2()? != 0
+                        && matches!(stmts.get(0), Some(DfStatement::Explain(_)))
+                    {
+                        ExplainInterpreterV2::try_create(context.clone(), query)?
                     } else {
                         let (plan, _) = PlanParser::parse_with_hint(query, context.clone()).await;
                         if let (Some(hint_error_code), Err(error_code)) = (

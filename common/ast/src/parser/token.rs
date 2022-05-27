@@ -749,7 +749,7 @@ impl TokenKind {
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE
-            | TokenKind::USER
+            //| TokenKind::USER
             | TokenKind::USING
             | TokenKind::VALUES
             | TokenKind::VARCHAR
@@ -868,7 +868,7 @@ impl TokenKind {
             | TokenKind::TRAILING
             | TokenKind::TRUE
             // | TokenKind::UNIQUE
-            | TokenKind::USER
+            //| TokenKind::USER
             | TokenKind::USING
             // | TokenKind::VARIADIC
             // | TokenKind::VERBOSE

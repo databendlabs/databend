@@ -40,10 +40,13 @@ where R: BufferRead
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
 
-        let v = std::str::from_utf8(buf.as_slice())
-            .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
+        let v = std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
+            format!("Cannot convert value:{:?} to utf8", buf)
+        })?;
         v.parse::<NaiveDate>()
-            .map_err_to_code(ErrorCode::BadBytes, || "Cannot parse value to Date type")
+            .map_err_to_code(ErrorCode::BadBytes, || {
+                format!("Cannot parse value:{} to Date type", v)
+            })
     }
 
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {

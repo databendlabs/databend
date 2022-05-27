@@ -1,4 +1,5 @@
 import json
+import os
 
 import environs
 import requests
@@ -97,8 +98,10 @@ class HttpConnector():
         self._database = database
         self._session_max_idle_time = 300
         self._session = None
+        self._additonal_headers = dict()
         e = environs.Env()
-        self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
+        if os.getenv("ADDITIONAL_HEADERS") is not None:
+            self._additonal_headers = e.dict("ADDITIONAL_HEADERS")
 
     def query(self, statement, session=None):
         url = "http://{}:{}/v1/query/".format(self._host, self._port)

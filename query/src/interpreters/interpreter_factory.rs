@@ -24,6 +24,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::AlterViewInterpreter;
 use super::CreateUserStageInterpreter;
 use super::ListInterpreter;
+use super::ShowStagesInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
@@ -70,6 +71,7 @@ use crate::interpreters::ShowTabStatInterpreter;
 use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
+use crate::interpreters::UnDropTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
 
@@ -120,6 +122,9 @@ impl InterpreterFactory {
             PlanNode::Show(ShowPlan::ShowRoles(v)) => {
                 ShowRolesInterpreter::try_create(ctx_clone, v)
             }
+            PlanNode::Show(ShowPlan::ShowStages(v)) => {
+                ShowStagesInterpreter::try_create(ctx_clone, v)
+            }
 
             // Database related transforms.
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
@@ -132,6 +137,7 @@ impl InterpreterFactory {
             // Table related transforms
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::UnDropTable(v) => UnDropTableInterpreter::try_create(ctx_clone, v),
             PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),

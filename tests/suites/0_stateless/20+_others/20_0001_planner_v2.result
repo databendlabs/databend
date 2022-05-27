@@ -121,6 +121,11 @@ NULL	2	3
 1	2
 2	3
 1000
+0
+1
+2
+3
+4
 ====ORDER_BY====
 2	0
 2	0
@@ -270,3 +275,43 @@ default
 1	2	1	2
 1	2	1	3
 2	6	2	4
+===Trim Functuon===
+abc
+
+
+c
+abc
+
+
+c
+
+c
+abc
+===Array Literal===
+[1, 2, 3]
+[]
+====Correlated Subquery====
+0
+1
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+===Explain===
+\n    Project: [a]\n        EvalScalar: []\n            Filter: [a > 0]\n                PhysicalScan: default.default.t1\n
+===Explain Pipeline===
+ProjectionTransform × 1 processor
+  ProjectionTransform × 1 processor
+    ProjectionTransform × 1 processor
+      TransformHashJoin × 1 processor
+        ProjectionTransform × 1 processor
+          FuseEngineSource × 1 processor
+BuildHashTable × 1 processor
+  ProjectionTransform × 1 processor
+    FuseEngineSource × 1 processor

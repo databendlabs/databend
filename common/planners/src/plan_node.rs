@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
+use crate::plan_table_undrop::UnDropTablePlan;
 use crate::plan_window_func::WindowFuncPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -125,6 +126,7 @@ pub enum PlanNode {
     // Table.
     CreateTable(CreateTablePlan),
     DropTable(DropTablePlan),
+    UnDropTable(UnDropTablePlan),
     RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
@@ -223,6 +225,7 @@ impl PlanNode {
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
+            PlanNode::UnDropTable(v) => v.schema(),
             PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
@@ -323,6 +326,7 @@ impl PlanNode {
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
+            PlanNode::UnDropTable(_) => "UndropTablePlan",
             PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",

@@ -36,7 +36,7 @@ use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_meta_types::UpsertKVAction;
+use common_meta_types::UpsertKVReq;
 use common_tracing::tracing;
 
 use crate::KVApi;
@@ -81,10 +81,11 @@ impl KVApiTestSuite {
 impl KVApiTestSuite {
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_write_read<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_write_read() start");
         {
             // write
             let res = kv
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     "foo",
                     MatchSeq::Any,
                     Operation::Update(b"bar".to_vec()),
@@ -98,7 +99,7 @@ impl KVApiTestSuite {
         {
             // write fails with unmatched seq
             let res = kv
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     "foo",
                     MatchSeq::Exact(2),
                     Operation::Update(b"bar".to_vec()),
@@ -118,7 +119,7 @@ impl KVApiTestSuite {
         {
             // write done with matching seq
             let res = kv
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     "foo",
                     MatchSeq::Exact(1),
                     Operation::Update(b"wow".to_vec()),
@@ -142,8 +143,9 @@ impl KVApiTestSuite {
 
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_delete<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
-        kv.upsert_kv(UpsertKVAction::new(
+        kv.upsert_kv(UpsertKVReq::new(
             test_key,
             MatchSeq::Any,
             Operation::Update(b"v1".to_vec()),
@@ -156,7 +158,7 @@ impl KVApiTestSuite {
             // seq mismatch
             let wrong_seq = Some(seq + 1);
             let res = kv
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     test_key,
                     wrong_seq.into(),
                     Operation::Delete,
@@ -168,7 +170,7 @@ impl KVApiTestSuite {
 
             // seq match
             let res = kv
-                .upsert_kv(UpsertKVAction::new(
+                .upsert_kv(UpsertKVReq::new(
                     test_key,
                     MatchSeq::Exact(seq),
                     Operation::Delete,
@@ -186,7 +188,7 @@ impl KVApiTestSuite {
 
         // key not exist
         let res = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 "not exists",
                 MatchSeq::Any,
                 Operation::Delete,
@@ -197,7 +199,7 @@ impl KVApiTestSuite {
         assert_eq!(None, res.result);
 
         // do not care seq
-        kv.upsert_kv(UpsertKVAction::new(
+        kv.upsert_kv(UpsertKVReq::new(
             test_key,
             MatchSeq::Any,
             Operation::Update(b"v2".to_vec()),
@@ -206,7 +208,7 @@ impl KVApiTestSuite {
         .await?;
 
         let res = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Any,
                 Operation::Delete,
@@ -223,10 +225,11 @@ impl KVApiTestSuite {
 
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_update<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
 
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::GE(1),
                 Operation::Update(b"v1".to_vec()),
@@ -236,7 +239,7 @@ impl KVApiTestSuite {
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Any,
                 Operation::Update(b"v1".to_vec()),
@@ -248,7 +251,7 @@ impl KVApiTestSuite {
 
         // unmatched seq
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Exact(seq + 1),
                 Operation::Update(b"v2".to_vec()),
@@ -260,7 +263,7 @@ impl KVApiTestSuite {
 
         // matched seq
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Exact(seq),
                 Operation::Update(b"v2".to_vec()),
@@ -272,7 +275,7 @@ impl KVApiTestSuite {
 
         // blind update
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::GE(1),
                 Operation::Update(b"v3".to_vec()),
@@ -295,6 +298,8 @@ impl KVApiTestSuite {
 
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_timeout<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_timeout() start");
+
         // - Test get  expired and non-expired.
         // - Test mget expired and non-expired.
         // - Test list expired and non-expired.
@@ -305,7 +310,7 @@ impl KVApiTestSuite {
             .unwrap()
             .as_secs();
 
-        kv.upsert_kv(UpsertKVAction::new(
+        kv.upsert_kv(UpsertKVReq::new(
             "k1",
             MatchSeq::Any,
             Operation::Update(b"v1".to_vec()),
@@ -336,7 +341,7 @@ impl KVApiTestSuite {
 
         tracing::info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 "k1",
                 MatchSeq::Exact(0),
                 Operation::Update(b"v1".to_vec()),
@@ -345,7 +350,7 @@ impl KVApiTestSuite {
                 }),
             ))
             .await?;
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 "k2",
                 MatchSeq::Exact(0),
                 Operation::Update(b"v2".to_vec()),
@@ -379,7 +384,7 @@ impl KVApiTestSuite {
 
         tracing::info!("--- update expire");
         {
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 "k2",
                 MatchSeq::Exact(3),
                 Operation::Update(b"v2".to_vec()),
@@ -398,6 +403,8 @@ impl KVApiTestSuite {
 
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_meta<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_meta() start");
+
         let test_key = "test_key_for_update_meta";
 
         let now = SystemTime::now()
@@ -406,7 +413,7 @@ impl KVApiTestSuite {
             .as_secs();
 
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Any,
                 Operation::Update(b"v1".to_vec()),
@@ -419,7 +426,7 @@ impl KVApiTestSuite {
         tracing::info!("--- mismatching seq does nothing");
 
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Exact(seq + 1),
                 Operation::AsIs,
@@ -434,7 +441,7 @@ impl KVApiTestSuite {
         tracing::info!("--- matching seq only update meta");
 
         let r = kv
-            .upsert_kv(UpsertKVAction::new(
+            .upsert_kv(UpsertKVReq::new(
                 test_key,
                 MatchSeq::Exact(seq),
                 Operation::AsIs,
@@ -474,9 +481,11 @@ impl KVApiTestSuite {
 
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_list<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_list() start");
+
         let mut values = vec![];
         {
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 "t",
                 MatchSeq::Any,
                 Operation::Update("".as_bytes().to_vec()),
@@ -488,7 +497,7 @@ impl KVApiTestSuite {
                 let key = format!("__users/{}", i);
                 let val = format!("val_{}", i);
                 values.push(val.clone());
-                kv.upsert_kv(UpsertKVAction::new(
+                kv.upsert_kv(UpsertKVReq::new(
                     &key,
                     MatchSeq::Any,
                     Operation::Update(val.as_bytes().to_vec()),
@@ -496,7 +505,7 @@ impl KVApiTestSuite {
                 ))
                 .await?;
             }
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 "v",
                 MatchSeq::Any,
                 Operation::Update(b"".to_vec()),
@@ -520,14 +529,16 @@ impl KVApiTestSuite {
 
     #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_mget<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        kv.upsert_kv(UpsertKVAction::new(
+        tracing::info!("--- KVApiTestSuite::kv_mget() start");
+
+        kv.upsert_kv(UpsertKVReq::new(
             "k1",
             MatchSeq::Any,
             Operation::Update(b"v1".to_vec()),
             None,
         ))
         .await?;
-        kv.upsert_kv(UpsertKVAction::new(
+        kv.upsert_kv(UpsertKVReq::new(
             "k2",
             MatchSeq::Any,
             Operation::Update(b"v2".to_vec()),
@@ -606,13 +617,14 @@ impl KVApiTestSuite {
     }
 
     pub async fn kv_transaction<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        tracing::info!("--- KVApiTestSuite::kv_transaction() start");
         // first case: get and set one key transaction
         {
             let k1 = "txn_1_K1";
             let val1 = b"v1".to_vec();
 
             // first insert k1 value
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 k1,
                 MatchSeq::Any,
                 Operation::Update(val1.clone()),
@@ -660,7 +672,7 @@ impl KVApiTestSuite {
             let k1 = "txn_2_K1";
             let k2 = "txn_2_K2";
 
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 k1,
                 MatchSeq::Any,
                 Operation::Update(b"v1".to_vec()),
@@ -717,14 +729,14 @@ impl KVApiTestSuite {
             let val2 = b"v1".to_vec();
 
             // first insert k1 and k2 value
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 k1,
                 MatchSeq::Any,
                 Operation::Update(val1.clone()),
                 None,
             ))
             .await?;
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 k2,
                 MatchSeq::Any,
                 Operation::Update(val2.clone()),
@@ -845,7 +857,7 @@ impl KVApiTestSuite {
             let val1_new = b"v1_new".to_vec();
 
             // first insert k1 value
-            kv.upsert_kv(UpsertKVAction::new(
+            kv.upsert_kv(UpsertKVReq::new(
                 k1,
                 MatchSeq::Any,
                 Operation::Update(val1.clone()),
@@ -921,7 +933,7 @@ impl KVApiTestSuite {
     ) -> anyhow::Result<()> {
         let mut values = vec![];
         {
-            kv1.upsert_kv(UpsertKVAction::new(
+            kv1.upsert_kv(UpsertKVReq::new(
                 "t",
                 MatchSeq::Any,
                 Operation::Update("t".as_bytes().to_vec()),
@@ -934,7 +946,7 @@ impl KVApiTestSuite {
                 let val = format!("val_{}", i);
                 values.push(val.clone());
                 tracing::info!("--- Start upsert-kv: {}", key);
-                kv1.upsert_kv(UpsertKVAction::new(
+                kv1.upsert_kv(UpsertKVReq::new(
                     &key,
                     MatchSeq::Any,
                     Operation::Update(val.as_bytes().to_vec()),
@@ -944,7 +956,7 @@ impl KVApiTestSuite {
                 tracing::info!("--- Done upsert-kv: {}", key);
             }
 
-            kv1.upsert_kv(UpsertKVAction::new(
+            kv1.upsert_kv(UpsertKVReq::new(
                 "v",
                 MatchSeq::Any,
                 Operation::Update(b"v".to_vec()),

@@ -15,11 +15,13 @@
 mod aggregate;
 mod apply;
 mod eval_scalar;
+mod explain;
 mod filter;
 mod hash_join;
 mod limit;
 mod logical_get;
 mod logical_join;
+mod max_one_row;
 mod pattern;
 mod physical_scan;
 mod project;
@@ -32,11 +34,13 @@ use common_exception::Result;
 use enum_dispatch::enum_dispatch;
 pub use eval_scalar::EvalScalar;
 pub use eval_scalar::ScalarItem;
+pub use explain::ExplainPlan;
 pub use filter::FilterPlan;
 pub use hash_join::PhysicalHashJoin;
 pub use limit::LimitPlan;
 pub use logical_get::LogicalGet;
 pub use logical_join::LogicalInnerJoin;
+pub use max_one_row::Max1Row;
 pub use pattern::PatternPlan;
 pub use physical_scan::PhysicalScan;
 pub use project::Project;
@@ -93,9 +97,13 @@ pub enum PlanType {
     Sort,
     Limit,
     CrossApply,
+    Max1Row,
 
     // Pattern
     Pattern,
+
+    // Explain
+    Explain,
 }
 
 /// Relational operators
@@ -115,6 +123,9 @@ pub enum RelOperator {
     Sort(SortPlan),
     Limit(LimitPlan),
     CrossApply(CrossApply),
+    Max1Row(Max1Row),
 
     Pattern(PatternPlan),
+
+    Explain(ExplainPlan),
 }

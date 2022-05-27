@@ -327,11 +327,11 @@ impl Ord for DataValue {
         }
 
         if self.is_null() {
-            return Ordering::Less;
+            return Ordering::Greater;
         }
 
         if other.is_null() {
-            return Ordering::Greater;
+            return Ordering::Less;
         }
 
         if !self.is_numeric() || !other.is_numeric() {

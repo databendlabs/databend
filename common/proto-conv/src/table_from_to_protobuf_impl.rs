@@ -126,9 +126,13 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: p.engine,
             engine_options: p.engine_options,
             options: p.options,
-            order_keys: p.order_keys,
+            cluster_keys: p.cluster_keys,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
+            drop_on: match p.drop_on {
+                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
+                None => None,
+            },
             comment: p.comment,
             statistics: p
                 .statistics
@@ -146,9 +150,13 @@ impl FromToProto<pb::TableMeta> for mt::TableMeta {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
-            order_keys: self.order_keys.clone(),
+            cluster_keys: self.cluster_keys.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
+            drop_on: match self.drop_on {
+                Some(drop_on) => Some(drop_on.to_pb()?),
+                None => None,
+            },
             comment: self.comment.clone(),
             statistics: Some(self.statistics.to_pb()?),
         };
@@ -177,6 +185,23 @@ impl FromToProto<pb::TableStatistics> for mt::TableStatistics {
             data_bytes: self.data_bytes,
             compressed_data_bytes: self.compressed_data_bytes,
             index_data_bytes: self.index_data_bytes,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto<pb::TableIdList> for mt::TableIdList {
+    fn from_pb(p: pb::TableIdList) -> Result<Self, Incompatible> {
+        check_ver(p.ver)?;
+
+        let v = Self { id_list: p.ids };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableIdList, Incompatible> {
+        let p = pb::TableIdList {
+            ver: VER,
+            ids: self.id_list.clone(),
         };
         Ok(p)
     }

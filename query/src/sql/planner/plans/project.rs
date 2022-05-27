@@ -59,12 +59,9 @@ impl PhysicalPlan for Project {
 
 impl LogicalPlan for Project {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop()?;
-        let mut output_columns = input_prop.output_columns;
-        output_columns = output_columns.union(&self.columns).cloned().collect();
-
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
         Ok(RelationalProperty {
-            output_columns,
+            output_columns: self.columns.clone(),
             outer_columns: input_prop.outer_columns,
         })
     }

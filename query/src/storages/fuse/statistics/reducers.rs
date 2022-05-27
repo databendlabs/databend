@@ -107,38 +107,24 @@ pub fn reduce_cluster_stats<T: Borrow<Option<ClusterStatistics>>>(
     for stat in stats.iter().skip(1) {
         let stat = stat.borrow().clone().unwrap();
         for (l, r) in min.iter().zip(stat.min.iter()) {
-            match (l.is_null(), r.is_null()) {
-                (true, _) => {
+            match l.cmp(r) {
+                Ordering::Equal => continue,
+                Ordering::Less => break,
+                Ordering::Greater => {
                     min = stat.min.clone();
                     break;
                 }
-                (_, true) => break,
-                _ => match l.cmp(r) {
-                    Ordering::Equal => continue,
-                    Ordering::Less => break,
-                    Ordering::Greater => {
-                        min = stat.min.clone();
-                        break;
-                    }
-                },
             }
         }
 
         for (l, r) in max.iter().zip(stat.max.iter()) {
-            match (l.is_null(), r.is_null()) {
-                (true, _) => {
+            match l.cmp(r) {
+                Ordering::Equal => continue,
+                Ordering::Less => {
                     max = stat.max.clone();
                     break;
                 }
-                (_, true) => break,
-                _ => match l.cmp(r) {
-                    Ordering::Equal => continue,
-                    Ordering::Less => {
-                        max = stat.max.clone();
-                        break;
-                    }
-                    Ordering::Greater => break,
-                },
+                Ordering::Greater => break,
             }
         }
     }
