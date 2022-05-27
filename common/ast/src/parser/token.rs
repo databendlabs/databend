@@ -240,6 +240,8 @@ pub enum TokenKind {
     ARRAY,
     #[token("AS", ignore(ascii_case))]
     AS,
+    #[token("AT", ignore(ascii_case))]
+    AT,
     #[token("ASC", ignore(ascii_case))]
     ASC,
     #[token("AWS_KEY_ID", ignore(ascii_case))]
@@ -526,6 +528,8 @@ pub enum TokenKind {
     SKIP_HEADER,
     #[token("SMALLINT", ignore(ascii_case))]
     SMALLINT,
+    #[token("SNAPSHOT", ignore(ascii_case))]
+    SNAPSHOT,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
     #[token("STATUS", ignore(ascii_case))]

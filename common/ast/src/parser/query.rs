@@ -136,9 +136,9 @@ pub fn table_reference(i: Input) -> IResult<TableReference> {
 pub fn aliased_table(i: Input) -> IResult<TableReference> {
     map(
         rule! {
-            #ident ~ ( "." ~ #ident )? ~ ( "." ~ #ident )? ~ #table_alias?
+            #ident ~ ( "." ~ #ident )? ~ ( "." ~ #ident )? ~ #travel_point? ~ #table_alias?
         },
-        |(fst, snd, third, alias)| {
+        |(fst, snd, third, travel_point, alias)| {
             let (catalog, database, table) = match (fst, snd, third) {
                 (catalog, Some((_, database)), Some((_, table))) => {
                     (Some(catalog), Some(database), table)
@@ -153,8 +153,18 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
                 database,
                 table,
                 alias,
+                travel_point,
             }
         },
+    )(i)
+}
+
+pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
+    map(
+        rule! {
+            AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")"
+        },
+        |(_, _, _, _, s, _)| TimeTravelPoint::Snapshot(s),
     )(i)
 }
 

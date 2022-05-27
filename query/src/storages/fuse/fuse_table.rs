@@ -30,7 +30,6 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
-use sqlparser::ast::Instant;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -43,6 +42,7 @@ use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
+use crate::storages::NavigationPoint;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -279,9 +279,9 @@ impl Table for FuseTable {
     async fn navigate_to(
         &self,
         ctx: Arc<QueryContext>,
-        instant: &Instant,
+        point: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
-        let Instant::SnapshotID(snapshot_id) = instant;
+        let NavigationPoint::SnapshotID(snapshot_id) = point;
         let res = self
             .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
             .await?;
