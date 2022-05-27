@@ -29,7 +29,6 @@ use crate::parser::error::ErrorKind;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape;
 
-
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
 /// Input tokens slice with a backtrace that records all errors including

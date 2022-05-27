@@ -45,25 +45,23 @@ pub fn unescape(s: &str) -> Option<String> {
 }
 
 fn unescape_unicode(chars: &mut Peekable<impl Iterator<Item = char>>) -> Option<char> {
-    let mut s = String::new();
+    let mut code = 0;
 
-    for _ in 0..4 {
-        s.push(chars.next()?);
+    for c in chars.take(4) {
+        code = code * 16 + c.to_digit(16)?;
     }
 
-    let u = u32::from_str_radix(&s, 16).ok()?;
-    char::from_u32(u)
+    char::from_u32(code)
 }
 
 fn unescape_byte(chars: &mut Peekable<impl Iterator<Item = char>>) -> Option<char> {
-    let mut s = String::new();
+    let mut byte = 0;
 
-    for _ in 0..2 {
-        s.push(chars.next()?);
+    for c in chars.take(2) {
+        byte = byte * 16 + c.to_digit(16)?;
     }
 
-    let u = u32::from_str_radix(&s, 16).ok()?;
-    char::from_u32(u)
+    char::from_u32(byte)
 }
 
 fn unescape_octal(c1: char, chars: &mut Peekable<impl Iterator<Item = char>>) -> char {
