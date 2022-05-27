@@ -35,6 +35,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::TupleFunction;
 
 use crate::sessions::QueryContext;
 use crate::sql::binder::Binder;
@@ -428,6 +429,8 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function("locate", &[substr_expr.as_ref(), str_expr.as_ref()], None)
                     .await
             }
+
+            Expr::Tuple { exprs, .. } => self.resolve_tuple(exprs).await,
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
@@ -906,6 +909,28 @@ impl<'a> TypeChecker<'a> {
             }
             .into(),
             data_type,
+        ))
+    }
+
+    async fn resolve_tuple(&mut self, exprs: &[Expr<'a>]) -> Result<(Scalar, DataTypeImpl)> {
+        let mut args = Vec::with_capacity(exprs.len());
+        let mut arg_types = Vec::with_capacity(exprs.len());
+        for expr in exprs {
+            let (arg, data_type) = self.resolve(expr, None).await?;
+            args.push(arg);
+            arg_types.push(data_type);
+        }
+        let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
+        let tuple_func = TupleFunction::try_create_func("", &arg_types_ref)?;
+        Ok((
+            FunctionCall {
+                arguments: args,
+                func_name: "tuple".to_string(),
+                arg_types,
+                return_type: tuple_func.return_type(),
+            }
+            .into(),
+            tuple_func.return_type(),
         ))
     }
 }

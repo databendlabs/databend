@@ -319,3 +319,9 @@ BuildHashTable × 1 processor
 4
 0
 2
+====Tuple====
+('field', 0)
+('field', 1)
+('field', 2)
+('field', 3)
+('field', 4)

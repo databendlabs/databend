@@ -536,7 +536,7 @@ async fn test_query_log() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
 
-    let response = get_uri(&ep, &result.kill_uri.as_ref().unwrap()).await;
+    let response = get_uri(&ep, result.kill_uri.as_ref().unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
