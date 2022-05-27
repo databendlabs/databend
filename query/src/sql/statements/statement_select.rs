@@ -412,7 +412,7 @@ impl DfQueryStatement {
                     data_block = res;
                 }
                 Err(cause) => {
-                    return Err(cause.add_message_back(" (while in select window aggr)"));
+                    return Err(cause.add_message_back(" (while in select window func)"));
                 }
             }
         }

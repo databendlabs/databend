@@ -13,20 +13,22 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::ops::Range;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::partition::lexicographical_partition_ranges;
 use common_arrow::arrow::compute::sort::SortColumn;
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_functions::aggregates::eval_aggr;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::window::WindowFrame;
+use common_functions::window::WindowFrameBound;
+use common_functions::window::WindowFrameUnits;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -36,6 +38,7 @@ use futures::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::transforms::get_sort_descriptions;
 
 pub struct WindowFuncTransform {
     window_func: Expression,
@@ -58,12 +61,8 @@ impl WindowFuncTransform {
         }
     }
 
-    /// evaluate range frame
-    /// requires that the block's already sorted by expressions of partition by and order by sub stmts
-    async fn evaluate_window_func_col(
-        &self,
-        block: &DataBlock,
-    ) -> common_exception::Result<ColumnRef> {
+    /// evaluate window function for each frame and return the result column
+    async fn evaluate_window_func(&self, block: &DataBlock) -> common_exception::Result<DataBlock> {
         // extract the window function
         let_extract!(
             Expression::WindowFunction {
@@ -78,68 +77,209 @@ impl WindowFuncTransform {
             panic!()
         );
 
-        match window_frame {
+        // sort block by partition_by and order_by exprs
+        let mut sort_exprs: Vec<Expression> =
+            Vec::with_capacity(partition_by.len() + order_by.len());
+        sort_exprs.extend(
+            partition_by
+                .iter()
+                .map(|part_by_expr| Expression::Sort {
+                    expr: Box::new(part_by_expr.to_owned()),
+                    asc: true,
+                    nulls_first: false,
+                    origin_expr: Box::new(part_by_expr.to_owned()),
+                })
+                .collect::<Vec<_>>(),
+        );
+        sort_exprs.extend(order_by.to_owned());
+        let sort_column_desc = get_sort_descriptions(block.schema(), &sort_exprs)?;
+        let block = DataBlock::sort_block(&block, &sort_column_desc, None)?;
+
+        // set default window frame
+        let window_frame = match window_frame {
             None => {
-                // at the moment, only supports aggr function
-                let is_aggr_func = AggregateFunctionFactory::instance().check(&op);
-                match is_aggr_func {
-                    true => {
-                        let mut arguments: Vec<DataField> = Vec::with_capacity(args.len());
-                        for arg in args {
-                            arguments.push(arg.to_data_field(&self.input_schema)?);
-                        }
-
-                        let mut sort_cols: Vec<SortColumn> =
-                            Vec::with_capacity(partition_by.len() + order_by.len());
-                        let partition_by_arrow_array = partition_by
-                            .iter()
-                            .map(|expr| {
-                                block
-                                    .try_column_by_name(&expr.column_name())
-                                    .unwrap()
-                                    .as_arrow_array()
-                            })
-                            .collect::<Vec<ArrayRef>>();
-                        let partition_by_column = partition_by_arrow_array
-                            .iter()
-                            .map(|array| SortColumn {
-                                values: array.as_ref(),
-                                options: None,
-                            })
-                            .collect::<Vec<SortColumn>>();
-
-                        sort_cols.extend(partition_by_column);
-                        // todo process sort expr
-
-                        let peer_rows = lexicographical_partition_ranges(&sort_cols).unwrap();
-
-                        let window_cols = peer_rows
-                            .map(|range| {
-                                let offset = range.start;
-                                let length = range.end - range.start;
-                                let peered = block.slice(offset, length);
-                                let args = arguments
-                                    .iter()
-                                    .map(|f| {
-                                        let arg = peered.try_column_by_name(f.name()).unwrap();
-                                        ColumnWithField::new(arg.clone(), f.to_owned())
-                                    })
-                                    .collect::<Vec<_>>();
-                                let agg_result =
-                                    eval_aggr(op, params.to_owned(), &args, peered.num_rows())
-                                        .unwrap();
-                                Series::concat(
-                                    &(0..length).map(|_| agg_result.clone()).collect::<Vec<_>>(),
-                                )
-                                .unwrap()
-                            })
-                            .collect::<Vec<_>>();
-                        Ok(Series::concat(&window_cols).unwrap())
-                    }
-                    false => unimplemented!(),
+                // compute the whole partition
+                match order_by.is_empty() {
+                    // RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                    false => WindowFrame::default(),
+                    // RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                    true => WindowFrame {
+                        units: WindowFrameUnits::Range,
+                        start_bound: WindowFrameBound::Preceding(None),
+                        end_bound: WindowFrameBound::Following(None),
+                    },
                 }
             }
-            Some(window_frame) => unimplemented!("not yet support window frame"),
+            Some(window_frame) => window_frame.to_owned(),
+        };
+
+        // determine window frame bounds of each tuple
+        let frame_bounds = Self::frame_bounds_per_tuple(
+            &block,
+            partition_by,
+            order_by,
+            window_frame.units,
+            window_frame.start_bound,
+            window_frame.end_bound,
+        );
+
+        // function calculate
+        let mut arguments: Vec<ColumnWithField> = Vec::with_capacity(args.len());
+        for arg in args {
+            let arg_field: DataField = arg.to_data_field(&self.input_schema)?;
+            let arg_column = block.try_column_by_name(arg_field.name()).unwrap();
+            arguments.push(ColumnWithField::new(Arc::clone(arg_column), arg_field));
+        }
+
+        let window_col_per_tuple = (0..block.num_rows())
+            .map(|i| {
+                let frame = &frame_bounds[i];
+                let frame_start = frame.start;
+                let frame_end = frame.end;
+                let frame_size = frame_end - frame_start;
+                let args_slice = arguments
+                    .iter()
+                    .map(|c| c.slice(frame_start, frame_size))
+                    .collect::<Vec<_>>();
+                // at the moment, only supports aggr function
+                if !AggregateFunctionFactory::instance().check(op) {
+                    unimplemented!("not yet impl built-in window func");
+                }
+                eval_aggr(op, params.to_owned(), &args_slice, frame_size).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        let window_col = Series::concat(&window_col_per_tuple).unwrap();
+
+        block.add_column(
+            window_col,
+            self.window_func.to_data_field(&self.input_schema).unwrap(),
+        )
+    }
+
+    /// compute frame range for each tuple
+    fn frame_bounds_per_tuple(
+        block: &DataBlock,
+        partition_by: &[Expression],
+        order_by: &[Expression],
+        frame_units: WindowFrameUnits,
+        start: WindowFrameBound,
+        end: WindowFrameBound,
+    ) -> Vec<Range<usize>> {
+        match (frame_units, start, end) {
+            (_, WindowFrameBound::Preceding(None), WindowFrameBound::Following(None)) => {
+                let partition_by_arrow_array = partition_by
+                    .iter()
+                    .map(|expr| {
+                        block
+                            .try_column_by_name(&expr.column_name())
+                            .unwrap()
+                            .as_arrow_array()
+                    })
+                    .collect::<Vec<ArrayRef>>();
+                let partition_by_sort_column = partition_by_arrow_array
+                    .iter()
+                    .map(|array| SortColumn {
+                        values: array.as_ref(),
+                        options: None,
+                    })
+                    .collect::<Vec<SortColumn>>();
+                let mut partition_boundaries =
+                    lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
+                let mut partition = partition_boundaries.next().unwrap();
+                (0..block.num_rows())
+                    .map(|i| {
+                        if i >= partition.end && i < block.num_rows() {
+                            partition = partition_boundaries.next().unwrap();
+                        }
+                        partition.clone()
+                    })
+                    .collect::<Vec<_>>()
+            }
+            (frame_unit, frame_start, frame_end) => {
+                let partition_by_arrow_array = partition_by
+                    .iter()
+                    .map(|expr| {
+                        block
+                            .try_column_by_name(&expr.column_name())
+                            .unwrap()
+                            .as_arrow_array()
+                    })
+                    .collect::<Vec<ArrayRef>>();
+                let mut partition_by_sort_column = partition_by_arrow_array
+                    .iter()
+                    .map(|array| SortColumn {
+                        values: array.as_ref(),
+                        options: None,
+                    })
+                    .collect::<Vec<SortColumn>>();
+
+                let order_by_arrow_array = order_by
+                    .iter()
+                    .map(|expr| {
+                        block
+                            .try_column_by_name(&expr.column_name())
+                            .unwrap()
+                            .as_arrow_array()
+                    })
+                    .collect::<Vec<ArrayRef>>();
+                let order_by_sort_column = order_by_arrow_array
+                    .iter()
+                    .map(|array| SortColumn {
+                        values: array.as_ref(),
+                        options: None,
+                    })
+                    .collect::<Vec<SortColumn>>();
+                partition_by_sort_column.extend(order_by_sort_column);
+
+                let mut frame_boundaries =
+                    lexicographical_partition_ranges(&partition_by_sort_column).unwrap();
+
+                match frame_unit {
+                    WindowFrameUnits::Rows => {
+                        let mut frame_bound = frame_boundaries.next().unwrap();
+
+                        (0..block.num_rows())
+                            .map(|i| {
+                                if i >= frame_bound.end && i < block.num_rows() {
+                                    frame_bound = frame_boundaries.next().unwrap();
+                                }
+                                let mut start = frame_bound.start;
+                                let mut end = frame_bound.end;
+                                match frame_start {
+                                    WindowFrameBound::Preceding(Some(preceding)) => {
+                                        start = std::cmp::max(
+                                            start,
+                                            if i < preceding as usize {
+                                                0
+                                            } else {
+                                                i - preceding as usize
+                                            },
+                                        );
+                                    }
+                                    WindowFrameBound::CurrentRow => {
+                                        start = i;
+                                    }
+                                    _ => (),
+                                }
+                                match frame_end {
+                                    WindowFrameBound::CurrentRow => {
+                                        end = i;
+                                    }
+                                    WindowFrameBound::Following(Some(following)) => {
+                                        end = std::cmp::min(end, i + 1 + following as usize);
+                                    }
+                                    _ => (),
+                                }
+                                start..end
+                            })
+                            .collect::<Vec<_>>()
+                    }
+                    WindowFrameUnits::Range => {
+                        todo!()
+                    }
+                }
+            }
         }
     }
 }
@@ -147,7 +287,7 @@ impl WindowFuncTransform {
 #[async_trait::async_trait]
 impl Processor for WindowFuncTransform {
     fn name(&self) -> &str {
-        "WindowAggrFuncTransform"
+        "WindowFuncTransform"
     }
 
     fn connect_to(&mut self, input: Arc<dyn Processor>) -> common_exception::Result<()> {
@@ -163,7 +303,7 @@ impl Processor for WindowFuncTransform {
         self
     }
 
-    #[tracing::instrument(level = "debug", name = "window_aggr_func_execute", skip(self))]
+    #[tracing::instrument(level = "debug", name = "window_func_execute", skip(self))]
     async fn execute(&self) -> common_exception::Result<SendableDataBlockStream> {
         let mut stream: SendableDataBlockStream = self.input.execute().await?;
         let mut blocks: Vec<DataBlock> = vec![];
@@ -196,15 +336,7 @@ impl Processor for WindowFuncTransform {
         let block = DataBlock::create(schema.clone(), combined_columns);
 
         // evaluate the window function column
-        let window_col = self.evaluate_window_func_col(&block).await.unwrap();
-
-        // add window func result column to the block
-        let block = block
-            .add_column(
-                window_col,
-                self.window_func.to_data_field(&self.input_schema).unwrap(),
-            )
-            .unwrap();
+        let block = self.evaluate_window_func(&block).await.unwrap();
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

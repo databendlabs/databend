@@ -158,17 +158,17 @@ pub trait UDFExprVisitor: Sized + Send {
     fn visit_function(&mut self, function: &Function) -> Result<()> {
         for function_arg in &function.args {
             match function_arg {
-                FunctionArg::Named { arg, .. } => self.visit_function_arg(arg)?,
-                FunctionArg::Unnamed(arg) => self.visit_function_arg(arg)?,
+                FunctionArg::Named { arg, .. } => self.visit_function_arg(&arg)?,
+                FunctionArg::Unnamed(arg) => self.visit_function_arg(&arg)?,
             };
         }
 
         if let Some(over) = &function.over {
             for partition_by in &over.partition_by {
-                UDFExprTraverser::accept(partition_by, self).await?;
+                UDFExprTraverser::accept(partition_by, self)?;
             }
             for order_by in &over.order_by {
-                UDFExprTraverser::accept(&order_by.expr, self).await?;
+                UDFExprTraverser::accept(&order_by.expr, self)?;
             }
         }
 

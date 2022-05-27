@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,20 +20,12 @@ use std::hash::Hasher;
 use common_exception::ErrorCode;
 use sqlparser::ast;
 
-/// The frame-spec determines which output rows are read by an aggregate window function.
-///
-/// The ending frame boundary can be omitted (if the BETWEEN and AND keywords that surround the
-/// starting frame boundary are also omitted), in which case the ending frame boundary defaults to
-/// CURRENT ROW.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub struct WindowFrame {
-    /// A frame type - either ROWS, RANGE or GROUPS
     pub units: WindowFrameUnits,
-    /// A starting frame boundary
     pub start_bound: WindowFrameBound,
-    /// An ending frame boundary
     pub end_bound: WindowFrameBound,
 }
 
@@ -97,20 +89,11 @@ impl Default for WindowFrame {
     }
 }
 
-/// There are three frame types: ROWS, GROUPS, and RANGE. The frame type determines how the
-/// starting and ending boundaries of the frame are measured.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub enum WindowFrameUnits {
-    /// The RANGE frame type requires that the ORDER BY clause of the window have exactly one
-    /// term. Call that term "X". With the RANGE frame type, the elements of the frame are
-    /// determined by computing the value of expression X for all rows in the partition and framing
-    /// those rows for which the value of X is within a certain range of the value of X for the
-    /// current row.
     Range,
-    /// The ROWS frame type means that the starting and ending boundaries for the frame are
-    /// determined by counting individual rows relative to the current row.
     Rows,
 }
 
@@ -133,36 +116,15 @@ impl From<ast::WindowFrameUnits> for WindowFrameUnits {
     }
 }
 
+// todo u64 -> Expression
 #[derive(Debug, Clone, Copy, Eq, serde::Serialize, serde::Deserialize)]
 pub enum WindowFrameBound {
-    /// 1. UNBOUNDED PRECEDING
-    /// The frame boundary is the first row in the partition.
-    ///
-    /// 2. <expr> PRECEDING
-    /// <expr> must be a non-negative constant numeric expression. The boundary is a row that
-    /// is <expr> "units" prior to the current row.
     Preceding(Option<u64>),
-    /// 3. The current row.
-    ///
-    /// For RANGE and GROUPS frame types, peers of the current row are also
-    /// included in the frame, unless specifically excluded by the EXCLUDE clause.
-    /// This is true regardless of whether CURRENT ROW is used as the starting or ending frame
-    /// boundary.
     CurrentRow,
-    /// 4. This is the same as "<expr> PRECEDING" except that the boundary is <expr> units after the
-    /// current rather than before the current row.
-    ///
-    /// 5. UNBOUNDED FOLLOWING
-    /// The frame boundary is the last row in the partition.
     Following(Option<u64>),
 }
 
 impl WindowFrameBound {
-    /// get the rank of this window frame bound.
-    ///
-    /// the rank is a tuple of (u8, u64) because we'll firstly compare the kind and then the value
-    /// which requires special handling e.g. with preceding the larger the value the smaller the
-    /// rank and also for 0 preceding / following it is the same as current row
     fn get_rank(&self) -> (u8, u64) {
         match self {
             WindowFrameBound::Preceding(None) => (0, 0),

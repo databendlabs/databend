@@ -34,6 +34,12 @@ impl ColumnWithField {
     pub fn data_type(&self) -> &DataTypeImpl {
         self.field.data_type()
     }
+    pub fn slice(&self, offset: usize, length: usize) -> Self {
+        Self {
+            column: self.column.slice(offset, length),
+            field: self.field.to_owned(),
+        }
+    }
 }
 
 pub type ColumnsWithField = [ColumnWithField];
