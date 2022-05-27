@@ -162,7 +162,7 @@ pub fn aliased_table(i: Input) -> IResult<TableReference> {
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     map(
         rule! {
-            AT ~  "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")"
+            AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")"
         },
         |(_, _, _, _, s, _)| TimeTravelPoint::Snapshot(s),
     )(i)
