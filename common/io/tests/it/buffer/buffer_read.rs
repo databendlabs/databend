@@ -32,10 +32,10 @@ fn test_buf_read() {
     assert!(spaces);
     assert_eq!(String::from_utf8_lossy(buffer.buffer()), "helloworld");
 
-    let mut buffer = BufferU8Reader::new("1 bytes   helloworld".as_bytes());
+    let mut buffer = MemoryReader::new("1 bytes   helloworld".as_bytes().to_vec());
 
     buffer.ignore_byte(b'1').unwrap();
     buffer.ignore_white_spaces().unwrap();
-    let bs = buffer.buffer();
+    let bs = buffer.fill_buf().unwrap();
     assert_eq!(String::from_utf8_lossy(bs), "bytes   helloworld");
 }

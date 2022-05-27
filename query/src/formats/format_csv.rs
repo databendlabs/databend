@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::Cursor;
+
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
@@ -21,9 +21,9 @@ use common_datavalues::DataType;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BufferReadExt;
-use common_io::prelude::BufferReader;
-use common_io::prelude::CheckpointReader;
+use common_io::prelude::{BufferReadExt, MemoryReader};
+
+
 use common_io::prelude::FormatSettings;
 
 use crate::formats::FormatFactory;
@@ -187,31 +187,30 @@ impl InputFormat for CsvInputFormat {
 
         let mut state = std::mem::replace(state, self.create_state());
         let state = state.as_any().downcast_mut::<CsvInputState>().unwrap();
-        let cursor = Cursor::new(&state.memory);
-        let reader = BufferReader::new(cursor);
-        let mut checkpoint_reader = CheckpointReader::new(reader);
+        let memory = std::mem::replace(&mut state.memory, vec![]);
+        let mut memory_reader = MemoryReader::new(memory);
 
         let mut row_index = 0;
-        while !checkpoint_reader.eof()? {
+        while !memory_reader.eof()? {
             for column_index in 0..deserializers.len() {
-                if checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
+                if memory_reader.ignore_white_spaces_and_byte(self.field_delimiter)? {
                     deserializers[column_index].de_default(&self.settings);
                 } else {
                     deserializers[column_index]
-                        .de_text_csv(&mut checkpoint_reader, &self.settings)?;
+                        .de_text_csv(&mut memory_reader, &self.settings)?;
 
                     if column_index + 1 != deserializers.len() {
-                        checkpoint_reader
+                        memory_reader
                             .must_ignore_white_spaces_and_byte(self.field_delimiter)?;
                     }
                 }
             }
 
-            checkpoint_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
+            memory_reader.ignore_white_spaces_and_byte(self.field_delimiter)?;
 
             if let Some(delimiter) = &self.row_delimiter {
-                if !checkpoint_reader.ignore_white_spaces_and_byte(*delimiter)?
-                    && !checkpoint_reader.eof()?
+                if !memory_reader.ignore_white_spaces_and_byte(*delimiter)?
+                    && !memory_reader.eof()?
                 {
                     return Err(ErrorCode::BadBytes(format!(
                         "Parse csv error at line {}",
@@ -219,9 +218,9 @@ impl InputFormat for CsvInputFormat {
                     )));
                 }
             } else {
-                if (!checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?
-                    & !checkpoint_reader.ignore_white_spaces_and_byte(b'\r')?)
-                    && !checkpoint_reader.eof()?
+                if (!memory_reader.ignore_white_spaces_and_byte(b'\n')?
+                    & !memory_reader.ignore_white_spaces_and_byte(b'\r')?)
+                    && !memory_reader.eof()?
                 {
                     return Err(ErrorCode::BadBytes(format!(
                         "Parse csv error at line {}",
@@ -230,7 +229,7 @@ impl InputFormat for CsvInputFormat {
                 }
 
                 // \r\n
-                checkpoint_reader.ignore_white_spaces_and_byte(b'\n')?;
+                memory_reader.ignore_white_spaces_and_byte(b'\n')?;
             }
 
             row_index += 1;
