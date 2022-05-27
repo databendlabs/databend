@@ -29,7 +29,6 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
-use sqlparser::ast::Instant;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -157,7 +156,7 @@ pub trait Table: Sync + Send {
     async fn navigate_to(
         &self,
         _ctx: Arc<QueryContext>,
-        _instant: &Instant,
+        _instant: &NavigationPoint,
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::UnImplement(format!(
             "table {},  of engine type {}, do not support time travel",
@@ -165,6 +164,10 @@ pub trait Table: Sync + Send {
             self.get_table_info().engine(),
         )))
     }
+}
+
+pub enum NavigationPoint {
+    SnapshotID(String),
 }
 
 #[derive(Debug)]

@@ -22,7 +22,6 @@ use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use sqlparser::ast::Instant;
 
 use self::subquery::SubqueryRewriter;
 use crate::catalogs::CatalogManager;
@@ -30,6 +29,7 @@ use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
 use crate::sql::planner::metadata::MetadataRef;
 use crate::sql::plans::ExplainPlan;
+use crate::storages::NavigationPoint;
 use crate::storages::Table;
 
 mod aggregate;
@@ -123,7 +123,7 @@ impl<'a> Binder {
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
         if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
             table_meta = table_meta
-                .navigate_to(self.ctx.clone(), &Instant::SnapshotID(s.to_owned()))
+                .navigate_to(self.ctx.clone(), &NavigationPoint::SnapshotID(s.to_owned()))
                 .await?;
         }
         Ok(table_meta)
