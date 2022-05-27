@@ -21,6 +21,5 @@ mod api;
 mod configs;
 mod grpc;
 mod meta_node;
-mod metrics;
 mod store;
 mod tests;

@@ -132,11 +132,6 @@ impl MetaSrvTestContext {
             config.admin_api_address = format!("{}:{}", host, http_port);
         }
 
-        {
-            let metric_port = next_port();
-            config.metric_api_address = format!("{}:{}", host, metric_port);
-        }
-
         tracing::info!("new test context config: {:?}", config);
 
         MetaSrvTestContext {

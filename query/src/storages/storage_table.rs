@@ -29,6 +29,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+use sqlparser::ast::Instant;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -71,6 +72,10 @@ pub trait Table: Sync + Send {
     /// whether table has the exact number of total rows
     fn has_exact_total_row_count(&self) -> bool {
         false
+    }
+
+    fn cluster_keys(&self) -> Vec<Expression> {
+        vec![]
     }
 
     // defaults to generate one single part and empty statistics
@@ -147,6 +152,18 @@ pub trait Table: Sync + Send {
 
     async fn statistics(&self, _ctx: Arc<QueryContext>) -> Result<Option<TableStatistics>> {
         Ok(None)
+    }
+
+    async fn navigate_to(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _instant: &Instant,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::UnImplement(format!(
+            "table {},  of engine type {}, do not support time travel",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
     }
 }
 

@@ -97,6 +97,7 @@ pub enum Statement<'a> {
         if_exists: bool,
         database: Option<Identifier<'a>>,
         table: Identifier<'a>,
+        all: bool,
     },
     AlterTable {
         if_exists: bool,
@@ -503,12 +504,16 @@ impl<'a> Display for Statement<'a> {
                 if_exists,
                 database,
                 table,
+                all,
             } => {
                 write!(f, "DROP TABLE ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
                 write_period_separated_list(f, database.iter().chain(Some(table)))?;
+                if *all {
+                    write!(f, " ALL")?;
+                }
             }
             Statement::AlterTable {
                 if_exists,

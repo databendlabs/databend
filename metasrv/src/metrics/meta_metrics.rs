@@ -20,7 +20,6 @@ use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Opts;
 use prometheus::Registry;
-use serde_json;
 
 pub const META_NAMESPACE: &str = "metasrv";
 pub const SERVER_SUBSYSTEM: &str = "server";
@@ -46,9 +45,12 @@ lazy_static! {
     )
     .expect("meta metric cannot be created");
     pub static ref APPLYING_SNAPSHOT: IntGauge = IntGauge::with_opts(
-        Opts::new("applying_snapshot", "Whether or not applying snapshot.")
-            .namespace(META_NAMESPACE)
-            .subsystem(SERVER_SUBSYSTEM)
+        Opts::new(
+            "applying_snapshot",
+            "Whether or not statemachine is applying snapshot."
+        )
+        .namespace(META_NAMESPACE)
+        .subsystem(SERVER_SUBSYSTEM)
     )
     .expect("meta metric cannot be created");
     pub static ref PROPOSALS_APPLIED: Gauge = Gauge::with_opts(
@@ -184,19 +186,4 @@ pub fn meta_metrics_to_prometheus_string() -> String {
     };
 
     res
-}
-
-/// Encode metrics as json value
-pub fn meta_metrics_to_json() -> serde_json::Value {
-    serde_json::json!({
-        "has_leader": HAS_LEADER.get(),
-        "is_leader": IS_LEADER.get(),
-        "leader_changes": LEADER_CHANGES.get(),
-        "applying_snapshot": APPLYING_SNAPSHOT.get(),
-        "proposals_applied": PROPOSALS_APPLIED.get() as u64,
-        "proposals_pending": PROPOSALS_PENDING.get(),
-        "proposals_failed": PROPOSALS_FAILED.get(),
-        "read_failed": READ_FAILED.get(),
-        "watchers": WATCHERS.get(),
-    })
 }

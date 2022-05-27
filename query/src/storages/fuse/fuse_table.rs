@@ -30,6 +30,7 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
+use sqlparser::ast::Instant;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
@@ -52,7 +53,7 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) order_keys: Vec<Expression>,
+    pub(crate) cluster_keys: Vec<Expression>,
     pub(crate) read_only: bool,
 }
 
@@ -64,14 +65,14 @@ impl FuseTable {
 
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
-        let mut order_keys = Vec::new();
-        if let Some(order) = &table_info.meta.order_keys {
-            order_keys = PlanParser::parse_exprs(order)?;
+        let mut cluster_keys = Vec::new();
+        if let Some(order) = &table_info.meta.cluster_keys {
+            cluster_keys = PlanParser::parse_exprs(order)?;
         }
 
         Ok(Box::new(FuseTable {
             table_info,
-            order_keys,
+            cluster_keys,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             read_only,
         }))
@@ -87,10 +88,6 @@ impl FuseTable {
 
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
-    }
-
-    pub fn cluster_keys(&self) -> Vec<Expression> {
-        self.order_keys.clone()
     }
 
     pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
@@ -185,6 +182,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn cluster_keys(&self) -> Vec<Expression> {
+        self.cluster_keys.clone()
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn read_partitions(
         &self,
@@ -273,5 +274,17 @@ impl Table for FuseTable {
             data_size_compressed: Some(s.compressed_data_bytes),
             index_length: None, // we do not have it yet
         }))
+    }
+
+    async fn navigate_to(
+        &self,
+        ctx: Arc<QueryContext>,
+        instant: &Instant,
+    ) -> Result<Arc<dyn Table>> {
+        let Instant::SnapshotID(snapshot_id) = instant;
+        let res = self
+            .navigate_to_snapshot(ctx.as_ref(), snapshot_id.as_str())
+            .await?;
+        Ok(res)
     }
 }

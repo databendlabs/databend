@@ -40,9 +40,6 @@ pub struct Config {
     #[clap(long, default_value = "./.databend/logs")]
     pub log_dir: String,
 
-    #[clap(long, default_value = "127.0.0.1:28001")]
-    pub metric_api_address: String,
-
     #[clap(long, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
 
@@ -80,7 +77,6 @@ impl TryInto<InnerConfig> for Config {
             config_file: self.config_file,
             log_level: self.log_level,
             log_dir: self.log_dir,
-            metric_api_address: self.metric_api_address,
             admin_api_address: self.admin_api_address,
             admin_tls_server_cert: self.admin_tls_server_cert,
             admin_tls_server_key: self.admin_tls_server_key,
@@ -98,7 +94,6 @@ impl From<InnerConfig> for Config {
             config_file: inner.config_file,
             log_level: inner.log_level,
             log_dir: inner.log_dir,
-            metric_api_address: inner.metric_api_address,
             admin_api_address: inner.admin_api_address,
             admin_tls_server_cert: inner.admin_tls_server_cert,
             admin_tls_server_key: inner.admin_tls_server_key,
@@ -159,7 +154,6 @@ pub struct ConfigViaEnv {
     pub metasrv_config_file: String,
     pub metasrv_log_level: String,
     pub metasrv_log_dir: String,
-    pub metasrv_metric_api_address: String,
     pub admin_api_address: String,
     pub admin_tls_server_cert: String,
     pub admin_tls_server_key: String,
@@ -195,7 +189,6 @@ impl From<Config> for ConfigViaEnv {
             metasrv_config_file: cfg.config_file,
             metasrv_log_level: cfg.log_level,
             metasrv_log_dir: cfg.log_dir,
-            metasrv_metric_api_address: cfg.metric_api_address,
             admin_api_address: cfg.admin_api_address,
             admin_tls_server_cert: cfg.admin_tls_server_cert,
             admin_tls_server_key: cfg.admin_tls_server_key,
@@ -245,7 +238,6 @@ impl Into<Config> for ConfigViaEnv {
             config_file: self.metasrv_config_file,
             log_level: self.metasrv_log_level,
             log_dir: self.metasrv_log_dir,
-            metric_api_address: self.metasrv_metric_api_address,
             admin_api_address: self.admin_api_address,
             admin_tls_server_cert: self.admin_tls_server_cert,
             admin_tls_server_key: self.admin_tls_server_key,

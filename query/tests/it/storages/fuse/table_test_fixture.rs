@@ -135,11 +135,11 @@ impl TestFixture {
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
-                order_keys: Some("(id)".to_string()),
+                cluster_keys: Some("(id)".to_string()),
                 ..Default::default()
             },
             as_select: None,
-            order_keys: vec![col("id")],
+            cluster_keys: vec![col("id")],
         }
     }
 
@@ -163,7 +163,7 @@ impl TestFixture {
             .into_iter()
             .map(|idx| {
                 let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+                    DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())]);
                 Ok(DataBlock::create(schema, vec![Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
