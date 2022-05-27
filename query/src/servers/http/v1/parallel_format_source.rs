@@ -91,6 +91,7 @@ impl MultipartWorker for ParallelMultipartWorker {
                         break 'outer;
                     }
                     Ok(Some(field)) => {
+                        let mut skipped_header = false;
                         let filename = field.file_name().unwrap_or("Unknown file name").to_string();
 
                         let mut buf = vec![0; 1048576];
@@ -105,27 +106,56 @@ impl MultipartWorker for ParallelMultipartWorker {
                                     break 'read;
                                 }
                                 Ok(sz) => {
-                                    let buf_slice = match sz == buf.len() {
-                                        true => &buf[..],
-                                        false => &buf[0..sz],
+                                    let mut buf_slice: &[u8] = match sz == buf.len() {
+                                        true => &buf,
+                                        false => &buf[..sz],
                                     };
 
-                                    let read_size =
-                                        match self.input_format.read_buf(buf_slice, &mut state) {
-                                            Ok(read_size) => read_size,
+                                    if !skipped_header {
+                                        let skip_size = match self
+                                            .input_format
+                                            .skip_header(buf_slice, &mut state)
+                                        {
+                                            Ok(skip_size) => skip_size,
                                             Err(cause) => {
                                                 Self::send(&tx, Err(cause)).await;
                                                 break 'outer;
                                             }
                                         };
 
-                                    if read_size != buf.len() {
-                                        let new_state = self.input_format.create_state();
-                                        let prepared_state = replace(&mut state, new_state);
+                                        buf_slice = &buf_slice[skip_size..];
 
-                                        if !Self::send(&tx, Ok(prepared_state)).await {
-                                            break 'outer;
+                                        if skip_size < buf_slice.len() {
+                                            skipped_header = true;
+                                            state = self.input_format.create_state();
                                         }
+                                    }
+
+                                    if !skipped_header {
+                                        continue 'read;
+                                    }
+
+                                    while !buf_slice.is_empty() {
+                                        let read_size =
+                                            match self.input_format.read_buf(buf_slice, &mut state)
+                                            {
+                                                Ok(read_size) => read_size,
+                                                Err(cause) => {
+                                                    Self::send(&tx, Err(cause)).await;
+                                                    break 'outer;
+                                                }
+                                            };
+
+                                        if read_size < buf_slice.len() {
+                                            let new_state = self.input_format.create_state();
+                                            let prepared_state = replace(&mut state, new_state);
+
+                                            if !Self::send(&tx, Ok(prepared_state)).await {
+                                                break 'outer;
+                                            }
+                                        }
+
+                                        buf_slice = &buf_slice[read_size..];
                                     }
                                 }
                                 Err(cause) => {
@@ -241,9 +271,7 @@ impl Processor for ParallelInputFormatSource {
     async fn async_process(&mut self) -> Result<()> {
         if let State::NeedReceiveData = replace(&mut self.state, State::NeedReceiveData) {
             if let Ok(receive_res) = self.data_receiver.recv().await {
-                let receive_bytes = receive_res?;
-
-                self.state = State::ReceivedData(receive_bytes);
+                self.state = State::ReceivedData(receive_res?);
                 return Ok(());
             }
         }

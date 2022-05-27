@@ -189,10 +189,7 @@ pub async fn streaming_load(
                     {
                         return match new_processor_format(&context, &plan, multipart).await {
                             Ok(res) => Ok(res),
-                            Err(cause) => {
-                                println!("catch error {:?}", cause);
-                                Err(InternalServerError(cause))
-                            }
+                            Err(cause) => Err(InternalServerError(cause)),
                         };
                     }
 
