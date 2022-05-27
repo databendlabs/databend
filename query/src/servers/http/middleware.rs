@@ -74,6 +74,7 @@ fn get_credential(req: &Request) -> Result<Credential> {
         match Bearer::decode(value) {
             Some(bearer) => Ok(Credential::Jwt {
                 token: bearer.token().to_string(),
+                hostname: client_ip,
             }),
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
