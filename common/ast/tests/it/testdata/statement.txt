@@ -445,6 +445,7 @@ DropTable {
         quote: None,
         span: Ident(11..12),
     },
+    all: false,
 }
 
 
@@ -469,6 +470,7 @@ DropTable {
         ),
         span: QuotedString(23..26),
     },
+    all: false,
 }
 
 
@@ -608,6 +610,7 @@ DropTable {
         quote: None,
         span: Ident(11..17),
     },
+    all: false,
 }
 
 
@@ -624,6 +627,7 @@ DropTable {
         quote: None,
         span: Ident(21..27),
     },
+    all: false,
 }
 
 

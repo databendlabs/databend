@@ -44,7 +44,7 @@ error:
   --> SQL:1:15
   |
 1 | drop table if a.b
-  |               ^ expected `EXISTS`, `.`, or `;`
+  |               ^ expected `EXISTS`, `.`, `ALL`, or `;`
 
 
 ---------- Input ----------
