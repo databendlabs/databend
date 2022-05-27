@@ -134,14 +134,12 @@ pub fn literal_string(i: Input) -> IResult<String> {
     match_token(QuotedString)(i).and_then(|(i2, token)| {
         if token.text().starts_with('\'') {
             let str = &token.text()[1..token.text().len() - 1];
-            let unescaped = unescape(str)
-                .ok_or_else(|| {
-                    nom::Err::Failure(Error::from_error_kind(
-                        i,
-                        ErrorKind::Other("invalid escape or unicode"),
-                    ))
-                })?
-                .replace("''", "'");
+            let unescaped = unescape(str, '\'').ok_or_else(|| {
+                nom::Err::Failure(Error::from_error_kind(
+                    i,
+                    ErrorKind::Other("invalid escape or unicode"),
+                ))
+            })?;
             Ok((i2, unescaped))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(

@@ -1,7 +1,7 @@
 use std::char;
 use std::iter::Peekable;
 
-pub fn unescape(s: &str) -> Option<String> {
+pub fn unescape(s: &str, quote: char) -> Option<String> {
     let mut chars = s.chars().peekable();
     let mut s = String::new();
 
@@ -27,13 +27,13 @@ pub fn unescape(s: &str) -> Option<String> {
                     s.push('\\');
                 }
             };
-        } else if c == '\'' {
-            s.push('\'');
+        } else if c == quote {
+            s.push(quote);
             match chars.next() {
-                Some('\'') | None => (),
-                Some(c) => {
+                Some(c) if c != quote => {
                     s.push(c);
                 }
+                _ => (),
             }
         } else {
             s.push(c);
