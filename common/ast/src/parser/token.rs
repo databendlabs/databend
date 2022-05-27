@@ -374,6 +374,8 @@ pub enum TokenKind {
     GROUP,
     #[token("HAVING", ignore(ascii_case))]
     HAVING,
+    #[token("HISTORY", ignore(ascii_case))]
+    HISTORY,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
     #[token("IDENTIFIED", ignore(ascii_case))]
@@ -572,6 +574,8 @@ pub enum TokenKind {
     UINT64,
     #[token("UINT8", ignore(ascii_case))]
     UINT8,
+    #[token("UNDROP", ignore(ascii_case))]
+    UNDROP,
     #[token("UNSIGNED", ignore(ascii_case))]
     UNSIGNED,
     #[token("URL", ignore(ascii_case))]
