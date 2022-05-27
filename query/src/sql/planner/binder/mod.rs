@@ -18,9 +18,11 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::BindContext;
 pub use bind_context::ColumnBinding;
 use common_ast::ast::Statement;
+use common_ast::ast::TimeTravelPoint;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use sqlparser::ast::Instant;
 
 use self::subquery::SubqueryRewriter;
 use crate::catalogs::CatalogManager;
@@ -114,10 +116,16 @@ impl<'a> Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        travel_point: &Option<TimeTravelPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
         let catalog = self.catalogs.get_catalog(catalog_name)?;
-        let table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
+        if let Some(TimeTravelPoint::Snapshot(s)) = travel_point {
+            table_meta = table_meta
+                .navigate_to(self.ctx.clone(), &Instant::SnapshotID(s.to_owned()))
+                .await?;
+        }
         Ok(table_meta)
     }
 
