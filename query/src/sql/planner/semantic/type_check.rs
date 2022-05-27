@@ -425,12 +425,8 @@ impl<'a> TypeChecker<'a> {
                 str_expr,
                 ..
             } => {
-                self.resolve_function(
-                    "locate",
-                    &vec![substr_expr.as_ref(), str_expr.as_ref()],
-                    None,
-                )
-                .await
+                self.resolve_function("locate", &[substr_expr.as_ref(), str_expr.as_ref()], None)
+                    .await
             }
 
             _ => Err(ErrorCode::UnImplement(format!(
