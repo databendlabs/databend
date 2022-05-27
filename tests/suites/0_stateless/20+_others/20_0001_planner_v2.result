@@ -275,7 +275,7 @@ default
 1	2	1	2
 1	2	1	3
 2	6	2	4
-===Trim Functuon===
+===Trim Function===
 abc
 
 
@@ -318,3 +318,4 @@ BuildHashTable × 1 processor
 ===Position Function===
 4
 0
+2

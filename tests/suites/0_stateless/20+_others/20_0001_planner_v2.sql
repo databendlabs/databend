@@ -253,5 +253,10 @@ drop table t2;
 select '===Position Function===';
 SELECT POSITION('bar' IN 'foobarbar');
 SELECT POSITION('xbar' IN 'foobar');
+drop table if exists t;
+create table t (a varchar);
+insert into t values ('foo');
+select POSITION('o' IN t.a) from t;
+drop table t;
 
 set enable_planner_v2 = 0;

@@ -424,7 +424,14 @@ impl<'a> TypeChecker<'a> {
                 substr_expr,
                 str_expr,
                 ..
-            } => self.resolve_position(substr_expr, str_expr).await,
+            } => {
+                self.resolve_function(
+                    "locate",
+                    &vec![substr_expr.as_ref(), str_expr.as_ref()],
+                    None,
+                )
+                .await
+            }
 
             _ => Err(ErrorCode::UnImplement(format!(
                 "Unsupported expr: {:?}",
@@ -904,48 +911,5 @@ impl<'a> TypeChecker<'a> {
             .into(),
             data_type,
         ))
-    }
-
-    async fn resolve_position(
-        &self,
-        substr_expr: &Expr<'a>,
-        str_expr: &Expr<'a>,
-    ) -> Result<(Scalar, DataTypeImpl)> {
-        let first_str = self.resolve_position_arg(substr_expr)?;
-        let second_str = self.resolve_position_arg(str_expr)?;
-        let index = DataValue::UInt64(match second_str.find(first_str.as_str()) {
-            None => 0,
-            Some(idx) => idx + 1,
-        } as u64);
-        Ok((
-            ConstantExpr {
-                value: index.clone(),
-                data_type: index.data_type(),
-            }
-            .into(),
-            index.data_type(),
-        ))
-    }
-
-    fn resolve_position_arg(&self, expr: &Expr<'a>) -> Result<String> {
-        let expr_str = match expr {
-            Expr::Literal { lit, .. } => {
-                let (value, data_type) = self.resolve_literal(lit, None)?;
-                if data_type != StringType::new_impl() {
-                    return Err(ErrorCode::SemanticError(
-                        expr.span()
-                            .display_error("substr_expr should be String".to_string()),
-                    ));
-                }
-                value.to_string()
-            }
-            _ => {
-                return Err(ErrorCode::SemanticError(
-                    expr.span()
-                        .display_error(format!("Position doesn't support expr {expr}")),
-                ));
-            }
-        };
-        Ok(expr_str)
     }
 }

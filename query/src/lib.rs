@@ -18,6 +18,8 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 
+extern crate core;
+
 pub mod api;
 pub mod catalogs;
 pub mod clusters;
