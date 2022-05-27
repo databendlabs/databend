@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_exception::Result;
-use databend_query::sql::statements::AlterTableAction;
-use databend_query::sql::statements::DfAlterTable;
-use databend_query::sql::statements::DfCreateTable;
-use databend_query::sql::statements::DfDescribeTable;
-use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfQueryStatement;
-use databend_query::sql::statements::DfRenameTable;
-use databend_query::sql::statements::DfShowCreateTable;
-use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::*;
 use sqlparser::ast::*;
 
@@ -37,12 +27,10 @@ fn select_table_at() -> Result<()> {
             distinct: false,
             from: vec![TableWithJoins {
                 relation: TableFactor::Table {
-                    name: ObjectName {
-                        0: vec![Ident {
-                            value: "t".to_owned(),
-                            quote_style: None,
-                        }],
-                    },
+                    name: ObjectName(vec![Ident {
+                        value: "t".to_owned(),
+                        quote_style: None,
+                    }]),
                     alias: None,
                     args: vec![],
                     with_hints: vec![],

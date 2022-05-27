@@ -39,7 +39,7 @@ fn snapshot_timestamp_monotonic_increase() {
     let current = TableSnapshot::new(
         uuid,
         &prev.timestamp,
-        prev.prev_snapshot_id.clone(),
+        prev.prev_snapshot_id,
         schema,
         Default::default(),
         vec![],
@@ -61,7 +61,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
     let current = TableSnapshot::new(
         uuid,
         &prev.timestamp,
-        prev.prev_snapshot_id.clone(),
+        prev.prev_snapshot_id,
         schema,
         Default::default(),
         vec![],

@@ -259,4 +259,7 @@ insert into t values ('foo');
 select POSITION('o' IN t.a) from t;
 drop table t;
 
+select '====Tuple====';
+select ('field', number) from numbers(5);
+
 set enable_planner_v2 = 0;
