@@ -18,6 +18,37 @@ ColumnRef {
 
 
 ---------- Input ----------
+'I''m who I\'m.'
+---------- Output ---------
+'I'm who I'm.'
+---------- AST ------------
+Literal {
+    span: [
+        QuotedString(0..16),
+    ],
+    lit: String(
+        "I'm who I'm.",
+    ),
+}
+
+
+---------- Input ----------
+'\776 \n \t \u0053'
+---------- Output ---------
+'Ǿ 
+ 	 S'
+---------- AST ------------
+Literal {
+    span: [
+        QuotedString(0..19),
+    ],
+    lit: String(
+        "Ǿ \n \t S",
+    ),
+}
+
+
+---------- Input ----------
 -1
 ---------- Output ---------
 - 1

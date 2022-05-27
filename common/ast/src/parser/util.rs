@@ -27,6 +27,8 @@ use crate::parser::error::Backtrace;
 use crate::parser::error::Error;
 use crate::parser::error::ErrorKind;
 use crate::parser::token::*;
+use crate::parser::unescape::unescape;
+
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
@@ -132,7 +134,16 @@ fn non_reserved_keyword(
 pub fn literal_string(i: Input) -> IResult<String> {
     match_token(QuotedString)(i).and_then(|(i2, token)| {
         if token.text().starts_with('\'') {
-            Ok((i2, token.text()[1..token.text().len() - 1].to_string()))
+            let str = &token.text()[1..token.text().len() - 1];
+            let unescaped = unescape(str)
+                .ok_or_else(|| {
+                    nom::Err::Failure(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("invalid escape or unicode"),
+                    ))
+                })?
+                .replace("''", "'");
+            Ok((i2, unescaped))
         } else {
             Err(nom::Err::Error(Error::from_error_kind(
                 i,
@@ -148,7 +159,7 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
             .text()
             .parse()
             .map(|num| (i2, num))
-            .map_err(|err: ParseIntError| nom::Err::Error(Error::from_error_kind(i, err.into())))
+            .map_err(|err: ParseIntError| nom::Err::Failure(Error::from_error_kind(i, err.into())))
     })
 }
 

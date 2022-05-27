@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod error;
+pub mod unescape;
 pub mod expr;
 pub mod query;
 pub mod statement;
