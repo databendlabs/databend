@@ -26,29 +26,25 @@ use crate::users::UserApiProvider;
 impl UserApiProvider {
     // Get one user from by tenant.
     pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
-        match user.username.as_str() {
-            // TODO(BohuTANG): Mock, need removed.
-            "default" | "" | "root" => {
-                let mut user_info = UserInfo::new_no_auth(&user.username, &user.hostname);
-                if user.is_localhost() {
-                    user_info.grants.grant_privileges(
-                        &GrantObject::Global,
-                        UserPrivilegeSet::available_privileges_on_global(),
-                    );
-                    user_info.option.set_all_flag();
-                } else if user.is_root() {
-                    return Err(ErrorCode::UnknownUser(format!(
-                        "'{}'@'{}'",
-                        user.username, user.hostname
-                    )));
-                }
-                Ok(user_info)
+        if user.is_root() {
+            let mut user_info = UserInfo::new_no_auth(&user.username, &user.hostname);
+            if user.is_localhost() {
+                user_info.grants.grant_privileges(
+                    &GrantObject::Global,
+                    UserPrivilegeSet::available_privileges_on_global(),
+                );
+                user_info.option.set_all_flag();
+            } else {
+                return Err(ErrorCode::UnknownUser(format!(
+                    "only accept root from localhost '{}'@'{}'",
+                    user.username, user.hostname
+                )));
             }
-            _ => {
-                let client = self.get_user_api_client(tenant)?;
-                let get_user = client.get_user(user, None);
-                Ok(get_user.await?.data)
-            }
+            Ok(user_info)
+        } else {
+            let client = self.get_user_api_client(tenant)?;
+            let get_user = client.get_user(user, None);
+            Ok(get_user.await?.data)
         }
     }
 
