@@ -176,12 +176,13 @@ pub fn statement(i: Input) -> IResult<Statement> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ( ALL )?
         },
-        |(_, _, opt_if_exists, opt_database, table)| Statement::DropTable {
+        |(_, _, opt_if_exists, opt_database, table, opt_all)| Statement::DropTable {
             if_exists: opt_if_exists.is_some(),
             database: opt_database.map(|(database, _)| database),
             table,
+            all: opt_all.is_some(),
         },
     );
     let alter_table = map(
