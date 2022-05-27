@@ -63,10 +63,10 @@ impl<'a> DfParser<'a> {
         let engine = self.parse_table_engine()?;
 
         // parse cluster key
-        let mut order_keys = vec![];
+        let mut cluster_keys = vec![];
         if self.parser.parse_keywords(&[Keyword::CLUSTER, Keyword::BY]) {
             self.parser.expect_token(&Token::LParen)?;
-            order_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
+            cluster_keys = self.parser.parse_comma_separated(Parser::parse_expr)?;
             self.parser.expect_token(&Token::RParen)?;
         }
 
@@ -91,7 +91,7 @@ impl<'a> DfParser<'a> {
             name: table_name,
             columns,
             engine,
-            order_keys,
+            cluster_keys,
             options,
             like: table_like,
             query,

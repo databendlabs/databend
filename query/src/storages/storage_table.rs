@@ -74,6 +74,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn cluster_keys(&self) -> Vec<Expression> {
+        vec![]
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
