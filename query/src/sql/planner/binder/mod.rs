@@ -116,7 +116,7 @@ impl<'a> Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        travel_point: Option<&TimeTravelPoint>,
+        travel_point: &Option<TimeTravelPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
         let catalog = self.catalogs.get_catalog(catalog_name)?;
