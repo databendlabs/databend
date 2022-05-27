@@ -113,6 +113,9 @@ pub enum TokenKind {
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
+    
+    #[regex(r#"@([^\s`'"])+"#)]
+    AtString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
     LiteralHex,

@@ -142,6 +142,12 @@ pub fn literal_string(i: Input) -> IResult<String> {
     })
 }
 
+pub fn at_string(i: Input) -> IResult<String> {
+    match_token(AtString)(i).and_then(|(i2, token)| {
+        Ok((i2, token.text()[1..token.text().len() - 1].to_string()))
+    })
+}
+
 pub fn literal_u64(i: Input) -> IResult<u64> {
     match_token(LiteralNumber)(i).and_then(|(i2, token)| {
         token

@@ -200,6 +200,17 @@ pub enum Statement<'a> {
         definition: Box<Expr<'a>>,
         description: Option<String>,
     },
+    // stages
+    ShowStages,
+    CreateStage {
+    },
+    RemoveStage{
+    },
+    Copy{
+    },
+    ListStage {
+        stage_name: String
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -753,6 +764,9 @@ impl<'a> Display for Statement<'a> {
                     write!(f, " DESC = '{description}'")?;
                 }
             }
+            Statement::ListStage { stage_name } => {
+                write!(f, "LIST @{stage_name}")?;
+            },
         }
         Ok(())
     }

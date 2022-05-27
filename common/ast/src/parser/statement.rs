@@ -404,6 +404,15 @@ pub fn statement(i: Input) -> IResult<Statement> {
             }
         },
     );
+    
+    let list_stage = map(
+        rule! {
+            LIST ~ #at_string
+        },
+        |(_, stage_name)| Statement::ListStage {
+            stage_name
+        },
+    );  
 
     alt((
         rule!(
@@ -443,6 +452,7 @@ pub fn statement(i: Input) -> IResult<Statement> {
             | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #list_stage: "`LIST @<stage_name>`"
         ),
     ))(i)
 }

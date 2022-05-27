@@ -37,6 +37,10 @@ fn test_lexer() {
         (QuotedString, "'日本語'", 9..20),
         (EOI, "", 20..20),
     ]);
+    assert_lex("@databend:/abc", &[
+        (AtString, "@databend:/abc", 0..14),
+        (EOI, "", 14..14),
+    ]);
     assert_lex("42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01", &[
         (LiteralNumber, "42", 0..2),
         (LiteralNumber, "3.5", 3..6),

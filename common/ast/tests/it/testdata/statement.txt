@@ -2552,3 +2552,13 @@ Query(
 )
 
 
+---------- Input ----------
+list @stage_a;
+---------- Output ---------
+LIST @stage_a
+---------- AST ------------
+ListStage {
+    stage_name: "stage_a",
+}
+
+
