@@ -851,7 +851,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear, &"%").await?;
+    test_auth_post(&ep, user_name, bear, "%").await?;
     Ok(())
 }
 
