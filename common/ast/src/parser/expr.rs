@@ -1027,25 +1027,16 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
-    let year = value(IntervalKind::Year, rule! { YEAR });
-    let month = value(IntervalKind::Month, rule! { MONTH });
-    let day = value(IntervalKind::Day, rule! { DAY });
-    let hour = value(IntervalKind::Hour, rule! { HOUR });
-    let minute = value(IntervalKind::Minute, rule! { MINUTE });
-    let second = value(IntervalKind::Second, rule! { SECOND });
-    let doy = value(IntervalKind::Doy, rule! { DOY });
-    let dow = value(IntervalKind::Dow, rule! { DOW });
-
-    rule!(
-        #year
-        | #month
-        | #day
-        | #hour
-        | #minute
-        | #second
-        | #doy
-        | #dow
-    )(i)
+    alt((
+        value(IntervalKind::Year, rule! { YEAR }),
+        value(IntervalKind::Month, rule! { MONTH }),
+        value(IntervalKind::Day, rule! { DAY }),
+        value(IntervalKind::Hour, rule! { HOUR }),
+        value(IntervalKind::Minute, rule! { MINUTE }),
+        value(IntervalKind::Second, rule! { SECOND }),
+        value(IntervalKind::Doy, rule! { DOY }),
+        value(IntervalKind::Dow, rule! { DOW }),
+    ))(i)
 }
 
 pub fn map_access(i: Input) -> IResult<MapAccessor> {
