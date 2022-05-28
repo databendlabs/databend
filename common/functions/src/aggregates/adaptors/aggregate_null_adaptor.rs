@@ -59,7 +59,7 @@ impl AggregateFunctionCombinatorNull {
             if properties.returns_default_when_only_null {
                 return AggregateNullResultFunction::try_create(u64::to_data_type());
             } else {
-                return AggregateNullResultFunction::try_create(NullType::arc());
+                return AggregateNullResultFunction::try_create(NullType::new_impl());
             }
         }
         let params = Self::transform_params(&params)?;
