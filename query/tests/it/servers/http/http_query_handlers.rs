@@ -709,21 +709,6 @@ async fn post_json_to_endpoint(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
-async fn test_auth_basic() -> Result<()> {
-    let user_name = "user1";
-    let password = "password";
-
-    let ep = create_endpoint();
-    let sql = format!("create user {} identified by {}", user_name, password);
-    post_sql_to_endpoint(&ep, &sql, 1).await?;
-
-    let basic = headers::Authorization::basic(user_name, password);
-    test_auth_post(&ep, user_name, basic, "%").await?;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_auth_jwt() -> Result<()> {
     let user_name = "root";
 
@@ -866,7 +851,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear, "%").await?;
+    test_auth_post(&ep, user_name, bear, &"%").await?;
     Ok(())
 }
 
