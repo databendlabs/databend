@@ -1011,7 +1011,6 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download() -> Result<()> {
     let ep = create_endpoint();
 
@@ -1058,7 +1057,6 @@ async fn test_download() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download_non_select() -> Result<()> {
     let ep = create_endpoint();
     let sql = "show databases";
@@ -1080,7 +1078,6 @@ async fn test_download_non_select() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download_failed() -> Result<()> {
     let ep = create_endpoint();
     let sql = "xxx";
@@ -1096,7 +1093,6 @@ async fn test_download_failed() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download_killed() -> Result<()> {
     let ep = create_endpoint();
 
