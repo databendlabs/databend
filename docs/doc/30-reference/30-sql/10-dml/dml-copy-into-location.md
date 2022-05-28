@@ -97,7 +97,7 @@ insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6);"
 CREATE STAGE s2;
 
 
-//Unload the data in the table into the stage as a CSV file
+-- Unload the data in the table into the stage as a CSV file
 copy into @s2 from test_table FILE_FORMAT = (type = 'CSV');
 
 //Unload the data from a query into the stage as a Parquet file
