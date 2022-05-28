@@ -394,7 +394,6 @@ fn test_http_session_serde() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore = "flaky, to be investigated"]
 async fn test_http_session() -> Result<()> {
     let ep = create_endpoint();
     let json = serde_json::json!({"sql":  "use system", "session": {"max_idle_time": 10}});
@@ -414,13 +413,23 @@ async fn test_http_session() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
-    assert_eq!(result.data.len(), 1, "{:?}", result);
     assert_eq!(result.data[0][0], "system", "{:?}", result);
+
+    let json = serde_json::json!({"sql": "select * from x", "session": {"id": session_id}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_some(), "{:?}", result);
+
+    let json = serde_json::json!({"sql": "select 1", "session": {"id": session_id}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore = "flaky, to be investigated"]
+#[ignore = "flaky, sleep time unreliable"]
 async fn test_result_timeout() -> Result<()> {
     let session_manager = SessionManagerBuilder::create()
         .http_handler_result_time_out(200u64)
