@@ -12,8 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod stats;
+mod tenant_tables;
 
-pub mod tenant_tables;
+use crate::procedures::stats::tenant_tables::TenantTablesProcedure;
+use crate::procedures::ProcedureFactory;
 
-pub use stats::StatsProcedure;
+pub struct StatsProcedure;
+
+impl StatsProcedure {
+    pub fn register(factory: &mut ProcedureFactory) {
+        factory.register(
+            "stats$tenant_tables",
+            Box::new(TenantTablesProcedure::try_create),
+        );
+    }
+}
