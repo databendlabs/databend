@@ -182,6 +182,5 @@ download_binary "$old_query_ver"
 
 mkdir -p ./target/debug/
 
-run_test current        current
 run_test current        $old_metasrv_ver
 run_test $old_query_ver current
