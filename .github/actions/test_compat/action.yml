@@ -15,6 +15,10 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
+    - name: Rust setup
+      run: |
+        bash ./scripts/setup/dev_setup.sh -yb
+
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
 
