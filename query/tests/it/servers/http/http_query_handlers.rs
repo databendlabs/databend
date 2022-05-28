@@ -536,7 +536,7 @@ async fn test_query_log() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
 
-    let response = get_uri(&ep, &result.kill_uri.as_ref().unwrap()).await;
+    let response = get_uri(&ep, result.kill_uri.as_ref().unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
     let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
@@ -663,7 +663,7 @@ async fn test_auth_basic() -> Result<()> {
     post_sql_to_endpoint(&ep, &sql, 1).await?;
 
     let basic = headers::Authorization::basic(user_name, password);
-    test_auth_post(&ep, user_name, basic, &"%").await?;
+    test_auth_post(&ep, user_name, basic, "%").await?;
     Ok(())
 }
 
@@ -810,7 +810,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
-    test_auth_post(&ep, user_name, bear, &"%").await?;
+    test_auth_post(&ep, user_name, bear, "%").await?;
     Ok(())
 }
 
