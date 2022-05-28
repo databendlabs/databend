@@ -32,6 +32,7 @@ use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
+use databend_query::sessions::SessionManager;
 use databend_query::users::auth::jwt::CustomClaims;
 use databend_query::users::auth::jwt::EnsureUser;
 use headers::Header;
@@ -73,10 +74,27 @@ type EndpointType = HTTPSessionEndpoint<Route>;
 // TODO(youngsofun): add test for
 // 1. query fail after started
 
+async fn expect_end(ep: &EndpointType, result: QueryResponse) -> Result<()> {
+    let result = match result.next_uri {
+        None => result,
+        Some(next_uri) => {
+            let (status, result) = get_uri_checked(ep, &next_uri).await?;
+            assert_eq!(status, StatusCode::OK, "{:?}", result);
+            assert_eq!(result.data.len(), 0, "{:?}", result);
+            assert!(result.next_uri.is_none(), "{:?}", result);
+            result
+        }
+    };
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_simple_sql() -> Result<()> {
     let sql = "select * from system.tables limit 10";
-    let (status, result) = post_sql(sql, 1).await?;
+    let ep = create_endpoint();
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10, "{:?}", result);
@@ -90,6 +108,45 @@ async fn test_simple_sql() -> Result<()> {
         "{:?}",
         result
     );
+
+    let query_id = &result.id;
+    // get state
+    let uri = make_state_uri(query_id);
+    let (status, result) = get_uri_checked(&ep, &uri).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 0, "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    // get page, support retry
+    let uri = make_page_uri(query_id, 0);
+    for _ in 1..3 {
+        let (status, result) = get_uri_checked(&ep, &uri).await?;
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
+        assert!(result.error.is_none(), "{:?}", result);
+        assert_eq!(result.data.len(), 10, "{:?}", result);
+        assert!(result.next_uri.is_none(), "{:?}", result);
+        assert!(result.schema.is_some(), "{:?}", result);
+        assert!(result.stats.scan_progress.is_some(), "{:?}", result);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+    }
+
+    // get page not expected
+    let uri = make_page_uri(query_id, 1);
+    let response = get_uri(&ep, &uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
+    let body = response.into_body().into_string().await.unwrap();
+    assert_eq!(body, "wrong page number 1");
+
+    // delete
+    let status = delete_query(&ep, query_id).await;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+
+    let response = get_uri(&ep, &uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 1).await?;
@@ -178,65 +235,54 @@ async fn test_bad_sql() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[ignore = "flaky, to be investigated"]
-async fn test_async() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_wait_time_secs() -> Result<()> {
     let ep = create_endpoint();
-    let sql = "select sleep(0.01)";
+    let sql = "select sleep(0.001)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 0);
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert_eq!(result.next_uri, Some(next_uri), "{:?}", result);
+    assert_eq!(result.next_uri, Some(next_uri.clone()), "{:?}", result);
     assert!(result.stats.scan_progress.is_some(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
-    sleep(Duration::from_millis(100)).await;
 
-    // get page, support retry
-    for _ in 1..3 {
-        let uri = make_page_uri(query_id, 0);
-
+    let mut uri = make_page_uri(query_id, 0);
+    let mut num_row = 0;
+    for _ in 1..300 {
+        sleep(Duration::from_millis(10)).await;
         let (status, result) = get_uri_checked(&ep, &uri).await?;
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result);
-        assert_eq!(result.data.len(), 1, "{:?}", result);
-        assert!(result.next_uri.is_none(), "{:?}", result);
-        assert!(result.schema.is_some(), "{:?}", result);
         assert!(result.stats.scan_progress.is_some(), "{:?}", result);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+        println!("{:?}", result);
+        num_row += result.data.len();
+        match &result.next_uri {
+            Some(next_uri) => {
+                assert!(
+                    matches!(
+                        result.state,
+                        ExecuteStateKind::Succeeded | ExecuteStateKind::Running
+                    ),
+                    "{:?}",
+                    result
+                );
+                uri = next_uri.clone();
+            }
+            None => {
+                assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+                assert!(result.schema.is_some(), "{:?}", result);
+                assert_eq!(num_row, 1, "{:?}", result);
+                return Ok(());
+            }
+        }
     }
-
-    // get state
-    let uri = make_state_uri(query_id);
-    let (status, result) = get_uri_checked(&ep, &uri).await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.schema.is_some(), "{:?}", result);
-    assert!(result.stats.scan_progress.is_some(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-
-    // get page not expected
-    let uri = make_page_uri(query_id, 1);
-    let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
-    let body = response.into_body().into_string().await.unwrap();
-    assert_eq!(body, "wrong page number 1");
-
-    // delete
-    let status = delete_query(&ep, query_id).await;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-
-    let response = get_uri(&ep, &uri).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
-
-    Ok(())
+    unreachable!("'{}' run for more than 3 secs", sql);
 }
 #[tokio::test]
 async fn test_buffer_size() -> Result<()> {
@@ -276,18 +322,18 @@ async fn test_pagination() -> Result<()> {
     assert!(result.schema.is_some(), "{:?}", result);
 
     for page in 0..5 {
-        let msg = || format!("page {}: {:?}", page, result);
         let uri = make_page_uri(query_id, page);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
+        let msg = || format!("page {}: {:?}", page, result);
+        println!("{} {:?}", msg(), result);
         assert_eq!(status, StatusCode::OK, "{:?}", msg());
         assert!(result.error.is_none(), "{:?}", msg());
         assert_eq!(result.data.len(), 2, "{:?}", msg());
         assert!(result.schema.is_some(), "{:?}", result);
         assert!(result.stats.scan_progress.is_some(), "{:?}", msg());
         if page == 4 {
-            assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", msg());
-            assert!(result.next_uri.is_none(), "{:?}", msg());
+            expect_end(&ep, result).await?;
         } else {
             assert!(result.next_uri.is_some(), "{:?}", msg());
         }
@@ -348,7 +394,6 @@ fn test_http_session_serde() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore = "flaky, to be investigated"]
 async fn test_http_session() -> Result<()> {
     let ep = create_endpoint();
     let json = serde_json::json!({"sql":  "use system", "session": {"max_idle_time": 10}});
@@ -369,11 +414,22 @@ async fn test_http_session() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert_eq!(result.data[0][0], "system", "{:?}", result);
+
+    let json = serde_json::json!({"sql": "select * from x", "session": {"id": session_id}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_some(), "{:?}", result);
+
+    let json = serde_json::json!({"sql": "select 1", "session": {"id": session_id}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore = "flaky, to be investigated"]
+#[ignore = "flaky, sleep time unreliable"]
 async fn test_result_timeout() -> Result<()> {
     let session_manager = SessionManagerBuilder::create()
         .http_handler_result_time_out(200u64)
@@ -650,21 +706,6 @@ async fn post_json_to_endpoint(
         .map_err(|e| ErrorCode::UnexpectedError(e.to_string()))?;
 
     check_response(response).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
-async fn test_auth_basic() -> Result<()> {
-    let user_name = "user1";
-    let password = "password";
-
-    let ep = create_endpoint();
-    let sql = format!("create user {} identified by {}", user_name, password);
-    post_sql_to_endpoint(&ep, &sql, 1).await?;
-
-    let basic = headers::Authorization::basic(user_name, password);
-    test_auth_post(&ep, user_name, basic, "%").await?;
-    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -965,7 +1006,6 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download() -> Result<()> {
     let ep = create_endpoint();
 
@@ -1012,7 +1052,6 @@ async fn test_download() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download_non_select() -> Result<()> {
     let ep = create_endpoint();
     let sql = "show databases";
@@ -1034,7 +1073,6 @@ async fn test_download_non_select() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download_failed() -> Result<()> {
     let ep = create_endpoint();
     let sql = "xxx";
@@ -1050,7 +1088,6 @@ async fn test_download_failed() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "flaky, to be investigated"]
 async fn test_download_killed() -> Result<()> {
     let ep = create_endpoint();
 
@@ -1087,6 +1124,28 @@ async fn test_download_killed() -> Result<()> {
         resp
     );
     assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", resp);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_no_download_in_management_mode() -> Result<()> {
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+
+    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+    let sql = "select 1";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+
+    let mut resp = download(&ep, &result.id).await;
+    let exp = "not exists";
+    assert!(resp.take_body().into_string().await.unwrap().contains(exp));
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{:?}", result);
 
     Ok(())
 }
