@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
@@ -166,11 +167,27 @@ impl HttpQuery {
                 let session = http_query_manager.get_session(id).await.ok_or_else(|| {
                     ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
                 })?;
-                if session.expire_state() == ExpiringState::InUse {
-                    return Err(ErrorCode::BadArguments(
-                        "last query on the session not finished",
-                    ));
-                };
+                let mut n = 1;
+                while let ExpiringState::InUse(query_id) = session.expire_state() {
+                    if let Some(last_query) = &http_query_manager.get_query(&query_id).await {
+                        if last_query.get_state().await.state == ExecuteStateKind::Running {
+                            return Err(ErrorCode::BadArguments(
+                                "last query on the session not finished",
+                            ));
+                        } else {
+                            http_query_manager.remove_query(&query_id).await;
+                        }
+                    }
+                    // wait for Arc<QueryContextShared> to drop and detach itself from session
+                    // should not take too long
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    n += 1;
+                    if n > 10 {
+                        return Err(ErrorCode::UnexpectedError(
+                            "last query stop but not released",
+                        ));
+                    }
+                }
                 session
             }
         };
