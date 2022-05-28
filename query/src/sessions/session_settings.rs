@@ -16,16 +16,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use common_base::infallible::RwLock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::Compression;
 use itertools::Itertools;
-use nom::AsBytes;
 
 use crate::Config;
 
