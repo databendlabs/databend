@@ -90,7 +90,7 @@ CREATE TABLE test_table (
      age INT
 );
 
-//Insert data into the table
+-- Insert data into the table
 insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6);"
 
 //Create an internal stage
