@@ -54,9 +54,9 @@ download_binary()
         echo " === Download binary ver: $ver"
         echo " === Download binary url: $url"
 
-        wget -q "$url" -o "$fn"
+        curl -L "$url" > "$fn"
         # or:
-        # curl -L "$url" > "$fn"
+        # wget -q "$url" -o "$fn"
     fi
 
     mkdir -p ./bins/$ver
